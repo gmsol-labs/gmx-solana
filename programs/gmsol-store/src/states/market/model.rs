@@ -116,7 +116,7 @@ impl gmsol_model::SwapMarket<{ constants::MARKET_DECIMALS }> for Market {
         Ok(FeeParams::builder()
             .with_fee_receiver_factor(self.config.swap_fee_receiver_factor)
             .with_positive_impact_fee_factor(self.config.swap_fee_factor_for_positive_impact)
-            .with_negative_impact_fee_factor(self.config.swap_fee_factor_for_positive_impact)
+            .with_negative_impact_fee_factor(self.config.swap_fee_factor_for_negative_impact)
             .build())
     }
 }
