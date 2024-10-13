@@ -36,15 +36,18 @@ impl Decimal {
         token_decimals: u8,
         precision: u8,
     ) -> Result<Self, DecimalError> {
-        if token_decimals > Self::MAX_DECIMALS || precision > Self::MAX_DECIMALS {
+        if token_decimals > Self::MAX_DECIMALS
+            || precision > Self::MAX_DECIMALS
+            || decimals > Self::MAX_DECIMALS
+        {
             return Err(DecimalError::ExceedMaxDecimals);
         }
         if token_decimals + precision > Self::MAX_DECIMALS {
             return Err(DecimalError::ExceedMaxDecimals);
         }
         // Convert the `price` to be with decimals of `token_decimals`.
-        match decimals.cmp(&token_decimals) {
-            Ordering::Equal => {}
+        let divisor_exp = match decimals.cmp(&token_decimals) {
+            Ordering::Equal => None,
             Ordering::Less => {
                 // CHECK: Since `token_decimals` and `decimals` are both less than `MAX_DECIMALS`,
                 // the pow will never overflow.
@@ -52,14 +55,10 @@ impl Decimal {
                 price = price
                     .checked_mul(multiplier)
                     .ok_or(DecimalError::Overflow)?;
+                None
             }
-            Ordering::Greater => {
-                let divisor = 10u128
-                    .checked_pow((decimals - token_decimals) as u32)
-                    .ok_or(DecimalError::Overflow)?;
-                price /= divisor;
-            }
-        }
+            Ordering::Greater => Some(decimals - token_decimals),
+        };
 
         let decimal_multiplier = Self::decimal_multiplier_from_precision(token_decimals, precision);
         debug_assert!(
@@ -69,14 +68,33 @@ impl Decimal {
         // CHECK: 2 * MAX_DECIMALS + MAX_DECIMAL_MULTIPLER <= u8::MAX
         let multiplier = (token_decimals << 1) + decimal_multiplier;
         let value = if Self::MAX_DECIMALS >= multiplier {
-            // CHECK: Since `MAX_DECIMALS <= 30`, the pow will never overflow.
-            price
-                .checked_mul(10u128.pow((Self::MAX_DECIMALS - multiplier) as u32))
-                .ok_or(DecimalError::Overflow)?
+            let mut exp = Self::MAX_DECIMALS - multiplier;
+            if let Some(divisor_exp) = divisor_exp {
+                if exp >= divisor_exp {
+                    exp -= divisor_exp;
+                    // CHECK: Since `exp <= MAX_DECIMALS <= 30`, the pow will never overflow.
+                    price
+                        .checked_mul(10u128.pow((exp) as u32))
+                        .ok_or(DecimalError::Overflow)?
+                } else {
+                    exp = divisor_exp - exp;
+                    // CHECK: Since `divisor_exp <= decimals <= MAX_DECIMALS <= 30`, the pow will never overflow.
+                    price / 10u128.pow(exp as u32)
+                }
+            } else {
+                // CHECK: Since `exp <= MAX_DECIMALS <= 30`, the pow will never overflow.
+                price
+                    .checked_mul(10u128.pow((exp) as u32))
+                    .ok_or(DecimalError::Overflow)?
+            }
         } else {
             // CHECK: Since `multiplier == 2 * token_decimals + decimal_multiplier <= token_decimals + MAX_DECIMALS <= 2 * MAX_DECIMALS`,
             // `multiplier - MAX_DECIMALS <= MAX_DECIMALS <= 30` will never make the pow overflow.
-            price / 10u128.pow((multiplier - Self::MAX_DECIMALS) as u32)
+            let mut ans = price / 10u128.pow((multiplier - Self::MAX_DECIMALS) as u32);
+            if let Some(exp) = divisor_exp {
+                ans /= 10u128.pow(exp as u32)
+            }
+            ans
         };
         Ok(Self {
             value: value as u32,
@@ -185,5 +203,16 @@ mod tests {
         // 5 / 10^8 * 10^20
         assert_eq!(price.to_unit_price(), 5_000_000_000_000);
         assert_eq!(price.decimal_multiplier, 20 - 8 - 2);
+    }
+
+    #[test]
+    fn test_price_8() {
+        // The price of one SHIB is 1.77347 * 10^-5
+        // price decimals: 10
+        // token decimals: 5
+        // expected precision: 9
+        let price = Decimal::try_from_price(177_347, 10, 5, 9).unwrap();
+        assert_eq!(price.to_unit_price(), 17_734_000_000);
+        assert_eq!(price.decimal_multiplier, 20 - 5 - 9);
     }
 }
