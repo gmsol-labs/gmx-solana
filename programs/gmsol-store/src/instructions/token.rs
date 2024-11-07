@@ -123,7 +123,7 @@ pub(crate) fn unchecked_use_claimable_account(
                 },
                 &[&ctx.accounts.store.load()?.signer_seeds()],
             ),
-            0,
+            amount,
         )?;
     }
     Ok(())
