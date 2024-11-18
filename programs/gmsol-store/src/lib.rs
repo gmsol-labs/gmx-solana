@@ -441,7 +441,6 @@ pub mod gmsol_store {
     /// Insert or enable a role for the given store.
     ///
     /// This instruction adds a new role or enables an existing disabled role in the store's role configuration.
-    /// If the role already exists and is enabled, this instruction has no effect.
     ///
     /// # Accounts
     /// *[See the documentation for the accounts.](EnableRole).*
@@ -454,6 +453,7 @@ pub mod gmsol_store {
     /// - The [`authority`](EnableRole::authority) must be a signer and be the `ADMIN` of the store.
     /// - The [`store`](EnableRole::store) must be an initialized store account owned by the store program.
     /// - The `role` name length must not exceed [`MAX_ROLE_NAME_LEN`](states::roles::MAX_ROLE_NAME_LEN).
+    /// - The `role` must not be already enabled.
     #[access_control(internal::Authenticate::only_admin(&ctx))]
     pub fn enable_role(ctx: Context<EnableRole>, role: String) -> Result<()> {
         instructions::unchecked_enable_role(ctx, role)
@@ -462,7 +462,6 @@ pub mod gmsol_store {
     /// Disable an existing role for the given store.
     ///
     /// This instruction disables an existing role in the store's role configuration.
-    /// If the role does not exist in the store, this instruction has no effect.
     ///
     /// # Accounts
     /// *[See the documentation for the accounts.](DisableRole).*
@@ -473,6 +472,7 @@ pub mod gmsol_store {
     /// # Errors
     /// - The [`authority`](DisableRole::authority) must be a signer and be the `ADMIN` of the store.
     /// - The [`store`](DisableRole::store) must be an initialized store account owned by the store program.
+    /// - The `role` must be enabled.
     #[access_control(internal::Authenticate::only_admin(&ctx))]
     pub fn disable_role(ctx: Context<DisableRole>, role: String) -> Result<()> {
         instructions::unchecked_disable_role(ctx, role)
@@ -493,7 +493,7 @@ pub mod gmsol_store {
     /// # Errors
     /// - The [`authority`](GrantRole::authority) must be a signer and be the `ADMIN` of the store.
     /// - The [`store`](GrantRole::store) must be an initialized store account owned by the store program.
-    /// - The `role` must exist and be enabled in the store's role configuration.
+    /// - The `role` must exist and be enabled in the store's role table.
     #[access_control(internal::Authenticate::only_admin(&ctx))]
     pub fn grant_role(ctx: Context<GrantRole>, user: Pubkey, role: String) -> Result<()> {
         instructions::unchecked_grant_role(ctx, user, role)
@@ -509,12 +509,12 @@ pub mod gmsol_store {
     ///
     /// # Arguments
     /// - `user`: The address of the user from whom the role should be revoked.
-    /// - `role`: The name of the role to be revoked. Must be an enabled role in the store.
+    /// - `role`: The name of the role to be revoked.
     ///
     /// # Errors
     /// - The [`authority`](RevokeRole::authority) must be a signer and be the `ADMIN` of the store.
     /// - The [`store`](RevokeRole::store) must be an initialized store account owned by the store program.
-    /// - The `role` must exist and be enabled in the store's role configuration.
+    /// - The `role` must exist in the store's role table.
     /// - The `user` must exist in the store's member table.
     #[access_control(internal::Authenticate::only_admin(&ctx))]
     pub fn revoke_role(ctx: Context<RevokeRole>, user: Pubkey, role: String) -> Result<()> {

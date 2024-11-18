@@ -111,12 +111,32 @@ impl RoleMetadata {
     }
 
     /// Enable this role.
-    pub fn enable(&mut self) {
+    ///
+    /// # Errors
+    /// Returns Error if this role is already enabled.
+    pub fn enable(&mut self) -> Result<()> {
+        require!(!self.is_enabled(), CoreError::PreconditionsAreNotMet);
+        self.set_enable();
+        Ok(())
+    }
+
+    /// Disable this role.
+    ///
+    /// # Errors
+    /// Returns Error if this role is already disabled.
+    pub fn disable(&mut self) -> Result<()> {
+        require!(self.is_enabled(), CoreError::PreconditionsAreNotMet);
+        self.set_disable();
+        Ok(())
+    }
+
+    /// Enable this role.
+    fn set_enable(&mut self) {
         self.enabled = Self::ROLE_ENABLED;
     }
 
     /// Disable this role.
-    pub fn disable(&mut self) {
+    fn set_disable(&mut self) {
         self.enabled = 0;
     }
 
@@ -155,7 +175,7 @@ impl RoleStore {
         match self.roles.get_mut(role) {
             Some(metadata) => {
                 require_eq!(metadata.name()?, role, CoreError::InvalidArgument);
-                metadata.enable();
+                metadata.enable()?;
             }
             None => {
                 let index = self
@@ -174,9 +194,19 @@ impl RoleStore {
     pub fn disable_role(&mut self, role: &str) -> Result<()> {
         if let Some(metadata) = self.roles.get_mut(role) {
             require_eq!(metadata.name()?, role, CoreError::InvalidArgument);
-            metadata.disable();
+            metadata.disable()?;
         }
         Ok(())
+    }
+
+    /// Get the index of a role.
+    pub fn role_index(&self, role: &str) -> Result<Option<u8>> {
+        if let Some(metadata) = self.roles.get(role) {
+            require_eq!(metadata.name()?, role, CoreError::InvalidArgument);
+            Ok(Some(metadata.index))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Get the index of a enabled role.
@@ -203,19 +233,25 @@ impl RoleStore {
     }
 
     /// Grant a role to the pubkey.
+    ///
+    /// # Errors
+    /// - The `role` must be enabled.
+    /// - The `authority` must not already have the role.
     pub fn grant(&mut self, authority: &Pubkey, role: &str) -> Result<()> {
         let Some(index) = self.enabled_role_index(role)? else {
             return err!(CoreError::NotFound);
         };
+        let index = index as usize;
         match self.members.get_mut(authority) {
             Some(value) => {
                 let mut bitmap = RoleBitmap::from_value(*value);
-                bitmap.set(index as usize, true);
+                require!(!bitmap.get(index), CoreError::PreconditionsAreNotMet);
+                bitmap.set(index, true);
                 *value = bitmap.into_value();
             }
             None => {
                 let mut bitmap = RoleBitmap::new();
-                bitmap.set(index as usize, true);
+                bitmap.set(index, true);
                 self.members
                     .insert_with_options(authority, bitmap.into_value(), true)?;
             }
@@ -224,15 +260,22 @@ impl RoleStore {
     }
 
     /// Revoke a role from the pubkey.
+    ///
+    /// # Errors
+    /// - The `authority` must have the role.
     pub fn revoke(&mut self, authority: &Pubkey, role: &str) -> Result<()> {
-        let Some(index) = self.enabled_role_index(role)? else {
+        // The `role` does not have to be enabled.
+        // This is useful when we want to modify the role configuration before enabling it.
+        let Some(index) = self.role_index(role)? else {
             return err!(CoreError::NotFound);
         };
         let Some(value) = self.members.get_mut(authority) else {
             return err!(CoreError::PermissionDenied);
         };
         let mut bitmap = RoleBitmap::from_value(*value);
-        bitmap.set(index as usize, false);
+        let index = index as usize;
+        require!(bitmap.get(index), CoreError::PreconditionsAreNotMet);
+        bitmap.set(index, false);
         *value = bitmap.into_value();
         Ok(())
     }
