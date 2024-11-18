@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt, time::Instant};
+use std::{
+    collections::HashMap,
+    fmt,
+    time::{Duration, Instant},
+};
 
 use crate::{
     clock::ClockKind,
@@ -92,6 +96,21 @@ pub struct MaxPnlFactors<T> {
     pub adl: T,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct Clock {
+    advanced: Duration,
+}
+
+impl Clock {
+    fn now(&self) -> Instant {
+        Instant::now() + self.advanced
+    }
+
+    fn move_forward(&mut self, duration: Duration) {
+        self.advanced += duration;
+    }
+}
+
 /// Test Market.
 #[derive(Debug, Clone)]
 pub struct TestMarket<T: Unsigned, const DECIMALS: u8> {
@@ -111,6 +130,7 @@ pub struct TestMarket<T: Unsigned, const DECIMALS: u8> {
     claimable_funding_amount_per_size: (TestPool<T>, TestPool<T>),
     collateral_sum: (TestPool<T>, TestPool<T>),
     total_borrowing: TestPool<T>,
+    clock: Clock,
     clocks: HashMap<ClockKind, Instant>,
 }
 
@@ -143,7 +163,13 @@ impl<T: Unsigned, const DECIMALS: u8> TestMarket<T, DECIMALS> {
             collateral_sum: Default::default(),
             total_borrowing: Default::default(),
             clocks: Default::default(),
+            clock: Default::default(),
         }
+    }
+
+    /// Move the clock forward.
+    pub fn move_clock_forward(&mut self, duration: Duration) {
+        self.clock.move_forward(duration);
     }
 }
 
@@ -358,8 +384,12 @@ where
     T: CheckedSub + fmt::Display + FixedPointOps<DECIMALS>,
     T::Signed: Num + std::fmt::Debug,
 {
+    fn now(&self) -> Instant {
+        self.clock.now()
+    }
+
     fn just_passed_in_seconds(&mut self, clock: ClockKind) -> crate::Result<u64> {
-        let now = Instant::now();
+        let now = self.now();
         let clock = self.clocks.entry(clock).or_insert(now);
         let duration = now.saturating_duration_since(*clock);
         *clock = now;
@@ -367,7 +397,7 @@ where
     }
 
     fn passed_in_seconds(&self, clock: ClockKind) -> crate::Result<u64> {
-        let now = Instant::now();
+        let now = self.now();
         let clock = self.clocks.get(&clock).unwrap_or(&now);
         let duration = now.saturating_duration_since(*clock);
         Ok(duration.as_secs())
