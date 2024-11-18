@@ -1,6 +1,8 @@
 /// Setup a GMSOL deployment.
 pub mod setup;
 
+mod roles;
+
 mod deposit;
 
 mod withdrawal;
