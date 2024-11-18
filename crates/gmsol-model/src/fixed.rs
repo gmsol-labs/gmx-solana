@@ -152,7 +152,7 @@ impl<T: FixedPointOps<DECIMALS>, const DECIMALS: u8> Mul for Fixed<T, DECIMALS> 
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        self.checked_mul(&rhs).expect("invalid mulplication")
+        self.checked_mul(&rhs).expect("invalid multiplication")
     }
 }
 

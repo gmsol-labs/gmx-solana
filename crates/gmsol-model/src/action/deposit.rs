@@ -304,7 +304,7 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
             if !self.params.long_token_amount.is_zero() {
                 let price_impact = long_token_usd_value
                     .clone()
-                    .checked_mul_div_with_signed_numberator(
+                    .checked_mul_div_with_signed_numerator(
                         &price_impact,
                         &long_token_usd_value
                             .checked_add(&short_token_usd_value)
@@ -321,7 +321,7 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
             if !self.params.short_token_amount.is_zero() {
                 let price_impact = short_token_usd_value
                     .clone()
-                    .checked_mul_div_with_signed_numberator(
+                    .checked_mul_div_with_signed_numerator(
                         &price_impact,
                         &long_token_usd_value
                             .checked_add(&short_token_usd_value)

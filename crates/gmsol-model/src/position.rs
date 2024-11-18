@@ -351,7 +351,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
             {
                 total_pnl = capped_pool_pnl
                     .unsigned_abs()
-                    .checked_mul_div_with_signed_numberator(&total_pnl, &pool_pnl.unsigned_abs())
+                    .checked_mul_div_with_signed_numerator(&total_pnl, &pool_pnl.unsigned_abs())
                     .ok_or(crate::Error::Computation("calculating capped total pnl"))?;
             }
         }
@@ -373,11 +373,11 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         };
 
         let pnl_usd = size_delta_in_tokens
-            .checked_mul_div_with_signed_numberator(&total_pnl, self.size_in_tokens())
+            .checked_mul_div_with_signed_numerator(&total_pnl, self.size_in_tokens())
             .ok_or(crate::Error::Computation("calculating pnl_usd"))?;
 
         let uncapped_pnl_usd = size_delta_in_tokens
-            .checked_mul_div_with_signed_numberator(&uncapped_total_pnl, self.size_in_tokens())
+            .checked_mul_div_with_signed_numerator(&uncapped_total_pnl, self.size_in_tokens())
             .ok_or(crate::Error::Computation("calculating uncapped_pnl_usd"))?;
 
         Ok((pnl_usd, uncapped_pnl_usd, size_delta_in_tokens))

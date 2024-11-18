@@ -123,7 +123,7 @@ pub fn apply_factor_to_signed<T, const DECIMALS: u8>(
 where
     T: FixedPointOps<DECIMALS>,
 {
-    factor.checked_mul_div_with_signed_numberator(value, &FixedPointOps::UNIT)
+    factor.checked_mul_div_with_signed_numerator(value, &FixedPointOps::UNIT)
 }
 
 /// Convert the `value` to a factor after dividing by the `divisor`.
@@ -166,5 +166,5 @@ where
         return Some(Zero::zero());
     }
 
-    T::UNIT.checked_mul_div_with_signed_numberator(value, divisor)
+    T::UNIT.checked_mul_div_with_signed_numerator(value, divisor)
 }

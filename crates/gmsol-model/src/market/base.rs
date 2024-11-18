@@ -30,10 +30,10 @@ pub trait BaseMarket<const DECIMALS: u8> {
     /// Get the swap impact pool.
     fn swap_impact_pool(&self) -> crate::Result<&Self::Pool>;
 
-    /// Get the reference of open interest pool.
+    /// Get the open interest pool.
     fn open_interest_pool(&self, is_long: bool) -> crate::Result<&Self::Pool>;
 
-    /// Get the reference of open interest pool.
+    /// Get the open interest in (index) tokens pool.
     fn open_interest_in_tokens_pool(&self, is_long: bool) -> crate::Result<&Self::Pool>;
 
     /// Get collateral sum pool.
@@ -382,7 +382,7 @@ pub trait BaseMarketExt<const DECIMALS: u8>: BaseMarket<DECIMALS> {
 
 impl<M: BaseMarket<DECIMALS> + ?Sized, const DECIMALS: u8> BaseMarketExt<DECIMALS> for M {}
 
-/// Extension trait for [`BaseMarket`].
+/// Extension trait for [`BaseMarketMut`].
 pub trait BaseMarketMutExt<const DECIMALS: u8>: BaseMarketMut<DECIMALS> {
     /// Apply delta to the primary pool.
     fn apply_delta(&mut self, is_long_token: bool, delta: &Self::Signed) -> crate::Result<()> {
@@ -441,6 +441,6 @@ pub enum PnlFactorKind {
     MaxForTrader,
     /// For auto-deleveraging.
     ForAdl,
-    /// Min factor after auto-deleveraing.
+    /// Min factor after auto-deleveraging.
     MinAfterAdl,
 }

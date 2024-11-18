@@ -121,7 +121,7 @@ where
             }
             accounts.close_action_account()?;
         } else {
-            msg!("Some ATAs are not initilaized, skip the close");
+            msg!("Some ATAs are not initialized, skip the close");
         }
         Ok(())
     }

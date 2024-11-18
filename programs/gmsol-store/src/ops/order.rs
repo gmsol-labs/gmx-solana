@@ -737,7 +737,7 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
         let mut should_throw_error = false;
         let prices = self.market.load()?.prices(self.oracle)?;
         let discount = self.validate_and_get_order_fee_discount()?;
-        let res = match self.perfrom_execution(&mut should_throw_error, prices, discount) {
+        let res = match self.perform_execution(&mut should_throw_error, prices, discount) {
             Ok((should_remove_position, mut transfer_out, should_send_trade_event)) => {
                 transfer_out.set_executed(true);
                 should_close_position = should_remove_position;
@@ -782,7 +782,7 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
     }
 
     #[inline(never)]
-    fn perfrom_execution(
+    fn perform_execution(
         &self,
         should_throw_error: &mut bool,
         prices: Prices<u128>,

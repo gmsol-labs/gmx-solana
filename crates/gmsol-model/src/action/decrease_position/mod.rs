@@ -291,7 +291,7 @@ where
                 .pnl_value(&self.params.prices, self.position.size_in_usd())?;
             let estimated_realized_pnl = self
                 .size_delta_usd
-                .checked_mul_div_with_signed_numberator(&estimated_pnl, self.position.size_in_usd())
+                .checked_mul_div_with_signed_numerator(&estimated_pnl, self.position.size_in_usd())
                 .ok_or(crate::Error::Computation("estimating realized pnl"))?;
             let estimated_remaining_pnl = estimated_pnl
                 .checked_sub(&estimated_realized_pnl)

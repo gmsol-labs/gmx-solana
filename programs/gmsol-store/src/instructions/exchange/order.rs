@@ -482,7 +482,7 @@ pub struct CloseOrder<'info> {
     /// The store.
     #[account(mut)]
     pub store: AccountLoader<'info, Store>,
-    /// THe owner of the order.
+    /// The owner of the order.
     /// CHECK: only used to validate and receive fund.
     #[account(mut)]
     pub owner: UncheckedAccount<'info>,

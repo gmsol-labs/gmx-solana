@@ -126,8 +126,8 @@ pub enum DecimalError {
     #[error("exceeds the maximum decimals")]
     ExceedMaxDecimals,
     /// Invalid decimals.
-    #[error("exceeds the maximum decimal multipler")]
-    ExceedMaxDecimalMultipler,
+    #[error("exceeds the maximum decimal multiplier")]
+    ExceedMaxDecimalMultiplier,
     /// Overflow.
     #[error("overflow")]
     Overflow,

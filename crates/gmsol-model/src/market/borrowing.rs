@@ -91,7 +91,7 @@ pub trait BorrowingFeeMarketExt<const DECIMALS: u8>: BorrowingFeeMarket<DECIMALS
                 crate::Error::Computation("calculating reserved value to pool factor"),
             )?;
         utils::apply_factor(&reversed_value_to_pool_factor, params.factor(is_long)).ok_or(
-            crate::Error::Computation("calculating borrowing factort per second"),
+            crate::Error::Computation("calculating borrowing factor per second"),
         )
     }
 

@@ -60,7 +60,7 @@ macro_rules! fixed_map {
 
             #[allow(dead_code)]
             impl $map {
-                fn binanry_search(&self, key: &[u8; $key_len]) -> std::result::Result<usize, usize> {
+                fn binary_search(&self, key: &[u8; $key_len]) -> std::result::Result<usize, usize> {
                     self.data[..self.len()].binary_search_by(|entry| entry.key.cmp(key))
                 }
 
@@ -68,7 +68,7 @@ macro_rules! fixed_map {
                 pub fn get(&self, key: &$key) -> Option<&$value> {
                     let key = $to_key(key);
                     self
-                        .binanry_search(&key)
+                        .binary_search(&key)
                         .ok()
                         .map(|index| &self.data[index].value)
                 }
@@ -83,11 +83,11 @@ macro_rules! fixed_map {
                     }
                 }
 
-                /// Get mutable reference to the corressponding value.
+                /// Get mutable reference to the corresponding value.
                 pub fn get_mut(&mut self, key: &$key) -> Option<&mut $value> {
                     let key = $to_key(key);
                     self
-                        .binanry_search(&key)
+                        .binary_search(&key)
                         .ok()
                         .map(|index| &mut self.data[index].value)
                 }
@@ -105,7 +105,7 @@ macro_rules! fixed_map {
                     new: bool,
                 ) -> std::result::Result<Option<$value>, anchor_lang::error::Error> {
                     let key = $to_key(key);
-                    match self.binanry_search(&key) {
+                    match self.binary_search(&key) {
                         Ok(index) => {
                             if new {
                                 anchor_lang::err!($crate::GeneralError::AlreadyExist)
@@ -132,7 +132,7 @@ macro_rules! fixed_map {
                 /// Remove.
                 pub fn remove(&mut self, key: &$key) -> Option<$value> {
                     let key = $to_key(key);
-                    self.binanry_search(&key).ok().map(|index| {
+                    self.binary_search(&key).ok().map(|index| {
                         let value = std::mem::take(&mut self.data[index].value);
                         let len = self.len();
                         for i in index..len {

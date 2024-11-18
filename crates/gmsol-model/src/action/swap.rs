@@ -129,7 +129,7 @@ impl<const DECIMALS: u8, M: SwapMarketMut<DECIMALS>> Swap<M, DECIMALS> {
     }
 
     /// Assign the amounts of `token_in` and `token_out` to `long_token` and `short_token`, respectively,
-    /// and assgin the prices of `long_token` and `short_token` to `token_in` and `token_out`.
+    /// and assign the prices of `long_token` and `short_token` to `token_in` and `token_out`.
     fn reassign_values(&self) -> crate::Result<ReassignedValues<M::Num>> {
         if self.params.is_token_in_long {
             let long_delta_value: M::Signed = self

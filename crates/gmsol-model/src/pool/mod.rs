@@ -77,7 +77,7 @@ pub enum PoolKind {
     BorrowingFactor,
     /// Funding amount per size for long.
     FundingAmountPerSizeForLong,
-    /// Funding mmount per size for short.
+    /// Funding amount per size for short.
     FundingAmountPerSizeForShort,
     /// Claimable funding amount per size for long.
     ClaimableFundingAmountPerSizeForLong,

@@ -161,7 +161,7 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
 
 impl<M: LiquidityMarket<DECIMALS>, const DECIMALS: u8> LiquidityMarketExt<DECIMALS> for M {}
 
-/// Extension trait of [`LiquidityMarket`].
+/// Extension trait of [`LiquidityMarketMut`].
 pub trait LiquidityMarketMutExt<const DECIMALS: u8>: LiquidityMarketMut<DECIMALS> {
     /// Create a [`Deposit`] action.
     fn deposit(

@@ -36,7 +36,7 @@ where
         }
 
         let adjustment = size_in_usd
-            .checked_mul_div_with_signed_numberator(&adjusted_price_impact_value, size_delta_usd)
+            .checked_mul_div_with_signed_numerator(&adjusted_price_impact_value, size_delta_usd)
             .ok_or(crate::Error::Computation(
                 "calculating execution price adjustment",
             ))?

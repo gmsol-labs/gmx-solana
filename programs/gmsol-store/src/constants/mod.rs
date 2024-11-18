@@ -38,7 +38,7 @@ pub const FUNDING_AMOUNT_PER_SIZE_ADJUSTMENT: u128 = 10u128.pow((MARKET_DECIMALS
 pub const MARKET_USD_TO_AMOUNT_DIVISOR: u128 =
     10u128.pow((MARKET_DECIMALS - MARKET_TOKEN_DECIMALS) as u32);
 
-/// Deicmals of usd values of factors.
+/// Decimals of usd values of factors.
 pub const MARKET_DECIMALS: u8 = Decimal::MAX_DECIMALS;
 
 /// Default claimable time window.

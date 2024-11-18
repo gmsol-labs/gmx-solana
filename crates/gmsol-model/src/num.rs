@@ -129,7 +129,7 @@ pub trait Unsigned: num_traits::Unsigned {
         }
     }
 
-    /// As divisor to checked divde other and round up magnitude.
+    /// As divisor to checked divide other and round up magnitude.
     fn as_divisor_to_round_up_magnitude_div(&self, dividend: &Self::Signed) -> Option<Self::Signed>
     where
         Self: Clone,
@@ -206,7 +206,7 @@ pub trait MulDiv: Unsigned {
     /// where `numerator` is signed.
     ///
     /// Returns `None` if the `denominator` is zero or overflow.
-    fn checked_mul_div_with_signed_numberator(
+    fn checked_mul_div_with_signed_numerator(
         &self,
         numerator: &Self::Signed,
         denominator: &Self,
