@@ -269,7 +269,7 @@ pub trait PerpMarketExt<const DECIMALS: u8>: PerpMarket<DECIMALS> {
 
 impl<M: PerpMarket<DECIMALS>, const DECIMALS: u8> PerpMarketExt<DECIMALS> for M {}
 
-/// Extension trait for [`PerpMarket`].
+/// Extension trait for [`PerpMarketMut`].
 pub trait PerpMarketMutExt<const DECIMALS: u8>: PerpMarketMut<DECIMALS> {
     /// Create a [`UpdateBorrowingState`] action.
     fn update_borrowing(
