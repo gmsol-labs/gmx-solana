@@ -2,6 +2,7 @@ use std::ops::Deref;
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
+use gmsol_utils::InitSpace;
 
 use crate::{
     constants,

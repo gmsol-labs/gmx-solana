@@ -18,7 +18,7 @@ use crate::{
         common::action::{ActionEvent, ActionState},
         order::{OrderKind, TransferOut},
         position::PositionState,
-        Position,
+        Position, Seed,
     },
     CoreError,
 };
@@ -589,12 +589,12 @@ pub struct TradeData {
     pub output_amounts: TradeOutputAmounts,
 }
 
-impl TradeData {
-    /// Init space.
-    pub const INIT_SPACE: usize = core::mem::size_of::<Self>();
+impl InitSpace for TradeData {
+    const INIT_SPACE: usize = std::mem::size_of::<Self>();
+}
 
-    /// Seed.
-    pub const SEED: &'static [u8] = b"trade_event_data";
+impl Seed for TradeData {
+    const SEED: &'static [u8] = b"trade_event_data";
 }
 
 /// Price.
