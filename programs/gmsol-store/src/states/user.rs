@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use gmsol_utils::InitSpace;
 
 use crate::CoreError;
 
@@ -217,9 +218,6 @@ pub struct ReferralCode {
 }
 
 impl ReferralCode {
-    /// Init Space.
-    pub const INIT_SPACE: usize = core::mem::size_of::<Self>();
-
     /// The length of referral code.
     pub const LEN: usize = core::mem::size_of::<ReferralCodeBytes>();
 
@@ -248,6 +246,10 @@ impl ReferralCode {
             code
         }
     }
+}
+
+impl InitSpace for ReferralCode {
+    const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
 impl Seed for ReferralCode {

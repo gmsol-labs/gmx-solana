@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use gmsol_utils::InitSpace;
 
 use crate::{
     states::{
