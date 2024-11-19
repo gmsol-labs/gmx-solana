@@ -216,11 +216,10 @@ impl Default for TestMarketConfig<u64, 9> {
     fn default() -> Self {
         Self {
             swap_impact_params: PriceImpactParams::builder()
-                .with_exponent(2_000_000_000)
-                .with_positive_factor(4)
-                .with_negative_factor(8)
-                .build()
-                .unwrap(),
+                .exponent(2_000_000_000)
+                .positive_factor(4)
+                .negative_factor(8)
+                .build(),
             swap_fee_params: FeeParams::builder()
                 .with_fee_receiver_factor(370_000_000)
                 .with_positive_impact_fee_factor(500_000)
@@ -235,11 +234,10 @@ impl Default for TestMarketConfig<u64, 9> {
                 2_500_000,
             ),
             position_impact_params: PriceImpactParams::builder()
-                .with_exponent(2_000_000_000)
-                .with_positive_factor(1)
-                .with_negative_factor(2)
-                .build()
-                .unwrap(),
+                .exponent(2_000_000_000)
+                .positive_factor(1)
+                .negative_factor(2)
+                .build(),
             order_fee_params: FeeParams::builder()
                 .with_fee_receiver_factor(370_000_000)
                 .with_positive_impact_fee_factor(500_000)
@@ -289,11 +287,10 @@ impl Default for TestMarketConfig<u128, 20> {
     fn default() -> Self {
         Self {
             swap_impact_params: PriceImpactParams::builder()
-                .with_exponent(200_000_000_000_000_000_000)
-                .with_positive_factor(400_000_000_000)
-                .with_negative_factor(800_000_000_000)
-                .build()
-                .unwrap(),
+                .exponent(200_000_000_000_000_000_000)
+                .positive_factor(400_000_000_000)
+                .negative_factor(800_000_000_000)
+                .build(),
             swap_fee_params: FeeParams::builder()
                 .with_fee_receiver_factor(37_000_000_000_000_000_000)
                 .with_positive_impact_fee_factor(50_000_000_000_000_000)
@@ -308,11 +305,10 @@ impl Default for TestMarketConfig<u128, 20> {
                 250_000_000_000_000_000,
             ),
             position_impact_params: PriceImpactParams::builder()
-                .with_exponent(200_000_000_000_000_000_000)
-                .with_positive_factor(100_000_000_000)
-                .with_negative_factor(200_000_000_000)
-                .build()
-                .unwrap(),
+                .exponent(200_000_000_000_000_000_000)
+                .positive_factor(100_000_000_000)
+                .negative_factor(200_000_000_000)
+                .build(),
             order_fee_params: FeeParams::builder()
                 .with_fee_receiver_factor(37_000_000_000_000_000_000)
                 .with_positive_impact_fee_factor(50_000_000_000_000_000)

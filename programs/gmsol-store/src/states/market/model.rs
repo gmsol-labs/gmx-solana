@@ -105,11 +105,11 @@ impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for Market {
 
 impl gmsol_model::SwapMarket<{ constants::MARKET_DECIMALS }> for Market {
     fn swap_impact_params(&self) -> gmsol_model::Result<PriceImpactParams<Self::Num>> {
-        PriceImpactParams::builder()
-            .with_exponent(self.config.swap_impact_exponent)
-            .with_positive_factor(self.config.swap_impact_positive_factor)
-            .with_negative_factor(self.config.swap_impact_negative_factor)
-            .build()
+        Ok(PriceImpactParams::builder()
+            .exponent(self.config.swap_impact_exponent)
+            .positive_factor(self.config.swap_impact_positive_factor)
+            .negative_factor(self.config.swap_impact_negative_factor)
+            .build())
     }
 
     fn swap_fee_params(&self) -> gmsol_model::Result<FeeParams<Self::Num>> {
@@ -128,11 +128,11 @@ impl gmsol_model::PositionImpactMarket<{ constants::MARKET_DECIMALS }> for Marke
 
     fn position_impact_params(&self) -> gmsol_model::Result<PriceImpactParams<Self::Num>> {
         let config = &self.config;
-        PriceImpactParams::builder()
-            .with_exponent(config.position_impact_exponent)
-            .with_positive_factor(config.position_impact_positive_factor)
-            .with_negative_factor(config.position_impact_negative_factor)
-            .build()
+        Ok(PriceImpactParams::builder()
+            .exponent(config.position_impact_exponent)
+            .positive_factor(config.position_impact_positive_factor)
+            .negative_factor(config.position_impact_negative_factor)
+            .build())
     }
 
     fn position_impact_distribution_params(

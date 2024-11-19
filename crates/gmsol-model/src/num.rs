@@ -189,7 +189,7 @@ pub trait Unsigned: num_traits::Unsigned {
     /// Returns an error if `min > max`:
     /// ```
     /// # use gmsol_model::num::Unsigned;
-    /// let result = Unsigned::bound_magnitude(&0, &1, &0);
+    /// let result = Unsigned::bound_magnitude(&0, &1u64, &0);
     /// assert!(result.is_err());
     /// ```
     ///
