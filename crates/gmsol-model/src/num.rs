@@ -157,10 +157,48 @@ pub trait Unsigned: num_traits::Unsigned {
         Some(self.checked_add(divisor)?.checked_sub(&One::one())? / divisor.clone())
     }
 
-    /// Bound magnitude.
+    /// Bound the magnitude of a signed value.
     ///
-    /// ## Panic
-    /// Panic if `min > max`.
+    /// # Errors
+    /// Return error if
+    /// - `min > max`
+    /// - `min` is greater than the maximum value representable by `Self::Signed`
+    ///
+    /// # Examples
+    ///
+    /// This method can be used to bound the magnitude of a signed value:
+    /// ```
+    /// # use gmsol_model::num::Unsigned;
+    /// let a = -123i64;
+    /// // Original value within bounds
+    /// assert_eq!(Unsigned::bound_magnitude(&a, &0, &124u64).unwrap(), -123);
+    /// // Value clamped to max magnitude
+    /// assert_eq!(Unsigned::bound_magnitude(&a, &0, &120u64).unwrap(), -120);
+    /// // Value clamped to min magnitude
+    /// assert_eq!(Unsigned::bound_magnitude(&a, &124, &256u64).unwrap(), -124);
+    ///
+    /// let b = 123i64;
+    /// // Original value within bounds
+    /// assert_eq!(Unsigned::bound_magnitude(&b, &0, &124u64).unwrap(), 123);
+    /// // Value clamped to max magnitude
+    /// assert_eq!(Unsigned::bound_magnitude(&b, &0, &120u64).unwrap(), 120);
+    /// // Value clamped to min magnitude
+    /// assert_eq!(Unsigned::bound_magnitude(&b, &124, &256u64).unwrap(), 124);
+    /// ```
+    ///
+    /// Returns an error if `min > max`:
+    /// ```
+    /// # use gmsol_model::num::Unsigned;
+    /// let result = Unsigned::bound_magnitude(&0, &1, &0);
+    /// assert!(result.is_err());
+    /// ```
+    ///
+    /// Returns an error if `min` is greater than the maximum value representable by `Self::Signed`:
+    /// ```
+    /// # use gmsol_model::num::Unsigned;
+    /// let result = Unsigned::bound_magnitude(&0, &(u64::MAX / 2 + 1), &u64::MAX);
+    /// assert!(result.is_err());
+    /// ```
     fn bound_magnitude(value: &Self::Signed, min: &Self, max: &Self) -> crate::Result<Self::Signed>
     where
         Self: Ord + Clone,
@@ -358,16 +396,21 @@ mod tests {
         assert_eq!(Unsigned::bound_magnitude(&a, &0, &124u64).unwrap(), -123);
         assert_eq!(Unsigned::bound_magnitude(&a, &0, &120u64).unwrap(), -120);
         assert_eq!(Unsigned::bound_magnitude(&a, &124, &256u64).unwrap(), -124);
+        assert_eq!(Unsigned::bound_magnitude(&a, &125, &125u64).unwrap(), -125);
 
         let b = 123i64;
         assert_eq!(Unsigned::bound_magnitude(&b, &0, &124u64).unwrap(), 123);
         assert_eq!(Unsigned::bound_magnitude(&b, &0, &120u64).unwrap(), 120);
         assert_eq!(Unsigned::bound_magnitude(&b, &124, &256u64).unwrap(), 124);
+        assert_eq!(Unsigned::bound_magnitude(&b, &125, &125u64).unwrap(), 125);
 
         let c = 0i64;
         assert_eq!(Unsigned::bound_magnitude(&c, &1, &124u64).unwrap(), 1);
 
         let d = -0i64;
         assert_eq!(Unsigned::bound_magnitude(&d, &1, &124u64).unwrap(), 1);
+
+        let result = Unsigned::bound_magnitude(&0, &u64::MAX, &u64::MAX);
+        assert!(result.is_err());
     }
 }
