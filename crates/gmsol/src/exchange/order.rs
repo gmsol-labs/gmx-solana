@@ -1242,7 +1242,6 @@ where
                         .map(|(token, _)| get_associated_token_address(&owner, token)),
                     associated_token_program: anchor_spl::associated_token::ID,
                     token_program: anchor_spl::token::ID,
-                    gt_token_program: anchor_spl::token_2022::ID,
                     system_program: system_program::ID,
                     program: *self.client.store_program_id(),
                 },

@@ -4,7 +4,6 @@ use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked},
-    token_interface,
 };
 use gmsol_model::utils::apply_factor;
 use gmsol_utils::InitSpace;
@@ -586,8 +585,6 @@ pub struct CloseOrder<'info> {
     pub system_program: Program<'info, System>,
     /// The token program.
     pub token_program: Program<'info, Token>,
-    /// The token program for GT.
-    pub gt_token_program: Interface<'info, token_interface::TokenInterface>,
     /// The associated token program.
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
