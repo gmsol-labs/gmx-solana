@@ -479,8 +479,8 @@ impl<T> PositionFees<T> {
         self.borrowing = BorrowingFee::default();
     }
 
-    /// Apply borrowing fee.
-    pub fn apply_borrowing_fee<const DECIMALS: u8>(
+    /// Set borrowing fee.
+    pub fn set_borrowing_fee<const DECIMALS: u8>(
         mut self,
         receiver_factor: &T,
         price: &Price<T>,
@@ -500,8 +500,8 @@ impl<T> PositionFees<T> {
         Ok(self)
     }
 
-    /// Apply funding fees.
-    pub fn apply_funding_fees(mut self, fees: FundingFees<T>) -> Self {
+    /// Set funding fees.
+    pub fn set_funding_fees(mut self, fees: FundingFees<T>) -> Self {
         self.funding = fees;
         self
     }

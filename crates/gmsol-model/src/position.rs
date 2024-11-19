@@ -687,12 +687,12 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
             .market()
             .order_fee_params()?
             .base_position_fees(collateral_token_price, size_delta_usd, is_positive_impact)?
-            .apply_borrowing_fee(
+            .set_borrowing_fee(
                 self.market().borrowing_fee_params()?.receiver_factor(),
                 collateral_token_price,
                 self.borrowing_fee_value()?,
             )?
-            .apply_funding_fees(self.funding_fees()?);
+            .set_funding_fees(self.funding_fees()?);
         Ok(fees)
     }
 }
