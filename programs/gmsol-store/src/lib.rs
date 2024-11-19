@@ -1617,7 +1617,7 @@ pub mod gmsol_store {
     }
 
     // ===========================================
-    //                  Depsoit
+    //                  Deposit
     // ===========================================
 
     /// Create a deposit by the owner.
@@ -1632,7 +1632,7 @@ pub mod gmsol_store {
     /// # Errors
     /// This instruction will fail if:
     /// - The [`owner`](CreateDeposit::owner) is not a signer or has insufficient balance
-    ///   for the execution fee.
+    ///   for the execution fee and rent.
     /// - The [`store`](CreateDeposit::store) is not properly initialized.
     /// - The [`market`](CreateDeposit::market) is not initialized, not owned by the store,
     ///   or is disabled.
@@ -1836,7 +1836,8 @@ pub mod gmsol_store {
     ///
     /// # Errors
     /// This instruction will fail if:
-    /// - The [`owner`](PreparePosition::owner) is not a signer.
+    /// - The [`owner`](PreparePosition::owner) is not a signer or has insufficient balance for the
+    ///   rent.
     /// - The [`store`](PreparePosition::store) is not properly initialized.
     /// - The [`market`](PreparePosition::market) is not initialized, is disabled, or not owned by
     ///   the `store`.
@@ -1862,7 +1863,8 @@ pub mod gmsol_store {
     ///
     /// # Errors
     /// This instruction will fail if:
-    /// - The [`owner`](CreateOrder::owner) is not a signer.
+    /// - The [`owner`](CreateOrder::owner) is not a signer or has insufficient balance for the
+    ///   execution fee and rent.
     /// - The [`store`](CreateOrder::store) is not properly initialized.
     /// - The [`market`](CreateOrder::market) is not initialized, is disabled, or not owned by
     ///   the `store`.
@@ -2277,7 +2279,8 @@ pub mod gmsol_store {
     /// - `params`: The parameters for creating the shift.
     ///
     /// # Errors
-    /// - The [`owner`](CreateShift::owner) must be a signer.
+    /// - The [`owner`](CreateShift::owner) must be a signer and have sufficient balance for the
+    ///   execution fee and rent.
     /// - The [`store`](CreateShift::store) must be initialized.
     /// - The [`from_market`](CreateShift::from_market) must be initialized, enabled
     ///   and store-owned.
@@ -2814,8 +2817,8 @@ pub mod gmsol_store {
     ///
     /// # Errors
     /// - The [`authority`](InitializeGlv::authority) must be a signer and have
-    ///   MARKET_KEEPER role in the store
-    /// - The [`store`](InitializeGlv::store) must be properly initialized
+    ///   MARKET_KEEPER role in the store.
+    /// - The [`store`](InitializeGlv::store) must be properly initialized.
     /// - The [`glv_token`](InitializeGlv::glv_token) must be:
     ///   - Uninitialized
     ///   - Address must be PDA derived from [`GLV_TOKEN_SEED`](crate::states::Glv::GLV_TOKEN_SEED),
@@ -2824,7 +2827,7 @@ pub mod gmsol_store {
     ///   - Uninitialized  
     ///   - Address must be PDA derived from the SEED of [`Glv`](states::Glv) and the address of the
     ///     [`glv_token`](InitializeGlv::glv_token)
-    /// - The remaining required accounts are documented in [`InitializeGlv`]
+    /// - The remaining required accounts are documented in [`InitializeGlv`].
     /// - The `length` must be:
     ///   - Greater than 0
     ///   - Less than or equal to [`Glv::MAX_ALLOWED_NUMBER_OF_MARKETS`](crate::states::Glv::MAX_ALLOWED_NUMBER_OF_MARKETS)
@@ -2878,7 +2881,8 @@ pub mod gmsol_store {
     /// - `params`: The parameters for creating the GLV deposit.
     ///
     /// # Errors
-    /// - The [`owner`](CreateGlvDeposit::owner) must be a signer.
+    /// - The [`owner`](CreateGlvDeposit::owner) must be a signer and have sufficient balance
+    ///   for the execution fee and rent.
     /// - The [`store`](CreateGlvDeposit::store) must be properly initialized.
     /// - The [`market`](CreateGlvDeposit::market) must be:
     ///   - Properly initialized
@@ -3028,7 +3032,8 @@ pub mod gmsol_store {
     /// - `params`: The parameters for creating the GLV withdrawal.
     ///
     /// # Errors
-    /// - The [`owner`](CreateGlvWithdrawal::owner) must be a signer.
+    /// - The [`owner`](CreateGlvWithdrawal::owner) must be a signer and have sufficient balance
+    ///   for the execution fee and rent.
     /// - The [`store`](CreateGlvWithdrawal::store) must be properly initialized.
     /// - The [`market`](CreateGlvWithdrawal::market) must be:
     ///   - Properly initialized
