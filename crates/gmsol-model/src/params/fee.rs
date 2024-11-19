@@ -4,32 +4,20 @@ use typed_builder::TypedBuilder;
 use crate::{fixed::FixedPointOps, num::Unsigned, price::Price, utils};
 
 /// Fee Parameters.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, TypedBuilder)]
 pub struct FeeParams<T> {
     positive_impact_fee_factor: T,
     negative_impact_fee_factor: T,
     fee_receiver_factor: T,
-    discount_factor: T,
+    #[builder(default = None, setter(strip_option))]
+    discount_factor: Option<T>,
 }
 
 impl<T> FeeParams<T> {
-    /// Builder for [`FeeParams`].
-    pub fn builder() -> Builder<T>
-    where
-        T: Zero,
-    {
-        Builder {
-            positive_impact_factor: Zero::zero(),
-            negative_impact_factor: Zero::zero(),
-            fee_receiver_factor: Zero::zero(),
-            discount_factor: Zero::zero(),
-        }
-    }
-
     /// Set discount factor.
     pub fn with_discount_factor(self, factor: T) -> Self {
         Self {
-            discount_factor: factor,
+            discount_factor: Some(factor),
             ..self
         }
     }
@@ -43,6 +31,16 @@ impl<T> FeeParams<T> {
         }
     }
 
+    fn discount_factor(&self) -> T
+    where
+        T: Zero + Clone,
+    {
+        self.discount_factor
+            .as_ref()
+            .cloned()
+            .unwrap_or(Zero::zero())
+    }
+
     /// Get basic fee.
     #[inline]
     pub fn fee<const DECIMALS: u8>(&self, is_positive_impact: bool, amount: &T) -> Option<T>
@@ -51,7 +49,7 @@ impl<T> FeeParams<T> {
     {
         let factor = self.factor(is_positive_impact);
         let fee = utils::apply_factor(amount, factor)?;
-        let discount = utils::apply_factor(&fee, &self.discount_factor)?;
+        let discount = utils::apply_factor(&fee, &self.discount_factor())?;
         fee.checked_sub(&discount)
     }
 
@@ -515,50 +513,6 @@ impl<T: Zero> Default for PositionFees<T> {
             base: Default::default(),
             borrowing: Default::default(),
             funding: Default::default(),
-        }
-    }
-}
-
-/// Builder for [`FeeParams`].
-pub struct Builder<T> {
-    positive_impact_factor: T,
-    negative_impact_factor: T,
-    fee_receiver_factor: T,
-    discount_factor: T,
-}
-
-impl<T> Builder<T> {
-    /// Set the fee factor for positive impact.
-    pub fn with_positive_impact_fee_factor(mut self, factor: T) -> Self {
-        self.positive_impact_factor = factor;
-        self
-    }
-
-    /// Set the fee factor for negative impact.
-    pub fn with_negative_impact_fee_factor(mut self, factor: T) -> Self {
-        self.negative_impact_factor = factor;
-        self
-    }
-
-    /// Set the fee receiver factor.
-    pub fn with_fee_receiver_factor(mut self, factor: T) -> Self {
-        self.fee_receiver_factor = factor;
-        self
-    }
-
-    /// Set discount factor.
-    pub fn with_discount_factor(mut self, factor: T) -> Self {
-        self.discount_factor = factor;
-        self
-    }
-
-    /// Build [`FeeParams`].
-    pub fn build(self) -> FeeParams<T> {
-        FeeParams {
-            positive_impact_fee_factor: self.positive_impact_factor,
-            negative_impact_fee_factor: self.negative_impact_factor,
-            fee_receiver_factor: self.fee_receiver_factor,
-            discount_factor: self.discount_factor,
         }
     }
 }

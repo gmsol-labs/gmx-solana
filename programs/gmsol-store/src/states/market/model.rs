@@ -114,9 +114,9 @@ impl gmsol_model::SwapMarket<{ constants::MARKET_DECIMALS }> for Market {
 
     fn swap_fee_params(&self) -> gmsol_model::Result<FeeParams<Self::Num>> {
         Ok(FeeParams::builder()
-            .with_fee_receiver_factor(self.config.swap_fee_receiver_factor)
-            .with_positive_impact_fee_factor(self.config.swap_fee_factor_for_positive_impact)
-            .with_negative_impact_fee_factor(self.config.swap_fee_factor_for_negative_impact)
+            .fee_receiver_factor(self.config.swap_fee_receiver_factor)
+            .positive_impact_fee_factor(self.config.swap_fee_factor_for_positive_impact)
+            .negative_impact_fee_factor(self.config.swap_fee_factor_for_negative_impact)
             .build())
     }
 }
@@ -230,9 +230,9 @@ impl gmsol_model::PerpMarket<{ constants::MARKET_DECIMALS }> for Market {
 
     fn order_fee_params(&self) -> gmsol_model::Result<FeeParams<Self::Num>> {
         Ok(FeeParams::builder()
-            .with_fee_receiver_factor(self.config.order_fee_receiver_factor)
-            .with_positive_impact_fee_factor(self.config.order_fee_factor_for_positive_impact)
-            .with_negative_impact_fee_factor(self.config.order_fee_factor_for_negative_impact)
+            .fee_receiver_factor(self.config.order_fee_receiver_factor)
+            .positive_impact_fee_factor(self.config.order_fee_factor_for_positive_impact)
+            .negative_impact_fee_factor(self.config.order_fee_factor_for_negative_impact)
             .build())
     }
 

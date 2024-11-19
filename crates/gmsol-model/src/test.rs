@@ -221,9 +221,9 @@ impl Default for TestMarketConfig<u64, 9> {
                 .negative_factor(8)
                 .build(),
             swap_fee_params: FeeParams::builder()
-                .with_fee_receiver_factor(370_000_000)
-                .with_positive_impact_fee_factor(500_000)
-                .with_negative_impact_fee_factor(700_000)
+                .fee_receiver_factor(370_000_000)
+                .positive_impact_fee_factor(500_000)
+                .negative_impact_fee_factor(700_000)
                 .build(),
             position_params: PositionParams::new(
                 1_000_000_000,
@@ -239,9 +239,9 @@ impl Default for TestMarketConfig<u64, 9> {
                 .negative_factor(2)
                 .build(),
             order_fee_params: FeeParams::builder()
-                .with_fee_receiver_factor(370_000_000)
-                .with_positive_impact_fee_factor(500_000)
-                .with_negative_impact_fee_factor(700_000)
+                .fee_receiver_factor(370_000_000)
+                .positive_impact_fee_factor(500_000)
+                .negative_impact_fee_factor(700_000)
                 .build(),
             position_impact_distribution_params: PositionImpactDistributionParams::builder()
                 .distribute_factor(1_000_000_000)
@@ -292,9 +292,9 @@ impl Default for TestMarketConfig<u128, 20> {
                 .negative_factor(800_000_000_000)
                 .build(),
             swap_fee_params: FeeParams::builder()
-                .with_fee_receiver_factor(37_000_000_000_000_000_000)
-                .with_positive_impact_fee_factor(50_000_000_000_000_000)
-                .with_negative_impact_fee_factor(70_000_000_000_000_000)
+                .fee_receiver_factor(37_000_000_000_000_000_000)
+                .positive_impact_fee_factor(50_000_000_000_000_000)
+                .negative_impact_fee_factor(70_000_000_000_000_000)
                 .build(),
             position_params: PositionParams::new(
                 100_000_000_000_000_000_000,
@@ -310,9 +310,9 @@ impl Default for TestMarketConfig<u128, 20> {
                 .negative_factor(200_000_000_000)
                 .build(),
             order_fee_params: FeeParams::builder()
-                .with_fee_receiver_factor(37_000_000_000_000_000_000)
-                .with_positive_impact_fee_factor(50_000_000_000_000_000)
-                .with_negative_impact_fee_factor(70_000_000_000_000_000)
+                .fee_receiver_factor(37_000_000_000_000_000_000)
+                .positive_impact_fee_factor(50_000_000_000_000_000)
+                .negative_impact_fee_factor(70_000_000_000_000_000)
                 .build(),
             position_impact_distribution_params: PositionImpactDistributionParams::builder()
                 .distribute_factor(100_000_000_000_000_000_000)
