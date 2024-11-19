@@ -34,7 +34,7 @@ pub fn find_first_deposit_owner_pda(store_program_id: &Pubkey) -> (Pubkey, u8) {
 }
 
 impl InitSpace for Deposit {
-    const INIT_SPACE: usize = core::mem::size_of::<Self>();
+    const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
 impl Closable for Deposit {

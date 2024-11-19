@@ -45,7 +45,7 @@ impl Seed for Withdrawal {
 }
 
 impl gmsol_utils::InitSpace for Withdrawal {
-    const INIT_SPACE: usize = core::mem::size_of::<Self>();
+    const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
 impl Action for Withdrawal {

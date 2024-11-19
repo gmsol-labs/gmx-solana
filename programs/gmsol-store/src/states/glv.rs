@@ -463,7 +463,7 @@ impl Seed for GlvDeposit {
 }
 
 impl gmsol_utils::InitSpace for GlvDeposit {
-    const INIT_SPACE: usize = core::mem::size_of::<Self>();
+    const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
 impl GlvDeposit {
@@ -683,7 +683,7 @@ impl Seed for GlvWithdrawal {
 }
 
 impl gmsol_utils::InitSpace for GlvWithdrawal {
-    const INIT_SPACE: usize = core::mem::size_of::<Self>();
+    const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
 impl HasSwapParams for GlvWithdrawal {
@@ -816,7 +816,7 @@ impl Seed for GlvShift {
 }
 
 impl gmsol_utils::InitSpace for GlvShift {
-    const INIT_SPACE: usize = core::mem::size_of::<Self>();
+    const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
 impl GlvShift {

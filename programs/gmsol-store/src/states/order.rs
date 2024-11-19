@@ -349,7 +349,7 @@ impl Seed for Order {
 }
 
 impl gmsol_utils::InitSpace for Order {
-    const INIT_SPACE: usize = core::mem::size_of::<Self>();
+    const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
 impl Action for Order {

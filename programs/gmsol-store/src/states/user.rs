@@ -64,7 +64,7 @@ impl UserHeader {
 
     /// Get User Account space.
     pub fn space(_version: u8) -> usize {
-        core::mem::size_of::<Self>()
+        std::mem::size_of::<Self>()
     }
 
     /// Get referral.
@@ -219,7 +219,7 @@ pub struct ReferralCode {
 
 impl ReferralCode {
     /// The length of referral code.
-    pub const LEN: usize = core::mem::size_of::<ReferralCodeBytes>();
+    pub const LEN: usize = std::mem::size_of::<ReferralCodeBytes>();
 
     #[cfg(feature = "utils")]
     /// Decode the given code string to code bytes.

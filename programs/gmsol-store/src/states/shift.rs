@@ -51,7 +51,7 @@ impl Closable for Shift {
 }
 
 impl gmsol_utils::InitSpace for Shift {
-    const INIT_SPACE: usize = core::mem::size_of::<Self>();
+    const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
 impl Shift {
