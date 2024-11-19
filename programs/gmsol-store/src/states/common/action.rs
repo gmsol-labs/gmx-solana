@@ -274,7 +274,7 @@ pub trait ActionExt: Action {
         let balance = account.get_lamports().saturating_sub(execution_lamports);
         let rent = Rent::get()?;
         require!(
-            rent.is_exempt(balance, Self::INIT_SPACE),
+            rent.is_exempt(balance, 8 + Self::INIT_SPACE),
             CoreError::NotEnoughExecutionFee
         );
         Ok(())
