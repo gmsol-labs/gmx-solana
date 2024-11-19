@@ -110,22 +110,6 @@ where
     value.checked_mul_div(factor, &FixedPointOps::UNIT)
 }
 
-/// Apply factor using this formula: `A * x`.
-///
-/// Assuming that `value` and `factor` are a fixed-point decimals,
-/// but they do not need to be of the same decimals.
-/// The const type `DECIMALS` is the decimals of `factor`.
-#[inline]
-pub fn apply_factor_to_signed<T, const DECIMALS: u8>(
-    value: &T::Signed,
-    factor: &T,
-) -> Option<T::Signed>
-where
-    T: FixedPointOps<DECIMALS>,
-{
-    factor.checked_mul_div_with_signed_numerator(value, &FixedPointOps::UNIT)
-}
-
 /// Convert the `value` to a factor after dividing by the `divisor`.
 ///
 /// ## Notes
@@ -167,4 +151,30 @@ where
     }
 
     T::UNIT.checked_mul_div_with_signed_numerator(value, divisor)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[allow(clippy::identity_op)]
+    fn test_apply_factor() {
+        use crate::fixed::Fixed;
+        type U64D9 = Fixed<u64, 9>;
+        type U64D10 = Fixed<u64, 10>;
+
+        let x = 12 * *U64D10::ONE.get();
+        let y = 1 * *U64D9::ONE.get();
+        let res = crate::utils::apply_factor::<_, 19>(&x, &y).unwrap();
+        assert_eq!(res, 12u64);
+
+        let x = 100 * *U64D9::ONE.get();
+        let y = 1 * (*U64D9::ONE.get() / 100); // 1%
+        let res = crate::utils::apply_factor::<_, 9>(&x, &y).unwrap();
+        assert_eq!(res, *U64D9::ONE.get());
+
+        let x = 100 * *U64D9::ONE.get();
+        let y = 1 * (*U64D9::ONE.get() + *U64D9::ONE.get() / 10); // 110%
+        let res = crate::utils::apply_factor::<_, 9>(&x, &y).unwrap();
+        assert_eq!(res, 110 * *U64D9::ONE.get());
+    }
 }
