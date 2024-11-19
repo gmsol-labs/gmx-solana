@@ -94,7 +94,7 @@ impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for Market {
             (PnlFactorKind::ForAdl, false) => Ok(self.config.max_pnl_factor_for_short_adl),
             (PnlFactorKind::MinAfterAdl, true) => Ok(self.config.min_pnl_factor_after_long_adl),
             (PnlFactorKind::MinAfterAdl, false) => Ok(self.config.min_pnl_factor_after_short_adl),
-            _ => Err(gmsol_model::Error::invalid_argument("missing pnl factor")),
+            _ => Err(gmsol_model::Error::InvalidArgument("missing pnl factor")),
         }
     }
 

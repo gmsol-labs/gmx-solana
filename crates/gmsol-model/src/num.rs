@@ -167,7 +167,7 @@ pub trait Unsigned: num_traits::Unsigned {
         Self::Signed: Clone + CheckedSub,
     {
         if min > max {
-            return Err(crate::Error::invalid_argument("min > max"));
+            return Err(crate::Error::InvalidArgument("min > max"));
         }
         let magnitude = value.unsigned_abs();
         let negative = value.is_negative();

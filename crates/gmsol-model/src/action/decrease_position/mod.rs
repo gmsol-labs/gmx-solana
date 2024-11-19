@@ -101,7 +101,7 @@ where
         is_liquidation_order: bool,
     ) -> crate::Result<Self> {
         if !prices.is_valid() {
-            return Err(crate::Error::invalid_argument("invalid prices"));
+            return Err(crate::Error::InvalidArgument("invalid prices"));
         }
         let size_delta_usd = size_delta_usd.min(position.size_in_usd().clone());
         Ok(Self {
@@ -318,7 +318,7 @@ where
                 &mut will_be_sufficient
             {
                 if self.size_delta_usd.is_zero() {
-                    return Err(crate::Error::invalid_argument(
+                    return Err(crate::Error::InvalidArgument(
                         "unable to withdraw collateral: insufficient collateral",
                     ));
                 }

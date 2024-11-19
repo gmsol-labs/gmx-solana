@@ -147,7 +147,7 @@ where
         if self.is_valid() {
             Ok(())
         } else {
-            Err(crate::Error::invalid_argument("invalid prices"))
+            Err(crate::Error::InvalidArgument("invalid prices"))
         }
     }
 }

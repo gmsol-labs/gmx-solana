@@ -164,7 +164,7 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Withdrawal<M, DECIMALS
             false,
         )?;
         if pool_value.is_zero() {
-            return Err(crate::Error::invalid_pool_value("withdrawal"));
+            return Err(crate::Error::InvalidPoolValue("withdrawal"));
         }
         let total_supply = self.market.total_supply();
 

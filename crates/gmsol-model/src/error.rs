@@ -38,7 +38,7 @@ pub enum Error {
     DividedByZero,
     /// Invalid pool value.
     #[error("invalid pool value {0}")]
-    InvalidPoolValue(String),
+    InvalidPoolValue(&'static str),
     /// Convert error.
     #[error("convert value error")]
     Convert,
@@ -48,7 +48,7 @@ pub enum Error {
     Solana(#[from] anchor_lang::prelude::Error),
     /// Build params error.
     #[error("build params: {0}")]
-    BuildParams(String),
+    BuildParams(&'static str),
     /// Missing pool of kind.
     #[error("missing pool of kind: {0:?}")]
     MissingPoolKind(PoolKind),
@@ -97,21 +97,4 @@ pub enum Error {
     /// Invalid token balance.
     #[error("invalid token balance: {0}, expected={1}, balance={2}")]
     InvalidTokenBalance(&'static str, String, String),
-}
-
-impl Error {
-    /// Build params.
-    pub fn build_params(msg: impl ToString) -> Self {
-        Self::BuildParams(msg.to_string())
-    }
-
-    /// Invalid pool value.
-    pub fn invalid_pool_value(msg: impl ToString) -> Self {
-        Self::InvalidPoolValue(msg.to_string())
-    }
-
-    /// Invalid argument.
-    pub fn invalid_argument(msg: &'static str) -> Self {
-        Self::InvalidArgument(msg)
-    }
 }

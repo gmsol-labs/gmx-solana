@@ -75,13 +75,13 @@ impl<T> Builder<T> {
         Ok(PriceImpactParams {
             exponent: self
                 .exponent
-                .ok_or(crate::Error::build_params("missing `exponent`"))?,
+                .ok_or(crate::Error::BuildParams("missing `exponent`"))?,
             positive_factor: self
                 .positive_factor
-                .ok_or(crate::Error::build_params("missing `positive_factor`"))?,
+                .ok_or(crate::Error::BuildParams("missing `positive_factor`"))?,
             negative_factor: self
                 .negative_factor
-                .ok_or(crate::Error::build_params("missing `negative_factor`"))?,
+                .ok_or(crate::Error::BuildParams("missing `negative_factor`"))?,
         })
     }
 }

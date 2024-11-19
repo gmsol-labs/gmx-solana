@@ -186,7 +186,7 @@ where
         acceptable_price: Option<P::Num>,
     ) -> crate::Result<Self> {
         if !prices.is_valid() {
-            return Err(crate::Error::invalid_argument("invalid prices"));
+            return Err(crate::Error::InvalidArgument("invalid prices"));
         }
         Ok(Self {
             position,
@@ -297,9 +297,7 @@ where
                 .will_collateral_be_sufficient(&self.params.prices, &delta)?;
 
             if !will_collateral_be_sufficient.is_sufficient() {
-                return Err(crate::Error::invalid_argument(
-                    "insufficient collateral usd",
-                ));
+                return Err(crate::Error::InvalidArgument("insufficient collateral usd"));
             }
         }
 
@@ -503,7 +501,7 @@ where
     {
         Ok(execution_price)
     } else {
-        Err(crate::Error::invalid_argument(
+        Err(crate::Error::InvalidArgument(
             "order not fulfillable at acceptable price",
         ))
     }

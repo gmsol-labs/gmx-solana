@@ -180,7 +180,7 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
         let mut mint_amount: M::Num = Zero::zero();
         let supply = self.market.total_supply();
         if pool_value.is_zero() && !supply.is_zero() {
-            return Err(crate::Error::invalid_pool_value("deposit"));
+            return Err(crate::Error::InvalidPoolValue("deposit"));
         }
 
         let (mut amount, price, opposite_price) = if is_long_token {
