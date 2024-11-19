@@ -15,7 +15,6 @@ pub const DEFAULT_TIMESTAMP_ADJUSTMENT: u64 = 1;
 pub struct PriceValidator {
     clock: Clock,
     max_age: Amount,
-    // max_ref_price_deviation_factor: Factor,
     max_oracle_timestamp_range: Amount,
     min_oracle_ts: i64,
     max_oracle_ts: i64,
@@ -47,7 +46,7 @@ impl PriceValidator {
             return err!(CoreError::MaxPriceAgeExceeded);
         }
 
-        // TODO: validate price with ref price.
+        // Note: we may add ref price validation here in the future.
 
         self.merge_range(Some(oracle_slot), ts, ts);
 
