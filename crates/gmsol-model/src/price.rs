@@ -100,7 +100,7 @@ pub struct Prices<T> {
 
 impl<T> Prices<T> {
     /// Create a new [`Prices`].
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test"))]
     pub fn new_for_test(index: T, long: T, short: T) -> Self
     where
         T: Clone,

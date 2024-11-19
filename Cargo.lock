@@ -2052,6 +2052,7 @@ version = "0.2.0"
 dependencies = [
  "anchor-lang",
  "borsh 0.10.4",
+ "gmsol-model",
  "num-traits",
  "num_enum 0.7.3",
  "ruint",
