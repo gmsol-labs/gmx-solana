@@ -6,6 +6,7 @@ use anchor_spl::{
     token_2022::Token2022,
     token_interface::{self, Mint},
 };
+use gmsol_utils::InitSpace;
 
 use crate::{
     constants,

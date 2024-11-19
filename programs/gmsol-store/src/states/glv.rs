@@ -4,6 +4,7 @@ use std::{
 };
 
 use anchor_lang::prelude::*;
+use gmsol_utils::InitSpace;
 
 use crate::{
     events::{GlvDepositRemoved, GlvWithdrawalRemoved, ShiftRemoved},
@@ -112,10 +113,11 @@ impl Seed for Glv {
     const SEED: &'static [u8] = b"glv";
 }
 
-impl Glv {
-    /// Init space.
-    pub const INIT_SPACE: usize = std::mem::size_of::<Self>();
+impl InitSpace for Glv {
+    const INIT_SPACE: usize = std::mem::size_of::<Self>();
+}
 
+impl Glv {
     /// GLV token seed.
     pub const GLV_TOKEN_SEED: &'static [u8] = b"glv_token";
 
