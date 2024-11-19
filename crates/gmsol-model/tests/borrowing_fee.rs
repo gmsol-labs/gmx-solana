@@ -24,15 +24,15 @@ fn test_total_borrowing_with_high_borrowing_factor() -> gmsol_model::Result<()> 
             .build(),
         max_open_interest,
         swap_impact_params: PriceImpactParams::builder()
-            .with_positive_factor(0)
-            .with_negative_factor(0)
-            .with_exponent(unit)
-            .build()?,
+            .positive_factor(0)
+            .negative_factor(0)
+            .exponent(unit)
+            .build(),
         position_impact_params: PriceImpactParams::builder()
-            .with_positive_factor(0)
-            .with_negative_factor(0)
-            .with_exponent(unit)
-            .build()?,
+            .positive_factor(0)
+            .negative_factor(0)
+            .exponent(unit)
+            .build(),
         min_collateral_factor_for_oi: 0,
         ..Default::default()
     });
