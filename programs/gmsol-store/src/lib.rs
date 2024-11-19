@@ -277,7 +277,7 @@ pub mod gmsol_store {
     /// - The [`payer`](Initialize::payer) must be a signer
     /// - The [`store`](Initialize::store) must not be initialized
     /// - The [`store`](Initialize::store) address must match the PDA derived from
-    ///   [`SEED`](states::Store::SEED) and the SHA-256 hash of `key`
+    ///   the seed of [`Store`](states::Store) and the SHA-256 hash of `key`
     pub fn initialize(
         ctx: Context<Initialize>,
         key: String,

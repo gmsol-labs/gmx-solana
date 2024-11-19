@@ -9,7 +9,7 @@ use crate::{constants, states::feature::display_feature, CoreError, CoreResult};
 use super::{
     feature::{ActionDisabledFlag, DisabledFeatures, DomainDisabledFlag},
     gt::GtState,
-    Amount, Factor, InitSpace, RoleStore,
+    Amount, Factor, InitSpace, RoleStore, Seed,
 };
 
 const MAX_LEN: usize = 32;
@@ -47,6 +47,11 @@ impl InitSpace for Store {
     const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
+impl Seed for Store {
+    /// The value of the seed is `b"data_store"`
+    const SEED: &'static [u8] = b"data_store";
+}
+
 #[cfg(feature = "display")]
 impl std::fmt::Display for Store {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -68,9 +73,6 @@ impl std::fmt::Display for Store {
 }
 
 impl Store {
-    /// The value of the seed is `b"data_store"`
-    pub const SEED: &'static [u8] = b"data_store";
-
     /// Maximum length of key.
     pub const MAX_LEN: usize = MAX_LEN;
 

@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use gmsol_utils::{to_seed, InitSpace};
 
 use crate::{
-    states::{Store, TokenMapHeader},
+    states::{Seed, Store, TokenMapHeader},
     utils::internal,
     CoreError,
 };
