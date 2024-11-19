@@ -26,7 +26,7 @@ use anchor_lang::prelude::*;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use self::price_map::PriceMap;
-use super::{HasMarketMeta, Store, TokenConfig, TokenMapHeader, TokenMapRef};
+use super::{HasMarketMeta, Seed, Store, TokenConfig, TokenMapHeader, TokenMapRef};
 
 pub use self::{
     chainlink::Chainlink,
@@ -67,10 +67,11 @@ impl gmsol_utils::InitSpace for Oracle {
     const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
-impl Oracle {
-    /// The seed for the oracle account's address.
-    pub const SEED: &'static [u8] = b"oracle";
+impl Seed for Oracle {
+    const SEED: &'static [u8] = b"oracle";
+}
 
+impl Oracle {
     fn get_flag(&self, kind: OracleFlag) -> bool {
         let index = u8::from(kind);
         let map = OracleFlagsMap::from_value(self.flags);
