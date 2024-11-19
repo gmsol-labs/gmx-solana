@@ -34,7 +34,7 @@ impl<T> PriceImpactParams<T> {
     /// Get adjusted swap factors.
     pub fn adjusted_factors(&self) -> (&T, &T)
     where
-        T: Ord,
+        T: Ord + crate::num::Unsigned,
     {
         if self.positive_factor > self.negative_factor {
             (&self.negative_factor, &self.negative_factor)
