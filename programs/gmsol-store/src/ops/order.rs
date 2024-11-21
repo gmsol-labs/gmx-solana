@@ -771,11 +771,22 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
             self.user.load()?.is_initialized(),
             CoreError::InvalidUserAccount
         );
-        let rank = self.user.load()?.gt.rank();
-        let discount_factor = self.store.load()?.gt().order_fee_discount_factor(rank)?;
+        let (rank, is_referred) = {
+            let user = self.user.load()?;
+            (user.gt.rank(), user.referral.referrer().is_some())
+        };
+        let discount_factor = self
+            .store
+            .load()?
+            .order_fee_discount_factor(rank, is_referred)?;
         msg!(
-            "[GT] apply a {} order fee discount (factor) for this rank {} user",
+            "[Order] apply a {} order fee discount (factor) for this {} rank {} user",
             discount_factor,
+            if is_referred {
+                "referred"
+            } else {
+                "non-referred"
+            },
             rank,
         );
         Ok(discount_factor)

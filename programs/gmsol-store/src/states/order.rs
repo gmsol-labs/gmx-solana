@@ -3,7 +3,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use gmsol_model::{action::decrease_position::DecreasePositionReport, price::Price};
 use gmsol_utils::InitSpace as _;
 
-use crate::{events::OrderRemoved, states::FactorKey, CoreError};
+use crate::{events::OrderRemoved, CoreError};
 
 use super::{
     common::{
@@ -550,17 +550,7 @@ impl Order {
 
         let value_to_mint_for = next_traded_value.saturating_sub(minted_value);
 
-        // Apply minting cost discount for referred user.
-        let is_referred = user.referral.referrer().is_some();
-        let discount = if is_referred {
-            *store.get_factor_by_key(FactorKey::GtMintingCostReferredDiscount)
-        } else {
-            0
-        };
-
-        let (minted, delta_minted_value) = store
-            .gt_mut()
-            .get_mint_amount(value_to_mint_for, discount)?;
+        let (minted, delta_minted_value) = store.gt_mut().get_mint_amount(value_to_mint_for, 0)?;
 
         let next_minted_value = minted_value
             .checked_add(delta_minted_value)

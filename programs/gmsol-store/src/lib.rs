@@ -42,8 +42,8 @@
 //! - [`insert_amount`]: Insert an amount to the global config.
 //! - [`insert_factor`]: Insert a factor to the global config.
 //! - [`insert_address`]: Insert an address to the global config.
-//! - [`insert_gt_minting_cost_referred_discount`]:
-//!   Insert GT miniting cost referred discount factor to the global config.
+//! - [`insert_order_fee_discount_for_referred_user`]:
+//!   Insert order fee discount for referred user factor to the global config.
 //!
 //! #### Instructions for Feature Management
 //! - [`toggle_feature`]: Enable or disable the given feature.
@@ -593,7 +593,7 @@ pub mod gmsol_store {
         instructions::unchecked_insert_address(ctx, &key, address)
     }
 
-    /// Insert GT minting cost referred discount factor to the global config.
+    /// Insert order fee discount for referred user factor to the global config.
     ///
     /// This instruction allows a MARKET_KEEPER to set or update the GT minting cost referred
     /// discount factor in the store's configuration. This factor determines the discount
@@ -613,13 +613,13 @@ pub mod gmsol_store {
     /// # Notes
     /// - While [`insert_factor`] can also modify this value, it requires CONFIG_KEEPER
     ///   permissions instead of MARKET_KEEPER permissions required by this instruction.
-    /// - The factor is stored under the [`FactorKey::GtMintingCostReferredDiscount`] key.
+    /// - The factor is stored under the [`FactorKey::OrderFeeDiscountForReferredUser`] key.
     #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
-    pub fn insert_gt_minting_cost_referred_discount(
+    pub fn insert_order_fee_discount_for_referred_user(
         ctx: Context<InsertConfig>,
         factor: u128,
     ) -> Result<()> {
-        let key = FactorKey::GtMintingCostReferredDiscount;
+        let key = FactorKey::OrderFeeDiscountForReferredUser;
         instructions::unchecked_insert_factor(ctx, &key.to_string(), factor)
     }
 

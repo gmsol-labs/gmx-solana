@@ -309,6 +309,34 @@ impl Store {
         self.disabled_features
             .set_disabled(domain, action, disabled)
     }
+
+    /// Get order fee discount factor.
+    pub fn order_fee_discount_factor(&self, rank: u8, is_referred: bool) -> Result<u128> {
+        use gmsol_model::utils::apply_factor;
+
+        let discount_factor_for_rank = self.gt().order_fee_discount_factor(rank)?;
+        if is_referred {
+            let discount_factor_for_referred =
+                self.get_factor_by_key(FactorKey::OrderFeeDiscountForReferredUser);
+            let complement_discount_factor_for_referred = constants::MARKET_USD_UNIT
+                .checked_sub(*discount_factor_for_referred)
+                .ok_or_else(|| error!(CoreError::Internal))?;
+
+            // 1 - (1 - A) * (1 - B) == A + B * (1 - A)
+            let discount_factor = apply_factor::<_, { constants::MARKET_DECIMALS }>(
+                &discount_factor_for_rank,
+                &complement_discount_factor_for_referred,
+            )
+            .and_then(|factor| discount_factor_for_referred.checked_add(factor))
+            .ok_or_else(|| error!(CoreError::ValueOverflow))?;
+
+            debug_assert!(discount_factor <= constants::MARKET_USD_UNIT);
+
+            Ok(discount_factor)
+        } else {
+            Ok(discount_factor_for_rank)
+        }
+    }
 }
 
 /// Treasury.
@@ -408,7 +436,7 @@ impl Amounts {
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct Factors {
     pub(crate) oracle_ref_price_deviation: Factor,
-    pub(crate) gt_minting_cost_referred_discount: Factor,
+    pub(crate) order_fee_discount_for_referred_user: Factor,
     reserved_1: [Factor; 30],
     reserved_2: [Factor; 32],
 }
@@ -424,8 +452,8 @@ pub struct Factors {
 pub enum FactorKey {
     /// Oracle Ref Price Deviation.
     OracleRefPriceDeviation,
-    /// GT Minting Cost Referred Discount.
-    GtMintingCostReferredDiscount,
+    /// Order fee discount for referred user.
+    OrderFeeDiscountForReferredUser,
 }
 
 impl Factors {
@@ -437,7 +465,9 @@ impl Factors {
     fn get(&self, key: &FactorKey) -> &Factor {
         match key {
             FactorKey::OracleRefPriceDeviation => &self.oracle_ref_price_deviation,
-            FactorKey::GtMintingCostReferredDiscount => &self.gt_minting_cost_referred_discount,
+            FactorKey::OrderFeeDiscountForReferredUser => {
+                &self.order_fee_discount_for_referred_user
+            }
         }
     }
 
@@ -445,7 +475,9 @@ impl Factors {
     fn get_mut(&mut self, key: &FactorKey) -> &mut Factor {
         match key {
             FactorKey::OracleRefPriceDeviation => &mut self.oracle_ref_price_deviation,
-            FactorKey::GtMintingCostReferredDiscount => &mut self.gt_minting_cost_referred_discount,
+            FactorKey::OrderFeeDiscountForReferredUser => {
+                &mut self.order_fee_discount_for_referred_user
+            }
         }
     }
 }

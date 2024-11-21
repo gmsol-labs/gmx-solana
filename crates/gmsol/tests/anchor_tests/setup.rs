@@ -827,7 +827,7 @@ impl Deployment {
         ))?
         .push(client.insert_factor(
             store,
-            FactorKey::GtMintingCostReferredDiscount,
+            FactorKey::OrderFeeDiscountForReferredUser,
             10 * MARKET_USD_UNIT / 100,
         ))?
         .push(

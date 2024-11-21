@@ -72,8 +72,8 @@ where
             store: *store,
         });
         match key {
-            FactorKey::GtMintingCostReferredDiscount => {
-                rpc.args(instruction::InsertGtMintingCostReferredDiscount { factor })
+            FactorKey::OrderFeeDiscountForReferredUser => {
+                rpc.args(instruction::InsertOrderFeeDiscountForReferredUser { factor })
             }
             _ => rpc.args(instruction::InsertFactor {
                 key: key.to_string(),
