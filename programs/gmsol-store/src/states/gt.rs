@@ -33,12 +33,13 @@
 //! #### VIP Levels (User Ranks)
 //!
 //! VIP levels are assigned based on users' GT holdings. The more GT a user holds, the higher their
-//! VIP level, which grants greater trading fee discounts.
+//! VIP level, which grants greater order fee discounts.
 //!
 //! #### Referral Program
 //!
-//! The referral program rewards referrers based on their VIP level and offers referees a 10%
-//! trading fee discount.
+//! The referral program offers referees an extra 10% order fee discount. The final order fee discount
+//! will be calculated as: order fee discount = 1 - (1 - order fee vip discount) * (1 - order fee
+//! referred discount).
 
 use anchor_lang::prelude::*;
 
