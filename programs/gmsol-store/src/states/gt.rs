@@ -258,7 +258,7 @@ impl GtState {
         }
     }
 
-    /// Sync the esGT factor and ming esGT to the given user.
+    /// Sync the esGT factor and mint esGT to the given user.
     ///
     /// # CHECK
     /// - `user` must be owned by this store.
@@ -267,11 +267,23 @@ impl GtState {
 
         let gt_amount = u128::from(user.gt.amount());
 
+        let current_factor = self.es_factor;
+
         if gt_amount == 0 {
+            // Must update the user's es factor to the current factor even if the user has no GT.
+            //
+            // If we don't do this, issues will happen when the user mints some GT and sync the
+            // es_factor again:
+            //
+            // 1. The first minting will not update the user's es_factor because of early return,
+            //    which means the user's es_factor is still be zero.
+            // 2. When the user mints the second time, the check of `gt_amount == 0` will be false,
+            //    and the esGT amount will be calculated as `gt_amount * (current_factor - 0)`, which
+            //    is wrong.
+            user.gt.es_factor = current_factor;
             return Ok(());
         }
 
-        let current_factor = self.es_factor;
         let user_factor = user.gt.es_factor;
         require_gte!(current_factor, user_factor, CoreError::Internal);
 
