@@ -504,8 +504,7 @@ pub enum MarketFlag {
 #[zero_copy]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct OtherState {
-    dirty: u8,
-    padding: [u8; 15],
+    padding: [u8; 16],
     rev: u64,
     trade_count: u64,
     long_token_balance: u64,
@@ -649,8 +648,7 @@ impl HasMarketMeta for MarketMeta {
 #[zero_copy]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct Clocks {
-    dirty: u8,
-    padding: [u8; 7],
+    padding: [u8; 8],
     rev: u64,
     /// Price impact distribution clock.
     price_impact_distribution: i64,

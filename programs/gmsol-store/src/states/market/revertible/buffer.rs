@@ -52,52 +52,46 @@ impl RevertibleBuffer {
             .cache_get_mut_with(self.rev, || storage.other)
     }
 
+    pub(super) fn start_revertible_operation(&mut self) {
+        self.rev = self.rev.checked_add(1).expect("rev overflow");
+    }
+
     pub(super) fn commit_to_storage(&mut self, storage: &mut State) {
         let state = &mut self.state;
+        let rev = self.rev;
 
         // Commit pools.
         for kind in PoolKind::iter() {
             let Some(pool) = state.pools.get_mut(kind) else {
                 continue;
             };
-            if pool.is_dirty() {
+            if pool.is_dirty(rev) {
                 let target = storage.pools.get_mut(kind).expect("must exist");
-                pool.clear_dirty();
                 *target = *pool;
             }
         }
 
         // Commit clocks.
-        if state.clocks.is_dirty() {
-            state.clocks.clear_dirty();
+        if state.clocks.is_dirty(rev) {
             storage.clocks = state.clocks;
         }
 
         // Commit other state.
-        if state.other.is_dirty() {
-            state.other.clear_dirty();
+        if state.other.is_dirty(rev) {
             storage.other = state.other;
         }
-
-        self.rev = self.rev.checked_add(1).expect("rev overflow");
     }
 }
 
-const DIRTY_VALUE: u8 = 1;
-
 pub(super) trait Cache {
-    fn set_dirty(&mut self);
-
-    fn clear_dirty(&mut self);
-
-    fn is_dirty(&self) -> bool;
+    fn is_dirty(&self, rev: u64) -> bool;
 
     fn rev(&self) -> u64;
 
     fn set_rev(&mut self, rev: u64) -> u64;
 
     fn cache_get_with<'a>(&'a self, rev: u64, f: impl FnOnce() -> &'a Self) -> &'a Self {
-        if self.rev() == rev {
+        if self.is_dirty(rev) {
             self
         } else {
             f()
@@ -108,11 +102,10 @@ pub(super) trait Cache {
     where
         Self: Sized,
     {
-        if self.rev() != rev {
+        if !self.is_dirty(rev) {
             *self = f();
             self.set_rev(rev);
         }
-        self.set_dirty();
         self
     }
 }
@@ -120,16 +113,8 @@ pub(super) trait Cache {
 macro_rules! impl_cache {
     ($cache:ty) => {
         impl Cache for $cache {
-            fn set_dirty(&mut self) {
-                self.dirty = DIRTY_VALUE;
-            }
-
-            fn clear_dirty(&mut self) {
-                self.dirty = 0;
-            }
-
-            fn is_dirty(&self) -> bool {
-                self.dirty == DIRTY_VALUE
+            fn is_dirty(&self, rev: u64) -> bool {
+                self.rev() == rev
             }
 
             fn rev(&self) -> u64 {

@@ -34,10 +34,7 @@ impl<'a, 'info> TryFrom<&'a AccountLoader<'info, Market>> for RevertibleMarket<'
     type Error = Error;
 
     fn try_from(value: &'a AccountLoader<'info, Market>) -> std::result::Result<Self, Self::Error> {
-        Ok(Self {
-            market: value.load_mut()?,
-            order_fee_discount_factor: 0,
-        })
+        Self::new(value)
     }
 }
 
@@ -54,6 +51,15 @@ impl<'a> AsRef<Market> for RevertibleMarket<'a> {
 }
 
 impl<'a> RevertibleMarket<'a> {
+    fn new<'info>(market: &'a AccountLoader<'info, Market>) -> Result<Self> {
+        let mut market = market.load_mut()?;
+        market.buffer.start_revertible_operation();
+        Ok(Self {
+            market,
+            order_fee_discount_factor: 0,
+        })
+    }
+
     pub(crate) fn with_order_fee_discount_factor(mut self, discount: u128) -> Self {
         self.order_fee_discount_factor = discount;
         self
