@@ -46,7 +46,7 @@ async fn balanced_market_order() -> eyre::Result<()> {
         .await?;
 
     // Increase position.
-    let size = 10_000_000_000_000_000_000_000;
+    let size = 5_000 * 100_000_000_000_000_000_000;
 
     for side in [true, false] {
         for collateral_side in [true, false] {
@@ -70,6 +70,28 @@ async fn balanced_market_order() -> eyre::Result<()> {
             tracing::info!(%order, %signature, %size, "created an increase position order");
 
             let mut builder = keeper.execute_order(store, oracle, &order, false)?;
+            deployment
+                .execute_with_pyth(
+                    builder
+                        .add_alt(deployment.common_alt().clone())
+                        .add_alt(deployment.market_alt().clone()),
+                    None,
+                    true,
+                    true,
+                )
+                .await?;
+
+            // Extract collateral.
+            let amount = collateral_amount / 2;
+            let (rpc, order) = client
+                .market_decrease(store, market_token, collateral_side, amount, side, 0)
+                .min_output_amount(u128::MAX)
+                .build_with_address()
+                .await?;
+            let signature = rpc.send().await?;
+            tracing::info!(%order, %signature, %amount, "created a extract collateral order");
+
+            let mut builder = keeper.execute_order(store, oracle, &order, true)?;
             deployment
                 .execute_with_pyth(
                     builder
@@ -250,7 +272,7 @@ async fn single_token_market_order() -> eyre::Result<()> {
         .await?;
 
     // Increase position.
-    let size = 10_000_000_000_000_000_000_000;
+    let size = 5_000 * 100_000_000_000_000_000_000;
 
     for side in [true, false] {
         for collateral_side in [true, false] {
@@ -269,6 +291,28 @@ async fn single_token_market_order() -> eyre::Result<()> {
             tracing::info!(%order, %signature, %size, "created an increase position order");
 
             let mut builder = keeper.execute_order(store, oracle, &order, false)?;
+            deployment
+                .execute_with_pyth(
+                    builder
+                        .add_alt(deployment.common_alt().clone())
+                        .add_alt(deployment.market_alt().clone()),
+                    None,
+                    true,
+                    true,
+                )
+                .await?;
+
+            // Extract collateral.
+            let amount = collateral_amount / 2;
+            let (rpc, order) = client
+                .market_decrease(store, market_token, collateral_side, amount, side, 0)
+                .min_output_amount(u128::MAX)
+                .build_with_address()
+                .await?;
+            let signature = rpc.send().await?;
+            tracing::info!(%order, %signature, %amount, "created a extract collateral order");
+
+            let mut builder = keeper.execute_order(store, oracle, &order, true)?;
             deployment
                 .execute_with_pyth(
                     builder
