@@ -556,6 +556,16 @@ impl GlvDeposit {
         Ok(())
     }
 
+    pub(crate) fn validate_output_amount(&self, amount: u64) -> Result<()> {
+        require_gte!(
+            amount,
+            self.params.min_glv_token_amount,
+            CoreError::InsufficientOutputAmount
+        );
+
+        Ok(())
+    }
+
     /// Get token infos.
     pub fn tokens(&self) -> &GlvDepositTokenAccounts {
         &self.tokens

@@ -400,6 +400,8 @@ impl<'a, 'info> ExecuteGlvDepositOperation<'a, 'info> {
                 u64::try_from(glv_amount).map_err(|_| error!(CoreError::TokenAmountOverflow))?
             };
 
+            deposit.validate_output_amount(glv_amount)?;
+
             op.commit();
 
             glv_amount
