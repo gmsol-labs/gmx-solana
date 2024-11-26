@@ -36,11 +36,11 @@ where
         }
 
         let adjustment = size_in_usd
-            .checked_mul_div_with_signed_numerator(&adjusted_price_impact_value, size_delta_usd)
+            .checked_mul_div_with_signed_numerator(&adjusted_price_impact_value, size_in_tokens)
             .ok_or(crate::Error::Computation(
                 "calculating execution price adjustment",
             ))?
-            / (size_in_tokens.clone())
+            / (size_delta_usd.clone())
                 .try_into()
                 .map_err(|_| crate::Error::Convert)?;
         execution_price = execution_price
