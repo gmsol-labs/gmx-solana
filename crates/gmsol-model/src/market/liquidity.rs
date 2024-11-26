@@ -128,14 +128,14 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
             .checked_sub_with_signed(&net_pnl)
             .ok_or(crate::Error::Computation("deducting net pnl"))?;
 
-        // Deduct impact pool value.
-        let impact_pool_value = {
+        // Deduct impact pool amount.
+        let impact_pool_amount = {
             let duration = self.passed_in_seconds_for_position_impact_distribution()?;
             self.pending_position_impact_pool_distribution_amount(duration)?
                 .1
         };
         pool_value = pool_value
-            .checked_sub(&impact_pool_value)
+            .checked_sub(&impact_pool_amount)
             .ok_or(crate::Error::Computation("deducting impact pool value"))?;
 
         Ok(pool_value)
