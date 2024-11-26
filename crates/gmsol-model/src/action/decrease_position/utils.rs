@@ -27,6 +27,7 @@ where
                 .checked_sub(price_impact_value)
                 .ok_or(crate::Error::Computation("price impact too large"))?
         };
+
         if adjusted_price_impact_value.is_negative()
             && adjusted_price_impact_value.unsigned_abs() > *size_delta_usd
         {
@@ -35,12 +36,19 @@ where
             ));
         }
 
+        // Since the decimals of the USD value are often greater than those of `size_in_tokens`,
+        // we must compute the `adjustment` in the following sequence. Furthermore, since the
+        // `price_impact_value` is comparable in magnitude to `size_delta_usd` and is capped,
+        // overflow is unlikely in the `mul_div` part.
+        //
+        // Otherwise, if we use the order `size_in_usd.mul_div(adjusted_price_impact_value, size_in_tokens) / size_in_usd`,
+        // the `mul_div` operation is likely to overflow.
         let adjustment = size_in_usd
-            .checked_mul_div_with_signed_numerator(&adjusted_price_impact_value, size_in_tokens)
+            .checked_mul_div_with_signed_numerator(&adjusted_price_impact_value, size_delta_usd)
             .ok_or(crate::Error::Computation(
                 "calculating execution price adjustment",
             ))?
-            / (size_delta_usd.clone())
+            / (size_in_tokens.clone())
                 .try_into()
                 .map_err(|_| crate::Error::Convert)?;
         execution_price = execution_price
