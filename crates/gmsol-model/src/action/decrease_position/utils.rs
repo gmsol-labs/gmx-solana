@@ -47,11 +47,11 @@ where
             .checked_add_with_signed(&adjustment)
             .ok_or(crate::Error::Computation("adjusting execution price"))?;
     }
-    let Some(acceptable_prcie) = acceptable_price else {
+    let Some(acceptable_price) = acceptable_price else {
         return Ok(execution_price);
     };
-    if (is_long && execution_price >= *acceptable_prcie)
-        || (!is_long && execution_price <= *acceptable_prcie)
+    if (is_long && execution_price >= *acceptable_price)
+        || (!is_long && execution_price <= *acceptable_price)
     {
         Ok(execution_price)
     } else {
