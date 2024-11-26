@@ -413,7 +413,7 @@ where
 }
 
 /// Calculate the funding amount for a position and unpack with the given `adjustment`.
-pub fn unpack_to_funding_amount<T, const DECIMALS: u8>(
+pub fn unpack_to_funding_amount_delta<T, const DECIMALS: u8>(
     adjustment: &T,
     latest_funding_amount_per_size: &T,
     position_funding_amount_per_size: &T,

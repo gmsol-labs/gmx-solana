@@ -5,7 +5,7 @@ use num_traits::{One, Zero};
 use crate::{
     action::{
         decrease_position::DecreasePosition, increase_position::IncreasePosition,
-        update_funding_state::unpack_to_funding_amount,
+        update_funding_state::unpack_to_funding_amount_delta,
     },
     fixed::FixedPointOps,
     market::{
@@ -631,7 +631,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         let adjustment = self.market().funding_amount_per_size_adjustment();
         let fees = FundingFees::builder()
             .amount(
-                unpack_to_funding_amount(
+                unpack_to_funding_amount_delta(
                     &adjustment,
                     &self.market().funding_fee_amount_per_size(
                         self.is_long(),
@@ -644,7 +644,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
                 .ok_or(crate::Error::Computation("calculating funding fee amount"))?,
             )
             .claimable_long_token_amount(
-                unpack_to_funding_amount(
+                unpack_to_funding_amount_delta(
                     &adjustment,
                     &self
                         .market()
@@ -658,7 +658,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
                 ))?,
             )
             .claimable_short_token_amount(
-                unpack_to_funding_amount(
+                unpack_to_funding_amount_delta(
                     &adjustment,
                     &self
                         .market()
