@@ -1,3 +1,5 @@
+use num_traits::Zero;
+
 use crate::{
     market::{
         BaseMarket, PositionImpactMarketExt, PositionImpactMarketMut, PositionImpactMarketMutExt,
@@ -49,8 +51,10 @@ impl<M: PositionImpactMarketMut<DECIMALS>, const DECIMALS: u8>
             .market
             .pending_position_impact_pool_distribution_amount(duration_in_seconds)?;
 
-        self.market
-            .apply_delta_to_position_impact_pool(&distribution_amount.to_opposite_signed()?)?;
+        if !distribution_amount.is_zero() {
+            self.market
+                .apply_delta_to_position_impact_pool(&distribution_amount.to_opposite_signed()?)?;
+        }
 
         Ok(DistributePositionImpactReport {
             duration_in_seconds,
