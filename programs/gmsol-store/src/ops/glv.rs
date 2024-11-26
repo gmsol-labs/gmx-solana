@@ -264,6 +264,7 @@ impl<'a, 'info> ExecuteGlvDepositOperation<'a, 'info> {
                         .flatten()
                         .expect("must have an expiration time"),
                 );
+                return Ok(false);
             }
             Err(err) => {
                 return Err(error!(err));
@@ -667,6 +668,7 @@ impl<'a, 'info> ExecuteGlvWithdrawalOperation<'a, 'info> {
                         .flatten()
                         .expect("must have an expiration time"),
                 );
+                return Ok(None);
             }
             Err(err) => {
                 return Err(error!(err));
@@ -1033,6 +1035,7 @@ impl<'a, 'info> ExecuteGlvShiftOperation<'a, 'info> {
                         .flatten()
                         .expect("must have an expiration time"),
                 );
+                return Ok(false);
             }
             Err(err) => {
                 return Err(error!(err));
