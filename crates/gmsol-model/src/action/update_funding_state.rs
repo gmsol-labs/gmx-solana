@@ -224,15 +224,15 @@ impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> UpdateFundingState<M, DECIM
             )?;
 
         if params.increase_factor_per_second().is_zero() {
-            let factor = if params.factor() > params.max_factor_per_second() {
-                params.max_factor_per_second()
-            } else {
-                params.factor()
-            };
-            let funding_factor_per_second =
-                utils::apply_factor(&diff_value_to_open_interest_factor, factor).ok_or(
+            let mut funding_factor_per_second =
+                utils::apply_factor(&diff_value_to_open_interest_factor, params.factor()).ok_or(
                     crate::Error::Computation("calculating fallback funding factor per second"),
                 )?;
+
+            if funding_factor_per_second > *params.max_factor_per_second() {
+                funding_factor_per_second = params.max_factor_per_second().clone();
+            }
+
             return Ok((
                 funding_factor_per_second,
                 long_open_interest > short_open_interest,
