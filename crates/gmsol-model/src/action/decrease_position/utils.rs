@@ -18,7 +18,7 @@ where
     T: Clone + MulDiv + Ord + CheckedAdd + CheckedSub,
     T::Signed: CheckedSub + Clone + Ord + UnsignedAbs,
 {
-    let mut execution_price = index_price.pick_price(is_long).clone();
+    let mut execution_price = index_price.pick_price(!is_long).clone();
     if !size_delta_usd.is_zero() && !size_in_tokens.is_zero() {
         let adjusted_price_impact_value = if is_long {
             price_impact_value.clone()
