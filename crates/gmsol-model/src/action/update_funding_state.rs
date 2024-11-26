@@ -118,7 +118,7 @@ impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> UpdateFundingState<M, DECIM
                 "calculating funding value for short collateral",
             ))?;
 
-        self.add_deltas(
+        self.set_deltas(
             &mut report,
             longs_pay_shorts,
             &for_long_collateral,
@@ -133,7 +133,7 @@ impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> UpdateFundingState<M, DECIM
         Ok(report)
     }
 
-    fn add_deltas(
+    fn set_deltas(
         &self,
         report: &mut UpdateFundingReport<M::Num>,
         longs_pay_shorts: bool,
