@@ -279,18 +279,19 @@ impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> UpdateFundingState<M, DECIM
                     .ok_or(crate::Error::Computation(
                         "calculating factor decrease value",
                     ))?;
-                let decreased = funding_factor_per_second_magnitude.checked_sub(&decrease_value);
-                match decreased {
-                    None => {
-                        funding_factor_per_second.clone()
-                            / funding_factor_per_second_magnitude.to_signed()?
-                    }
-                    Some(decreased) => {
-                        if funding_factor_per_second.is_negative() {
-                            decreased.to_opposite_signed()?
-                        } else {
-                            decreased.to_signed()?
-                        }
+                if funding_factor_per_second_magnitude <= decrease_value {
+                    funding_factor_per_second.clone()
+                        / funding_factor_per_second_magnitude.to_signed()?
+                } else {
+                    let decreased = funding_factor_per_second_magnitude
+                        .checked_sub(&decrease_value)
+                        .ok_or(crate::Error::Computation(
+                            "calculating decreased funding factor per second (infallible)",
+                        ))?;
+                    if funding_factor_per_second.is_negative() {
+                        decreased.to_opposite_signed()?
+                    } else {
+                        decreased.to_signed()?
                     }
                 }
             }
