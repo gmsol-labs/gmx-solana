@@ -220,7 +220,7 @@ impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> UpdateFundingState<M, DECIM
             )?;
         let diff_value_to_open_interest_factor =
             utils::div_to_factor(&diff_value_after_exponent, &total_open_interest, false).ok_or(
-                crate::Error::Computation("calculating diff value to open intertest factor"),
+                crate::Error::Computation("calculating diff value to open interest factor"),
             )?;
 
         if params.increase_factor_per_second().is_zero() {
