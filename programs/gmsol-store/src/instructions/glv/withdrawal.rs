@@ -726,7 +726,7 @@ impl<'info> ExecuteGlvWithdrawal<'info> {
                 .glv_withdrawal
                 .load()?
                 .swap
-                .find_and_unpack_last_market(store, true, remaining_accounts)?
+                .find_and_unpack_last_market(store, false, remaining_accounts)?
                 .unwrap_or(self.market.clone());
             let vault = &self.final_short_token_vault;
             let escrow = &self.final_short_token_escrow;
