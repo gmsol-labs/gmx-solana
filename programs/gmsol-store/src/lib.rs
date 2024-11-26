@@ -3688,6 +3688,9 @@ pub enum CoreError {
     /// Empty GLV withdrawal.
     #[msg("Empty GLV withdrawal")]
     EmptyGlvWithdrawal,
+    /// Negative Market Pool Value.
+    #[msg("GLV: negative market pool value")]
+    GlvNegativeMarketPoolValue,
     // ===========================================
     //                Other Errors
     // ===========================================

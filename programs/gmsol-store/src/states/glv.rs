@@ -67,7 +67,7 @@ impl GlvMarketConfig {
     fn validate_market_token_balance(
         &self,
         new_balance: u64,
-        market_pool_value: &u128,
+        market_pool_value: &i128,
         market_token_supply: &u128,
     ) -> Result<()> {
         if self.max_amount == 0 && self.max_value == 0 {
@@ -83,9 +83,13 @@ impl GlvMarketConfig {
         }
 
         if self.max_value > 0 {
+            if market_pool_value.is_negative() {
+                return err!(CoreError::GlvNegativeMarketPoolValue);
+            }
+
             let value = gmsol_model::utils::market_token_amount_to_usd(
                 &(new_balance as u128),
-                market_pool_value,
+                &market_pool_value.unsigned_abs(),
                 market_token_supply,
             )
             .ok_or_else(|| error!(CoreError::FailedToCalculateGlvValueForMarket))?;
@@ -398,7 +402,7 @@ impl Glv {
         &self,
         market_token: &Pubkey,
         new_balance: u64,
-        market_pool_value: &u128,
+        market_pool_value: &i128,
         market_token_supply: &u128,
     ) -> Result<()> {
         let config = self

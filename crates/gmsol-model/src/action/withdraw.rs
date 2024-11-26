@@ -1,11 +1,11 @@
 use crate::{
     market::{BaseMarket, BaseMarketExt, LiquidityMarketExt, LiquidityMarketMut},
-    num::MulDiv,
+    num::{MulDiv, UnsignedAbs},
     params::Fees,
     price::{Price, Prices},
     utils, BalanceExt, PnlFactorKind, PoolExt,
 };
-use num_traits::{CheckedAdd, Zero};
+use num_traits::{CheckedAdd, Signed, Zero};
 
 /// A withdrawal.
 #[must_use]
@@ -163,8 +163,15 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Withdrawal<M, DECIMALS
             PnlFactorKind::MaxAfterWithdrawal,
             false,
         )?;
+        if pool_value.is_negative() {
+            return Err(crate::Error::InvalidPoolValue(
+                "withdrawal: current pool value is negative",
+            ));
+        }
         if pool_value.is_zero() {
-            return Err(crate::Error::InvalidPoolValue("withdrawal"));
+            return Err(crate::Error::InvalidPoolValue(
+                "withdrawal: current pool value is zero",
+            ));
         }
         let total_supply = self.market.total_supply();
 
@@ -184,7 +191,7 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Withdrawal<M, DECIMALS
 
         let market_token_value = utils::market_token_amount_to_usd(
             &self.params.market_token_amount,
-            &pool_value,
+            &pool_value.unsigned_abs(),
             &total_supply,
         )
         .ok_or(crate::Error::Computation("amount to usd"))?;

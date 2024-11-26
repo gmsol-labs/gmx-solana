@@ -142,9 +142,9 @@ fn test_total_borrowing_with_high_borrowing_factor_2() -> gmsol_model::Result<()
 
     let prices = Prices::new_for_test(price, price, price);
 
-    market
-        .deposit(max_deposit_amount, max_deposit_amount, prices)?
-        .execute()?;
+    // Cannot deposit assets with a total value exceeding `i128::MAX` value
+    // because the pool value calculation is limited by signed values.
+    market.deposit(max_deposit_amount, 0, prices)?.execute()?;
 
     println!(
         "pool value: {}",

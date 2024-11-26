@@ -1,9 +1,9 @@
-use num_traits::{CheckedAdd, CheckedSub, Zero};
+use num_traits::{CheckedAdd, CheckedSub, Signed, Zero};
 
 use crate::{
     action::{deposit::Deposit, withdraw::Withdrawal},
     fixed::FixedPointOps,
-    num::Unsigned,
+    num::{Unsigned, UnsignedAbs},
     price::Prices,
     BorrowingFeeMarket, PnlFactorKind, PositionImpactMarket,
 };
@@ -81,13 +81,14 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
         prices: &Prices<Self::Num>,
         pnl_factor: PnlFactorKind,
         maximize: bool,
-    ) -> crate::Result<Self::Num> {
+    ) -> crate::Result<Self::Signed> {
         let mut pool_value = {
             let long_value = self.pool_value_without_pnl_for_one_side(prices, true, maximize)?;
             let short_value = self.pool_value_without_pnl_for_one_side(prices, false, maximize)?;
             long_value
                 .checked_add(&short_value)
                 .ok_or(crate::Error::Overflow)?
+                .to_signed()?
         };
 
         // Add total pending borrowing fees.
@@ -105,7 +106,8 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
             .and_then(|factor| crate::utils::apply_factor(&total_borrowing_fees, &factor))
             .ok_or(crate::Error::Computation(
                 "calculating total borrowing fees for pool",
-            ))?;
+            ))?
+            .to_signed()?;
         pool_value = pool_value
             .checked_add(&total_borrowing_fees_for_pool)
             .ok_or(crate::Error::Computation(
@@ -125,7 +127,7 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
             .checked_add(&short_pnl)
             .ok_or(crate::Error::Computation("calculating net pnl"))?;
         pool_value = pool_value
-            .checked_sub_with_signed(&net_pnl)
+            .checked_sub(&net_pnl)
             .ok_or(crate::Error::Computation("deducting net pnl"))?;
 
         // Deduct impact pool amount.
@@ -133,7 +135,9 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
             let duration = self.passed_in_seconds_for_position_impact_distribution()?;
             self.pending_position_impact_pool_distribution_amount(duration)?
                 .1
-        };
+        }
+        .to_signed()?;
+
         pool_value = pool_value
             .checked_sub(&impact_pool_amount)
             .ok_or(crate::Error::Computation("deducting impact pool value"))?;
@@ -153,8 +157,11 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
             return Ok(Self::Num::UNIT);
         }
         let pool_value = self.pool_value(prices, pnl_factor, maximize)?;
+        if pool_value.is_negative() {
+            return Err(crate::Error::InvalidPoolValue("the pool value is negative. Calculation of the market token price is currently unsupported when the pool value is negative."));
+        }
         let one = Self::Num::UNIT / self.usd_to_amount_divisor();
-        crate::utils::market_token_amount_to_usd(&one, &pool_value, &supply)
+        crate::utils::market_token_amount_to_usd(&one, &pool_value.unsigned_abs(), &supply)
             .ok_or(crate::Error::Computation("calculating market token price"))
     }
 }

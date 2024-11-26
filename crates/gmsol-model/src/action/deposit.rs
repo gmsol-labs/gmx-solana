@@ -300,6 +300,11 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
                 PnlFactorKind::MaxAfterDeposit,
                 true,
             )?;
+            if pool_value.is_negative() {
+                return Err(crate::Error::InvalidPoolValue(
+                    "deposit: current pool value is negative",
+                ));
+            }
             let mut all_fees = [Default::default(), Default::default()];
             if !self.params.long_token_amount.is_zero() {
                 let price_impact = long_token_usd_value
@@ -312,7 +317,7 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
                     )
                     .ok_or(crate::Error::Computation("price impact for long"))?;
                 let (mint_amount, fees) =
-                    self.execute_deposit(true, pool_value.clone(), price_impact)?;
+                    self.execute_deposit(true, pool_value.unsigned_abs(), price_impact)?;
                 market_token_to_mint = market_token_to_mint
                     .checked_add(&mint_amount)
                     .ok_or(crate::Error::Overflow)?;
@@ -328,7 +333,8 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
                             .ok_or(crate::Error::Overflow)?,
                     )
                     .ok_or(crate::Error::Computation("price impact for short"))?;
-                let (mint_amount, fees) = self.execute_deposit(false, pool_value, price_impact)?;
+                let (mint_amount, fees) =
+                    self.execute_deposit(false, pool_value.unsigned_abs(), price_impact)?;
                 market_token_to_mint = market_token_to_mint
                     .checked_add(&mint_amount)
                     .ok_or(crate::Error::Overflow)?;

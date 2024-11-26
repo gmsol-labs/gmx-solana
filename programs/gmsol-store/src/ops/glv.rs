@@ -937,9 +937,9 @@ fn get_glv_value_for_market<M>(
     market: &M,
     balance: u128,
     maximize: bool,
-) -> Result<(u128, u128, u128)>
+) -> Result<(u128, i128, u128)>
 where
-    M: gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }, Num = u128>,
+    M: gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }, Num = u128, Signed = i128>,
     M: HasMarketMeta,
 {
     use gmsol_model::{utils, LiquidityMarketExt, PnlFactorKind};
@@ -961,7 +961,11 @@ where
         return Ok((0, value, supply));
     }
 
-    let glv_value = utils::market_token_amount_to_usd(&balance, &value, &supply)
+    if value.is_negative() {
+        return err!(CoreError::GlvNegativeMarketPoolValue);
+    }
+
+    let glv_value = utils::market_token_amount_to_usd(&balance, &value.unsigned_abs(), &supply)
         .ok_or_else(|| error!(CoreError::FailedToCalculateGlvValueForMarket))?;
 
     Ok((glv_value, value, supply))
@@ -974,7 +978,7 @@ fn get_market_token_amount_for_glv_value<M>(
     maximize: bool,
 ) -> Result<u128>
 where
-    M: gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }, Num = u128>,
+    M: gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }, Num = u128, Signed = i128>,
     M: HasMarketMeta,
 {
     use gmsol_model::{utils, LiquidityMarketExt, PnlFactorKind};
@@ -985,11 +989,15 @@ where
         .pool_value(&prices, PnlFactorKind::MaxAfterWithdrawal, maximize)
         .map_err(ModelError::from)?;
 
+    if value.is_negative() {
+        return err!(CoreError::GlvNegativeMarketPoolValue);
+    }
+
     let supply = market.total_supply();
 
     let market_token_amount = utils::usd_to_market_token_amount(
         glv_value,
-        value,
+        value.unsigned_abs(),
         supply,
         constants::MARKET_USD_TO_AMOUNT_DIVISOR,
     )
