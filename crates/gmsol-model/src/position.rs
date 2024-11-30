@@ -489,14 +489,36 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
 
     /// Get position price impact.
     fn position_price_impact(&self, size_delta_usd: &Self::Signed) -> crate::Result<Self::Signed> {
+        struct ReassignedValues<T> {
+            delta_long_usd_value: T,
+            delta_short_usd_value: T,
+        }
+
+        impl<T: Zero + Clone> ReassignedValues<T> {
+            fn new(is_long: bool, size_delta_usd: &T) -> Self {
+                if is_long {
+                    Self {
+                        delta_long_usd_value: size_delta_usd.clone(),
+                        delta_short_usd_value: Zero::zero(),
+                    }
+                } else {
+                    Self {
+                        delta_long_usd_value: Zero::zero(),
+                        delta_short_usd_value: size_delta_usd.clone(),
+                    }
+                }
+            }
+        }
+
         // Since the amounts of open interest are already usd amounts,
         // the price should be `one`.
         let usd_price = One::one();
-        let (delta_long_usd_value, delta_short_usd_value) = if self.is_long() {
-            (size_delta_usd.clone(), Zero::zero())
-        } else {
-            (Zero::zero(), size_delta_usd.clone())
-        };
+
+        let ReassignedValues {
+            delta_long_usd_value,
+            delta_short_usd_value,
+        } = ReassignedValues::new(self.is_long(), size_delta_usd);
+
         let price_impact_value = self
             .market()
             .open_interest()?
