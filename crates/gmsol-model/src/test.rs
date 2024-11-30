@@ -864,6 +864,10 @@ where
     fn are_pnl_and_collateral_tokens_the_same(&self) -> bool {
         self.position.is_long == self.position.is_collateral_token_long
     }
+
+    fn on_validate(&self) -> crate::Result<()> {
+        Ok(())
+    }
 }
 
 impl<'a, T, const DECIMALS: u8> PositionMut<DECIMALS> for TestPositionOps<'a, T, DECIMALS>
@@ -875,11 +879,11 @@ where
         self.market
     }
 
-    fn increased(&mut self) -> crate::Result<()> {
+    fn on_increased(&mut self) -> crate::Result<()> {
         Ok(())
     }
 
-    fn decreased(&mut self) -> crate::Result<()> {
+    fn on_decreased(&mut self) -> crate::Result<()> {
         Ok(())
     }
 }

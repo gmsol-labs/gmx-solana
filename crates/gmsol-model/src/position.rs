@@ -85,6 +85,9 @@ pub trait Position<const DECIMALS: u8>: PositionState<DECIMALS> {
 
     /// Returns whether the pnl and collateral tokens are the same.
     fn are_pnl_and_collateral_tokens_the_same(&self) -> bool;
+
+    /// Called from `validate_position` to add supplementary checks.
+    fn on_validate(&self) -> crate::Result<()>;
 }
 
 /// Position with mutable access.
@@ -93,10 +96,10 @@ pub trait PositionMut<const DECIMALS: u8>: Position<DECIMALS> + PositionStateMut
     fn market_mut(&mut self) -> &mut Self::Market;
 
     /// Increased callback.
-    fn increased(&mut self) -> crate::Result<()>;
+    fn on_increased(&mut self) -> crate::Result<()>;
 
     /// Decreased callback.
-    fn decreased(&mut self) -> crate::Result<()>;
+    fn on_decreased(&mut self) -> crate::Result<()>;
 }
 
 impl<'a, const DECIMALS: u8, P: PositionState<DECIMALS>> PositionState<DECIMALS> for &'a mut P {
@@ -147,6 +150,10 @@ impl<'a, const DECIMALS: u8, P: Position<DECIMALS>> Position<DECIMALS> for &'a m
     fn are_pnl_and_collateral_tokens_the_same(&self) -> bool {
         (**self).are_pnl_and_collateral_tokens_the_same()
     }
+
+    fn on_validate(&self) -> crate::Result<()> {
+        (**self).on_validate()
+    }
 }
 
 impl<'a, const DECIMALS: u8, P: PositionStateMut<DECIMALS>> PositionStateMut<DECIMALS>
@@ -185,12 +192,12 @@ impl<'a, const DECIMALS: u8, P: PositionMut<DECIMALS>> PositionMut<DECIMALS> for
         (**self).market_mut()
     }
 
-    fn increased(&mut self) -> crate::Result<()> {
-        (**self).increased()
+    fn on_increased(&mut self) -> crate::Result<()> {
+        (**self).on_increased()
     }
 
-    fn decreased(&mut self) -> crate::Result<()> {
-        (**self).decreased()
+    fn on_decreased(&mut self) -> crate::Result<()> {
+        (**self).on_decreased()
     }
 }
 
@@ -380,8 +387,8 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         Ok((pnl_usd, uncapped_pnl_usd, size_delta_in_tokens))
     }
 
-    /// Validate the position state.
-    fn validate_position(
+    /// Validate the position.
+    fn validate(
         &self,
         prices: &Prices<Self::Num>,
         should_validate_min_position_size: bool,
@@ -392,6 +399,8 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
                 "size_in_usd or size_in_tokens is zero",
             ));
         }
+
+        self.on_validate()?;
 
         if should_validate_min_position_size
             && self.size_in_usd() < self.market().position_params()?.min_position_size_usd()

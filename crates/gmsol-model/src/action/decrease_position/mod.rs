@@ -253,11 +253,10 @@ where
         )?;
 
         if !should_remove {
-            self.position
-                .validate_position(&self.params.prices, false, false)?;
+            self.position.validate(&self.params.prices, false, false)?;
         }
 
-        self.position.decreased()?;
+        self.position.on_decreased()?;
 
         let mut report = Box::new(DecreasePositionReport::new(
             should_remove,

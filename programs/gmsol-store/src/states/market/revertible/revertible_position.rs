@@ -111,6 +111,10 @@ impl<'a> gmsol_model::Position<{ constants::MARKET_DECIMALS }> for RevertiblePos
     fn are_pnl_and_collateral_tokens_the_same(&self) -> bool {
         self.is_long == self.is_collateral_token_long || self.market.is_pure()
     }
+
+    fn on_validate(&self) -> gmsol_model::Result<()> {
+        self.storage.validate_for_market(&self.market.market)
+    }
 }
 
 impl<'a> gmsol_model::PositionMut<{ constants::MARKET_DECIMALS }> for RevertiblePosition<'a> {
@@ -118,7 +122,7 @@ impl<'a> gmsol_model::PositionMut<{ constants::MARKET_DECIMALS }> for Revertible
         &mut self.market
     }
 
-    fn increased(&mut self) -> gmsol_model::Result<()> {
+    fn on_increased(&mut self) -> gmsol_model::Result<()> {
         let clock = Clock::get().map_err(Error::from)?;
         self.state.updated_at_slot = clock.slot;
         self.state.increased_at = clock.unix_timestamp;
@@ -126,7 +130,7 @@ impl<'a> gmsol_model::PositionMut<{ constants::MARKET_DECIMALS }> for Revertible
         Ok(())
     }
 
-    fn decreased(&mut self) -> gmsol_model::Result<()> {
+    fn on_decreased(&mut self) -> gmsol_model::Result<()> {
         let clock = Clock::get().map_err(Error::from)?;
         self.state.updated_at_slot = clock.slot;
         self.state.decreased_at = clock.unix_timestamp;

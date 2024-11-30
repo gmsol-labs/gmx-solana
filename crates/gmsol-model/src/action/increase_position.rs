@@ -301,10 +301,9 @@ where
             }
         }
 
-        self.position
-            .validate_position(&self.params.prices, true, true)?;
+        self.position.validate(&self.params.prices, true, true)?;
 
-        self.position.increased()?;
+        self.position.on_increased()?;
 
         Ok(IncreasePositionReport::new(
             self.params,

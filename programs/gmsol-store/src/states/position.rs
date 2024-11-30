@@ -101,6 +101,26 @@ impl Position {
     pub fn as_position<'a>(&'a self, market: &'a Market) -> Result<AsPosition<'a>> {
         AsPosition::try_new(self, market)
     }
+
+    pub(crate) fn validate_for_market(&self, market: &Market) -> gmsol_model::Result<()> {
+        let meta = market
+            .validated_meta(&self.store)
+            .map_err(|_| gmsol_model::Error::InvalidPosition("invalid or disabled market"))?;
+
+        if meta.market_token_mint != self.market_token {
+            return Err(gmsol_model::Error::InvalidPosition(
+                "position's market token does not match the market's",
+            ));
+        }
+
+        if !meta.is_collateral_token(&self.collateral_token) {
+            return Err(gmsol_model::Error::InvalidPosition(
+                "invalid collateral token for market",
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 impl AsRef<Position> for Position {
@@ -310,5 +330,9 @@ impl<'a> gmsol_model::Position<{ constants::MARKET_DECIMALS }> for AsPosition<'a
 
     fn are_pnl_and_collateral_tokens_the_same(&self) -> bool {
         self.is_long == self.is_collateral_long || self.market.is_pure()
+    }
+
+    fn on_validate(&self) -> gmsol_model::Result<()> {
+        self.position.validate_for_market(self.market)
     }
 }
