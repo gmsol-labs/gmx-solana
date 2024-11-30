@@ -314,7 +314,7 @@ where
         Ok(())
     }
 
-    fn pay_with_primary_pool(
+    fn pay_to_primary_pool(
         &mut self,
         collateral_token_amount: &M::Signed,
         secondary_output_token_amount: &M::Signed,
@@ -384,7 +384,7 @@ where
             self.pay_for_cost(
                 pnl.unsigned_abs(),
                 |processor, paid_in_collateral_amount, paid_in_secondary_output_amount, _| {
-                    processor.pay_with_primary_pool(
+                    processor.pay_to_primary_pool(
                         &paid_in_collateral_amount.to_signed()?,
                         &paid_in_secondary_output_amount.to_signed()?,
                     )
@@ -429,7 +429,7 @@ where
             self.pay_for_cost(
                 price_impact.unsigned_abs(),
                 |processor, paid_in_collateral_amount, paid_in_secondary_output_amount, _| {
-                    processor.pay_with_primary_pool(
+                    processor.pay_to_primary_pool(
                         &paid_in_collateral_amount.to_signed()?,
                         &paid_in_secondary_output_amount.to_signed()?,
                     )?;
@@ -535,7 +535,7 @@ where
                             &fees.for_receiver()?.to_signed()?,
                         )?;
                     } else {
-                        processor.pay_with_primary_pool(
+                        processor.pay_to_primary_pool(
                             &paid_in_collateral_amount.to_signed()?,
                             &paid_in_secondary_output_amount.to_signed()?,
                         )?;
