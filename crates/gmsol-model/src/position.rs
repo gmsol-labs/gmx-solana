@@ -693,6 +693,7 @@ where
         let is_long_collateral = self.is_collateral_token_long();
         let is_long = self.is_long();
         let max_open_interest = self.market().max_open_interest(is_long)?;
+
         let open_interest = self.market_mut().open_interest_pool_mut(is_long)?;
         if is_long_collateral {
             open_interest.apply_delta_to_long_amount(size_delta_usd)?;
@@ -700,13 +701,16 @@ where
             open_interest.apply_delta_to_short_amount(size_delta_usd)?;
         }
 
-        let is_exceeded = open_interest
-            .long_amount()?
-            .checked_add(&open_interest.short_amount()?)
-            .map(|total| total > max_open_interest)
-            .unwrap_or(true);
-        if is_exceeded {
-            return Err(crate::Error::MaxOpenInterestExceeded);
+        if size_delta_usd.is_positive() {
+            let is_exceeded = open_interest
+                .long_amount()?
+                .checked_add(&open_interest.short_amount()?)
+                .map(|total| total > max_open_interest)
+                .unwrap_or(true);
+
+            if is_exceeded {
+                return Err(crate::Error::MaxOpenInterestExceeded);
+            }
         }
 
         let open_interest_in_tokens = self
