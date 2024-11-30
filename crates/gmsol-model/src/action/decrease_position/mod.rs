@@ -5,7 +5,7 @@ use crate::{
     num::{MulDiv, Unsigned},
     params::fee::PositionFees,
     position::{
-        CollateralDelta, Position, PositionExt, PositionMut, PositionMutExt,
+        CollateralDelta, Position, PositionExt, PositionMut, PositionMutExt, PositionStateExt,
         WillCollateralBeSufficient,
     },
     price::{Price, Prices},
@@ -102,6 +102,9 @@ where
     ) -> crate::Result<Self> {
         if !prices.is_valid() {
             return Err(crate::Error::InvalidArgument("invalid prices"));
+        }
+        if position.is_empty() {
+            return Err(crate::Error::InvalidPosition("empty position"));
         }
         let size_delta_usd = size_delta_usd.min(position.size_in_usd().clone());
         Ok(Self {

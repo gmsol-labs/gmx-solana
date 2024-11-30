@@ -873,6 +873,8 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
                 }
                 let mut position = RevertiblePosition::new(market, position_loader)?;
 
+                position.on_validate().map_err(ModelError::from)?;
+
                 let should_remove_position = match kind {
                     OrderKind::MarketIncrease | OrderKind::LimitIncrease => {
                         execute_increase_position(
