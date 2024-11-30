@@ -567,10 +567,7 @@ where
         if !price_impact_diff.is_zero() {
             self.pay_for_cost(
                 price_impact_diff.clone(),
-                |processor,
-                 paid_in_collateral_amount,
-                 paid_in_secondary_output_amount,
-                 _remaining_cost| {
+                |processor, paid_in_collateral_amount, paid_in_secondary_output_amount, _| {
                     if !paid_in_collateral_amount.is_zero() {
                         processor
                             .state
