@@ -899,3 +899,19 @@ where
         Ok(CheckCollateralResult::Sufficient)
     }
 }
+
+/// Insolvent Close Step.
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+pub enum InsolventCloseStep {
+    /// PnL.
+    Pnl,
+    /// Fees.
+    Fees,
+    /// Funding fees.
+    Funding,
+    /// Price impact.
+    Impact,
+    /// Price impact diff.
+    Diff,
+}

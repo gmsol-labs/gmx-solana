@@ -1,4 +1,7 @@
-use crate::{position::LiquidatableReason, ClockKind, PnlFactorKind, PoolKind};
+use crate::{
+    position::{InsolventCloseStep, LiquidatableReason},
+    ClockKind, PnlFactorKind, PoolKind,
+};
 
 /// Error type.
 #[derive(Debug, thiserror::Error)]
@@ -62,8 +65,8 @@ pub enum Error {
     #[error("withdrawal vault not set")]
     WithdrawalVaultNotSet,
     /// Insufficient funds to pay for cost.
-    #[error("insufficient funds to pay for costs")]
-    InsufficientFundsToPayForCosts,
+    #[error("insufficient funds to pay for costs: {0:?}")]
+    InsufficientFundsToPayForCosts(InsolventCloseStep),
     /// Invalid position state.
     #[error("invalid position state: {0}")]
     InvalidPosition(&'static str),

@@ -6,6 +6,7 @@ use crate::{
     },
     num::Unsigned,
     params::fee::PositionFees,
+    position::InsolventCloseStep,
 };
 
 use super::{ClaimableCollateral, ProcessCollateralResult};
@@ -34,6 +35,7 @@ pub struct DecreasePositionReport<T: Unsigned> {
     claimable_funding_short_token_amount: T,
     for_holding: ClaimableCollateral<T>,
     for_user: ClaimableCollateral<T>,
+    insolvent_close_step: Option<InsolventCloseStep>,
 }
 
 impl<T: Unsigned + fmt::Debug> fmt::Debug for DecreasePositionReport<T>
@@ -72,6 +74,7 @@ where
             )
             .field("for_holding", &self.for_holding)
             .field("for_user", &self.for_user)
+            .field("insolvent_close_step", &self.insolvent_close_step)
             .finish()
     }
 }
@@ -117,6 +120,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
             for_user: execution.collateral.for_user,
             fees: execution.fees,
             pnl: execution.pnl,
+            insolvent_close_step: execution.collateral.insolvent_close_step,
         }
     }
 
@@ -250,6 +254,11 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     /// Get processed pnl.
     pub fn pnl(&self) -> &ProcessedPnl<T::Signed> {
         &self.pnl
+    }
+
+    /// Get insolvent close step.
+    pub fn insolvent_close_step(&self) -> Option<InsolventCloseStep> {
+        self.insolvent_close_step
     }
 }
 

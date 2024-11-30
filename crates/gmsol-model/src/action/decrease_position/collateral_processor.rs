@@ -4,8 +4,8 @@ use crate::{
     market::{BaseMarket, BaseMarketMutExt, PositionImpactMarketMutExt},
     num::{MulDiv, Num, Unsigned, UnsignedAbs},
     params::fee::{FundingFees, PositionFees},
-    price::Price,
-    price::Prices,
+    position::InsolventCloseStep,
+    price::{Price, Prices},
     PerpMarketMut,
 };
 
@@ -29,6 +29,7 @@ pub(super) struct ProcessReport<T> {
     pub(super) remaining_collateral_amount: T,
     pub(super) for_holding: ClaimableCollateral<T>,
     pub(super) for_user: ClaimableCollateral<T>,
+    pub(super) insolvent_close_step: Option<InsolventCloseStep>,
 }
 
 struct State<T> {
@@ -246,6 +247,7 @@ where
                     secondary_output_amount: Zero::zero(),
                     for_holding: ClaimableCollateral::default(),
                     for_user: ClaimableCollateral::default(),
+                    insolvent_close_step: None,
                 },
             },
             is_insolvent_close_allowed,
@@ -273,8 +275,13 @@ where
         Ok(())
     }
 
-    fn into_report(self) -> ProcessReport<M::Num> {
-        self.state.report
+    fn into_report(
+        self,
+        insolvent_close_step: Option<InsolventCloseStep>,
+    ) -> ProcessReport<M::Num> {
+        let mut report = self.state.report;
+        report.insolvent_close_step = insolvent_close_step;
+        report
     }
 
     pub(super) fn process(
@@ -285,11 +292,11 @@ where
             processor: &mut self,
         });
         match res {
-            Ok(()) => Ok(self.into_report()),
-            Err(crate::Error::InsufficientFundsToPayForCosts)
+            Ok(()) => Ok(self.into_report(None)),
+            Err(crate::Error::InsufficientFundsToPayForCosts(step))
                 if self.is_insolvent_close_allowed =>
             {
-                Ok(self.into_report())
+                Ok(self.into_report(Some(step)))
             }
             Err(err) => Err(err),
         }
@@ -299,6 +306,7 @@ where
         &mut self,
         mut cost: M::Num,
         receive: impl FnOnce(&mut Self, &M::Num, &M::Num, &M::Num) -> crate::Result<()>,
+        step: InsolventCloseStep,
     ) -> crate::Result<()> {
         let (paid_in_collateral_amount, paid_in_secondary_amount) =
             self.state.do_pay_for_cost(&mut cost)?;
@@ -309,7 +317,7 @@ where
             &cost,
         )?;
         if !cost.is_zero() {
-            return Err(crate::Error::InsufficientFundsToPayForCosts);
+            return Err(crate::Error::InsufficientFundsToPayForCosts(step));
         }
         Ok(())
     }
@@ -389,6 +397,7 @@ where
                         &paid_in_secondary_output_amount.to_signed()?,
                     )
                 },
+                InsolventCloseStep::Pnl,
             )?;
         }
         Ok(self)
@@ -466,6 +475,7 @@ where
                     }
                     Ok(())
                 },
+                InsolventCloseStep::Impact,
             )?;
         }
         Ok(self)
@@ -501,6 +511,7 @@ where
                     }
                     Ok(())
                 },
+                InsolventCloseStep::Funding,
             )?;
         }
         Ok(self)
@@ -543,6 +554,7 @@ where
                     }
                     Ok(())
                 },
+                InsolventCloseStep::Fees,
             )?;
         }
         Ok(self)
@@ -573,6 +585,7 @@ where
                     }
                     Ok(())
                 },
+                InsolventCloseStep::Diff,
             )?;
         }
         Ok(self)
