@@ -205,7 +205,7 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
                 .try_into()
                 .map_err(|_| crate::Error::Convert)?,
         )?;
-        // FIXME: will this case happend in our implementation?
+
         if price_impact.is_positive() && supply.is_zero() {
             price_impact = Zero::zero();
         }
