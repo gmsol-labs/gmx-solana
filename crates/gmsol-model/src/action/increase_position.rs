@@ -67,11 +67,11 @@ where
             .field("borrowing", &self.borrowing)
             .field("funding", &self.funding)
             .field(
-                "claimble_funding_long_token_amount",
+                "claimable_funding_long_token_amount",
                 &self.claimable_funding_long_token_amount,
             )
             .field(
-                "claimble_funding_short_token_amount",
+                "claimable_funding_short_token_amount",
                 &self.claimable_funding_short_token_amount,
             )
             .finish()
