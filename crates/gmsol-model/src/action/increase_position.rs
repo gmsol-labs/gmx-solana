@@ -34,6 +34,21 @@ pub struct IncreasePositionParams<T> {
 }
 
 impl<T> IncreasePositionParams<T> {
+    /// Get collateral increment amount.
+    pub fn collateral_increment_amount(&self) -> &T {
+        &self.collateral_increment_amount
+    }
+
+    /// Get size delta USD.
+    pub fn size_delta_usd(&self) -> &T {
+        &self.size_delta_usd
+    }
+
+    /// Get acceptable price.
+    pub fn acceptable_price(&self) -> Option<&T> {
+        self.acceptable_price.as_ref()
+    }
+
     /// Get prices.
     pub fn prices(&self) -> &Prices<T> {
         &self.prices
@@ -155,9 +170,9 @@ pub struct ExecutionParams<T: Unsigned> {
 }
 
 impl<T: Unsigned> ExecutionParams<T> {
-    /// Get execution price.
-    pub fn execution_price(&self) -> &T {
-        &self.execution_price
+    /// Get price impact value.
+    pub fn price_impact_value(&self) -> &T::Signed {
+        &self.price_impact_value
     }
 
     /// Get price impact amount.
@@ -165,9 +180,14 @@ impl<T: Unsigned> ExecutionParams<T> {
         &self.price_impact_amount
     }
 
-    /// Get price impact value.
-    pub fn price_impact_value(&self) -> &T::Signed {
-        &self.price_impact_value
+    /// Get size delta in tokens.
+    pub fn size_delta_in_tokens(&self) -> &T {
+        &self.size_delta_in_tokens
+    }
+
+    /// Get execution price.
+    pub fn execution_price(&self) -> &T {
+        &self.execution_price
     }
 }
 
