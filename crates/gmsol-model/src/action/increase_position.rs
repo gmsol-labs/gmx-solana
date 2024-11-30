@@ -87,21 +87,19 @@ impl<T: Unsigned + Clone> IncreasePositionReport<T> {
         borrowing: UpdateBorrowingReport<T>,
         funding: UpdateFundingReport<T>,
     ) -> Self {
+        let claimable_funding_long_token_amount =
+            fees.funding_fees().claimable_long_token_amount().clone();
+        let claimable_funding_short_token_amount =
+            fees.funding_fees().claimable_short_token_amount().clone();
         Self {
             params,
             execution,
             collateral_delta_amount,
+            fees,
             borrowing,
             funding,
-            claimable_funding_long_token_amount: fees
-                .funding_fees()
-                .claimable_long_token_amount()
-                .clone(),
-            claimable_funding_short_token_amount: fees
-                .funding_fees()
-                .claimable_short_token_amount()
-                .clone(),
-            fees,
+            claimable_funding_long_token_amount,
+            claimable_funding_short_token_amount,
         }
     }
 
