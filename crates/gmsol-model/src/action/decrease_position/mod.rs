@@ -434,11 +434,11 @@ where
         let remaining_collateral_amount = self.position.collateral_amount().clone();
         let processor = CollateralProcessor::new(
             self.position.market_mut(),
-            remaining_collateral_amount,
             is_output_token_long,
             is_pnl_token_long,
             are_pnl_and_collateral_tokens_the_same,
             &self.params.prices,
+            remaining_collateral_amount,
             is_insolvent_close_allowed,
         );
         let mut report = processor.process(|mut ctx| {

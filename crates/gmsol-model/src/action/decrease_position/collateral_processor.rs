@@ -33,8 +33,8 @@ pub(super) struct ProcessReport<T> {
 
 struct State<T> {
     prices: Prices<T>,
-    is_pnl_token_long: bool,
     is_output_token_long: bool,
+    is_pnl_token_long: bool,
     are_pnl_and_collateral_tokens_the_same: bool,
     report: ProcessReport<T>,
 }
@@ -226,19 +226,19 @@ where
 {
     pub(super) fn new(
         market: &'a mut M,
-        remaining_collateral_amount: M::Num,
         is_output_token_long: bool,
         is_pnl_token_long: bool,
         are_pnl_and_collateral_tokens_the_same: bool,
         prices: &Prices<M::Num>,
+        remaining_collateral_amount: M::Num,
         is_insolvent_close_allowed: bool,
     ) -> Self {
         Self {
             market,
             state: State {
                 prices: prices.clone(),
-                is_pnl_token_long,
                 is_output_token_long,
+                is_pnl_token_long,
                 are_pnl_and_collateral_tokens_the_same,
                 report: ProcessReport {
                     remaining_collateral_amount,
