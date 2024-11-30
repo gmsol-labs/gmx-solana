@@ -283,11 +283,8 @@ impl<'a, 'info> CreateIncreaseOrderOperation<'a, 'info> {
             CoreError::Internal
         );
         require!(
-            self.common.params.initial_collateral_delta_amount != 0,
-            CoreError::EmptyOrder
-        );
-        require!(
-            self.common.params.size_delta_value != 0,
+            self.common.params.size_delta_value != 0
+                || self.common.params.initial_collateral_delta_amount != 0,
             CoreError::EmptyOrder
         );
         require_gte!(
@@ -295,16 +292,25 @@ impl<'a, 'info> CreateIncreaseOrderOperation<'a, 'info> {
             self.common.params.initial_collateral_delta_amount,
             CoreError::NotEnoughTokenAmount
         );
-        require_eq!(
-            self.common.market.load()?.meta().long_token_mint,
-            self.long_token.mint,
-            CoreError::TokenMintMismatched
-        );
-        require_eq!(
-            self.common.market.load()?.meta().short_token_mint,
-            self.short_token.mint,
-            CoreError::TokenMintMismatched
-        );
+
+        {
+            let market = self.common.market.load()?;
+            require_eq!(
+                market.meta().long_token_mint,
+                self.long_token.mint,
+                CoreError::TokenMintMismatched
+            );
+            require_eq!(
+                market.meta().short_token_mint,
+                self.short_token.mint,
+                CoreError::TokenMintMismatched
+            );
+            self.position
+                .load()?
+                .validate_for_market(&market)
+                .map_err(ModelError::from)?;
+        }
+
         Ok(())
     }
 }
@@ -355,16 +361,29 @@ impl<'a, 'info> CreateDecreaseOrderOperation<'a, 'info> {
             self.common.params.kind.is_decrease_position(),
             CoreError::Internal
         );
-        require_eq!(
-            self.common.market.load()?.meta().long_token_mint,
-            self.long_token.mint,
-            CoreError::TokenMintMismatched
+        require!(
+            self.common.params.size_delta_value != 0
+                || self.common.params.initial_collateral_delta_amount != 0,
+            CoreError::EmptyOrder
         );
-        require_eq!(
-            self.common.market.load()?.meta().short_token_mint,
-            self.short_token.mint,
-            CoreError::TokenMintMismatched
-        );
+
+        {
+            let market = self.common.market.load()?;
+            require_eq!(
+                market.meta().long_token_mint,
+                self.long_token.mint,
+                CoreError::TokenMintMismatched
+            );
+            require_eq!(
+                market.meta().short_token_mint,
+                self.short_token.mint,
+                CoreError::TokenMintMismatched
+            );
+            self.position
+                .load()?
+                .validate_for_market(&market)
+                .map_err(ModelError::from)?;
+        }
         Ok(())
     }
 }

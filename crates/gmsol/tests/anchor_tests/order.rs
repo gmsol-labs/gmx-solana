@@ -81,6 +81,34 @@ async fn balanced_market_order() -> eyre::Result<()> {
                 )
                 .await?;
 
+            // Increase position
+            let increment_size = size / 10;
+            let (rpc, order) = client
+                .market_increase(
+                    store,
+                    market_token,
+                    collateral_side,
+                    0,
+                    side,
+                    increment_size,
+                )
+                .build_with_address()
+                .await?;
+            let signature = rpc.send().await?;
+            tracing::info!(%order, %signature, %increment_size, "created an increase position order");
+
+            let mut builder = keeper.execute_order(store, oracle, &order, false)?;
+            deployment
+                .execute_with_pyth(
+                    builder
+                        .add_alt(deployment.common_alt().clone())
+                        .add_alt(deployment.market_alt().clone()),
+                    None,
+                    true,
+                    true,
+                )
+                .await?;
+
             // Extract collateral.
             let amount = collateral_amount / 2;
             let (rpc, order) = client
@@ -289,6 +317,34 @@ async fn single_token_market_order() -> eyre::Result<()> {
                 .await?;
             let signature = rpc.send().await?;
             tracing::info!(%order, %signature, %size, "created an increase position order");
+
+            let mut builder = keeper.execute_order(store, oracle, &order, false)?;
+            deployment
+                .execute_with_pyth(
+                    builder
+                        .add_alt(deployment.common_alt().clone())
+                        .add_alt(deployment.market_alt().clone()),
+                    None,
+                    true,
+                    true,
+                )
+                .await?;
+
+            // Increase position
+            let increment_size = size / 10;
+            let (rpc, order) = client
+                .market_increase(
+                    store,
+                    market_token,
+                    collateral_side,
+                    0,
+                    side,
+                    increment_size,
+                )
+                .build_with_address()
+                .await?;
+            let signature = rpc.send().await?;
+            tracing::info!(%order, %signature, %increment_size, "created an increase position order");
 
             let mut builder = keeper.execute_order(store, oracle, &order, false)?;
             deployment

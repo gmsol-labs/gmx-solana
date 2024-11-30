@@ -45,7 +45,7 @@ impl<T> IncreasePositionParams<T> {
 pub struct IncreasePositionReport<T: Unsigned> {
     params: IncreasePositionParams<T>,
     execution: ExecutionParams<T>,
-    collateral_delta_amount: T,
+    collateral_delta_amount: T::Signed,
     fees: PositionFees<T>,
     borrowing: UpdateBorrowingReport<T>,
     funding: UpdateFundingReport<T>,
@@ -82,7 +82,7 @@ impl<T: Unsigned + Clone> IncreasePositionReport<T> {
     fn new(
         params: IncreasePositionParams<T>,
         execution: ExecutionParams<T>,
-        collateral_delta_amount: T,
+        collateral_delta_amount: T::Signed,
         fees: PositionFees<T>,
         borrowing: UpdateBorrowingReport<T>,
         funding: UpdateFundingReport<T>,
@@ -127,7 +127,7 @@ impl<T: Unsigned + Clone> IncreasePositionReport<T> {
     }
 
     /// Get collateral delta amount.
-    pub fn collateral_delta_amount(&self) -> &T {
+    pub fn collateral_delta_amount(&self) -> &T::Signed {
         &self.collateral_delta_amount
     }
 
@@ -219,11 +219,18 @@ where
         let (collateral_delta_amount, fees) =
             self.process_collateral(&execution.price_impact_value)?;
 
+        let is_collateral_delta_positive = collateral_delta_amount.is_positive();
         *self.position.collateral_amount_mut() = self
             .position
             .collateral_amount_mut()
-            .checked_add(&collateral_delta_amount)
-            .ok_or(crate::Error::Computation("collateral amount overflow"))?;
+            .checked_add_with_signed(&collateral_delta_amount)
+            .ok_or_else(|| {
+                if is_collateral_delta_positive {
+                    crate::Error::Computation("collateral amount overflow")
+                } else {
+                    crate::Error::InvalidArgument("insufficient collateral amount")
+                }
+            })?;
 
         self.position
             .market_mut()
@@ -433,10 +440,10 @@ where
     fn process_collateral(
         &mut self,
         price_impact_value: &P::Signed,
-    ) -> crate::Result<(P::Num, PositionFees<P::Num>)> {
+    ) -> crate::Result<(P::Signed, PositionFees<P::Num>)> {
         use num_traits::CheckedSub;
 
-        let mut collateral_delta_amount = self.params.collateral_increment_amount.clone();
+        let mut collateral_delta_amount = self.params.collateral_increment_amount.to_signed()?;
 
         let fees = self.position.position_fees(
             self.collateral_price(),
@@ -445,7 +452,7 @@ where
         )?;
 
         collateral_delta_amount = collateral_delta_amount
-            .checked_sub(&fees.total_cost_amount()?)
+            .checked_sub(&fees.total_cost_amount()?.to_signed()?)
             .ok_or(crate::Error::Computation(
                 "applying fees to collateral amount",
             ))?;
@@ -467,10 +474,7 @@ where
         self.position
             .market_mut()
             .collateral_sum_pool_mut(is_long)?
-            .apply_delta_amount(
-                is_collateral_token_long,
-                &collateral_delta_amount.to_signed()?,
-            )?;
+            .apply_delta_amount(is_collateral_token_long, &collateral_delta_amount)?;
 
         Ok((collateral_delta_amount, fees))
     }
