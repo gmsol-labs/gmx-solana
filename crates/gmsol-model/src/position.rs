@@ -10,7 +10,7 @@ use crate::{
     fixed::FixedPointOps,
     market::{
         BaseMarketExt, BorrowingFeeMarket, BorrowingFeeMarketExt, PerpMarket, PerpMarketExt,
-        PositionImpactMarket, PositionImpactMarketExt,
+        PositionImpactMarket,
     },
     num::{MulDiv, Num, Unsigned, UnsignedAbs},
     params::fee::{FundingFees, PositionFees},
@@ -429,10 +429,10 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         let has_positive_impact = price_impact_value.is_positive();
 
         if price_impact_value.is_negative() {
-            self.cap_negative_position_price_impact(
+            self.market().cap_negative_position_price_impact(
                 &size_delta_usd,
-                &mut price_impact_value,
                 true,
+                &mut price_impact_value,
             )?;
         } else {
             price_impact_value = Zero::zero();
@@ -511,79 +511,6 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         Ok(price_impact_value)
     }
 
-    /// Cap positive position price impact.
-    fn cap_positive_position_price_impact(
-        &self,
-        index_token_price: &Price<Self::Num>,
-        size_delta_usd: &Self::Signed,
-        impact: &mut Self::Signed,
-    ) -> crate::Result<()> {
-        use crate::utils;
-        use num_traits::{CheckedMul, Signed};
-        if impact.is_positive() {
-            let impact_pool_amount = self.market().position_impact_pool_amount()?;
-            // Cap price impact based on pool amount.
-            let max_impact = impact_pool_amount
-                .checked_mul(index_token_price.pick_price(false))
-                .ok_or(crate::Error::Computation(
-                    "overflow calculating max positive position impact based on pool amount",
-                ))?
-                .to_signed()?;
-            if *impact > max_impact {
-                *impact = max_impact;
-            }
-
-            // Cap price impact based on max factor.
-            let params = self.market().position_params()?;
-            let max_impact_factor = params.max_positive_position_impact_factor();
-            let max_impact = utils::apply_factor(&size_delta_usd.unsigned_abs(), max_impact_factor)
-                .ok_or(crate::Error::Computation(
-                    "calculating max positive position impact based on max factor",
-                ))?
-                .to_signed()?;
-            if *impact > max_impact {
-                *impact = max_impact;
-            }
-        }
-        Ok(())
-    }
-
-    /// Cap negative position price impact.
-    fn cap_negative_position_price_impact(
-        &self,
-        size_delta_usd: &Self::Signed,
-        impact: &mut Self::Signed,
-        for_liquidations: bool,
-    ) -> crate::Result<Self::Num> {
-        use crate::utils;
-        use num_traits::{CheckedSub, Signed};
-
-        let mut impact_diff = Zero::zero();
-        if impact.is_negative() {
-            let params = self.market().position_params()?;
-            let max_impact_factor = if for_liquidations {
-                params.max_position_impact_factor_for_liquidations()
-            } else {
-                params.max_negative_position_impact_factor()
-            };
-            let min_impact = utils::apply_factor(&size_delta_usd.unsigned_abs(), max_impact_factor)
-                .ok_or(crate::Error::Computation(
-                    "calculating max negative position impact based on max factor",
-                ))?
-                .to_opposite_signed()?;
-            if *impact < min_impact {
-                impact_diff = min_impact
-                    .checked_sub(impact)
-                    .ok_or(crate::Error::Computation(
-                        "overflow calculating impact diff",
-                    ))?
-                    .unsigned_abs();
-                *impact = min_impact;
-            }
-        }
-        Ok(impact_diff)
-    }
-
     /// Get position price impact usd and cap the value if it is positive.
     #[inline]
     fn capped_positive_position_price_impact(
@@ -592,7 +519,11 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         size_delta_usd: &Self::Signed,
     ) -> crate::Result<Self::Signed> {
         let mut impact = self.position_price_impact(size_delta_usd)?;
-        self.cap_positive_position_price_impact(index_token_price, size_delta_usd, &mut impact)?;
+        self.market().cap_positive_position_price_impact(
+            index_token_price,
+            size_delta_usd,
+            &mut impact,
+        )?;
         Ok(impact)
     }
 
@@ -609,7 +540,8 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         let mut impact =
             self.capped_positive_position_price_impact(index_token_price, size_delta_usd)?;
         let impact_diff =
-            self.cap_negative_position_price_impact(size_delta_usd, &mut impact, false)?;
+            self.market()
+                .cap_negative_position_price_impact(size_delta_usd, false, &mut impact)?;
         Ok((impact, impact_diff))
     }
 

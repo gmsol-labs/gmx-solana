@@ -4,7 +4,7 @@ use crate::{
     },
     num::Unsigned,
     params::{fee::FundingFeeParams, FeeParams, PositionParams},
-    price::Prices,
+    price::{Price, Prices},
     BalanceExt, BorrowingFeeMarket, PoolExt, PositionImpactMarket, PositionImpactMarketMut,
     SwapMarket, SwapMarketMut,
 };
@@ -264,6 +264,86 @@ pub trait PerpMarketExt<const DECIMALS: u8>: PerpMarket<DECIMALS> {
         crate::utils::apply_factor(&next_open_interest, &factor).ok_or(crate::Error::Computation(
             "calculating min collateral factor for OI",
         ))
+    }
+
+    /// Caps positive position price impact in-place.
+    /// If `impact` is not positive, the function does nothing.
+    fn cap_positive_position_price_impact(
+        &self,
+        index_token_price: &Price<Self::Num>,
+        size_delta_usd: &Self::Signed,
+        impact: &mut Self::Signed,
+    ) -> crate::Result<()> {
+        use crate::{market::PositionImpactMarketExt, num::UnsignedAbs, utils};
+        use num_traits::{CheckedMul, Signed};
+
+        if impact.is_positive() {
+            let impact_pool_amount = self.position_impact_pool_amount()?;
+            // Cap price impact based on pool amount.
+            let max_impact = impact_pool_amount
+                .checked_mul(index_token_price.pick_price(false))
+                .ok_or(crate::Error::Computation(
+                    "overflow calculating max positive position impact based on pool amount",
+                ))?
+                .to_signed()?;
+            if *impact > max_impact {
+                *impact = max_impact;
+            }
+
+            // Cap price impact based on max factor.
+            let params = self.position_params()?;
+            let max_impact_factor = params.max_positive_position_impact_factor();
+            let max_impact = utils::apply_factor(&size_delta_usd.unsigned_abs(), max_impact_factor)
+                .ok_or(crate::Error::Computation(
+                    "calculating max positive position impact based on max factor",
+                ))?
+                .to_signed()?;
+            if *impact > max_impact {
+                *impact = max_impact;
+            }
+        }
+        Ok(())
+    }
+
+    /// Caps negative position price impact in-place.
+    /// If `impact` is not negative, the function does nothing.
+    ///
+    /// # Returns
+    ///
+    /// - The capped amount of the negative `impact`.
+    fn cap_negative_position_price_impact(
+        &self,
+        size_delta_usd: &Self::Signed,
+        for_liquidations: bool,
+        impact: &mut Self::Signed,
+    ) -> crate::Result<Self::Num> {
+        use crate::{num::UnsignedAbs, utils};
+        use num_traits::{CheckedSub, Signed, Zero};
+
+        let mut impact_diff = Zero::zero();
+        if impact.is_negative() {
+            let params = self.position_params()?;
+            let max_impact_factor = if for_liquidations {
+                params.max_position_impact_factor_for_liquidations()
+            } else {
+                params.max_negative_position_impact_factor()
+            };
+            let min_impact = utils::apply_factor(&size_delta_usd.unsigned_abs(), max_impact_factor)
+                .ok_or(crate::Error::Computation(
+                    "calculating max negative position impact based on max factor",
+                ))?
+                .to_opposite_signed()?;
+            if *impact < min_impact {
+                impact_diff = min_impact
+                    .checked_sub(impact)
+                    .ok_or(crate::Error::Computation(
+                        "overflow calculating impact diff",
+                    ))?
+                    .unsigned_abs();
+                *impact = min_impact;
+            }
+        }
+        Ok(impact_diff)
     }
 }
 
