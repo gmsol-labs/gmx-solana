@@ -749,7 +749,6 @@ impl<const DECIMALS: u8, P: PositionMut<DECIMALS>> PositionMutExt<DECIMALS> for 
 }
 
 /// Collateral Delta Values.
-#[allow(unused)]
 pub struct CollateralDelta<T: Unsigned> {
     next_size_in_usd: T,
     next_collateral_amount: T,
