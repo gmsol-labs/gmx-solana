@@ -19,17 +19,22 @@ VERIFIABLE := TARGET / "verifiable"
 STORE_PROGRAM := VERIFIABLE / "gmsol_store.so"
 MOCK_CHAINLINK_PROGRAM := VERIFIABLE / "mock_chainlink_verifier.so"
 
-default: lint test test-programs
+default: lint test-crates test-programs
 
-lint:
+lint: && build-docs
   cargo fmt --check
   cargo clippy --features {{FEATURES}}
 
-test:
+test: test-crates test-programs
+
+test-crates:
   cargo test --features {{FEATURES}}
 
 test-programs *ARGS:
   anchor test {{ARGS}}
+
+build-docs *ARGS:
+  cargo doc --features doc {{ARGS}}
 
 build-idls:
   mkdir -p {{IDL_OUT_DIR}}
