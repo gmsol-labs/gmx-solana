@@ -284,7 +284,12 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
         );
 
         // Validate max pnl first.
-        // FIXME: add comment for the reason.
+        // Deposits should improve the pool state but it should be checked if
+        // the max pnl factor for deposits is exceeded as this would lead to the
+        // price of the market token decreasing below a target minimum percentage
+        // due to pnl.
+        // Note that this is just a validation for deposits, there is no actual
+        // minimum price for a market token
         self.market.validate_max_pnl(
             &self.params.prices,
             PnlFactorKind::MaxAfterDeposit,
