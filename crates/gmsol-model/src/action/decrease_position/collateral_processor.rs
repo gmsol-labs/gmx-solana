@@ -180,7 +180,7 @@ where
                 self.secondary_output_token_price().pick_price(false),
             )
             .ok_or(crate::Error::Computation(
-                "initalizing remaing cost in secondary output token",
+                "initializing remaining cost in secondary output token",
             ))?;
 
         if !self.secondary_output_amount.is_zero() {
@@ -214,7 +214,7 @@ where
 
         *cost = remaining_cost_in_secondary_output_token
             .checked_mul(self.secondary_output_token_price().pick_price(false))
-            .ok_or(crate::Error::Computation("calculating remaing cost"))?;
+            .ok_or(crate::Error::Computation("calculating remaining cost"))?;
 
         Ok((paid_in_collateral_amount, paid_in_secondary_output_amount))
     }
@@ -440,7 +440,7 @@ where
                                 processor.state.prices.index_token_price.pick_price(true),
                             )
                             .ok_or(crate::Error::Computation(
-                                "calculating price impact paied in collateral (output) token",
+                                "calculating price impact paid in collateral (output) token",
                             ))?
                             .to_signed()?;
                         processor
@@ -457,7 +457,7 @@ where
                                 processor.state.prices.index_token_price.pick_price(true),
                             )
                             .ok_or(crate::Error::Computation(
-                                "calculating price impact paied in secondary output token",
+                                "calculating price impact paid in secondary output token",
                             ))?
                             .to_signed()?;
                         processor
