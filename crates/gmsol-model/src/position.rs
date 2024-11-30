@@ -1,6 +1,6 @@
 use std::{fmt, ops::Deref};
 
-use num_traits::{One, Zero};
+use num_traits::{One, Signed, Zero};
 
 use crate::{
     action::{
@@ -222,17 +222,13 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         prices: &Prices<Self::Num>,
         delta: &CollateralDelta<Self::Num>,
     ) -> crate::Result<WillCollateralBeSufficient<Self::Signed>> {
-        use num_traits::{CheckedAdd, CheckedMul, Signed};
+        use num_traits::{CheckedAdd, CheckedMul};
 
-        let collateral_token_price = if self.is_collateral_token_long() {
-            &prices.long_token_price
-        } else {
-            &prices.short_token_price
-        };
+        let collateral_price = self.collateral_price(prices);
 
         let mut remaining_collateral_value = delta
             .next_collateral_amount
-            .checked_mul(collateral_token_price.pick_price(false))
+            .checked_mul(collateral_price.pick_price(false))
             .ok_or(crate::Error::Computation(
                 "overflow calculating collateral value",
             ))?
@@ -250,7 +246,6 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
             ));
         }
 
-        // Check leverage.
         let min_collateral_factor = self
             .market()
             .min_collateral_factor_for_open_interest(&delta.open_interest_delta, self.is_long())?
@@ -261,20 +256,22 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
                     .clone(),
             );
 
-        let min_collateral_value_for_leverage =
-            crate::utils::apply_factor(&delta.next_size_in_usd, &min_collateral_factor).ok_or(
-                crate::Error::Computation("overflow calculating min collateral value for leverage"),
-            )?;
-
-        debug_assert!(!remaining_collateral_value.is_negative());
-        if remaining_collateral_value.unsigned_abs() >= min_collateral_value_for_leverage {
-            Ok(WillCollateralBeSufficient::Sufficient(
-                remaining_collateral_value,
-            ))
-        } else {
-            Ok(WillCollateralBeSufficient::Insufficient(
-                remaining_collateral_value,
-            ))
+        match check_collateral(
+            &delta.next_size_in_usd,
+            &min_collateral_factor,
+            None,
+            true,
+            &remaining_collateral_value,
+        )? {
+            CheckCollateralResult::Sufficient | CheckCollateralResult::Zero => Ok(
+                WillCollateralBeSufficient::Sufficient(remaining_collateral_value),
+            ),
+            CheckCollateralResult::Negative | CheckCollateralResult::MinCollateralForLeverage => {
+                Ok(WillCollateralBeSufficient::Insufficient(
+                    remaining_collateral_value,
+                ))
+            }
+            CheckCollateralResult::MinCollateral => unreachable!(),
         }
     }
 
@@ -311,7 +308,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         prices: &Prices<Self::Num>,
         size_delta_usd: &Self::Num,
     ) -> crate::Result<(Self::Signed, Self::Signed, Self::Num)> {
-        use num_traits::{CheckedMul, CheckedSub, Signed};
+        use num_traits::{CheckedMul, CheckedSub};
 
         let execution_price = &prices
             .index_token_price
@@ -376,8 +373,8 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
                 ))?
         };
 
-        let pnl_usd = size_delta_in_tokens
-            .checked_mul_div_with_signed_numerator(&total_pnl, self.size_in_tokens())
+        let pnl_usd = dbg!(&size_delta_in_tokens)
+            .checked_mul_div_with_signed_numerator(dbg!(&total_pnl), dbg!(self.size_in_tokens()))
             .ok_or(crate::Error::Computation("calculating pnl_usd"))?;
 
         let uncapped_pnl_usd = size_delta_in_tokens
@@ -423,7 +420,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         prices: &Prices<Self::Num>,
         should_validate_min_collateral_usd: bool,
     ) -> crate::Result<Option<LiquidatableReason>> {
-        use num_traits::{CheckedAdd, CheckedMul, CheckedSub, Signed};
+        use num_traits::{CheckedAdd, CheckedMul, CheckedSub};
 
         let size_in_usd = self.size_in_usd();
 
@@ -470,33 +467,22 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
 
         let params = self.market().position_params()?;
 
-        let min_collateral_usd_for_leverage =
-            crate::utils::apply_factor(size_in_usd, params.min_collateral_factor()).ok_or(
-                crate::Error::Computation("calculating min collateral usd for leverage"),
-            )?;
-
-        if !remaining_collateral_value.is_positive() {
-            return if should_validate_min_collateral_usd {
-                // Keep the behavior consistent with the Solidity version.
-                Ok(Some(LiquidatableReason::MinCollateral))
-            } else {
+        match check_collateral(
+            size_in_usd,
+            params.min_collateral_factor(),
+            should_validate_min_collateral_usd.then(|| params.min_collateral_factor()),
+            false,
+            &remaining_collateral_value,
+        )? {
+            CheckCollateralResult::Sufficient => Ok(None),
+            CheckCollateralResult::Zero | CheckCollateralResult::Negative => {
                 Ok(Some(LiquidatableReason::NotPositive))
-            };
+            }
+            CheckCollateralResult::MinCollateralForLeverage => {
+                Ok(Some(LiquidatableReason::MinCollateralForLeverage))
+            }
+            CheckCollateralResult::MinCollateral => Ok(Some(LiquidatableReason::MinCollateral)),
         }
-
-        let remaining_collateral_value = remaining_collateral_value.unsigned_abs();
-
-        if should_validate_min_collateral_usd
-            && remaining_collateral_value < *params.min_collateral_value()
-        {
-            return Ok(Some(LiquidatableReason::MinCollateral));
-        }
-
-        if remaining_collateral_value < min_collateral_usd_for_leverage {
-            return Ok(Some(LiquidatableReason::MinCollateralForLeverage));
-        }
-
-        Ok(None)
     }
 
     /// Get position price impact.
@@ -833,5 +819,56 @@ impl fmt::Display for LiquidatableReason {
             Self::NotPositive => write!(f, "<= 0"),
             Self::MinCollateralForLeverage => write!(f, "min collateral for leverage"),
         }
+    }
+}
+
+enum CheckCollateralResult {
+    Sufficient,
+    Zero,
+    Negative,
+    MinCollateralForLeverage,
+    MinCollateral,
+}
+
+fn check_collateral<T, const DECIMALS: u8>(
+    size_in_usd: &T,
+    min_collateral_factor: &T,
+    min_collateral_value: Option<&T>,
+    allow_zero_collateral: bool,
+    collateral_value: &T::Signed,
+) -> crate::Result<CheckCollateralResult>
+where
+    T: FixedPointOps<DECIMALS>,
+{
+    if collateral_value.is_negative() {
+        if min_collateral_value.is_some() {
+            // Keep the behavior consistent with the Solidity version.
+            Ok(CheckCollateralResult::MinCollateral)
+        } else {
+            Ok(CheckCollateralResult::Negative)
+        }
+    } else {
+        let collateral_value = collateral_value.unsigned_abs();
+
+        if let Some(min_collateral_value) = min_collateral_value {
+            if collateral_value < *min_collateral_value {
+                return Ok(CheckCollateralResult::MinCollateral);
+            }
+        }
+
+        if !allow_zero_collateral && collateral_value.is_zero() {
+            return Ok(CheckCollateralResult::Zero);
+        }
+
+        let min_collateral_usd_for_leverage =
+            crate::utils::apply_factor(size_in_usd, min_collateral_factor).ok_or(
+                crate::Error::Computation("calculating min collateral usd for leverage"),
+            )?;
+
+        if collateral_value < min_collateral_usd_for_leverage {
+            return Ok(CheckCollateralResult::MinCollateralForLeverage);
+        }
+
+        Ok(CheckCollateralResult::Sufficient)
     }
 }
