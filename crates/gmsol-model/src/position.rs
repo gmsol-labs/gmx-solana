@@ -206,6 +206,8 @@ pub trait PositionStateExt<const DECIMALS: u8>: PositionState<DECIMALS> {
     /// Return whether the position is considered to be empty.
     fn is_empty(&self) -> bool {
         self.size_in_usd().is_zero()
+            || self.size_in_tokens().is_zero()
+            || self.collateral_amount().is_zero()
     }
 }
 
