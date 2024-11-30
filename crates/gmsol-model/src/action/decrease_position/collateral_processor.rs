@@ -91,7 +91,7 @@ impl<T> State<T>
 where
     T: MulDiv + Num,
 {
-    /// Pay for cost with `output_amount`, `collateral_amount` and `pnl_amount` in order.
+    /// Pay the cost in the following order: output amount, collateral amount, then secondary output amount.
     fn do_pay_for_cost(&mut self, cost: &mut T) -> crate::Result<(T, T)> {
         let mut paid_in_collateral_amount = Zero::zero();
         let mut paid_in_secondary_output_amount = Zero::zero();
