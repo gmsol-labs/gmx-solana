@@ -408,14 +408,14 @@ where
         price_impact: &M::Signed,
     ) -> crate::Result<&mut Self> {
         if price_impact.is_positive() {
-            let min_amount = price_impact
+            let amount = price_impact
                 .unsigned_abs()
                 .checked_round_up_div(self.state.prices.index_token_price.pick_price(false))
                 .ok_or(crate::Error::Computation(
                     "calculating positive price impact amount",
                 ))?;
             self.market
-                .apply_delta_to_position_impact_pool(&min_amount.to_opposite_signed()?)?;
+                .apply_delta_to_position_impact_pool(&amount.to_opposite_signed()?)?;
 
             debug_assert!(!self.state.pnl_token_price().has_zero());
             let deduction_amount_for_pool =
