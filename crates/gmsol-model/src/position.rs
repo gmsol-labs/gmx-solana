@@ -814,7 +814,7 @@ pub enum LiquidatableReason {
 impl fmt::Display for LiquidatableReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MinCollateral => write!(f, "min colltateral"),
+            Self::MinCollateral => write!(f, "min collateral"),
             Self::NotPositive => write!(f, "<= 0"),
             Self::MinCollateralForLeverage => write!(f, "min collateral for leverage"),
         }
