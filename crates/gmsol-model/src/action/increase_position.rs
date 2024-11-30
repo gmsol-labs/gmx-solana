@@ -50,8 +50,8 @@ pub struct IncreasePositionReport<T: Unsigned> {
     borrowing: UpdateBorrowingReport<T>,
     funding: UpdateFundingReport<T>,
     /// Output amounts that must be processed.
-    claimble_funding_long_token_amount: T,
-    claimble_funding_short_token_amount: T,
+    claimable_funding_long_token_amount: T,
+    claimable_funding_short_token_amount: T,
 }
 
 impl<T: Unsigned + fmt::Debug> fmt::Debug for IncreasePositionReport<T>
@@ -68,11 +68,11 @@ where
             .field("funding", &self.funding)
             .field(
                 "claimble_funding_long_token_amount",
-                &self.claimble_funding_long_token_amount,
+                &self.claimable_funding_long_token_amount,
             )
             .field(
                 "claimble_funding_short_token_amount",
-                &self.claimble_funding_short_token_amount,
+                &self.claimable_funding_short_token_amount,
             )
             .finish()
     }
@@ -93,11 +93,11 @@ impl<T: Unsigned + Clone> IncreasePositionReport<T> {
             collateral_delta_amount,
             borrowing,
             funding,
-            claimble_funding_long_token_amount: fees
+            claimable_funding_long_token_amount: fees
                 .funding_fees()
                 .claimable_long_token_amount()
                 .clone(),
-            claimble_funding_short_token_amount: fees
+            claimable_funding_short_token_amount: fees
                 .funding_fees()
                 .claimable_short_token_amount()
                 .clone(),
@@ -105,14 +105,14 @@ impl<T: Unsigned + Clone> IncreasePositionReport<T> {
         }
     }
 
-    /// Get claimble funding amounts, returns `(long_amount, short_amount)`.
+    /// Get claimable funding amounts, returns `(long_amount, short_amount)`.
     ///
     /// ## Must Use
-    /// These amounts is expected to be used by the caller.
+    /// These amounts are expected to be used by the caller.
     pub fn claimable_funding_amounts(&self) -> (&T, &T) {
         (
-            &self.claimble_funding_long_token_amount,
-            &self.claimble_funding_short_token_amount,
+            &self.claimable_funding_long_token_amount,
+            &self.claimable_funding_short_token_amount,
         )
     }
 
@@ -147,7 +147,7 @@ impl<T: Unsigned + Clone> IncreasePositionReport<T> {
     }
 }
 
-/// Exeuction Params for increasing position.
+/// Execution Params for increasing position.
 #[derive(Debug, Clone, Copy)]
 pub struct ExecutionParams<T: Unsigned> {
     price_impact_value: T::Signed,
