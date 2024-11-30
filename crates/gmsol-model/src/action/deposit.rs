@@ -46,6 +46,25 @@ impl<T> DepositParams<T> {
     pub fn short_token_price(&self) -> &Price<T> {
         &self.prices.short_token_price
     }
+
+    fn reassign_values(&self, is_long_token: bool) -> ReassignedVaules<T>
+    where
+        T: Clone,
+    {
+        if is_long_token {
+            ReassignedVaules {
+                amount: self.long_token_amount.clone(),
+                price: self.long_token_price(),
+                opposite_price: self.short_token_price(),
+            }
+        } else {
+            ReassignedVaules {
+                amount: self.short_token_amount.clone(),
+                price: self.short_token_price(),
+                opposite_price: self.long_token_price(),
+            }
+        }
+    }
 }
 
 /// Report of the execution of deposit.
@@ -179,23 +198,17 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
     ) -> Result<(M::Num, Fees<M::Num>), crate::Error> {
         let mut mint_amount: M::Num = Zero::zero();
         let supply = self.market.total_supply();
+
         if pool_value.is_zero() && !supply.is_zero() {
             return Err(crate::Error::InvalidPoolValue("deposit"));
         }
 
-        let (mut amount, price, opposite_price) = if is_long_token {
-            (
-                self.params.long_token_amount.clone(),
-                self.params.long_token_price(),
-                self.params.short_token_price(),
-            )
-        } else {
-            (
-                self.params.short_token_amount.clone(),
-                self.params.short_token_price(),
-                self.params.long_token_price(),
-            )
-        };
+        let ReassignedVaules {
+            mut amount,
+            price,
+            opposite_price,
+        } = self.params.reassign_values(is_long_token);
+
         let fees = self.charge_fees(price_impact.is_positive(), &mut amount)?;
         self.market.claimable_fee_pool_mut()?.apply_delta_amount(
             is_long_token,
@@ -350,6 +363,12 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
         self.market.mint(&report.minted)?;
         Ok(report)
     }
+}
+
+struct ReassignedVaules<'a, T> {
+    amount: T,
+    price: &'a Price<T>,
+    opposite_price: &'a Price<T>,
 }
 
 #[cfg(test)]
