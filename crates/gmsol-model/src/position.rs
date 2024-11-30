@@ -467,7 +467,12 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
             )?;
 
         if !remaining_collateral_value.is_positive() {
-            return Ok(Some(LiquidatableReason::NotPositive));
+            return if should_validate_min_collateral_usd {
+                // Keep the behavior consistent with the Solidity version.
+                Ok(Some(LiquidatableReason::MinCollateral))
+            } else {
+                Ok(Some(LiquidatableReason::NotPositive))
+            };
         }
 
         let remaining_collateral_value = remaining_collateral_value.unsigned_abs();
