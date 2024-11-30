@@ -254,13 +254,10 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
                     .clone(),
             );
 
-        let Some(min_collateral_value_for_leverage) =
-            crate::utils::apply_factor(&delta.next_size_in_usd, &min_collateral_factor)
-        else {
-            return Ok(WillCollateralBeSufficient::Insufficient(
-                remaining_collateral_value,
-            ));
-        };
+        let min_collateral_value_for_leverage =
+            crate::utils::apply_factor(&delta.next_size_in_usd, &min_collateral_factor).ok_or(
+                crate::Error::Computation("overflow calculating min collateral value for leverage"),
+            )?;
 
         debug_assert!(!remaining_collateral_value.is_negative());
         if remaining_collateral_value.unsigned_abs() >= min_collateral_value_for_leverage {
