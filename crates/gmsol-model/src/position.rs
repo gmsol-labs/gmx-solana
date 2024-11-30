@@ -425,11 +425,15 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
     ) -> crate::Result<Option<LiquidatableReason>> {
         use num_traits::{CheckedAdd, CheckedMul, CheckedSub, Signed};
 
-        let (pnl, _, _) = self.pnl_value(prices, self.size_in_usd())?;
+        let size_in_usd = self.size_in_usd();
+
+        let (pnl, _, _) = self.pnl_value(prices, size_in_usd)?;
 
         let collateral_value = self.collateral_value(prices)?;
+        let collateral_price = self.collateral_price(prices);
 
-        let size_delta_usd = self.size_in_usd().to_opposite_signed()?;
+        let size_delta_usd = size_in_usd.to_opposite_signed()?;
+
         let mut price_impact_value = self.position_price_impact(&size_delta_usd)?;
 
         let has_positive_impact = price_impact_value.is_positive();
@@ -444,15 +448,11 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
             price_impact_value = Zero::zero();
         }
 
-        let fees = self.position_fees(
-            self.collateral_price(prices),
-            self.size_in_usd(),
-            has_positive_impact,
-        )?;
+        let fees = self.position_fees(collateral_price, size_in_usd, has_positive_impact)?;
 
         let collateral_cost_value = fees
             .total_cost_amount()?
-            .checked_mul(self.collateral_price(prices).pick_price(false))
+            .checked_mul(collateral_price.pick_price(false))
             .ok_or(crate::Error::Computation(
                 "overflow calculating collateral cost value",
             ))?;
@@ -471,7 +471,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         let params = self.market().position_params()?;
 
         let min_collateral_usd_for_leverage =
-            crate::utils::apply_factor(self.size_in_usd(), params.min_collateral_factor()).ok_or(
+            crate::utils::apply_factor(size_in_usd, params.min_collateral_factor()).ok_or(
                 crate::Error::Computation("calculating min collateral usd for leverage"),
             )?;
 
