@@ -58,9 +58,9 @@ pub struct DecreasePositionParams<T> {
 }
 
 impl<T> DecreasePositionParams<T> {
-    /// Get initial collateral withdrawal amount.
-    pub fn initial_collateral_withdrawal_amount(&self) -> &T {
-        &self.initial_collateral_withdrawal_amount
+    /// Get prices.
+    pub fn prices(&self) -> &Prices<T> {
+        &self.prices
     }
 
     /// Get initial size delta usd.
@@ -68,9 +68,29 @@ impl<T> DecreasePositionParams<T> {
         &self.initial_size_delta_usd
     }
 
-    /// Get prices.
-    pub fn prices(&self) -> &Prices<T> {
-        &self.prices
+    /// Get acceptable price.
+    pub fn acceptable_price(&self) -> Option<&T> {
+        self.acceptable_price.as_ref()
+    }
+
+    /// Get initial collateral withdrawal amount.
+    pub fn initial_collateral_withdrawal_amount(&self) -> &T {
+        &self.initial_collateral_withdrawal_amount
+    }
+
+    /// Get whether insolvent close is allowed.
+    pub fn is_insolvent_close_allowed(&self) -> bool {
+        self.is_insolvent_close_allowed
+    }
+
+    /// Get whether the order is an liquidation order.
+    pub fn is_liquidation_order(&self) -> bool {
+        self.is_liquidation_order
+    }
+
+    /// Get the swap type.
+    pub fn swap(&self) -> DecreasePositionSwapType {
+        self.swap
     }
 }
 
