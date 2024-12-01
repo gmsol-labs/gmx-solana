@@ -293,11 +293,19 @@ pub trait BaseMarketExt<const DECIMALS: u8>: BaseMarket<DECIMALS> {
         index_token_price: &Price<Self::Num>,
         is_long: bool,
     ) -> crate::Result<Self::Num> {
-        // FIXME: add comment to explain the difference.
         if is_long {
+            // For longs calculate the reserved USD based on the open interest and current index_token_price.
+            // This works well for e.g. an ETH / USD market with long collateral token as WETH
+            // the available amount to be reserved would scale with the price of ETH.
+            // This also works for e.g. a SOL / USD market with long collateral token as WETH
+            // if the price of SOL increases more than the price of ETH, additional amounts would be
+            // automatically reserved.
             self.open_interest_in_tokens()?
                 .long_usd_value(index_token_price.pick_price(true))
         } else {
+            // For shorts use the open interest as the reserved USD value.
+            // This works well for e.g. an ETH / USD market with short collateral token as USDC
+            // the available amount to be reserved would not change with the price of ETH.
             self.open_interest()?.short_amount()
         }
     }
