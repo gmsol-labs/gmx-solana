@@ -13,7 +13,7 @@ use crate::{
     get_pnl_token,
     ops::{
         execution_fee::PayExecutionFeeOperation,
-        order::{PositionCutKind, PositionCutOp},
+        order::{PositionCutKind, PositionCutOperation},
     },
     states::{
         common::action::{ActionEvent, ActionExt},
@@ -71,7 +71,7 @@ pub struct PositionCut<'info> {
         init,
         space = 8 + Order::INIT_SPACE,
         payer = authority,
-        seeds = [Order::SEED, store.key().as_ref(), owner.key().as_ref(), &nonce],
+        seeds = [Order::SEED, store.key().as_ref(), authority.key().as_ref(), &nonce],
         bump,
     )]
     pub order: AccountLoader<'info, Order>,
@@ -228,7 +228,7 @@ pub(crate) fn unchecked_process_position_cut<'info>(
 
     let refund = Order::position_cut_rent()?;
 
-    let ops = PositionCutOp::builder()
+    let ops = PositionCutOperation::builder()
         .kind(kind)
         .position(&accounts.position)
         .order(&accounts.order)
@@ -262,6 +262,7 @@ pub(crate) fn unchecked_process_position_cut<'info>(
         )
         .token_program(accounts.token_program.to_account_info())
         .system_program(accounts.system_program.to_account_info())
+        // CHECK: the address of `order` has been checked to be derived from this account's address.
         .executor(accounts.authority.to_account_info())
         .refund(refund);
 

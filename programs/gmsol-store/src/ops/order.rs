@@ -93,6 +93,14 @@ pub(crate) struct CreateOrderOperation<'a, 'info> {
     market: AccountLoader<'info, Market>,
     store: AccountLoader<'info, Store>,
     owner: AccountInfo<'info>,
+    #[builder(
+        default,
+        setter(
+            strip_option,
+            doc = "Set the creator of this order. CHECK: It must be the address derving the order account",
+        )
+    )]
+    creator: Option<AccountInfo<'info>>,
     nonce: &'a NonceBytes,
     bump: u8,
     params: &'a CreateOrderParams,
@@ -162,6 +170,10 @@ impl<'a, 'info> CreateOrderOperation<'a, 'info> {
                 self.bump,
                 self.params.execution_lamports,
             )?;
+
+            if let Some(creator) = self.creator.as_ref() {
+                header.unchecked_set_creator(creator.key());
+            }
 
             *market_token = self.market.load()?.meta().market_token_mint;
 
@@ -1505,8 +1517,11 @@ fn execute_decrease_position(
 
 /// Position Cut Operation.
 #[derive(TypedBuilder)]
-pub struct PositionCutOp<'a, 'info> {
+pub struct PositionCutOperation<'a, 'info> {
     kind: PositionCutKind,
+    #[builder(setter(
+        doc = "Set the executor of this operation. CHECK: the address of the `order` must be derived from its address"
+    ))]
     executor: AccountInfo<'info>,
     position: &'a AccountLoader<'info, Position>,
     event: &'a AccountLoader<'info, TradeData>,
@@ -1557,7 +1572,7 @@ impl PositionCutKind {
     }
 }
 
-impl<'a, 'info> PositionCutOp<'a, 'info> {
+impl<'a, 'info> PositionCutOperation<'a, 'info> {
     pub(crate) fn execute(self) -> Result<ShouldSendTradeEvent> {
         let (size_in_usd, is_long, is_collateral_long) = {
             let position = self.position.load()?;
@@ -1613,6 +1628,7 @@ impl<'a, 'info> PositionCutOp<'a, 'info> {
             .market(self.market.clone())
             .store(self.store.clone())
             .owner(self.owner.clone())
+            .creator(self.executor.clone())
             .nonce(self.nonce)
             .bump(self.order_bump)
             .params(&params)

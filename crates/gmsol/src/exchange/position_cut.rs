@@ -260,7 +260,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PositionCutBuilder<'a, C> {
             .feeds_parser
             .parse(hint.feeds())
             .collect::<Result<Vec<_>, _>>()?;
-        let order = self.client.find_order_address(&store, &owner, &nonce);
+        let order = self.client.find_order_address(&store, &payer, &nonce);
 
         let long_token_escrow = get_associated_token_address(&order, &long_token_mint);
         let short_token_escrow = get_associated_token_address(&order, &short_token_mint);

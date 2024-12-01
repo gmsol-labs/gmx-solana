@@ -79,6 +79,8 @@ pub struct ActionHeader {
     pub(crate) owner: Pubkey,
     /// Nonce bytes.
     pub(crate) nonce: [u8; 32],
+    /// Creator.
+    pub(crate) creator: Pubkey,
     /// Max execution lamports.
     pub(crate) max_execution_lamports: u64,
     /// Last updated timestamp.
@@ -116,12 +118,18 @@ impl ActionHeader {
 
     /// Get action signer.
     pub(crate) fn signer(&self, seed: &'static [u8]) -> ActionSigner {
-        ActionSigner::new(seed, self.store, self.owner, self.nonce, self.bump)
+        ActionSigner::new(seed, self.store, *self.creator(), self.nonce, self.bump)
     }
 
     /// Get the owner.
     pub fn owner(&self) -> &Pubkey {
         &self.owner
+    }
+
+    /// Get the creator.
+    /// We assume that the action account's address is derived from that address.
+    pub fn creator(&self) -> &Pubkey {
+        &self.creator
     }
 
     // Get the action id.
@@ -181,12 +189,22 @@ impl ActionHeader {
         self.market = market;
         self.owner = owner;
         self.nonce = nonce;
+        // The creator defaults to the `owner`.
+        self.creator = owner;
         self.bump = bump;
         self.max_execution_lamports = execution_lamports;
         self.updated_at = clock.unix_timestamp;
         self.updated_at_slot = clock.slot;
 
         Ok(())
+    }
+
+    /// Set the creator.
+    ///
+    /// # CHECK
+    /// - The address of this action account must be derived from this address.
+    pub(crate) fn unchecked_set_creator(&mut self, creator: Pubkey) {
+        self.creator = creator;
     }
 
     pub(crate) fn updated(&mut self) -> Result<()> {
