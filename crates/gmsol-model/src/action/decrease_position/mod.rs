@@ -415,7 +415,8 @@ where
         self.size_delta_usd < *self.position.size_in_usd()
     }
 
-    fn is_fully_close(&self) -> bool {
+    /// Whether the action is a fully close.
+    pub fn is_fully_close(&self) -> bool {
         self.size_delta_usd == *self.position.size_in_usd()
     }
 
@@ -427,8 +428,8 @@ where
     fn process_collateral(&mut self) -> crate::Result<ProcessCollateralResult<P::Num>> {
         use num_traits::Signed;
 
-        let is_insolvent_close_allowed =
-            self.params.is_insolvent_close_allowed && self.is_fully_close();
+        // is_insolvent_close_allowed => is_fully_close
+        debug_assert!(!self.params.is_insolvent_close_allowed || self.is_fully_close());
 
         let (price_impact_value, price_impact_diff, execution_price) =
             self.get_execution_params()?;
@@ -459,7 +460,7 @@ where
             are_pnl_and_collateral_tokens_the_same,
             &self.params.prices,
             remaining_collateral_amount,
-            is_insolvent_close_allowed,
+            self.params.is_insolvent_close_allowed,
         );
         let mut report = processor.process(|mut ctx| {
             ctx.add_pnl_if_positive(&base_pnl_usd)?
