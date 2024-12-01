@@ -545,7 +545,6 @@ impl Deployment {
             .push(client.initialize_store(&self.store_key, None))?
             .push_many(
                 [
-                    RoleKey::CONTROLLER,
                     RoleKey::GT_CONTROLLER,
                     RoleKey::MARKET_KEEPER,
                     RoleKey::ORDER_KEEPER,
