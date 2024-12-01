@@ -552,7 +552,7 @@ where
                     .ok_or(crate::Error::Computation("merging output tokens"))?;
                 *secondary_output_amount = Zero::zero();
             } else {
-                let report = market
+                let swap_report = market
                     .swap(
                         is_secondary_output_token_long,
                         secondary_output_amount.clone(),
@@ -560,9 +560,10 @@ where
                     )?
                     .execute()?;
                 *output_amount = output_amount
-                    .checked_add(report.token_out_amount())
+                    .checked_add(swap_report.token_out_amount())
                     .ok_or(crate::Error::Computation("adding swapped output tokens"))?;
                 *secondary_output_amount = Zero::zero();
+                report.set_swap_output_tokens_report(swap_report);
             }
         }
         Ok(())

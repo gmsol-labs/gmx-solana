@@ -2,7 +2,8 @@ use std::fmt;
 
 use crate::{
     action::{
-        update_borrowing_state::UpdateBorrowingReport, update_funding_state::UpdateFundingReport,
+        swap::SwapReport, update_borrowing_state::UpdateBorrowingReport,
+        update_funding_state::UpdateFundingReport,
     },
     num::Unsigned,
     params::fee::PositionFees,
@@ -24,6 +25,7 @@ pub struct DecreasePositionReport<T: Unsigned> {
     size_delta_usd: T,
     borrowing: UpdateBorrowingReport<T>,
     funding: UpdateFundingReport<T>,
+    swap_output_tokens: Option<SwapReport<T>>,
     pnl: ProcessedPnl<T::Signed>,
 
     // Output.
@@ -57,6 +59,7 @@ where
             .field("size_delta_usd", &self.size_delta_usd)
             .field("borrowing", &self.borrowing)
             .field("funding", &self.funding)
+            .field("swap_output_tokens", &self.swap_output_tokens)
             .field("should_remove", &self.should_remove)
             .field("is_output_token_long", &self.is_output_token_long)
             .field(
@@ -97,6 +100,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
             size_delta_in_tokens: execution.size_delta_in_tokens,
             borrowing,
             funding,
+            swap_output_tokens: None,
             is_output_token_long: execution.is_output_token_long,
             is_secondary_output_token_long: execution.is_secondary_output_token_long,
             output_amounts: OutputAmounts {
@@ -122,6 +126,10 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
             pnl: execution.pnl,
             insolvent_close_step: execution.collateral.insolvent_close_step,
         }
+    }
+
+    pub(super) fn set_swap_output_tokens_report(&mut self, report: SwapReport<T>) {
+        self.swap_output_tokens = Some(report);
     }
 
     // /// Get params.
@@ -249,6 +257,11 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     /// Get funding report.
     pub fn funding(&self) -> &UpdateFundingReport<T> {
         &self.funding
+    }
+
+    /// Get the report of output tokens swap.
+    pub fn swap_output_tokens(&self) -> Option<&SwapReport<T>> {
+        self.swap_output_tokens.as_ref()
     }
 
     /// Get processed pnl.
