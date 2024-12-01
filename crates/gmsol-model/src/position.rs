@@ -347,6 +347,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
                 self.is_long(),
                 &pool_pnl,
                 PnlFactorKind::MaxForTrader,
+                false,
             )?;
 
             // Note: If the PnL is capped at zero, it can still pass this test.

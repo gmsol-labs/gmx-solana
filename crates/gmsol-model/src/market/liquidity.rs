@@ -117,11 +117,11 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
         // Deduct net pnl.
         let long_pnl = {
             let pnl = self.pnl(&prices.index_token_price, true, !maximize)?;
-            self.cap_pnl(prices, true, &pnl, pnl_factor)?
+            self.cap_pnl(prices, true, &pnl, pnl_factor, true)?
         };
         let short_pnl = {
             let pnl = self.pnl(&prices.index_token_price, false, !maximize)?;
-            self.cap_pnl(prices, false, &pnl, pnl_factor)?
+            self.cap_pnl(prices, false, &pnl, pnl_factor, true)?
         };
         let net_pnl = long_pnl
             .checked_add(&short_pnl)
