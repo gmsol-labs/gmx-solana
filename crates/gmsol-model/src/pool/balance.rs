@@ -22,7 +22,6 @@ pub trait Balance {
 pub trait BalanceExt: Balance {
     /// Get the long amount value in USD.
     fn long_usd_value(&self, price: &Self::Num) -> crate::Result<Self::Num> {
-        // FIXME: should we use MulDiv?
         self.long_amount()?
             .checked_mul(price)
             .ok_or(crate::Error::Overflow)
@@ -30,7 +29,6 @@ pub trait BalanceExt: Balance {
 
     /// Get the short amount value in USD.
     fn short_usd_value(&self, price: &Self::Num) -> crate::Result<Self::Num> {
-        // FIXME: should we use MulDiv?
         self.short_amount()?
             .checked_mul(price)
             .ok_or(crate::Error::Overflow)
