@@ -205,7 +205,6 @@ impl InitializeRoles {
         builder
             .push_many(
                 [
-                    RoleKey::CONTROLLER,
                     RoleKey::GT_CONTROLLER,
                     RoleKey::MARKET_KEEPER,
                     RoleKey::ORDER_KEEPER,

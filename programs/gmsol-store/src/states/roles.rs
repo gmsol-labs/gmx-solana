@@ -25,9 +25,6 @@ pub struct RoleKey {
 }
 
 impl RoleKey {
-    /// Controller.
-    pub const CONTROLLER: &'static str = "CONTROLLER";
-
     /// Oracle Controller.
     pub const ORACLE_CONTROLLER: &'static str = "ORACLE_CONTROLLER";
 
@@ -319,28 +316,34 @@ mod tests {
         let mut store = RoleStore::zeroed();
         let authority = Pubkey::new_unique();
 
-        assert!(store.grant(&authority, RoleKey::CONTROLLER).is_err());
-        assert!(store.has_role(&authority, RoleKey::CONTROLLER).is_err());
+        assert!(store.grant(&authority, RoleKey::GT_CONTROLLER).is_err());
+        assert!(store.has_role(&authority, RoleKey::GT_CONTROLLER).is_err());
 
-        store.enable_role(RoleKey::CONTROLLER).unwrap();
+        store.enable_role(RoleKey::GT_CONTROLLER).unwrap();
         store.enable_role(RoleKey::MARKET_KEEPER).unwrap();
 
-        store.grant(&authority, RoleKey::CONTROLLER).unwrap();
-        assert_eq!(store.has_role(&authority, RoleKey::CONTROLLER), Ok(true));
+        store.grant(&authority, RoleKey::GT_CONTROLLER).unwrap();
+        assert_eq!(store.has_role(&authority, RoleKey::GT_CONTROLLER), Ok(true));
         store.grant(&authority, RoleKey::MARKET_KEEPER).unwrap();
         assert_eq!(store.has_role(&authority, RoleKey::MARKET_KEEPER), Ok(true));
-        assert_eq!(store.has_role(&authority, RoleKey::CONTROLLER), Ok(true));
+        assert_eq!(store.has_role(&authority, RoleKey::GT_CONTROLLER), Ok(true));
 
-        store.revoke(&authority, RoleKey::CONTROLLER).unwrap();
+        store.revoke(&authority, RoleKey::GT_CONTROLLER).unwrap();
         assert_eq!(store.has_role(&authority, RoleKey::MARKET_KEEPER), Ok(true));
-        assert_eq!(store.has_role(&authority, RoleKey::CONTROLLER), Ok(false));
+        assert_eq!(
+            store.has_role(&authority, RoleKey::GT_CONTROLLER),
+            Ok(false)
+        );
 
         store.revoke(&authority, RoleKey::MARKET_KEEPER).unwrap();
         assert_eq!(
             store.has_role(&authority, RoleKey::MARKET_KEEPER),
             Ok(false)
         );
-        assert_eq!(store.has_role(&authority, RoleKey::CONTROLLER), Ok(false));
+        assert_eq!(
+            store.has_role(&authority, RoleKey::GT_CONTROLLER),
+            Ok(false)
+        );
 
         store.disable_role(RoleKey::MARKET_KEEPER).unwrap();
         assert!(store.grant(&authority, RoleKey::MARKET_KEEPER).is_err());
@@ -355,12 +358,12 @@ mod tests {
         let mut store = RoleStore::zeroed();
         let authority = Pubkey::new_unique();
 
-        store.enable_role(RoleKey::CONTROLLER).unwrap();
-        store.grant(&authority, RoleKey::CONTROLLER).unwrap();
-        assert_eq!(store.has_role(&authority, RoleKey::CONTROLLER), Ok(true));
-        store.disable_role(RoleKey::CONTROLLER).unwrap();
-        assert!(store.has_role(&authority, RoleKey::CONTROLLER).is_err());
-        store.enable_role(RoleKey::CONTROLLER).unwrap();
-        assert_eq!(store.has_role(&authority, RoleKey::CONTROLLER), Ok(true));
+        store.enable_role(RoleKey::GT_CONTROLLER).unwrap();
+        store.grant(&authority, RoleKey::GT_CONTROLLER).unwrap();
+        assert_eq!(store.has_role(&authority, RoleKey::GT_CONTROLLER), Ok(true));
+        store.disable_role(RoleKey::GT_CONTROLLER).unwrap();
+        assert!(store.has_role(&authority, RoleKey::GT_CONTROLLER).is_err());
+        store.enable_role(RoleKey::GT_CONTROLLER).unwrap();
+        assert_eq!(store.has_role(&authority, RoleKey::GT_CONTROLLER), Ok(true));
     }
 }

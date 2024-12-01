@@ -60,11 +60,6 @@ pub trait Authenticate<'info>: Authentication<'info> {
         }
     }
 
-    /// Check that the `authority` has the [`CONTROLLER`](`RoleKey::CONTROLLER`) role.
-    fn only_controller(ctx: &Context<Self>) -> Result<()> {
-        Self::only(ctx, RoleKey::CONTROLLER)
-    }
-
     /// Check that the `authority` has the [`MARKET_KEEPER`](`RoleKey::MARKET_KEEPER`) role.
     fn only_market_keeper(ctx: &Context<Self>) -> Result<()> {
         Self::only(ctx, RoleKey::MARKET_KEEPER)

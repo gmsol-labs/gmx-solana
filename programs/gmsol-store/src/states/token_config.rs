@@ -579,7 +579,7 @@ impl<'a> TokenMapMutAccess for TokenMapMut<'a> {
 /// Utils for using token map.
 #[cfg(feature = "utils")]
 pub mod utils {
-    use std::{fmt, sync::Arc};
+    use std::sync::Arc;
 
     use anchor_lang::{prelude::Pubkey, AccountDeserialize};
     use bytes::Bytes;
@@ -594,8 +594,9 @@ pub mod utils {
         configs: Bytes,
     }
 
-    impl fmt::Debug for TokenMap {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    #[cfg(feature = "debug")]
+    impl std::fmt::Debug for TokenMap {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             f.debug_struct("TokenMap")
                 .field("header", &self.header)
                 .field("configs", &self.configs)
