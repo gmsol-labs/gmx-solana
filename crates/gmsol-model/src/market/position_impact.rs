@@ -85,13 +85,14 @@ pub trait PositionImpactMarketExt<const DECIMALS: u8>: PositionImpactMarket<DECI
 
         let current_amount = self.position_impact_pool_amount()?;
         let params = self.position_impact_distribution_params()?;
+        let min_position_impact_pool_amount = params.min_position_impact_pool_amount();
         if params.distribute_factor().is_zero()
-            || current_amount <= *params.min_position_impact_pool_amount()
+            || current_amount <= *min_position_impact_pool_amount
         {
             return Ok((Zero::zero(), current_amount));
         }
         let max_distribution_amount = current_amount
-            .checked_sub(params.min_position_impact_pool_amount())
+            .checked_sub(min_position_impact_pool_amount)
             .ok_or(crate::Error::Computation(
                 "calculating max distribution amount",
             ))?;
