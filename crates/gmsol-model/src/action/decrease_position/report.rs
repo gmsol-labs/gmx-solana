@@ -10,7 +10,7 @@ use crate::{
     position::InsolventCloseStep,
 };
 
-use super::{ClaimableCollateral, ProcessCollateralResult};
+use super::{ClaimableCollateral, DecreasePositionParams, ProcessCollateralResult};
 
 /// Report of the execution of posiiton decreasing.
 #[must_use]
@@ -22,6 +22,7 @@ pub struct DecreasePositionReport<T: Unsigned> {
     size_delta_in_tokens: T,
     fees: PositionFees<T>,
     withdrawable_collateral_amount: T,
+    initial_size_delta_usd: T,
     size_delta_usd: T,
     borrowing: UpdateBorrowingReport<T>,
     funding: UpdateFundingReport<T>,
@@ -46,7 +47,6 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DecreasePositionReport")
-            // .field("params", &self.params)
             .field("price_impact_value", &self.price_impact_value)
             .field("price_impact_diff", &self.price_impact_diff)
             .field("execution_price", &self.execution_price)
@@ -56,6 +56,7 @@ where
                 "withdrawable_collateral_amount",
                 &self.withdrawable_collateral_amount,
             )
+            .field("initial_size_delta_usd", &self.initial_size_delta_usd)
             .field("size_delta_usd", &self.size_delta_usd)
             .field("borrowing", &self.borrowing)
             .field("funding", &self.funding)
@@ -85,7 +86,7 @@ where
 impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     pub(super) fn new(
         should_remove: bool,
-        // _params: DecreasePositionParams<T>,
+        params: &DecreasePositionParams<T>,
         execution: ProcessCollateralResult<T>,
         withdrawable_collateral_amount: T,
         size_delta_usd: T,
@@ -108,6 +109,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
                 secondary_output_amount: execution.collateral.secondary_output_amount,
             },
             withdrawable_collateral_amount,
+            initial_size_delta_usd: params.initial_size_delta_usd.clone(),
             size_delta_usd,
             price_impact_diff: execution.price_impact_diff,
             claimable_funding_long_token_amount: execution
@@ -132,14 +134,19 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
         self.swap_output_tokens = Some(report);
     }
 
-    // /// Get params.
-    // pub fn params(&self) -> &DecreasePositionParams<T> {
-    //     &self.params
-    // }
-
     /// Get size delta in tokens.
     pub fn size_delta_in_tokens(&self) -> &T {
         &self.size_delta_in_tokens
+    }
+
+    /// Get initial size delta in usd.
+    pub fn initial_size_delta_usd(&self) -> &T {
+        &self.initial_size_delta_usd
+    }
+
+    /// Get size delta in usd.
+    pub fn size_delta_usd(&self) -> &T {
+        &self.size_delta_usd
     }
 
     /// Get execution price.

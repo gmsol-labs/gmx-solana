@@ -163,12 +163,13 @@ where
             return Err(crate::Error::InvalidPosition("empty position"));
         }
 
+        let initial_size_delta_usd = size_delta_usd.clone();
         flags.init(position.size_in_usd(), &mut size_delta_usd)?;
 
         Ok(Self {
             params: DecreasePositionParams {
                 prices,
-                initial_size_delta_usd: size_delta_usd.clone(),
+                initial_size_delta_usd,
                 acceptable_price,
                 initial_collateral_withdrawal_amount: collateral_withdrawal_amount.clone(),
                 flags,
@@ -318,7 +319,7 @@ where
 
         let mut report = Box::new(DecreasePositionReport::new(
             should_remove,
-            // self.params,
+            &self.params,
             execution,
             self.withdrawable_collateral_amount,
             self.size_delta_usd,
