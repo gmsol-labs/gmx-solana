@@ -542,8 +542,7 @@ where
         prices: &Prices<P::Num>,
         are_pnl_and_collateral_tokens_the_same: bool,
     ) -> crate::Result<()> {
-        let (is_secondary_output_token_long, prices) =
-            (report.is_secondary_output_token_long(), prices.clone());
+        let is_secondary_output_token_long = report.is_secondary_output_token_long();
         let (output_amount, secondary_output_amount) = report.output_amounts_mut();
         if !secondary_output_amount.is_zero() {
             if are_pnl_and_collateral_tokens_the_same {
@@ -556,7 +555,7 @@ where
                     .swap(
                         is_secondary_output_token_long,
                         secondary_output_amount.clone(),
-                        prices,
+                        prices.clone(),
                     )?
                     .execute()?;
                 *output_amount = output_amount
