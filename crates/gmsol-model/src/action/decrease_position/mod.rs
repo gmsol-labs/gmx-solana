@@ -307,7 +307,7 @@ where
     fn check_partial_close(&mut self) -> crate::Result<()> {
         use num_traits::CheckedMul;
 
-        if self.is_partial_close() {
+        if self.will_size_remain() {
             let (estimated_pnl, _, _) = self
                 .position
                 .pnl_value(&self.params.prices, self.position.size_in_usd())?;
@@ -411,12 +411,12 @@ where
         }
     }
 
-    fn is_partial_close(&self) -> bool {
+    fn will_size_remain(&self) -> bool {
         self.size_delta_usd < *self.position.size_in_usd()
     }
 
-    /// Whether the action is a fully close.
-    pub fn is_fully_close(&self) -> bool {
+    /// Whether the action is a full close.
+    pub fn is_full_close(&self) -> bool {
         self.size_delta_usd == *self.position.size_in_usd()
     }
 
@@ -428,8 +428,8 @@ where
     fn process_collateral(&mut self) -> crate::Result<ProcessCollateralResult<P::Num>> {
         use num_traits::Signed;
 
-        // is_insolvent_close_allowed => is_fully_close
-        debug_assert!(!self.params.is_insolvent_close_allowed || self.is_fully_close());
+        // is_insolvent_close_allowed => is_full_close
+        debug_assert!(!self.params.is_insolvent_close_allowed || self.is_full_close());
 
         let (price_impact_value, price_impact_diff, execution_price) =
             self.get_execution_params()?;
