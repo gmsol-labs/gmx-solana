@@ -49,16 +49,18 @@ where
             .field("price_impact_diff", &self.price_impact_diff)
             .field("execution_price", &self.execution_price)
             .field("size_delta_in_tokens", &self.size_delta_in_tokens)
-            .field("fees", &self.fees)
             .field(
                 "withdrawable_collateral_amount",
                 &self.withdrawable_collateral_amount,
             )
             .field("initial_size_delta_usd", &self.initial_size_delta_usd)
             .field("size_delta_usd", &self.size_delta_usd)
+            .field("fees", &self.fees)
             .field("borrowing", &self.borrowing)
             .field("funding", &self.funding)
             .field("swap_output_tokens", &self.swap_output_tokens)
+            .field("pnl", &self.pnl)
+            .field("insolvent_close_step", &self.insolvent_close_step)
             .field("should_remove", &self.should_remove)
             .field("is_output_token_long", &self.is_output_token_long)
             .field(
@@ -76,7 +78,6 @@ where
             )
             .field("for_holding", &self.for_holding)
             .field("for_user", &self.for_user)
-            .field("insolvent_close_step", &self.insolvent_close_step)
             .finish()
     }
 }
