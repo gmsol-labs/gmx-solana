@@ -598,16 +598,6 @@ impl MarketMeta {
         }
     }
 
-    /// Check if the given token is a valid collateral token,
-    /// return error if it is not.
-    pub fn validate_collateral_token(&self, token: &Pubkey) -> Result<()> {
-        if self.is_collateral_token(token) {
-            Ok(())
-        } else {
-            Err(CoreError::InvalidCollateralToken.into())
-        }
-    }
-
     /// Get ordered token set.
     pub fn ordered_tokens(&self) -> BTreeSet<Pubkey> {
         BTreeSet::from([
