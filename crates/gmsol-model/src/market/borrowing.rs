@@ -86,11 +86,11 @@ pub trait BorrowingFeeMarketExt<const DECIMALS: u8>: BorrowingFeeMarket<DECIMALS
             utils::apply_exponent_factor(reserved_value, params.exponent(is_long).clone()).ok_or(
                 crate::Error::Computation("calculating reserved value after exponent"),
             )?;
-        let reversed_value_to_pool_factor =
+        let reserved_value_to_pool_factor =
             utils::div_to_factor(&reserved_value_after_exponent, &pool_value, false).ok_or(
                 crate::Error::Computation("calculating reserved value to pool factor"),
             )?;
-        utils::apply_factor(&reversed_value_to_pool_factor, params.factor(is_long)).ok_or(
+        utils::apply_factor(&reserved_value_to_pool_factor, params.factor(is_long)).ok_or(
             crate::Error::Computation("calculating borrowing factor per second"),
         )
     }

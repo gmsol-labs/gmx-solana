@@ -299,7 +299,7 @@ impl<'a, 'info, T> Execute<'a, 'info, T> {
     ///
     /// # Errors
     ///
-    pub(crate) fn unchekced_withdraw(
+    pub(crate) fn unchecked_withdraw(
         mut self,
         market_token_vault: &'a AccountInfo<'info>,
         params: &WithdrawalParams,
@@ -409,7 +409,7 @@ impl<'a, 'info, T> Execute<'a, 'info, T> {
             let (op, output) = self.take_output(());
             let mut withdrawal_params = WithdrawalParams::default();
             withdrawal_params.market_token_amount = params.from_market_token_amount;
-            op.unchekced_withdraw(
+            op.unchecked_withdraw(
                 from_market_token_vault,
                 &withdrawal_params,
                 (long_token, short_token),

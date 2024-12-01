@@ -767,7 +767,7 @@ impl<'a, 'info> ExecuteGlvWithdrawalOperation<'a, 'info> {
                 params.min_long_token_amount = withdrawal.params.min_final_long_token_amount;
                 params.min_short_token_amount = withdrawal.params.min_final_short_token_amount;
 
-                op.unchekced_withdraw(
+                op.unchecked_withdraw(
                     &self.market_token_withdrawal_vault,
                     &params,
                     (

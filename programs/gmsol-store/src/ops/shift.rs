@@ -177,7 +177,7 @@ impl<'a, 'info> ExecuteShiftOperation<'a, 'info> {
                 return Err(error!(err));
             }
         }
-        match self.perfrom_shift() {
+        match self.perform_shift() {
             Ok(()) => Ok(true),
             Err(err) if !throw_on_execution_error => {
                 msg!("Execute shift error: {}", err);
@@ -213,7 +213,7 @@ impl<'a, 'info> ExecuteShiftOperation<'a, 'info> {
     }
 
     #[inline(never)]
-    fn perfrom_shift(self) -> Result<()> {
+    fn perform_shift(self) -> Result<()> {
         self.validate_markets_and_shift()?;
 
         let shift = self.shift.load()?;

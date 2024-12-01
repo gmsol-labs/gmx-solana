@@ -202,7 +202,7 @@ impl<'a, 'info> ExecuteWithdrawalOperation<'a, 'info> {
             self.remaining_accounts,
         )?;
 
-        let executed = market.op()?.unchekced_withdraw(
+        let executed = market.op()?.unchecked_withdraw(
             &self.market_token_vault,
             &withdrawal.params,
             (
