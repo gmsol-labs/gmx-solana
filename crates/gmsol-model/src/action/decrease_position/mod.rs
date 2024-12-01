@@ -473,7 +473,13 @@ where
         })?;
 
         // Handle initial collateral delta amount with price impact diff.
-        // FIXME: Comment on the reason.
+        // The price_impact_diff has been deducted from the output amount or the position's collateral
+        // to reduce the chance that the position's collateral is reduced by an unexpected amount, adjust the
+        // initial_collateral_delta_amount by the price_impact_diff_amount.
+        // This would also help to prevent the position's leverage from being unexpectedly increased
+        //
+        // note that this calculation may not be entirely accurate since it is possible that the price_impact_diff
+        // could have been paid with one of or a combination of collateral / output_amount / secondary_output_amount
         if !self.withdrawable_collateral_amount.is_zero() && !price_impact_diff.is_zero() {
             // The prices should have been validated to be non-zero.
             debug_assert!(!self.collateral_token_price().has_zero());
