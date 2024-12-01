@@ -33,7 +33,7 @@ pub struct DecreasePosition<P: Position<DECIMALS>, const DECIMALS: u8> {
     size_delta_usd: P::Num,
 }
 
-/// Swap Type for the decrese position action.
+/// Swap Type for the decrease position action.
 #[derive(Debug, Clone, Copy, Default)]
 pub enum DecreasePositionSwapType {
     /// No swap.
@@ -63,7 +63,7 @@ impl<T> DecreasePositionParams<T> {
         &self.initial_collateral_withdrawal_amount
     }
 
-    /// Get inital size delta usd.
+    /// Get initial size delta usd.
     pub fn initial_size_delta_usd(&self) -> &T {
         &self.initial_size_delta_usd
     }
@@ -163,7 +163,7 @@ where
             .update_funding(&self.params.prices)?
             .execute()?;
 
-        self.check_liquiation()?;
+        self.check_liquidation()?;
 
         let initial_collateral_amount = self.position.collateral_amount_mut().clone();
 
@@ -377,7 +377,7 @@ where
         Ok(())
     }
 
-    fn check_liquiation(&self) -> crate::Result<()> {
+    fn check_liquidation(&self) -> crate::Result<()> {
         if self.params.is_liquidation_order {
             let Some(_reason) = self
                 .position
