@@ -56,7 +56,7 @@ fn test_total_borrowing_with_high_borrowing_factor() -> gmsol_model::Result<()> 
 
     _ = position
         .ops(&mut market)
-        .decrease(prices, 0, None, 0, false, false)?
+        .decrease(prices, 0, None, 0, Default::default())?
         .execute()?;
 
     let total_borrowing = market.total_borrowing_pool()?;
@@ -180,12 +180,12 @@ fn test_total_borrowing_with_high_borrowing_factor_2() -> gmsol_model::Result<()
     // Update the total borrowing pool by decreasing positions with a delta size of 0.
     _ = position_1
         .ops(&mut market)
-        .decrease(prices, 0, None, 0, false, false)?
+        .decrease(prices, 0, None, 0, Default::default())?
         .execute()?;
 
     _ = position_2
         .ops(&mut market)
-        .decrease(prices, 0, None, 0, false, false)?
+        .decrease(prices, 0, None, 0, Default::default())?
         .execute()?;
 
     let open_interest = market.open_interest()?.long_amount()?;

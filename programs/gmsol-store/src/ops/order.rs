@@ -1,8 +1,9 @@
 use anchor_lang::{prelude::*, system_program};
 use anchor_spl::token::{Mint, TokenAccount};
 use gmsol_model::{
-    num::Unsigned, price::Prices, BaseMarket, BaseMarketExt, PnlFactorKind, Position as _,
-    PositionImpactMarketMutExt, PositionMut, PositionMutExt, PositionState, PositionStateExt,
+    action::decrease_position::DecreasePositionFlags, num::Unsigned, price::Prices, BaseMarket,
+    BaseMarketExt, PnlFactorKind, Position as _, PositionImpactMarketMutExt, PositionMut,
+    PositionMutExt, PositionState, PositionStateExt,
 };
 use typed_builder::TypedBuilder;
 
@@ -1316,6 +1317,12 @@ fn execute_decrease_position(
             secondary_order_type,
             Some(SecondaryOrderType::AutoDeleveraging)
         );
+
+        let is_cap_size_delta_usd_allowed = matches!(
+            order.params().kind()?,
+            OrderKind::LimitDecrease | OrderKind::StopLossDecrease
+        );
+
         // Only required when the order is an ADL order.
         let mut pnl_factor_before_execution = None;
 
@@ -1346,8 +1353,11 @@ fn execute_decrease_position(
                 size_delta_usd,
                 Some(acceptable_price),
                 collateral_withdrawal_amount,
-                is_insolvent_close_allowed,
-                is_liquidation_order,
+                DecreasePositionFlags {
+                    is_insolvent_close_allowed,
+                    is_liquidation_order,
+                    is_cap_size_delta_usd_allowed,
+                },
             )
             .and_then(|a| a.execute())
             .map_err(ModelError::from)?;

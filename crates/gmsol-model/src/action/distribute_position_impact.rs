@@ -114,8 +114,7 @@ mod tests {
                     50_000_000_000_000,
                     None,
                     0,
-                    false,
-                    false,
+                    Default::default(),
                 )?
                 .execute()?;
         }

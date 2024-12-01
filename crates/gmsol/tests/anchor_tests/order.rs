@@ -133,7 +133,14 @@ async fn balanced_market_order() -> eyre::Result<()> {
 
             // Decrease position.
             let (rpc, order) = client
-                .market_decrease(store, market_token, collateral_side, 0, side, size)
+                .market_decrease(
+                    store,
+                    market_token,
+                    collateral_side,
+                    0,
+                    side,
+                    size + increment_size,
+                )
                 .build_with_address()
                 .await?;
             let signature = rpc.send().await?;
@@ -382,7 +389,14 @@ async fn single_token_market_order() -> eyre::Result<()> {
 
             // Decrease position.
             let (rpc, order) = client
-                .market_decrease(store, market_token, collateral_side, 0, side, size)
+                .market_decrease(
+                    store,
+                    market_token,
+                    collateral_side,
+                    0,
+                    side,
+                    size + increment_size,
+                )
                 .build_with_address()
                 .await?;
             let signature = rpc.send().await?;

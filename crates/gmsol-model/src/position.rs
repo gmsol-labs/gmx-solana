@@ -4,7 +4,8 @@ use num_traits::{One, Signed, Zero};
 
 use crate::{
     action::{
-        decrease_position::DecreasePosition, increase_position::IncreasePosition,
+        decrease_position::{DecreasePosition, DecreasePositionFlags},
+        increase_position::IncreasePosition,
         update_funding_state::unpack_to_funding_amount_delta,
     },
     fixed::FixedPointOps,
@@ -684,8 +685,7 @@ where
         size_delta_usd: Self::Num,
         acceptable_price: Option<Self::Num>,
         collateral_withdrawal_amount: Self::Num,
-        is_insolvent_close_allowed: bool,
-        is_liquidation_order: bool,
+        flags: DecreasePositionFlags,
     ) -> crate::Result<DecreasePosition<&mut Self, DECIMALS>>
     where
         Self: Sized,
@@ -696,8 +696,7 @@ where
             size_delta_usd,
             acceptable_price,
             collateral_withdrawal_amount,
-            is_insolvent_close_allowed,
-            is_liquidation_order,
+            flags,
         )
     }
 

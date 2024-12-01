@@ -290,7 +290,7 @@ pub struct Pnl<T> {
 }
 
 impl<T> Pnl<T> {
-    /// Create a new [`ProcessedPnl`].
+    /// Create a new [`Pnl`].
     pub fn new(pnl: T, uncapped_pnl: T) -> Self {
         Self { pnl, uncapped_pnl }
     }

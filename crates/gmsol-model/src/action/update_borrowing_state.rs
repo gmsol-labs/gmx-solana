@@ -106,7 +106,7 @@ mod tests {
         sleep(Duration::from_secs(2));
         let report = position
             .ops(&mut market)
-            .decrease(prices, 50_000_000_000_000, None, 0, false, false)?
+            .decrease(prices, 50_000_000_000_000, None, 0, Default::default())?
             .execute()?;
         println!("{report:#?}");
         println!("{market:#?}");

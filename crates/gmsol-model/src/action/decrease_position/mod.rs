@@ -52,8 +52,7 @@ pub struct DecreasePositionParams<T> {
     initial_size_delta_usd: T,
     acceptable_price: Option<T>,
     initial_collateral_withdrawal_amount: T,
-    is_insolvent_close_allowed: bool,
-    is_liquidation_order: bool,
+    flags: DecreasePositionFlags,
     swap: DecreasePositionSwapType,
 }
 
@@ -78,19 +77,57 @@ impl<T> DecreasePositionParams<T> {
         &self.initial_collateral_withdrawal_amount
     }
 
-    /// Get whether insolvent close is allowed.
+    /// Whether insolvent close is allowed.
     pub fn is_insolvent_close_allowed(&self) -> bool {
-        self.is_insolvent_close_allowed
+        self.flags.is_insolvent_close_allowed
     }
 
-    /// Get whether the order is an liquidation order.
+    /// Whether the order is a liquidation order.
     pub fn is_liquidation_order(&self) -> bool {
-        self.is_liquidation_order
+        self.flags.is_liquidation_order
+    }
+
+    /// Whether capping size_delta_usd is allowed.
+    pub fn is_cap_size_delta_usd_allowed(&self) -> bool {
+        self.flags.is_cap_size_delta_usd_allowed
     }
 
     /// Get the swap type.
     pub fn swap(&self) -> DecreasePositionSwapType {
         self.swap
+    }
+}
+
+/// Decrease Position Flags.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DecreasePositionFlags {
+    /// Whether insolvent close is allowed.
+    pub is_insolvent_close_allowed: bool,
+    /// Whether the order is a liquidation order.
+    pub is_liquidation_order: bool,
+    /// Whether capping size_delta_usd is allowed.
+    pub is_cap_size_delta_usd_allowed: bool,
+}
+
+impl DecreasePositionFlags {
+    fn init<T>(&mut self, size_in_usd: &T, size_delta_usd: &mut T) -> crate::Result<()>
+    where
+        T: Ord + Clone,
+    {
+        if *size_delta_usd > *size_in_usd {
+            if self.is_cap_size_delta_usd_allowed {
+                *size_delta_usd = size_in_usd.clone();
+            } else {
+                return Err(crate::Error::InvalidArgument("invalid decrease order size"));
+            }
+        }
+
+        let is_full_close = *size_in_usd == *size_delta_usd;
+
+        self.is_insolvent_close_allowed =
+            is_full_close && self.is_insolvent_close_allowed && self.is_liquidation_order;
+
+        Ok(())
     }
 }
 
@@ -114,11 +151,10 @@ where
     pub fn try_new(
         position: P,
         prices: Prices<P::Num>,
-        size_delta_usd: P::Num,
+        mut size_delta_usd: P::Num,
         acceptable_price: Option<P::Num>,
         collateral_withdrawal_amount: P::Num,
-        is_insolvent_close_allowed: bool,
-        is_liquidation_order: bool,
+        mut flags: DecreasePositionFlags,
     ) -> crate::Result<Self> {
         if !prices.is_valid() {
             return Err(crate::Error::InvalidArgument("invalid prices"));
@@ -126,17 +162,16 @@ where
         if position.is_empty() {
             return Err(crate::Error::InvalidPosition("empty position"));
         }
-        let size_delta_usd = size_delta_usd.min(position.size_in_usd().clone());
+
+        flags.init(position.size_in_usd(), &mut size_delta_usd)?;
+
         Ok(Self {
             params: DecreasePositionParams {
                 prices,
                 initial_size_delta_usd: size_delta_usd.clone(),
                 acceptable_price,
                 initial_collateral_withdrawal_amount: collateral_withdrawal_amount.clone(),
-                is_insolvent_close_allowed: is_insolvent_close_allowed
-                    && (size_delta_usd == *position.size_in_usd())
-                    && is_liquidation_order,
-                is_liquidation_order,
+                flags,
                 swap: DecreasePositionSwapType::NoSwap,
             },
             withdrawable_collateral_amount: collateral_withdrawal_amount
@@ -398,7 +433,7 @@ where
     }
 
     fn check_liquidation(&self) -> crate::Result<()> {
-        if self.params.is_liquidation_order {
+        if self.params.is_liquidation_order() {
             let Some(_reason) = self
                 .position
                 .check_liquidatable(&self.params.prices, true)?
@@ -429,7 +464,7 @@ where
         use num_traits::Signed;
 
         // is_insolvent_close_allowed => is_full_close
-        debug_assert!(!self.params.is_insolvent_close_allowed || self.is_full_close());
+        debug_assert!(!self.params.is_insolvent_close_allowed() || self.is_full_close());
 
         let (price_impact_value, price_impact_diff, execution_price) =
             self.get_execution_params()?;
@@ -460,7 +495,7 @@ where
             are_pnl_and_collateral_tokens_the_same,
             &self.params.prices,
             remaining_collateral_amount,
-            self.params.is_insolvent_close_allowed,
+            self.params.is_insolvent_close_allowed(),
         );
         let mut report = processor.process(|mut ctx| {
             ctx.add_pnl_if_positive(&base_pnl_usd)?
@@ -632,8 +667,7 @@ mod tests {
                 40_000_000_000,
                 None,
                 100_000_000,
-                false,
-                false,
+                Default::default(),
             )?
             .execute()?;
         println!("{report:#?}");
@@ -647,8 +681,7 @@ mod tests {
                 40_000_000_000,
                 None,
                 0,
-                false,
-                false,
+                Default::default(),
             )?
             .execute()?;
         println!("{report:#?}");
