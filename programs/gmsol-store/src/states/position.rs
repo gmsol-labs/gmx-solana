@@ -71,7 +71,9 @@ impl Position {
 
     /// Initialize the position state.
     ///
-    /// Returns error if `kind` is not `Unitialized`.
+    /// Returns error if
+    /// - `kind` is `Unitialized`.
+    /// - The kind of the position is not `Uninitialized`.
     pub fn try_init(
         &mut self,
         kind: PositionKind,
