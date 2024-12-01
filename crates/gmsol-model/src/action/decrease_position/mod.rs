@@ -48,10 +48,10 @@ pub enum DecreasePositionSwapType {
 /// Decrease Position Params.
 #[derive(Debug, Clone, Copy)]
 pub struct DecreasePositionParams<T> {
-    initial_collateral_withdrawal_amount: T,
+    prices: Prices<T>,
     initial_size_delta_usd: T,
     acceptable_price: Option<T>,
-    prices: Prices<T>,
+    initial_collateral_withdrawal_amount: T,
     is_insolvent_close_allowed: bool,
     is_liquidation_order: bool,
     swap: DecreasePositionSwapType,
@@ -109,9 +109,9 @@ where
         let size_delta_usd = size_delta_usd.min(position.size_in_usd().clone());
         Ok(Self {
             params: DecreasePositionParams {
+                prices,
                 initial_size_delta_usd: size_delta_usd.clone(),
                 acceptable_price,
-                prices,
                 initial_collateral_withdrawal_amount: collateral_withdrawal_amount.clone(),
                 is_insolvent_close_allowed: is_insolvent_close_allowed
                     && (size_delta_usd == *position.size_in_usd())
