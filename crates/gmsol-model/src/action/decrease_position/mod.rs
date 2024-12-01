@@ -511,7 +511,7 @@ where
                 Zero::zero(),
                 Zero::zero(),
                 index_token_price
-                    .pick_price(self.position.is_long())
+                    .pick_price(!self.position.is_long())
                     .clone(),
             ));
         }
