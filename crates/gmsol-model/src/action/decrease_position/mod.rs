@@ -123,9 +123,7 @@ impl DecreasePositionFlags {
         }
 
         let is_full_close = *size_in_usd == *size_delta_usd;
-
-        self.is_insolvent_close_allowed =
-            is_full_close && self.is_insolvent_close_allowed && self.is_liquidation_order;
+        self.is_insolvent_close_allowed = is_full_close && self.is_insolvent_close_allowed;
 
         Ok(())
     }
