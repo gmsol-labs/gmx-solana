@@ -316,13 +316,13 @@ where
         self.position.on_decreased()?;
 
         let mut report = Box::new(DecreasePositionReport::new(
-            should_remove,
             &self.params,
             execution,
             self.withdrawable_collateral_amount,
             self.size_delta_usd,
             borrowing,
             funding,
+            should_remove,
         ));
 
         let are_pnl_and_collateral_tokens_the_same =

@@ -15,21 +15,20 @@ use super::{ClaimableCollateral, DecreasePositionParams, ProcessCollateralResult
 /// Report of the execution of posiiton decreasing.
 #[must_use]
 pub struct DecreasePositionReport<T: Unsigned> {
-    // params: DecreasePositionParams<T>,
     price_impact_value: T::Signed,
     price_impact_diff: T,
     execution_price: T,
     size_delta_in_tokens: T,
-    fees: PositionFees<T>,
     withdrawable_collateral_amount: T,
     initial_size_delta_usd: T,
     size_delta_usd: T,
+    fees: PositionFees<T>,
     borrowing: UpdateBorrowingReport<T>,
     funding: UpdateFundingReport<T>,
     swap_output_tokens: Option<SwapReport<T>>,
     pnl: Pnl<T::Signed>,
-
-    // Output.
+    insolvent_close_step: Option<InsolventCloseStep>,
+    // Output
     should_remove: bool,
     is_output_token_long: bool,
     is_secondary_output_token_long: bool,
@@ -38,7 +37,6 @@ pub struct DecreasePositionReport<T: Unsigned> {
     claimable_funding_short_token_amount: T,
     for_holding: ClaimableCollateral<T>,
     for_user: ClaimableCollateral<T>,
-    insolvent_close_step: Option<InsolventCloseStep>,
 }
 
 impl<T: Unsigned + fmt::Debug> fmt::Debug for DecreasePositionReport<T>
@@ -85,48 +83,50 @@ where
 
 impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     pub(super) fn new(
-        should_remove: bool,
         params: &DecreasePositionParams<T>,
         execution: ProcessCollateralResult<T>,
         withdrawable_collateral_amount: T,
         size_delta_usd: T,
         borrowing: UpdateBorrowingReport<T>,
         funding: UpdateFundingReport<T>,
+        should_remove: bool,
     ) -> Self {
+        let claimable_funding_long_token_amount = execution
+            .fees
+            .funding_fees()
+            .claimable_long_token_amount()
+            .clone();
+        let claimable_funding_short_token_amount = execution
+            .fees
+            .funding_fees()
+            .claimable_short_token_amount()
+            .clone();
         Self {
-            should_remove,
-            // params,
             price_impact_value: execution.price_impact_value,
+            price_impact_diff: execution.price_impact_diff,
             execution_price: execution.execution_price,
             size_delta_in_tokens: execution.size_delta_in_tokens,
+            withdrawable_collateral_amount,
+            initial_size_delta_usd: params.initial_size_delta_usd.clone(),
+            size_delta_usd,
+            fees: execution.fees,
             borrowing,
             funding,
             swap_output_tokens: None,
+            pnl: execution.pnl,
+            insolvent_close_step: execution.collateral.insolvent_close_step,
+            // Output
+            should_remove,
             is_output_token_long: execution.is_output_token_long,
             is_secondary_output_token_long: execution.is_secondary_output_token_long,
             output_amounts: OutputAmounts {
                 output_amount: execution.collateral.output_amount,
                 secondary_output_amount: execution.collateral.secondary_output_amount,
             },
-            withdrawable_collateral_amount,
-            initial_size_delta_usd: params.initial_size_delta_usd.clone(),
-            size_delta_usd,
-            price_impact_diff: execution.price_impact_diff,
-            claimable_funding_long_token_amount: execution
-                .fees
-                .funding_fees()
-                .claimable_long_token_amount()
-                .clone(),
-            claimable_funding_short_token_amount: execution
-                .fees
-                .funding_fees()
-                .claimable_short_token_amount()
-                .clone(),
+            claimable_funding_long_token_amount,
+            claimable_funding_short_token_amount,
             for_holding: execution.collateral.for_holding,
             for_user: execution.collateral.for_user,
-            fees: execution.fees,
-            pnl: execution.pnl,
-            insolvent_close_step: execution.collateral.insolvent_close_step,
         }
     }
 
