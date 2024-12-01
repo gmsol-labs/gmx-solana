@@ -15,7 +15,7 @@ pub trait WithStore<'info> {
 }
 
 /// Accounts that can be used for authentication.
-pub trait Authentication<'info>: Bumps + Sized + WithStore<'info> {
+pub trait CpiAuthentication<'info>: Bumps + Sized + WithStore<'info> {
     /// Get the authority to check.
     ///
     /// ## Notes
@@ -37,8 +37,8 @@ pub trait Authentication<'info>: Bumps + Sized + WithStore<'info> {
     fn on_error(&self) -> Result<()>;
 }
 
-/// Provides access control utils for [`Authentication`]s.
-pub trait Authenticate<'info>: Authentication<'info> {
+/// Provides access control utils for [`CpiAuthentication`]s.
+pub trait CpiAuthenticate<'info>: CpiAuthentication<'info> {
     /// Check that the `authority` has the given `role`.
     fn only(ctx: &Context<Self>, role: &str) -> Result<()> {
         let has_role =
@@ -71,7 +71,7 @@ pub trait Authenticate<'info>: Authentication<'info> {
     }
 }
 
-impl<'info, T> Authenticate<'info> for T where T: Authentication<'info> {}
+impl<'info, T> CpiAuthenticate<'info> for T where T: CpiAuthentication<'info> {}
 
 /// Accounts that with oracle context.
 pub trait WithOracle<'info>: WithStore<'info> {
