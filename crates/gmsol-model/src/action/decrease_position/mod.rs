@@ -127,7 +127,7 @@ where
     }
 
     /// Set the swap type.
-    pub fn swap(mut self, kind: DecreasePositionSwapType) -> Self {
+    pub fn set_swap(mut self, kind: DecreasePositionSwapType) -> Self {
         self.params.swap = kind;
         self
     }
