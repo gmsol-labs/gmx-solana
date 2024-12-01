@@ -1267,7 +1267,9 @@ fn execute_increase_position(
         collateral_increment_amount
     };
 
-    // Validate that the collateral amount is sufficient.
+    // Validate that the collateral amount swapped out is sufficient.
+    // Here, `min_output` refers to the minimum amount of collateral tokens expected
+    // after the swap.
     order.validate_output_amount(collateral_increment_amount.into())?;
 
     // Increase position.
