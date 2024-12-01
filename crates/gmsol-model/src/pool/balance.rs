@@ -5,16 +5,16 @@ use super::PoolDelta;
 
 /// Balanced amounts.
 pub trait Balance {
-    /// Unsigned number type of the pool.
+    /// Unsigned number type.
     type Num: Num + Unsigned<Signed = Self::Signed>;
 
-    /// Signed number type of the pool.
+    /// Signed number type.
     type Signed;
 
-    /// Get the long token amount (when this is a token pool), or long usd value (when this is a usd value pool).
+    /// Get the long token amount (when this is a token balance), or long usd value (when this is a usd value balance).
     fn long_amount(&self) -> crate::Result<Self::Num>;
 
-    /// Get the short token amount (when this is a token pool), or short usd value (when this is a usd value pool).
+    /// Get the short token amount (when this is a token balance), or short usd value (when this is a usd value balance).
     fn short_amount(&self) -> crate::Result<Self::Num>;
 }
 

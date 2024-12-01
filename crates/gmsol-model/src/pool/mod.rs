@@ -8,7 +8,7 @@ pub mod delta;
 
 pub use self::balance::{Balance, BalanceExt};
 
-/// A pool for holding tokens.
+/// A balance for holding tokens, usd values, or factors
 pub trait Pool: Balance {
     /// Apply delta to long amount.
     fn apply_delta_to_long_amount(&mut self, delta: &Self::Signed) -> Result<(), crate::Error>;
