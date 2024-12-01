@@ -173,6 +173,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     ///
     /// ## Must Use
     /// Must be used by the caller.
+    #[must_use]
     pub fn is_output_token_long(&self) -> bool {
         self.is_output_token_long
     }
@@ -181,6 +182,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     ///
     /// ## Must Use
     /// Must be used by the caller.
+    #[must_use]
     pub fn is_secondary_output_token_long(&self) -> bool {
         self.is_secondary_output_token_long
     }
@@ -189,6 +191,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     ///
     /// ## Must Use
     /// Must be used by the caller.
+    #[must_use]
     pub fn output_amount(&self) -> &T {
         &self.output_amounts.output_amount
     }
@@ -197,6 +200,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     ///
     /// ## Must Use
     /// Must be used by the caller.
+    #[must_use]
     pub fn secondary_output_amount(&self) -> &T {
         &self.output_amounts.secondary_output_amount
     }
@@ -217,6 +221,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     ///
     /// ## Must Use
     /// Must be used by the caller.
+    #[must_use]
     pub fn should_remove(&self) -> bool {
         self.should_remove
     }
@@ -225,6 +230,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     ///
     /// ## Must Use
     /// Must be used by the caller.
+    #[must_use]
     pub fn withdrawable_collateral_amount(&self) -> &T {
         &self.withdrawable_collateral_amount
     }
@@ -233,6 +239,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     ///
     /// ## Must Use
     /// Must be used by the caller.
+    #[must_use]
     pub fn claimable_funding_amounts(&self) -> (&T, &T) {
         (
             &self.claimable_funding_long_token_amount,
@@ -244,6 +251,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     ///
     /// ## Must Use
     /// Must be used by the caller.
+    #[must_use]
     pub fn claimable_collateral_for_holding(&self) -> &ClaimableCollateral<T> {
         &self.for_holding
     }
@@ -252,6 +260,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     ///
     /// ## Must Use
     /// Must be used by the caller.
+    #[must_use]
     pub fn claimable_collateral_for_user(&self) -> &ClaimableCollateral<T> {
         &self.for_user
     }
