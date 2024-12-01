@@ -21,9 +21,9 @@ pub(super) struct CollateralProcessor<'a, M: BaseMarket<DECIMALS>, const DECIMAL
     is_insolvent_close_allowed: bool,
 }
 
-/// Collateral Process Report.
+/// Collateral Process Result.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct ProcessReport<T> {
+pub(super) struct ProcessResult<T> {
     pub(super) output_amount: T,
     pub(super) secondary_output_amount: T,
     pub(super) remaining_collateral_amount: T,
@@ -37,11 +37,11 @@ struct State<T> {
     is_output_token_long: bool,
     is_pnl_token_long: bool,
     are_pnl_and_collateral_tokens_the_same: bool,
-    report: ProcessReport<T>,
+    report: ProcessResult<T>,
 }
 
 impl<T> Deref for State<T> {
-    type Target = ProcessReport<T>;
+    type Target = ProcessResult<T>;
 
     fn deref(&self) -> &Self::Target {
         &self.report
@@ -241,7 +241,7 @@ where
                 is_output_token_long,
                 is_pnl_token_long,
                 are_pnl_and_collateral_tokens_the_same,
-                report: ProcessReport {
+                report: ProcessResult {
                     remaining_collateral_amount,
                     output_amount: Zero::zero(),
                     secondary_output_amount: Zero::zero(),
@@ -278,7 +278,7 @@ where
     fn into_report(
         self,
         insolvent_close_step: Option<InsolventCloseStep>,
-    ) -> ProcessReport<M::Num> {
+    ) -> ProcessResult<M::Num> {
         let mut report = self.state.report;
         report.insolvent_close_step = insolvent_close_step;
         report
@@ -287,7 +287,7 @@ where
     pub(super) fn process(
         mut self,
         f: impl FnOnce(Context<'_, 'a, M, DECIMALS>) -> crate::Result<()>,
-    ) -> crate::Result<ProcessReport<M::Num>> {
+    ) -> crate::Result<ProcessResult<M::Num>> {
         let res = (f)(Context {
             processor: &mut self,
         });

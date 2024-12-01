@@ -12,7 +12,7 @@ use crate::{
     BorrowingFeeMarketExt, PerpMarketMut, PerpMarketMutExt, PoolExt,
 };
 
-use self::collateral_processor::{CollateralProcessor, ProcessReport};
+use self::collateral_processor::{CollateralProcessor, ProcessResult};
 
 mod claimable;
 mod collateral_processor;
@@ -21,7 +21,7 @@ mod utils;
 
 pub use self::{
     claimable::ClaimableCollateral,
-    report::{DecreasePositionReport, OutputAmounts, ProcessedPnl},
+    report::{DecreasePositionReport, OutputAmounts, Pnl},
 };
 
 /// Decrease the position.
@@ -81,9 +81,9 @@ struct ProcessCollateralResult<T: Unsigned> {
     size_delta_in_tokens: T,
     is_output_token_long: bool,
     is_secondary_output_token_long: bool,
-    collateral: ProcessReport<T>,
+    collateral: ProcessResult<T>,
     fees: PositionFees<T>,
-    pnl: ProcessedPnl<T::Signed>,
+    pnl: Pnl<T::Signed>,
 }
 
 impl<const DECIMALS: u8, P: PositionMut<DECIMALS>> DecreasePosition<P, DECIMALS>
@@ -498,7 +498,7 @@ where
             is_secondary_output_token_long: is_pnl_token_long,
             collateral: report,
             fees,
-            pnl: ProcessedPnl::new(base_pnl_usd, uncapped_base_pnl_usd),
+            pnl: Pnl::new(base_pnl_usd, uncapped_base_pnl_usd),
         })
     }
 

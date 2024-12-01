@@ -26,7 +26,7 @@ pub struct DecreasePositionReport<T: Unsigned> {
     borrowing: UpdateBorrowingReport<T>,
     funding: UpdateFundingReport<T>,
     swap_output_tokens: Option<SwapReport<T>>,
-    pnl: ProcessedPnl<T::Signed>,
+    pnl: Pnl<T::Signed>,
 
     // Output.
     should_remove: bool,
@@ -265,7 +265,7 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     }
 
     /// Get processed pnl.
-    pub fn pnl(&self) -> &ProcessedPnl<T::Signed> {
+    pub fn pnl(&self) -> &Pnl<T::Signed> {
         &self.pnl
     }
 
@@ -282,14 +282,14 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     derive(anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize)
 )]
 #[derive(Debug, Clone, Copy, Default)]
-pub struct ProcessedPnl<T> {
+pub struct Pnl<T> {
     /// Final PnL value.
     pnl: T,
     /// Uncapped PnL value.
     uncapped_pnl: T,
 }
 
-impl<T> ProcessedPnl<T> {
+impl<T> Pnl<T> {
     /// Create a new [`ProcessedPnl`].
     pub fn new(pnl: T, uncapped_pnl: T) -> Self {
         Self { pnl, uncapped_pnl }
