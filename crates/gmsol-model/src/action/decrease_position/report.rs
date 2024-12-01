@@ -12,7 +12,7 @@ use crate::{
 
 use super::{ClaimableCollateral, DecreasePositionParams, ProcessCollateralResult};
 
-/// Report of the execution of posiiton decreasing.
+/// Report of the execution of position decreasing.
 #[must_use]
 pub struct DecreasePositionReport<T: Unsigned> {
     price_impact_value: T::Signed,
