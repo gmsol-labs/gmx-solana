@@ -348,7 +348,9 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
                 &pool_pnl,
                 PnlFactorKind::MaxForTrader,
             )?;
-            // FIXME: add test for zero factor.
+
+            // Note: If the PnL is capped at zero, it can still pass this test.
+            // See the `test_zero_max_pnl_factor_for_trader` test for more details.
             if capped_pool_pnl != pool_pnl
                 && !capped_pool_pnl.is_negative()
                 && pool_pnl.is_positive()
@@ -376,8 +378,8 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
                 ))?
         };
 
-        let pnl_usd = dbg!(&size_delta_in_tokens)
-            .checked_mul_div_with_signed_numerator(dbg!(&total_pnl), dbg!(self.size_in_tokens()))
+        let pnl_usd = size_delta_in_tokens
+            .checked_mul_div_with_signed_numerator(&total_pnl, self.size_in_tokens())
             .ok_or(crate::Error::Computation("calculating pnl_usd"))?;
 
         let uncapped_pnl_usd = size_delta_in_tokens
