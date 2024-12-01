@@ -215,4 +215,43 @@ mod tests {
         assert_eq!(price.to_unit_price(), 17_734_000_000);
         assert_eq!(price.decimal_multiplier, 20 - 5 - 9);
     }
+
+    #[test]
+    fn test_price_max_price() {
+        /*
+            https://arbitrum-api.gmxinfra.io/tokens :
+            {"symbol":"ETH","address":"0x82aF49447D8a07e3bd95BD0d56f35241523fBab1","decimals":18},
+            {"symbol":"BTC","address":"0x47904963fc8b2340414262125aF798B9655E58Cd","decimals":8,"synthetic":true},
+            {"symbol":"USDC","address":"0xaf88d065e77c8cC2239327C5EDb3A432268e5831","decimals":6}
+        https://arbitrum-api.gmxinfra.io/prices/tickers :
+        {"tokenAddress":"0x82aF49447D8a07e3bd95BD0d56f35241523fBab1","tokenSymbol":"ETH","minPrice":"2960193941697386","maxPrice":"2960410000000000","updatedAt":1731093960710,"timestamp":1731093960},
+        {"tokenAddress":"0x47904963fc8b2340414262125aF798B9655E58Cd","tokenSymbol":"BTC","minPrice":"769507202712389700000000000","maxPrice":"769509257839876500000000000","updatedAt":1731093959803,"timestamp":1731093959},
+        {"tokenAddress":"0xaf88d065e77c8cC2239327C5EDb3A432268e5831","tokenSymbol":"USDC","minPrice":"999883816264707600000000","maxPrice":"1000000000000000000000000","updatedAt":1731093960613,"timestamp":1731093960}
+        https://api.gmx.io/prices :
+        "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1":"2959011950971600000000000000000000"
+        eth price approx $2960.41 per 1 ETH
+        */
+        // https://solscan.io/account/716hFAECqotxcXcj8Hs8nr7AG6q9dBw2oX3k3M8V7uGq#data solana chainlink eth oracle has 8 decimals. token_decimal config would have to be << 18 to work
+        let price_eth = Decimal::try_from_price(296041000000, 8, 8, 4).unwrap();
+        assert_eq!(price_eth.value, 29604100); // precision 4
+        assert_eq!(price_eth.decimal_multiplier, 8); // 8 (20-4-8)
+        assert_eq!(price_eth.to_unit_price(), 2960410000000000); // 12 decimals (4+8)
+                                                                 // chopped off 2 decimals from maxPrice
+        let price_btc = Decimal::try_from_price(7695092578398765000000000, 20, 8, 2).unwrap();
+        assert_eq!(price_btc.value, 7695092); // precision 2
+        assert_eq!(price_btc.decimal_multiplier, 10); // 10 (20-2-8)
+        assert_eq!(price_btc.to_unit_price(), 76950920000000000); // 12 decimals (2+10)
+                                                                  // chopped off 4 decimals
+        let price_usdc = Decimal::try_from_price(100000000000000000000, 20, 6, 6).unwrap();
+        assert_eq!(price_usdc.value, 1000000); // precision 6
+        assert_eq!(price_usdc.decimal_multiplier, 8); // 8 (20-6-6)
+        assert_eq!(price_usdc.to_unit_price(), 100000000000000); // 14 decimals (6+8)
+
+        let fiat_value_eth = price_eth.to_unit_price() * 10u128.pow(8);
+        assert_eq!(fiat_value_eth, 296041000000000000000000u128); // 20 decimals (unit price decimals+token_decimals = 20 for one full unit)
+        let fiat_eth_to_btc = fiat_value_eth / price_btc.to_unit_price();
+        assert_eq!(fiat_eth_to_btc, 3847140);
+        let fiat_eth_to_usdc = fiat_value_eth / price_usdc.to_unit_price();
+        assert_eq!(fiat_eth_to_usdc, 2960410000);
+    }
 }
