@@ -679,7 +679,7 @@ where
         let is_token_in_long = report.is_output_token_long();
         let is_secondary_output_token_long = report.is_secondary_output_token_long();
         let (output_amount, secondary_output_amount) = report.output_amounts_mut();
-        if !secondary_output_amount.is_zero()
+        if !output_amount.is_zero()
             && matches!(swap, DecreasePositionSwapType::CollateralToPnlToken)
         {
             if is_token_in_long == is_secondary_output_token_long {

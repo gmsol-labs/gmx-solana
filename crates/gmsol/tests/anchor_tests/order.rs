@@ -114,6 +114,7 @@ async fn balanced_market_order() -> eyre::Result<()> {
             let amount = collateral_amount / 2;
             let (rpc, order) = client
                 .market_decrease(store, market_token, collateral_side, amount, side, 0)
+                .decrease_position_swap_type(Some(DecreasePositionSwapType::CollateralToPnlToken))
                 .min_output_amount(u128::MAX)
                 .build_with_address()
                 .await?;
@@ -202,6 +203,7 @@ async fn balanced_market_order() -> eyre::Result<()> {
     let amount = 1_00;
     let (rpc, order) = client
         .market_decrease(store, market_token, true, amount, side, 0)
+        .decrease_position_swap_type(Some(DecreasePositionSwapType::CollateralToPnlToken))
         .build_with_address()
         .await?;
     let signature = rpc.send().await?;
@@ -374,6 +376,7 @@ async fn single_token_market_order() -> eyre::Result<()> {
             let amount = collateral_amount / 2;
             let (rpc, order) = client
                 .market_decrease(store, market_token, collateral_side, amount, side, 0)
+                .decrease_position_swap_type(Some(DecreasePositionSwapType::CollateralToPnlToken))
                 .min_output_amount(u128::MAX)
                 .build_with_address()
                 .await?;
@@ -462,6 +465,7 @@ async fn single_token_market_order() -> eyre::Result<()> {
     let amount = 1_00;
     let (rpc, order) = client
         .market_decrease(store, market_token, true, amount, side, 0)
+        .decrease_position_swap_type(Some(DecreasePositionSwapType::CollateralToPnlToken))
         .build_with_address()
         .await?;
     let signature = rpc.send().await?;
