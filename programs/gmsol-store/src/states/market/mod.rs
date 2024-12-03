@@ -361,19 +361,17 @@ impl Market {
     /// Get pool of the given kind.
     #[inline]
     pub fn pool(&self, kind: PoolKind) -> Option<Pool> {
-        self.state.pools.get(kind).copied()
+        self.state.pools.get(kind).map(|s| s.pool()).copied()
     }
 
     /// Try to get pool of the given kind.
     pub fn try_pool(&self, kind: PoolKind) -> gmsol_model::Result<&Pool> {
-        self.state
+        Ok(self
+            .state
             .pools
             .get(kind)
-            .ok_or(gmsol_model::Error::MissingPoolKind(kind))
-    }
-
-    pub(crate) fn _pool_mut(&mut self, kind: PoolKind) -> Option<&mut Pool> {
-        self.state.pools.get_mut(kind)
+            .ok_or(gmsol_model::Error::MissingPoolKind(kind))?
+            .pool())
     }
 
     /// Get clock of the given kind.

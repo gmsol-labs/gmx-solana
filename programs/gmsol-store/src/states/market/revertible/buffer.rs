@@ -3,8 +3,8 @@ use gmsol_model::PoolKind;
 use strum::IntoEnumIterator;
 
 use crate::states::{
-    market::{Clocks, State},
-    OtherState, Pool,
+    market::{Clocks, Pool, State},
+    OtherState, PoolStorage,
 };
 
 #[account(zero_copy)]
@@ -21,13 +21,21 @@ impl RevertibleBuffer {
     }
 
     pub(super) fn pool<'a>(&'a self, kind: PoolKind, storage: &'a State) -> Option<&'a Pool> {
-        let pool = self.state.pools.get(kind)?;
-        Some(pool.cache_get_with(self.rev, || storage.pools.get(kind).expect("must exist")))
+        let pool_storage = self.state.pools.get(kind)?;
+        Some(
+            pool_storage
+                .cache_get_with(self.rev, || storage.pools.get(kind).expect("must exist"))
+                .pool(),
+        )
     }
 
     pub(super) fn pool_mut(&mut self, kind: PoolKind, storage: &State) -> Option<&mut Pool> {
-        let pool = self.state.pools.get_mut(kind)?;
-        Some(pool.cache_get_mut_with(self.rev, || *storage.pools.get(kind).expect("must exist")))
+        let pool_storage = self.state.pools.get_mut(kind)?;
+        Some(
+            pool_storage
+                .cache_get_mut_with(self.rev, || *storage.pools.get(kind).expect("must exist"))
+                .pool_mut(),
+        )
     }
 
     pub(super) fn clocks<'a>(&'a self, storage: &'a State) -> &'a Clocks {
@@ -130,5 +138,5 @@ macro_rules! impl_cache {
 }
 
 impl_cache!(Clocks);
-impl_cache!(Pool);
+impl_cache!(PoolStorage);
 impl_cache!(OtherState);

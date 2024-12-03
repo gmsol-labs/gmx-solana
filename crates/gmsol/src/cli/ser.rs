@@ -2,8 +2,8 @@ use std::{fmt, str::FromStr};
 
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use gmsol::types::{
-    position::PositionState, Factor, FeedConfig, Market, MarketConfigKey, Pool, Position,
-    PriceProviderKind, TokenConfig,
+    market::pool::Pool, position::PositionState, Factor, FeedConfig, Market, MarketConfigKey,
+    Position, PriceProviderKind, TokenConfig,
 };
 use gmsol_model::{ClockKind, PoolKind};
 use indexmap::IndexMap;

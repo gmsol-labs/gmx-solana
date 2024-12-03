@@ -15,9 +15,9 @@ use crate::{
     states::{
         market::{
             clock::{AsClock, AsClockMut},
-            Clocks,
+            Clocks, Pool,
         },
-        Factor, HasMarketMeta, Market, MarketMeta, OtherState, Pool,
+        Factor, HasMarketMeta, Market, MarketMeta, OtherState,
     },
     CoreError,
 };

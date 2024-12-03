@@ -1,7 +1,32 @@
 use anchor_lang::prelude::*;
 use gmsol_model::PoolKind;
 
-use crate::CoreError;
+/// A pool storage for market.
+#[zero_copy]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PoolStorage {
+    pub(super) rev: u64,
+    padding: [u8; 8],
+    pool: Pool,
+}
+
+impl PoolStorage {
+    /// Set the pure flag.
+    pub(crate) fn set_is_pure(&mut self, is_pure: bool) {
+        self.pool.set_is_pure(is_pure);
+    }
+
+    /// Get pool.
+    pub fn pool(&self) -> &Pool {
+        &self.pool
+    }
+
+    /// Get pool mutably.
+    pub(super) fn pool_mut(&mut self) -> &mut Pool {
+        &mut self.pool
+    }
+}
 
 /// A pool for market.
 #[zero_copy]
@@ -13,8 +38,7 @@ pub struct Pool {
     /// For a pure pool, only the `long_token_amount` field is used.
     is_pure: u8,
     #[cfg_attr(feature = "serde", serde(skip))]
-    padding: [u8; 7],
-    pub(super) rev: u64,
+    padding: [u8; 15],
     /// Long token amount.
     pub(super) long_token_amount: u128,
     /// Short token amount.
@@ -25,24 +49,13 @@ const PURE_VALUE: u8 = 1;
 
 impl Pool {
     /// Set the pure flag.
-    pub(crate) fn set_is_pure(&mut self, is_pure: bool) {
+    fn set_is_pure(&mut self, is_pure: bool) {
         self.is_pure = if is_pure { PURE_VALUE } else { 0 };
     }
 
     /// Is this a pure pool.
-    pub(crate) fn is_pure(&self) -> bool {
+    fn is_pure(&self) -> bool {
         !matches!(self.is_pure, 0)
-    }
-
-    /// Merge pool amount if it is pure.
-    /// Will return error if the pool is not pure.
-    pub(crate) fn _merge_if_pure(&mut self) -> Result<()> {
-        require!(self.is_pure(), CoreError::InvalidArgument);
-        self.long_token_amount = self
-            .long_token_amount
-            .checked_add(self.short_token_amount)
-            .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
-        Ok(())
     }
 }
 
@@ -120,40 +133,40 @@ impl gmsol_model::Pool for Pool {
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct Pools {
     /// Primary Pool.
-    primary: Pool,
+    primary: PoolStorage,
     /// Swap Impact Pool.
-    swap_impact: Pool,
+    swap_impact: PoolStorage,
     /// Claimable Fee Pool.
-    claimable_fee: Pool,
+    claimable_fee: PoolStorage,
     /// Long open interest.
-    open_interest_for_long: Pool,
+    open_interest_for_long: PoolStorage,
     /// Short open interest.
-    open_interest_for_short: Pool,
+    open_interest_for_short: PoolStorage,
     /// Long open interest in tokens.
-    open_interest_in_tokens_for_long: Pool,
+    open_interest_in_tokens_for_long: PoolStorage,
     /// Short open interest in tokens.
-    open_interest_in_tokens_for_short: Pool,
+    open_interest_in_tokens_for_short: PoolStorage,
     /// Position Impact.
-    position_impact: Pool,
+    position_impact: PoolStorage,
     /// Borrowing Factor.
-    borrowing_factor: Pool,
+    borrowing_factor: PoolStorage,
     /// Funding Amount Per Size for long.
-    funding_amount_per_size_for_long: Pool,
+    funding_amount_per_size_for_long: PoolStorage,
     /// Funding Amount Per Size for short.
-    funding_amount_per_size_for_short: Pool,
+    funding_amount_per_size_for_short: PoolStorage,
     /// Claimable Funding Amount Per Size for long.
-    claimable_funding_amount_per_size_for_long: Pool,
+    claimable_funding_amount_per_size_for_long: PoolStorage,
     /// Claimable Funding Amount Per Size for short.
-    claimable_funding_amount_per_size_for_short: Pool,
+    claimable_funding_amount_per_size_for_short: PoolStorage,
     /// Collateral sum pool for long.
-    collateral_sum_for_long: Pool,
+    collateral_sum_for_long: PoolStorage,
     /// Collateral sum pool for short.
-    collateral_sum_for_short: Pool,
+    collateral_sum_for_short: PoolStorage,
     /// Total borrowing pool.
-    total_borrowing: Pool,
+    total_borrowing: PoolStorage,
     /// Point pool.
-    point: Pool,
-    reserved: [Pool; 4],
+    point: PoolStorage,
+    reserved: [PoolStorage; 4],
 }
 
 impl Pools {
@@ -183,7 +196,7 @@ impl Pools {
         self.point.set_is_pure(false);
     }
 
-    pub(super) fn get(&self, kind: PoolKind) -> Option<&Pool> {
+    pub(super) fn get(&self, kind: PoolKind) -> Option<&PoolStorage> {
         let pool = match kind {
             PoolKind::Primary => &self.primary,
             PoolKind::SwapImpact => &self.swap_impact,
@@ -211,7 +224,7 @@ impl Pools {
         Some(pool)
     }
 
-    pub(super) fn get_mut(&mut self, kind: PoolKind) -> Option<&mut Pool> {
+    pub(super) fn get_mut(&mut self, kind: PoolKind) -> Option<&mut PoolStorage> {
         let pool = match kind {
             PoolKind::Primary => &mut self.primary,
             PoolKind::SwapImpact => &mut self.swap_impact,
