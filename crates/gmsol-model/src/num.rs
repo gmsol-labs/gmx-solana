@@ -1,7 +1,7 @@
 use std::fmt;
 
 use num_traits::{
-    CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedSub, FromPrimitive, One, Signed, Zero,
+    CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedSub, FromPrimitive, One, Signed,
 };
 
 /// Num trait used in GMX.
@@ -39,7 +39,7 @@ impl<
 /// Unsigned value that cannot be negative.
 pub trait Unsigned: num_traits::Unsigned {
     /// The signed type.
-    type Signed: TryFrom<Self> + UnsignedAbs<Unsigned = Self>;
+    type Signed: TryFrom<Self> + UnsignedAbs<Unsigned = Self> + CheckedNeg;
 
     /// Convert to a signed value
     fn to_signed(&self) -> crate::Result<Self::Signed>
@@ -68,9 +68,8 @@ pub trait Unsigned: num_traits::Unsigned {
         Self: Clone,
         Self::Signed: CheckedSub,
     {
-        let value = self.to_signed()?;
-        Self::Signed::zero()
-            .checked_sub(&value)
+        self.to_signed()?
+            .checked_neg()
             .ok_or(crate::Error::Computation("to opposite signed"))
     }
 

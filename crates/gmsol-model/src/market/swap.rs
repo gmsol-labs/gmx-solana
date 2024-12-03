@@ -24,6 +24,8 @@ pub trait SwapMarketMut<const DECIMALS: u8>:
     SwapMarket<DECIMALS> + BaseMarketMut<DECIMALS>
 {
     /// Get the swap impact pool mutably.
+    /// # Requirements
+    /// - This method must return `Ok` if [`BaseMarket::swap_impact_pool`] does.
     fn swap_impact_pool_mut(&mut self) -> crate::Result<&mut Self::Pool>;
 }
 

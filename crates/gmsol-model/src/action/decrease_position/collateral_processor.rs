@@ -504,7 +504,7 @@ where
                             .try_add_amount(paid_in_secondary_output_amount, false)?;
                     }
                     if paid_in_collateral_amount < cost_amount {
-                        processor.market.insufficient_funding_fee_payment(
+                        processor.market.on_insufficient_funding_fee_payment(
                             paid_in_collateral_amount,
                             cost_amount,
                         )?;

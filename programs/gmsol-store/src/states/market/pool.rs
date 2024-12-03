@@ -99,6 +99,20 @@ impl gmsol_model::Pool for Pool {
             ))?;
         Ok(())
     }
+
+    fn checked_apply_delta(
+        &self,
+        delta: gmsol_model::Delta<&Self::Signed>,
+    ) -> gmsol_model::Result<Self> {
+        let mut ans = *self;
+        if let Some(amount) = delta.long() {
+            ans.apply_delta_to_long_amount(amount)?;
+        }
+        if let Some(amount) = delta.short() {
+            ans.apply_delta_to_short_amount(amount)?;
+        }
+        Ok(ans)
+    }
 }
 
 /// Market Pools.

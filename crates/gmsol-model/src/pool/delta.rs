@@ -4,6 +4,65 @@ use crate::{
     fixed::FixedPointOps, num::Unsigned, params::PriceImpactParams, utils, Balance, BalanceExt,
 };
 
+/// Delta Amounts.
+#[derive(Debug, Clone, Copy)]
+pub struct Delta<T> {
+    /// Long amount.
+    long: Option<T>,
+    /// Short amount.
+    short: Option<T>,
+}
+
+impl<T> Delta<T> {
+    /// Create a new delta amounts.
+    pub fn new(long: Option<T>, short: Option<T>) -> Self {
+        Self { long, short }
+    }
+
+    /// Create a long delta amount.
+    #[inline]
+    pub fn new_with_long(amount: T) -> Self {
+        Self::new(Some(amount), None)
+    }
+
+    /// Create a short delta amount.
+    #[inline]
+    pub fn new_with_short(amount: T) -> Self {
+        Self::new(None, Some(amount))
+    }
+
+    /// Create a delta amount for one side.
+    #[inline]
+    pub fn new_one_side(is_long: bool, amount: T) -> Self {
+        if is_long {
+            Self::new_with_long(amount)
+        } else {
+            Self::new_with_short(amount)
+        }
+    }
+
+    /// Create delta amounts for both sides.
+    #[inline]
+    pub fn new_both_sides(is_long_first: bool, first: T, second: T) -> Self {
+        let (long, short) = if is_long_first {
+            (first, second)
+        } else {
+            (second, first)
+        };
+        Self::new(Some(long), Some(short))
+    }
+
+    /// Get long delta amount.
+    pub fn long(&self) -> Option<&T> {
+        self.long.as_ref()
+    }
+
+    /// Get short delta amount.
+    pub fn short(&self) -> Option<&T> {
+        self.short.as_ref()
+    }
+}
+
 /// Usd values of pool.
 pub struct PoolValue<T> {
     long_token_usd_value: T,

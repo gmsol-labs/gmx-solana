@@ -28,6 +28,8 @@ pub trait PositionImpactMarketMut<const DECIMALS: u8>:
     BaseMarketMut<DECIMALS> + PositionImpactMarket<DECIMALS>
 {
     /// Get position impact pool mutably.
+    /// # Requirements
+    /// - This method must return `Ok` if [`PositionImpactMarket::position_impact_pool`] does.
     fn position_impact_pool_mut(&mut self) -> crate::Result<&mut Self::Pool>;
 
     /// Get the just passed time in seconds for the given kind of clock.

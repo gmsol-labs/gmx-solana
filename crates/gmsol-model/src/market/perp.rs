@@ -63,33 +63,50 @@ pub trait PerpMarketMut<const DECIMALS: u8>:
     fn funding_factor_per_second_mut(&mut self) -> &mut Self::Signed;
 
     /// Get mutable reference of open interest pool.
+    /// # Requirements
+    /// - This method must return `Ok` if
+    ///   [`BaseMarket::open_interest_pool`](crate::BaseMarket::open_interest_pool) does.
     fn open_interest_pool_mut(&mut self, is_long: bool) -> crate::Result<&mut Self::Pool>;
 
     /// Get mutable reference of open interest pool.
+    /// # Requirements
+    /// - This method must return `Ok` if
+    ///   [`BaseMarket::open_interest_in_tokens_pool`](crate::BaseMarket::open_interest_in_tokens_pool) does.
     fn open_interest_in_tokens_pool_mut(&mut self, is_long: bool)
         -> crate::Result<&mut Self::Pool>;
 
     /// Get borrowing factor pool mutably.
+    /// # Requirements
+    /// - This method must return `Ok` if [`BorrowingFeeMarket::borrowing_factor_pool`] does.
     fn borrowing_factor_pool_mut(&mut self) -> crate::Result<&mut Self::Pool>;
 
     /// Get funding amount per size pool mutably.
+    /// # Requirements
+    /// - This method must return `Ok` if [`PerpMarket::funding_amount_per_size_pool`] does.
     fn funding_amount_per_size_pool_mut(&mut self, is_long: bool)
         -> crate::Result<&mut Self::Pool>;
 
     /// Get claimable funding amount per size pool mutably.
+    /// # Requirements
+    /// - This method must return `Ok` if [`PerpMarket::claimable_funding_amount_per_size_pool`] does.
     fn claimable_funding_amount_per_size_pool_mut(
         &mut self,
         is_long: bool,
     ) -> crate::Result<&mut Self::Pool>;
 
     /// Get collateral sum pool mutably.
+    /// # Requirements
+    /// - This method must return `Ok` if
+    ///   [`BaseMarket::collateral_sum_pool`](crate::BaseMarket::collateral_sum_pool) does.
     fn collateral_sum_pool_mut(&mut self, is_long: bool) -> crate::Result<&mut Self::Pool>;
 
     /// Get total borrowing pool mutably.
+    /// # Requirements
+    /// - This method must return `Ok` if [`BorrowingFeeMarket::total_borrowing_pool`] does.
     fn total_borrowing_pool_mut(&mut self) -> crate::Result<&mut Self::Pool>;
 
     /// Insufficient funding fee payment callback.
-    fn insufficient_funding_fee_payment(
+    fn on_insufficient_funding_fee_payment(
         &mut self,
         _paid_in_collateral_amount: &Self::Num,
         _cost_amount: &Self::Num,
@@ -193,12 +210,12 @@ impl<'a, M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> PerpMarketMut<DECIMALS>
         (**self).just_passed_in_seconds_for_funding()
     }
 
-    fn insufficient_funding_fee_payment(
+    fn on_insufficient_funding_fee_payment(
         &mut self,
         paid_in_collateral_amount: &Self::Num,
         cost_amount: &Self::Num,
     ) -> crate::Result<()> {
-        (**self).insufficient_funding_fee_payment(paid_in_collateral_amount, cost_amount)
+        (**self).on_insufficient_funding_fee_payment(paid_in_collateral_amount, cost_amount)
     }
 }
 

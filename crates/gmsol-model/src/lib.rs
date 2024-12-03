@@ -55,7 +55,7 @@ pub use market::{
     PnlFactorKind, PositionImpactMarket, PositionImpactMarketExt, PositionImpactMarketMut,
     PositionImpactMarketMutExt, SwapMarket, SwapMarketExt, SwapMarketMut, SwapMarketMutExt,
 };
-pub use pool::{Balance, BalanceExt, Pool, PoolExt, PoolKind};
+pub use pool::{Balance, BalanceExt, Delta, Pool, PoolExt, PoolKind};
 pub use position::{
     Position, PositionExt, PositionMut, PositionMutExt, PositionState, PositionStateExt,
     PositionStateMut,

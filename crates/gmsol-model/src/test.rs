@@ -17,7 +17,7 @@ use crate::{
         position::PositionImpactDistributionParams,
         FeeParams, PositionParams, PriceImpactParams,
     },
-    pool::{Balance, Pool},
+    pool::{Balance, Delta, Pool},
     position::Position,
     BaseMarketMut, BorrowingFeeMarket, PerpMarketMut, PositionImpactMarketMut, PositionMut,
     PositionState, PositionStateMut, SwapMarketMut,
@@ -52,6 +52,17 @@ impl<T> Pool for TestPool<T>
 where
     T: MulDiv + Num + CheckedSub,
 {
+    fn checked_apply_delta(&self, delta: Delta<&Self::Signed>) -> crate::Result<Self> {
+        let mut ans = self.clone();
+        if let Some(amount) = delta.long() {
+            ans.apply_delta_to_long_amount(amount)?;
+        }
+        if let Some(amount) = delta.short() {
+            ans.apply_delta_to_short_amount(amount)?;
+        }
+        Ok(ans)
+    }
+
     fn apply_delta_to_long_amount(&mut self, delta: &Self::Signed) -> Result<(), crate::Error> {
         if delta.is_positive() {
             self.long_amount = self

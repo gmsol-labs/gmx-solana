@@ -6,15 +6,27 @@ pub mod balance;
 /// Delta.
 pub mod delta;
 
-pub use self::balance::{Balance, BalanceExt};
+pub use self::{
+    balance::{Balance, BalanceExt},
+    delta::Delta,
+};
 
 /// A balance for holding tokens, usd values, or factors
-pub trait Pool: Balance {
+pub trait Pool: Balance + Sized {
     /// Apply delta to long amount.
-    fn apply_delta_to_long_amount(&mut self, delta: &Self::Signed) -> Result<(), crate::Error>;
+    fn apply_delta_to_long_amount(&mut self, delta: &Self::Signed) -> crate::Result<()> {
+        *self = self.checked_apply_delta(Delta::new_with_long(delta))?;
+        Ok(())
+    }
 
     /// Apply delta to short amount.
-    fn apply_delta_to_short_amount(&mut self, delta: &Self::Signed) -> Result<(), crate::Error>;
+    fn apply_delta_to_short_amount(&mut self, delta: &Self::Signed) -> crate::Result<()> {
+        *self = self.checked_apply_delta(Delta::new_with_short(delta))?;
+        Ok(())
+    }
+
+    /// Checked apply delta amounts.
+    fn checked_apply_delta(&self, delta: Delta<&Self::Signed>) -> crate::Result<Self>;
 }
 
 /// Extension trait for [`Pool`] with utils.
@@ -30,7 +42,7 @@ pub trait PoolExt: Pool {
     }
 }
 
-impl<P: Pool + ?Sized> PoolExt for P {}
+impl<P: Pool> PoolExt for P {}
 
 /// Pool kind.
 #[derive(

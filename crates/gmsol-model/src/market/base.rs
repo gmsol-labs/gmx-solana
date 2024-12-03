@@ -57,9 +57,13 @@ pub trait BaseMarket<const DECIMALS: u8> {
 /// Base Market trait for mutable access.
 pub trait BaseMarketMut<const DECIMALS: u8>: BaseMarket<DECIMALS> {
     /// Get the liquidity pool mutably.
+    /// # Requirements
+    /// - This method must return `Ok` if [`BaseMarket::liquidity_pool`] does.
     fn liquidity_pool_mut(&mut self) -> crate::Result<&mut Self::Pool>;
 
     /// Get the mutable reference of the claimable fee pool.
+    /// # Requirements
+    /// - This method must return `Ok` if [`BaseMarket::claimable_fee_pool`] does.
     fn claimable_fee_pool_mut(&mut self) -> crate::Result<&mut Self::Pool>;
 }
 
