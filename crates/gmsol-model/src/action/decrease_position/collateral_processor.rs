@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use crate::{
+    action::swap::SwapReport,
     market::{BaseMarket, BaseMarketMutExt, PositionImpactMarketMutExt},
     num::{MulDiv, Num, Unsigned, UnsignedAbs},
     params::fee::{FundingFees, PositionFees},
@@ -581,7 +582,7 @@ where
     pub(super) fn swap_profit_to_collateral_tokens(
         &mut self,
         swap: DecreasePositionSwapType,
-        handle_swap_error: impl FnOnce(crate::Error) -> crate::Result<()>,
+        handle_swap_result: impl FnOnce(crate::Result<SwapReport<M::Num>>) -> crate::Result<()>,
     ) -> crate::Result<&mut Self> {
         use crate::market::SwapMarketMutExt;
 
@@ -614,9 +615,10 @@ where
                             "swap profit: overflow occurred while adding token_out_amount",
                         ))?;
                     self.state.secondary_output_amount = Zero::zero();
+                    (handle_swap_result)(Ok(report))?;
                 }
                 Err(err) => {
-                    (handle_swap_error)(err)?;
+                    (handle_swap_result)(Err(err))?;
                 }
             }
         }

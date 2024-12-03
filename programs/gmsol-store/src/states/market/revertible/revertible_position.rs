@@ -1,6 +1,7 @@
 use std::cell::RefMut;
 
 use anchor_lang::prelude::*;
+use gmsol_model::action::decrease_position::DecreasePositionSwapType;
 
 use crate::{
     constants,
@@ -138,8 +139,25 @@ impl<'a> gmsol_model::PositionMut<{ constants::MARKET_DECIMALS }> for Revertible
         Ok(())
     }
 
-    fn on_swap_error(&mut self, error: gmsol_model::Error) -> gmsol_model::Result<()> {
-        msg!("[Decrease Position] swap error: {}", error);
+    fn on_swapped(
+        &mut self,
+        ty: DecreasePositionSwapType,
+        report: &gmsol_model::action::swap::SwapReport<Self::Num>,
+    ) -> gmsol_model::Result<()> {
+        msg!(
+            "[Decrease Position Swap] swapped: ty={}, report={:?}",
+            ty,
+            report
+        );
+        Ok(())
+    }
+
+    fn on_swap_error(
+        &mut self,
+        ty: DecreasePositionSwapType,
+        error: gmsol_model::Error,
+    ) -> gmsol_model::Result<()> {
+        msg!("[Decrease Position Swap] error: ty={}, err={}", ty, error);
         Ok(())
     }
 }

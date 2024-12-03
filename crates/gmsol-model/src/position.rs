@@ -4,8 +4,9 @@ use num_traits::{One, Signed, Zero};
 
 use crate::{
     action::{
-        decrease_position::{DecreasePosition, DecreasePositionFlags},
+        decrease_position::{DecreasePosition, DecreasePositionFlags, DecreasePositionSwapType},
         increase_position::IncreasePosition,
+        swap::SwapReport,
         update_funding_state::unpack_to_funding_amount_delta,
     },
     fixed::FixedPointOps,
@@ -102,8 +103,19 @@ pub trait PositionMut<const DECIMALS: u8>: Position<DECIMALS> + PositionStateMut
     /// Decreased callback.
     fn on_decreased(&mut self) -> crate::Result<()>;
 
+    /// Swapped callback.
+    fn on_swapped(
+        &mut self,
+        ty: DecreasePositionSwapType,
+        report: &SwapReport<Self::Num>,
+    ) -> crate::Result<()>;
+
     /// Handle swap error.
-    fn on_swap_error(&mut self, error: crate::Error) -> crate::Result<()>;
+    fn on_swap_error(
+        &mut self,
+        ty: DecreasePositionSwapType,
+        error: crate::Error,
+    ) -> crate::Result<()>;
 }
 
 impl<'a, const DECIMALS: u8, P: PositionState<DECIMALS>> PositionState<DECIMALS> for &'a mut P {
@@ -204,8 +216,20 @@ impl<'a, const DECIMALS: u8, P: PositionMut<DECIMALS>> PositionMut<DECIMALS> for
         (**self).on_decreased()
     }
 
-    fn on_swap_error(&mut self, error: crate::Error) -> crate::Result<()> {
-        (**self).on_swap_error(error)
+    fn on_swapped(
+        &mut self,
+        ty: DecreasePositionSwapType,
+        report: &SwapReport<Self::Num>,
+    ) -> crate::Result<()> {
+        (**self).on_swapped(ty, report)
+    }
+
+    fn on_swap_error(
+        &mut self,
+        ty: DecreasePositionSwapType,
+        error: crate::Error,
+    ) -> crate::Result<()> {
+        (**self).on_swap_error(ty, error)
     }
 }
 

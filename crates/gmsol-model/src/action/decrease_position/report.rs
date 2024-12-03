@@ -2,8 +2,7 @@ use std::fmt;
 
 use crate::{
     action::{
-        swap::SwapReport, update_borrowing_state::UpdateBorrowingReport,
-        update_funding_state::UpdateFundingReport,
+        update_borrowing_state::UpdateBorrowingReport, update_funding_state::UpdateFundingReport,
     },
     num::Unsigned,
     params::fee::PositionFees,
@@ -25,7 +24,6 @@ pub struct DecreasePositionReport<T: Unsigned> {
     fees: PositionFees<T>,
     borrowing: UpdateBorrowingReport<T>,
     funding: UpdateFundingReport<T>,
-    swap_output_tokens: Option<SwapReport<T>>,
     pnl: Pnl<T::Signed>,
     insolvent_close_step: Option<InsolventCloseStep>,
     // Output
@@ -58,7 +56,6 @@ where
             .field("fees", &self.fees)
             .field("borrowing", &self.borrowing)
             .field("funding", &self.funding)
-            .field("swap_output_tokens", &self.swap_output_tokens)
             .field("pnl", &self.pnl)
             .field("insolvent_close_step", &self.insolvent_close_step)
             .field("should_remove", &self.should_remove)
@@ -113,7 +110,6 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
             fees: execution.fees,
             borrowing,
             funding,
-            swap_output_tokens: None,
             pnl: execution.pnl,
             insolvent_close_step: execution.collateral.insolvent_close_step,
             // Output
@@ -129,10 +125,6 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
             for_holding: execution.collateral.for_holding,
             for_user: execution.collateral.for_user,
         }
-    }
-
-    pub(super) fn set_swap_output_tokens_report(&mut self, report: SwapReport<T>) {
-        self.swap_output_tokens = Some(report);
     }
 
     /// Get size delta in tokens.
@@ -274,11 +266,6 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     /// Get funding report.
     pub fn funding(&self) -> &UpdateFundingReport<T> {
         &self.funding
-    }
-
-    /// Get the report of output tokens swap.
-    pub fn swap_output_tokens(&self) -> Option<&SwapReport<T>> {
-        self.swap_output_tokens.as_ref()
     }
 
     /// Get processed pnl.

@@ -24,6 +24,8 @@ pub use self::{
     report::{DecreasePositionReport, OutputAmounts, Pnl},
 };
 
+use super::swap::SwapReport;
+
 /// Decrease the position.
 #[must_use]
 pub struct DecreasePosition<P: Position<DECIMALS>, const DECIMALS: u8> {
@@ -351,20 +353,25 @@ where
         ));
 
         // Swap collateral tokens to pnl tokens.
-        let mut swap_error = None;
-        Self::swap_collateral_token_to_pnl_token(
-            self.position.market_mut(),
-            &mut report,
-            self.params.prices(),
-            self.params.swap,
-            |error| {
-                swap_error = Some(error);
-                Ok(())
-            },
-        )?;
+        {
+            let ty = self.params.swap;
+            let swap_result = Self::swap_collateral_token_to_pnl_token(
+                self.position.market_mut(),
+                &mut report,
+                self.params.prices(),
+                ty,
+            )?;
 
-        if let Some(error) = swap_error {
-            self.position.on_swap_error(error)?;
+            if let Some(result) = swap_result {
+                match result {
+                    Ok(report) => {
+                        self.position.on_swapped(ty, &report)?;
+                    }
+                    Err(err) => {
+                        self.position.on_swap_error(ty, err)?;
+                    }
+                }
+            }
         }
 
         // Merge amounts if needed.
@@ -544,25 +551,34 @@ where
             self.params.is_insolvent_close_allowed(),
         );
 
-        let mut swap_error = None;
-        let mut report = processor.process(|mut ctx| {
-            ctx.add_pnl_if_positive(&base_pnl_usd)?
-                .add_price_impact_if_positive(&price_impact_value)?
-                .swap_profit_to_collateral_tokens(self.params.swap, |error| {
-                    swap_error = Some(error);
-                    Ok(())
-                })?
-                .pay_for_funding_fees(fees.funding_fees())?
-                .pay_for_pnl_if_negative(&base_pnl_usd)?
-                .pay_for_fees_excluding_funding(&mut fees)?
-                .pay_for_price_impact_if_negative(&price_impact_value)?
-                .pay_for_price_impact_diff(&price_impact_diff)?;
-            Ok(())
-        })?;
+        let mut result = {
+            let ty = self.params.swap;
+            let mut swap_result = None;
 
-        if let Some(error) = swap_error {
-            self.position.on_swap_error(error)?;
-        }
+            let result = processor.process(|mut ctx| {
+                ctx.add_pnl_if_positive(&base_pnl_usd)?
+                    .add_price_impact_if_positive(&price_impact_value)?
+                    .swap_profit_to_collateral_tokens(self.params.swap, |error| {
+                        swap_result = Some(error);
+                        Ok(())
+                    })?
+                    .pay_for_funding_fees(fees.funding_fees())?
+                    .pay_for_pnl_if_negative(&base_pnl_usd)?
+                    .pay_for_fees_excluding_funding(&mut fees)?
+                    .pay_for_price_impact_if_negative(&price_impact_value)?
+                    .pay_for_price_impact_diff(&price_impact_diff)?;
+                Ok(())
+            })?;
+
+            if let Some(result) = swap_result {
+                match result {
+                    Ok(report) => self.position.on_swapped(ty, &report)?,
+                    Err(error) => self.position.on_swap_error(ty, error)?,
+                }
+            }
+
+            result
+        };
 
         // Handle initial collateral delta amount with price impact diff.
         // The price_impact_diff has been deducted from the output amount or the position's collateral
@@ -590,16 +606,16 @@ where
         }
 
         // Cap the withdrawal amount to the remaining collateral amount.
-        if self.withdrawable_collateral_amount > report.remaining_collateral_amount {
-            self.withdrawable_collateral_amount = report.remaining_collateral_amount.clone();
+        if self.withdrawable_collateral_amount > result.remaining_collateral_amount {
+            self.withdrawable_collateral_amount = result.remaining_collateral_amount.clone();
         }
 
         if !self.withdrawable_collateral_amount.is_zero() {
-            report.remaining_collateral_amount = report
+            result.remaining_collateral_amount = result
                 .remaining_collateral_amount
                 .checked_sub(&self.withdrawable_collateral_amount)
                 .expect("must be success");
-            report.output_amount = report
+            result.output_amount = result
                 .output_amount
                 .checked_add(&self.withdrawable_collateral_amount)
                 .ok_or(crate::Error::Computation(
@@ -614,7 +630,7 @@ where
             size_delta_in_tokens,
             is_output_token_long,
             is_secondary_output_token_long: is_pnl_token_long,
-            collateral: report,
+            collateral: result,
             fees,
             pnl: Pnl::new(base_pnl_usd, uncapped_base_pnl_usd),
         })
@@ -659,8 +675,7 @@ where
         report: &mut DecreasePositionReport<P::Num>,
         prices: &Prices<P::Num>,
         swap: DecreasePositionSwapType,
-        handle_swap_error: impl FnOnce(crate::Error) -> crate::Result<()>,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<Option<crate::Result<SwapReport<P::Num>>>> {
         let is_token_in_long = report.is_output_token_long();
         let is_secondary_output_token_long = report.is_secondary_output_token_long();
         let (output_amount, secondary_output_amount) = report.output_amounts_mut();
@@ -686,14 +701,13 @@ where
                             "swap collateral: overflow occurred while adding token_out_amount",
                         ))?;
                     *output_amount = Zero::zero();
-                    report.set_swap_output_tokens_report(swap_report);
+                    Ok(Some(Ok(swap_report)))
                 }
-                Err(err) => {
-                    (handle_swap_error)(err)?;
-                }
+                Err(err) => Ok(Some(Err(err))),
             }
+        } else {
+            Ok(None)
         }
-        Ok(())
     }
 }
 

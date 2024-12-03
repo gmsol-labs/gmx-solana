@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::{
+    action::decrease_position::DecreasePositionSwapType,
     clock::ClockKind,
     fixed::FixedPointOps,
     market::{
@@ -898,8 +899,21 @@ where
         Ok(())
     }
 
-    fn on_swap_error(&mut self, error: crate::Error) -> crate::Result<()> {
-        eprintln!("swap error: {error}");
+    fn on_swapped(
+        &mut self,
+        ty: DecreasePositionSwapType,
+        report: &crate::action::swap::SwapReport<Self::Num>,
+    ) -> crate::Result<()> {
+        println!("swapped: ty={ty}, report={report:?}");
+        Ok(())
+    }
+
+    fn on_swap_error(
+        &mut self,
+        ty: DecreasePositionSwapType,
+        error: crate::Error,
+    ) -> crate::Result<()> {
+        eprintln!("swap error: ty={ty}, err={error}");
         Ok(())
     }
 }
