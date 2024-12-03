@@ -164,7 +164,7 @@ async fn balanced_market_order() -> eyre::Result<()> {
         }
     }
 
-    let side = true;
+    let side = false;
     let collateral_side = true;
     let collateral_amount = short_collateral_amount;
 
@@ -424,7 +424,7 @@ async fn single_token_market_order() -> eyre::Result<()> {
         }
     }
 
-    let side = false;
+    let side = true;
     let collateral_side = false;
     let collateral_amount = initial_collateral_amount;
 
