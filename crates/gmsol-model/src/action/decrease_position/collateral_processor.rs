@@ -11,7 +11,7 @@ use crate::{
 
 use num_traits::{CheckedAdd, Signed, Zero};
 
-use super::ClaimableCollateral;
+use super::{ClaimableCollateral, DecreasePositionSwapType};
 
 /// Collateral Processor.
 #[must_use]
@@ -34,7 +34,9 @@ pub(super) struct ProcessResult<T> {
 
 struct State<T> {
     prices: Prices<T>,
+    /// Also known as collateral token.
     is_output_token_long: bool,
+    /// Also known as secondary output token.
     is_pnl_token_long: bool,
     are_pnl_and_collateral_tokens_the_same: bool,
     report: ProcessResult<T>,
@@ -72,15 +74,6 @@ impl<T> State<T> {
     #[inline]
     fn output_token_price(&self) -> &Price<T> {
         if self.is_output_token_long {
-            &self.prices.long_token_price
-        } else {
-            &self.prices.short_token_price
-        }
-    }
-
-    #[inline]
-    fn secondary_output_token_price(&self) -> &Price<T> {
-        if self.is_pnl_token_long {
             &self.prices.long_token_price
         } else {
             &self.prices.short_token_price
@@ -178,7 +171,7 @@ where
         let mut remaining_cost_in_secondary_output_token = remaining_cost_in_output_token
             .checked_mul_div(
                 self.output_token_price().pick_price(false),
-                self.secondary_output_token_price().pick_price(false),
+                self.pnl_token_price().pick_price(false),
             )
             .ok_or(crate::Error::Computation(
                 "initializing remaining cost in secondary output token",
@@ -214,7 +207,7 @@ where
         }
 
         *cost = remaining_cost_in_secondary_output_token
-            .checked_mul(self.secondary_output_token_price().pick_price(false))
+            .checked_mul(self.pnl_token_price().pick_price(false))
             .ok_or(crate::Error::Computation("calculating remaining cost"))?;
 
         Ok((paid_in_collateral_amount, paid_in_secondary_output_amount))
@@ -459,10 +452,7 @@ where
                     if !paid_in_secondary_output_amount.is_zero() {
                         let delta = paid_in_secondary_output_amount
                             .checked_mul_div(
-                                processor
-                                    .state
-                                    .secondary_output_token_price()
-                                    .pick_price(false),
+                                processor.state.pnl_token_price().pick_price(false),
                                 processor.state.prices.index_token_price.pick_price(true),
                             )
                             .ok_or(crate::Error::Computation(
@@ -585,6 +575,50 @@ where
                 InsolventCloseStep::Diff,
             )?;
         }
+        Ok(self)
+    }
+
+    pub(super) fn swap_profit_to_collateral_tokens(
+        &mut self,
+        swap: DecreasePositionSwapType,
+        handle_swap_error: impl FnOnce(crate::Error) -> crate::Result<()>,
+    ) -> crate::Result<&mut Self> {
+        use crate::market::SwapMarketMutExt;
+
+        let profit_amount = &self.state.secondary_output_amount;
+
+        if !profit_amount.is_zero()
+            && matches!(swap, DecreasePositionSwapType::PnlTokenToCollateralToken)
+        {
+            if self.state.is_pnl_token_long == self.state.is_output_token_long {
+                return Err(crate::Error::InvalidArgument("swap is not required"));
+            }
+
+            let is_token_in_long = self.state.is_pnl_token_long;
+            let token_in_amount = profit_amount.clone();
+            let prices = self.state.prices.clone();
+
+            match self
+                .market
+                .swap(is_token_in_long, token_in_amount, prices)
+                .and_then(|a| a.execute())
+            {
+                Ok(report) => {
+                    self.state.output_amount = self
+                        .state
+                        .output_amount
+                        .checked_add(report.token_out_amount())
+                        .ok_or(crate::Error::Computation(
+                            "swap profit: overflow adding token_out_amount",
+                        ))?;
+                    self.state.secondary_output_amount = Zero::zero();
+                }
+                Err(err) => {
+                    (handle_swap_error)(err)?;
+                }
+            }
+        }
+
         Ok(self)
     }
 }

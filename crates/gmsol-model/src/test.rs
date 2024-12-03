@@ -897,6 +897,11 @@ where
     fn on_decreased(&mut self) -> crate::Result<()> {
         Ok(())
     }
+
+    fn on_swap_error(&mut self, error: crate::Error) -> crate::Result<()> {
+        eprintln!("swap error: {error}");
+        Ok(())
+    }
 }
 
 impl<'a, T, const DECIMALS: u8> PositionStateMut<DECIMALS> for TestPositionOps<'a, T, DECIMALS>

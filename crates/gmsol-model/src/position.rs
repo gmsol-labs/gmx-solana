@@ -101,6 +101,9 @@ pub trait PositionMut<const DECIMALS: u8>: Position<DECIMALS> + PositionStateMut
 
     /// Decreased callback.
     fn on_decreased(&mut self) -> crate::Result<()>;
+
+    /// Handle swap error.
+    fn on_swap_error(&mut self, error: crate::Error) -> crate::Result<()>;
 }
 
 impl<'a, const DECIMALS: u8, P: PositionState<DECIMALS>> PositionState<DECIMALS> for &'a mut P {
@@ -199,6 +202,10 @@ impl<'a, const DECIMALS: u8, P: PositionMut<DECIMALS>> PositionMut<DECIMALS> for
 
     fn on_decreased(&mut self) -> crate::Result<()> {
         (**self).on_decreased()
+    }
+
+    fn on_swap_error(&mut self, error: crate::Error) -> crate::Result<()> {
+        (**self).on_swap_error(error)
     }
 }
 

@@ -137,6 +137,11 @@ impl<'a> gmsol_model::PositionMut<{ constants::MARKET_DECIMALS }> for Revertible
         self.state.trade_id = self.market.next_trade_id()?;
         Ok(())
     }
+
+    fn on_swap_error(&mut self, error: gmsol_model::Error) -> gmsol_model::Result<()> {
+        msg!("[Decrease Position] swap error: {}", error);
+        Ok(())
+    }
 }
 
 impl<'a> gmsol_model::PositionStateMut<{ constants::MARKET_DECIMALS }> for RevertiblePosition<'a> {

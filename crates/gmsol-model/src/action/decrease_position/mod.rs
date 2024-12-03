@@ -487,6 +487,7 @@ where
         )?;
 
         let remaining_collateral_amount = self.position.collateral_amount().clone();
+
         let processor = CollateralProcessor::new(
             self.position.market_mut(),
             is_output_token_long,
@@ -496,9 +497,15 @@ where
             remaining_collateral_amount,
             self.params.is_insolvent_close_allowed(),
         );
+
+        let mut swap_error = None;
         let mut report = processor.process(|mut ctx| {
             ctx.add_pnl_if_positive(&base_pnl_usd)?
                 .add_price_impact_if_positive(&price_impact_value)?
+                .swap_profit_to_collateral_tokens(self.params.swap, |error| {
+                    swap_error = Some(error);
+                    Ok(())
+                })?
                 .pay_for_funding_fees(fees.funding_fees())?
                 .pay_for_pnl_if_negative(&base_pnl_usd)?
                 .pay_for_fees_excluding_funding(&mut fees)?
@@ -506,6 +513,10 @@ where
                 .pay_for_price_impact_diff(&price_impact_diff)?;
             Ok(())
         })?;
+
+        if let Some(error) = swap_error {
+            self.position.on_swap_error(error)?;
+        }
 
         // Handle initial collateral delta amount with price impact diff.
         // The price_impact_diff has been deducted from the output amount or the position's collateral
