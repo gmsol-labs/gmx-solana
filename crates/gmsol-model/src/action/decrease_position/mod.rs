@@ -34,7 +34,32 @@ pub struct DecreasePosition<P: Position<DECIMALS>, const DECIMALS: u8> {
 }
 
 /// Swap Type for the decrease position action.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    num_enum::TryFromPrimitive,
+    num_enum::IntoPrimitive,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+)]
+#[cfg_attr(
+    feature = "strum",
+    derive(strum::EnumIter, strum::EnumString, strum::Display)
+)]
+#[cfg_attr(feature = "strum", strum(serialize_all = "snake_case"))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+#[cfg_attr(
+    feature = "anchor-lang",
+    derive(anchor_lang::AnchorSerialize, anchor_lang::AnchorDeserialize)
+)]
+#[repr(u8)]
+#[non_exhaustive]
 pub enum DecreasePositionSwapType {
     /// No swap.
     #[default]
@@ -325,14 +350,35 @@ where
             should_remove,
         ));
 
-        let are_pnl_and_collateral_tokens_the_same =
-            self.position.are_pnl_and_collateral_tokens_the_same();
-        Self::swap_output_tokens_if_needed(
+        // Swap collateral tokens to pnl tokens.
+        let mut swap_error = None;
+        Self::swap_collateral_token_to_pnl_token(
             self.position.market_mut(),
             &mut report,
             self.params.prices(),
-            are_pnl_and_collateral_tokens_the_same,
+            self.params.swap,
+            |error| {
+                swap_error = Some(error);
+                Ok(())
+            },
         )?;
+
+        if let Some(error) = swap_error {
+            self.position.on_swap_error(error)?;
+        }
+
+        // Merge amounts if needed.
+        let (output_amount, secondary_output_amount) = report.output_amounts_mut();
+        if self.position.are_pnl_and_collateral_tokens_the_same()
+            && !secondary_output_amount.is_zero()
+        {
+            *output_amount = output_amount.checked_add(secondary_output_amount).ok_or(
+                crate::Error::Computation(
+                    "overflow occurred while merging the secondary output amount",
+                ),
+            )?;
+            *secondary_output_amount = Zero::zero();
+        }
 
         Ok(report)
     }
@@ -557,7 +603,7 @@ where
                 .output_amount
                 .checked_add(&self.withdrawable_collateral_amount)
                 .ok_or(crate::Error::Computation(
-                    "overflow adding withdrawable amount",
+                    "overflow occurred while adding withdrawable amount",
                 ))?;
         }
 
@@ -608,33 +654,43 @@ where
     }
 
     /// Swap the secondary output tokens to output tokens if needed.
-    fn swap_output_tokens_if_needed(
+    fn swap_collateral_token_to_pnl_token(
         market: &mut P::Market,
         report: &mut DecreasePositionReport<P::Num>,
         prices: &Prices<P::Num>,
-        are_pnl_and_collateral_tokens_the_same: bool,
+        swap: DecreasePositionSwapType,
+        handle_swap_error: impl FnOnce(crate::Error) -> crate::Result<()>,
     ) -> crate::Result<()> {
+        let is_token_in_long = report.is_output_token_long();
         let is_secondary_output_token_long = report.is_secondary_output_token_long();
         let (output_amount, secondary_output_amount) = report.output_amounts_mut();
-        if !secondary_output_amount.is_zero() {
-            if are_pnl_and_collateral_tokens_the_same {
-                *output_amount = output_amount
-                    .checked_add(secondary_output_amount)
-                    .ok_or(crate::Error::Computation("merging output tokens"))?;
-                *secondary_output_amount = Zero::zero();
-            } else {
-                let swap_report = market
-                    .swap(
-                        is_secondary_output_token_long,
-                        secondary_output_amount.clone(),
-                        prices.clone(),
-                    )?
-                    .execute()?;
-                *output_amount = output_amount
-                    .checked_add(swap_report.token_out_amount())
-                    .ok_or(crate::Error::Computation("adding swapped output tokens"))?;
-                *secondary_output_amount = Zero::zero();
-                report.set_swap_output_tokens_report(swap_report);
+        if !secondary_output_amount.is_zero()
+            && matches!(swap, DecreasePositionSwapType::CollateralToPnlToken)
+        {
+            if is_token_in_long == is_secondary_output_token_long {
+                return Err(crate::Error::InvalidArgument(
+                    "swap collateral: swap is not required",
+                ));
+            }
+
+            let token_in_amount = output_amount.clone();
+
+            match market
+                .swap(is_token_in_long, token_in_amount, prices.clone())
+                .and_then(|a| a.execute())
+            {
+                Ok(swap_report) => {
+                    *secondary_output_amount = secondary_output_amount
+                        .checked_add(swap_report.token_out_amount())
+                        .ok_or(crate::Error::Computation(
+                            "swap collateral: overflow occurred while adding token_out_amount",
+                        ))?;
+                    *output_amount = Zero::zero();
+                    report.set_swap_output_tokens_report(swap_report);
+                }
+                Err(err) => {
+                    (handle_swap_error)(err)?;
+                }
             }
         }
         Ok(())

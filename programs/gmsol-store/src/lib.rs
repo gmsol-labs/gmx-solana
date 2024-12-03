@@ -3568,6 +3568,9 @@ pub enum CoreError {
     /// Unknown Order Side.
     #[msg("unknown order side")]
     UnknownOrderSide,
+    /// Unknown Decrease Position Swap Type.
+    #[msg("unknown decrease position swap type")]
+    UnknownDecreasePositionSwapType,
     /// Missing initial collateral token.
     #[msg("missing initial collateral token")]
     MissingInitialCollateralToken,

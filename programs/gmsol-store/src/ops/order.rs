@@ -1,9 +1,11 @@
 use anchor_lang::{prelude::*, system_program};
 use anchor_spl::token::{Mint, TokenAccount};
 use gmsol_model::{
-    action::decrease_position::DecreasePositionFlags, num::Unsigned, price::Prices, BaseMarket,
-    BaseMarketExt, PnlFactorKind, Position as _, PositionImpactMarketMutExt, PositionMut,
-    PositionMutExt, PositionState, PositionStateExt,
+    action::decrease_position::{DecreasePositionFlags, DecreasePositionSwapType},
+    num::Unsigned,
+    price::Prices,
+    BaseMarket, BaseMarketExt, PnlFactorKind, Position as _, PositionImpactMarketMutExt,
+    PositionMut, PositionMutExt, PositionState, PositionStateExt,
 };
 use typed_builder::TypedBuilder;
 
@@ -36,6 +38,8 @@ use super::{execution_fee::TransferExecutionFeeOperation, market::MarketTransfer
 pub struct CreateOrderParams {
     /// Order Kind.
     pub kind: OrderKind,
+    /// Decrease Position Swap Type.
+    pub decrease_position_swap_type: Option<DecreasePositionSwapType>,
     /// Execution fee in lamports.
     pub execution_lamports: u64,
     /// The length of the swap path.
@@ -363,6 +367,7 @@ impl<'a, 'info> CreateDecreaseOrderOperation<'a, 'info> {
                 create.trigger_price,
                 create.acceptable_price,
                 create.min_output,
+                create.decrease_position_swap_type.unwrap_or_default(),
             )?;
             Ok((collateral_token, self.final_output_token.mint))
         })?;
@@ -1322,6 +1327,7 @@ fn execute_decrease_position(
     // Decrease position.
     let report = {
         let params = &order.params;
+        let decrease_position_swap_type = params.decrease_position_swap_type()?;
         let collateral_withdrawal_amount = params.initial_collateral_delta_amount as u128;
         let size_delta_usd = params.size_delta_value;
         let acceptable_price = params.acceptable_price;
@@ -1373,6 +1379,7 @@ fn execute_decrease_position(
                     is_cap_size_delta_usd_allowed,
                 },
             )
+            .map(|a| a.set_swap(decrease_position_swap_type))
             .and_then(|a| a.execute())
             .map_err(ModelError::from)?;
 
@@ -1610,6 +1617,7 @@ impl<'a, 'info> PositionCutOperation<'a, 'info> {
             .execute()?;
         let params = CreateOrderParams {
             kind: self.kind.to_order_kind(),
+            decrease_position_swap_type: Some(DecreasePositionSwapType::PnlTokenToCollateralToken),
             execution_lamports: Order::MIN_EXECUTION_LAMPORTS,
             swap_path_length: 0,
             initial_collateral_delta_amount: 0,

@@ -2,6 +2,7 @@ use gmsol::{
     constants::MARKET_USD_UNIT, exchange::ExchangeOps, store::market::MarketOps,
     types::MarketConfigKey,
 };
+use gmsol_model::action::decrease_position::DecreasePositionSwapType;
 use tracing::Instrument;
 
 use crate::anchor_tests::setup::{current_deployment, Deployment};
@@ -141,6 +142,9 @@ async fn balanced_market_order() -> eyre::Result<()> {
                     side,
                     size + increment_size,
                 )
+                .decrease_position_swap_type(Some(
+                    DecreasePositionSwapType::PnlTokenToCollateralToken,
+                ))
                 .build_with_address()
                 .await?;
             let signature = rpc.send().await?;
@@ -241,6 +245,7 @@ async fn balanced_market_order() -> eyre::Result<()> {
     // Fully decrease and swap.
     let (rpc, order) = client
         .market_decrease(store, market_token, true, 0, side, size)
+        .decrease_position_swap_type(Some(DecreasePositionSwapType::PnlTokenToCollateralToken))
         .final_output_token(&usdg.address)
         .swap_path(vec![*market_token])
         .build_with_address()
@@ -397,6 +402,9 @@ async fn single_token_market_order() -> eyre::Result<()> {
                     side,
                     size + increment_size,
                 )
+                .decrease_position_swap_type(Some(
+                    DecreasePositionSwapType::PnlTokenToCollateralToken,
+                ))
                 .build_with_address()
                 .await?;
             let signature = rpc.send().await?;
@@ -497,6 +505,7 @@ async fn single_token_market_order() -> eyre::Result<()> {
     // Fully decrease and swap.
     let (rpc, order) = client
         .market_decrease(store, market_token, true, 0, side, size)
+        .decrease_position_swap_type(Some(DecreasePositionSwapType::PnlTokenToCollateralToken))
         .final_output_token(&usdg.address)
         .swap_path(vec![*for_swap])
         .build_with_address()

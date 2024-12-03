@@ -105,25 +105,25 @@ where
                 paid_in_collateral_amount = paid_in_collateral_amount
                     .checked_add(&remaining_cost_in_output_token)
                     .ok_or(crate::Error::Computation(
-                        "overflow increasing paid amount for output token [1]",
+                        "overflow occurred while increasing paid amount for output token [1]",
                     ))?;
                 self.output_amount = self
                     .output_amount
                     .checked_sub(&remaining_cost_in_output_token)
                     .ok_or(crate::Error::Computation(
-                        "underflow deducting output amount",
+                        "underflow occurred while deducting output amount",
                     ))?;
                 remaining_cost_in_output_token = Zero::zero();
             } else {
                 paid_in_collateral_amount = paid_in_collateral_amount
                     .checked_add(&self.output_amount)
                     .ok_or(crate::Error::Computation(
-                        "overflow increasing paid amount for output token [2]",
+                        "overflow occurred while increasing paid amount for output token [2]",
                     ))?;
                 remaining_cost_in_output_token = remaining_cost_in_output_token
                     .checked_sub(&self.output_amount)
                     .ok_or(crate::Error::Computation(
-                        "underflow deducting remaining cost in output token [1]",
+                        "underflow occurred while deducting remaining cost in output token [1]",
                     ))?;
                 self.output_amount = Zero::zero();
             }
@@ -139,25 +139,25 @@ where
                 paid_in_collateral_amount = paid_in_collateral_amount
                     .checked_add(&remaining_cost_in_output_token)
                     .ok_or(crate::Error::Computation(
-                        "overflow increasing paid amount in collateral token [1]",
+                        "overflow occurred while increasing paid amount in collateral token [1]",
                     ))?;
                 self.remaining_collateral_amount = self
                     .remaining_collateral_amount
                     .checked_sub(&remaining_cost_in_output_token)
                     .ok_or(crate::Error::Computation(
-                        "underflow deducting collateral amount",
+                        "underflow occurred while deducting collateral amount",
                     ))?;
                 remaining_cost_in_output_token = Zero::zero();
             } else {
                 paid_in_collateral_amount = paid_in_collateral_amount
                     .checked_add(&self.remaining_collateral_amount)
                     .ok_or(crate::Error::Computation(
-                        "overflow increasing paid amount for collateral token [2]",
+                        "overflow occurred while increasing paid amount for collateral token [2]",
                     ))?;
                 remaining_cost_in_output_token = remaining_cost_in_output_token
                     .checked_sub(&self.remaining_collateral_amount)
                     .ok_or(crate::Error::Computation(
-                        "underflow deducting remaining cost in output token [2]",
+                        "underflow occurred while deducting remaining cost in output token [2]",
                     ))?;
                 self.remaining_collateral_amount = Zero::zero();
             }
@@ -182,7 +182,7 @@ where
                 paid_in_secondary_output_amount = paid_in_secondary_output_amount
                     .checked_add(&remaining_cost_in_secondary_output_token)
                     .ok_or(crate::Error::Computation(
-                        "overflow increasing paid amount in secondary token [1]",
+                        "overflow occurred while increasing paid amount in secondary token [1]",
                     ))?;
                 self.secondary_output_amount = self
                     .secondary_output_amount
@@ -195,12 +195,12 @@ where
                 paid_in_secondary_output_amount = paid_in_secondary_output_amount
                     .checked_add(&self.secondary_output_amount)
                     .ok_or(crate::Error::Computation(
-                        "overflow increasing paid amount for secondary token [2]",
+                        "overflow occurred while increasing paid amount for secondary token [2]",
                     ))?;
                 remaining_cost_in_secondary_output_token = remaining_cost_in_secondary_output_token
                     .checked_sub(&self.secondary_output_amount)
                     .ok_or(crate::Error::Computation(
-                        "underflow deducting remaining cost in secondary token [2]",
+                        "underflow occurred while deducting remaining cost in secondary token [2]",
                     ))?;
                 self.secondary_output_amount = Zero::zero();
             }
@@ -254,7 +254,7 @@ where
                 .output_amount
                 .checked_add(&deduction_amount_for_pool)
                 .ok_or(crate::Error::Computation(
-                    "overflow adding deduction amount to output_amount",
+                    "overflow occurred while adding deduction amount to output_amount",
                 ))?;
         } else {
             self.state.secondary_output_amount = self
@@ -262,7 +262,7 @@ where
                 .secondary_output_amount
                 .checked_add(&deduction_amount_for_pool)
                 .ok_or(crate::Error::Computation(
-                    "overflow adding deduction amount to secondary_output_amount",
+                    "overflow occurred while adding deduction amount to secondary_output_amount",
                 ))?;
         }
         Ok(())
@@ -591,7 +591,9 @@ where
             && matches!(swap, DecreasePositionSwapType::PnlTokenToCollateralToken)
         {
             if self.state.is_pnl_token_long == self.state.is_output_token_long {
-                return Err(crate::Error::InvalidArgument("swap is not required"));
+                return Err(crate::Error::InvalidArgument(
+                    "swap profit: swap is not required",
+                ));
             }
 
             let is_token_in_long = self.state.is_pnl_token_long;
@@ -609,7 +611,7 @@ where
                         .output_amount
                         .checked_add(report.token_out_amount())
                         .ok_or(crate::Error::Computation(
-                            "swap profit: overflow adding token_out_amount",
+                            "swap profit: overflow occurred while adding token_out_amount",
                         ))?;
                     self.state.secondary_output_amount = Zero::zero();
                 }

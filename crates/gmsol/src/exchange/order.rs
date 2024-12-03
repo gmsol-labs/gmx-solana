@@ -11,6 +11,7 @@ use anchor_client::{
     },
 };
 use anchor_spl::associated_token::get_associated_token_address;
+use gmsol_model::action::decrease_position::DecreasePositionSwapType;
 use gmsol_store::{
     accounts, instruction,
     ops::order::CreateOrderParams,
@@ -43,9 +44,12 @@ use crate::pyth::pull_oracle::{ExecuteWithPythPrices, Prices, PythPullOracleCont
 pub const EXECUTE_ORDER_COMPUTE_BUDGET: u32 = 400_000;
 
 /// Order Params.
+#[derive(Debug, Clone)]
 pub struct OrderParams {
     /// Order kind.
     pub kind: OrderKind,
+    /// Decrease Position Swap Type.
+    pub decrease_position_swap_type: Option<DecreasePositionSwapType>,
     /// Minimum amount or value for output tokens.
     ///
     /// - Amount for swap orders.
@@ -144,6 +148,15 @@ where
             long_token: meta.long_token_mint,
             short_token: meta.short_token_mint,
         });
+        self
+    }
+
+    /// Set decrease position swap type.
+    pub fn decrease_position_swap_type(
+        &mut self,
+        ty: Option<DecreasePositionSwapType>,
+    ) -> &mut Self {
+        self.params.decrease_position_swap_type = ty;
         self
     }
 
@@ -358,6 +371,7 @@ where
                 .try_into()
                 .map_err(|_| crate::Error::NumberOutOfRange)?,
             kind,
+            decrease_position_swap_type: self.params.decrease_position_swap_type,
             initial_collateral_delta_amount: self.params.initial_collateral_delta_amount,
             size_delta_value: self.params.size_delta_usd,
             is_long: self.params.is_long,

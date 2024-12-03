@@ -1,6 +1,9 @@
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
-use gmsol_model::{action::decrease_position::DecreasePositionReport, price::Price};
+use gmsol_model::{
+    action::decrease_position::{DecreasePositionReport, DecreasePositionSwapType},
+    price::Price,
+};
 use gmsol_utils::InitSpace as _;
 
 use crate::{events::OrderRemoved, CoreError};
@@ -638,7 +641,9 @@ pub struct OrderParams {
     kind: u8,
     /// Order side.
     side: u8,
-    padding_1: [u8; 6],
+    /// Decrease position swap type.
+    decrease_position_swap_type: u8,
+    padding_1: [u8; 5],
     /// Collateral/Output token.
     collateral_token: Pubkey,
     /// Position address.
@@ -751,6 +756,7 @@ impl OrderParams {
         trigger_price: Option<u128>,
         acceptable_price: Option<u128>,
         min_output: Option<u128>,
+        swap_type: DecreasePositionSwapType,
     ) -> Result<()> {
         self.kind = kind.into();
         self.side = if is_long {
@@ -759,6 +765,7 @@ impl OrderParams {
             OrderSide::Short
         }
         .into();
+        self.decrease_position_swap_type = swap_type.into();
         self.position = position;
         self.collateral_token = collateral_token;
         self.initial_collateral_delta_amount = initial_collateral_delta_amount;
@@ -796,6 +803,15 @@ impl OrderParams {
     /// Get order kind.
     pub fn kind(&self) -> Result<OrderKind> {
         Ok(self.kind.try_into()?)
+    }
+
+    /// Get decrease position swap type.
+    pub fn decrease_position_swap_type(&self) -> Result<DecreasePositionSwapType> {
+        let ty = self
+            .decrease_position_swap_type
+            .try_into()
+            .map_err(|_| CoreError::UnknownDecreasePositionSwapType)?;
+        Ok(ty)
     }
 
     /// Return whether the order is updatable.

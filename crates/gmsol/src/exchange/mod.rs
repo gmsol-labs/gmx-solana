@@ -188,6 +188,7 @@ pub trait ExchangeOps<C> {
     ) -> CreateOrderBuilder<C> {
         let params = OrderParams {
             kind: OrderKind::MarketIncrease,
+            decrease_position_swap_type: None,
             min_output_amount: 0,
             size_delta_usd: increment_size_in_usd,
             initial_collateral_delta_amount: initial_collateral_amount,
@@ -210,6 +211,7 @@ pub trait ExchangeOps<C> {
     ) -> CreateOrderBuilder<C> {
         let params = OrderParams {
             kind: OrderKind::MarketDecrease,
+            decrease_position_swap_type: None,
             min_output_amount: 0,
             size_delta_usd: decrement_size_in_usd,
             initial_collateral_delta_amount: collateral_withdrawal_amount,
@@ -236,6 +238,7 @@ pub trait ExchangeOps<C> {
     {
         let params = OrderParams {
             kind: OrderKind::MarketSwap,
+            decrease_position_swap_type: None,
             min_output_amount: 0,
             size_delta_usd: 0,
             initial_collateral_delta_amount: initial_swap_in_token_amount,
@@ -264,6 +267,7 @@ pub trait ExchangeOps<C> {
     ) -> CreateOrderBuilder<C> {
         let params = OrderParams {
             kind: OrderKind::LimitIncrease,
+            decrease_position_swap_type: None,
             min_output_amount: 0,
             size_delta_usd: increment_size_in_usd,
             initial_collateral_delta_amount: initial_collateral_amount,
@@ -288,6 +292,7 @@ pub trait ExchangeOps<C> {
     ) -> CreateOrderBuilder<C> {
         let params = OrderParams {
             kind: OrderKind::LimitDecrease,
+            decrease_position_swap_type: None,
             min_output_amount: 0,
             size_delta_usd: decrement_size_in_usd,
             initial_collateral_delta_amount: collateral_withdrawal_amount,
@@ -312,6 +317,7 @@ pub trait ExchangeOps<C> {
     ) -> CreateOrderBuilder<C> {
         let params = OrderParams {
             kind: OrderKind::StopLossDecrease,
+            decrease_position_swap_type: None,
             min_output_amount: 0,
             size_delta_usd: decrement_size_in_usd,
             initial_collateral_delta_amount: collateral_withdrawal_amount,
@@ -340,6 +346,7 @@ pub trait ExchangeOps<C> {
     {
         let params = OrderParams {
             kind: OrderKind::LimitSwap,
+            decrease_position_swap_type: None,
             min_output_amount: u128::from(min_output_amount),
             size_delta_usd: 0,
             initial_collateral_delta_amount: initial_swap_in_token_amount,
