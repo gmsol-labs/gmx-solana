@@ -33,6 +33,9 @@ test-crates:
 test-programs *ARGS:
   anchor test {{ARGS}}
 
+test-programs-debug *ARGS:
+  anchor test {{ARGS}} -- --features debug-msg
+
 build-docs *ARGS:
   cargo doc --features doc {{ARGS}}
 
