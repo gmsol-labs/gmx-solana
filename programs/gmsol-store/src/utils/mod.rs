@@ -21,6 +21,9 @@ pub mod fixed_str;
 /// Dynamic Access.
 pub mod dynamic_access;
 
+/// Logging utils.
+pub mod logging;
+
 /// Utils for deserializing "zero-copy" account.
 #[cfg(feature = "utils")]
 pub mod de;

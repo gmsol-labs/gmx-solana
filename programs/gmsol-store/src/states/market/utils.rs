@@ -42,6 +42,11 @@ pub trait ValidateMarketBalances:
                     ))?;
         }
 
+        crate::debug_msg!(
+            "[Validation] validating min token balance: {} >= {}",
+            balance,
+            min_token_balance
+        );
         if balance < min_token_balance {
             return Err(gmsol_model::Error::InvalidTokenBalance(
                 "Less than expected min token balance excluding collateral amount",
@@ -63,6 +68,11 @@ pub trait ValidateMarketBalances:
                     ))?;
         }
 
+        crate::debug_msg!(
+            "[Validation] validating collateral amount: {} >= {}",
+            balance,
+            collateral_amount
+        );
         if balance < collateral_amount {
             return Err(gmsol_model::Error::InvalidTokenBalance(
                 "Less than total collateral amount",

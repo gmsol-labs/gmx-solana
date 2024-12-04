@@ -258,8 +258,8 @@ async fn glv_shift() -> eyre::Result<()> {
     let store = &deployment.store;
     let oracle = &deployment.oracle();
     let glv_token = &deployment.glv_token;
-    let market_token = deployment.market_token("fBTC", "fBTC", "USDG").unwrap();
-    let to_market_token = deployment.market_token("SOL", "fBTC", "USDG").unwrap();
+    let to_market_token = deployment.market_token("fBTC", "fBTC", "USDG").unwrap();
+    let market_token = deployment.market_token("SOL", "fBTC", "USDG").unwrap();
 
     let long_token_amount = 1_000;
     let short_token_amount = 1_000 * 100_000_000;
