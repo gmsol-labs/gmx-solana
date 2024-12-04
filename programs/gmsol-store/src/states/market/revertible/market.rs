@@ -101,14 +101,11 @@ impl<'a> RevertibleMarket<'a> {
 
     fn balance_for_one_side(&self, is_long: bool) -> u64 {
         let other = self.other();
-        if is_long || self.market.is_pure() {
-            if self.market.is_pure() {
-                other.long_token_balance / 2
-            } else {
-                other.long_token_balance
-            }
-        } else {
-            other.short_token_balance
+        match (self.market.is_pure(), is_long) {
+            (true, true) => other.long_token_balance.div_ceil(2),
+            (true, false) => other.long_token_balance / 2,
+            (false, true) => other.long_token_balance,
+            (false, false) => other.short_token_balance,
         }
     }
 

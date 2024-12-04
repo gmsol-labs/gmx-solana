@@ -71,7 +71,7 @@ impl gmsol_model::Balance for Pool {
                 self.short_token_amount, 0,
                 "short token amount must be zero"
             );
-            Ok(self.long_token_amount / 2)
+            Ok(self.long_token_amount.div_ceil(2))
         } else {
             Ok(self.long_token_amount)
         }
