@@ -14,7 +14,7 @@ async fn referral() -> eyre::Result<()> {
     let _enter = span.enter();
 
     let client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
-    let client2 = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let client2 = deployment.user_client(Deployment::USER_1)?;
     let store = &deployment.store;
 
     let signature = client.prepare_user(store)?.send_without_preflight().await?;

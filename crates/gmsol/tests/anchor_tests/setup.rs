@@ -110,6 +110,9 @@ impl Deployment {
     /// Default user.
     pub const DEFAULT_USER: &'static str = "user_0";
 
+    /// User 1.
+    pub const USER_1: &'static str = "user_1";
+
     /// Default keeper.
     pub const DEFAULT_KEEPER: &'static str = "keeper";
 
@@ -378,6 +381,7 @@ impl Deployment {
 
     fn add_users(&mut self) -> eyre::Result<()> {
         self.users.add_user(Self::DEFAULT_USER, &mut self.rng)?;
+        self.users.add_user(Self::USER_1, &mut self.rng)?;
         self.users.add_user(Self::DEFAULT_KEEPER, &mut self.rng)?;
 
         Ok(())

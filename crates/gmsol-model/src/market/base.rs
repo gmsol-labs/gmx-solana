@@ -333,23 +333,36 @@ pub trait BaseMarketExt<const DECIMALS: u8>: BaseMarket<DECIMALS> {
     }
 
     /// Expected min token balance excluding collateral amount.
-    fn expected_min_token_balance_excluding_collateral_amount(
+    ///
+    /// # Notes
+    /// Note that **"one token side"** here means calculating based on half of the side.
+    /// For markets where the long token and short token are different, there is no ambiguity.
+    /// However, if the long token and short token are the same, choosing the long token side
+    /// will result in a value that is not actually the total amount of the long token,
+    /// but rather the total amount belonging to the long token side (often only half of it).
+    ///
+    /// For example, if both the long token and the short token are WSOL, and the liquidity
+    /// pool has a total of 1000 WSOL. Then, in a typical pool implementation, the long token
+    /// side of the liquidity pool has only 500 **WSOL**, while the short token side also has 500 WSOL.
+    /// In this case, this function will only consider one side, taking into account only 500 WSOL
+    /// in the calculation.
+    fn expected_min_token_balance_excluding_collateral_amount_for_one_token_side(
         &self,
-        is_long_token: bool,
+        is_long_side: bool,
     ) -> crate::Result<Self::Num> {
-        // Primary Pool Amount
-        let mut balance = self.liquidity_pool()?.amount(is_long_token)?;
+        // Liquidity Pool Amount
+        let mut balance = self.liquidity_pool()?.amount(is_long_side)?;
 
         // Swap Impact Pool Amount
         balance = balance
-            .checked_add(&self.swap_impact_pool()?.amount(is_long_token)?)
+            .checked_add(&self.swap_impact_pool()?.amount(is_long_side)?)
             .ok_or(crate::Error::Computation(
                 "overflow adding swap impact pool amount",
             ))?;
 
         // Claimable Fee Pool Amount
         balance = balance
-            .checked_add(&self.claimable_fee_pool()?.amount(is_long_token)?)
+            .checked_add(&self.claimable_fee_pool()?.amount(is_long_side)?)
             .ok_or(crate::Error::Computation(
                 "overflow adding claimable fee amount",
             ))?;
@@ -357,39 +370,22 @@ pub trait BaseMarketExt<const DECIMALS: u8>: BaseMarket<DECIMALS> {
         Ok(balance)
     }
 
-    /// Validate token balance of the market.
-    fn validate_token_balance_for_one_side(
+    /// Get total collateral amount for one token side.
+    ///
+    /// # Notes
+    /// Note that **"one token side"** here means calculating based on half of the side.
+    /// (See also [`expected_min_token_balance_excluding_collateral_amount_for_one_token_side`](BaseMarketExt::expected_min_token_balance_excluding_collateral_amount_for_one_token_side)).
+    fn total_collateral_amount_for_one_token_side(
         &self,
-        balance: &Self::Num,
-        is_long_token: bool,
-    ) -> crate::Result<()> {
-        let expected =
-            self.expected_min_token_balance_excluding_collateral_amount(is_long_token)?;
-        if *balance < expected {
-            return Err(crate::Error::InvalidTokenBalance(
-                "Less than expected min token balance excluding collateral amount",
-                expected.to_string(),
-                balance.to_string(),
-            ));
-        }
-
-        let mut collateral_amount = self.collateral_sum_pool(true)?.amount(is_long_token)?;
+        is_long_side: bool,
+    ) -> crate::Result<Self::Num> {
+        let mut collateral_amount = self.collateral_sum_pool(true)?.amount(is_long_side)?;
         collateral_amount = collateral_amount
-            .checked_add(&self.collateral_sum_pool(false)?.amount(is_long_token)?)
+            .checked_add(&self.collateral_sum_pool(false)?.amount(is_long_side)?)
             .ok_or(crate::Error::Computation(
                 "calculating total collateral sum for one side",
             ))?;
-        if *balance < collateral_amount {
-            return Err(crate::Error::InvalidTokenBalance(
-                "Less than total collateral amount",
-                collateral_amount.to_string(),
-                balance.to_string(),
-            ));
-        }
-
-        // We don't have to validate the claimable funding amount since they are claimed immediately.
-
-        Ok(())
+        Ok(collateral_amount)
     }
 }
 

@@ -644,7 +644,9 @@ pub(crate) fn claim_fees_from_market(ctx: Context<ClaimFeesFromMarket>) -> Resul
         pool.apply_delta_amount(is_long_token, &delta)
             .map_err(ModelError::from)?;
 
-        market.validate_market_balance_for_the_given_token(&token, amount)?;
+        market
+            .validate_market_balance_for_the_given_token(&token, amount)
+            .map_err(ModelError::from)?;
         market.commit();
 
         amount

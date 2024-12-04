@@ -99,13 +99,12 @@ impl<'a> RevertibleMarket<'a> {
         buffer.clocks_mut(state)
     }
 
-    fn balance_for_one_side(&self, is_long: bool) -> u64 {
+    fn balance_for_token(&self, is_long_token: bool) -> u64 {
         let other = self.other();
-        match (self.market.is_pure(), is_long) {
-            (true, true) => other.long_token_balance.div_ceil(2),
-            (true, false) => other.long_token_balance / 2,
-            (false, true) => other.long_token_balance,
-            (false, false) => other.short_token_balance,
+        if is_long_token || self.market.is_pure() {
+            other.long_token_balance
+        } else {
+            other.short_token_balance
         }
     }
 
@@ -248,7 +247,7 @@ impl<'a> gmsol_model::Bank<Pubkey> for RevertibleMarket<'a> {
 
     fn balance<Q: Borrow<Pubkey> + ?Sized>(&self, token: &Q) -> gmsol_model::Result<Self::Num> {
         let side = self.market.meta.to_token_side(token.borrow())?;
-        Ok(self.balance_for_one_side(side))
+        Ok(self.balance_for_token(side))
     }
 }
 

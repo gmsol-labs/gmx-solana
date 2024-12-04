@@ -71,6 +71,10 @@ impl gmsol_model::Balance for Pool {
                 self.short_token_amount, 0,
                 "short token amount must be zero"
             );
+            // For pure pools, we must ensure that the long token amount
+            // plus the short token amount equals the total token amount.
+            // Therefore, we use `div_ceil` for the long token amount
+            // and `div` for the short token amount.
             Ok(self.long_token_amount.div_ceil(2))
         } else {
             Ok(self.long_token_amount)

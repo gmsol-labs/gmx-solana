@@ -12,6 +12,70 @@ pub trait ValidateMarketBalances:
     + gmsol_model::Bank<Pubkey, Num = u64>
     + HasMarketMeta
 {
+    /// Validate market balance for the given token.
+    fn validate_market_balance_for_the_given_token(
+        &self,
+        token: &Pubkey,
+        excluded: u64,
+    ) -> gmsol_model::Result<()> {
+        let is_long_token = self.market_meta().to_token_side(token)?;
+        let is_pure = self.is_pure();
+
+        let balance = u128::from(self.balance_excluding(token, &excluded)?);
+
+        let mut min_token_balance = self
+            .expected_min_token_balance_excluding_collateral_amount_for_one_token_side(
+                is_long_token,
+            )?;
+
+        // Since the `min_token_balance` only accounts for one side, we need to include the other side
+        // for a pure market.
+        if is_pure {
+            min_token_balance = min_token_balance
+                    .checked_add(
+                        self.expected_min_token_balance_excluding_collateral_amount_for_one_token_side(
+                            !is_long_token,
+                        )?,
+                    )
+                    .ok_or(gmsol_model::Error::Computation(
+                        "validate balance: overflow while adding the min token balance for the other side",
+                    ))?;
+        }
+
+        if balance < min_token_balance {
+            return Err(gmsol_model::Error::InvalidTokenBalance(
+                "Less than expected min token balance excluding collateral amount",
+                min_token_balance.to_string(),
+                balance.to_string(),
+            ));
+        }
+
+        let mut collateral_amount =
+            self.total_collateral_amount_for_one_token_side(is_long_token)?;
+
+        // Since the `collateral_amount` only accounts for one side, we need to include the other side
+        // for a pure market.
+        if is_pure {
+            collateral_amount = collateral_amount
+                    .checked_add(self.total_collateral_amount_for_one_token_side(!is_long_token)?)
+                    .ok_or(gmsol_model::Error::Computation(
+                        "validate balance: overflow while adding the collateral amount for the other side",
+                    ))?;
+        }
+
+        if balance < collateral_amount {
+            return Err(gmsol_model::Error::InvalidTokenBalance(
+                "Less than total collateral amount",
+                collateral_amount.to_string(),
+                balance.to_string(),
+            ));
+        }
+
+        // We don't have to validate the claimable funding amount since they are claimed immediately.
+
+        Ok(())
+    }
+
     /// Validate market balances.
     fn validate_market_balances(
         &self,
@@ -22,21 +86,24 @@ pub trait ValidateMarketBalances:
             let total = long_excluding_amount
                 .checked_add(short_excluding_amount)
                 .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
-            (long_excluding_amount, short_excluding_amount) = (total / 2, total / 2);
+            long_excluding_amount = total;
+            short_excluding_amount = 0;
         }
         let meta = self.market_meta();
-        let long_token_balance = self
-            .balance_excluding(&meta.long_token_mint, &long_excluding_amount)
-            .map_err(ModelError::from)?
-            .into();
-        self.validate_token_balance_for_one_side(&long_token_balance, true)
+        self.validate_market_balance_for_the_given_token(
+            &meta.long_token_mint,
+            long_excluding_amount,
+        )
+        .map_err(ModelError::from)?;
+        // Skip the validation for short token if this is a pure market,
+        // where the long token and short token are the same.
+        if !self.is_pure() {
+            self.validate_market_balance_for_the_given_token(
+                &meta.short_token_mint,
+                short_excluding_amount,
+            )
             .map_err(ModelError::from)?;
-        let short_token_balance = self
-            .balance_excluding(&meta.short_token_mint, &short_excluding_amount)
-            .map_err(ModelError::from)?
-            .into();
-        self.validate_token_balance_for_one_side(&short_token_balance, false)
-            .map_err(ModelError::from)?;
+        }
         Ok(())
     }
 
@@ -69,23 +136,8 @@ pub trait ValidateMarketBalances:
                     .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
             }
         }
-        self.validate_market_balances(long_excluding_amount, short_excluding_amount)
-    }
 
-    /// Validate market balance for the given token.
-    fn validate_market_balance_for_the_given_token(
-        &self,
-        token: &Pubkey,
-        excluded: u64,
-    ) -> Result<()> {
-        let side = self.market_meta().to_token_side(token)?;
-        let balance = self
-            .balance_excluding(token, &excluded)
-            .map_err(ModelError::from)?
-            .into();
-        self.validate_token_balance_for_one_side(&balance, side)
-            .map_err(ModelError::from)?;
-        Ok(())
+        self.validate_market_balances(long_excluding_amount, short_excluding_amount)
     }
 }
 
