@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*, system_program};
+use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, TokenAccount};
 use gmsol_model::{
     action::decrease_position::{DecreasePositionFlags, DecreasePositionSwapType},
@@ -736,7 +736,6 @@ pub(crate) struct ExecuteOrderOperation<'a, 'info> {
     throw_on_execution_error: bool,
     #[builder(default)]
     refund: u64,
-    system_program: AccountInfo<'info>,
 }
 
 pub(crate) type ShouldRemovePosition = bool;
@@ -1006,6 +1005,7 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
         };
 
         let balance = position.to_account_info().lamports();
+
         if balance < self.refund {
             msg!(
                 "Warn: not enough balance to pay the executor, balance = {}, refund = {}",
@@ -1013,22 +1013,23 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
                 self.refund,
             );
         }
-        let refund = balance.saturating_sub(self.refund);
 
-        if refund != 0 {
-            system_program::transfer(
-                CpiContext::new(
-                    self.system_program.clone(),
-                    system_program::Transfer {
-                        from: self.executor.clone(),
-                        to: self.owner.clone(),
-                    },
-                ),
-                refund,
-            )?;
+        let refund_to_owner = balance.saturating_sub(self.refund);
+        let refund_to_executor = balance.checked_sub(refund_to_owner).expect("must success");
+
+        // Since the order account must be mutable and is owned by the current program,
+        // we use it as an intermediary to distribute funds.
+        position.close(self.order.to_account_info())?;
+
+        if refund_to_owner != 0 {
+            self.order.sub_lamports(refund_to_owner)?;
+            self.owner.add_lamports(refund_to_owner)?;
         }
 
-        position.close(self.executor.clone())?;
+        if refund_to_executor != 0 {
+            self.order.sub_lamports(refund_to_executor)?;
+            self.executor.add_lamports(refund_to_executor)?;
+        }
 
         Ok(())
     }
@@ -1670,7 +1671,6 @@ impl<'a, 'info> PositionCutOperation<'a, 'info> {
             .remaining_accounts(&[])
             .throw_on_execution_error(true)
             .refund(self.refund)
-            .system_program(self.system_program.clone())
             .executor(self.executor.clone())
             .build()
             .execute()

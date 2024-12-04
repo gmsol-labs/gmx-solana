@@ -439,8 +439,7 @@ impl<'info> ExecuteIncreaseOrSwapOrder<'info> {
             .position(self.position.as_ref())
             .event(self.event.as_ref())
             .throw_on_execution_error(throw_on_execution_error)
-            .executor(self.authority.to_account_info())
-            .system_program(self.system_program.to_account_info());
+            .executor(self.authority.to_account_info());
 
         self.oracle.load_mut()?.with_prices(
             &self.store,
@@ -782,8 +781,7 @@ impl<'info> ExecuteDecreaseOrder<'info> {
             .position(Some(&self.position))
             .event(Some(&self.event))
             .throw_on_execution_error(throw_on_execution_error)
-            .executor(self.authority.to_account_info())
-            .system_program(self.system_program.to_account_info());
+            .executor(self.authority.to_account_info());
 
         self.oracle.load_mut()?.with_prices(
             &self.store,
