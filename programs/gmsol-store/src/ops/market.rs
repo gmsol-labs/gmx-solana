@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, TokenAccount};
-use gmsol_model::{Bank, LiquidityMarketMutExt, PerpMarketMutExt, PositionImpactMarketMutExt};
+use gmsol_model::{
+    Bank, LiquidityMarketMutExt, MarketAction, PerpMarketMutExt, PositionImpactMarketMutExt,
+};
 use typed_builder::TypedBuilder;
 
 use crate::{

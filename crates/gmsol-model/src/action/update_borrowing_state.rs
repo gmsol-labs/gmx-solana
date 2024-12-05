@@ -5,8 +5,10 @@ use crate::{
     PerpMarketMut, PoolExt,
 };
 
+use super::MarketAction;
+
 /// Update Borrowing State Action.
-#[must_use]
+#[must_use = "actions do nothing unless you `execute` them"]
 pub struct UpdateBorrowingState<M: BaseMarket<DECIMALS>, const DECIMALS: u8> {
     market: M,
     prices: Prices<M::Num>,
@@ -35,9 +37,14 @@ impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> UpdateBorrowingState<M, DEC
             .apply_delta_amount(is_long, &delta.to_signed()?)?;
         Ok(next_cumulative_borrowing_factor)
     }
+}
 
-    /// Execute.
-    pub fn execute(mut self) -> crate::Result<UpdateBorrowingReport<M::Num>> {
+impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> MarketAction
+    for UpdateBorrowingState<M, DECIMALS>
+{
+    type Report = UpdateBorrowingReport<M::Num>;
+
+    fn execute(mut self) -> crate::Result<Self::Report> {
         let duration_in_seconds = self.market.just_passed_in_seconds_for_borrowing()?;
         let next_cumulative_borrowing_factor_for_long =
             self.execute_one_side(true, duration_in_seconds)?;
@@ -82,7 +89,7 @@ mod tests {
     use crate::{
         market::LiquidityMarketMutExt,
         test::{TestMarket, TestPosition},
-        PositionMutExt,
+        MarketAction, PositionMutExt,
     };
 
     use super::*;

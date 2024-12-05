@@ -2,7 +2,7 @@ use gmsol_model::{
     fixed::Fixed,
     price::Prices,
     test::{MaxPnlFactors, TestMarket, TestMarketConfig, TestPosition},
-    LiquidityMarketExt, LiquidityMarketMutExt, PnlFactorKind, PositionMutExt,
+    LiquidityMarketExt, LiquidityMarketMutExt, MarketAction, PnlFactorKind, PositionMutExt,
 };
 use num_traits::Zero;
 

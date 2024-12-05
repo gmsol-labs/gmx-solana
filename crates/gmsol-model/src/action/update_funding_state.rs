@@ -9,8 +9,10 @@ use crate::{
     Balance, BalanceExt, PerpMarketMut,
 };
 
+use super::MarketAction;
+
 /// Update Funding State Action.
-#[must_use]
+#[must_use = "actions do nothing unless you `execute` them"]
 pub struct UpdateFundingState<M: BaseMarket<DECIMALS>, const DECIMALS: u8> {
     market: M,
     prices: Prices<M::Num>,
@@ -24,34 +26,6 @@ impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> UpdateFundingState<M, DECIM
             market,
             prices: prices.clone(),
         })
-    }
-
-    /// Execute.
-    pub fn execute(mut self) -> crate::Result<UpdateFundingReport<M::Num>> {
-        const MATRIX: [(bool, bool); 4] =
-            [(true, true), (true, false), (false, true), (false, false)];
-        let duration_in_seconds = self.market.just_passed_in_seconds_for_funding()?;
-        let report = self.next_funding_amount_per_size(duration_in_seconds)?;
-        for (is_long, is_long_collateral) in MATRIX {
-            self.market.apply_delta_to_funding_amount_per_size(
-                is_long,
-                is_long_collateral,
-                &report
-                    .delta_funding_amount_per_size(is_long, is_long_collateral)
-                    .to_signed()?,
-            )?;
-            self.market
-                .apply_delta_to_claimable_funding_amount_per_size(
-                    is_long,
-                    is_long_collateral,
-                    &report
-                        .delta_claimable_funding_amount_per_size(is_long, is_long_collateral)
-                        .to_signed()?,
-                )?;
-        }
-        *self.market.funding_factor_per_second_mut() =
-            report.next_funding_factor_per_second().clone();
-        Ok(report)
     }
 
     fn next_funding_amount_per_size(
@@ -319,6 +293,39 @@ impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> UpdateFundingState<M, DECIM
     }
 }
 
+impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> MarketAction
+    for UpdateFundingState<M, DECIMALS>
+{
+    type Report = UpdateFundingReport<M::Num>;
+
+    fn execute(mut self) -> crate::Result<Self::Report> {
+        const MATRIX: [(bool, bool); 4] =
+            [(true, true), (true, false), (false, true), (false, false)];
+        let duration_in_seconds = self.market.just_passed_in_seconds_for_funding()?;
+        let report = self.next_funding_amount_per_size(duration_in_seconds)?;
+        for (is_long, is_long_collateral) in MATRIX {
+            self.market.apply_delta_to_funding_amount_per_size(
+                is_long,
+                is_long_collateral,
+                &report
+                    .delta_funding_amount_per_size(is_long, is_long_collateral)
+                    .to_signed()?,
+            )?;
+            self.market
+                .apply_delta_to_claimable_funding_amount_per_size(
+                    is_long,
+                    is_long_collateral,
+                    &report
+                        .delta_claimable_funding_amount_per_size(is_long, is_long_collateral)
+                        .to_signed()?,
+                )?;
+        }
+        *self.market.funding_factor_per_second_mut() =
+            report.next_funding_factor_per_second().clone();
+        Ok(report)
+    }
+}
+
 /// Update Funding Report.
 #[derive(Debug)]
 pub struct UpdateFundingReport<T: Unsigned> {
@@ -443,7 +450,7 @@ mod tests {
     use crate::{
         market::LiquidityMarketMutExt,
         test::{TestMarket, TestPosition},
-        PositionMutExt,
+        MarketAction, PositionMutExt,
     };
 
     use super::*;

@@ -44,6 +44,7 @@ pub mod utils;
 #[cfg(any(test, feature = "test"))]
 pub mod test;
 
+pub use action::MarketAction;
 pub use bank::Bank;
 pub use clock::ClockKind;
 pub use error::Error;

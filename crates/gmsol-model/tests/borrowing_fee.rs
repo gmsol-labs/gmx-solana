@@ -7,7 +7,7 @@ use gmsol_model::{
     price::Prices,
     test::{TestMarket, TestMarketConfig, TestPosition},
     Balance, BaseMarketExt, BorrowingFeeMarket, BorrowingFeeMarketExt, LiquidityMarketExt,
-    LiquidityMarketMutExt, PnlFactorKind, PositionExt, PositionMutExt,
+    LiquidityMarketMutExt, MarketAction, PnlFactorKind, PositionExt, PositionMutExt,
 };
 
 #[test]

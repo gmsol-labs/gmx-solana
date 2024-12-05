@@ -7,8 +7,10 @@ use crate::{
 };
 use num_traits::{CheckedAdd, CheckedDiv, Signed, Zero};
 
+use super::MarketAction;
+
 /// A withdrawal.
-#[must_use]
+#[must_use = "actions do nothing unless you `execute` them"]
 pub struct Withdrawal<M: BaseMarket<DECIMALS>, const DECIMALS: u8> {
     market: M,
     params: WithdrawParams<M::Num>,
@@ -96,66 +98,6 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Withdrawal<M, DECIMALS
         })
     }
 
-    /// Execute the withdrawal.
-    pub fn execute(mut self) -> crate::Result<WithdrawReport<M::Num>> {
-        let (mut long_token_amount, mut short_token_amount) = self.output_amounts()?;
-        let long_token_fees = self.charge_fees(&mut long_token_amount)?;
-        let short_token_fees = self.charge_fees(&mut short_token_amount)?;
-        // Apply claimable fees delta.
-        let pool = self.market.claimable_fee_pool_mut()?;
-        pool.apply_delta_amount(
-            true,
-            &long_token_fees
-                .fee_receiver_amount()
-                .clone()
-                .try_into()
-                .map_err(|_| crate::Error::Convert)?,
-        )?;
-        pool.apply_delta_amount(
-            false,
-            &short_token_fees
-                .fee_receiver_amount()
-                .clone()
-                .try_into()
-                .map_err(|_| crate::Error::Convert)?,
-        )?;
-        // Apply pool delta.
-        // The delta must be the amount leaves the pool: -(amount_after_fees + fee_receiver_amount)
-        let pool = self.market.liquidity_pool_mut()?;
-
-        let delta = long_token_fees
-            .fee_receiver_amount()
-            .checked_add(&long_token_amount)
-            .ok_or(crate::Error::Overflow)?
-            .to_opposite_signed()?;
-        pool.apply_delta_amount(true, &delta)?;
-
-        let delta = short_token_fees
-            .fee_receiver_amount()
-            .checked_add(&short_token_amount)
-            .ok_or(crate::Error::Overflow)?
-            .to_opposite_signed()?;
-        pool.apply_delta_amount(false, &delta)?;
-
-        self.market.validate_reserve(&self.params.prices, true)?;
-        self.market.validate_reserve(&self.params.prices, false)?;
-        self.market.validate_max_pnl(
-            &self.params.prices,
-            PnlFactorKind::MaxAfterWithdrawal,
-            PnlFactorKind::MaxAfterWithdrawal,
-        )?;
-
-        self.market.burn(&self.params.market_token_amount)?;
-
-        Ok(WithdrawReport {
-            params: self.params,
-            long_token_fees,
-            short_token_fees,
-            long_token_output: long_token_amount,
-            short_token_output: short_token_amount,
-        })
-    }
-
     fn output_amounts(&self) -> crate::Result<(M::Num, M::Num)> {
         let pool_value = self.market.pool_value(
             &self.params.prices,
@@ -219,11 +161,74 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Withdrawal<M, DECIMALS
     }
 }
 
+impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> MarketAction for Withdrawal<M, DECIMALS> {
+    type Report = WithdrawReport<M::Num>;
+
+    fn execute(mut self) -> crate::Result<Self::Report> {
+        let (mut long_token_amount, mut short_token_amount) = self.output_amounts()?;
+        let long_token_fees = self.charge_fees(&mut long_token_amount)?;
+        let short_token_fees = self.charge_fees(&mut short_token_amount)?;
+        // Apply claimable fees delta.
+        let pool = self.market.claimable_fee_pool_mut()?;
+        pool.apply_delta_amount(
+            true,
+            &long_token_fees
+                .fee_receiver_amount()
+                .clone()
+                .try_into()
+                .map_err(|_| crate::Error::Convert)?,
+        )?;
+        pool.apply_delta_amount(
+            false,
+            &short_token_fees
+                .fee_receiver_amount()
+                .clone()
+                .try_into()
+                .map_err(|_| crate::Error::Convert)?,
+        )?;
+        // Apply pool delta.
+        // The delta must be the amount leaves the pool: -(amount_after_fees + fee_receiver_amount)
+        let pool = self.market.liquidity_pool_mut()?;
+
+        let delta = long_token_fees
+            .fee_receiver_amount()
+            .checked_add(&long_token_amount)
+            .ok_or(crate::Error::Overflow)?
+            .to_opposite_signed()?;
+        pool.apply_delta_amount(true, &delta)?;
+
+        let delta = short_token_fees
+            .fee_receiver_amount()
+            .checked_add(&short_token_amount)
+            .ok_or(crate::Error::Overflow)?
+            .to_opposite_signed()?;
+        pool.apply_delta_amount(false, &delta)?;
+
+        self.market.validate_reserve(&self.params.prices, true)?;
+        self.market.validate_reserve(&self.params.prices, false)?;
+        self.market.validate_max_pnl(
+            &self.params.prices,
+            PnlFactorKind::MaxAfterWithdrawal,
+            PnlFactorKind::MaxAfterWithdrawal,
+        )?;
+
+        self.market.burn(&self.params.market_token_amount)?;
+
+        Ok(WithdrawReport {
+            params: self.params,
+            long_token_fees,
+            short_token_fees,
+            long_token_output: long_token_amount,
+            short_token_output: short_token_amount,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
         market::LiquidityMarketMutExt, pool::Balance, price::Prices, test::TestMarket, BaseMarket,
-        LiquidityMarket,
+        LiquidityMarket, MarketAction,
     };
 
     #[test]

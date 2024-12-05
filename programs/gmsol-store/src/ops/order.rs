@@ -4,8 +4,8 @@ use gmsol_model::{
     action::decrease_position::{DecreasePositionFlags, DecreasePositionSwapType},
     num::Unsigned,
     price::Prices,
-    BaseMarket, BaseMarketExt, PnlFactorKind, Position as _, PositionImpactMarketMutExt,
-    PositionMut, PositionMutExt, PositionState, PositionStateExt,
+    BaseMarket, BaseMarketExt, MarketAction, PnlFactorKind, Position as _,
+    PositionImpactMarketMutExt, PositionMut, PositionMutExt, PositionState, PositionStateExt,
 };
 use typed_builder::TypedBuilder;
 

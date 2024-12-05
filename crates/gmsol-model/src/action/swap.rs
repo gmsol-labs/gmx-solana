@@ -10,8 +10,10 @@ use crate::{
 
 use num_traits::{CheckedAdd, CheckedMul, CheckedNeg, CheckedSub, Signed, Zero};
 
+use super::MarketAction;
+
 /// A swap.
-#[must_use]
+#[must_use = "actions do nothing unless you `execute` them"]
 pub struct Swap<M: BaseMarket<DECIMALS>, const DECIMALS: u8> {
     market: M,
     params: SwapParams<M::Num>,
@@ -236,11 +238,18 @@ impl<const DECIMALS: u8, M: SwapMarketMut<DECIMALS>> Swap<M, DECIMALS> {
 
         Ok((cache, result))
     }
+}
+
+impl<const DECIMALS: u8, M> MarketAction for Swap<M, DECIMALS>
+where
+    M: SwapMarketMut<DECIMALS>,
+{
+    type Report = SwapReport<M::Num>;
 
     /// Execute the swap.
     /// # Notes
     /// - This function is atomic.
-    pub fn execute(mut self) -> crate::Result<SwapReport<M::Num>> {
+    fn execute(mut self) -> crate::Result<Self::Report> {
         let (cache, result) = self.try_execute()?;
 
         let Cache {
@@ -455,7 +464,7 @@ mod tests {
         pool::Balance,
         price::Prices,
         test::TestMarket,
-        BaseMarket, LiquidityMarket,
+        BaseMarket, LiquidityMarket, MarketAction,
     };
 
     #[test]

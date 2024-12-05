@@ -11,8 +11,10 @@ use crate::{
     utils, BalanceExt, PnlFactorKind, PoolExt,
 };
 
+use super::MarketAction;
+
 /// A deposit.
-#[must_use]
+#[must_use = "actions do nothing unless you `execute` them"]
 pub struct Deposit<M: BaseMarket<DECIMALS>, const DECIMALS: u8> {
     market: M,
     params: DepositParams<M::Num>,
@@ -288,9 +290,15 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
             .validate_pool_value_for_deposit(&self.params.prices, is_long_token)?;
         Ok((mint_amount, fees))
     }
+}
 
-    /// Execute.
-    pub fn execute(mut self) -> Result<DepositReport<M::Num>, crate::Error> {
+impl<const DECIMALS: u8, M> MarketAction for Deposit<M, DECIMALS>
+where
+    M: LiquidityMarketMut<DECIMALS>,
+{
+    type Report = DepositReport<M::Num>;
+
+    fn execute(mut self) -> crate::Result<Self::Report> {
         debug_assert!(
             !self.params.long_token_amount.is_zero() || !self.params.short_token_amount.is_zero(),
             "shouldn't be empty deposit"
@@ -377,6 +385,7 @@ mod tests {
         market::LiquidityMarketMutExt,
         price::Prices,
         test::{TestMarket, TestMarketConfig},
+        MarketAction,
     };
 
     #[test]

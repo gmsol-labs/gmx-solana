@@ -15,10 +15,11 @@ use crate::{
 
 use super::{
     update_borrowing_state::UpdateBorrowingReport, update_funding_state::UpdateFundingReport,
+    MarketAction,
 };
 
 /// Increase the position.
-#[must_use]
+#[must_use = "actions do nothing unless you `execute` them"]
 pub struct IncreasePosition<P: Position<DECIMALS>, const DECIMALS: u8> {
     position: P,
     params: IncreasePositionParams<P::Num>,
@@ -218,129 +219,6 @@ where
         })
     }
 
-    /// Execute.
-    pub fn execute(mut self) -> crate::Result<IncreasePositionReport<P::Num>> {
-        let borrowing = self
-            .position
-            .market_mut()
-            .update_borrowing(&self.params.prices)?
-            .execute()?;
-        let funding = self
-            .position
-            .market_mut()
-            .update_funding(&self.params.prices)?
-            .execute()?;
-
-        self.initialize_position_if_empty()?;
-
-        let execution = self.get_execution_params()?;
-
-        let (collateral_delta_amount, fees) =
-            self.process_collateral(&execution.price_impact_value)?;
-
-        let is_collateral_delta_positive = collateral_delta_amount.is_positive();
-        *self.position.collateral_amount_mut() = self
-            .position
-            .collateral_amount_mut()
-            .checked_add_with_signed(&collateral_delta_amount)
-            .ok_or_else(|| {
-                if is_collateral_delta_positive {
-                    crate::Error::Computation("collateral amount overflow")
-                } else {
-                    crate::Error::InvalidArgument("insufficient collateral amount")
-                }
-            })?;
-
-        self.position
-            .market_mut()
-            .apply_delta_to_position_impact_pool(
-                &execution
-                    .price_impact_amount()
-                    .checked_neg()
-                    .ok_or(crate::Error::Computation(
-                        "calculating position impact pool delta amount",
-                    ))?,
-            )?;
-
-        let is_long = self.position.is_long();
-        let next_position_size_in_usd = self
-            .position
-            .size_in_usd_mut()
-            .checked_add(&self.params.size_delta_usd)
-            .ok_or(crate::Error::Computation("size in usd overflow"))?;
-        let next_position_borrowing_factor = self
-            .position
-            .market()
-            .cumulative_borrowing_factor(is_long)?;
-
-        // Update total borrowing before updating position size.
-        self.position
-            .update_total_borrowing(&next_position_size_in_usd, &next_position_borrowing_factor)?;
-
-        // Update sizes.
-        *self.position.size_in_usd_mut() = next_position_size_in_usd;
-        *self.position.size_in_tokens_mut() = self
-            .position
-            .size_in_tokens_mut()
-            .checked_add(&execution.size_delta_in_tokens)
-            .ok_or(crate::Error::Computation("size in tokens overflow"))?;
-
-        // Update funding fees state.
-        *self.position.funding_fee_amount_per_size_mut() = self
-            .position
-            .market()
-            .funding_fee_amount_per_size(is_long, self.position.is_collateral_token_long())?;
-        for is_long_collateral in [true, false] {
-            *self
-                .position
-                .claimable_funding_fee_amount_per_size_mut(is_long_collateral) = self
-                .position
-                .market()
-                .claimable_funding_fee_amount_per_size(is_long, is_long_collateral)?;
-        }
-
-        // Update borrowing fee state.
-        *self.position.borrowing_factor_mut() = next_position_borrowing_factor;
-
-        self.position.update_open_interest(
-            &self.params.size_delta_usd.to_signed()?,
-            &execution.size_delta_in_tokens.to_signed()?,
-        )?;
-
-        if !self.params.size_delta_usd.is_zero() {
-            let market = self.position.market();
-            market.validate_reserve(&self.params.prices, self.position.is_long())?;
-            market.validate_open_interest_reserve(&self.params.prices, self.position.is_long())?;
-
-            let delta = CollateralDelta::new(
-                self.position.size_in_usd().clone(),
-                self.position.collateral_amount().clone(),
-                Zero::zero(),
-                Zero::zero(),
-            );
-            let will_collateral_be_sufficient = self
-                .position
-                .will_collateral_be_sufficient(&self.params.prices, &delta)?;
-
-            if !will_collateral_be_sufficient.is_sufficient() {
-                return Err(crate::Error::InvalidArgument("insufficient collateral usd"));
-            }
-        }
-
-        self.position.validate(&self.params.prices, true, true)?;
-
-        self.position.on_increased()?;
-
-        Ok(IncreasePositionReport::new(
-            self.params,
-            execution,
-            collateral_delta_amount,
-            fees,
-            borrowing,
-            funding,
-        ))
-    }
-
     fn initialize_position_if_empty(&mut self) -> crate::Result<()> {
         if self.position.size_in_usd().is_zero() {
             // Ensure that the size in tokens is initialized to zero.
@@ -538,11 +416,141 @@ where
     }
 }
 
+impl<const DECIMALS: u8, P: PositionMut<DECIMALS>> MarketAction for IncreasePosition<P, DECIMALS>
+where
+    P::Market: PerpMarketMut<DECIMALS, Num = P::Num, Signed = P::Signed>,
+{
+    type Report = IncreasePositionReport<P::Num>;
+
+    fn execute(mut self) -> crate::Result<Self::Report> {
+        let borrowing = self
+            .position
+            .market_mut()
+            .update_borrowing(&self.params.prices)?
+            .execute()?;
+        let funding = self
+            .position
+            .market_mut()
+            .update_funding(&self.params.prices)?
+            .execute()?;
+
+        self.initialize_position_if_empty()?;
+
+        let execution = self.get_execution_params()?;
+
+        let (collateral_delta_amount, fees) =
+            self.process_collateral(&execution.price_impact_value)?;
+
+        let is_collateral_delta_positive = collateral_delta_amount.is_positive();
+        *self.position.collateral_amount_mut() = self
+            .position
+            .collateral_amount_mut()
+            .checked_add_with_signed(&collateral_delta_amount)
+            .ok_or_else(|| {
+                if is_collateral_delta_positive {
+                    crate::Error::Computation("collateral amount overflow")
+                } else {
+                    crate::Error::InvalidArgument("insufficient collateral amount")
+                }
+            })?;
+
+        self.position
+            .market_mut()
+            .apply_delta_to_position_impact_pool(
+                &execution
+                    .price_impact_amount()
+                    .checked_neg()
+                    .ok_or(crate::Error::Computation(
+                        "calculating position impact pool delta amount",
+                    ))?,
+            )?;
+
+        let is_long = self.position.is_long();
+        let next_position_size_in_usd = self
+            .position
+            .size_in_usd_mut()
+            .checked_add(&self.params.size_delta_usd)
+            .ok_or(crate::Error::Computation("size in usd overflow"))?;
+        let next_position_borrowing_factor = self
+            .position
+            .market()
+            .cumulative_borrowing_factor(is_long)?;
+
+        // Update total borrowing before updating position size.
+        self.position
+            .update_total_borrowing(&next_position_size_in_usd, &next_position_borrowing_factor)?;
+
+        // Update sizes.
+        *self.position.size_in_usd_mut() = next_position_size_in_usd;
+        *self.position.size_in_tokens_mut() = self
+            .position
+            .size_in_tokens_mut()
+            .checked_add(&execution.size_delta_in_tokens)
+            .ok_or(crate::Error::Computation("size in tokens overflow"))?;
+
+        // Update funding fees state.
+        *self.position.funding_fee_amount_per_size_mut() = self
+            .position
+            .market()
+            .funding_fee_amount_per_size(is_long, self.position.is_collateral_token_long())?;
+        for is_long_collateral in [true, false] {
+            *self
+                .position
+                .claimable_funding_fee_amount_per_size_mut(is_long_collateral) = self
+                .position
+                .market()
+                .claimable_funding_fee_amount_per_size(is_long, is_long_collateral)?;
+        }
+
+        // Update borrowing fee state.
+        *self.position.borrowing_factor_mut() = next_position_borrowing_factor;
+
+        self.position.update_open_interest(
+            &self.params.size_delta_usd.to_signed()?,
+            &execution.size_delta_in_tokens.to_signed()?,
+        )?;
+
+        if !self.params.size_delta_usd.is_zero() {
+            let market = self.position.market();
+            market.validate_reserve(&self.params.prices, self.position.is_long())?;
+            market.validate_open_interest_reserve(&self.params.prices, self.position.is_long())?;
+
+            let delta = CollateralDelta::new(
+                self.position.size_in_usd().clone(),
+                self.position.collateral_amount().clone(),
+                Zero::zero(),
+                Zero::zero(),
+            );
+            let will_collateral_be_sufficient = self
+                .position
+                .will_collateral_be_sufficient(&self.params.prices, &delta)?;
+
+            if !will_collateral_be_sufficient.is_sufficient() {
+                return Err(crate::Error::InvalidArgument("insufficient collateral usd"));
+            }
+        }
+
+        self.position.validate(&self.params.prices, true, true)?;
+
+        self.position.on_increased()?;
+
+        Ok(IncreasePositionReport::new(
+            self.params,
+            execution,
+            collateral_delta_amount,
+            fees,
+            borrowing,
+            funding,
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
         market::LiquidityMarketMutExt,
         test::{TestMarket, TestPosition},
+        MarketAction,
     };
 
     use super::*;

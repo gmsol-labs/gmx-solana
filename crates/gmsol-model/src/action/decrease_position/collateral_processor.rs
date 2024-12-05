@@ -7,7 +7,7 @@ use crate::{
     params::fee::{FundingFees, PositionFees},
     position::InsolventCloseStep,
     price::{Price, Prices},
-    PerpMarketMut,
+    MarketAction, PerpMarketMut,
 };
 
 use num_traits::{CheckedAdd, CheckedDiv, Signed, Zero};

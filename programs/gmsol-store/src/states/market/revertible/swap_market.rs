@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use gmsol_model::{Bank, SwapMarketMutExt};
+use gmsol_model::{Bank, MarketAction, SwapMarketMutExt};
 use indexmap::{map::Entry, IndexMap};
 
 use crate::{

@@ -24,10 +24,10 @@ pub use self::{
     report::{DecreasePositionReport, OutputAmounts, Pnl},
 };
 
-use super::swap::SwapReport;
+use super::{swap::SwapReport, MarketAction};
 
 /// Decrease the position.
-#[must_use]
+#[must_use = "actions do nothing unless you `execute` them"]
 pub struct DecreasePosition<P: Position<DECIMALS>, const DECIMALS: u8> {
     position: P,
     params: DecreasePositionParams<P::Num>,
@@ -211,183 +211,6 @@ where
     pub fn set_swap(mut self, kind: DecreasePositionSwapType) -> Self {
         self.params.swap = kind;
         self
-    }
-
-    /// Execute.
-    pub fn execute(mut self) -> crate::Result<Box<DecreasePositionReport<P::Num>>> {
-        debug_assert!(
-            self.size_delta_usd <= *self.position.size_in_usd_mut(),
-            "must have been checked or capped by the position size"
-        );
-        debug_assert!(
-            self.withdrawable_collateral_amount <= *self.position.collateral_amount_mut(),
-            "must have been capped by the position collateral amount"
-        );
-
-        self.check_partial_close()?;
-        self.check_close()?;
-
-        if !matches!(self.params.swap, DecreasePositionSwapType::NoSwap)
-            && self.position.are_pnl_and_collateral_tokens_the_same()
-        {
-            self.params.swap = DecreasePositionSwapType::NoSwap;
-        }
-
-        let borrowing = self
-            .position
-            .market_mut()
-            .update_borrowing(&self.params.prices)?
-            .execute()?;
-        let funding = self
-            .position
-            .market_mut()
-            .update_funding(&self.params.prices)?
-            .execute()?;
-
-        self.check_liquidation()?;
-
-        let initial_collateral_amount = self.position.collateral_amount_mut().clone();
-
-        let mut execution = self.process_collateral()?;
-
-        let should_remove;
-        {
-            let is_long = self.position.is_long();
-            let is_collateral_long = self.position.is_collateral_token_long();
-
-            let next_position_size_in_usd = self
-                .position
-                .size_in_usd_mut()
-                .checked_sub(&self.size_delta_usd)
-                .ok_or(crate::Error::Computation(
-                    "calculating next position size in usd",
-                ))?;
-            let next_position_borrowing_factor = self
-                .position
-                .market()
-                .cumulative_borrowing_factor(is_long)?;
-
-            // Update total borrowing before updating position size.
-            self.position.update_total_borrowing(
-                &next_position_size_in_usd,
-                &next_position_borrowing_factor,
-            )?;
-
-            let next_position_size_in_tokens = self
-                .position
-                .size_in_tokens_mut()
-                .checked_sub(&execution.size_delta_in_tokens)
-                .ok_or(crate::Error::Computation("calculating next size in tokens"))?;
-            let next_position_collateral_amount =
-                execution.collateral.remaining_collateral_amount.clone();
-
-            should_remove =
-                next_position_size_in_usd.is_zero() || next_position_size_in_tokens.is_zero();
-
-            if should_remove {
-                *self.position.size_in_usd_mut() = Zero::zero();
-                *self.position.size_in_tokens_mut() = Zero::zero();
-                *self.position.collateral_amount_mut() = Zero::zero();
-                execution.collateral.output_amount = execution
-                    .collateral
-                    .output_amount
-                    .checked_add(&next_position_collateral_amount)
-                    .ok_or(crate::Error::Computation("calculating output amount"))?;
-            } else {
-                *self.position.size_in_usd_mut() = next_position_size_in_usd;
-                *self.position.size_in_tokens_mut() = next_position_size_in_tokens;
-                *self.position.collateral_amount_mut() = next_position_collateral_amount;
-            };
-
-            // Update collateral sum.
-            {
-                let collateral_delta_amount = initial_collateral_amount
-                    .checked_sub(self.position.collateral_amount_mut())
-                    .ok_or(crate::Error::Computation("collateral amount increased"))?;
-
-                self.position
-                    .market_mut()
-                    .collateral_sum_pool_mut(is_long)?
-                    .apply_delta_amount(
-                        is_collateral_long,
-                        &collateral_delta_amount.to_opposite_signed()?,
-                    )?;
-            }
-
-            // The state of the position must be up-to-date, even if it is going to be removed.
-            *self.position.borrowing_factor_mut() = next_position_borrowing_factor;
-            *self.position.funding_fee_amount_per_size_mut() = self
-                .position
-                .market()
-                .funding_fee_amount_per_size(is_long, is_collateral_long)?;
-            for is_long_collateral in [true, false] {
-                *self
-                    .position
-                    .claimable_funding_fee_amount_per_size_mut(is_long_collateral) = self
-                    .position
-                    .market()
-                    .claimable_funding_fee_amount_per_size(is_long, is_long_collateral)?;
-            }
-        }
-
-        // Update open interest.
-        self.position.update_open_interest(
-            &self.size_delta_usd.to_opposite_signed()?,
-            &execution.size_delta_in_tokens.to_opposite_signed()?,
-        )?;
-
-        if !should_remove {
-            self.position.validate(&self.params.prices, false, false)?;
-        }
-
-        self.position.on_decreased()?;
-
-        let mut report = Box::new(DecreasePositionReport::new(
-            &self.params,
-            execution,
-            self.withdrawable_collateral_amount,
-            self.size_delta_usd,
-            borrowing,
-            funding,
-            should_remove,
-        ));
-
-        // Swap collateral tokens to pnl tokens.
-        {
-            let ty = self.params.swap;
-            let swap_result = Self::swap_collateral_token_to_pnl_token(
-                self.position.market_mut(),
-                &mut report,
-                self.params.prices(),
-                ty,
-            )?;
-
-            if let Some(result) = swap_result {
-                match result {
-                    Ok(report) => {
-                        self.position.on_swapped(ty, &report)?;
-                    }
-                    Err(err) => {
-                        self.position.on_swap_error(ty, err)?;
-                    }
-                }
-            }
-        }
-
-        // Merge amounts if needed.
-        let (output_amount, secondary_output_amount) = report.output_amounts_mut();
-        if self.position.are_pnl_and_collateral_tokens_the_same()
-            && !secondary_output_amount.is_zero()
-        {
-            *output_amount = output_amount.checked_add(secondary_output_amount).ok_or(
-                crate::Error::Computation(
-                    "overflow occurred while merging the secondary output amount",
-                ),
-            )?;
-            *secondary_output_amount = Zero::zero();
-        }
-
-        Ok(report)
     }
 
     /// Do a check when the position will be partially decreased.
@@ -712,11 +535,195 @@ where
     }
 }
 
+impl<const DECIMALS: u8, P: PositionMut<DECIMALS>> MarketAction for DecreasePosition<P, DECIMALS>
+where
+    P::Market: PerpMarketMut<DECIMALS, Num = P::Num, Signed = P::Signed>,
+{
+    type Report = Box<DecreasePositionReport<P::Num>>;
+
+    fn execute(mut self) -> crate::Result<Self::Report> {
+        debug_assert!(
+            self.size_delta_usd <= *self.position.size_in_usd_mut(),
+            "must have been checked or capped by the position size"
+        );
+        debug_assert!(
+            self.withdrawable_collateral_amount <= *self.position.collateral_amount_mut(),
+            "must have been capped by the position collateral amount"
+        );
+
+        self.check_partial_close()?;
+        self.check_close()?;
+
+        if !matches!(self.params.swap, DecreasePositionSwapType::NoSwap)
+            && self.position.are_pnl_and_collateral_tokens_the_same()
+        {
+            self.params.swap = DecreasePositionSwapType::NoSwap;
+        }
+
+        let borrowing = self
+            .position
+            .market_mut()
+            .update_borrowing(&self.params.prices)?
+            .execute()?;
+        let funding = self
+            .position
+            .market_mut()
+            .update_funding(&self.params.prices)?
+            .execute()?;
+
+        self.check_liquidation()?;
+
+        let initial_collateral_amount = self.position.collateral_amount_mut().clone();
+
+        let mut execution = self.process_collateral()?;
+
+        let should_remove;
+        {
+            let is_long = self.position.is_long();
+            let is_collateral_long = self.position.is_collateral_token_long();
+
+            let next_position_size_in_usd = self
+                .position
+                .size_in_usd_mut()
+                .checked_sub(&self.size_delta_usd)
+                .ok_or(crate::Error::Computation(
+                    "calculating next position size in usd",
+                ))?;
+            let next_position_borrowing_factor = self
+                .position
+                .market()
+                .cumulative_borrowing_factor(is_long)?;
+
+            // Update total borrowing before updating position size.
+            self.position.update_total_borrowing(
+                &next_position_size_in_usd,
+                &next_position_borrowing_factor,
+            )?;
+
+            let next_position_size_in_tokens = self
+                .position
+                .size_in_tokens_mut()
+                .checked_sub(&execution.size_delta_in_tokens)
+                .ok_or(crate::Error::Computation("calculating next size in tokens"))?;
+            let next_position_collateral_amount =
+                execution.collateral.remaining_collateral_amount.clone();
+
+            should_remove =
+                next_position_size_in_usd.is_zero() || next_position_size_in_tokens.is_zero();
+
+            if should_remove {
+                *self.position.size_in_usd_mut() = Zero::zero();
+                *self.position.size_in_tokens_mut() = Zero::zero();
+                *self.position.collateral_amount_mut() = Zero::zero();
+                execution.collateral.output_amount = execution
+                    .collateral
+                    .output_amount
+                    .checked_add(&next_position_collateral_amount)
+                    .ok_or(crate::Error::Computation("calculating output amount"))?;
+            } else {
+                *self.position.size_in_usd_mut() = next_position_size_in_usd;
+                *self.position.size_in_tokens_mut() = next_position_size_in_tokens;
+                *self.position.collateral_amount_mut() = next_position_collateral_amount;
+            };
+
+            // Update collateral sum.
+            {
+                let collateral_delta_amount = initial_collateral_amount
+                    .checked_sub(self.position.collateral_amount_mut())
+                    .ok_or(crate::Error::Computation("collateral amount increased"))?;
+
+                self.position
+                    .market_mut()
+                    .collateral_sum_pool_mut(is_long)?
+                    .apply_delta_amount(
+                        is_collateral_long,
+                        &collateral_delta_amount.to_opposite_signed()?,
+                    )?;
+            }
+
+            // The state of the position must be up-to-date, even if it is going to be removed.
+            *self.position.borrowing_factor_mut() = next_position_borrowing_factor;
+            *self.position.funding_fee_amount_per_size_mut() = self
+                .position
+                .market()
+                .funding_fee_amount_per_size(is_long, is_collateral_long)?;
+            for is_long_collateral in [true, false] {
+                *self
+                    .position
+                    .claimable_funding_fee_amount_per_size_mut(is_long_collateral) = self
+                    .position
+                    .market()
+                    .claimable_funding_fee_amount_per_size(is_long, is_long_collateral)?;
+            }
+        }
+
+        // Update open interest.
+        self.position.update_open_interest(
+            &self.size_delta_usd.to_opposite_signed()?,
+            &execution.size_delta_in_tokens.to_opposite_signed()?,
+        )?;
+
+        if !should_remove {
+            self.position.validate(&self.params.prices, false, false)?;
+        }
+
+        self.position.on_decreased()?;
+
+        let mut report = Box::new(DecreasePositionReport::new(
+            &self.params,
+            execution,
+            self.withdrawable_collateral_amount,
+            self.size_delta_usd,
+            borrowing,
+            funding,
+            should_remove,
+        ));
+
+        // Swap collateral tokens to pnl tokens.
+        {
+            let ty = self.params.swap;
+            let swap_result = Self::swap_collateral_token_to_pnl_token(
+                self.position.market_mut(),
+                &mut report,
+                self.params.prices(),
+                ty,
+            )?;
+
+            if let Some(result) = swap_result {
+                match result {
+                    Ok(report) => {
+                        self.position.on_swapped(ty, &report)?;
+                    }
+                    Err(err) => {
+                        self.position.on_swap_error(ty, err)?;
+                    }
+                }
+            }
+        }
+
+        // Merge amounts if needed.
+        let (output_amount, secondary_output_amount) = report.output_amounts_mut();
+        if self.position.are_pnl_and_collateral_tokens_the_same()
+            && !secondary_output_amount.is_zero()
+        {
+            *output_amount = output_amount.checked_add(secondary_output_amount).ok_or(
+                crate::Error::Computation(
+                    "overflow occurred while merging the secondary output amount",
+                ),
+            )?;
+            *secondary_output_amount = Zero::zero();
+        }
+
+        Ok(report)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
         market::LiquidityMarketMutExt,
         test::{TestMarket, TestPosition},
+        MarketAction,
     };
 
     use super::*;

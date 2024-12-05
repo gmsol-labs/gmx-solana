@@ -7,8 +7,10 @@ use crate::{
     num::Unsigned,
 };
 
+use super::MarketAction;
+
 /// Distribute Position Impact.
-#[must_use]
+#[must_use = "actions do nothing unless you `execute` them"]
 pub struct DistributePositionImpact<M: BaseMarket<DECIMALS>, const DECIMALS: u8> {
     market: M,
 }
@@ -38,11 +40,12 @@ impl<T> DistributePositionImpactReport<T> {
     }
 }
 
-impl<M: PositionImpactMarketMut<DECIMALS>, const DECIMALS: u8>
-    DistributePositionImpact<M, DECIMALS>
+impl<M: PositionImpactMarketMut<DECIMALS>, const DECIMALS: u8> MarketAction
+    for DistributePositionImpact<M, DECIMALS>
 {
-    /// Execute.
-    pub fn execute(mut self) -> crate::Result<DistributePositionImpactReport<M::Num>> {
+    type Report = DistributePositionImpactReport<M::Num>;
+
+    fn execute(mut self) -> crate::Result<Self::Report> {
         let duration_in_seconds = self
             .market
             .just_passed_in_seconds_for_position_impact_distribution()?;
@@ -80,7 +83,7 @@ mod tests {
         market::LiquidityMarketMutExt,
         price::Prices,
         test::{TestMarket, TestPosition},
-        PositionMutExt,
+        MarketAction, PositionMutExt,
     };
 
     use super::*;
