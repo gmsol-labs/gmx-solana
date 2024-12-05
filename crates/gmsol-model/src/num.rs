@@ -213,7 +213,7 @@ pub trait Unsigned: num_traits::Unsigned {
     fn bound_magnitude(value: &Self::Signed, min: &Self, max: &Self) -> crate::Result<Self::Signed>
     where
         Self: Ord + Clone,
-        Self::Signed: Clone + CheckedSub + CheckedNeg,
+        Self::Signed: Clone + CheckedSub,
     {
         if min > max {
             return Err(crate::Error::InvalidArgument("min > max"));
