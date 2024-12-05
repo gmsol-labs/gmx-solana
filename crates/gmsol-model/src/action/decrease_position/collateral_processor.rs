@@ -15,7 +15,6 @@ use num_traits::{CheckedAdd, CheckedDiv, Signed, Zero};
 use super::{ClaimableCollateral, DecreasePositionSwapType};
 
 /// Collateral Processor.
-#[must_use]
 pub(super) struct CollateralProcessor<'a, M: BaseMarket<DECIMALS>, const DECIMALS: u8> {
     market: &'a mut M,
     state: State<M::Num>,

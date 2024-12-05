@@ -320,7 +320,7 @@ struct SwapResult<T: Unsigned> {
 }
 
 /// Report of the execution of swap.
-#[must_use = "`token_out_amount` must use"]
+#[must_use = "`token_out_amount` must be used"]
 pub struct SwapReport<T: Unsigned> {
     params: SwapParams<T>,
     result: SwapResult<T>,
@@ -352,6 +352,7 @@ impl<T: Unsigned> SwapReport<T> {
     }
 
     /// Get the amount of out token.
+    #[must_use = "the returned amount of tokens should be transferred out from the market vault"]
     pub fn token_out_amount(&self) -> &T {
         &self.result.token_out_amount
     }

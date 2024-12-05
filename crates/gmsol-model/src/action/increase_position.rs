@@ -57,7 +57,7 @@ impl<T> IncreasePositionParams<T> {
 }
 
 /// Report of the execution of position increasing.
-#[must_use]
+#[must_use = "`claimable_funding_amounts` must be used"]
 pub struct IncreasePositionReport<T: Unsigned> {
     params: IncreasePositionParams<T>,
     execution: ExecutionParams<T>,
@@ -120,10 +120,7 @@ impl<T: Unsigned + Clone> IncreasePositionReport<T> {
     }
 
     /// Get claimable funding amounts, returns `(long_amount, short_amount)`.
-    ///
-    /// ## Must Use
-    /// These amounts are expected to be used by the caller.
-    #[must_use]
+    #[must_use = "the returned amounts of tokens should be transferred out from the market vault"]
     pub fn claimable_funding_amounts(&self) -> (&T, &T) {
         (
             &self.claimable_funding_long_token_amount,

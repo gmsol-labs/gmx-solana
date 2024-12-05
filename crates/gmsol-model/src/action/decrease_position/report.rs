@@ -12,7 +12,11 @@ use crate::{
 use super::{ClaimableCollateral, DecreasePositionParams, ProcessCollateralResult};
 
 /// Report of the execution of position decreasing.
-#[must_use]
+#[must_use = "
+    `output_amount`, `secondary_output_amount`, `should_remove`, `withdrawable_collateral_amount`,
+    `claimable_funding_amounts`, `claimable_collateral_for_holding` and `claimable_collateral_for_user`
+    must be used
+"]
 pub struct DecreasePositionReport<T: Unsigned> {
     price_impact_value: T::Signed,
     price_impact_diff: T,
@@ -162,38 +166,24 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
         &self.fees
     }
 
-    /// Returns whether the output token (collateral token) is long token.
-    ///
-    /// ## Must Use
-    /// Must be used by the caller.
-    #[must_use]
+    /// Returns whether the output token (collateral token) is the long token.
     pub fn is_output_token_long(&self) -> bool {
         self.is_output_token_long
     }
 
-    /// Returns whether the secondary output token (pnl token) is long token.
-    ///
-    /// ## Must Use
-    /// Must be used by the caller.
-    #[must_use]
+    /// Returns whether the secondary output token (pnl token) is the long token.
     pub fn is_secondary_output_token_long(&self) -> bool {
         self.is_secondary_output_token_long
     }
 
-    /// Get output amount.
-    ///
-    /// ## Must Use
-    /// Must be used by the caller.
-    #[must_use]
+    /// Get the output amount.
+    #[must_use = "the returned amount of output tokens should be transferred out from the market vault"]
     pub fn output_amount(&self) -> &T {
         &self.output_amounts.output_amount
     }
 
     /// Get secondary output amount.
-    ///
-    /// ## Must Use
-    /// Must be used by the caller.
-    #[must_use]
+    #[must_use = "the returned amount of secondary output tokens should be transferred out from the market vault"]
     pub fn secondary_output_amount(&self) -> &T {
         &self.output_amounts.secondary_output_amount
     }
@@ -210,29 +200,20 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
         )
     }
 
-    /// Get should remove.
-    ///
-    /// ## Must Use
-    /// Must be used by the caller.
-    #[must_use]
+    /// Returns whether the position should be removed.
+    #[must_use = "The position should be removed if `true` is returned"]
     pub fn should_remove(&self) -> bool {
         self.should_remove
     }
 
     /// Get withdrawable collateral amount.
-    ///
-    /// ## Must Use
-    /// Must be used by the caller.
-    #[must_use]
+    #[must_use = "the returned amount of collateral tokens should be transferred out from the market vault"]
     pub fn withdrawable_collateral_amount(&self) -> &T {
         &self.withdrawable_collateral_amount
     }
 
     /// Get claimable funding amounts.
-    ///
-    /// ## Must Use
-    /// Must be used by the caller.
-    #[must_use]
+    #[must_use = "the returned amounts of tokens should be transferred out from the market vault"]
     pub fn claimable_funding_amounts(&self) -> (&T, &T) {
         (
             &self.claimable_funding_long_token_amount,
@@ -241,19 +222,13 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     }
 
     /// Get claimable collateral for holding.
-    ///
-    /// ## Must Use
-    /// Must be used by the caller.
-    #[must_use]
+    #[must_use = "the returned amount of tokens should be transferred out from the market vault"]
     pub fn claimable_collateral_for_holding(&self) -> &ClaimableCollateral<T> {
         &self.for_holding
     }
 
     /// Get Get claimable collateral for user.
-    ///
-    /// ## Must Use
-    /// Must be used by the caller.
-    #[must_use]
+    #[must_use = "the returned amount of tokens should be transferred out from the market vault"]
     pub fn claimable_collateral_for_user(&self) -> &ClaimableCollateral<T> {
         &self.for_user
     }

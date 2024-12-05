@@ -41,7 +41,7 @@ impl<T> WithdrawParams<T> {
 }
 
 /// Report of the execution of withdrawal.
-#[must_use = "`long_token_output` and `short_token_output` must use"]
+#[must_use = "`long_token_output` and `short_token_output` must be used"]
 #[derive(Debug, Clone, Copy)]
 pub struct WithdrawReport<T> {
     params: WithdrawParams<T>,
@@ -68,11 +68,13 @@ impl<T> WithdrawReport<T> {
     }
 
     /// Get the output amount of long tokens.
+    #[must_use = "the returned amount of long tokens should be transferred out from the market vault"]
     pub fn long_token_output(&self) -> &T {
         &self.long_token_output
     }
 
     /// Get the output amount of short tokens.
+    #[must_use = "the returned amount of short tokens should be transferred out from the market vault"]
     pub fn short_token_output(&self) -> &T {
         &self.short_token_output
     }
