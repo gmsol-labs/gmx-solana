@@ -201,7 +201,7 @@ pub struct CloseGlvWithdrawal<'info> {
         mut,
         constraint = glv_withdrawal.load()?.header.store == store.key() @ CoreError::StoreMismatched,
         constraint = glv_withdrawal.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
-        // The rent receiver of a glv withdrawal must be the owner.
+        // The rent receiver of a GLV withdrawal must be the owner.
         constraint = glv_withdrawal.load()?.header.rent_receiver() == owner.key @ CoreError::RentReceiverMismatched,
         constraint = glv_withdrawal.load()?.tokens.market_token_account() == market_token_escrow.key() @ CoreError::MarketTokenAccountMismatched,
         constraint = glv_withdrawal.load()?.tokens.glv_token_account() == glv_token_escrow.key() @ CoreError::MarketTokenAccountMismatched,
