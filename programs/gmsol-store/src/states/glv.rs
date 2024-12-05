@@ -796,7 +796,6 @@ pub struct GlvWithdrawalParams {
 #[account(zero_copy)]
 pub struct GlvShift {
     pub(crate) shift: Shift,
-    pub(crate) funder: Pubkey,
 }
 
 impl Action for GlvShift {
@@ -850,7 +849,7 @@ impl GlvShift {
 
     /// Get the funder.
     pub fn funder(&self) -> &Pubkey {
-        &self.funder
+        self.shift.header().rent_receiver()
     }
 }
 

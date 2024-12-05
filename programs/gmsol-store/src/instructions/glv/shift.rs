@@ -131,7 +131,10 @@ impl<'info> internal::Create<'info, GlvShift> for CreateGlvShift<'info> {
         // Set the funder of the GLV shift.
         {
             self.glv_shift.exit(&crate::ID)?;
-            self.glv_shift.load_mut()?.funder = self.authority.key();
+            self.glv_shift
+                .load_mut()?
+                .header_mut()
+                .set_rent_receiver(self.authority.key());
         }
 
         Ok(())
@@ -171,9 +174,10 @@ pub struct CloseGlvShift<'info> {
     /// The GLV shift to close.
     #[account(
         mut,
-        has_one = funder,
         constraint = glv_shift.load()?.header().owner == glv.key() @ CoreError::OwnerMismatched,
         constraint = glv_shift.load()?.header().store == store.key() @ CoreError::StoreMismatched,
+        // The rent receiver of a GLV shift must be the funder.
+        constraint = glv_shift.load()?.header().rent_receiver() == funder.key @ CoreError::RentReceiverMismatched,
         seeds = [GlvShift::SEED, store.key().as_ref(), glv.key().as_ref(), &glv_shift.load()?.header().nonce],
         bump = glv_shift.load()?.header().bump,
     )]
@@ -201,7 +205,11 @@ impl<'info> internal::Close<'info, GlvShift> for CloseGlvShift<'info> {
         RoleKey::ORDER_KEEPER
     }
 
-    fn fund_receiver(&self) -> AccountInfo<'info> {
+    fn rent_receiver(&self) -> AccountInfo<'info> {
+        debug_assert!(
+            self.glv_shift.load().unwrap().header().rent_receiver() == self.funder.key,
+            "The rent receiver must have been checked to be the owner"
+        );
         self.funder.to_account_info()
     }
 

@@ -79,8 +79,6 @@ pub struct ActionHeader {
     pub(crate) owner: Pubkey,
     /// Nonce bytes.
     pub(crate) nonce: [u8; 32],
-    /// Creator.
-    pub(crate) creator: Pubkey,
     /// Max execution lamports.
     pub(crate) max_execution_lamports: u64,
     /// Last updated timestamp.
@@ -92,6 +90,11 @@ pub struct ActionHeader {
     /// The bump seed.
     pub(crate) bump: u8,
     padding_0: [u8; 6],
+    /// Creator.
+    pub(crate) creator: Pubkey,
+    /// Rent receiver.
+    rent_receiver: Pubkey,
+    reserved: [u8; 256],
 }
 
 impl ActionHeader {
@@ -126,12 +129,6 @@ impl ActionHeader {
         &self.owner
     }
 
-    /// Get the creator.
-    /// We assume that the action account's address is derived from that address.
-    pub fn creator(&self) -> &Pubkey {
-        &self.creator
-    }
-
     // Get the action id.
     pub fn id(&self) -> u64 {
         self.id
@@ -152,11 +149,6 @@ impl ActionHeader {
         &self.nonce
     }
 
-    /// Get the bump.
-    pub fn bump(&self) -> u8 {
-        self.bump
-    }
-
     /// Get max execution lamports.
     pub fn max_execution_lamports(&self) -> u64 {
         self.max_execution_lamports
@@ -170,6 +162,22 @@ impl ActionHeader {
     /// Get last updated slot.
     pub fn updated_at_slot(&self) -> u64 {
         self.updated_at_slot
+    }
+
+    /// Get the bump.
+    pub fn bump(&self) -> u8 {
+        self.bump
+    }
+
+    /// Get the creator.
+    /// We assume that the action account's address is derived from that address.
+    pub fn creator(&self) -> &Pubkey {
+        &self.creator
+    }
+
+    /// Get the rent receiver.
+    pub fn rent_receiver(&self) -> &Pubkey {
+        &self.rent_receiver
     }
 
     #[inline(never)]
@@ -189,12 +197,14 @@ impl ActionHeader {
         self.market = market;
         self.owner = owner;
         self.nonce = nonce;
-        // The creator defaults to the `owner`.
-        self.creator = owner;
-        self.bump = bump;
         self.max_execution_lamports = execution_lamports;
         self.updated_at = clock.unix_timestamp;
         self.updated_at_slot = clock.slot;
+        self.bump = bump;
+        // The creator defaults to the `owner`.
+        self.creator = owner;
+        // The rent receiver defaults to the `owner`.
+        self.rent_receiver = owner;
 
         Ok(())
     }
@@ -205,6 +215,11 @@ impl ActionHeader {
     /// - The address of this action account must be derived from this address.
     pub(crate) fn unchecked_set_creator(&mut self, creator: Pubkey) {
         self.creator = creator;
+    }
+
+    /// Set the rent receiver.
+    pub(crate) fn set_rent_receiver(&mut self, rent_receiver: Pubkey) {
+        self.rent_receiver = rent_receiver;
     }
 
     pub(crate) fn updated(&mut self) -> Result<()> {

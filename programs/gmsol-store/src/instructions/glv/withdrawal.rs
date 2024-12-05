@@ -199,8 +199,10 @@ pub struct CloseGlvWithdrawal<'info> {
     /// The GLV withdrawal to close.
     #[account(
         mut,
-        constraint = glv_withdrawal.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
         constraint = glv_withdrawal.load()?.header.store == store.key() @ CoreError::StoreMismatched,
+        constraint = glv_withdrawal.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
+        // The rent receiver of a glv withdrawal must be the owner.
+        constraint = glv_withdrawal.load()?.header.rent_receiver() == owner.key @ CoreError::RentReceiverMismatched,
         constraint = glv_withdrawal.load()?.tokens.market_token_account() == market_token_escrow.key() @ CoreError::MarketTokenAccountMismatched,
         constraint = glv_withdrawal.load()?.tokens.glv_token_account() == glv_token_escrow.key() @ CoreError::MarketTokenAccountMismatched,
         constraint = glv_withdrawal.load()?.tokens.final_long_token_account() == final_long_token_escrow.key() @ CoreError::TokenAccountMismatched,
@@ -301,7 +303,11 @@ impl<'info> internal::Close<'info, GlvWithdrawal> for CloseGlvWithdrawal<'info> 
         RoleKey::ORDER_KEEPER
     }
 
-    fn fund_receiver(&self) -> AccountInfo<'info> {
+    fn rent_receiver(&self) -> AccountInfo<'info> {
+        debug_assert!(
+            self.glv_withdrawal.load().unwrap().header.rent_receiver() == self.owner.key,
+            "The rent receiver must have been checked to be the owner"
+        );
         self.owner.to_account_info()
     }
 
@@ -319,7 +325,8 @@ impl<'info> internal::Close<'info, GlvWithdrawal> for CloseGlvWithdrawal<'info> 
             .owner(self.owner.to_account_info())
             .escrow_authority(self.glv_withdrawal.to_account_info())
             .seeds(&seeds)
-            .init_if_needed(init_if_needed);
+            .init_if_needed(init_if_needed)
+            .rent_receiver(self.rent_receiver());
 
         // Transfer market tokens.
         if !builder

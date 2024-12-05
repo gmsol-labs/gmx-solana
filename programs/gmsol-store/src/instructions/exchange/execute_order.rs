@@ -10,7 +10,10 @@ use crate::{
     ops::{
         execution_fee::PayExecutionFeeOperation,
         market::{MarketTransferInOperation, MarketTransferOutOperation},
-        order::{ExecuteOrderOperation, ProcessTransferOutOperation, ShouldSendTradeEvent},
+        order::{
+            ExecuteOrderOperation, ProcessTransferOutOperation, RemovePosition,
+            ShouldSendTradeEvent,
+        },
     },
     states::{
         common::action::{ActionEvent, ActionExt, ActionSigner},
@@ -312,7 +315,7 @@ pub(crate) fn unchecked_execute_increase_or_swap_order<'info>(
 
     accounts.transfer_tokens_in(&signer, remaining_accounts)?;
 
-    let (transfer_out, should_send_trade_event) =
+    let (is_position_removed, transfer_out, should_send_trade_event) =
         accounts.perform_execution(remaining_accounts, throw_on_execution_error)?;
 
     if transfer_out.executed() {
@@ -331,6 +334,10 @@ pub(crate) fn unchecked_execute_increase_or_swap_order<'info>(
             .load()?;
         let event = Trade::from(&*event);
         event.emit_cpi(accounts.event_authority.clone(), ctx.bumps.event_authority)?;
+    }
+
+    if is_position_removed {
+        msg!("[Position] the position is removed");
     }
 
     // It must be placed at the end to be executed correctly.
@@ -423,7 +430,7 @@ impl<'info> ExecuteIncreaseOrSwapOrder<'info> {
         &mut self,
         remaining_accounts: &'info [AccountInfo<'info>],
         throw_on_execution_error: bool,
-    ) -> Result<(Box<TransferOut>, ShouldSendTradeEvent)> {
+    ) -> Result<(RemovePosition, Box<TransferOut>, ShouldSendTradeEvent)> {
         // FIXME: We only need the tokens here, the feeds are not necessary.
         let feeds = self
             .order
@@ -726,7 +733,7 @@ pub(crate) fn unchecked_execute_decrease_order<'info>(
         .load()?
         .validate_feature_enabled(kind.try_into()?, ActionDisabledFlag::ExecuteOrder)?;
 
-    let (transfer_out, should_send_trade_event) =
+    let (is_position_removed, transfer_out, should_send_trade_event) =
         accounts.perform_execution(remaining_accounts, throw_on_execution_error)?;
 
     if transfer_out.executed() {
@@ -741,6 +748,10 @@ pub(crate) fn unchecked_execute_decrease_order<'info>(
         let event = event_loader.load()?;
         let event = Trade::from(&*event);
         event.emit_cpi(accounts.event_authority.clone(), ctx.bumps.event_authority)?;
+    }
+
+    if is_position_removed {
+        msg!("[Position] the position is removed");
     }
 
     // It must be placed at the end to be executed correctly.
@@ -765,7 +776,7 @@ impl<'info> ExecuteDecreaseOrder<'info> {
         &mut self,
         remaining_accounts: &'info [AccountInfo<'info>],
         throw_on_execution_error: bool,
-    ) -> Result<(Box<TransferOut>, ShouldSendTradeEvent)> {
+    ) -> Result<(RemovePosition, Box<TransferOut>, ShouldSendTradeEvent)> {
         // FIXME: We only need the tokens here, the feeds are not necessary.
         let feeds = self
             .order

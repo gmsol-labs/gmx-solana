@@ -62,6 +62,7 @@ pub struct PositionCutHint {
     pnl_token: Pubkey,
     token_map: Pubkey,
     market: Pubkey,
+    position_size: u128,
 }
 
 impl PositionCutHint {
@@ -138,6 +139,7 @@ impl PositionCutHint {
             collateral_token: position.collateral_token,
             pnl_token: market_meta.pnl_token(position.try_is_long()?),
             meta: market_meta,
+            position_size: position.state.size_in_usd,
         })
     }
 
@@ -360,6 +362,11 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PositionCutBuilder<'a, C> {
             }
         }
 
+        let is_full_close = match self.kind {
+            PositionCutKind::Liquidate => true,
+            PositionCutKind::AutoDeleverage(size) => size >= hint.position_size,
+        };
+
         if self.close {
             let close = self
                 .client
@@ -376,6 +383,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PositionCutBuilder<'a, C> {
                     short_token_and_account: Some((short_token_mint, short_token_escrow)),
                     user: hint.user,
                     referrer: hint.referrer,
+                    rent_receiver: if is_full_close { owner } else { payer },
                 })
                 .reason("position cut")
                 .build()

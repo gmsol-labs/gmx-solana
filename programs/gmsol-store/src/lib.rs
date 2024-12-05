@@ -3394,6 +3394,9 @@ pub enum CoreError {
     /// Owner mismatched.
     #[msg("owner mismatched")]
     OwnerMismatched,
+    /// Rent Receiver mismatched.
+    #[msg("rent receiver mismatched")]
+    RentReceiverMismatched,
     /// Market mismatched.
     #[msg("market mismatched")]
     MarketMismatched,

@@ -15,6 +15,7 @@ use crate::{
         execution_fee::TransferExecutionFeeOperation,
         order::{CreateOrderOperation, CreateOrderParams},
     },
+    order::internal::Close,
     states::{
         feature::ActionDisabledFlag,
         order::{Order, OrderKind},
@@ -485,6 +486,10 @@ pub struct CloseOrder<'info> {
     /// CHECK: only used to validate and receive fund.
     #[account(mut)]
     pub owner: UncheckedAccount<'info>,
+    /// The rent receiver of the order.
+    /// CHECK: only used to validate and receive fund.
+    #[account(mut)]
+    pub rent_receiver: UncheckedAccount<'info>,
     /// User Account.
     #[account(
         mut,
@@ -509,8 +514,9 @@ pub struct CloseOrder<'info> {
     /// Order to close.
     #[account(
         mut,
-        constraint = order.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
         constraint = order.load()?.header.store == store.key() @ CoreError::StoreMismatched,
+        constraint = order.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
+        constraint = order.load()?.header.rent_receiver() == rent_receiver.key @ CoreError::RentReceiverMismatched,
         constraint = order.load()?.tokens.initial_collateral.account() == initial_collateral_token_escrow.as_ref().map(|a| a.key()) @ CoreError::TokenAccountMismatched,
         constraint = order.load()?.tokens.final_output_token.account() == final_output_token_escrow.as_ref().map(|a| a.key()) @ CoreError::TokenAccountMismatched,
         constraint = order.load()?.tokens.long_token.account() == long_token_escrow.as_ref().map(|a| a.key())@ CoreError::TokenAccountMismatched,
@@ -604,8 +610,8 @@ impl<'info> internal::Close<'info, Order> for CloseOrder<'info> {
         RoleKey::ORDER_KEEPER
     }
 
-    fn fund_receiver(&self) -> AccountInfo<'info> {
-        self.owner.to_account_info()
+    fn rent_receiver(&self) -> AccountInfo<'info> {
+        self.rent_receiver.to_account_info()
     }
 
     fn validate(&self) -> Result<()> {
@@ -654,6 +660,7 @@ impl<'info> CloseOrder<'info> {
             .owner(self.owner.to_account_info())
             .escrow_authority(self.order.to_account_info())
             .seeds(&seeds)
+            .rent_receiver(self.rent_receiver())
             .init_if_needed(init_if_needed);
 
         for (escrow, ata, token) in [

@@ -738,7 +738,7 @@ pub(crate) struct ExecuteOrderOperation<'a, 'info> {
     refund: u64,
 }
 
-pub(crate) type ShouldRemovePosition = bool;
+pub(crate) type RemovePosition = bool;
 pub(crate) type ShouldSendTradeEvent = bool;
 
 enum SecondaryOrderType {
@@ -748,8 +748,10 @@ enum SecondaryOrderType {
 
 impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
     #[inline(never)]
-    pub(crate) fn execute(self) -> Result<(Box<TransferOut>, ShouldSendTradeEvent)> {
-        let mut should_close_position = false;
+    pub(crate) fn execute(
+        self,
+    ) -> Result<(RemovePosition, Box<TransferOut>, ShouldSendTradeEvent)> {
+        let mut remove_position = false;
 
         match self.validate_oracle_and_adl() {
             Ok(()) => {}
@@ -763,7 +765,7 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
                         .flatten()
                         .expect("must have an expiration time"),
                 );
-                return Ok((Box::new(TransferOut::new_failed()), false));
+                return Ok((false, Box::new(TransferOut::new_failed()), false));
             }
             Err(err) => {
                 return Err(error!(err));
@@ -776,12 +778,12 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
         let res = match self.perform_execution(&mut should_throw_error, prices, discount) {
             Ok((should_remove_position, mut transfer_out, should_send_trade_event)) => {
                 transfer_out.set_executed(true);
-                should_close_position = should_remove_position;
+                remove_position = should_remove_position;
                 Ok((transfer_out, should_send_trade_event))
             }
             Err(err) if !(should_throw_error || self.throw_on_execution_error) => {
                 msg!("Execute order error: {}", err);
-                should_close_position = self
+                remove_position = self
                     .position
                     .as_ref()
                     .map(|a| Result::Ok(a.load()?.state.is_empty()))
@@ -794,11 +796,11 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
 
         let (transfer_out, should_send_trade_event) = res?;
 
-        if should_close_position {
+        if remove_position {
             self.close_position()?;
         }
 
-        Ok((transfer_out, should_send_trade_event))
+        Ok((remove_position, transfer_out, should_send_trade_event))
     }
 
     #[inline(never)]
@@ -834,7 +836,7 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
         should_throw_error: &mut bool,
         prices: Prices<u128>,
         order_fee_discount_factor: u128,
-    ) -> Result<(ShouldRemovePosition, Box<TransferOut>, ShouldSendTradeEvent)> {
+    ) -> Result<(RemovePosition, Box<TransferOut>, ShouldSendTradeEvent)> {
         self.validate_market()?;
         self.validate_order(should_throw_error, &prices)?;
 
@@ -1324,7 +1326,7 @@ fn execute_decrease_position(
     order: &mut Order,
     is_insolvent_close_allowed: bool,
     secondary_order_type: Option<SecondaryOrderType>,
-) -> Result<ShouldRemovePosition> {
+) -> Result<RemovePosition> {
     // Decrease position.
     let report = {
         let params = &order.params;
@@ -1595,9 +1597,20 @@ impl<'a, 'info> PositionCutOperation<'a, 'info> {
             )
         };
         self.create_order(size_in_usd, is_long, is_collateral_long)?;
-        let (transfer_out, should_send_trade_event) = self.execute_order()?;
+        let (is_position_removed, transfer_out, should_send_trade_event) = self.execute_order()?;
         require!(transfer_out.executed(), CoreError::Internal);
         self.order.load_mut()?.header.completed()?;
+        if is_position_removed {
+            msg!("[Position] the position is removed");
+        } else {
+            msg!(
+                "[Position] the position is not removed, setting the rent receiver to the executor"
+            );
+            self.order
+                .load_mut()?
+                .header
+                .set_rent_receiver(self.executor.key());
+        }
         self.process_transfer_out(&transfer_out, is_long, is_collateral_long)?;
         Ok(should_send_trade_event)
     }
@@ -1658,7 +1671,7 @@ impl<'a, 'info> PositionCutOperation<'a, 'info> {
     }
 
     #[inline(never)]
-    fn execute_order(&self) -> Result<(Box<TransferOut>, ShouldSendTradeEvent)> {
+    fn execute_order(&self) -> Result<(RemovePosition, Box<TransferOut>, ShouldSendTradeEvent)> {
         ExecuteOrderOperation::builder()
             .store(self.store)
             .market(self.market)

@@ -162,6 +162,8 @@ pub struct CloseShift<'info> {
         mut,
         constraint = shift.load()?.header.store == store.key() @ CoreError::StoreMismatched,
         constraint = shift.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
+        // The rent receiver of a shift must be the owner.
+        constraint = shift.load()?.header.rent_receiver() == owner.key @ CoreError::RentReceiverMismatched,
         constraint = shift.load()?.tokens.from_market_token_account() == from_market_token_escrow.key() @ CoreError::MarketTokenAccountMismatched,
         constraint = shift.load()?.tokens.to_market_token_account() == to_market_token_escrow.key() @ CoreError::MarketTokenAccountMismatched,
     )]
@@ -223,7 +225,11 @@ impl<'info> internal::Close<'info, Shift> for CloseShift<'info> {
         RoleKey::ORDER_KEEPER
     }
 
-    fn fund_receiver(&self) -> AccountInfo<'info> {
+    fn rent_receiver(&self) -> AccountInfo<'info> {
+        debug_assert!(
+            self.shift.load().unwrap().header.rent_receiver() == self.owner.key,
+            "The rent receiver must have been checked to be the owner"
+        );
         self.owner.to_account_info()
     }
 
@@ -241,7 +247,8 @@ impl<'info> internal::Close<'info, Shift> for CloseShift<'info> {
             .owner(self.owner.to_account_info())
             .escrow_authority(self.shift.to_account_info())
             .seeds(&seeds)
-            .init_if_needed(init_if_needed);
+            .init_if_needed(init_if_needed)
+            .rent_receiver(self.rent_receiver());
 
         // Transfer from market tokens.
         if !builder

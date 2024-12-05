@@ -598,6 +598,7 @@ pub struct ExecuteOrderHint {
     market_token: Pubkey,
     position: Option<Pubkey>,
     owner: Pubkey,
+    rent_receiver: Pubkey,
     user: Pubkey,
     referrer: Option<Pubkey>,
     initial_collateral_token_and_account: Option<(Pubkey, Pubkey)>,
@@ -744,6 +745,7 @@ where
         let kind = params.kind()?;
         let tokens = order.tokens();
         let owner = *order.header().owner();
+        let rent_receiver = *order.header().rent_receiver();
         let user_address = self.client.find_user_address(&self.store, &owner);
         let referrer = user.and_then(|user| user.referral().referrer().copied());
         self.hint = Some(ExecuteOrderHint {
@@ -753,6 +755,7 @@ where
             market_token,
             position: params.position().copied(),
             owner,
+            rent_receiver,
             user: user_address,
             referrer,
             long_token_mint: market.meta().long_token_mint,
@@ -1060,6 +1063,7 @@ where
                     short_token_and_account: hint.short_token_and_account,
                     user: hint.user,
                     referrer: hint.referrer,
+                    rent_receiver: hint.rent_receiver,
                 })
                 .build()
                 .await?;
@@ -1119,6 +1123,7 @@ pub struct CloseOrderHint {
     pub(super) short_token_and_account: Option<(Pubkey, Pubkey)>,
     pub(super) user: Pubkey,
     pub(super) referrer: Option<Pubkey>,
+    pub(super) rent_receiver: Pubkey,
 }
 
 impl CloseOrderHint {
@@ -1133,6 +1138,7 @@ impl CloseOrderHint {
         let store = order.header().store();
         let user_address = crate::pda::find_user_pda(store, owner, program_id).0;
         let referrer = user.and_then(|user| user.referral().referrer().copied());
+        let rent_receiver = *order.header().rent_receiver();
         Ok(Self {
             owner: *owner,
             store: *store,
@@ -1142,6 +1148,7 @@ impl CloseOrderHint {
             final_output_token_and_account: tokens.final_output_token().token_and_account(),
             long_token_and_account: tokens.long_token().token_and_account(),
             short_token_and_account: tokens.short_token().token_and_account(),
+            rent_receiver,
         })
     }
 }
@@ -1222,6 +1229,7 @@ where
                     order: self.order,
                     executor: payer,
                     owner,
+                    rent_receiver: hint.rent_receiver,
                     user: hint.user,
                     referrer_user,
                     initial_collateral_token: hint

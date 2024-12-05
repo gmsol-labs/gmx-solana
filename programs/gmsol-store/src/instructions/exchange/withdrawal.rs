@@ -197,6 +197,8 @@ pub struct CloseWithdrawal<'info> {
     #[account(
         mut,
         constraint = withdrawal.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
+        // The rent receiver of a withdrawal must be the owner.
+        constraint = withdrawal.load()?.header.rent_receiver() == owner.key @ CoreError::RentReceiverMismatched,
         constraint = withdrawal.load()?.header.store == store.key() @ CoreError::StoreMismatched,
         constraint = withdrawal.load()?.tokens.market_token_account() == market_token_escrow.key() @ CoreError::MarketTokenAccountMismatched,
         constraint = withdrawal.load()?.tokens.final_long_token_account() == final_long_token_escrow.key() @ CoreError::MarketTokenAccountMismatched,
@@ -268,7 +270,11 @@ impl<'info> internal::Close<'info, Withdrawal> for CloseWithdrawal<'info> {
         RoleKey::ORDER_KEEPER
     }
 
-    fn fund_receiver(&self) -> AccountInfo<'info> {
+    fn rent_receiver(&self) -> AccountInfo<'info> {
+        debug_assert!(
+            self.withdrawal.load().unwrap().header.rent_receiver() == self.owner.key,
+            "The rent receiver must have been checked to be the owner"
+        );
         self.owner.to_account_info()
     }
 
@@ -286,7 +292,8 @@ impl<'info> internal::Close<'info, Withdrawal> for CloseWithdrawal<'info> {
             .owner(self.owner.to_account_info())
             .escrow_authority(self.withdrawal.to_account_info())
             .seeds(&seeds)
-            .init_if_needed(init_if_needed);
+            .init_if_needed(init_if_needed)
+            .rent_receiver(self.rent_receiver());
 
         // Transfer market tokens.
         if !builder

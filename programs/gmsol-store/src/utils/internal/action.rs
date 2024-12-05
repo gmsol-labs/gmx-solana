@@ -87,8 +87,8 @@ where
     /// Expected keeper role.
     fn expected_keeper_role(&self) -> &str;
 
-    /// Fund receiver.
-    fn fund_receiver(&self) -> AccountInfo<'info>;
+    /// Rent receiver.
+    fn rent_receiver(&self) -> AccountInfo<'info>;
 
     /// Get event authority.
     fn event_authority(&self, bumps: &Self::Bumps) -> (AccountInfo<'info>, u8);
@@ -150,6 +150,6 @@ where
 
     /// Close the action account.
     fn close_action_account(&self) -> Result<()> {
-        self.action().close(self.fund_receiver())
+        self.action().close(self.rent_receiver())
     }
 }

@@ -235,6 +235,8 @@ pub struct CloseDeposit<'info> {
     #[account(
         mut,
         constraint = deposit.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
+        // The rent receiver of a deposit must be the owner.
+        constraint = deposit.load()?.header.rent_receiver() == owner.key @ CoreError::RentReceiverMismatched,
         constraint = deposit.load()?.header.store == store.key() @ CoreError::StoreMismatched,
         constraint = deposit.load()?.tokens.market_token.account().expect("must exist") == market_token_escrow.key() @ CoreError::MarketTokenAccountMismatched,
         constraint = deposit.load()?.tokens.initial_long_token.account() == initial_long_token_escrow.as_ref().map(|a| a.key()) @ CoreError::TokenAccountMismatched,
@@ -308,7 +310,11 @@ impl<'info> internal::Close<'info, Deposit> for CloseDeposit<'info> {
         RoleKey::ORDER_KEEPER
     }
 
-    fn fund_receiver(&self) -> AccountInfo<'info> {
+    fn rent_receiver(&self) -> AccountInfo<'info> {
+        debug_assert!(
+            self.deposit.load().unwrap().header.rent_receiver() == self.owner.key,
+            "The rent receiver must have been checked to be the owner"
+        );
         self.owner.to_account_info()
     }
 
@@ -327,7 +333,8 @@ impl<'info> internal::Close<'info, Deposit> for CloseDeposit<'info> {
             .owner(self.owner.to_account_info())
             .escrow_authority(self.deposit.to_account_info())
             .seeds(&seeds)
-            .init_if_needed(init_if_needed);
+            .init_if_needed(init_if_needed)
+            .rent_receiver(self.rent_receiver());
 
         // Transfer market tokens.
         if !builder
