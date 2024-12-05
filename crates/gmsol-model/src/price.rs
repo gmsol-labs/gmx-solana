@@ -59,9 +59,11 @@ where
 {
     /// Get mid price checked.
     pub fn checked_mid(&self) -> Option<T> {
+        let one = T::one();
+        let two = one.checked_add(&one)?;
         self.min
             .checked_add(&self.max)
-            .and_then(|p| p.checked_div(&(T::one() + T::one())))
+            .and_then(|p| p.checked_div(&two))
     }
 
     /// Get mid price.

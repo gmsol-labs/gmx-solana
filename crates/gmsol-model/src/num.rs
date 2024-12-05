@@ -122,7 +122,11 @@ pub trait Unsigned: num_traits::Unsigned {
     {
         let value = other.unsigned_abs();
         if other.is_negative() {
-            Some(-self.checked_mul(&value)?.try_into().ok()?)
+            Some(
+                Self::Signed::try_from(self.checked_mul(&value)?)
+                    .ok()?
+                    .checked_neg()?,
+            )
         } else {
             self.checked_mul(&value)?.try_into().ok()
         }
@@ -132,28 +136,36 @@ pub trait Unsigned: num_traits::Unsigned {
     fn as_divisor_to_round_up_magnitude_div(&self, dividend: &Self::Signed) -> Option<Self::Signed>
     where
         Self: Clone,
-        Self::Signed: CheckedSub + CheckedAdd,
+        Self::Signed: CheckedSub + CheckedAdd + CheckedDiv,
     {
         if self.is_zero() {
             return None;
         }
         let divisor: Self::Signed = self.clone().try_into().ok()?;
         if dividend.is_negative() {
-            Some(dividend.checked_sub(&divisor)?.checked_add(&One::one())? / divisor)
+            dividend
+                .checked_sub(&divisor)?
+                .checked_add(&One::one())?
+                .checked_div(&divisor)
         } else {
-            Some(dividend.checked_add(&divisor)?.checked_sub(&One::one())? / divisor)
+            dividend
+                .checked_add(&divisor)?
+                .checked_sub(&One::one())?
+                .checked_div(&divisor)
         }
     }
 
     /// Checked round up division.
     fn checked_round_up_div(&self, divisor: &Self) -> Option<Self>
     where
-        Self: CheckedAdd + CheckedSub + Clone,
+        Self: CheckedAdd + CheckedSub + Clone + CheckedDiv,
     {
         if divisor.is_zero() {
             return None;
         }
-        Some(self.checked_add(divisor)?.checked_sub(&One::one())? / divisor.clone())
+        self.checked_add(divisor)?
+            .checked_sub(&One::one())?
+            .checked_div(divisor)
     }
 
     /// Bound the magnitude of a signed value.
@@ -201,7 +213,7 @@ pub trait Unsigned: num_traits::Unsigned {
     fn bound_magnitude(value: &Self::Signed, min: &Self, max: &Self) -> crate::Result<Self::Signed>
     where
         Self: Ord + Clone,
-        Self::Signed: Clone + CheckedSub,
+        Self::Signed: Clone + CheckedSub + CheckedNeg,
     {
         if min > max {
             return Err(crate::Error::InvalidArgument("min > max"));
@@ -255,7 +267,7 @@ pub trait MulDiv: Unsigned {
         if numerator.is_positive() {
             Some(ans)
         } else {
-            Some(-ans)
+            ans.checked_neg()
         }
     }
 }
@@ -269,6 +281,7 @@ impl Unsigned for u64 {
 }
 
 impl MulDiv for u64 {
+    #[allow(clippy::arithmetic_side_effects)]
     fn checked_mul_div(&self, numerator: &Self, denominator: &Self) -> Option<Self> {
         if *denominator == 0 {
             return None;
@@ -280,6 +293,7 @@ impl MulDiv for u64 {
         ans.try_into().ok()
     }
 
+    #[allow(clippy::arithmetic_side_effects)]
     fn checked_mul_div_ceil(&self, numerator: &Self, denominator: &Self) -> Option<Self> {
         if *denominator == 0 {
             return None;
@@ -323,6 +337,7 @@ mod u128 {
     }
 
     impl MulDiv for u128 {
+        #[allow(clippy::arithmetic_side_effects)]
         fn checked_mul_div(&self, numerator: &Self, denominator: &Self) -> Option<Self> {
             if *denominator == 0 {
                 return None;
@@ -334,6 +349,7 @@ mod u128 {
             ans.try_into().ok()
         }
 
+        #[allow(clippy::arithmetic_side_effects)]
         fn checked_mul_div_ceil(&self, numerator: &Self, denominator: &Self) -> Option<Self> {
             if *denominator == 0 {
                 return None;

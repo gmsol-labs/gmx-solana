@@ -23,9 +23,11 @@ where
         return None;
     }
     if supply.is_zero() && pool_value.is_zero() {
-        Some(usd_value / usd_to_amount_divisor)
+        usd_value.checked_div(&usd_to_amount_divisor)
     } else if supply.is_zero() && !pool_value.is_zero() {
-        Some((pool_value.checked_add(&usd_value)?) / usd_to_amount_divisor)
+        pool_value
+            .checked_add(&usd_value)?
+            .checked_div(&usd_to_amount_divisor)
     } else {
         supply.checked_mul_div(&usd_value, &pool_value)
     }

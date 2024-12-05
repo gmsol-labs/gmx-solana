@@ -1,4 +1,4 @@
-use num_traits::Zero;
+use num_traits::{CheckedDiv, Zero};
 
 use crate::{
     fixed::FixedPointOps,
@@ -280,8 +280,9 @@ impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> UpdateFundingState<M, DECIM
                         "calculating factor decrease value",
                     ))?;
                 if funding_factor_per_second_magnitude <= decrease_value {
-                    funding_factor_per_second.clone()
-                        / funding_factor_per_second_magnitude.to_signed()?
+                    funding_factor_per_second
+                        .checked_div(&funding_factor_per_second_magnitude.to_signed()?)
+                        .ok_or(crate::Error::Computation("calculating signum"))?
                 } else {
                     let decreased = funding_factor_per_second_magnitude
                         .checked_sub(&decrease_value)
@@ -409,7 +410,7 @@ where
     if round_up_magnitude {
         funding_value_per_size.checked_round_up_div(price)
     } else {
-        Some(funding_value_per_size / price.clone())
+        funding_value_per_size.checked_div(price)
     }
 }
 

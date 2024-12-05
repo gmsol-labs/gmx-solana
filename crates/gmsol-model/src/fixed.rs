@@ -16,6 +16,7 @@ pub trait FixedPointOps<const DECIMALS: u8>: MulDiv + Num {
 impl<const DECIMALS: u8> FixedPointOps<DECIMALS> for u64 {
     const UNIT: Self = 10u64.pow(DECIMALS as u32);
 
+    #[allow(clippy::arithmetic_side_effects)]
     fn checked_pow_fixed(&self, exponent: &Self) -> Option<Self> {
         use rust_decimal::{Decimal, MathematicalOps};
 
@@ -47,6 +48,7 @@ impl<const DECIMALS: u8> FixedPointOps<DECIMALS> for u64 {
 impl<const DECIMALS: u8> FixedPointOps<DECIMALS> for u128 {
     const UNIT: Self = 10u128.pow(DECIMALS as u32);
 
+    #[allow(clippy::arithmetic_side_effects)]
     fn checked_pow_fixed(&self, exponent: &Self) -> Option<Self> {
         use std::cmp::Ordering;
 
@@ -138,7 +140,7 @@ impl<T: FixedPointOps<DECIMALS>, const DECIMALS: u8> Add for Fixed<T, DECIMALS> 
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Self(self.0 + rhs.0)
+        Self(self.0.add(rhs.0))
     }
 }
 

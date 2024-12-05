@@ -1,11 +1,11 @@
 use crate::{
     market::{BaseMarket, BaseMarketExt, LiquidityMarketExt, LiquidityMarketMut},
-    num::{MulDiv, UnsignedAbs},
+    num::{MulDiv, Unsigned, UnsignedAbs},
     params::Fees,
     price::{Price, Prices},
     utils, BalanceExt, PnlFactorKind, PoolExt,
 };
-use num_traits::{CheckedAdd, Signed, Zero};
+use num_traits::{CheckedAdd, CheckedDiv, Signed, Zero};
 
 /// A withdrawal.
 #[must_use]
@@ -126,17 +126,16 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Withdrawal<M, DECIMALS
         let delta = long_token_fees
             .fee_receiver_amount()
             .checked_add(&long_token_amount)
-            .ok_or(crate::Error::Overflow)?;
-        pool.apply_delta_amount(true, &-delta.try_into().map_err(|_| crate::Error::Convert)?)?;
+            .ok_or(crate::Error::Overflow)?
+            .to_opposite_signed()?;
+        pool.apply_delta_amount(true, &delta)?;
 
         let delta = short_token_fees
             .fee_receiver_amount()
             .checked_add(&short_token_amount)
-            .ok_or(crate::Error::Overflow)?;
-        pool.apply_delta_amount(
-            false,
-            &-delta.try_into().map_err(|_| crate::Error::Convert)?,
-        )?;
+            .ok_or(crate::Error::Overflow)?
+            .to_opposite_signed()?;
+        pool.apply_delta_amount(false, &delta)?;
 
         self.market.validate_reserve(&self.params.prices, true)?;
         self.market.validate_reserve(&self.params.prices, false)?;
@@ -200,12 +199,12 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Withdrawal<M, DECIMALS
         debug_assert!(!self.params.short_token_price().has_zero());
         let long_token_amount = market_token_value
             .checked_mul_div(&long_token_value, &total_pool_token_value)
-            .ok_or(crate::Error::Computation("long token amount"))?
-            / self.params.long_token_price().pick_price(true).clone();
+            .and_then(|a| a.checked_div(self.params.long_token_price().pick_price(true)))
+            .ok_or(crate::Error::Computation("long token amount"))?;
         let short_token_amount = market_token_value
             .checked_mul_div(&short_token_value, &total_pool_token_value)
-            .ok_or(crate::Error::Computation("short token amount"))?
-            / self.params.short_token_price().pick_price(true).clone();
+            .and_then(|a| a.checked_div(self.params.short_token_price().pick_price(true)))
+            .ok_or(crate::Error::Computation("short token amount"))?;
         Ok((long_token_amount, short_token_amount))
     }
 

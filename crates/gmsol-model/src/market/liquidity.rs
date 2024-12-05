@@ -1,4 +1,4 @@
-use num_traits::{CheckedAdd, CheckedMul, CheckedSub, Signed, Zero};
+use num_traits::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Signed, Zero};
 
 use crate::{
     action::{deposit::Deposit, withdraw::Withdrawal},
@@ -165,7 +165,9 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
         if pool_value.is_negative() {
             return Err(crate::Error::InvalidPoolValue("the pool value is negative. Calculation of the market token price is currently unsupported when the pool value is negative."));
         }
-        let one = Self::Num::UNIT / self.usd_to_amount_divisor();
+        let one = Self::Num::UNIT
+            .checked_div(&self.usd_to_amount_divisor())
+            .ok_or(crate::Error::Computation("calculating one market token"))?;
         crate::utils::market_token_amount_to_usd(&one, &pool_value.unsigned_abs(), &supply)
             .ok_or(crate::Error::Computation("calculating market token price"))
     }

@@ -100,7 +100,8 @@ impl<T> FeeParams<T> {
         let fee_amount = self
             .fee(is_positive_impact, size_delta_usd)
             .ok_or(crate::Error::Computation("calculating order fee usd"))?
-            / collateral_token_price.pick_price(false).clone();
+            .checked_div(collateral_token_price.pick_price(false))
+            .ok_or(crate::Error::Computation("calculating order fee amount"))?;
 
         let receiver_fee_amount = self
             .receiver_fee(&fee_amount)
@@ -491,7 +492,9 @@ impl<T> PositionFees<T> {
     {
         let price = price.pick_price(false);
         debug_assert!(!price.is_zero(), "must be non-zero");
-        let amount = value / price.clone();
+        let amount = value
+            .checked_div(price)
+            .ok_or(crate::Error::Computation("calculating borrowing amount"))?;
         self.borrowing.amount_for_receiver = crate::utils::apply_factor(&amount, receiver_factor)
             .ok_or(crate::Error::Computation(
             "calculating borrowing fee amount for receiver",

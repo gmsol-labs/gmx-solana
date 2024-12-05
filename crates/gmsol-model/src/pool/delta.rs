@@ -1,4 +1,4 @@
-use num_traits::{CheckedAdd, CheckedMul, CheckedSub};
+use num_traits::{CheckedAdd, CheckedMul, CheckedNeg, CheckedSub};
 
 use crate::{
     fixed::FixedPointOps, num::Unsigned, params::PriceImpactParams, utils, Balance, BalanceExt,
@@ -245,7 +245,13 @@ impl<T: Unsigned + Clone + Ord> PoolDelta<T> {
             .diff(next)
             .try_into()
             .map_err(|_| crate::Error::Convert)?;
-        Ok(if has_positive_impact { delta } else { -delta })
+        Ok(if has_positive_impact {
+            delta
+        } else {
+            delta.checked_neg().ok_or(crate::Error::Computation(
+                "same side rebalance: negating delta",
+            ))?
+        })
     }
 
     #[inline]
@@ -269,6 +275,12 @@ impl<T: Unsigned + Clone + Ord> PoolDelta<T> {
             .diff(negative_impact)
             .try_into()
             .map_err(|_| crate::Error::Convert)?;
-        Ok(if has_positive_impact { delta } else { -delta })
+        Ok(if has_positive_impact {
+            delta
+        } else {
+            delta.checked_neg().ok_or(crate::Error::Computation(
+                "cross over rebalance: negating delta",
+            ))?
+        })
     }
 }

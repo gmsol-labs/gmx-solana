@@ -52,7 +52,9 @@ impl<const DECIMALS: u8, M: SwapMarketMut<DECIMALS>> Swap<M, DECIMALS> {
                 .map_err(|_| crate::Error::Convert)?;
             Ok(ReassignedValues::new(
                 long_delta_value.clone(),
-                -long_delta_value,
+                long_delta_value
+                    .checked_neg()
+                    .ok_or(crate::Error::Computation("negating long delta value"))?,
                 self.params.long_token_price().clone(),
                 self.params.short_token_price().clone(),
                 PnlFactorKind::MaxAfterDeposit,
@@ -67,7 +69,9 @@ impl<const DECIMALS: u8, M: SwapMarketMut<DECIMALS>> Swap<M, DECIMALS> {
                 .try_into()
                 .map_err(|_| crate::Error::Convert)?;
             Ok(ReassignedValues::new(
-                -short_delta_value.clone(),
+                short_delta_value
+                    .checked_neg()
+                    .ok_or(crate::Error::Computation("negating short delta value"))?,
                 short_delta_value,
                 self.params.short_token_price().clone(),
                 self.params.long_token_price().clone(),

@@ -1,4 +1,4 @@
-use num_traits::{CheckedAdd, CheckedNeg, Signed, Zero};
+use num_traits::{CheckedAdd, CheckedDiv, CheckedNeg, Signed, Zero};
 use std::fmt;
 
 use crate::{
@@ -398,7 +398,9 @@ where
                 !price.is_zero(),
                 "price must have been checked to be non-zero"
             );
-            price_impact_value.clone() / price
+            price_impact_value
+                .checked_div(&price)
+                .ok_or(crate::Error::Computation("calculating price impact amount"))?
         } else {
             self.params
                 .prices
@@ -415,7 +417,12 @@ where
                 !price.is_zero(),
                 "price must have been checked to be non-zero"
             );
-            self.params.size_delta_usd.clone() / price.clone()
+            self.params
+                .size_delta_usd
+                .checked_div(price)
+                .ok_or(crate::Error::Computation(
+                    "calculating size delta in tokens",
+                ))?
         } else {
             let price = self.params.prices.index_token_price.pick_price(false);
             self.params
@@ -506,13 +513,15 @@ fn get_execution_price_for_increase<T>(
     is_long: bool,
 ) -> crate::Result<T>
 where
-    T: num_traits::Num + Ord + Clone,
+    T: num_traits::Num + Ord + Clone + CheckedDiv,
 {
     if size_delta_usd.is_zero() {
         return Err(crate::Error::Computation("empty size delta in tokens"));
     }
 
-    let execution_price = size_delta_usd.clone() / size_delta_in_tokens.clone();
+    let execution_price = size_delta_usd
+        .checked_div(size_delta_in_tokens)
+        .ok_or(crate::Error::Computation("calculating execution price"))?;
 
     let Some(acceptable_price) = acceptable_price else {
         return Ok(execution_price);

@@ -10,7 +10,7 @@ use crate::{
     PerpMarketMut,
 };
 
-use num_traits::{CheckedAdd, Signed, Zero};
+use num_traits::{CheckedAdd, CheckedDiv, Signed, Zero};
 
 use super::{ClaimableCollateral, DecreasePositionSwapType};
 
@@ -367,8 +367,12 @@ where
     pub(super) fn add_pnl_if_positive(&mut self, pnl: &M::Signed) -> crate::Result<&mut Self> {
         if pnl.is_positive() {
             debug_assert!(!self.state.pnl_token_price().has_zero());
-            let deduction_amount_for_pool =
-                pnl.unsigned_abs() / self.state.pnl_token_price().pick_price(true).clone();
+            let deduction_amount_for_pool = pnl
+                .unsigned_abs()
+                .checked_div(self.state.pnl_token_price().pick_price(true))
+                .ok_or(crate::Error::Computation(
+                    "pnl: calculating dedcution amount for pool",
+                ))?;
 
             let is_pnl_token_long = self.state.is_pnl_token_long;
             self.market.apply_delta(
@@ -412,8 +416,12 @@ where
                 .apply_delta_to_position_impact_pool(&amount.to_opposite_signed()?)?;
 
             debug_assert!(!self.state.pnl_token_price().has_zero());
-            let deduction_amount_for_pool =
-                price_impact.unsigned_abs() / self.state.pnl_token_price().pick_price(true).clone();
+            let deduction_amount_for_pool = price_impact
+                .unsigned_abs()
+                .checked_div(self.state.pnl_token_price().pick_price(true))
+                .ok_or(crate::Error::Computation(
+                    "impact: calculating deduction amount for pool",
+                ))?;
             let is_pnl_token_long = self.state.is_pnl_token_long;
             self.market.apply_delta(
                 is_pnl_token_long,

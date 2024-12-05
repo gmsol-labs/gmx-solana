@@ -1,4 +1,4 @@
-use num_traits::{CheckedAdd, CheckedSub, Zero};
+use num_traits::{CheckedAdd, CheckedDiv, CheckedSub, Zero};
 
 use crate::{
     market::{PerpMarket, PerpMarketExt, SwapMarketMutExt},
@@ -591,8 +591,9 @@ where
         if !self.withdrawable_collateral_amount.is_zero() && !price_impact_diff.is_zero() {
             // The prices should have been validated to be non-zero.
             debug_assert!(!self.collateral_token_price().has_zero());
-            let diff_amount =
-                price_impact_diff.clone() / self.collateral_token_price().pick_price(false).clone();
+            let diff_amount = price_impact_diff
+                .checked_div(self.collateral_token_price().pick_price(false))
+                .ok_or(crate::Error::Computation("calculating diff amount"))?;
             if self.withdrawable_collateral_amount > diff_amount {
                 self.withdrawable_collateral_amount = self
                     .withdrawable_collateral_amount

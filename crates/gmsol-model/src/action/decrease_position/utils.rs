@@ -1,4 +1,4 @@
-use num_traits::{CheckedAdd, CheckedSub, Signed, Zero};
+use num_traits::{CheckedAdd, CheckedDiv, CheckedSub, Signed, Zero};
 
 use crate::{
     num::{MulDiv, UnsignedAbs},
@@ -16,7 +16,7 @@ pub(super) fn get_execution_price_for_decrease<T>(
 ) -> crate::Result<T>
 where
     T: Clone + MulDiv + Ord + CheckedAdd + CheckedSub,
-    T::Signed: CheckedSub + Clone + Ord + UnsignedAbs,
+    T::Signed: CheckedSub + Clone + Ord + UnsignedAbs + CheckedDiv,
 {
     let mut execution_price = index_price.pick_price(!is_long).clone();
     if !size_delta_usd.is_zero() && !size_in_tokens.is_zero() {
@@ -66,14 +66,14 @@ where
         //
         // size_in_usd * price_impact_value / size_in_tokens >= 3.60 * 10^39 > i128::MAX
         //
+        let signed_size_in_tokens = size_in_tokens.to_signed()?;
         let adjustment = size_in_usd
             .checked_mul_div_with_signed_numerator(&adjusted_price_impact_value, size_delta_usd)
             .ok_or(crate::Error::Computation(
                 "calculating execution price adjustment",
             ))?
-            / (size_in_tokens.clone())
-                .try_into()
-                .map_err(|_| crate::Error::Convert)?;
+            .checked_div(&signed_size_in_tokens)
+            .ok_or(crate::Error::Computation("calculating adjustment"))?;
         execution_price = execution_price
             .checked_add_with_signed(&adjustment)
             .ok_or(crate::Error::Computation("adjusting execution price"))?;
