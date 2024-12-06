@@ -175,7 +175,7 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> MarketAction for Withd
         pool.apply_delta_amount(
             true,
             &long_token_fees
-                .fee_receiver_amount()
+                .fee_amount_for_receiver()
                 .clone()
                 .try_into()
                 .map_err(|_| crate::Error::Convert)?,
@@ -183,7 +183,7 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> MarketAction for Withd
         pool.apply_delta_amount(
             false,
             &short_token_fees
-                .fee_receiver_amount()
+                .fee_amount_for_receiver()
                 .clone()
                 .try_into()
                 .map_err(|_| crate::Error::Convert)?,
@@ -193,14 +193,14 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> MarketAction for Withd
         let pool = self.market.liquidity_pool_mut()?;
 
         let delta = long_token_fees
-            .fee_receiver_amount()
+            .fee_amount_for_receiver()
             .checked_add(&long_token_amount)
             .ok_or(crate::Error::Overflow)?
             .to_opposite_signed()?;
         pool.apply_delta_amount(true, &delta)?;
 
         let delta = short_token_fees
-            .fee_receiver_amount()
+            .fee_amount_for_receiver()
             .checked_add(&short_token_amount)
             .ok_or(crate::Error::Overflow)?
             .to_opposite_signed()?;
@@ -254,13 +254,13 @@ mod tests {
         );
         assert_eq!(
             market.liquidity_pool()?.long_amount()?
-                + report.long_token_fees.fee_receiver_amount()
+                + report.long_token_fees.fee_amount_for_receiver()
                 + report.long_token_output,
             before_long_amount
         );
         assert_eq!(
             market.liquidity_pool()?.short_amount()?
-                + report.short_token_fees.fee_receiver_amount()
+                + report.short_token_fees.fee_amount_for_receiver()
                 + report.short_token_output,
             before_short_amount
         );
@@ -318,13 +318,13 @@ mod tests {
         );
         assert_eq!(
             market.liquidity_pool()?.long_amount()?
-                + report.long_token_fees.fee_receiver_amount()
+                + report.long_token_fees.fee_amount_for_receiver()
                 + report.long_token_output,
             before_long_amount
         );
         assert_eq!(
             market.liquidity_pool()?.short_amount()?
-                + report.short_token_fees.fee_receiver_amount()
+                + report.short_token_fees.fee_amount_for_receiver()
                 + report.short_token_output,
             before_short_amount
         );

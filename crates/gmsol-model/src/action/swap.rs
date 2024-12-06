@@ -121,7 +121,7 @@ impl<const DECIMALS: u8, M: SwapMarketMut<DECIMALS>> Swap<M, DECIMALS> {
                 .claimable_fee_pool()?
                 .checked_apply_delta(Delta::new_one_side(
                     self.params.is_token_in_long,
-                    &fees.fee_receiver_amount().to_signed()?,
+                    &fees.fee_amount_for_receiver().to_signed()?,
                 ))?;
 
         // Calculate final amounts && apply delta to price impact pool.
@@ -536,7 +536,7 @@ mod tests {
         );
         assert_eq!(
             before_market.liquidity_pool()?.short_amount()? + token_in_amount
-                - report.token_in_fees().fee_receiver_amount(),
+                - report.token_in_fees().fee_amount_for_receiver(),
             market.liquidity_pool()?.short_amount()?,
         );
 
@@ -555,7 +555,7 @@ mod tests {
         );
         assert_eq!(
             before_market.claimable_fee_pool()?.short_amount()?
-                + report.token_in_fees().fee_receiver_amount(),
+                + report.token_in_fees().fee_amount_for_receiver(),
             market.claimable_fee_pool()?.short_amount()?,
         );
 
@@ -574,7 +574,7 @@ mod tests {
         assert_eq!(
             before_market.liquidity_pool()?.long_amount()? + token_in_amount
                 - report.price_impact_amount()
-                - report.token_in_fees().fee_receiver_amount(),
+                - report.token_in_fees().fee_amount_for_receiver(),
             market.liquidity_pool()?.long_amount()?,
         );
         assert_eq!(
@@ -593,7 +593,7 @@ mod tests {
 
         assert_eq!(
             before_market.claimable_fee_pool()?.long_amount()?
-                + report.token_in_fees().fee_receiver_amount(),
+                + report.token_in_fees().fee_amount_for_receiver(),
             market.claimable_fee_pool()?.long_amount()?,
         );
         assert_eq!(

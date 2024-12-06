@@ -1,4 +1,4 @@
-use num_traits::{CheckedAdd, Zero};
+use num_traits::{CheckedAdd, CheckedSub, Zero};
 use typed_builder::TypedBuilder;
 
 use crate::{fixed::FixedPointOps, num::Unsigned, price::Price, utils};
@@ -78,7 +78,7 @@ impl<T> FeeParams<T> {
         let fee_receiver_amount = self.receiver_fee(&fee_amount)?;
         let fees = Fees {
             fee_amount_for_pool: fee_amount.checked_sub(&fee_receiver_amount)?,
-            fee_receiver_amount,
+            fee_amount_for_receiver: fee_receiver_amount,
         };
         Some((amount.checked_sub(&fee_amount)?, fees))
     }
@@ -439,14 +439,14 @@ impl<T> LiquidationFeeParams<T> {
     derive(anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize)
 )]
 pub struct Fees<T> {
-    fee_receiver_amount: T,
+    fee_amount_for_receiver: T,
     fee_amount_for_pool: T,
 }
 
 impl<T: Zero> Default for Fees<T> {
     fn default() -> Self {
         Self {
-            fee_receiver_amount: Zero::zero(),
+            fee_amount_for_receiver: Zero::zero(),
             fee_amount_for_pool: Zero::zero(),
         }
     }
@@ -457,13 +457,13 @@ impl<T> Fees<T> {
     pub fn new(pool: T, receiver: T) -> Self {
         Self {
             fee_amount_for_pool: pool,
-            fee_receiver_amount: receiver,
+            fee_amount_for_receiver: receiver,
         }
     }
 
-    /// Get fee receiver amount.
-    pub fn fee_receiver_amount(&self) -> &T {
-        &self.fee_receiver_amount
+    /// Get fee amount for receiver
+    pub fn fee_amount_for_receiver(&self) -> &T {
+        &self.fee_amount_for_receiver
     }
 
     /// Get fee amount for pool.
@@ -485,27 +485,39 @@ pub struct OrderFees<T> {
 )]
 #[derive(Debug, Clone, Copy)]
 pub struct BorrowingFees<T> {
-    amount: T,
-    amount_for_receiver: T,
+    fee_amount: T,
+    fee_amount_for_receiver: T,
 }
 
 impl<T> BorrowingFees<T> {
     /// Get total borrowing fee amount.
-    pub fn amount(&self) -> &T {
-        &self.amount
+    pub fn fee_amount(&self) -> &T {
+        &self.fee_amount
     }
 
     /// Get borrowing fee amount for receiver.
-    pub fn amount_for_receiver(&self) -> &T {
-        &self.amount_for_receiver
+    pub fn fee_amount_for_receiver(&self) -> &T {
+        &self.fee_amount_for_receiver
+    }
+
+    /// Get borrowing fee amount for pool.
+    pub fn fee_amount_for_pool(&self) -> crate::Result<T>
+    where
+        T: CheckedSub,
+    {
+        self.fee_amount
+            .checked_sub(&self.fee_amount_for_receiver)
+            .ok_or(crate::Error::Computation(
+                "borrowing fee: calculating fee for pool",
+            ))
     }
 }
 
 impl<T: Zero> Default for BorrowingFees<T> {
     fn default() -> Self {
         Self {
-            amount: Zero::zero(),
-            amount_for_receiver: Zero::zero(),
+            fee_amount: Zero::zero(),
+            fee_amount_for_receiver: Zero::zero(),
         }
     }
 }
@@ -584,6 +596,18 @@ impl<T> LiquidationFees<T> {
         &self.fee_amount_for_receiver
     }
 
+    /// Get liquidation fee amount for pool.
+    pub fn fee_amount_for_pool(&self) -> crate::Result<T>
+    where
+        T: CheckedSub,
+    {
+        self.fee_amount
+            .checked_sub(&self.fee_amount_for_receiver)
+            .ok_or(crate::Error::Computation(
+                "liquidation fee: calculating fee for pool",
+            ))
+    }
+
     /// Get total liquidation fee value.
     pub fn fee_value(&self) -> &T {
         &self.fee_value
@@ -611,8 +635,8 @@ impl<T> PositionFees<T> {
         T: CheckedAdd,
     {
         self.base
-            .fee_receiver_amount
-            .checked_add(self.borrowing.amount_for_receiver())
+            .fee_amount_for_receiver()
+            .checked_add(self.borrowing.fee_amount_for_receiver())
             .and_then(|total| {
                 if let Some(fees) = self.liquidation_fees() {
                     total.checked_add(fees.fee_amount_for_receiver())
@@ -630,19 +654,18 @@ impl<T> PositionFees<T> {
     {
         let amount = self
             .base
-            .fee_amount_for_pool
-            .checked_add(&self.borrowing.amount)
-            .and_then(|total| total.checked_sub(self.borrowing.amount_for_receiver()))
+            .fee_amount_for_pool()
+            .checked_add(&self.borrowing.fee_amount_for_pool()?)
+            .ok_or(crate::Error::Computation("adding borrowing fee for pool"))
             .and_then(|total| {
                 if let Some(fees) = self.liquidation_fees() {
                     total
-                        .checked_add(fees.fee_amount())?
-                        .checked_sub(fees.fee_amount_for_receiver())
+                        .checked_add(&fees.fee_amount_for_pool()?)
+                        .ok_or(crate::Error::Computation("adding liquidation fee for pool"))
                 } else {
-                    Some(total)
+                    Ok(total)
                 }
-            })
-            .ok_or(crate::Error::Computation("calculating fee for pool"))?;
+            })?;
         Ok(amount)
     }
 
@@ -682,9 +705,9 @@ impl<T> PositionFees<T> {
         T: CheckedAdd,
     {
         self.base
-            .fee_amount_for_pool
-            .checked_add(&self.base.fee_receiver_amount)
-            .and_then(|acc| acc.checked_add(&self.borrowing.amount))
+            .fee_amount_for_pool()
+            .checked_add(self.base.fee_amount_for_receiver())
+            .and_then(|acc| acc.checked_add(self.borrowing.fee_amount()))
             .and_then(|acc| {
                 if let Some(fees) = self.liquidation_fees() {
                     acc.checked_add(fees.fee_amount())
@@ -692,7 +715,9 @@ impl<T> PositionFees<T> {
                     Some(acc)
                 }
             })
-            .ok_or(crate::Error::Overflow)
+            .ok_or(crate::Error::Computation(
+                "overflow while calculating total cost excluding funding",
+            ))
     }
 
     /// Clear fees excluding funding fee.
@@ -720,11 +745,11 @@ impl<T> PositionFees<T> {
         let amount = value
             .checked_div(price)
             .ok_or(crate::Error::Computation("calculating borrowing amount"))?;
-        self.borrowing.amount_for_receiver = crate::utils::apply_factor(&amount, receiver_factor)
-            .ok_or(crate::Error::Computation(
-            "calculating borrowing fee amount for receiver",
-        ))?;
-        self.borrowing.amount = amount;
+        self.borrowing.fee_amount_for_receiver =
+            crate::utils::apply_factor(&amount, receiver_factor).ok_or(
+                crate::Error::Computation("calculating borrowing fee amount for receiver"),
+            )?;
+        self.borrowing.fee_amount = amount;
         Ok(self)
     }
 

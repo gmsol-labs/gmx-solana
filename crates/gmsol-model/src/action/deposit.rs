@@ -215,7 +215,7 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
         self.market.claimable_fee_pool_mut()?.apply_delta_amount(
             is_long_token,
             &fees
-                .fee_receiver_amount()
+                .fee_amount_for_receiver()
                 .clone()
                 .try_into()
                 .map_err(|_| crate::Error::Convert)?,

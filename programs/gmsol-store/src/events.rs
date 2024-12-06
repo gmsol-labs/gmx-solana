@@ -656,6 +656,10 @@ pub struct TradeFees {
     pub order_fee_for_receiver_amount: u128,
     /// Order fee for pool amount.
     pub order_fee_for_pool_amount: u128,
+    /// Total liquidation fee amount.
+    pub liquidation_fee_amount: u128,
+    /// Liquidation fee for pool amount.
+    pub liquidation_fee_for_receiver_amount: u128,
     /// Total borrowing fee amount.
     pub total_borrowing_fee_amount: u128,
     /// Borrowing fee for receiver amount.
@@ -670,10 +674,14 @@ pub struct TradeFees {
 
 impl TradeFees {
     fn set_with_position_fees(&mut self, fees: &PositionFees<u128>) {
-        self.order_fee_for_receiver_amount = *fees.order_fees().fee_receiver_amount();
+        self.order_fee_for_receiver_amount = *fees.order_fees().fee_amount_for_receiver();
         self.order_fee_for_pool_amount = *fees.order_fees().fee_amount_for_pool();
-        self.total_borrowing_fee_amount = *fees.borrowing_fees().amount();
-        self.borrowing_fee_for_receiver_amount = *fees.borrowing_fees().amount_for_receiver();
+        if let Some(fees) = fees.liquidation_fees() {
+            self.liquidation_fee_amount = *fees.fee_amount();
+            self.liquidation_fee_for_receiver_amount = *fees.fee_amount_for_receiver();
+        }
+        self.total_borrowing_fee_amount = *fees.borrowing_fees().fee_amount();
+        self.borrowing_fee_for_receiver_amount = *fees.borrowing_fees().fee_amount_for_receiver();
         self.funding_fee_amount = *fees.funding_fees().amount();
         self.claimable_funding_fee_long_token_amount =
             *fees.funding_fees().claimable_long_token_amount();
