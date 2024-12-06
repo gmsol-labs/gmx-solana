@@ -178,6 +178,119 @@ impl<T> BorrowingFeeParams<T> {
     }
 }
 
+/// Borrowing Fee Kink Model Parameters.
+#[derive(Debug, Clone, Copy, TypedBuilder)]
+pub struct BorrowingFeeKinkModelParams<T> {
+    long: BorrowingFeeKinkModelParamsForOneSide<T>,
+    short: BorrowingFeeKinkModelParamsForOneSide<T>,
+}
+
+impl<T> BorrowingFeeKinkModelParams<T> {
+    fn params_for_one_side(&self, is_long: bool) -> &BorrowingFeeKinkModelParamsForOneSide<T> {
+        if is_long {
+            &self.long
+        } else {
+            &self.short
+        }
+    }
+
+    /// Get optimal usage factor.
+    pub fn optimal_usage_factor(&self, is_long: bool) -> &T {
+        &self.params_for_one_side(is_long).optimal_usage_factor
+    }
+
+    /// Get base borrowing factor.
+    pub fn base_borrowing_factor(&self, is_long: bool) -> &T {
+        &self.params_for_one_side(is_long).base_borrowing_factor
+    }
+
+    /// Get above optimal usage borrowing factor.
+    pub fn above_optimal_usage_borrowing_factor(&self, is_long: bool) -> &T {
+        &self
+            .params_for_one_side(is_long)
+            .above_optimal_usage_borrowing_factor
+    }
+
+    /// Calculate borrowing factor per second.
+    pub fn borrowing_factor_per_second<const DECIMALS: u8, M>(
+        &self,
+        market: &M,
+        is_long: bool,
+        reserved_value: &T,
+        pool_value: &T,
+    ) -> crate::Result<Option<T>>
+    where
+        M: crate::BaseMarket<DECIMALS, Num = T> + ?Sized,
+        T: FixedPointOps<DECIMALS>,
+    {
+        use crate::market::utils::MarketUtils;
+
+        let optimal_usage_factor = self.optimal_usage_factor(is_long);
+
+        if optimal_usage_factor.is_zero() {
+            return Ok(None);
+        }
+
+        let usage_factor = market.usage_factor(is_long, reserved_value, pool_value)?;
+
+        let base_borrowing_factor = self.base_borrowing_factor(is_long);
+
+        let borrowing_factor_per_second = utils::apply_factor(&usage_factor, base_borrowing_factor)
+            .ok_or(crate::Error::Computation(
+                "borrowing fee kink model: calculating borrowing factor per second",
+            ))?;
+
+        if usage_factor > *optimal_usage_factor && T::UNIT > *optimal_usage_factor {
+            let diff =
+                usage_factor
+                    .checked_sub(optimal_usage_factor)
+                    .ok_or(crate::Error::Computation(
+                        "borrowing fee kink model: calculating diff",
+                    ))?;
+
+            let above_optimal_usage_borrowing_factor =
+                self.above_optimal_usage_borrowing_factor(is_long);
+
+            let additional_borrowing_factor_per_second =
+                if above_optimal_usage_borrowing_factor > base_borrowing_factor {
+                    above_optimal_usage_borrowing_factor
+                        .checked_sub(base_borrowing_factor)
+                        .ok_or(crate::Error::Computation(
+                            "borrowing fee kink model: calculating addtional factor",
+                        ))?
+                } else {
+                    T::zero()
+                };
+
+            let divisor =
+                T::UNIT
+                    .checked_sub(optimal_usage_factor)
+                    .ok_or(crate::Error::Computation(
+                        "borrowing fee kink model: calculating divisor",
+                    ))?;
+
+            let borrowing_factor_per_second = additional_borrowing_factor_per_second
+                .checked_mul_div(&diff, &divisor)
+                .and_then(|a| borrowing_factor_per_second.checked_add(&a))
+                .ok_or(crate::Error::Computation(
+                    "borrowing fee kink model: increasing borrowing factor per second",
+                ))?;
+
+            Ok(Some(borrowing_factor_per_second))
+        } else {
+            Ok(Some(borrowing_factor_per_second))
+        }
+    }
+}
+
+/// Borrowing Fee Kink Model Parameters for one side.
+#[derive(Debug, Clone, Copy, TypedBuilder)]
+pub struct BorrowingFeeKinkModelParamsForOneSide<T> {
+    optimal_usage_factor: T,
+    base_borrowing_factor: T,
+    above_optimal_usage_borrowing_factor: T,
+}
+
 /// Funding Fee Parameters.
 #[derive(Debug, Clone, Copy, TypedBuilder)]
 pub struct FundingFeeParams<T> {

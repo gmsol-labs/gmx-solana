@@ -1,7 +1,10 @@
 use anchor_spl::token::Mint;
 use gmsol_model::{
     params::{
-        fee::{BorrowingFeeParams, FundingFeeParams},
+        fee::{
+            BorrowingFeeKinkModelParams, BorrowingFeeKinkModelParamsForOneSide, BorrowingFeeParams,
+            FundingFeeParams,
+        },
         position::PositionImpactDistributionParams,
         FeeParams, PositionParams, PriceImpactParams,
     },
@@ -10,7 +13,7 @@ use gmsol_model::{
 
 use crate::constants;
 
-use super::{clock::AsClock, HasMarketMeta, Market, Pool};
+use super::{clock::AsClock, config::MarketConfigFlag, HasMarketMeta, Market, Pool};
 
 impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for Market {
     type Num = u128;
@@ -101,6 +104,24 @@ impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for Market {
     fn reserve_factor(&self) -> gmsol_model::Result<Self::Num> {
         Ok(self.config.reserve_factor)
     }
+
+    fn open_interest_reserve_factor(&self) -> gmsol_model::Result<Self::Num> {
+        Ok(self.config.open_interest_reserve_factor)
+    }
+
+    fn max_open_interest(&self, is_long: bool) -> gmsol_model::Result<Self::Num> {
+        if is_long {
+            Ok(self.config.max_open_interest_for_long)
+        } else {
+            Ok(self.config.max_open_interest_for_short)
+        }
+    }
+
+    fn ignore_open_interest_for_usage_factor(&self) -> gmsol_model::Result<bool> {
+        Ok(self
+            .config
+            .flag(MarketConfigFlag::IgnoreOpenInterestForUsageFactor))
+    }
 }
 
 impl gmsol_model::SwapMarket<{ constants::MARKET_DECIMALS }> for Market {
@@ -166,11 +187,42 @@ impl gmsol_model::BorrowingFeeMarket<{ constants::MARKET_DECIMALS }> for Market 
             .factor_for_short(self.config.borrowing_fee_factor_for_short)
             .exponent_for_long(self.config.borrowing_fee_exponent_for_long)
             .exponent_for_short(self.config.borrowing_fee_exponent_for_short)
+            .skip_borrowing_fee_for_smaller_side(
+                self.config
+                    .flag(MarketConfigFlag::SkipBorrowingFeeForSmallerSide),
+            )
             .build())
     }
 
     fn passed_in_seconds_for_borrowing(&self) -> gmsol_model::Result<u64> {
         AsClock::from(&self.clocks().borrowing).passed_in_seconds()
+    }
+
+    fn borrowing_fee_kink_model_params(
+        &self,
+    ) -> gmsol_model::Result<BorrowingFeeKinkModelParams<Self::Num>> {
+        Ok(BorrowingFeeKinkModelParams::builder()
+            .long(
+                BorrowingFeeKinkModelParamsForOneSide::builder()
+                    .optimal_usage_factor(self.config.borrowing_fee_optimal_usage_factor_for_long)
+                    .base_borrowing_factor(self.config.borrowing_fee_base_factor_for_long)
+                    .above_optimal_usage_borrowing_factor(
+                        self.config
+                            .borrowing_fee_above_optimal_usage_factor_for_long,
+                    )
+                    .build(),
+            )
+            .short(
+                BorrowingFeeKinkModelParamsForOneSide::builder()
+                    .optimal_usage_factor(self.config.borrowing_fee_optimal_usage_factor_for_short)
+                    .base_borrowing_factor(self.config.borrowing_fee_base_factor_for_short)
+                    .above_optimal_usage_borrowing_factor(
+                        self.config
+                            .borrowing_fee_above_optimal_usage_factor_for_short,
+                    )
+                    .build(),
+            )
+            .build())
     }
 }
 
@@ -234,18 +286,6 @@ impl gmsol_model::PerpMarket<{ constants::MARKET_DECIMALS }> for Market {
             .positive_impact_fee_factor(self.config.order_fee_factor_for_positive_impact)
             .negative_impact_fee_factor(self.config.order_fee_factor_for_negative_impact)
             .build())
-    }
-
-    fn open_interest_reserve_factor(&self) -> gmsol_model::Result<Self::Num> {
-        Ok(self.config.open_interest_reserve_factor)
-    }
-
-    fn max_open_interest(&self, is_long: bool) -> gmsol_model::Result<Self::Num> {
-        if is_long {
-            Ok(self.config.max_open_interest_for_long)
-        } else {
-            Ok(self.config.max_open_interest_for_short)
-        }
     }
 
     fn min_collateral_factor_for_open_interest_multiplier(
@@ -351,6 +391,18 @@ where
     fn reserve_factor(&self) -> gmsol_model::Result<Self::Num> {
         self.market.reserve_factor()
     }
+
+    fn open_interest_reserve_factor(&self) -> gmsol_model::Result<Self::Num> {
+        self.market.open_interest_reserve_factor()
+    }
+
+    fn max_open_interest(&self, is_long: bool) -> gmsol_model::Result<Self::Num> {
+        self.market.max_open_interest(is_long)
+    }
+
+    fn ignore_open_interest_for_usage_factor(&self) -> gmsol_model::Result<bool> {
+        self.market.ignore_open_interest_for_usage_factor()
+    }
 }
 
 impl<'a, M> gmsol_model::PositionImpactMarket<{ constants::MARKET_DECIMALS }>
@@ -407,6 +459,12 @@ where
 
     fn passed_in_seconds_for_borrowing(&self) -> gmsol_model::Result<u64> {
         self.market.passed_in_seconds_for_borrowing()
+    }
+
+    fn borrowing_fee_kink_model_params(
+        &self,
+    ) -> gmsol_model::Result<gmsol_model::params::fee::BorrowingFeeKinkModelParams<Self::Num>> {
+        self.market.borrowing_fee_kink_model_params()
     }
 }
 

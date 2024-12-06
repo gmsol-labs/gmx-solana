@@ -313,6 +313,18 @@ impl<'a> gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for RevertibleM
     fn reserve_factor(&self) -> gmsol_model::Result<Self::Num> {
         self.market.reserve_factor()
     }
+
+    fn open_interest_reserve_factor(&self) -> gmsol_model::Result<Self::Num> {
+        self.market.open_interest_reserve_factor()
+    }
+
+    fn max_open_interest(&self, is_long: bool) -> gmsol_model::Result<Self::Num> {
+        self.market.max_open_interest(is_long)
+    }
+
+    fn ignore_open_interest_for_usage_factor(&self) -> gmsol_model::Result<bool> {
+        self.market.ignore_open_interest_for_usage_factor()
+    }
 }
 
 impl<'a> gmsol_model::BaseMarketMut<{ constants::MARKET_DECIMALS }> for RevertibleMarket<'a> {
@@ -393,6 +405,12 @@ impl<'a> gmsol_model::BorrowingFeeMarket<{ constants::MARKET_DECIMALS }> for Rev
     fn passed_in_seconds_for_borrowing(&self) -> gmsol_model::Result<u64> {
         AsClock::from(&self.clocks().borrowing).passed_in_seconds()
     }
+
+    fn borrowing_fee_kink_model_params(
+        &self,
+    ) -> gmsol_model::Result<gmsol_model::params::fee::BorrowingFeeKinkModelParams<Self::Num>> {
+        self.market.borrowing_fee_kink_model_params()
+    }
 }
 
 impl<'a> gmsol_model::PerpMarket<{ constants::MARKET_DECIMALS }> for RevertibleMarket<'a> {
@@ -434,14 +452,6 @@ impl<'a> gmsol_model::PerpMarket<{ constants::MARKET_DECIMALS }> for RevertibleM
     fn order_fee_params(&self) -> gmsol_model::Result<FeeParams<Self::Num>> {
         let params = self.market.order_fee_params()?;
         Ok(params.with_discount_factor(self.order_fee_discount_factor))
-    }
-
-    fn open_interest_reserve_factor(&self) -> gmsol_model::Result<Self::Num> {
-        self.market.open_interest_reserve_factor()
-    }
-
-    fn max_open_interest(&self, is_long: bool) -> gmsol_model::Result<Self::Num> {
-        self.market.max_open_interest(is_long)
     }
 
     fn min_collateral_factor_for_open_interest_multiplier(

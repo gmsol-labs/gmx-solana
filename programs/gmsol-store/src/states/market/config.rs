@@ -1,12 +1,24 @@
 use anchor_lang::prelude::*;
+use bitmaps::Bitmap;
 
 use crate::{constants, states::Factor, CoreError};
+
+/// Max number of config flags.
+pub const MAX_CONFIG_FLAGS: usize = 128;
+
+/// Market Flag Value.
+pub type MarketConfigFlagValue = u128;
+
+/// Market Flag Bitmap.
+pub type MarketConfigFlagBitmap = Bitmap<MAX_CONFIG_FLAGS>;
 
 /// Market Config.
 #[zero_copy]
 #[cfg_attr(feature = "debug", derive(Debug))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MarketConfig {
+    /// Flags.
+    flag: MarketConfigFlagValue,
     // Swap impact.
     pub(super) swap_impact_exponent: Factor,
     pub(super) swap_impact_positive_factor: Factor,
@@ -41,6 +53,12 @@ pub struct MarketConfig {
     pub(super) borrowing_fee_factor_for_short: Factor,
     pub(super) borrowing_fee_exponent_for_long: Factor,
     pub(super) borrowing_fee_exponent_for_short: Factor,
+    pub(super) borrowing_fee_optimal_usage_factor_for_long: Factor,
+    pub(super) borrowing_fee_optimal_usage_factor_for_short: Factor,
+    pub(super) borrowing_fee_base_factor_for_long: Factor,
+    pub(super) borrowing_fee_base_factor_for_short: Factor,
+    pub(super) borrowing_fee_above_optimal_usage_factor_for_long: Factor,
+    pub(super) borrowing_fee_above_optimal_usage_factor_for_short: Factor,
     // Funding fee.
     pub(super) funding_fee_exponent: Factor,
     pub(super) funding_fee_factor: Factor,
@@ -120,6 +138,18 @@ impl MarketConfig {
         self.borrowing_fee_factor_for_short = constants::DEFAULT_BORROWING_FEE_FACTOR_FOR_SHORT;
         self.borrowing_fee_exponent_for_long = constants::DEFAULT_BORROWING_FEE_EXPONENT_FOR_LONG;
         self.borrowing_fee_exponent_for_short = constants::DEFAULT_BORROWING_FEE_EXPONENT_FOR_SHORT;
+        self.borrowing_fee_optimal_usage_factor_for_long =
+            constants::DEFAULT_BORROWING_FEE_OPTIMAL_USAGE_FACTOR_FOR_LONG;
+        self.borrowing_fee_optimal_usage_factor_for_short =
+            constants::DEFAULT_BORROWING_FEE_OPTIMAL_USAGE_FACTOR_FOR_SHORT;
+        self.borrowing_fee_base_factor_for_long =
+            constants::DEFAULT_BORROWING_FEE_BASE_FACTOR_FOR_LONG;
+        self.borrowing_fee_base_factor_for_short =
+            constants::DEFAULT_BORROWING_FEE_BASE_FACTOR_FOR_SHORT;
+        self.borrowing_fee_above_optimal_usage_factor_for_long =
+            constants::DEFAULT_BORROWING_FEE_ABOVE_OPTIMAL_USAGE_FACTOR_FOR_LONG;
+        self.borrowing_fee_above_optimal_usage_factor_for_short =
+            constants::DEFAULT_BORROWING_FEE_ABOVE_OPTIMAL_USAGE_FACTOR_FOR_SHORT;
 
         self.funding_fee_exponent = constants::DEFAULT_FUNDING_FEE_EXPONENT;
         self.funding_fee_factor = constants::DEFAULT_FUNDING_FEE_FACTOR;
@@ -164,6 +194,15 @@ impl MarketConfig {
         self.max_open_interest_for_short = constants::DEFAULT_MAX_OPEN_INTEREST_FOR_SHORT;
 
         self.min_tokens_for_first_deposit = constants::DEFAULT_MIN_TOKENS_FOR_FIRST_DEPOSIT;
+
+        self.set_flag(
+            MarketConfigFlag::SkipBorrowingFeeForSmallerSide,
+            constants::DEFAULT_SKIP_BORROWING_FEE_FOR_SMALLER_SIDE,
+        );
+        self.set_flag(
+            MarketConfigFlag::IgnoreOpenInterestForUsageFactor,
+            constants::DEFAULT_IGNORE_OPEN_INTEREST_FOR_USAGE_FACTOR,
+        );
     }
 
     pub(super) fn get(&self, key: MarketConfigKey) -> &Factor {
@@ -215,6 +254,24 @@ impl MarketConfig {
             MarketConfigKey::BorrowingFeeFactorForShort => &self.borrowing_fee_factor_for_short,
             MarketConfigKey::BorrowingFeeExponentForLong => &self.borrowing_fee_exponent_for_long,
             MarketConfigKey::BorrowingFeeExponentForShort => &self.borrowing_fee_exponent_for_short,
+            MarketConfigKey::BorrowingFeeOptimalUsageFactorForLong => {
+                &self.borrowing_fee_optimal_usage_factor_for_long
+            }
+            MarketConfigKey::BorrowingFeeOptimalUsageFactorForShort => {
+                &self.borrowing_fee_optimal_usage_factor_for_short
+            }
+            MarketConfigKey::BorrowingFeeBaseFactorForLong => {
+                &self.borrowing_fee_base_factor_for_long
+            }
+            MarketConfigKey::BorrowingFeeBaseFactorForShort => {
+                &self.borrowing_fee_base_factor_for_short
+            }
+            MarketConfigKey::BorrowingFeeAboveOptimalUsageFactorForLong => {
+                &self.borrowing_fee_above_optimal_usage_factor_for_long
+            }
+            MarketConfigKey::BorrowingFeeAboveOptimalUsageFactorForShort => {
+                &self.borrowing_fee_above_optimal_usage_factor_for_short
+            }
             MarketConfigKey::FundingFeeExponent => &self.funding_fee_exponent,
             MarketConfigKey::FundingFeeFactor => &self.funding_fee_factor,
             MarketConfigKey::FundingFeeMaxFactorPerSecond => {
@@ -324,6 +381,24 @@ impl MarketConfig {
             MarketConfigKey::BorrowingFeeExponentForShort => {
                 &mut self.borrowing_fee_exponent_for_short
             }
+            MarketConfigKey::BorrowingFeeOptimalUsageFactorForLong => {
+                &mut self.borrowing_fee_optimal_usage_factor_for_long
+            }
+            MarketConfigKey::BorrowingFeeOptimalUsageFactorForShort => {
+                &mut self.borrowing_fee_optimal_usage_factor_for_short
+            }
+            MarketConfigKey::BorrowingFeeBaseFactorForLong => {
+                &mut self.borrowing_fee_base_factor_for_long
+            }
+            MarketConfigKey::BorrowingFeeBaseFactorForShort => {
+                &mut self.borrowing_fee_base_factor_for_short
+            }
+            MarketConfigKey::BorrowingFeeAboveOptimalUsageFactorForLong => {
+                &mut self.borrowing_fee_above_optimal_usage_factor_for_long
+            }
+            MarketConfigKey::BorrowingFeeAboveOptimalUsageFactorForShort => {
+                &mut self.borrowing_fee_above_optimal_usage_factor_for_short
+            }
             MarketConfigKey::FundingFeeExponent => &mut self.funding_fee_exponent,
             MarketConfigKey::FundingFeeFactor => &mut self.funding_fee_factor,
             MarketConfigKey::FundingFeeMaxFactorPerSecond => {
@@ -381,6 +456,53 @@ impl MarketConfig {
             MarketConfigKey::MinTokensForFirstDeposit => &mut self.min_tokens_for_first_deposit,
         }
     }
+
+    /// Get config flag.
+    pub(crate) fn flag(&self, flag: MarketConfigFlag) -> bool {
+        let bitmap = MarketConfigFlagBitmap::from_value(self.flag);
+        bitmap.get(usize::from(flag as u8))
+    }
+
+    /// Set config flag.
+    ///
+    /// Return the previous value.
+    pub(crate) fn set_flag(&mut self, flag: MarketConfigFlag, value: bool) -> bool {
+        let mut bitmap = MarketConfigFlagBitmap::from_value(self.flag);
+        let previous = bitmap.set(usize::from(flag as u8), value);
+        self.flag = bitmap.into_value();
+        previous
+    }
+}
+
+/// Market Config Flags.
+#[derive(
+    strum::EnumString,
+    strum::Display,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    num_enum::TryFromPrimitive,
+    num_enum::IntoPrimitive,
+)]
+#[strum(serialize_all = "snake_case")]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "enum-iter", derive(strum::EnumIter))]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+#[cfg_attr(feature = "clap", clap(rename_all = "snake_case"))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+#[non_exhaustive]
+#[repr(u8)]
+pub enum MarketConfigFlag {
+    /// Skip borrowing fee for smaller side.
+    SkipBorrowingFeeForSmallerSide,
+    /// Ignore open interest for usage factor.
+    IgnoreOpenInterestForUsageFactor,
+    // CHECK: cannot have more than `MAX_CONFIG_FLAGS` flags.
 }
 
 /// Market config keys.
@@ -461,6 +583,18 @@ pub enum MarketConfigKey {
     BorrowingFeeExponentForLong,
     /// Borrowing fee exponent for short.
     BorrowingFeeExponentForShort,
+    /// Borrowing fee optimal usage factor for long.
+    BorrowingFeeOptimalUsageFactorForLong,
+    /// Borrowing fee optimal usage factor for short.
+    BorrowingFeeOptimalUsageFactorForShort,
+    /// Borrowing fee base factor for long.
+    BorrowingFeeBaseFactorForLong,
+    /// Borrowing fee base factor for short.
+    BorrowingFeeBaseFactorForShort,
+    /// Borrowing fee above optimal usage factor for long.
+    BorrowingFeeAboveOptimalUsageFactorForLong,
+    /// Borrowing fee above optimal usage factor for short.
+    BorrowingFeeAboveOptimalUsageFactorForShort,
     /// Funding fee exponent.
     FundingFeeExponent,
     /// Funding fee factor.

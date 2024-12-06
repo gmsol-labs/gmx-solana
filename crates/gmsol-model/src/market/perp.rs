@@ -36,12 +36,6 @@ pub trait PerpMarket<const DECIMALS: u8>:
     /// Get the order fee params.
     fn order_fee_params(&self) -> crate::Result<FeeParams<Self::Num>>;
 
-    /// Get open interest reserve factor.
-    fn open_interest_reserve_factor(&self) -> crate::Result<Self::Num>;
-
-    /// Get max open interest.
-    fn max_open_interest(&self, is_long: bool) -> crate::Result<Self::Num>;
-
     /// Get min collateral factor for open interest multiplier.
     fn min_collateral_factor_for_open_interest_multiplier(
         &self,
@@ -142,14 +136,6 @@ impl<'a, M: PerpMarket<DECIMALS>, const DECIMALS: u8> PerpMarket<DECIMALS> for &
 
     fn order_fee_params(&self) -> crate::Result<FeeParams<Self::Num>> {
         (**self).order_fee_params()
-    }
-
-    fn open_interest_reserve_factor(&self) -> crate::Result<Self::Num> {
-        (**self).open_interest_reserve_factor()
-    }
-
-    fn max_open_interest(&self, is_long: bool) -> crate::Result<Self::Num> {
-        (**self).max_open_interest(is_long)
     }
 
     fn min_collateral_factor_for_open_interest_multiplier(

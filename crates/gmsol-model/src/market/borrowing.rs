@@ -1,7 +1,9 @@
 use num_traits::{CheckedAdd, CheckedSub, Zero};
 
 use crate::{
-    params::fee::BorrowingFeeParams, price::Prices, Balance, BalanceExt, BaseMarket, BaseMarketExt,
+    params::fee::{BorrowingFeeKinkModelParams, BorrowingFeeParams},
+    price::Prices,
+    Balance, BalanceExt, BaseMarket, BaseMarketExt,
 };
 
 /// A market with borrowing fees.
@@ -17,6 +19,11 @@ pub trait BorrowingFeeMarket<const DECIMALS: u8>: BaseMarket<DECIMALS> {
 
     /// Get the passed time in seconds for the given kind of clock.
     fn passed_in_seconds_for_borrowing(&self) -> crate::Result<u64>;
+
+    /// Get borrowing fee kink model params.
+    fn borrowing_fee_kink_model_params(
+        &self,
+    ) -> crate::Result<BorrowingFeeKinkModelParams<Self::Num>>;
 }
 
 impl<'a, M: BorrowingFeeMarket<DECIMALS>, const DECIMALS: u8> BorrowingFeeMarket<DECIMALS>
@@ -36,6 +43,12 @@ impl<'a, M: BorrowingFeeMarket<DECIMALS>, const DECIMALS: u8> BorrowingFeeMarket
 
     fn passed_in_seconds_for_borrowing(&self) -> crate::Result<u64> {
         (**self).passed_in_seconds_for_borrowing()
+    }
+
+    fn borrowing_fee_kink_model_params(
+        &self,
+    ) -> crate::Result<BorrowingFeeKinkModelParams<Self::Num>> {
+        (**self).borrowing_fee_kink_model_params()
     }
 }
 
@@ -80,19 +93,25 @@ pub trait BorrowingFeeMarketExt<const DECIMALS: u8>: BorrowingFeeMarket<DECIMALS
             return Err(crate::Error::UnableToGetBorrowingFactorEmptyPoolValue);
         }
 
-        // TODO: apply optimal usage factor.
-
-        let reserved_value_after_exponent =
-            utils::apply_exponent_factor(reserved_value, params.exponent(is_long).clone()).ok_or(
-                crate::Error::Computation("calculating reserved value after exponent"),
-            )?;
-        let reserved_value_to_pool_factor =
-            utils::div_to_factor(&reserved_value_after_exponent, &pool_value, false).ok_or(
-                crate::Error::Computation("calculating reserved value to pool factor"),
-            )?;
-        utils::apply_factor(&reserved_value_to_pool_factor, params.factor(is_long)).ok_or(
-            crate::Error::Computation("calculating borrowing factor per second"),
-        )
+        if let Some(factor) = self
+            .borrowing_fee_kink_model_params()?
+            .borrowing_factor_per_second(self, is_long, &reserved_value, &pool_value)?
+        {
+            Ok(factor)
+        } else {
+            let reserved_value_after_exponent =
+                utils::apply_exponent_factor(reserved_value, params.exponent(is_long).clone())
+                    .ok_or(crate::Error::Computation(
+                        "calculating reserved value after exponent",
+                    ))?;
+            let reserved_value_to_pool_factor =
+                utils::div_to_factor(&reserved_value_after_exponent, &pool_value, false).ok_or(
+                    crate::Error::Computation("calculating reserved value to pool factor"),
+                )?;
+            utils::apply_factor(&reserved_value_to_pool_factor, params.factor(is_long)).ok_or(
+                crate::Error::Computation("calculating borrowing factor per second"),
+            )
+        }
     }
 
     /// Get next cumulative borrowing factor of the given side.

@@ -3,7 +3,10 @@ use std::time::Duration;
 use gmsol_model::{
     fixed::Fixed,
     num::MulDiv,
-    params::{fee::BorrowingFeeParams, FeeParams, PositionParams, PriceImpactParams},
+    params::{
+        fee::{BorrowingFeeKinkModelParamsForOneSide, BorrowingFeeParams},
+        FeeParams, PositionParams, PriceImpactParams,
+    },
     price::Prices,
     test::{TestMarket, TestMarketConfig, TestPosition},
     Balance, BaseMarketExt, BorrowingFeeMarket, BorrowingFeeMarketExt, LiquidityMarketExt,
@@ -36,6 +39,11 @@ fn test_total_borrowing_with_high_borrowing_factor() -> gmsol_model::Result<()> 
             .exponent(unit)
             .build(),
         min_collateral_factor_for_oi: 0,
+        borrowing_fee_kink_model_params: BorrowingFeeKinkModelParamsForOneSide::builder()
+            .optimal_usage_factor(0)
+            .base_borrowing_factor(0)
+            .above_optimal_usage_borrowing_factor(0)
+            .build(),
         ..Default::default()
     });
 
@@ -136,6 +144,11 @@ fn test_total_borrowing_with_high_borrowing_factor_2() -> gmsol_model::Result<()
             .max_positive_position_impact_factor(5_000_000)
             .max_negative_position_impact_factor(5_000_000)
             .max_position_impact_factor_for_liquidations(2_500_000)
+            .build(),
+        borrowing_fee_kink_model_params: BorrowingFeeKinkModelParamsForOneSide::builder()
+            .optimal_usage_factor(0)
+            .base_borrowing_factor(0)
+            .above_optimal_usage_borrowing_factor(0)
             .build(),
         ..Default::default()
     });

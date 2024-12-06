@@ -1,5 +1,7 @@
 use crate::states::Factor;
 
+const SECONDS_PER_YEAR: Factor = 3600 * 24 * 365;
+
 /// Default receiver factor.
 pub const DEFAULT_RECEIVER_FACTOR: Factor = 70_000_000_000_000_000_000;
 
@@ -57,6 +59,24 @@ pub const DEFAULT_BORROWING_FEE_FACTOR_FOR_SHORT: Factor = 2_780_000_000_000;
 pub const DEFAULT_BORROWING_FEE_EXPONENT_FOR_LONG: Factor = super::MARKET_USD_UNIT;
 /// Default borrowing fee exponent for short.
 pub const DEFAULT_BORROWING_FEE_EXPONENT_FOR_SHORT: Factor = super::MARKET_USD_UNIT;
+/// Default borrowing fee optimal usage factor for long.
+pub const DEFAULT_BORROWING_FEE_OPTIMAL_USAGE_FACTOR_FOR_LONG: Factor =
+    75 * super::MARKET_USD_UNIT / 100;
+/// Default borrowing fee optimal usage factor for short.
+pub const DEFAULT_BORROWING_FEE_OPTIMAL_USAGE_FACTOR_FOR_SHORT: Factor =
+    75 * super::MARKET_USD_UNIT / 100;
+/// Default borrowing fee base factor for long.
+pub const DEFAULT_BORROWING_FEE_BASE_FACTOR_FOR_LONG: Factor =
+    60 * super::MARKET_USD_UNIT / 100 / SECONDS_PER_YEAR;
+/// Default borrowing fee base factor for short.
+pub const DEFAULT_BORROWING_FEE_BASE_FACTOR_FOR_SHORT: Factor =
+    60 * super::MARKET_USD_UNIT / 100 / SECONDS_PER_YEAR;
+/// Default borrowing fee above optimal usage factor for long.
+pub const DEFAULT_BORROWING_FEE_ABOVE_OPTIMAL_USAGE_FACTOR_FOR_LONG: Factor =
+    150 * super::MARKET_USD_UNIT / 100 / SECONDS_PER_YEAR;
+/// Default borrowing fee above optimal usage factor for short.
+pub const DEFAULT_BORROWING_FEE_ABOVE_OPTIMAL_USAGE_FACTOR_FOR_SHORT: Factor =
+    150 * super::MARKET_USD_UNIT / 100 / SECONDS_PER_YEAR;
 
 /// Default funding fee exponent.
 pub const DEFAULT_FUNDING_FEE_EXPONENT: Factor = super::MARKET_USD_UNIT;
@@ -118,3 +138,9 @@ pub const DEFAULT_MAX_OPEN_INTEREST_FOR_SHORT: Factor = 450_000 * super::MARKET_
 
 /// Default min tokens for first deposit.
 pub const DEFAULT_MIN_TOKENS_FOR_FIRST_DEPOSIT: Factor = 0;
+
+/// Default skip borrowing fee for smaller side.
+pub const DEFAULT_SKIP_BORROWING_FEE_FOR_SMALLER_SIDE: bool = true;
+
+/// Default ignore open interest for usage factor.
+pub const DEFAULT_IGNORE_OPEN_INTEREST_FOR_USAGE_FACTOR: bool = false;

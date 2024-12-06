@@ -52,6 +52,15 @@ pub trait BaseMarket<const DECIMALS: u8> {
 
     /// Get reserve factor.
     fn reserve_factor(&self) -> crate::Result<Self::Num>;
+
+    /// Get open interest reserve factor.
+    fn open_interest_reserve_factor(&self) -> crate::Result<Self::Num>;
+
+    /// Get max open interest.
+    fn max_open_interest(&self, is_long: bool) -> crate::Result<Self::Num>;
+
+    /// Returns whether ignore open interest for usage factor.
+    fn ignore_open_interest_for_usage_factor(&self) -> crate::Result<bool>;
 }
 
 /// Base Market trait for mutable access.
@@ -112,6 +121,18 @@ impl<'a, M: BaseMarket<DECIMALS>, const DECIMALS: u8> BaseMarket<DECIMALS> for &
 
     fn reserve_factor(&self) -> crate::Result<Self::Num> {
         (**self).reserve_factor()
+    }
+
+    fn open_interest_reserve_factor(&self) -> crate::Result<Self::Num> {
+        (**self).open_interest_reserve_factor()
+    }
+
+    fn max_open_interest(&self, is_long: bool) -> crate::Result<Self::Num> {
+        (**self).max_open_interest(is_long)
+    }
+
+    fn ignore_open_interest_for_usage_factor(&self) -> crate::Result<bool> {
+        (**self).ignore_open_interest_for_usage_factor()
     }
 }
 

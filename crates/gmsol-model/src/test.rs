@@ -16,7 +16,10 @@ use crate::{
     },
     num::{MulDiv, Num, Unsigned, UnsignedAbs},
     params::{
-        fee::{BorrowingFeeParams, FundingFeeParams},
+        fee::{
+            BorrowingFeeKinkModelParams, BorrowingFeeKinkModelParamsForOneSide, BorrowingFeeParams,
+            FundingFeeParams,
+        },
         position::PositionImpactDistributionParams,
         FeeParams, PositionParams, PriceImpactParams,
     },
@@ -215,6 +218,8 @@ impl Default for TestMarket<u128, 20> {
     }
 }
 
+const SECONDS_PER_YEAR: u64 = 365 * 24 * 3600;
+
 /// Test Market Config.
 #[derive(Debug, Clone)]
 pub struct TestMarketConfig<T, const DECIMALS: u8> {
@@ -232,6 +237,8 @@ pub struct TestMarketConfig<T, const DECIMALS: u8> {
     pub position_impact_distribution_params: PositionImpactDistributionParams<T>,
     /// Borrowing fee params.
     pub borrowing_fee_params: BorrowingFeeParams<T>,
+    /// Borrowing fee kink model params.
+    pub borrowing_fee_kink_model_params: BorrowingFeeKinkModelParamsForOneSide<T>,
     /// Funding fee params.
     pub funding_fee_params: FundingFeeParams<T>,
     /// Reserve factor.
@@ -250,6 +257,8 @@ pub struct TestMarketConfig<T, const DECIMALS: u8> {
     pub max_open_interest: T,
     /// Min collateral factor for OI.
     pub min_collateral_factor_for_oi: T,
+    /// Ignore open interest for usage factor.
+    pub ignore_open_interest_for_usage_factor: bool,
 }
 
 impl Default for TestMarketConfig<u64, 9> {
@@ -294,6 +303,11 @@ impl Default for TestMarketConfig<u64, 9> {
                 .exponent_for_long(1_000_000_000)
                 .exponent_for_short(1_000_000_000)
                 .build(),
+            borrowing_fee_kink_model_params: BorrowingFeeKinkModelParamsForOneSide::builder()
+                .optimal_usage_factor(750_000_000)
+                .base_borrowing_factor(600_000_000 / SECONDS_PER_YEAR)
+                .above_optimal_usage_borrowing_factor(1_500_000_000 / SECONDS_PER_YEAR)
+                .build(),
             funding_fee_params: FundingFeeParams::builder()
                 .exponent(1_000_000_000)
                 .funding_factor(20)
@@ -318,6 +332,7 @@ impl Default for TestMarketConfig<u64, 9> {
             max_open_interest: u64::MAX,
             // min collateral factor of 0.005 when open interest is $83,000,000
             min_collateral_factor_for_oi: 5 * 10u64.pow(6) / 83_000_000,
+            ignore_open_interest_for_usage_factor: false,
         }
     }
 }
@@ -365,6 +380,13 @@ impl Default for TestMarketConfig<u128, 20> {
                 .exponent_for_long(100_000_000_000_000_000_000)
                 .exponent_for_short(100_000_000_000_000_000_000)
                 .build(),
+            borrowing_fee_kink_model_params: BorrowingFeeKinkModelParamsForOneSide::builder()
+                .optimal_usage_factor(75_000_000_000_000_000_000)
+                .base_borrowing_factor(60_000_000_000_000_000_000 / u128::from(SECONDS_PER_YEAR))
+                .above_optimal_usage_borrowing_factor(
+                    150_000_000_000_000_000_000 / u128::from(SECONDS_PER_YEAR),
+                )
+                .build(),
             funding_fee_params: FundingFeeParams::builder()
                 .exponent(100_000_000_000_000_000_000)
                 .funding_factor(2_000_000_000_000)
@@ -389,6 +411,7 @@ impl Default for TestMarketConfig<u128, 20> {
             max_open_interest: 1_000_000_000 * 10u128.pow(20),
             // min collateral factor of 0.005 when open interest is $83,000,000
             min_collateral_factor_for_oi: 5 * 10u128.pow(17) / 83_000_000,
+            ignore_open_interest_for_usage_factor: false,
         }
     }
 }
@@ -486,6 +509,18 @@ where
 
     fn reserve_factor(&self) -> crate::Result<Self::Num> {
         Ok(self.config.reserve_factor.clone())
+    }
+
+    fn open_interest_reserve_factor(&self) -> crate::Result<Self::Num> {
+        Ok(self.config.open_interest_reserve_factor.clone())
+    }
+
+    fn max_open_interest(&self, _is_long: bool) -> crate::Result<Self::Num> {
+        Ok(self.config.max_open_interest.clone())
+    }
+
+    fn ignore_open_interest_for_usage_factor(&self) -> crate::Result<bool> {
+        Ok(self.config.ignore_open_interest_for_usage_factor)
     }
 }
 
@@ -621,6 +656,16 @@ where
     fn passed_in_seconds_for_borrowing(&self) -> crate::Result<u64> {
         self.passed_in_seconds(ClockKind::Borrowing)
     }
+
+    fn borrowing_fee_kink_model_params(
+        &self,
+    ) -> crate::Result<BorrowingFeeKinkModelParams<Self::Num>> {
+        let for_one_side = self.config.borrowing_fee_kink_model_params.clone();
+        Ok(BorrowingFeeKinkModelParams::builder()
+            .long(for_one_side.clone())
+            .short(for_one_side)
+            .build())
+    }
 }
 
 impl<T, const DECIMALS: u8> PerpMarket<DECIMALS> for TestMarket<T, DECIMALS>
@@ -662,14 +707,6 @@ where
 
     fn order_fee_params(&self) -> crate::Result<FeeParams<Self::Num>> {
         Ok(self.config.order_fee_params.clone())
-    }
-
-    fn open_interest_reserve_factor(&self) -> crate::Result<Self::Num> {
-        Ok(self.config.open_interest_reserve_factor.clone())
-    }
-
-    fn max_open_interest(&self, _is_long: bool) -> crate::Result<Self::Num> {
-        Ok(self.config.max_open_interest.clone())
     }
 
     fn min_collateral_factor_for_open_interest_multiplier(

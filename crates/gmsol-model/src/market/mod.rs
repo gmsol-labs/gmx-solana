@@ -16,6 +16,8 @@ pub mod borrowing;
 /// Perpetual Market.
 pub mod perp;
 
+pub(crate) mod utils;
+
 pub use self::{
     base::{BaseMarket, BaseMarketExt, BaseMarketMut, BaseMarketMutExt, PnlFactorKind},
     borrowing::{BorrowingFeeMarket, BorrowingFeeMarketExt},

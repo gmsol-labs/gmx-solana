@@ -176,6 +176,18 @@ impl<'a, 'info> gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }>
     fn reserve_factor(&self) -> gmsol_model::Result<Self::Num> {
         self.base.reserve_factor()
     }
+
+    fn open_interest_reserve_factor(&self) -> gmsol_model::Result<Self::Num> {
+        self.base.open_interest_reserve_factor()
+    }
+
+    fn max_open_interest(&self, is_long: bool) -> gmsol_model::Result<Self::Num> {
+        self.base.max_open_interest(is_long)
+    }
+
+    fn ignore_open_interest_for_usage_factor(&self) -> gmsol_model::Result<bool> {
+        self.base.ignore_open_interest_for_usage_factor()
+    }
 }
 
 impl<'a, 'info> gmsol_model::BaseMarketMut<{ constants::MARKET_DECIMALS }>
@@ -267,6 +279,12 @@ impl<'a, 'info> gmsol_model::BorrowingFeeMarket<{ constants::MARKET_DECIMALS }>
 
     fn passed_in_seconds_for_borrowing(&self) -> gmsol_model::Result<u64> {
         self.base.passed_in_seconds_for_borrowing()
+    }
+
+    fn borrowing_fee_kink_model_params(
+        &self,
+    ) -> gmsol_model::Result<gmsol_model::params::fee::BorrowingFeeKinkModelParams<Self::Num>> {
+        self.base.borrowing_fee_kink_model_params()
     }
 }
 

@@ -17,7 +17,7 @@ use crate::{
     num::{MulDiv, Num, Unsigned, UnsignedAbs},
     params::fee::{FundingFees, PositionFees},
     price::{Price, Prices},
-    Balance, BalanceExt, PerpMarketMut, PnlFactorKind, Pool, PoolExt,
+    Balance, BalanceExt, BaseMarket, PerpMarketMut, PnlFactorKind, Pool, PoolExt,
 };
 
 /// Read-only access to the position state.
