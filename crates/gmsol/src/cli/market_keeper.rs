@@ -21,7 +21,7 @@ use gmsol::{
         store_ops::StoreOps,
         token_config::TokenConfigOps,
     },
-    types::market::config::MarketConfigBuffer,
+    types::market::config::{MarketConfigBuffer, MarketConfigFlag},
     utils::TransactionBuilder,
 };
 use gmsol_store::states::{
@@ -188,6 +188,17 @@ enum Command {
         /// Whether to keep the used market config buffer account.
         #[arg(long)]
         keep_buffer: bool,
+    },
+    /// Update Market Config Flag.
+    UpdateConfigFlag {
+        /// The market token of the market to update.
+        market_token: Pubkey,
+        /// The config key to udpate.
+        #[arg(long, short)]
+        key: MarketConfigFlag,
+        /// The boolean value that the flag to update to.
+        #[arg(long, short)]
+        value: bool,
     },
     /// Update Market Configs from file.
     UpdateConfigs {
@@ -546,6 +557,24 @@ impl Args {
                         !*keep_buffer,
                     )
                     .await?;
+            }
+            Command::UpdateConfigFlag {
+                market_token,
+                key,
+                value,
+            } => {
+                crate::utils::send_or_serialize_rpc(
+                    client.update_market_config_flag_by_key(store, market_token, *key, *value)?,
+                    serialize_only,
+                    false,
+                    |signature| {
+                        tracing::info!(
+                            "market config flag is updated to {value} at tx {signature}"
+                        );
+                        Ok(())
+                    },
+                )
+                .await?;
             }
             Command::UpdateConfigs {
                 path,

@@ -50,7 +50,7 @@ async fn set_market_config_flag() -> eyre::Result<()> {
             store,
             market_token,
             MarketConfigFlag::SkipBorrowingFeeForSmallerSide,
-            true,
+            false,
         )?
         .send_without_preflight()
         .await?;
