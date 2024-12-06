@@ -587,9 +587,20 @@ async fn liquidation() -> eyre::Result<()> {
                 MarketConfigKey::MinCollateralFactor,
                 &MARKET_USD_UNIT,
             )?
-            .send()
+            .send_without_preflight()
             .await?;
         tracing::info!(%signature, %market_token, "increased min collateral factor");
+
+        let signature = keeper
+            .update_market_config_by_key(
+                store,
+                market_token,
+                MarketConfigKey::LiquidationFeeFactor,
+                &(5 * MARKET_USD_UNIT / 10_000),
+            )?
+            .send_without_preflight()
+            .await?;
+        tracing::info!(%signature, %market_token, "set liquidation fee factor");
 
         // Liquidate.
         let mut builder = keeper.liquidate(oracle, &position)?;
@@ -613,7 +624,7 @@ async fn liquidation() -> eyre::Result<()> {
                 MarketConfigKey::MinCollateralFactor,
                 &(MARKET_USD_UNIT / 100),
             )?
-            .send()
+            .send_without_preflight()
             .await?;
         tracing::info!(%signature, %market_token, "restore min collateral factor");
     }

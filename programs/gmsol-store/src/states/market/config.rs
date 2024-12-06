@@ -44,6 +44,9 @@ pub struct MarketConfig {
     pub(super) order_fee_receiver_factor: Factor,
     pub(super) order_fee_factor_for_positive_impact: Factor,
     pub(super) order_fee_factor_for_negative_impact: Factor,
+    // Liquidation fee.
+    pub(super) liquidation_fee_receiver_factor: Factor,
+    pub(super) liquidation_fee_factor: Factor,
     // Position impact distribution.
     pub(super) position_impact_distribute_factor: Factor,
     pub(super) min_position_impact_pool_amount: Factor,
@@ -128,6 +131,9 @@ impl MarketConfig {
             constants::DEFAULT_ORDER_FEE_FACTOR_FOR_POSITIVE_IMPACT;
         self.order_fee_factor_for_negative_impact =
             constants::DEFAULT_ORDER_FEE_FACTOR_FOR_NEGATIVE_IMPACT;
+
+        self.liquidation_fee_receiver_factor = constants::DEFAULT_RECEIVER_FACTOR;
+        self.liquidation_fee_factor = constants::DEFAULT_LIQUIDATION_FEE_FACTOR;
 
         self.position_impact_distribute_factor =
             constants::DEFAULT_POSITION_IMPACT_DISTRIBUTE_FACTOR;
@@ -245,6 +251,8 @@ impl MarketConfig {
             MarketConfigKey::OrderFeeFactorForNegativeImpact => {
                 &self.order_fee_factor_for_negative_impact
             }
+            MarketConfigKey::LiquidationFeeReceiverFactor => &self.liquidation_fee_receiver_factor,
+            MarketConfigKey::LiquidationFeeFactor => &self.liquidation_fee_factor,
             MarketConfigKey::PositionImpactDistributeFactor => {
                 &self.position_impact_distribute_factor
             }
@@ -366,6 +374,10 @@ impl MarketConfig {
             MarketConfigKey::OrderFeeFactorForNegativeImpact => {
                 &mut self.order_fee_factor_for_negative_impact
             }
+            MarketConfigKey::LiquidationFeeReceiverFactor => {
+                &mut self.liquidation_fee_receiver_factor
+            }
+            MarketConfigKey::LiquidationFeeFactor => &mut self.liquidation_fee_factor,
             MarketConfigKey::PositionImpactDistributeFactor => {
                 &mut self.position_impact_distribute_factor
             }
@@ -569,6 +581,10 @@ pub enum MarketConfigKey {
     OrderFeeFactorForPositiveImpact,
     /// Order fee factor for negative impact.
     OrderFeeFactorForNegativeImpact,
+    /// Liquidation fee receiver factor.
+    LiquidationFeeReceiverFactor,
+    /// Liquidation fee factor.
+    LiquidationFeeFactor,
     /// Position impact distribute factor.
     PositionImpactDistributeFactor,
     /// Min position impact pool amount.

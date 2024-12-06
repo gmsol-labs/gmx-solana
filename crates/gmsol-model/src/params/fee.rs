@@ -132,6 +132,7 @@ impl<T> FeeParams<T> {
             base,
             borrowing: Default::default(),
             funding: Default::default(),
+            liquidation: Default::default(),
         })
     }
 }
@@ -389,6 +390,47 @@ pub enum FundingRateChangeType {
     Decrease,
 }
 
+/// Liquidation Fee Parameters.
+#[derive(Debug, Clone, Copy, TypedBuilder)]
+pub struct LiquidationFeeParams<T> {
+    factor: T,
+    receiver_factor: T,
+}
+
+impl<T> LiquidationFeeParams<T> {
+    pub(crate) fn fee<const DECIMALS: u8>(
+        &self,
+        size_in_usd: &T,
+        collateral_token_price: &Price<T>,
+    ) -> crate::Result<LiquidationFees<T>>
+    where
+        T: FixedPointOps<DECIMALS>,
+    {
+        if self.factor.is_zero() {
+            return Ok(Default::default());
+        }
+
+        let fee_value = utils::apply_factor(size_in_usd, &self.factor).ok_or(
+            crate::Error::Computation("liquidation fee: calculating fee value"),
+        )?;
+        let fee_amount = fee_value
+            .checked_round_up_div(collateral_token_price.pick_price(false))
+            .ok_or(crate::Error::Computation(
+                "liquidation fee: calculating fee amount",
+            ))?;
+        let fee_amount_for_receiver = utils::apply_factor(&fee_amount, &self.receiver_factor)
+            .ok_or(crate::Error::Computation(
+                "liquidation fee: calculating fee amount for receiver",
+            ))?;
+
+        Ok(LiquidationFees {
+            fee_value,
+            fee_amount,
+            fee_amount_for_receiver,
+        })
+    }
+}
+
 /// Fees.
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -442,12 +484,12 @@ pub struct OrderFees<T> {
     derive(anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize)
 )]
 #[derive(Debug, Clone, Copy)]
-pub struct BorrowingFee<T> {
+pub struct BorrowingFees<T> {
     amount: T,
     amount_for_receiver: T,
 }
 
-impl<T> BorrowingFee<T> {
+impl<T> BorrowingFees<T> {
     /// Get total borrowing fee amount.
     pub fn amount(&self) -> &T {
         &self.amount
@@ -459,7 +501,7 @@ impl<T> BorrowingFee<T> {
     }
 }
 
-impl<T: Zero> Default for BorrowingFee<T> {
+impl<T: Zero> Default for BorrowingFees<T> {
     fn default() -> Self {
         Self {
             amount: Zero::zero(),
@@ -508,6 +550,46 @@ impl<T: Zero> Default for FundingFees<T> {
     }
 }
 
+/// Liquidation Fees.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "anchor-lang",
+    derive(anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize)
+)]
+#[derive(Debug, Clone, Copy)]
+pub struct LiquidationFees<T> {
+    fee_value: T,
+    fee_amount: T,
+    fee_amount_for_receiver: T,
+}
+
+impl<T: Zero> Default for LiquidationFees<T> {
+    fn default() -> Self {
+        Self {
+            fee_value: Zero::zero(),
+            fee_amount: Zero::zero(),
+            fee_amount_for_receiver: Zero::zero(),
+        }
+    }
+}
+
+impl<T> LiquidationFees<T> {
+    /// Get total liquidation fee amount.
+    pub fn fee_amount(&self) -> &T {
+        &self.fee_amount
+    }
+
+    /// Get liquidation fee amount for receiver.
+    pub fn fee_amount_for_receiver(&self) -> &T {
+        &self.fee_amount_for_receiver
+    }
+
+    /// Get total liquidation fee value.
+    pub fn fee_value(&self) -> &T {
+        &self.fee_value
+    }
+}
+
 /// Position Fees.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -517,8 +599,9 @@ impl<T: Zero> Default for FundingFees<T> {
 #[derive(Debug, Clone, Copy)]
 pub struct PositionFees<T> {
     base: Fees<T>,
-    borrowing: BorrowingFee<T>,
+    borrowing: BorrowingFees<T>,
     funding: FundingFees<T>,
+    liquidation: Option<LiquidationFees<T>>,
 }
 
 impl<T> PositionFees<T> {
@@ -530,6 +613,13 @@ impl<T> PositionFees<T> {
         self.base
             .fee_receiver_amount
             .checked_add(self.borrowing.amount_for_receiver())
+            .and_then(|total| {
+                if let Some(fees) = self.liquidation_fees() {
+                    total.checked_add(fees.fee_amount_for_receiver())
+                } else {
+                    Some(total)
+                }
+            })
             .ok_or(crate::Error::Computation("calculating fee for receiver"))
     }
 
@@ -543,23 +633,37 @@ impl<T> PositionFees<T> {
             .fee_amount_for_pool
             .checked_add(&self.borrowing.amount)
             .and_then(|total| total.checked_sub(self.borrowing.amount_for_receiver()))
+            .and_then(|total| {
+                if let Some(fees) = self.liquidation_fees() {
+                    total
+                        .checked_add(fees.fee_amount())?
+                        .checked_sub(fees.fee_amount_for_receiver())
+                } else {
+                    Some(total)
+                }
+            })
             .ok_or(crate::Error::Computation("calculating fee for pool"))?;
         Ok(amount)
     }
 
-    /// Get order fee.
-    pub fn order_fee(&self) -> &Fees<T> {
+    /// Get order fees.
+    pub fn order_fees(&self) -> &Fees<T> {
         &self.base
     }
 
-    /// Get borrowing fee.
-    pub fn borrowing(&self) -> &BorrowingFee<T> {
+    /// Get borrowing fees.
+    pub fn borrowing_fees(&self) -> &BorrowingFees<T> {
         &self.borrowing
     }
 
     /// Get funding fees.
     pub fn funding_fees(&self) -> &FundingFees<T> {
         &self.funding
+    }
+
+    /// Get liquidation fees.
+    pub fn liquidation_fees(&self) -> Option<&LiquidationFees<T>> {
+        self.liquidation.as_ref()
     }
 
     /// Get total cost amount in collateral tokens.
@@ -581,6 +685,13 @@ impl<T> PositionFees<T> {
             .fee_amount_for_pool
             .checked_add(&self.base.fee_receiver_amount)
             .and_then(|acc| acc.checked_add(&self.borrowing.amount))
+            .and_then(|acc| {
+                if let Some(fees) = self.liquidation_fees() {
+                    acc.checked_add(fees.fee_amount())
+                } else {
+                    Some(acc)
+                }
+            })
             .ok_or(crate::Error::Overflow)
     }
 
@@ -590,11 +701,12 @@ impl<T> PositionFees<T> {
         T: Zero,
     {
         self.base = Fees::default();
-        self.borrowing = BorrowingFee::default();
+        self.borrowing = BorrowingFees::default();
+        self.liquidation = None;
     }
 
-    /// Set borrowing fee.
-    pub fn set_borrowing_fee<const DECIMALS: u8>(
+    /// Set borrowing fees.
+    pub fn set_borrowing_fees<const DECIMALS: u8>(
         mut self,
         receiver_factor: &T,
         price: &Price<T>,
@@ -621,6 +733,12 @@ impl<T> PositionFees<T> {
         self.funding = fees;
         self
     }
+
+    /// Set liquidation fees.
+    pub fn set_liquidation_fees(mut self, fees: Option<LiquidationFees<T>>) -> Self {
+        self.liquidation = fees;
+        self
+    }
 }
 
 impl<T: Zero> Default for PositionFees<T> {
@@ -629,6 +747,7 @@ impl<T: Zero> Default for PositionFees<T> {
             base: Default::default(),
             borrowing: Default::default(),
             funding: Default::default(),
+            liquidation: None,
         }
     }
 }

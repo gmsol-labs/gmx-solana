@@ -670,10 +670,10 @@ pub struct TradeFees {
 
 impl TradeFees {
     fn set_with_position_fees(&mut self, fees: &PositionFees<u128>) {
-        self.order_fee_for_receiver_amount = *fees.order_fee().fee_receiver_amount();
-        self.order_fee_for_pool_amount = *fees.order_fee().fee_amount_for_pool();
-        self.total_borrowing_fee_amount = *fees.borrowing().amount();
-        self.borrowing_fee_for_receiver_amount = *fees.borrowing().amount_for_receiver();
+        self.order_fee_for_receiver_amount = *fees.order_fees().fee_receiver_amount();
+        self.order_fee_for_pool_amount = *fees.order_fees().fee_amount_for_pool();
+        self.total_borrowing_fee_amount = *fees.borrowing_fees().amount();
+        self.borrowing_fee_for_receiver_amount = *fees.borrowing_fees().amount_for_receiver();
         self.funding_fee_amount = *fees.funding_fees().amount();
         self.claimable_funding_fee_long_token_amount =
             *fees.funding_fees().claimable_long_token_amount();

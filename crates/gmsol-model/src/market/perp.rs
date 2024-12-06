@@ -3,7 +3,10 @@ use crate::{
         update_borrowing_state::UpdateBorrowingState, update_funding_state::UpdateFundingState,
     },
     num::Unsigned,
-    params::{fee::FundingFeeParams, FeeParams, PositionParams},
+    params::{
+        fee::{FundingFeeParams, LiquidationFeeParams},
+        FeeParams, PositionParams,
+    },
     price::{Price, Prices},
     BalanceExt, BorrowingFeeMarket, PoolExt, PositionImpactMarket, PositionImpactMarketMut,
     SwapMarket, SwapMarketMut,
@@ -41,6 +44,9 @@ pub trait PerpMarket<const DECIMALS: u8>:
         &self,
         is_long: bool,
     ) -> crate::Result<Self::Num>;
+
+    /// Get liquidation fee params.
+    fn liquidation_fee_params(&self) -> crate::Result<LiquidationFeeParams<Self::Num>>;
 }
 
 /// A mutable perpetual market.
@@ -143,6 +149,10 @@ impl<'a, M: PerpMarket<DECIMALS>, const DECIMALS: u8> PerpMarket<DECIMALS> for &
         is_long: bool,
     ) -> crate::Result<Self::Num> {
         (**self).min_collateral_factor_for_open_interest_multiplier(is_long)
+    }
+
+    fn liquidation_fee_params(&self) -> crate::Result<LiquidationFeeParams<Self::Num>> {
+        (**self).liquidation_fee_params()
     }
 }
 

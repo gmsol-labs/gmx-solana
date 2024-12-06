@@ -350,6 +350,7 @@ where
             self.collateral_price(),
             &self.params.size_delta_usd,
             price_impact_value.is_positive(),
+            false,
         )?;
 
         collateral_delta_amount = collateral_delta_amount

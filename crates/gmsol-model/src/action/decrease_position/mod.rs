@@ -360,6 +360,7 @@ where
                 .collateral_token_price(is_output_token_long),
             &self.size_delta_usd,
             price_impact_value.is_positive(),
+            self.params.is_liquidation_order(),
         )?;
 
         let remaining_collateral_amount = self.position.collateral_amount().clone();

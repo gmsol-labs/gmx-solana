@@ -18,7 +18,7 @@ use crate::{
     params::{
         fee::{
             BorrowingFeeKinkModelParams, BorrowingFeeKinkModelParamsForOneSide, BorrowingFeeParams,
-            FundingFeeParams,
+            FundingFeeParams, LiquidationFeeParams,
         },
         position::PositionImpactDistributionParams,
         FeeParams, PositionParams, PriceImpactParams,
@@ -259,6 +259,8 @@ pub struct TestMarketConfig<T, const DECIMALS: u8> {
     pub min_collateral_factor_for_oi: T,
     /// Ignore open interest for usage factor.
     pub ignore_open_interest_for_usage_factor: bool,
+    /// Liquidation fee params.
+    pub liquidation_fee_params: LiquidationFeeParams<T>,
 }
 
 impl Default for TestMarketConfig<u64, 9> {
@@ -333,6 +335,10 @@ impl Default for TestMarketConfig<u64, 9> {
             // min collateral factor of 0.005 when open interest is $83,000,000
             min_collateral_factor_for_oi: 5 * 10u64.pow(6) / 83_000_000,
             ignore_open_interest_for_usage_factor: false,
+            liquidation_fee_params: LiquidationFeeParams::builder()
+                .factor(500_000)
+                .receiver_factor(370_000_000)
+                .build(),
         }
     }
 }
@@ -412,6 +418,10 @@ impl Default for TestMarketConfig<u128, 20> {
             // min collateral factor of 0.005 when open interest is $83,000,000
             min_collateral_factor_for_oi: 5 * 10u128.pow(17) / 83_000_000,
             ignore_open_interest_for_usage_factor: false,
+            liquidation_fee_params: LiquidationFeeParams::builder()
+                .factor(50_000_000_000_000_000)
+                .receiver_factor(37_000_000_000_000_000_000)
+                .build(),
         }
     }
 }
@@ -714,6 +724,10 @@ where
         _is_long: bool,
     ) -> crate::Result<Self::Num> {
         Ok(self.config.min_collateral_factor_for_oi.clone())
+    }
+
+    fn liquidation_fee_params(&self) -> crate::Result<LiquidationFeeParams<Self::Num>> {
+        Ok(self.config.liquidation_fee_params.clone())
     }
 }
 

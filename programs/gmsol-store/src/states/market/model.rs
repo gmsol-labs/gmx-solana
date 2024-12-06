@@ -3,7 +3,7 @@ use gmsol_model::{
     params::{
         fee::{
             BorrowingFeeKinkModelParams, BorrowingFeeKinkModelParamsForOneSide, BorrowingFeeParams,
-            FundingFeeParams,
+            FundingFeeParams, LiquidationFeeParams,
         },
         position::PositionImpactDistributionParams,
         FeeParams, PositionParams, PriceImpactParams,
@@ -301,6 +301,13 @@ impl gmsol_model::PerpMarket<{ constants::MARKET_DECIMALS }> for Market {
                 .config
                 .min_collateral_factor_for_open_interest_multiplier_for_short)
         }
+    }
+
+    fn liquidation_fee_params(&self) -> gmsol_model::Result<LiquidationFeeParams<Self::Num>> {
+        Ok(LiquidationFeeParams::builder()
+            .factor(self.config.liquidation_fee_factor)
+            .receiver_factor(self.config.liquidation_fee_receiver_factor)
+            .build())
     }
 }
 

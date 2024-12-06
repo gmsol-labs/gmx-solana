@@ -461,6 +461,12 @@ impl<'a> gmsol_model::PerpMarket<{ constants::MARKET_DECIMALS }> for RevertibleM
         self.market
             .min_collateral_factor_for_open_interest_multiplier(is_long)
     }
+
+    fn liquidation_fee_params(
+        &self,
+    ) -> gmsol_model::Result<gmsol_model::params::fee::LiquidationFeeParams<Self::Num>> {
+        self.market.liquidation_fee_params()
+    }
 }
 
 impl<'a> gmsol_model::PerpMarketMut<{ constants::MARKET_DECIMALS }> for RevertibleMarket<'a> {

@@ -482,7 +482,13 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
             price_impact_value = Zero::zero();
         }
 
-        let fees = self.position_fees(collateral_price, size_in_usd, has_positive_impact)?;
+        let fees = self.position_fees(
+            collateral_price,
+            size_in_usd,
+            has_positive_impact,
+            // Should not account for liquidation fees to determine if position should be liquidated.
+            false,
+        )?;
 
         let collateral_cost_value = fees
             .total_cost_amount()?
@@ -669,18 +675,29 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         collateral_token_price: &Price<Self::Num>,
         size_delta_usd: &Self::Num,
         is_positive_impact: bool,
+        is_liquidation: bool,
     ) -> crate::Result<PositionFees<Self::Num>> {
         debug_assert!(!collateral_token_price.has_zero(), "must be non-zero");
+
+        let liquidation_fees = is_liquidation
+            .then(|| {
+                self.market()
+                    .liquidation_fee_params()?
+                    .fee(self.size_in_usd(), collateral_token_price)
+            })
+            .transpose()?;
+
         let fees = self
             .market()
             .order_fee_params()?
             .base_position_fees(collateral_token_price, size_delta_usd, is_positive_impact)?
-            .set_borrowing_fee(
+            .set_borrowing_fees(
                 self.market().borrowing_fee_params()?.receiver_factor(),
                 collateral_token_price,
                 self.pending_borrowing_fee_value()?,
             )?
-            .set_funding_fees(self.pending_funding_fees()?);
+            .set_funding_fees(self.pending_funding_fees()?)
+            .set_liquidation_fees(liquidation_fees);
         Ok(fees)
     }
 }
