@@ -2,8 +2,9 @@ use std::{fmt, str::FromStr};
 
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use gmsol::types::{
-    market::pool::Pool, position::PositionState, Factor, FeedConfig, Market, MarketConfigKey,
-    Position, PriceProviderKind, TokenConfig,
+    market::{config::MarketConfigFlag, pool::Pool},
+    position::PositionState,
+    Factor, FeedConfig, Market, MarketConfigKey, Position, PriceProviderKind, TokenConfig,
 };
 use gmsol_model::{ClockKind, PoolKind};
 use indexmap::IndexMap;
@@ -68,6 +69,8 @@ pub struct SerializeMarket {
     pub pools: SerializeMarketPools,
     /// Parameters.
     pub params: MarketConfigMap,
+    /// Flags.
+    pub flags: MarketConfigFlags,
 }
 
 impl SerializeMarket {
@@ -102,6 +105,7 @@ impl SerializeMarket {
             clocks: market.try_into()?,
             pools: market.try_into()?,
             params: market.try_into()?,
+            flags: market.try_into()?,
         };
         Ok(serialized)
     }
@@ -190,6 +194,24 @@ impl<'a> TryFrom<&'a Market> for MarketConfigMap {
             .map(|key| {
                 let factor = market.get_config_by_key(key);
                 (key, SerdeFactor(*factor))
+            })
+            .collect();
+        Ok(Self(map))
+    }
+}
+
+/// Market Config Flags.
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct MarketConfigFlags(pub IndexMap<MarketConfigFlag, bool>);
+
+impl<'a> TryFrom<&'a Market> for MarketConfigFlags {
+    type Error = gmsol::Error;
+
+    fn try_from(market: &'a Market) -> Result<Self, Self::Error> {
+        let map = MarketConfigFlag::iter()
+            .map(|key| {
+                let flag = market.get_config_flag_by_key(key);
+                (key, flag)
             })
             .collect();
         Ok(Self(map))

@@ -7,7 +7,10 @@ use anchor_client::{
 use gmsol_model::{price::Prices, PnlFactorKind};
 use gmsol_store::{
     accounts, instruction,
-    states::{market::config::EntryArgs, Factor, MarketConfigKey},
+    states::{
+        market::config::{EntryArgs, MarketConfigFlag},
+        Factor, MarketConfigKey,
+    },
 };
 
 use crate::utils::RpcBuilder;
@@ -72,6 +75,15 @@ pub trait MarketOps<C> {
         value: &Factor,
     ) -> crate::Result<RpcBuilder<C>>;
 
+    /// Update market config flag
+    fn update_market_config_flag(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        key: &str,
+        value: bool,
+    ) -> crate::Result<RpcBuilder<C>>;
+
     /// Update market config by key.
     fn update_market_config_by_key(
         &self,
@@ -82,6 +94,18 @@ pub trait MarketOps<C> {
     ) -> crate::Result<RpcBuilder<C>> {
         let key = key.to_string();
         self.update_market_config(store, market_token, &key, value)
+    }
+
+    /// Update market config flag by key.
+    fn update_market_config_flag_by_key(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        key: MarketConfigFlag,
+        value: bool,
+    ) -> crate::Result<RpcBuilder<C>> {
+        let key = key.to_string();
+        self.update_market_config_flag(store, market_token, &key, value)
     }
 
     /// Toggle market.
@@ -189,6 +213,27 @@ where
             .args(instruction::UpdateMarketConfig {
                 key: key.to_string(),
                 value: *value,
+            })
+            .accounts(accounts::UpdateMarketConfig {
+                authority: self.payer(),
+                store: *store,
+                market: self.find_market_address(store, market_token),
+            });
+        Ok(req)
+    }
+
+    fn update_market_config_flag(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        key: &str,
+        value: bool,
+    ) -> crate::Result<RpcBuilder<C>> {
+        let req = self
+            .store_rpc()
+            .args(instruction::UpdateMarketConfigFlag {
+                key: key.to_string(),
+                value,
             })
             .accounts(accounts::UpdateMarketConfig {
                 authority: self.payer(),

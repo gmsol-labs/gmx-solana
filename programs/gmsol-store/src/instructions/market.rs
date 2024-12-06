@@ -289,9 +289,8 @@ impl<'info> internal::Authentication<'info> for MarketTransferIn<'info> {
     }
 }
 
-/// The accounts definition for [`update_market_config`](crate::gmsol_store::update_market_config).
-///
-/// *[See also the documentation for the instruction.](crate::gmsol_store::update_market_config)*
+/// The accounts definition for [`update_market_config`](crate::gmsol_store::update_market_config)
+/// and [`update_market_config_flag`](crate::gmsol_store::update_market_config_flag).
 #[derive(Accounts)]
 pub struct UpdateMarketConfig<'info> {
     /// The caller.
@@ -303,10 +302,20 @@ pub struct UpdateMarketConfig<'info> {
     pub market: AccountLoader<'info, Market>,
 }
 
+impl<'info> internal::Authentication<'info> for UpdateMarketConfig<'info> {
+    fn authority(&self) -> &Signer<'info> {
+        &self.authority
+    }
+
+    fn store(&self) -> &AccountLoader<'info, Store> {
+        &self.store
+    }
+}
+
 /// Update market config by key.
 ///
 /// ## CHECK
-/// - Only MARKET_KEEPER can udpate the config of market.
+/// - Only MARKET_KEEPER can update the config of market.
 pub(crate) fn unchecked_update_market_config(
     ctx: Context<UpdateMarketConfig>,
     key: &str,
@@ -322,14 +331,28 @@ pub(crate) fn unchecked_update_market_config(
     Ok(())
 }
 
-impl<'info> internal::Authentication<'info> for UpdateMarketConfig<'info> {
-    fn authority(&self) -> &Signer<'info> {
-        &self.authority
-    }
-
-    fn store(&self) -> &AccountLoader<'info, Store> {
-        &self.store
-    }
+/// Update market config flag by key.
+///
+/// ## CHECK
+/// - Only MARKET_KEEPER can update the config of market.
+pub(crate) fn unchecked_update_market_config_flag(
+    ctx: Context<UpdateMarketConfig>,
+    key: &str,
+    value: bool,
+) -> Result<()> {
+    let previous = ctx
+        .accounts
+        .market
+        .load_mut()?
+        .set_config_flag(key, value)?;
+    msg!(
+        "{}: set {} = {}, previous = {}",
+        ctx.accounts.market.load()?.meta.market_token_mint,
+        key,
+        value,
+        previous,
+    );
+    Ok(())
 }
 
 /// The accounts definition for [`update_market_config_with_buffer`](crate::gmsol_store::update_market_config_with_buffer).

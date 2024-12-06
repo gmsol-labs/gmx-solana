@@ -1130,6 +1130,11 @@ fn format_market(market: &SerializeMarket) -> gmsol::Result<String> {
         writeln!(f, "{key} = {}", value.0.to_formatted_string(&Locale::en))?;
     }
 
+    writeln!(f, "\nFlags:")?;
+    for (key, value) in market.flags.0.iter() {
+        writeln!(f, "{key} = {}", *value)?;
+    }
+
     Ok(buf)
 }
 

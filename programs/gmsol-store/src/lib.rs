@@ -1294,6 +1294,34 @@ pub mod gmsol_store {
         instructions::unchecked_update_market_config(ctx, &key, value)
     }
 
+    /// Update a flag in the market config.
+    ///
+    /// This instruction allows a MARKET_KEEPER to update a single flag in the market's
+    /// configuration. The key must be one of the predefined market config flags.
+    ///
+    /// # Accounts
+    /// [*See the documentation for the accounts.*](UpdateMarketConfig)
+    ///
+    /// # Arguments
+    /// - `key`: The flag to update. Must be a valid key defined in
+    ///   [`MarketConfigFlag`](states::market::config::MarketConfigFlag).
+    /// - `value`: The new boolean value to set for this flag.
+    ///
+    /// # Errors
+    /// - The [`authority`](UpdateMarketConfig::authority) must be a signer and have the MARKET_KEEPER
+    ///   role in the store.
+    /// - The [`store`](UpdateMarketConfig::store) must be an initialized store account owned by this program.
+    /// - The [`market`](UpdateMarketConfig::market) must be an initialized market account owned by the store.
+    /// - The provided `key` must be defined in [`MarketConfigFlag`](states::market::config::MarketConfigFlag).
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn update_market_config_flag(
+        ctx: Context<UpdateMarketConfig>,
+        key: String,
+        value: bool,
+    ) -> Result<()> {
+        instructions::unchecked_update_market_config_flag(ctx, &key, value)
+    }
+
     /// Update the market configuration using a pre-populated
     /// [`MarketConfigBuffer`](crate::states::market::config::MarketConfigBuffer) account.
     ///

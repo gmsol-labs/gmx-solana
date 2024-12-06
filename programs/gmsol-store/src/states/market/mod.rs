@@ -31,6 +31,7 @@ use anchor_lang::{prelude::*, Bump};
 use anchor_spl::token::Mint;
 use bitmaps::Bitmap;
 use borsh::{BorshDeserialize, BorshSerialize};
+use config::MarketConfigFlag;
 use gmsol_model::{price::Prices, ClockKind, PoolKind};
 use revertible::RevertibleBuffer;
 
@@ -403,11 +404,33 @@ impl Market {
         self.config.get(key)
     }
 
-    /// Get config mutably by key
+    /// Get config mutably.
     pub fn get_config_mut(&mut self, key: &str) -> Result<&mut Factor> {
         let key = MarketConfigKey::from_str(key)
             .map_err(|_| error!(CoreError::InvalidMarketConfigKey))?;
         Ok(self.config.get_mut(key))
+    }
+
+    /// Get config flag.
+    pub fn get_config_flag(&self, key: &str) -> Result<bool> {
+        let key = MarketConfigFlag::from_str(key)
+            .map_err(|_| error!(CoreError::InvalidMarketConfigKey))?;
+        Ok(self.get_config_flag_by_key(key))
+    }
+
+    /// Get config flag by key.
+    #[inline]
+    pub fn get_config_flag_by_key(&self, key: MarketConfigFlag) -> bool {
+        self.config.flag(key)
+    }
+
+    /// Set config flag.
+    ///
+    /// Returns previous value.
+    pub fn set_config_flag(&mut self, key: &str, value: bool) -> Result<bool> {
+        let key = MarketConfigFlag::from_str(key)
+            .map_err(|_| error!(CoreError::InvalidMarketConfigKey))?;
+        Ok(self.config.set_flag(key, value))
     }
 
     /// Get other market state.
