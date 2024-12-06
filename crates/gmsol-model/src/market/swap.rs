@@ -1,4 +1,4 @@
-use num_traits::{CheckedAdd, CheckedDiv, CheckedNeg, CheckedSub, One, Signed, Zero};
+use num_traits::{CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedSub, One, Signed, Zero};
 
 use crate::{
     action::swap::Swap,
@@ -53,24 +53,36 @@ pub trait SwapMarketExt<const DECIMALS: u8>: SwapMarket<DECIMALS> {
         is_long_token: bool,
         price: &Price<Self::Num>,
         usd_impact: &Self::Signed,
-    ) -> crate::Result<Self::Signed> {
+    ) -> crate::Result<(Self::Signed, Self::Num)> {
         if price.has_zero() {
             return Err(crate::Error::DividedByZero);
         }
         if usd_impact.is_positive() {
-            let price = price.pick_price(true).to_signed()?;
+            let max_price = price.pick_price(true).to_signed()?;
+
             let mut amount = usd_impact
-                .checked_div(&price)
+                .checked_div(&max_price)
                 .ok_or(crate::Error::Computation("calculating swap impact amount"))?;
+
             let max_amount = if is_long_token {
                 self.swap_impact_pool()?.long_amount()?
             } else {
                 self.swap_impact_pool()?.short_amount()?
-            };
-            if amount.unsigned_abs() > max_amount {
-                amount = max_amount.try_into().map_err(|_| crate::Error::Convert)?;
             }
-            Ok(amount)
+            .to_signed()?;
+
+            let capped_diff_value = if amount > max_amount {
+                let capped_diff_value = amount
+                    .checked_sub(&max_amount)
+                    .map(|diff_amount| diff_amount.unsigned_abs())
+                    .and_then(|diff_amount| diff_amount.checked_mul(price.pick_price(true)))
+                    .ok_or(crate::Error::Computation("calculating capped diff value"))?;
+                amount = max_amount;
+                capped_diff_value
+            } else {
+                Zero::zero()
+            };
+            Ok((amount, capped_diff_value))
         } else if usd_impact.is_negative() {
             let price = price.pick_price(false).to_signed()?;
             let one = Self::Signed::one();
@@ -81,9 +93,9 @@ pub trait SwapMarketExt<const DECIMALS: u8>: SwapMarket<DECIMALS> {
                 .ok_or(crate::Error::Computation(
                     "calculating round up swap impact amount",
                 ))?;
-            Ok(amount)
+            Ok((amount, Zero::zero()))
         } else {
-            Ok(Zero::zero())
+            Ok((Zero::zero(), Zero::zero()))
         }
     }
 }
@@ -116,8 +128,8 @@ pub trait SwapMarketMutExt<const DECIMALS: u8>: SwapMarketMut<DECIMALS> {
         price: &Price<Self::Num>,
         usd_impact: &Self::Signed,
     ) -> crate::Result<Self::Num> {
-        let delta = self
-            .swap_impact_amount_with_cap(is_long_token, price, usd_impact)?
+        let (amount, _) = self.swap_impact_amount_with_cap(is_long_token, price, usd_impact)?;
+        let delta = amount
             .checked_neg()
             .ok_or(crate::Error::Computation("negating swap impact delta"))?;
         if is_long_token {

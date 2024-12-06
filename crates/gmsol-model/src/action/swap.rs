@@ -125,31 +125,54 @@ impl<const DECIMALS: u8, M: SwapMarketMut<DECIMALS>> Swap<M, DECIMALS> {
                 ))?;
 
         // Calculate final amounts && apply delta to price impact pool.
-        let token_in_amount;
+        let mut token_in_amount;
         let token_out_amount;
         let pool_amount_out;
         let price_impact_amount;
         let swap_impact;
         if price_impact.is_positive() {
+            token_in_amount = amount_after_fees;
+
             let swap_impact_deduct_side = !self.params.is_token_in_long;
-            let signed_price_impact_amount = self.market.swap_impact_amount_with_cap(
-                swap_impact_deduct_side,
-                &token_out_price,
-                &price_impact,
-            )?;
+            let (signed_price_impact_amount, capped_diff_value) =
+                self.market.swap_impact_amount_with_cap(
+                    swap_impact_deduct_side,
+                    &token_out_price,
+                    &price_impact,
+                )?;
             debug_assert!(!signed_price_impact_amount.is_negative());
+
+            let capped_diff_token_in_amount = if capped_diff_value.is_zero() {
+                Zero::zero()
+            } else {
+                // If the positive price impact was capped, use the token_in swap
+                // impact pool to pay for the positive price impact.
+                let (capped_diff_token_in_amount, _) = self.market.swap_impact_amount_with_cap(
+                    self.params.is_token_in_long,
+                    &token_in_price,
+                    &capped_diff_value.to_signed()?,
+                )?;
+                debug_assert!(!capped_diff_token_in_amount.is_negative());
+                token_in_amount = token_in_amount
+                    .checked_add(&capped_diff_token_in_amount.unsigned_abs())
+                    .ok_or(crate::Error::Computation("swap: adding capped diff amount"))?;
+                capped_diff_token_in_amount
+            };
+
             swap_impact =
                 self.market
                     .swap_impact_pool()?
-                    .checked_apply_delta(Delta::new_one_side(
+                    .checked_apply_delta(Delta::new_both_sides(
                         swap_impact_deduct_side,
                         &signed_price_impact_amount.checked_neg().ok_or(
                             crate::Error::Computation("negating positive price impact amount "),
                         )?,
+                        &capped_diff_token_in_amount
+                            .checked_neg()
+                            .ok_or(crate::Error::Computation("negating capped diff amount "))?,
                     ))?;
             price_impact_amount = signed_price_impact_amount.unsigned_abs();
 
-            token_in_amount = amount_after_fees;
             pool_amount_out = token_in_amount
                 .checked_mul_div(
                     token_in_price.pick_price(false),
@@ -164,7 +187,7 @@ impl<const DECIMALS: u8, M: SwapMarketMut<DECIMALS>> Swap<M, DECIMALS> {
             )?;
         } else {
             let swap_impact_deduct_side = self.params.is_token_in_long;
-            let signed_price_impact_amount = self.market.swap_impact_amount_with_cap(
+            let (signed_price_impact_amount, _) = self.market.swap_impact_amount_with_cap(
                 swap_impact_deduct_side,
                 &token_in_price,
                 &price_impact,
