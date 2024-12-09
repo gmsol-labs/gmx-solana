@@ -1,13 +1,6 @@
 use std::fmt;
 
-use crate::{
-    action::{
-        update_borrowing_state::UpdateBorrowingReport, update_funding_state::UpdateFundingReport,
-    },
-    num::Unsigned,
-    params::fee::PositionFees,
-    position::InsolventCloseStep,
-};
+use crate::{num::Unsigned, params::fee::PositionFees, position::InsolventCloseStep};
 
 use super::{ClaimableCollateral, DecreasePositionParams, ProcessCollateralResult};
 
@@ -26,8 +19,6 @@ pub struct DecreasePositionReport<T: Unsigned> {
     initial_size_delta_usd: T,
     size_delta_usd: T,
     fees: PositionFees<T>,
-    borrowing: UpdateBorrowingReport<T>,
-    funding: UpdateFundingReport<T>,
     pnl: Pnl<T::Signed>,
     insolvent_close_step: Option<InsolventCloseStep>,
     // Output
@@ -58,8 +49,6 @@ where
             .field("initial_size_delta_usd", &self.initial_size_delta_usd)
             .field("size_delta_usd", &self.size_delta_usd)
             .field("fees", &self.fees)
-            .field("borrowing", &self.borrowing)
-            .field("funding", &self.funding)
             .field("pnl", &self.pnl)
             .field("insolvent_close_step", &self.insolvent_close_step)
             .field("should_remove", &self.should_remove)
@@ -89,8 +78,6 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
         execution: ProcessCollateralResult<T>,
         withdrawable_collateral_amount: T,
         size_delta_usd: T,
-        borrowing: UpdateBorrowingReport<T>,
-        funding: UpdateFundingReport<T>,
         should_remove: bool,
     ) -> Self {
         let claimable_funding_long_token_amount = execution
@@ -112,8 +99,6 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
             initial_size_delta_usd: params.initial_size_delta_usd.clone(),
             size_delta_usd,
             fees: execution.fees,
-            borrowing,
-            funding,
             pnl: execution.pnl,
             insolvent_close_step: execution.collateral.insolvent_close_step,
             // Output
@@ -231,16 +216,6 @@ impl<T: Unsigned + Clone> DecreasePositionReport<T> {
     #[must_use = "the returned amount of tokens should be transferred out from the market vault"]
     pub fn claimable_collateral_for_user(&self) -> &ClaimableCollateral<T> {
         &self.for_user
-    }
-
-    /// Get borrowing report.
-    pub fn borrowing(&self) -> &UpdateBorrowingReport<T> {
-        &self.borrowing
-    }
-
-    /// Get funding report.
-    pub fn funding(&self) -> &UpdateFundingReport<T> {
-        &self.funding
     }
 
     /// Get processed pnl.

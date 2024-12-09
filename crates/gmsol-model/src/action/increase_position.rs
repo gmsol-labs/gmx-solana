@@ -2,10 +2,7 @@ use num_traits::{CheckedAdd, CheckedDiv, CheckedNeg, Signed, Zero};
 use std::fmt;
 
 use crate::{
-    market::{
-        BaseMarketExt, BaseMarketMutExt, PerpMarketExt, PerpMarketMutExt,
-        PositionImpactMarketMutExt,
-    },
+    market::{BaseMarketExt, BaseMarketMutExt, PerpMarketExt, PositionImpactMarketMutExt},
     num::Unsigned,
     params::fee::PositionFees,
     position::{CollateralDelta, Position, PositionExt},
@@ -13,10 +10,7 @@ use crate::{
     BorrowingFeeMarketExt, PerpMarketMut, PoolExt, PositionMut, PositionMutExt,
 };
 
-use super::{
-    update_borrowing_state::UpdateBorrowingReport, update_funding_state::UpdateFundingReport,
-    MarketAction,
-};
+use super::MarketAction;
 
 /// Increase the position.
 #[must_use = "actions do nothing unless you `execute` them"]
@@ -63,8 +57,6 @@ pub struct IncreasePositionReport<T: Unsigned> {
     execution: ExecutionParams<T>,
     collateral_delta_amount: T::Signed,
     fees: PositionFees<T>,
-    borrowing: UpdateBorrowingReport<T>,
-    funding: UpdateFundingReport<T>,
     /// Output amounts that must be processed.
     claimable_funding_long_token_amount: T,
     claimable_funding_short_token_amount: T,
@@ -80,8 +72,6 @@ where
             .field("execution", &self.execution)
             .field("collateral_delta_amount", &self.collateral_delta_amount)
             .field("fees", &self.fees)
-            .field("borrowing", &self.borrowing)
-            .field("funding", &self.funding)
             .field(
                 "claimable_funding_long_token_amount",
                 &self.claimable_funding_long_token_amount,
@@ -100,8 +90,6 @@ impl<T: Unsigned + Clone> IncreasePositionReport<T> {
         execution: ExecutionParams<T>,
         collateral_delta_amount: T::Signed,
         fees: PositionFees<T>,
-        borrowing: UpdateBorrowingReport<T>,
-        funding: UpdateFundingReport<T>,
     ) -> Self {
         let claimable_funding_long_token_amount =
             fees.funding_fees().claimable_long_token_amount().clone();
@@ -112,8 +100,6 @@ impl<T: Unsigned + Clone> IncreasePositionReport<T> {
             execution,
             collateral_delta_amount,
             fees,
-            borrowing,
-            funding,
             claimable_funding_long_token_amount,
             claimable_funding_short_token_amount,
         }
@@ -146,16 +132,6 @@ impl<T: Unsigned + Clone> IncreasePositionReport<T> {
     /// Get position fees.
     pub fn fees(&self) -> &PositionFees<T> {
         &self.fees
-    }
-
-    /// Get borrowing report.
-    pub fn borrowing(&self) -> &UpdateBorrowingReport<T> {
-        &self.borrowing
-    }
-
-    /// Get funding report.
-    pub fn funding(&self) -> &UpdateFundingReport<T> {
-        &self.funding
     }
 }
 
@@ -421,17 +397,6 @@ where
     type Report = IncreasePositionReport<P::Num>;
 
     fn execute(mut self) -> crate::Result<Self::Report> {
-        let borrowing = self
-            .position
-            .market_mut()
-            .update_borrowing(&self.params.prices)?
-            .execute()?;
-        let funding = self
-            .position
-            .market_mut()
-            .update_funding(&self.params.prices)?
-            .execute()?;
-
         self.initialize_position_if_empty()?;
 
         let execution = self.get_execution_params()?;
@@ -537,8 +502,6 @@ where
             execution,
             collateral_delta_amount,
             fees,
-            borrowing,
-            funding,
         ))
     }
 }

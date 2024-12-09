@@ -9,7 +9,7 @@ use crate::{
         WillCollateralBeSufficient,
     },
     price::{Price, Prices},
-    BorrowingFeeMarketExt, PerpMarketMut, PerpMarketMutExt, PoolExt,
+    BorrowingFeeMarketExt, PerpMarketMut, PoolExt,
 };
 
 use self::collateral_processor::{CollateralProcessor, ProcessResult};
@@ -561,17 +561,6 @@ where
             self.params.swap = DecreasePositionSwapType::NoSwap;
         }
 
-        let borrowing = self
-            .position
-            .market_mut()
-            .update_borrowing(&self.params.prices)?
-            .execute()?;
-        let funding = self
-            .position
-            .market_mut()
-            .update_funding(&self.params.prices)?
-            .execute()?;
-
         self.check_liquidation()?;
 
         let initial_collateral_amount = self.position.collateral_amount_mut().clone();
@@ -675,8 +664,6 @@ where
             execution,
             self.withdrawable_collateral_amount,
             self.size_delta_usd,
-            borrowing,
-            funding,
             should_remove,
         ));
 

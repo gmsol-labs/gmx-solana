@@ -4,7 +4,7 @@ use gmsol_model::{
     action::decrease_position::{DecreasePositionFlags, DecreasePositionSwapType},
     num::Unsigned,
     price::Prices,
-    BaseMarket, BaseMarketExt, MarketAction, PnlFactorKind, Position as _,
+    BaseMarket, BaseMarketExt, MarketAction, PerpMarketMutExt, PnlFactorKind, Position as _,
     PositionImpactMarketMutExt, PositionMut, PositionMutExt, PositionState, PositionStateExt,
 };
 use typed_builder::TypedBuilder;
@@ -862,6 +862,24 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
                 .execute()
                 .map_err(ModelError::from)?;
             msg!("[Order] pre-execute: {:?}", report);
+        }
+
+        // Update borrowing states.
+        {
+            let borrowing = market
+                .update_borrowing(&prices)
+                .and_then(|a| a.execute())
+                .map_err(ModelError::from)?;
+            msg!("[Order] pre-execute: {:?}", borrowing);
+        }
+
+        // Update funding states.
+        {
+            let funding = market
+                .update_funding(&prices)
+                .and_then(|a| a.execute())
+                .map_err(ModelError::from)?;
+            msg!("[Order] pre-execute: {:?}", funding);
         }
 
         let kind = self.order.load()?.params.kind()?;
