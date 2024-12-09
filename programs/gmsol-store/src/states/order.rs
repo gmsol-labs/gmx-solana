@@ -539,23 +539,28 @@ impl Order {
         &mut self,
         store: &mut Store,
         user: &mut UserHeader,
+        paid_fee_value: u128,
     ) -> Result<()> {
-        let size_in_value = self.params.size_delta_value;
+        if paid_fee_value == 0 {
+            msg!("[GT] GT is not minted unless an order fee is paid");
+            return Ok(());
+        }
+
         // Ignore the overflowed value.
-        let next_traded_value = user.gt.traded_value().saturating_add(size_in_value);
-        let minted_value = user.gt.minted_value();
+        let next_paid_fee_value = user.gt.paid_fee_value().saturating_add(paid_fee_value);
+        let minted_fee_value = user.gt.minted_fee_value();
 
         require_gte!(
-            next_traded_value,
-            minted_value,
+            next_paid_fee_value,
+            minted_fee_value,
             CoreError::InvalidUserAccount
         );
 
-        let value_to_mint_for = next_traded_value.saturating_sub(minted_value);
+        let value_to_mint_for = next_paid_fee_value.saturating_sub(minted_fee_value);
 
         let (minted, delta_minted_value) = store.gt_mut().get_mint_amount(value_to_mint_for, 0)?;
 
-        let next_minted_value = minted_value
+        let next_minted_value = minted_fee_value
             .checked_add(delta_minted_value)
             .ok_or_else(|| error!(CoreError::ValueOverflow))?;
 
@@ -563,8 +568,8 @@ impl Order {
         msg!("[GT] minted {} units of GT", minted);
 
         self.gt_reward = minted;
-        user.gt.traded_value = next_traded_value;
-        user.gt.minted_value = next_minted_value;
+        user.gt.paid_fee_value = next_paid_fee_value;
+        user.gt.minted_fee_value = next_minted_value;
 
         Ok(())
     }

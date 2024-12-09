@@ -931,9 +931,9 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
 
                 position.on_validate().map_err(ModelError::from)?;
 
-                let should_remove_position = match kind {
+                let (should_remove_position, paid_fee_value) = match kind {
                     OrderKind::MarketIncrease | OrderKind::LimitIncrease => {
-                        execute_increase_position(
+                        let paid_fee_value = execute_increase_position(
                             self.oracle,
                             prices,
                             &mut position,
@@ -942,7 +942,7 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
                             &mut *event_loader.load_mut()?,
                             &mut *self.order.load_mut()?,
                         )?;
-                        false
+                        (false, paid_fee_value)
                     }
                     OrderKind::Liquidation => execute_decrease_position(
                         self.oracle,
@@ -992,6 +992,7 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
                     self.order.load_mut()?.unchecked_process_gt(
                         &mut *self.store.load_mut()?,
                         &mut *self.user.load_mut()?,
+                        paid_fee_value,
                     )?;
                 } else {
                     msg!("[GT] GT minting is disabled for this market");
@@ -1270,7 +1271,7 @@ fn execute_increase_position(
     transfer_out: &mut TransferOut,
     event: &mut TradeData,
     order: &mut Order,
-) -> Result<()> {
+) -> Result<u128> {
     let params = &order.params;
 
     // Perform swap.
@@ -1299,7 +1300,7 @@ fn execute_increase_position(
     order.validate_output_amount(collateral_increment_amount.into())?;
 
     // Increase position.
-    let (long_amount, short_amount) = {
+    let (long_amount, short_amount, paid_order_fee_value) = {
         let size_delta_usd = params.size_delta_value;
         let acceptable_price = params.acceptable_price;
         let report = position
@@ -1314,7 +1315,11 @@ fn execute_increase_position(
         msg!("[Position] increased: {:?}", report);
         let (long_amount, short_amount) = report.claimable_funding_amounts();
         event.update_with_increase_report(&report)?;
-        (*long_amount, *short_amount)
+        (
+            *long_amount,
+            *short_amount,
+            *report.fees().paid_order_fee_value(),
+        )
     };
 
     // Process output amount.
@@ -1329,7 +1334,7 @@ fn execute_increase_position(
             .map_err(|_| error!(CoreError::TokenAmountOverflow))?,
     )?;
 
-    Ok(())
+    Ok(paid_order_fee_value)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1344,7 +1349,7 @@ fn execute_decrease_position(
     order: &mut Order,
     is_insolvent_close_allowed: bool,
     secondary_order_type: Option<SecondaryOrderType>,
-) -> Result<RemovePosition> {
+) -> Result<(RemovePosition, u128)> {
     // Decrease position.
     let report = {
         let params = &order.params;
@@ -1542,7 +1547,10 @@ fn execute_decrease_position(
         .market()
         .validate_market_balances(long_transfer_out, short_transfer_out)?;
 
-    Ok(should_remove_position)
+    Ok((
+        should_remove_position,
+        *report.fees().paid_order_fee_value(),
+    ))
 }
 
 /// Position Cut Operation.

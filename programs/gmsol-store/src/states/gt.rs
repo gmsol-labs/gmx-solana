@@ -479,7 +479,7 @@ impl GtState {
         let minted_value = size_in_value - remainder;
 
         msg!(
-            "[GT] will mint {} units of GT with a minting cost of {} per unit GT (in terms of trade volume), discount = {}",
+            "[GT] will mint {} units of GT with a minting cost of {} per unit GT (in terms of paid order fee), discount = {}",
             minted,
             minting_cost,
             discount,

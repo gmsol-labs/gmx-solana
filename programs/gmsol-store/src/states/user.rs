@@ -268,20 +268,20 @@ pub struct GtState {
     pub(crate) es_amount: u64,
     pub(crate) vesting_es_amount: u64,
     pub(crate) es_factor: u128,
-    pub(crate) traded_value: u128,
-    pub(crate) minted_value: u128,
+    pub(crate) paid_fee_value: u128,
+    pub(crate) minted_fee_value: u128,
     reserved: [u8; 64],
 }
 
 impl GtState {
-    /// Get traded value.
-    pub fn traded_value(&self) -> u128 {
-        self.traded_value
+    /// Get total paid fee value.
+    pub fn paid_fee_value(&self) -> u128 {
+        self.paid_fee_value
     }
 
-    /// Get minted value.
-    pub fn minted_value(&self) -> u128 {
-        self.minted_value
+    /// Get minted fee value.
+    pub fn minted_fee_value(&self) -> u128 {
+        self.minted_fee_value
     }
 
     /// Get current rank.

@@ -813,7 +813,7 @@ impl Deployment {
         tx.push(client.initialize_gt(
             store,
             decimals,
-            100 * MARKET_USD_UNIT / 10u128.pow(decimals as u32),
+            MARKET_USD_UNIT / 100 / 10u128.pow(decimals as u32),
             101 * MARKET_USD_UNIT / 100,
             10 * gt_unit,
             vec![

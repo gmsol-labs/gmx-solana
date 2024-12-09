@@ -544,11 +544,21 @@ where
                             &fees.for_receiver()?.to_signed()?,
                         )?;
                     } else {
+                        // The fees are expected to be paid in the collateral token.
+                        // If there are insufficient funds to pay for fees entirely in the collateral token,
+                        // then credit the fee amount entirely to the pool.
                         processor.pay_to_primary_pool(
                             &paid_in_collateral_amount.to_signed()?,
                             &paid_in_secondary_output_amount.to_signed()?,
                         )?;
+
+                        // Empty the fees since the amount was entirely paid to the pool instead of for fees.
+                        // It is possible for the txn execution to still complete even in this case
+                        // as long as the remaining_cost is still zero.
                         fees.clear_fees_excluding_funding();
+
+                        // Also, clear the `paid_order_fee_value` for the same reason.
+                        fees.set_paid_order_fee_value(Zero::zero());
                     }
                     Ok(())
                 },

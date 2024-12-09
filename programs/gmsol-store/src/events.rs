@@ -674,8 +674,9 @@ pub struct TradeFees {
 
 impl TradeFees {
     fn set_with_position_fees(&mut self, fees: &PositionFees<u128>) {
-        self.order_fee_for_receiver_amount = *fees.order_fees().fee_amount_for_receiver();
-        self.order_fee_for_pool_amount = *fees.order_fees().fee_amount_for_pool();
+        self.order_fee_for_receiver_amount =
+            *fees.order_fees().fee_amounts().fee_amount_for_receiver();
+        self.order_fee_for_pool_amount = *fees.order_fees().fee_amounts().fee_amount_for_pool();
         if let Some(fees) = fees.liquidation_fees() {
             self.liquidation_fee_amount = *fees.fee_amount();
             self.liquidation_fee_for_receiver_amount = *fees.fee_amount_for_receiver();
