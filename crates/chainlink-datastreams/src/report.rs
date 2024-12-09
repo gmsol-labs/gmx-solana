@@ -57,6 +57,18 @@ pub enum DecodeError {
     /// Unsupported Version.
     #[error("unsupported version: {0}")]
     UnsupportedVersion(u16),
+    /// Snap Error.
+    #[error(transparent)]
+    Snap(#[from] snap::Error),
+}
+
+/// Decode compressed report.
+pub fn decode_compressed_report(compressed: &[u8]) -> Result<Report, DecodeError> {
+    use crate::utils::Compressor;
+
+    let data = Compressor::decompress(compressed)?;
+
+    decode(&data)
 }
 
 /// Decode Report.

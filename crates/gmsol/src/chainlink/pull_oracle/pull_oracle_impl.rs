@@ -12,11 +12,12 @@ use super::{client::ApiReportData, Client, FeedId};
 
 /// Chainlink Pull Oracle.
 pub struct ChainlinkPullOracle<'a, C> {
+    chainlink: &'a Client,
+    gmsol: &'a crate::Client<C>,
     chainlink_program: Pubkey,
+    access_controller: Pubkey,
     store: Pubkey,
     feed_index: u8,
-    gmsol: &'a crate::Client<C>,
-    chainlink: &'a Client,
     feeds: FeedAddressMap,
 }
 
@@ -26,15 +27,17 @@ impl<'a, C> ChainlinkPullOracle<'a, C> {
         chainlink: &'a Client,
         gmsol: &'a crate::Client<C>,
         chainlink_program: &Pubkey,
+        access_controller: &Pubkey,
         store: &Pubkey,
         feed_index: u8,
     ) -> Self {
         Self {
             chainlink,
+            gmsol,
             chainlink_program: *chainlink_program,
+            access_controller: *access_controller,
             store: *store,
             feed_index,
-            gmsol,
             feeds: Default::default(),
         }
     }
@@ -147,8 +150,9 @@ impl<'r, 'a, C: Deref<Target = impl Signer> + Clone> PullOracleOps<'a, C>
                 &self.store,
                 feed,
                 &self.chainlink_program,
-                update.report_bytes()?,
-            );
+                &self.access_controller,
+                &update.report_bytes()?,
+            )?;
             txs.try_push_post(rpc)?;
             map.insert(feed_id, *feed);
         }

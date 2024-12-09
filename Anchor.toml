@@ -43,21 +43,29 @@ program = "external-programs/wormhole.so"
 
 [test.validator]
 bind_address = "127.0.0.1"
-url = "https://api.mainnet-beta.solana.com"
+url = "https://api.devnet.solana.com"
 ledger = ".anchor/test-ledger"
 rpc_port = 8899
 
-# BTC Data Feed (Chainlink)
+# Chainlink Verifier Program
 [[test.validator.clone]]
-address = "Cv4T27XbjVoKUYwP72NQQanvZeA7W4YF9L4EnYT9kx5o"
+address = "Gt9S41PtjR58CbG9JhJ3J6vxesqrNAswbWYbLNTMZA3c"
 
-# SOL Data Feed (Chainlink)
+# Chainlink Verifier Account
 [[test.validator.clone]]
-address = "CH31Xns5z3M1cTAbKW34jcxPPciazARpijcHj9rxtemt"
+address = "HJR45sRiFdGncL69HVzRK4HLS2SXcVW3KeTPkp2aFmWC"
 
-# USDC Data Feed (Chainlink)
+# Chainlink Access Controller Account
 [[test.validator.clone]]
-address = "GzGuoKXE8Unn7Vcg1DtomwD27tL4bVUpSK2M1yk6Xfz5"
+address = "DZGvxqHkELxY6HH5y5De5AUCzRn4BiwYVGK3d6ZdoysG"
+
+# # Chainlink Data Streams Config Account for ETH.
+# [[test.validator.clone]]
+# address = "6LozY6XRzHCG8ordYbA3o8a7WhXWbBcdeqpde98DeMJA"
+
+# # Chainlink Data Streams Config Account for USDC.
+# [[test.validator.clone]]
+# address = "B7uYzGctUxQhNKhmKEkQVq4w7Bh5qizHQECqWb87SbFe"
 
 # WBTC Token Mint
 [[test.validator.clone]]

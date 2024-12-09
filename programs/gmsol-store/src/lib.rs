@@ -1173,9 +1173,9 @@ pub mod gmsol_store {
     #[access_control(internal::Authenticate::only_order_keeper(&ctx))]
     pub fn update_price_feed_with_chainlink(
         ctx: Context<UpdatePriceFeedWithChainlink>,
-        signed_report: Vec<u8>,
+        compressed_report: Vec<u8>,
     ) -> Result<()> {
-        instructions::unchecked_update_price_feed_with_chainlink(ctx, signed_report)
+        instructions::unchecked_update_price_feed_with_chainlink(ctx, compressed_report)
     }
 
     // ===========================================

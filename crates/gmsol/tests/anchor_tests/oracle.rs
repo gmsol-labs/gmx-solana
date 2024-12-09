@@ -27,6 +27,7 @@ async fn update_chainlink_price_feed() -> eyre::Result<()> {
     let index = 255;
     let store = &deployment.store;
     let chainlink_verifier_program = &deployment.chainlink_verifier_program;
+    let chainlink_access_controller = &deployment.chainlink_access_controller;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
 
     let usdg = deployment.token("USDG").unwrap();
@@ -52,8 +53,9 @@ async fn update_chainlink_price_feed() -> eyre::Result<()> {
             store,
             &feed,
             chainlink_verifier_program,
-            report.report_bytes()?,
-        )
+            chainlink_access_controller,
+            &report.report_bytes()?,
+        )?
         .send_without_preflight()
         .await?;
 

@@ -53,6 +53,8 @@ const ENV_GMSOL_RANDOM_STORE: &str = "GMSOL_RANDOM_STORE";
 const ENV_GMSOL_RNG: &str = "GMSOL_RNG";
 const ENV_GMSOL_REFUND_WAIT: &str = "GMSOL_REFUND_WAIT";
 const ENV_GMSOL_CLAIM_FEES_WAIT: &str = "GMSOL_CLAIM_FEES_WAIT";
+const ENV_GMSOL_NO_MOCK: &str = "GMSOL_NO_MOCK";
+const ENV_CHAINLINK_ACCESS_CONTROLLER: &str = "CHAINLINK_ACCESS_CONTROLLER";
 
 /// Deployment.
 pub struct Deployment {
@@ -86,6 +88,8 @@ pub struct Deployment {
     claim_fees_enabled_at: Instant,
     /// Chainlink verifirer Program.
     pub chainlink_verifier_program: Pubkey,
+    /// Chainlink access controller.
+    pub chainlink_access_controller: Pubkey,
     /// Chainlink Feed Index.
     pub chainlink_feed_index: u8,
 }
@@ -191,6 +195,7 @@ impl Deployment {
             },
             claim_fees_enabled_at: Instant::now(),
             chainlink_verifier_program: Default::default(),
+            chainlink_access_controller: Default::default(),
             chainlink_feed_index: 42,
         })
     }
@@ -355,11 +360,26 @@ impl Deployment {
     }
 
     async fn initialize_mock(&mut self) -> eyre::Result<()> {
-        use mock_chainlink_verifier::{accounts, instruction, DEFAULT_VERIFIER_ACCOUNT_SEEDS, ID};
+        use mock_chainlink_verifier::{
+            accounts, instruction, DEFAULT_ACCESS_CONTROLLER_ACCOUNT_SEEDS,
+            DEFAULT_VERIFIER_ACCOUNT_SEEDS, ID,
+        };
+
+        if std::env::var(ENV_GMSOL_NO_MOCK).is_ok() {
+            let access_controller = std::env::var(ENV_CHAINLINK_ACCESS_CONTROLLER)?;
+            self.chainlink_access_controller = access_controller.parse()?;
+            self.chainlink_verifier_program = chainlink_datastreams::verifier::ID;
+
+            return Ok(());
+        }
 
         let chainlink_verifier =
             Pubkey::find_program_address(&[DEFAULT_VERIFIER_ACCOUNT_SEEDS], &ID).0;
+        let access_controller =
+            Pubkey::find_program_address(&[DEFAULT_ACCESS_CONTROLLER_ACCOUNT_SEEDS], &ID).0;
+
         self.chainlink_verifier_program = ID;
+        self.chainlink_access_controller = access_controller;
 
         let signature = self
             .client
@@ -368,9 +388,10 @@ impl Deployment {
             .accounts(accounts::Initialize {
                 payer: self.client.payer(),
                 verifier_account: chainlink_verifier,
+                access_controller,
                 system_program: system_program::ID,
             })
-            .args(instruction::Initialize {})
+            .args(instruction::Initialize { user: self.store })
             .send()
             .await?;
 
@@ -1236,6 +1257,7 @@ impl Deployment {
             chainlink,
             gmsol,
             &self.chainlink_verifier_program,
+            &self.chainlink_access_controller,
             &self.store,
             self.chainlink_feed_index,
         );

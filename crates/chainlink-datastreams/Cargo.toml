@@ -12,3 +12,4 @@ hex = { workspace = true }
 mock-chainlink-verifier = { workspace = true, features = ["cpi"] }
 anchor-lang = { workspace = true }
 thiserror = { workspace = true }
+snap = { workspace = true }

@@ -82,6 +82,12 @@ pub struct UpdatePriceFeedWithChainlink<'info> {
     /// Verifier Account.
     /// CHECK: checked by CPI.
     pub verifier_account: UncheckedAccount<'info>,
+    /// Access Controller Account.
+    /// CHECK: check by CPI.
+    pub access_controller: UncheckedAccount<'info>,
+    /// Config Account.
+    /// CHECK: check by CPI.
+    pub config_account: UncheckedAccount<'info>,
     /// Price Feed Account.
     #[account(mut, has_one = store, has_one = authority)]
     pub price_feed: AccountLoader<'info, PriceFeed>,
@@ -92,7 +98,7 @@ pub struct UpdatePriceFeedWithChainlink<'info> {
 /// CHECK: only ORDER_KEEPER can update custom price feed.
 pub(crate) fn unchecked_update_price_feed_with_chainlink(
     ctx: Context<UpdatePriceFeedWithChainlink>,
-    signed_report: Vec<u8>,
+    compressed_report: Vec<u8>,
 ) -> Result<()> {
     let accounts = ctx.accounts;
 
@@ -102,9 +108,9 @@ pub(crate) fn unchecked_update_price_feed_with_chainlink(
         CoreError::InvalidArgument
     );
 
-    let price = accounts.decode_and_validate_report(&signed_report)?;
+    let price = accounts.decode_and_validate_report(&compressed_report)?;
 
-    accounts.verify_report(signed_report)?;
+    accounts.verify_report(compressed_report)?;
 
     accounts.price_feed.load_mut()?.update(&price)?;
 
@@ -122,10 +128,13 @@ impl<'info> internal::Authentication<'info> for UpdatePriceFeedWithChainlink<'in
 }
 
 impl<'info> UpdatePriceFeedWithChainlink<'info> {
-    fn decode_and_validate_report(&self, signed_report: &[u8]) -> Result<PriceFeedPrice> {
-        use chainlink_datastreams::report::decode;
+    fn decode_and_validate_report(&self, compressed_report: &[u8]) -> Result<PriceFeedPrice> {
+        use chainlink_datastreams::report::decode_compressed_report;
 
-        let report = decode(signed_report).map_err(|_| error!(CoreError::InvalidPriceReport))?;
+        let report = decode_compressed_report(compressed_report).map_err(|err| {
+            msg!("[Decode Error] {}", err);
+            error!(CoreError::InvalidPriceReport)
+        })?;
 
         require_eq!(
             Pubkey::new_from_array(report.feed_id),
@@ -143,10 +152,16 @@ impl<'info> UpdatePriceFeedWithChainlink<'info> {
             self.chainlink.to_account_info(),
             VerifyContext {
                 verifier_account: self.verifier_account.to_account_info(),
+                access_controller: self.access_controller.to_account_info(),
+                user: self.store.to_account_info(),
+                config_account: self.config_account.to_account_info(),
             },
         );
 
-        verify(ctx, signed_report)?;
+        verify(
+            ctx.with_signer(&[&self.store.load()?.signer_seeds()]),
+            signed_report,
+        )?;
         Ok(())
     }
 }

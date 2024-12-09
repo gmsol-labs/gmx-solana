@@ -12,10 +12,10 @@ pub struct ChainlinkDataStreamsInterface;
 impl Ids for ChainlinkDataStreamsInterface {
     fn ids() -> &'static [anchor_lang::prelude::Pubkey] {
         #[cfg(not(feature = "no-mock"))]
-        static IDS: &[Pubkey] = &[crate::mock::ID];
+        static IDS: &[Pubkey] = &[crate::mock::ID, crate::verifier::ID];
 
         #[cfg(feature = "no-mock")]
-        static IDS: &[Pubkey] = &[];
+        static IDS: &[Pubkey] = &[crate::verifier::ID];
 
         IDS
     }

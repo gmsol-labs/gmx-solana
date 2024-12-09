@@ -38,8 +38,9 @@ pub trait OracleOps<C> {
         store: &Pubkey,
         price_feed: &Pubkey,
         chainlink: &Pubkey,
-        signed_report: Vec<u8>,
-    ) -> RpcBuilder<C>;
+        access_controller: &Pubkey,
+        signed_report: &[u8],
+    ) -> crate::Result<RpcBuilder<C>>;
 }
 
 impl<C, S> OracleOps<C> for crate::Client<C>
@@ -119,22 +120,30 @@ where
         store: &Pubkey,
         price_feed: &Pubkey,
         chainlink: &Pubkey,
-        signed_report: Vec<u8>,
-    ) -> RpcBuilder<C> {
+        access_controller: &Pubkey,
+        signed_report: &[u8],
+    ) -> crate::Result<RpcBuilder<C>> {
+        use chainlink_datastreams::utils::{
+            find_config_account_pda, find_verifier_account_pda, Compressor,
+        };
+
         let authority = self.payer();
-        let verifier_account = Pubkey::find_program_address(
-            &[chainlink_datastreams::interface::VERIFIER_ACCOUNT_SEEDS],
-            chainlink,
-        )
-        .0;
-        self.store_rpc()
+        let verifier_account = find_verifier_account_pda(chainlink);
+        let config_account = find_config_account_pda(signed_report, chainlink);
+        Ok(self
+            .store_rpc()
             .accounts(accounts::UpdatePriceFeedWithChainlink {
                 authority,
                 store: *store,
                 verifier_account,
+                access_controller: *access_controller,
+                config_account,
                 price_feed: *price_feed,
                 chainlink: *chainlink,
             })
-            .args(instruction::UpdatePriceFeedWithChainlink { signed_report })
+            .args(instruction::UpdatePriceFeedWithChainlink {
+                compressed_report: Compressor::compress(signed_report)
+                    .map_err(crate::Error::invalid_argument)?,
+            }))
     }
 }
