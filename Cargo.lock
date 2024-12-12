@@ -2109,7 +2109,9 @@ name = "gmsol-treasury"
 version = "0.2.0"
 dependencies = [
  "anchor-lang",
+ "bytemuck",
  "gmsol-store",
+ "gmsol-utils",
 ]
 
 [[package]]

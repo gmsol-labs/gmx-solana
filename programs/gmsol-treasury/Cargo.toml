@@ -21,4 +21,6 @@ multi-store = ["gmsol-store/multi-store"]
 
 [dependencies]
 anchor-lang = { workspace = true }
+bytemuck = { workspace = true }
+gmsol-utils = { workspace = true }
 gmsol-store = { workspace = true, features = ["cpi"] }
