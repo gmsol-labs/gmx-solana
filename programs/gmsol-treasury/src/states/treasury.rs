@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use bytemuck::Zeroable;
 use gmsol_store::{states::Seed, utils::pubkey::to_bytes, CoreError};
 
-const MAX_TOKENS: usize = 64;
+pub(crate) const MAX_TOKENS: usize = 64;
 
 /// Treasury account.
 #[account(zero_copy)]
@@ -10,9 +10,9 @@ const MAX_TOKENS: usize = 64;
 pub struct Treasury {
     pub(crate) bump: u8,
     index: u8,
-    reserved_0: [u8; 6],
+    padding: [u8; 14],
     pub(crate) config: Pubkey,
-    reserved_1: [u8; 256],
+    reserved: [u8; 256],
     tokens: TokenMap,
 }
 

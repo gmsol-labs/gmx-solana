@@ -103,4 +103,10 @@ pub mod gmsol_treasury {
     pub fn claim_fees(ctx: Context<ClaimFees>) -> Result<()> {
         instructions::unchecked_claim_fees(ctx)
     }
+
+    /// Prepare GT Bank.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_KEEPER))]
+    pub fn prepare_gt_bank(ctx: Context<PrepareGtBank>) -> Result<()> {
+        instructions::unchecked_prepare_gt_bank(ctx)
+    }
 }

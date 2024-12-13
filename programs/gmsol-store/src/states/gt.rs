@@ -775,7 +775,8 @@ pub struct GtExchangeVault {
     ts: i64,
     time_window: i64,
     amount: u64,
-    pub(crate) store: Pubkey,
+    /// Store.
+    pub store: Pubkey,
     reserved: [u8; 64],
 }
 
@@ -844,7 +845,8 @@ impl GtExchangeVault {
         Ok(self.amount)
     }
 
-    fn validate_depositable(&self) -> Result<()> {
+    /// Validate that this vault is depositable.
+    pub fn validate_depositable(&self) -> Result<()> {
         require!(!self.is_confirmed(), CoreError::PreconditionsAreNotMet);
 
         let clock = Clock::get()?;
