@@ -70,6 +70,12 @@ pub mod gmsol_treasury {
         instructions::unchecked_toggle_token_flag(ctx, &flag, value)
     }
 
+    /// Transfer the receiver permission to a new address.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_OWNER))]
+    pub fn transfer_receiver(ctx: Context<TransferReceiver>) -> Result<()> {
+        instructions::unchecked_transfer_receiver(ctx)
+    }
+
     /// Claim fees.
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_KEEPER))]
     pub fn claim_fees(ctx: Context<ClaimFees>) -> Result<()> {
