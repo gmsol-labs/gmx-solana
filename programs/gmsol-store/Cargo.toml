@@ -15,7 +15,11 @@ no-log-ix-name = []
 debug-msg = []
 cpi = ["no-entrypoint"]
 default = []
-idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+idl-build = [
+    "anchor-lang/idl-build",
+    "anchor-spl/idl-build",
+    "gmsol-utils/idl-build",
+]
 debug = []
 display = []
 utils = ["bytes", "bs58"]
@@ -36,7 +40,6 @@ anchor-spl = { workspace = true, default-features = false, features = [
     "token_2022_extensions",
     "associated_token",
 ] }
-bitmaps = { workspace = true }
 chainlink_solana = { workspace = true }
 num_enum = { workspace = true }
 static_assertions = { workspace = true }

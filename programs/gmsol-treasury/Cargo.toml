@@ -14,7 +14,11 @@ no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
 debug-msg = []
-idl-build = ["anchor-lang/idl-build", "gmsol-store/idl-build"]
+idl-build = [
+    "anchor-lang/idl-build",
+    "gmsol-store/idl-build",
+    "gmsol-utils/idl-build",
+]
 debug = ["gmsol-store/debug"]
 no-mock = []
 multi-store = ["gmsol-store/multi-store"]

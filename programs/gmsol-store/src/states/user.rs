@@ -13,7 +13,7 @@ pub struct UserHeader {
     pub(crate) version: u8,
     /// The bump seed.
     pub(crate) bump: u8,
-    flags: UserFlagValue,
+    flags: UserFlagContainer,
     padding_0: [u8; 13],
     /// The owner of this user account.
     pub(crate) owner: Pubkey,
@@ -26,34 +26,35 @@ pub struct UserHeader {
     reserved: [u8; 128],
 }
 
+/// User flags.
+#[derive(num_enum::IntoPrimitive)]
+#[repr(u8)]
+#[non_exhaustive]
+pub enum UserFlag {
+    /// Is initialized.
+    Initialized,
+}
+
+impl UserFlag {
+    /// Max flags.
+    pub const MAX_FLAGS: usize = 8;
+}
+
+gmsol_utils::flags!(UserFlag, { UserFlag::MAX_FLAGS }, u8);
+
 impl UserHeader {
-    /// Get flag.
-    fn flag(&self, flag: UserFlag) -> bool {
-        let map = UserFlagMap::from_value(self.flags);
-        map.get(flag as usize)
-    }
-
-    /// Set flag.
-    /// Return the previous value.
-    fn set_flag(&mut self, flag: UserFlag, value: bool) -> bool {
-        let mut map = UserFlagMap::from_value(self.flags);
-        let previous = map.set(flag as usize, value);
-        self.flags = map.into_value();
-        previous
-    }
-
     /// Return whether the user account is initialized.
     pub fn is_initialized(&self) -> bool {
-        self.flag(UserFlag::Initialized)
+        self.flags.get_flag(UserFlag::Initialized)
     }
 
     /// Initialize.
     pub(crate) fn init(&mut self, store: &Pubkey, owner: &Pubkey, bump: u8) -> Result<()> {
         require!(
-            !self.flag(UserFlag::Initialized),
+            !self.flags.get_flag(UserFlag::Initialized),
             CoreError::UserAccountHasBeenInitialized
         );
-        self.set_flag(UserFlag::Initialized, true);
+        self.flags.set_flag(UserFlag::Initialized, true);
 
         self.bump = bump;
         self.owner = *owner;
@@ -117,22 +118,6 @@ impl UserHeader {
 impl Seed for UserHeader {
     const SEED: &'static [u8] = b"user";
 }
-
-/// User flags.
-#[repr(u8)]
-#[non_exhaustive]
-pub enum UserFlag {
-    /// Is initialized.
-    Initialized,
-}
-
-impl UserFlag {
-    /// Max flags.
-    pub const MAX_FLAGS: usize = 8;
-}
-
-type UserFlagMap = bitmaps::Bitmap<{ UserFlag::MAX_FLAGS }>;
-type UserFlagValue = u8;
 
 /// Referral Code Bytes.
 pub type ReferralCodeBytes = [u8; 8];

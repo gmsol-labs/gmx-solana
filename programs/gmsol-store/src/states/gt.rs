@@ -751,9 +751,6 @@ impl GtState {
     }
 }
 
-type GtExchangeVaultFlagsMap = bitmaps::Bitmap<MAX_FLAGS>;
-type GtExchangeVaultFlagsValue = u8;
-
 /// GT Exchange Vault Flags.
 #[repr(u8)]
 #[non_exhaustive]
@@ -766,12 +763,14 @@ pub enum GtExchangeVaultFlag {
     // CHECK: should have no more than `MAX_FLAGS` of flags.
 }
 
+gmsol_utils::flags!(GtExchangeVaultFlag, MAX_FLAGS, u8);
+
 /// GT Exchange Vault.
 #[account(zero_copy)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct GtExchangeVault {
     pub(crate) bump: u8,
-    flags: GtExchangeVaultFlagsValue,
+    flags: GtExchangeVaultFlagContainer,
     padding: [u8; 6],
     ts: i64,
     time_window: i64,
@@ -781,20 +780,6 @@ pub struct GtExchangeVault {
 }
 
 impl GtExchangeVault {
-    fn get_flag(&self, kind: GtExchangeVaultFlag) -> bool {
-        let index = u8::from(kind);
-        let map = GtExchangeVaultFlagsMap::from_value(self.flags);
-        map.get(usize::from(index))
-    }
-
-    fn set_flag(&mut self, kind: GtExchangeVaultFlag, value: bool) -> bool {
-        let index = u8::from(kind);
-        let mut map = GtExchangeVaultFlagsMap::from_value(self.flags);
-        let previous = map.set(usize::from(index), value);
-        self.flags = map.into_value();
-        previous
-    }
-
     /// Get amount.
     pub fn amount(&self) -> u64 {
         self.amount
@@ -802,12 +787,12 @@ impl GtExchangeVault {
 
     /// Get whether the vault is initialized.
     pub fn is_initialized(&self) -> bool {
-        self.get_flag(GtExchangeVaultFlag::Intiailized)
+        self.flags.get_flag(GtExchangeVaultFlag::Intiailized)
     }
 
     /// Get whether the vault is comfirmed.
     pub fn is_confirmed(&self) -> bool {
-        self.get_flag(GtExchangeVaultFlag::Comfirmed)
+        self.flags.get_flag(GtExchangeVaultFlag::Comfirmed)
     }
 
     pub(crate) fn init(&mut self, bump: u8, store: &Pubkey, time_window: u32) -> Result<()> {
@@ -820,7 +805,7 @@ impl GtExchangeVault {
         self.bump = bump;
         self.ts = clock.unix_timestamp;
         self.store = *store;
-        self.set_flag(GtExchangeVaultFlag::Intiailized, true);
+        self.flags.set_flag(GtExchangeVaultFlag::Intiailized, true);
         self.time_window = i64::from(time_window);
 
         Ok(())
@@ -855,7 +840,7 @@ impl GtExchangeVault {
     /// Confirm the vault.
     fn confirm(&mut self) -> Result<u64> {
         self.validate_confirmable()?;
-        self.set_flag(GtExchangeVaultFlag::Comfirmed, true);
+        self.flags.set_flag(GtExchangeVaultFlag::Comfirmed, true);
         Ok(self.amount)
     }
 
@@ -896,9 +881,6 @@ impl gmsol_utils::InitSpace for GtExchangeVault {
     const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
-type GtExchangeFlagsMap = bitmaps::Bitmap<MAX_FLAGS>;
-type GtExchangeFlagsValue = u8;
-
 /// GT Exchange Vault Flags.
 #[repr(u8)]
 #[non_exhaustive]
@@ -909,13 +891,15 @@ pub enum GtExchangeFlag {
     // CHECK: should have no more than `MAX_FLAGS` of flags.
 }
 
+gmsol_utils::flags!(GtExchangeFlag, MAX_FLAGS, u8);
+
 /// GT Exchange Account.
 #[account(zero_copy)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct GtExchange {
     /// Bump.
     pub bump: u8,
-    flags: GtExchangeFlagsValue,
+    flags: GtExchangeFlagContainer,
     padding: [u8; 6],
     amount: u64,
     /// Owner address.
@@ -936,23 +920,9 @@ impl Default for GtExchange {
 }
 
 impl GtExchange {
-    fn get_flag(&self, kind: GtExchangeFlag) -> bool {
-        let index = u8::from(kind);
-        let map = GtExchangeFlagsMap::from_value(self.flags);
-        map.get(usize::from(index))
-    }
-
-    fn set_flag(&mut self, kind: GtExchangeFlag, value: bool) -> bool {
-        let index = u8::from(kind);
-        let mut map = GtExchangeFlagsMap::from_value(self.flags);
-        let previous = map.set(usize::from(index), value);
-        self.flags = map.into_value();
-        previous
-    }
-
     /// Get whether the vault is initialized.
     pub fn is_initialized(&self) -> bool {
-        self.get_flag(GtExchangeFlag::Intiailized)
+        self.flags.get_flag(GtExchangeFlag::Intiailized)
     }
 
     pub(crate) fn init(
@@ -969,7 +939,7 @@ impl GtExchange {
         self.store = *store;
         self.vault = *vault;
 
-        self.set_flag(GtExchangeFlag::Intiailized, true);
+        self.flags.set_flag(GtExchangeFlag::Intiailized, true);
 
         Ok(())
     }
@@ -1017,9 +987,6 @@ pub fn get_time_window_index(ts: i64, time_window: i64) -> i64 {
     ts / time_window
 }
 
-type GtVestingFlagsMap = bitmaps::Bitmap<MAX_FLAGS>;
-type GtVestingFlagsValue = u8;
-
 /// GT Vesting Vault Flags.
 #[repr(u8)]
 #[non_exhaustive]
@@ -1030,6 +997,8 @@ pub enum GtVestingFlag {
     // CHECK: should have no more than `MAX_FLAGS` of flags.
 }
 
+gmsol_utils::flags!(GtVestingFlag, MAX_FLAGS, u8);
+
 const VESTING_LEN: usize = 1024;
 
 /// GT Vesting.
@@ -1037,7 +1006,7 @@ const VESTING_LEN: usize = 1024;
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct GtVesting {
     pub(crate) bump: u8,
-    flags: GtVestingFlagsValue,
+    flags: GtVestingFlagContainer,
     head: u16,
     divisor: u16,
     padding_0: [u8; 2],
@@ -1050,23 +1019,9 @@ pub struct GtVesting {
 }
 
 impl GtVesting {
-    fn get_flag(&self, kind: GtVestingFlag) -> bool {
-        let index = u8::from(kind);
-        let map = GtVestingFlagsMap::from_value(self.flags);
-        map.get(usize::from(index))
-    }
-
-    fn set_flag(&mut self, kind: GtVestingFlag, value: bool) -> bool {
-        let index = u8::from(kind);
-        let mut map = GtVestingFlagsMap::from_value(self.flags);
-        let previous = map.set(usize::from(index), value);
-        self.flags = map.into_value();
-        previous
-    }
-
     /// Get whether the vault is initialized.
     pub fn is_initialized(&self) -> bool {
-        self.get_flag(GtVestingFlag::Intiailized)
+        self.flags.get_flag(GtVestingFlag::Intiailized)
     }
 
     pub(crate) fn init(
@@ -1091,7 +1046,7 @@ impl GtVesting {
         self.divisor = divisor;
         self.time_window = time_window;
 
-        self.set_flag(GtVestingFlag::Intiailized, true);
+        self.flags.set_flag(GtVestingFlag::Intiailized, true);
 
         Ok(())
     }

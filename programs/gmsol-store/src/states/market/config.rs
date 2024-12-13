@@ -1,16 +1,9 @@
 use anchor_lang::prelude::*;
-use bitmaps::Bitmap;
 
 use crate::{constants, states::Factor, CoreError};
 
 /// Max number of config flags.
 pub const MAX_CONFIG_FLAGS: usize = 128;
-
-/// Market Flag Value.
-pub type MarketConfigFlagValue = u128;
-
-/// Market Flag Bitmap.
-pub type MarketConfigFlagBitmap = Bitmap<MAX_CONFIG_FLAGS>;
 
 /// Market Config.
 #[zero_copy]
@@ -18,7 +11,7 @@ pub type MarketConfigFlagBitmap = Bitmap<MAX_CONFIG_FLAGS>;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MarketConfig {
     /// Flags.
-    flag: MarketConfigFlagValue,
+    flag: MarketConfigFlagContainer,
     // Swap impact.
     pub(super) swap_impact_exponent: Factor,
     pub(super) swap_impact_positive_factor: Factor,
@@ -471,18 +464,14 @@ impl MarketConfig {
 
     /// Get config flag.
     pub(crate) fn flag(&self, flag: MarketConfigFlag) -> bool {
-        let bitmap = MarketConfigFlagBitmap::from_value(self.flag);
-        bitmap.get(usize::from(flag as u8))
+        self.flag.get_flag(flag)
     }
 
     /// Set config flag.
     ///
     /// Return the previous value.
     pub(crate) fn set_flag(&mut self, flag: MarketConfigFlag, value: bool) -> bool {
-        let mut bitmap = MarketConfigFlagBitmap::from_value(self.flag);
-        let previous = bitmap.set(usize::from(flag as u8), value);
-        self.flag = bitmap.into_value();
-        previous
+        self.flag.set_flag(flag, value)
     }
 }
 
@@ -516,6 +505,8 @@ pub enum MarketConfigFlag {
     IgnoreOpenInterestForUsageFactor,
     // CHECK: cannot have more than `MAX_CONFIG_FLAGS` flags.
 }
+
+gmsol_utils::flags!(MarketConfigFlag, MAX_CONFIG_FLAGS, u128);
 
 /// Market config keys.
 #[derive(

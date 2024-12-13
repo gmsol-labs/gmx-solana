@@ -2075,7 +2075,6 @@ version = "0.2.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
- "bitmaps 3.2.1",
  "bs58 0.5.1",
  "bytemuck",
  "bytes",
@@ -2120,9 +2119,12 @@ name = "gmsol-utils"
 version = "0.2.0"
 dependencies = [
  "anchor-lang",
+ "bitmaps 3.2.1",
  "bytemuck",
+ "num_enum 0.7.3",
  "paste",
  "ruint",
+ "serde",
  "static_assertions",
  "thiserror",
 ]

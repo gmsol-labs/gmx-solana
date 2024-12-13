@@ -1,7 +1,6 @@
 use std::{borrow::Cow, ops::Deref};
 
 use anchor_lang::prelude::*;
-use bitmaps::Bitmap;
 use borsh::{BorshDeserialize, BorshSerialize};
 use bytemuck::Zeroable;
 use gmsol_model::{
@@ -508,6 +507,21 @@ impl<'a> std::fmt::Display for Trade<'a> {
     }
 }
 
+#[allow(clippy::enum_variant_names)]
+#[derive(num_enum::IntoPrimitive)]
+#[repr(u8)]
+enum TradeFlag {
+    /// Is long.
+    IsLong,
+    /// Is collateral long.
+    IsCollateralLong,
+    /// Is increase.
+    IsIncrease,
+    // CHECK: cannot have more than `8` flags.
+}
+
+gmsol_utils::flags!(TradeFlag, 8, u8);
+
 /// Trade event data.
 #[account(zero_copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -515,6 +529,8 @@ impl<'a> std::fmt::Display for Trade<'a> {
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct TradeData {
     /// Trade flag.
+    // FIXME: Use the type alias `TradeFlag` instead of the concrete type.
+    // However, this causes the IDL build to fail in `anchor v0.30.1`.
     flags: u8,
     padding_0: [u8; 7],
     /// Trade id.
@@ -703,19 +719,6 @@ pub struct TradeOutputAmounts {
     pub secondary_output_amount: u128,
 }
 
-type TradeFlagMap = Bitmap<8>;
-
-#[allow(clippy::enum_variant_names)]
-#[repr(u8)]
-enum TradeFlag {
-    /// Is long.
-    IsLong,
-    /// Is collateral long.
-    IsCollateralLong,
-    /// Is increase.
-    IsIncrease,
-}
-
 impl TradeData {
     pub(crate) fn init(
         &mut self,
@@ -755,17 +758,17 @@ impl TradeData {
         is_collateral_long: bool,
         is_increase: bool,
     ) -> &mut Self {
-        let mut flags = TradeFlagMap::new();
-        flags.set(TradeFlag::IsLong as usize, is_long);
-        flags.set(TradeFlag::IsCollateralLong as usize, is_collateral_long);
-        flags.set(TradeFlag::IsIncrease as usize, is_increase);
+        let mut flags = TradeFlagContainer::default();
+        flags.set_flag(TradeFlag::IsLong, is_long);
+        flags.set_flag(TradeFlag::IsCollateralLong, is_collateral_long);
+        flags.set_flag(TradeFlag::IsIncrease, is_increase);
         self.flags = flags.into_value();
         self
     }
 
     fn get_flag(&self, flag: TradeFlag) -> bool {
-        let map = TradeFlagMap::from_value(self.flags);
-        map.get(flag as usize)
+        let map = TradeFlagContainer::from_value(self.flags);
+        map.get_flag(flag)
     }
 
     /// Return whether the position side is long.

@@ -29,7 +29,6 @@ use std::{collections::BTreeSet, str::FromStr};
 
 use anchor_lang::{prelude::*, Bump};
 use anchor_spl::token::Mint;
-use bitmaps::Bitmap;
 use borsh::{BorshDeserialize, BorshSerialize};
 use config::MarketConfigFlag;
 use gmsol_model::{price::Prices, ClockKind, PoolKind};
@@ -72,12 +71,6 @@ mod model;
 /// Max number of flags.
 pub const MAX_FLAGS: usize = 8;
 
-/// Market Flag Value.
-pub type MarketFlagValue = u8;
-
-/// Market Flag Bitmap.
-pub type MarketFlagBitmap = Bitmap<MAX_FLAGS>;
-
 const MAX_NAME_LEN: usize = 64;
 
 /// Market.
@@ -86,7 +79,7 @@ const MAX_NAME_LEN: usize = 64;
 pub struct Market {
     /// Bump Seed.
     pub(crate) bump: u8,
-    flag: MarketFlagValue,
+    flags: MarketFlagContainer,
     padding: [u8; 14],
     name: [u8; MAX_NAME_LEN],
     pub(crate) meta: MarketMeta,
@@ -228,18 +221,14 @@ impl Market {
 
     /// Get flag.
     pub fn flag(&self, flag: MarketFlag) -> bool {
-        let bitmap = MarketFlagBitmap::from_value(self.flag);
-        bitmap.get(usize::from(flag as u8))
+        self.flags.get_flag(flag)
     }
 
     /// Set flag.
     ///
     /// Return the previous value.
     pub fn set_flag(&mut self, flag: MarketFlag, value: bool) -> bool {
-        let mut bitmap = MarketFlagBitmap::from_value(self.flag);
-        let previous = bitmap.set(usize::from(flag as u8), value);
-        self.flag = bitmap.into_value();
-        previous
+        self.flags.set_flag(flag, value)
     }
 
     /// Is this market a pure market, i.e., a single token market.
@@ -506,6 +495,7 @@ impl Market {
 }
 
 /// Market Flags.
+#[derive(num_enum::IntoPrimitive)]
 #[repr(u8)]
 pub enum MarketFlag {
     /// Is enabled.
@@ -520,6 +510,8 @@ pub enum MarketFlag {
     GTEnabled,
     // CHECK: cannot have more than `MAX_FLAGS` flags.
 }
+
+gmsol_utils::flags!(MarketFlag, MAX_FLAGS, u8);
 
 /// Market State.
 #[zero_copy]

@@ -47,8 +47,7 @@ enum OracleFlag {
     // CHECK: should have no more than `MAX_FLAGS` of flags.
 }
 
-type OracleFlagsMap = bitmaps::Bitmap<MAX_FLAGS>;
-type OracleFlagsValue = u8;
+gmsol_utils::flags!(OracleFlag, MAX_FLAGS, u8);
 
 /// Oracle Account.
 #[account(zero_copy)]
@@ -59,7 +58,7 @@ pub struct Oracle {
     max_oracle_ts: i64,
     min_oracle_slot: u64,
     primary: PriceMap,
-    flags: OracleFlagsValue,
+    flags: OracleFlagContainer,
     padding_0: [u8; 3],
 }
 
@@ -72,20 +71,6 @@ impl Seed for Oracle {
 }
 
 impl Oracle {
-    fn get_flag(&self, kind: OracleFlag) -> bool {
-        let index = u8::from(kind);
-        let map = OracleFlagsMap::from_value(self.flags);
-        map.get(usize::from(index))
-    }
-
-    fn set_flag(&mut self, kind: OracleFlag, value: bool) -> bool {
-        let index = u8::from(kind);
-        let mut map = OracleFlagsMap::from_value(self.flags);
-        let previous = map.set(usize::from(index), value);
-        self.flags = map.into_value();
-        previous
-    }
-
     /// Initialize the [`Oracle`].
     pub(crate) fn init(&mut self, store: Pubkey) {
         self.clear_all_prices();
@@ -94,7 +79,7 @@ impl Oracle {
 
     /// Return whether the oracle is cleared.
     pub fn is_cleared(&self) -> bool {
-        self.get_flag(OracleFlag::Cleared)
+        self.flags.get_flag(OracleFlag::Cleared)
     }
 
     /// Set prices from remaining accounts.
@@ -174,7 +159,7 @@ impl Oracle {
             self.min_oracle_slot = min_slot;
             self.min_oracle_ts = min_ts;
             self.max_oracle_ts = max_ts;
-            self.set_flag(OracleFlag::Cleared, false);
+            self.flags.set_flag(OracleFlag::Cleared, false);
         }
         Ok(())
     }
@@ -185,7 +170,7 @@ impl Oracle {
         self.min_oracle_ts = i64::MAX;
         self.max_oracle_ts = i64::MIN;
         self.min_oracle_slot = u64::MAX;
-        self.set_flag(OracleFlag::Cleared, true);
+        self.flags.set_flag(OracleFlag::Cleared, true);
     }
 
     #[inline(never)]

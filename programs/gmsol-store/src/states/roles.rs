@@ -1,7 +1,8 @@
 use std::borrow::Borrow;
 
 use anchor_lang::prelude::*;
-use bitmaps::Bitmap;
+
+use gmsol_utils::bitmaps::Bitmap;
 
 use crate::CoreError;
 

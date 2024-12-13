@@ -7,6 +7,9 @@ pub mod fixed_map;
 /// Init space.
 pub mod init_space;
 
+/// Zero-copy flags.
+pub mod flags;
+
 /// Convert a string to a seed.
 pub fn to_seed(key: &str) -> [u8; 32] {
     use anchor_lang::solana_program::hash::hash;
@@ -14,6 +17,7 @@ pub fn to_seed(key: &str) -> [u8; 32] {
 }
 
 pub use self::{init_space::InitSpace, price::Price};
+pub use bitmaps;
 pub use paste;
 pub use static_assertions;
 

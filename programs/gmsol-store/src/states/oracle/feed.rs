@@ -156,9 +156,6 @@ impl PriceFeed {
     }
 }
 
-type PriceFlagsMap = bitmaps::Bitmap<MAX_FLAGS>;
-type PriceFlagsValue = u8;
-
 /// Price Feed Flags.
 #[repr(u8)]
 #[non_exhaustive]
@@ -169,12 +166,14 @@ pub enum PriceFlag {
     // CHECK: should have no more than `MAX_FLAGS` of flags.
 }
 
+gmsol_utils::flags!(PriceFlag, MAX_FLAGS, u8);
+
 /// Price structure for Price Feed.
 #[zero_copy]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct PriceFeedPrice {
     decimals: u8,
-    flags: PriceFlagsValue,
+    flags: PriceFlagContainer,
     padding: [u8; 6],
     ts: i64,
     price: u128,
@@ -203,23 +202,9 @@ impl PriceFeedPrice {
         &self.price
     }
 
-    fn get_flag(&self, kind: PriceFlag) -> bool {
-        let index = u8::from(kind);
-        let map = PriceFlagsMap::from_value(self.flags);
-        map.get(usize::from(index))
-    }
-
-    fn set_flag(&mut self, kind: PriceFlag, value: bool) -> bool {
-        let index = u8::from(kind);
-        let mut map = PriceFlagsMap::from_value(self.flags);
-        let previous = map.set(usize::from(index), value);
-        self.flags = map.into_value();
-        previous
-    }
-
     /// Is market open.
     pub fn is_market_open(&self) -> bool {
-        self.get_flag(PriceFlag::Open)
+        self.flags.get_flag(PriceFlag::Open)
     }
 
     pub(crate) fn from_chainlink_report(
@@ -245,7 +230,7 @@ impl PriceFeedPrice {
 
         let mut price = Self {
             decimals: Report::DECIMALS - divisor_decimals,
-            flags: PriceFlagsMap::new().into_value(),
+            flags: Default::default(),
             padding: [0; 6],
             ts: i64::from(report.observations_timestamp),
             price: (report.price / divisor).try_into().unwrap(),
@@ -253,7 +238,7 @@ impl PriceFeedPrice {
             max_price: (report.ask / divisor).try_into().unwrap(),
         };
 
-        price.set_flag(PriceFlag::Open, true);
+        price.flags.set_flag(PriceFlag::Open, true);
 
         Ok(price)
     }

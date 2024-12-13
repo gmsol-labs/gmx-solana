@@ -35,6 +35,7 @@ impl Treasury {
 #[zero_copy]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct TokenConfig {
+    flags: Flags,
     reserved: [u8; 256],
 }
 
@@ -45,3 +46,9 @@ impl Default for TokenConfig {
 }
 
 fixed_map!(TokenMap, Pubkey, to_bytes, TokenConfig, MAX_TOKENS, 0);
+
+#[zero_copy]
+#[cfg_attr(feature = "debug", derive(Debug))]
+pub struct Flags {
+    value: u8,
+}

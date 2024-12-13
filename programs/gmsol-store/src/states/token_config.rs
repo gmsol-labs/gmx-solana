@@ -4,7 +4,6 @@ use std::{
 };
 
 use anchor_lang::prelude::*;
-use bitmaps::Bitmap;
 
 use crate::{
     utils::fixed_str::{bytes_to_fixed_str, fixed_str_to_bytes},
@@ -31,6 +30,7 @@ const MAX_TOKENS: usize = 256;
 const MAX_NAME_LEN: usize = 32;
 
 /// Token Flags.
+#[derive(num_enum::IntoPrimitive)]
 #[repr(u8)]
 #[non_exhaustive]
 pub enum Flag {
@@ -40,11 +40,10 @@ pub enum Flag {
     Enabled,
     /// Is a synthetic asset.
     Synthetic,
-    // WARNING: Cannot have more than `MAX_FLAGS` flags.
+    // CHECK: Cannot have more than `MAX_FLAGS` flags.
 }
 
-type TokenFlags = Bitmap<MAX_FLAGS>;
-type TokenFlagsValue = u8;
+gmsol_utils::flags!(Flag, MAX_FLAGS, u8);
 
 #[zero_copy]
 #[derive(PartialEq, Eq)]
@@ -53,7 +52,7 @@ pub struct TokenConfig {
     /// Name.
     name: [u8; MAX_NAME_LEN],
     /// Flags.
-    flags: TokenFlagsValue,
+    flags: FlagContainer,
     /// Token decimals.
     token_decimals: u8,
     /// Precision.
@@ -166,17 +165,12 @@ impl TokenConfig {
 
     /// Set flag
     pub fn set_flag(&mut self, flag: Flag, value: bool) {
-        let mut bitmap = TokenFlags::from_value(self.flags);
-        let index = flag as usize;
-        bitmap.set(index, value);
-        self.flags = bitmap.into_value();
+        self.flags.set_flag(flag, value);
     }
 
     /// Get flag.
     pub fn flag(&self, flag: Flag) -> bool {
-        let bitmap = TokenFlags::from_value(self.flags);
-        let index = flag as usize;
-        bitmap.get(index)
+        self.flags.get_flag(flag)
     }
 
     /// Create a new token config from builder.
