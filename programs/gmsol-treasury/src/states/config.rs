@@ -1,9 +1,10 @@
 use anchor_lang::prelude::*;
-use gmsol_store::states::Seed;
+use gmsol_store::{states::Seed, CoreError};
 use gmsol_utils::InitSpace;
 
 /// Config account.
 #[account(zero_copy)]
+#[cfg_attr(feature = "debug", derive(Debug))]
 pub struct Config {
     pub(crate) bump: u8,
     padding: [u8; 7],
@@ -33,5 +34,14 @@ impl Config {
         } else {
             Some(&self.treasury)
         }
+    }
+
+    /// Set the treasury address.
+    pub(crate) fn set_treasury(&mut self, mut address: Pubkey) -> Result<Pubkey> {
+        require_neq!(self.treasury, address, CoreError::PreconditionsAreNotMet);
+
+        std::mem::swap(&mut address, &mut self.treasury);
+
+        Ok(address)
     }
 }
