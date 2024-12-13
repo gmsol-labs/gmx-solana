@@ -69,4 +69,10 @@ pub mod gmsol_treasury {
     ) -> Result<()> {
         instructions::unchecked_toggle_token_flag(ctx, &flag, value)
     }
+
+    /// Claim fees.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_KEEPER))]
+    pub fn claim_fees(ctx: Context<ClaimFees>) -> Result<()> {
+        instructions::unchecked_claim_fees(ctx)
+    }
 }

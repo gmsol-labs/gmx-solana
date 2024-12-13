@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::TokenAccount;
+use anchor_spl::token_interface::Mint;
 use gmsol_store::{
     program::GmsolStore,
     utils::{CpiAuthentication, WithStore},
@@ -74,7 +74,7 @@ pub struct InsertTokenToTreasury<'info> {
     #[account(mut, has_one = config)]
     pub treasury: AccountLoader<'info, Treasury>,
     /// Token to insert.
-    pub token: InterfaceAccount<'info, TokenAccount>,
+    pub token: InterfaceAccount<'info, Mint>,
     /// Store program.
     pub store_program: Program<'info, GmsolStore>,
 }
@@ -183,7 +183,7 @@ pub struct ToggleTokenFlag<'info> {
     #[account(mut, has_one = config)]
     pub treasury: AccountLoader<'info, Treasury>,
     /// Token.
-    pub token: InterfaceAccount<'info, TokenAccount>,
+    pub token: InterfaceAccount<'info, Mint>,
     /// Store program.
     pub store_program: Program<'info, GmsolStore>,
 }

@@ -44,4 +44,25 @@ impl Config {
 
         Ok(address)
     }
+
+    /// Get signer.
+    pub(crate) fn signer(&self) -> ConfigSigner {
+        ConfigSigner {
+            store: self.store,
+            bump_bytes: [self.bump],
+        }
+    }
+}
+
+/// Config Signer.
+pub struct ConfigSigner {
+    store: Pubkey,
+    bump_bytes: [u8; 1],
+}
+
+impl ConfigSigner {
+    /// As signer seeds.
+    pub fn as_seeds(&self) -> [&[u8]; 3] {
+        [Config::SEED, self.store.as_ref(), &self.bump_bytes]
+    }
 }
