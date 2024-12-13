@@ -23,13 +23,13 @@ pub mod gmsol_treasury {
     }
 
     /// Set treasury.
-    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_OWNER))]
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_ADMIN))]
     pub fn set_treasury(ctx: Context<SetTreasury>) -> Result<()> {
         instructions::unchecked_set_treasury(ctx)
     }
 
     /// Initialize a [`Treasury`](crate::states::Treasury) account.
-    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_OWNER))]
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_ADMIN))]
     pub fn initialize_treasury(ctx: Context<InitializeTreasury>) -> Result<()> {
         instructions::unchecked_initialize_treasury(ctx)
     }
@@ -38,7 +38,7 @@ pub mod gmsol_treasury {
     ///
     /// # Errors
     /// - The [`token`](InsertTokenToTreasury::token) must not have been inserted.
-    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_OWNER))]
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_ADMIN))]
     pub fn insert_token_to_treasury(ctx: Context<InsertTokenToTreasury>) -> Result<()> {
         instructions::unchecked_insert_token_to_treasury(ctx)
     }
@@ -47,7 +47,7 @@ pub mod gmsol_treasury {
     ///
     /// # Errors
     /// - The [`token`](RemoveTokenFromTreasury::token) must have been inserted.
-    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_OWNER))]
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_ADMIN))]
     pub fn remove_token_from_treasury(ctx: Context<RemoveTokenFromTreasury>) -> Result<()> {
         instructions::unchecked_remove_token_from_treasury(ctx)
     }
@@ -61,7 +61,7 @@ pub mod gmsol_treasury {
     /// # Errors.
     /// - The [`token`](ToggleTokenFlag::token) must be in the token list.
     /// - `flag` must be defined in [`TokenFlag`](crate::states::treasury::TokenFlag).
-    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_OWNER))]
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_ADMIN))]
     pub fn toggle_token_flag(
         ctx: Context<ToggleTokenFlag>,
         flag: String,

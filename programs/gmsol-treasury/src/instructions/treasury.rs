@@ -31,7 +31,7 @@ pub struct InitializeTreasury<'info> {
 
 /// Initialize [`Treasury`] account.
 /// # CHECK
-/// Only [`TREASURY_OWNER`](crate::roles::TREASURY_OWNER) can use.
+/// Only [`TREASURY_ADMIN`](crate::roles::TREASURY_ADMIN) can use.
 pub(crate) fn unchecked_initialize_treasury(ctx: Context<InitializeTreasury>) -> Result<()> {
     ctx.accounts
         .treasury
@@ -81,7 +81,7 @@ pub struct InsertTokenToTreasury<'info> {
 
 /// Insert a token to the [`Treasury`] account.
 /// # CHECK
-/// Only [`TREASURY_OWNER`](crate::roles::TREASURY_OWNER) can use.
+/// Only [`TREASURY_ADMIN`](crate::roles::TREASURY_ADMIN) can use.
 pub(crate) fn unchecked_insert_token_to_treasury(
     ctx: Context<InsertTokenToTreasury>,
 ) -> Result<()> {
@@ -136,7 +136,7 @@ pub struct RemoveTokenFromTreasury<'info> {
 
 /// Remove a token from the [`Treasury`] account.
 /// # CHECK
-/// Only [`TREASURY_OWNER`](crate::roles::TREASURY_OWNER) can use.
+/// Only [`TREASURY_ADMIN`](crate::roles::TREASURY_ADMIN) can use.
 pub(crate) fn unchecked_remove_token_from_treasury(
     ctx: Context<RemoveTokenFromTreasury>,
 ) -> Result<()> {
@@ -190,7 +190,7 @@ pub struct ToggleTokenFlag<'info> {
 
 /// Toggle a token flag.
 /// # CHECK
-/// Only [`TREASURY_OWNER`](crate::roles::TREASURY_OWNER) can use.
+/// Only [`TREASURY_ADMIN`](crate::roles::TREASURY_ADMIN) can use.
 pub(crate) fn unchecked_toggle_token_flag(
     ctx: Context<ToggleTokenFlag>,
     flag: &str,

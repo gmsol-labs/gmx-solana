@@ -79,7 +79,7 @@ impl<'info> CpiAuthentication<'info> for SetTreasury<'info> {
 
 /// Set config's treasury address.
 /// # CHECK
-/// only [`TREASURY_OWNER`](crate::roles::TREASURY_OWNER) can use.
+/// Only [`TREASURY_ADMIN`](crate::roles::TREASURY_ADMIN) can use.
 pub(crate) fn unchecked_set_treasury(ctx: Context<SetTreasury>) -> Result<()> {
     let treasury = ctx.accounts.treasury.key();
     let previous = ctx.accounts.config.load_mut()?.set_treasury(treasury)?;
