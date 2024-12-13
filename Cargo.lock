@@ -2112,6 +2112,8 @@ dependencies = [
  "bytemuck",
  "gmsol-store",
  "gmsol-utils",
+ "num_enum 0.7.3",
+ "strum",
 ]
 
 [[package]]

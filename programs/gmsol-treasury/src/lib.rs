@@ -42,4 +42,22 @@ pub mod gmsol_treasury {
     pub fn insert_token_to_treasury(ctx: Context<InsertTokenToTreasury>) -> Result<()> {
         instructions::unchecked_insert_token_to_treasury(ctx)
     }
+
+    /// Toggle a flag of the given token.
+    ///
+    /// # Arguments
+    /// - `flag`: the flag to toggle.
+    /// - `value`: the value to be changed to.
+    ///
+    /// # Errors.
+    /// - The [`token`](ToggleTokenFlag::token) must be in the token list.
+    /// - `flag` must be defined in [`TokenFlag`](crate::states::treasury::TokenFlag).
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_OWNER))]
+    pub fn toggle_token_flag(
+        ctx: Context<ToggleTokenFlag>,
+        flag: String,
+        value: bool,
+    ) -> Result<()> {
+        instructions::unchecked_toggle_token_flag(ctx, &flag, value)
+    }
 }
