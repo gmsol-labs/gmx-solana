@@ -28,6 +28,12 @@ pub mod gmsol_treasury {
         instructions::unchecked_set_treasury(ctx)
     }
 
+    /// Set GT factor.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_ADMIN))]
+    pub fn set_gt_factor(ctx: Context<SetGtFactor>, factor: u128) -> Result<()> {
+        instructions::unchecked_set_gt_factor(ctx, factor)
+    }
+
     /// Initialize a [`Treasury`](crate::states::Treasury) account.
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_ADMIN))]
     pub fn initialize_treasury(ctx: Context<InitializeTreasury>, index: u8) -> Result<()> {

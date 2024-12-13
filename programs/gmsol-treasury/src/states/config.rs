@@ -7,9 +7,10 @@ use gmsol_utils::InitSpace;
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct Config {
     pub(crate) bump: u8,
-    padding: [u8; 7],
+    padding: [u8; 15],
     pub(crate) store: Pubkey,
     treasury: Pubkey,
+    gt_factor: u128,
     reserved: [u8; 256],
 }
 
@@ -43,6 +44,18 @@ impl Config {
         std::mem::swap(&mut address, &mut self.treasury);
 
         Ok(address)
+    }
+
+    /// Set GT factor.
+    pub(crate) fn set_gt_factor(&mut self, mut factor: u128) -> Result<u128> {
+        require_gte!(
+            gmsol_store::constants::MARKET_USD_UNIT,
+            factor,
+            CoreError::InvalidArgument
+        );
+        require_neq!(self.gt_factor, factor, CoreError::PreconditionsAreNotMet);
+        std::mem::swap(&mut self.gt_factor, &mut factor);
+        Ok(factor)
     }
 
     /// Get signer.
