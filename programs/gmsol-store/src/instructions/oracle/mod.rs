@@ -17,6 +17,7 @@ pub use self::custom::*;
 /// [*See also the documentation for the instruction.*](crate::gmsol_store::initialize_oracle)
 #[derive(Accounts)]
 pub struct InitializeOracle<'info> {
+    /// The payer, and it will be set as the authority of the created oracle account.
     pub payer: Signer<'info>,
     /// The store account that will be the owner of the oracle account.
     pub store: AccountLoader<'info, Store>,
@@ -31,7 +32,7 @@ pub(crate) fn initialize_oracle(ctx: Context<InitializeOracle>) -> Result<()> {
     ctx.accounts
         .oracle
         .load_init()?
-        .init(ctx.accounts.store.key());
+        .init(ctx.accounts.store.key(), ctx.accounts.payer.key());
     Ok(())
 }
 
@@ -46,6 +47,7 @@ pub struct ClearAllPrices<'info> {
     #[account(
         mut,
         has_one = store,
+        has_one = authority,
     )]
     pub oracle: AccountLoader<'info, Oracle>,
 }
@@ -83,6 +85,7 @@ pub struct SetPricesFromPriceFeed<'info> {
     #[account(
         mut,
         has_one = store,
+        has_one = authority,
     )]
     pub oracle: AccountLoader<'info, Oracle>,
     /// Token map.
@@ -93,7 +96,8 @@ pub struct SetPricesFromPriceFeed<'info> {
 }
 
 /// Set the oracle prices from price feeds.
-pub(crate) fn set_prices_from_price_feed<'info>(
+/// CHECK: only ORACLE_CONTROLLER is allowed to invoke.
+pub(crate) fn unchecked_set_prices_from_price_feed<'info>(
     ctx: Context<'_, '_, 'info, 'info, SetPricesFromPriceFeed<'info>>,
     tokens: Vec<Pubkey>,
 ) -> Result<()> {

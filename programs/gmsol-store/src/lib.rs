@@ -1061,7 +1061,7 @@ pub mod gmsol_store {
     ///
     /// # Errors
     /// - The [`authority`](ClearAllPrices::authority) must be a signer and have the ORACLE_CONTROLLER
-    ///   role in the given store.
+    ///   role in the given store. It must also be the authority of the oracle.
     /// - The [`store`](ClearAllPrices::store) must be an initialized store account owned by the
     ///   store program.
     /// - The [`oracle`](ClearAllPrices::oracle) must be an initialized oracle account owned by
@@ -1086,7 +1086,7 @@ pub mod gmsol_store {
     ///
     /// # Errors
     /// - The [`authority`](SetPricesFromPriceFeed::authority) must be a signer and have the
-    ///   ORACLE_CONTROLLER role in the given store.
+    ///   ORACLE_CONTROLLER role in the given store. It must also be the authority of the `oracle`.
     /// - The [`store`](SetPricesFromPriceFeed::store) must be an initialized store account owned by
     ///   the store program.
     /// - The [`oracle`](SetPricesFromPriceFeed::oracle) must be an initialized oracle account owned
@@ -1101,7 +1101,7 @@ pub mod gmsol_store {
         ctx: Context<'_, '_, 'info, 'info, SetPricesFromPriceFeed<'info>>,
         tokens: Vec<Pubkey>,
     ) -> Result<()> {
-        instructions::set_prices_from_price_feed(ctx, tokens)
+        instructions::unchecked_set_prices_from_price_feed(ctx, tokens)
     }
 
     /// Initialize a custom price feed account.

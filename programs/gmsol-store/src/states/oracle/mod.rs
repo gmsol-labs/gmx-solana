@@ -53,13 +53,18 @@ gmsol_utils::flags!(OracleFlag, MAX_FLAGS, u8);
 #[account(zero_copy)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct Oracle {
+    /// Store.
     pub store: Pubkey,
+    /// This address is authorized to **directly** modify
+    /// the oracle through instrcutions.
+    pub(crate) authority: Pubkey,
     min_oracle_ts: i64,
     max_oracle_ts: i64,
     min_oracle_slot: u64,
     primary: PriceMap,
     flags: OracleFlagContainer,
     padding_0: [u8; 3],
+    reserved: [u8; 256],
 }
 
 impl gmsol_utils::InitSpace for Oracle {
@@ -72,9 +77,10 @@ impl Seed for Oracle {
 
 impl Oracle {
     /// Initialize the [`Oracle`].
-    pub(crate) fn init(&mut self, store: Pubkey) {
+    pub(crate) fn init(&mut self, store: Pubkey, authority: Pubkey) {
         self.clear_all_prices();
         self.store = store;
+        self.authority = authority;
     }
 
     /// Return whether the oracle is cleared.

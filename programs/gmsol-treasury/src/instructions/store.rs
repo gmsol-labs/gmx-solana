@@ -29,6 +29,7 @@ pub struct TransferReceiver<'info> {
     #[account(has_one = store)]
     pub config: AccountLoader<'info, Config>,
     /// The new receiver.
+    /// CHECK: only used as an identifier.
     pub receiver: UncheckedAccount<'info>,
     /// Store program.
     pub store_program: Program<'info, GmsolStore>,
