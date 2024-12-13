@@ -43,6 +43,15 @@ pub mod gmsol_treasury {
         instructions::unchecked_insert_token_to_treasury(ctx)
     }
 
+    /// Remove a token from the given [`Treasury`](crate::states::Treasury) account.
+    ///
+    /// # Errors
+    /// - The [`token`](RemoveTokenFromTreasury::token) must have been inserted.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_OWNER))]
+    pub fn remove_token_from_treasury(ctx: Context<RemoveTokenFromTreasury>) -> Result<()> {
+        instructions::unchecked_remove_token_from_treasury(ctx)
+    }
+
     /// Toggle a flag of the given token.
     ///
     /// # Arguments

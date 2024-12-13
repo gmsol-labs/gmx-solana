@@ -85,10 +85,12 @@ pub struct InsertTokenToTreasury<'info> {
 pub(crate) fn unchecked_insert_token_to_treasury(
     ctx: Context<InsertTokenToTreasury>,
 ) -> Result<()> {
-    ctx.accounts
-        .treasury
-        .load_mut()?
-        .insert_token(&ctx.accounts.token.key())?;
+    let token = ctx.accounts.token.key();
+    ctx.accounts.treasury.load_mut()?.insert_token(&token)?;
+    msg!(
+        "[Treasury] inserted a token into the treasury, token = {}",
+        token
+    );
     Ok(())
 }
 
@@ -103,6 +105,61 @@ impl<'info> WithStore<'info> for InsertTokenToTreasury<'info> {
 }
 
 impl<'info> CpiAuthentication<'info> for InsertTokenToTreasury<'info> {
+    fn authority(&self) -> AccountInfo<'info> {
+        self.authority.to_account_info()
+    }
+
+    fn on_error(&self) -> Result<()> {
+        err!(CoreError::PermissionDenied)
+    }
+}
+
+/// The accounts definition for [`remove_token_from_treasury`](crate::gmsol_treasury::remove_token_from_treasury).
+#[derive(Accounts)]
+pub struct RemoveTokenFromTreasury<'info> {
+    /// Authority.
+    pub authority: Signer<'info>,
+    /// Store.
+    /// CHECK: check by CPI.
+    pub store: UncheckedAccount<'info>,
+    /// Config to initialize with.
+    #[account(has_one = store)]
+    pub config: AccountLoader<'info, Config>,
+    #[account(mut, has_one = config)]
+    pub treasury: AccountLoader<'info, Treasury>,
+    /// Token to remove.
+    /// CHECK: only used as a identifier.
+    pub token: UncheckedAccount<'info>,
+    /// Store program.
+    pub store_program: Program<'info, GmsolStore>,
+}
+
+/// Remove a token from the [`Treasury`] account.
+/// # CHECK
+/// Only [`TREASURY_OWNER`](crate::roles::TREASURY_OWNER) can use.
+pub(crate) fn unchecked_remove_token_from_treasury(
+    ctx: Context<RemoveTokenFromTreasury>,
+) -> Result<()> {
+    let token = ctx.accounts.token.key;
+    ctx.accounts.treasury.load_mut()?.remove_token(token)?;
+    msg!(
+        "[Treasury] removed a token from the treasury, token = {}",
+        token
+    );
+    Ok(())
+}
+
+impl<'info> WithStore<'info> for RemoveTokenFromTreasury<'info> {
+    fn store_program(&self) -> AccountInfo<'info> {
+        self.store_program.to_account_info()
+    }
+
+    fn store(&self) -> AccountInfo<'info> {
+        self.store.to_account_info()
+    }
+}
+
+impl<'info> CpiAuthentication<'info> for RemoveTokenFromTreasury<'info> {
     fn authority(&self) -> AccountInfo<'info> {
         self.authority.to_account_info()
     }

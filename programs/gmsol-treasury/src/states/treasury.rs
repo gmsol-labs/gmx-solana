@@ -29,6 +29,13 @@ impl Treasury {
         Ok(())
     }
 
+    pub(crate) fn remove_token(&mut self, token: &Pubkey) -> Result<()> {
+        self.tokens
+            .remove(token)
+            .ok_or_else(|| error!(CoreError::NotFound))?;
+        Ok(())
+    }
+
     pub(crate) fn toggle_token_flag(
         &mut self,
         token: &Pubkey,
