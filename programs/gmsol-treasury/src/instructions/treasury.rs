@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token_interface::TokenAccount;
 use gmsol_store::{
     program::GmsolStore,
     utils::{CpiAuthentication, WithStore},
@@ -30,7 +31,7 @@ pub struct InitializeTreasury<'info> {
 
 /// Initialize [`Treasury`] account.
 /// # CHECK
-/// Only [TREASURY_OWNER](crate::roles::TREASURY_OWNER) can use.
+/// Only [`TREASURY_OWNER`](crate::roles::TREASURY_OWNER) can use.
 pub(crate) fn unchecked_initialize_treasury(ctx: Context<InitializeTreasury>) -> Result<()> {
     ctx.accounts
         .treasury
@@ -50,6 +51,58 @@ impl<'info> WithStore<'info> for InitializeTreasury<'info> {
 }
 
 impl<'info> CpiAuthentication<'info> for InitializeTreasury<'info> {
+    fn authority(&self) -> AccountInfo<'info> {
+        self.authority.to_account_info()
+    }
+
+    fn on_error(&self) -> Result<()> {
+        err!(CoreError::PermissionDenied)
+    }
+}
+
+/// The accounts definition for [`insert_token_to_treasury`](crate::gmsol_treasury::insert_token_to_treasury).
+#[derive(Accounts)]
+pub struct InsertTokenToTreasury<'info> {
+    /// Authority.
+    pub authority: Signer<'info>,
+    /// Store.
+    /// CHECK: check by CPI.
+    pub store: UncheckedAccount<'info>,
+    /// Config to initialize with.
+    #[account(has_one = store)]
+    pub config: AccountLoader<'info, Config>,
+    #[account(mut, has_one = config)]
+    pub treasury: AccountLoader<'info, Treasury>,
+    /// Token to insert.
+    pub token: InterfaceAccount<'info, TokenAccount>,
+    /// Store program.
+    pub store_program: Program<'info, GmsolStore>,
+}
+
+/// Insert a token to the [`Treasury`] account.
+/// # CHECK
+/// Only [`TREASURY_OWNER`](crate::roles::TREASURY_OWNER) can use.
+pub(crate) fn unchecked_insert_token_to_treasury(
+    ctx: Context<InsertTokenToTreasury>,
+) -> Result<()> {
+    ctx.accounts
+        .treasury
+        .load_mut()?
+        .insert_token(&ctx.accounts.token.key())?;
+    Ok(())
+}
+
+impl<'info> WithStore<'info> for InsertTokenToTreasury<'info> {
+    fn store_program(&self) -> AccountInfo<'info> {
+        self.store_program.to_account_info()
+    }
+
+    fn store(&self) -> AccountInfo<'info> {
+        self.store.to_account_info()
+    }
+}
+
+impl<'info> CpiAuthentication<'info> for InsertTokenToTreasury<'info> {
     fn authority(&self) -> AccountInfo<'info> {
         self.authority.to_account_info()
     }

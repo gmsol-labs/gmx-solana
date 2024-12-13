@@ -23,6 +23,12 @@ impl Treasury {
     pub(crate) fn init(&mut self, config: &Pubkey) {
         self.config = *config;
     }
+
+    pub(crate) fn insert_token(&mut self, token: &Pubkey) -> Result<()> {
+        self.tokens
+            .insert_with_options(token, TokenConfig::default(), true)?;
+        Ok(())
+    }
 }
 
 /// Token config for treasury.

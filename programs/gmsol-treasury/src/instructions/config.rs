@@ -50,11 +50,11 @@ pub struct SetTreasury<'info> {
     /// Config to update.
     #[account(mut, has_one = store)]
     pub config: AccountLoader<'info, Config>,
-    /// Store program.
-    pub store_program: Program<'info, GmsolStore>,
     /// Treasury.
     #[account(has_one = config)]
     pub treasury: AccountLoader<'info, Treasury>,
+    /// Store program.
+    pub store_program: Program<'info, GmsolStore>,
 }
 
 impl<'info> WithStore<'info> for SetTreasury<'info> {

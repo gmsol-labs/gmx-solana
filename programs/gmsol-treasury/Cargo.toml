@@ -21,6 +21,12 @@ multi-store = ["gmsol-store/multi-store"]
 
 [dependencies]
 anchor-lang = { workspace = true }
+anchor-spl = { workspace = true, default-features = false, features = [
+    "token",
+    "token_2022",
+    "token_2022_extensions",
+    "associated_token",
+] }
 bytemuck = { workspace = true }
 gmsol-utils = { workspace = true }
 gmsol-store = { workspace = true, features = ["cpi"] }

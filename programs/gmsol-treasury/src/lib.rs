@@ -33,4 +33,13 @@ pub mod gmsol_treasury {
     pub fn initialize_treasury(ctx: Context<InitializeTreasury>) -> Result<()> {
         instructions::unchecked_initialize_treasury(ctx)
     }
+
+    /// Insert a token to the given [`Treasury`](crate::states::Treasury) account.
+    ///
+    /// # Errors
+    /// - The [`token`](InsertTokenToTreasury::token) must not have been inserted.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_OWNER))]
+    pub fn insert_token_to_treasury(ctx: Context<InsertTokenToTreasury>) -> Result<()> {
+        instructions::unchecked_insert_token_to_treasury(ctx)
+    }
 }
