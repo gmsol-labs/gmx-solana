@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use bytemuck::Zeroable;
-use gmsol_store::{utils::pubkey::to_bytes, CoreError};
+use gmsol_store::{states::Seed, utils::pubkey::to_bytes, CoreError};
 
 const MAX_TOKENS: usize = 64;
 
@@ -8,10 +8,16 @@ const MAX_TOKENS: usize = 64;
 #[account(zero_copy)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct Treasury {
-    reserved_0: [u8; 8],
+    pub(crate) bump: u8,
+    index: u8,
+    reserved_0: [u8; 6],
     pub(crate) config: Pubkey,
     reserved_1: [u8; 256],
     tokens: TokenMap,
+}
+
+impl Seed for Treasury {
+    const SEED: &'static [u8] = b"treasury";
 }
 
 impl gmsol_utils::InitSpace for Treasury {
@@ -19,7 +25,9 @@ impl gmsol_utils::InitSpace for Treasury {
 }
 
 impl Treasury {
-    pub(crate) fn init(&mut self, config: &Pubkey) {
+    pub(crate) fn init(&mut self, bump: u8, index: u8, config: &Pubkey) {
+        self.bump = bump;
+        self.index = index;
         self.config = *config;
     }
 
@@ -55,6 +63,53 @@ impl Treasury {
 
         Ok(config.flags.set_flag(flag, value))
     }
+
+    fn get_token_config(&self, token: &Pubkey) -> Result<&TokenConfig> {
+        self.tokens
+            .get(token)
+            .ok_or_else(|| error!(CoreError::NotFound))
+    }
+
+    pub(crate) fn is_deposit_allowed(&self, token: &Pubkey) -> Result<bool> {
+        Ok(self
+            .get_token_config(token)?
+            .flags
+            .get_flag(TokenFlag::AllowDeposit))
+    }
+
+    pub(crate) fn is_withdrawal_allowed(&self, token: &Pubkey) -> Result<bool> {
+        Ok(self
+            .get_token_config(token)?
+            .flags
+            .get_flag(TokenFlag::AllowWithdrawal))
+    }
+
+    pub(crate) fn signer(&self) -> TreasurySigner {
+        TreasurySigner {
+            config: self.config,
+            index_bytes: [self.index],
+            bump_bytes: [self.bump],
+        }
+    }
+}
+
+/// Treasury Signer.
+pub struct TreasurySigner {
+    config: Pubkey,
+    index_bytes: [u8; 1],
+    bump_bytes: [u8; 1],
+}
+
+impl TreasurySigner {
+    /// As signer seeds.
+    pub fn as_seeds(&self) -> [&[u8]; 4] {
+        [
+            Treasury::SEED,
+            self.config.as_ref(),
+            &self.index_bytes,
+            &self.bump_bytes,
+        ]
+    }
 }
 
 /// Token config for treasury.
@@ -62,7 +117,7 @@ impl Treasury {
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct TokenConfig {
     flags: TokenFlagContainer,
-    reserved: [u8; 256],
+    reserved: [u8; 64],
 }
 
 impl Default for TokenConfig {

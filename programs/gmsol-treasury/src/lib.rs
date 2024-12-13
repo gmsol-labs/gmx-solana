@@ -30,8 +30,8 @@ pub mod gmsol_treasury {
 
     /// Initialize a [`Treasury`](crate::states::Treasury) account.
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_ADMIN))]
-    pub fn initialize_treasury(ctx: Context<InitializeTreasury>) -> Result<()> {
-        instructions::unchecked_initialize_treasury(ctx)
+    pub fn initialize_treasury(ctx: Context<InitializeTreasury>, index: u8) -> Result<()> {
+        instructions::unchecked_initialize_treasury(ctx, index)
     }
 
     /// Insert a token to the given [`Treasury`](crate::states::Treasury) account.
@@ -68,6 +68,22 @@ pub mod gmsol_treasury {
         value: bool,
     ) -> Result<()> {
         instructions::unchecked_toggle_token_flag(ctx, &flag, value)
+    }
+
+    /// Deposit into the treasury vault.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_KEEPER))]
+    pub fn deposit_into_treasury(ctx: Context<DepositIntoTreasury>) -> Result<()> {
+        instructions::unchecked_deposit_into_treasury(ctx)
+    }
+
+    /// Withdraw from the treasury vault.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_WITHDRAWER))]
+    pub fn withdraw_from_treasury(
+        ctx: Context<WithdrawFromTreasury>,
+        amount: u64,
+        decimals: u8,
+    ) -> Result<()> {
+        instructions::unchecked_withdraw_from_treasury(ctx, amount, decimals)
     }
 
     /// Transfer the receiver permission to a new address.

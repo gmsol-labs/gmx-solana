@@ -6,3 +6,6 @@ pub const TREASURY_ADMIN: &str = "TREASURY_ADMIN";
 
 /// Treasury Keeper.
 pub const TREASURY_KEEPER: &str = "TREASURY_KEEPER";
+
+/// Treasury Withdrawer.
+pub const TREASURY_WITHDRAWER: &str = "TREASURY_WITHDRAWER";

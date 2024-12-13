@@ -101,14 +101,14 @@ pub struct ClaimFees<'info> {
     /// CHECK: check by CPI.
     #[account(mut)]
     pub vault: UncheckedAccount<'info>,
-    /// Reciever.
+    /// Reciever vault.
     #[account(
         init_if_needed,
         payer = authority,
         associated_token::authority = config,
         associated_token::mint = token,
     )]
-    pub token_receiver: InterfaceAccount<'info, TokenAccount>,
+    pub receiver_vault: InterfaceAccount<'info, TokenAccount>,
     /// Store program.
     pub store_program: Program<'info, GmsolStore>,
     /// The token program.
@@ -125,7 +125,8 @@ pub struct ClaimFees<'info> {
 pub(crate) fn unchecked_claim_fees(ctx: Context<ClaimFees>) -> Result<()> {
     let signer = ctx.accounts.config.load()?.signer();
     let cpi_ctx = ctx.accounts.claim_fees_from_market_ctx();
-    claim_fees_from_market(cpi_ctx.with_signer(&[&signer.as_seeds()]))?;
+    let amount = claim_fees_from_market(cpi_ctx.with_signer(&[&signer.as_seeds()]))?;
+    msg!("[Treasury] claimed {} tokens from the market", amount.get());
     Ok(())
 }
 
@@ -161,7 +162,7 @@ impl<'info> ClaimFees<'info> {
                 market: self.market.to_account_info(),
                 token_mint: self.token.to_account_info(),
                 vault: self.vault.to_account_info(),
-                target: self.token_receiver.to_account_info(),
+                target: self.receiver_vault.to_account_info(),
                 token_program: self.token_program.to_account_info(),
                 associated_token_program: self.associated_token_program.to_account_info(),
             },
