@@ -6,13 +6,13 @@ use anchor_spl::{
 };
 use gmsol_store::{
     program::GmsolStore,
-    states::Seed,
+    states::{gt::GtExchangeVault, Seed, Store},
     utils::{CpiAuthentication, WithStore},
     CoreError,
 };
 use gmsol_utils::InitSpace;
 
-use crate::states::{config::Config, treasury::Treasury};
+use crate::states::{config::Config, treasury::TreasuryConfig, GtBank};
 
 /// The accounts definition for [`initialize_treasury`](crate::gmsol_treasury::initialize_treasury).
 #[derive(Accounts)]
@@ -27,15 +27,15 @@ pub struct InitializeTreasury<'info> {
     /// Config to initialize with.
     #[account(has_one = store)]
     pub config: AccountLoader<'info, Config>,
-    /// Treasury account to initialize.
+    /// Treasury config account to initialize.
     #[account(
         init,
         payer = authority,
-        space = 8 + Treasury::INIT_SPACE,
-        seeds = [Treasury::SEED, config.key().as_ref(), &[index]],
+        space = 8 + TreasuryConfig::INIT_SPACE,
+        seeds = [TreasuryConfig::SEED, config.key().as_ref(), &[index]],
         bump,
     )]
-    pub treasury: AccountLoader<'info, Treasury>,
+    pub treasury_config: AccountLoader<'info, TreasuryConfig>,
     /// Store program.
     pub store_program: Program<'info, GmsolStore>,
     /// The system program.
@@ -49,10 +49,11 @@ pub(crate) fn unchecked_initialize_treasury(
     ctx: Context<InitializeTreasury>,
     index: u8,
 ) -> Result<()> {
-    ctx.accounts
-        .treasury
-        .load_init()?
-        .init(ctx.bumps.treasury, index, &ctx.accounts.config.key());
+    ctx.accounts.treasury_config.load_init()?.init(
+        ctx.bumps.treasury_config,
+        index,
+        &ctx.accounts.config.key(),
+    );
     Ok(())
 }
 
@@ -87,8 +88,9 @@ pub struct InsertTokenToTreasury<'info> {
     /// Config to initialize with.
     #[account(has_one = store)]
     pub config: AccountLoader<'info, Config>,
+    /// Treasury config.
     #[account(mut, has_one = config)]
-    pub treasury: AccountLoader<'info, Treasury>,
+    pub treasury_config: AccountLoader<'info, TreasuryConfig>,
     /// Token to insert.
     pub token: InterfaceAccount<'info, Mint>,
     /// Store program.
@@ -102,7 +104,10 @@ pub(crate) fn unchecked_insert_token_to_treasury(
     ctx: Context<InsertTokenToTreasury>,
 ) -> Result<()> {
     let token = ctx.accounts.token.key();
-    ctx.accounts.treasury.load_mut()?.insert_token(&token)?;
+    ctx.accounts
+        .treasury_config
+        .load_mut()?
+        .insert_token(&token)?;
     msg!(
         "[Treasury] inserted a token into the treasury, token = {}",
         token
@@ -141,8 +146,9 @@ pub struct RemoveTokenFromTreasury<'info> {
     /// Config to initialize with.
     #[account(has_one = store)]
     pub config: AccountLoader<'info, Config>,
+    /// Treasury Config.
     #[account(mut, has_one = config)]
-    pub treasury: AccountLoader<'info, Treasury>,
+    pub treasury_config: AccountLoader<'info, TreasuryConfig>,
     /// Token to remove.
     /// CHECK: only used as a identifier.
     pub token: UncheckedAccount<'info>,
@@ -157,7 +163,10 @@ pub(crate) fn unchecked_remove_token_from_treasury(
     ctx: Context<RemoveTokenFromTreasury>,
 ) -> Result<()> {
     let token = ctx.accounts.token.key;
-    ctx.accounts.treasury.load_mut()?.remove_token(token)?;
+    ctx.accounts
+        .treasury_config
+        .load_mut()?
+        .remove_token(token)?;
     msg!(
         "[Treasury] removed a token from the treasury, token = {}",
         token
@@ -196,8 +205,9 @@ pub struct ToggleTokenFlag<'info> {
     /// Config to initialize with.
     #[account(has_one = store)]
     pub config: AccountLoader<'info, Config>,
+    /// Treasury Config.
     #[account(mut, has_one = config)]
-    pub treasury: AccountLoader<'info, Treasury>,
+    pub treasury_config: AccountLoader<'info, TreasuryConfig>,
     /// Token.
     pub token: InterfaceAccount<'info, Mint>,
     /// Store program.
@@ -212,7 +222,7 @@ pub(crate) fn unchecked_toggle_token_flag(
     flag: &str,
     value: bool,
 ) -> Result<()> {
-    let previous = ctx.accounts.treasury.load_mut()?.toggle_token_flag(
+    let previous = ctx.accounts.treasury_config.load_mut()?.toggle_token_flag(
         &ctx.accounts.token.key(),
         flag.parse()
             .map_err(|_| error!(CoreError::InvalidArgument))?,
@@ -254,16 +264,40 @@ pub struct DepositIntoTreasury<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
     /// Store.
-    /// CHECK: check by CPI.
-    pub store: UncheckedAccount<'info>,
+    pub store: AccountLoader<'info, Store>,
     /// Config to initialize with.
     #[account(has_one = store)]
     pub config: AccountLoader<'info, Config>,
+    /// Treasury Config.
     #[account(
         has_one = config,
-        constraint = treasury.load()?.is_deposit_allowed(&token.key())? @ CoreError::InvalidArgument,
+        constraint = treasury_config.load()?.is_deposit_allowed(&token.key())? @ CoreError::InvalidArgument,
     )]
-    pub treasury: AccountLoader<'info, Treasury>,
+    pub treasury_config: AccountLoader<'info, TreasuryConfig>,
+    /// GT exchange vault.
+    #[account(
+        has_one = store,
+        constraint = store.load()?.gt().exchange_time_window() as i64 == gt_exchange_vault.load()?.time_window() @ CoreError::InvalidArgument,
+        constraint = gt_exchange_vault.load()?.is_initialized() @ CoreError::InvalidArgument,
+        constraint = gt_exchange_vault.load()?.validate_depositable().map(|_| true)?,
+        seeds = [GtExchangeVault::SEED, store.key().as_ref(), &gt_exchange_vault.load()?.time_window_index().to_be_bytes()],
+        bump = gt_exchange_vault.load()?.bump,
+        seeds::program = gmsol_store::ID,
+    )]
+    pub gt_exchange_vault: AccountLoader<'info, GtExchangeVault>,
+    /// GT bank.
+    #[account(
+        mut,
+        has_one = config,
+        has_one = gt_exchange_vault,
+        seeds = [
+            GtBank::SEED,
+            config.key().as_ref(),
+            gt_exchange_vault.key().as_ref(),
+        ],
+        bump = gt_bank.load()?.bump,
+    )]
+    pub gt_bank: AccountLoader<'info, GtBank>,
     /// Token.
     pub token: InterfaceAccount<'info, Mint>,
     /// Receiver vault.
@@ -277,10 +311,18 @@ pub struct DepositIntoTreasury<'info> {
     #[account(
         init_if_needed,
         payer = authority,
-        associated_token::authority = treasury,
+        associated_token::authority = treasury_config,
         associated_token::mint =  token,
     )]
     pub treasury_vault: InterfaceAccount<'info, TokenAccount>,
+    /// GT bank vault.
+    #[account(
+        init_if_needed,
+        payer = authority,
+        associated_token::authority = gt_bank,
+        associated_token::mint =  token,
+    )]
+    pub gt_bank_vault: InterfaceAccount<'info, TokenAccount>,
     /// Store program.
     pub store_program: Program<'info, GmsolStore>,
     /// The token program.
@@ -295,11 +337,49 @@ pub struct DepositIntoTreasury<'info> {
 /// # CHECK
 /// Only [`TREASURY_KEEPER`](crate::roles::TREASURY_KEEPER) can use.
 pub(crate) fn unchecked_deposit_into_treasury(ctx: Context<DepositIntoTreasury>) -> Result<()> {
+    use gmsol_model::utils::apply_factor;
+    use gmsol_store::constants::{MARKET_DECIMALS, MARKET_USD_UNIT};
+
     let signer = ctx.accounts.config.load()?.signer();
-    let cpi_ctx = ctx.accounts.transfer_checked_ctx();
-    let amount = ctx.accounts.receiver_vault.amount;
     let decimals = ctx.accounts.token.decimals;
-    transfer_checked(cpi_ctx.with_signer(&[&signer.as_seeds()]), amount, decimals)?;
+
+    let (gt_amount, treasury_amount): (u64, u64) = {
+        let gt_factor = ctx.accounts.config.load()?.gt_factor();
+        let amount = u128::from(ctx.accounts.receiver_vault.amount);
+        require_gte!(MARKET_USD_UNIT, gt_factor, CoreError::Internal);
+        let gt_amount = apply_factor::<_, MARKET_DECIMALS>(&amount, &gt_factor)
+            .ok_or_else(|| error!(CoreError::Internal))?;
+        let treasury_amount = amount
+            .checked_sub(gt_amount)
+            .ok_or_else(|| error!(CoreError::Internal))?;
+        (
+            gt_amount
+                .try_into()
+                .map_err(|_| error!(CoreError::TokenAmountOverflow))?,
+            treasury_amount
+                .try_into()
+                .map_err(|_| error!(CoreError::TokenAmountOverflow))?,
+        )
+    };
+
+    let cpi_ctx = ctx.accounts.transfer_checked_ctx_for_gt_bank();
+    transfer_checked(
+        cpi_ctx.with_signer(&[&signer.as_seeds()]),
+        gt_amount,
+        decimals,
+    )?;
+
+    ctx.accounts
+        .gt_bank
+        .load_mut()?
+        .record_transferred_in(&ctx.accounts.token.key(), gt_amount)?;
+
+    let cpi_ctx = ctx.accounts.transfer_checked_ctx_for_treasury();
+    transfer_checked(
+        cpi_ctx.with_signer(&[&signer.as_seeds()]),
+        treasury_amount,
+        decimals,
+    )?;
     Ok(())
 }
 
@@ -324,13 +404,29 @@ impl<'info> CpiAuthentication<'info> for DepositIntoTreasury<'info> {
 }
 
 impl<'info> DepositIntoTreasury<'info> {
-    fn transfer_checked_ctx(&self) -> CpiContext<'_, '_, '_, 'info, TransferChecked<'info>> {
+    fn transfer_checked_ctx_for_treasury(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, TransferChecked<'info>> {
         CpiContext::new(
             self.token_program.to_account_info(),
             TransferChecked {
                 from: self.receiver_vault.to_account_info(),
                 mint: self.token.to_account_info(),
                 to: self.treasury_vault.to_account_info(),
+                authority: self.config.to_account_info(),
+            },
+        )
+    }
+
+    fn transfer_checked_ctx_for_gt_bank(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, TransferChecked<'info>> {
+        CpiContext::new(
+            self.token_program.to_account_info(),
+            TransferChecked {
+                from: self.receiver_vault.to_account_info(),
+                mint: self.token.to_account_info(),
+                to: self.gt_bank_vault.to_account_info(),
                 authority: self.config.to_account_info(),
             },
         )
@@ -349,17 +445,18 @@ pub struct WithdrawFromTreasury<'info> {
     /// Config to initialize with.
     #[account(has_one = store)]
     pub config: AccountLoader<'info, Config>,
+    /// Treasury Config.
     #[account(
         has_one = config,
-        constraint = treasury.load()?.is_withdrawal_allowed(&token.key())? @ CoreError::InvalidArgument,
+        constraint = treasury_config.load()?.is_withdrawal_allowed(&token.key())? @ CoreError::InvalidArgument,
     )]
-    pub treasury: AccountLoader<'info, Treasury>,
+    pub treasury_config: AccountLoader<'info, TreasuryConfig>,
     /// Token.
     pub token: InterfaceAccount<'info, Mint>,
     /// Treasury vault.
     #[account(
         mut,
-        associated_token::authority = treasury,
+        associated_token::authority = treasury_config,
         associated_token::mint =  token,
     )]
     pub treasury_vault: InterfaceAccount<'info, TokenAccount>,
@@ -380,7 +477,7 @@ pub(crate) fn unchecked_withdraw_from_treasury(
     amount: u64,
     decimals: u8,
 ) -> Result<()> {
-    let signer = ctx.accounts.treasury.load()?.signer();
+    let signer = ctx.accounts.treasury_config.load()?.signer();
     let cpi_ctx = ctx.accounts.transfer_checked_ctx();
     transfer_checked(cpi_ctx.with_signer(&[&signer.as_seeds()]), amount, decimals)?;
     Ok(())

@@ -2110,6 +2110,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "bytemuck",
+ "gmsol-model",
  "gmsol-store",
  "gmsol-utils",
  "num_enum 0.7.3",

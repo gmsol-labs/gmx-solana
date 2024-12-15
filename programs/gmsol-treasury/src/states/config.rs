@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use gmsol_store::{states::Seed, CoreError};
 use gmsol_utils::InitSpace;
 
-/// Config account.
+/// Global Config account.
 #[account(zero_copy)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct Config {
@@ -44,6 +44,11 @@ impl Config {
         std::mem::swap(&mut address, &mut self.treasury);
 
         Ok(address)
+    }
+
+    /// Get GT factor.
+    pub fn gt_factor(&self) -> u128 {
+        self.gt_factor
     }
 
     /// Set GT factor.

@@ -9,4 +9,4 @@ pub mod gt_bank;
 
 pub use config::Config;
 pub use gt_bank::GtBank;
-pub use treasury::Treasury;
+pub use treasury::TreasuryConfig;

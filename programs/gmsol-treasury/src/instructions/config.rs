@@ -6,7 +6,7 @@ use gmsol_store::{
 };
 use gmsol_utils::InitSpace;
 
-use crate::states::{config::Config, treasury::Treasury};
+use crate::states::{config::Config, treasury::TreasuryConfig};
 
 /// The accounts definition for [`initialize_config`](crate::gmsol_treasury::initialize_config).
 #[derive(Accounts)]
@@ -52,7 +52,7 @@ pub struct SetTreasury<'info> {
     pub config: AccountLoader<'info, Config>,
     /// Treasury.
     #[account(has_one = config)]
-    pub treasury: AccountLoader<'info, Treasury>,
+    pub treasury: AccountLoader<'info, TreasuryConfig>,
     /// Store program.
     pub store_program: Program<'info, GmsolStore>,
 }

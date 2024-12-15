@@ -769,7 +769,8 @@ gmsol_utils::flags!(GtExchangeVaultFlag, MAX_FLAGS, u8);
 #[account(zero_copy)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct GtExchangeVault {
-    pub(crate) bump: u8,
+    /// Bump seed.
+    pub bump: u8,
     flags: GtExchangeVaultFlagContainer,
     padding: [u8; 6],
     ts: i64,

@@ -4,10 +4,10 @@ use gmsol_store::{states::Seed, utils::pubkey::to_bytes, CoreError};
 
 pub(crate) const MAX_TOKENS: usize = 64;
 
-/// Treasury account.
+/// Treasury config account.
 #[account(zero_copy)]
 #[cfg_attr(feature = "debug", derive(Debug))]
-pub struct Treasury {
+pub struct TreasuryConfig {
     pub(crate) bump: u8,
     index: u8,
     padding: [u8; 14],
@@ -16,15 +16,15 @@ pub struct Treasury {
     tokens: TokenMap,
 }
 
-impl Seed for Treasury {
+impl Seed for TreasuryConfig {
     const SEED: &'static [u8] = b"treasury";
 }
 
-impl gmsol_utils::InitSpace for Treasury {
+impl gmsol_utils::InitSpace for TreasuryConfig {
     const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
-impl Treasury {
+impl TreasuryConfig {
     pub(crate) fn init(&mut self, bump: u8, index: u8, config: &Pubkey) {
         self.bump = bump;
         self.index = index;
@@ -104,7 +104,7 @@ impl TreasurySigner {
     /// As signer seeds.
     pub fn as_seeds(&self) -> [&[u8]; 4] {
         [
-            Treasury::SEED,
+            TreasuryConfig::SEED,
             self.config.as_ref(),
             &self.index_bytes,
             &self.bump_bytes,
