@@ -94,7 +94,7 @@
 //! #### Instructions for [`Oracle`](states::Oracle) accounts
 //! - [`initialize_oracle`](gmsol_store::initialize_oracle): Initialize a new [`Oracle`](states::Oracle) account.
 //! - [`clear_all_prices`]: Clear the prices of the given oracle account.
-//! - [`set_prices_from_price_feed`](gmsol_store::set_prices_from_price_feed): Validate and set prices parsed from the
+//! - [`set_prices_from_price_feed`]: Validate and set prices parsed from the
 //!   provided price feed accounts.
 //! - [`initialize_price_feed`]: Initialize a custom price feed.
 //! - [`update_price_feed_with_chainlink`]: Update a custom Chainlink price feed with Chainlink Data Streams report.

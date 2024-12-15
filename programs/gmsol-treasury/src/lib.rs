@@ -34,13 +34,13 @@ pub mod gmsol_treasury {
         instructions::unchecked_set_gt_factor(ctx, factor)
     }
 
-    /// Initialize a [`Treasury`](crate::states::Treasury) account.
+    /// Initialize a [`TreasuryConfig`](crate::states::TreasuryConfig) account.
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_ADMIN))]
     pub fn initialize_treasury(ctx: Context<InitializeTreasury>, index: u8) -> Result<()> {
         instructions::unchecked_initialize_treasury(ctx, index)
     }
 
-    /// Insert a token to the given [`Treasury`](crate::states::Treasury) account.
+    /// Insert a token to the given [`TreasuryConfig`](crate::states::TreasuryConfig) account.
     ///
     /// # Errors
     /// - The [`token`](InsertTokenToTreasury::token) must not have been inserted.
@@ -49,7 +49,7 @@ pub mod gmsol_treasury {
         instructions::unchecked_insert_token_to_treasury(ctx)
     }
 
-    /// Remove a token from the given [`Treasury`](crate::states::Treasury) account.
+    /// Remove a token from the given [`TreasuryConfig`](crate::states::TreasuryConfig) account.
     ///
     /// # Errors
     /// - The [`token`](RemoveTokenFromTreasury::token) must have been inserted.

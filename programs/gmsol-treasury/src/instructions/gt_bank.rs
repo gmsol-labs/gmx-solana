@@ -254,7 +254,7 @@ impl<'info> SyncGtBank<'info> {
     }
 }
 
-/// The accounts definition for [`complete_gt_exchange`](crate::gmsol_treasury::complete_exchange).
+/// The accounts definition for [`complete_gt_exchange`](crate::gmsol_treasury::complete_gt_exchange).
 ///
 /// Remaining accounts expected by this instruction:
 ///
