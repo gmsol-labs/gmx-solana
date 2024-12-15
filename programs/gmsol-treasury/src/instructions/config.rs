@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use gmsol_store::{
     program::GmsolStore,
-    states::Seed,
+    states::{Seed, Store},
     utils::{CpiAuthentication, WithStore},
 };
 use gmsol_utils::InitSpace;
@@ -15,15 +15,13 @@ pub struct InitializeConfig<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     /// The store that controls this config.
-    /// CHECK: only need to check that it is owned by the store program.
-    #[account(owner = gmsol_store::ID)]
-    pub store: UncheckedAccount<'info>,
+    pub store: AccountLoader<'info, Store>,
     /// The config account.
     #[account(
         init,
         payer = payer,
         space = 8 + Config::INIT_SPACE,
-        seeds = [Config::SEED, store.key.as_ref()],
+        seeds = [Config::SEED, store.key().as_ref()],
         bump,
     )]
     pub config: AccountLoader<'info, Config>,
@@ -33,8 +31,8 @@ pub struct InitializeConfig<'info> {
 
 pub(crate) fn initialize_config(ctx: Context<InitializeConfig>) -> Result<()> {
     let mut config = ctx.accounts.config.load_init()?;
-    let store = ctx.accounts.store.key;
-    config.init(ctx.bumps.config, store);
+    let store = ctx.accounts.store.key();
+    config.init(ctx.bumps.config, &store);
     msg!("[Treasury] initialized the treasury config for {}", store);
     Ok(())
 }
@@ -62,7 +60,11 @@ pub struct SetTreasury<'info> {
 /// Only [`TREASURY_ADMIN`](crate::roles::TREASURY_ADMIN) can use.
 pub(crate) fn unchecked_set_treasury(ctx: Context<SetTreasury>) -> Result<()> {
     let treasury = ctx.accounts.treasury.key();
-    let previous = ctx.accounts.config.load_mut()?.set_treasury(treasury)?;
+    let previous = ctx
+        .accounts
+        .config
+        .load_mut()?
+        .set_treasury_config(treasury)?;
     msg!(
         "[Treasury] the treasury address has been updated from {} to {}",
         previous,

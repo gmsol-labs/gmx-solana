@@ -25,7 +25,7 @@ pub struct TransferReceiver<'info> {
     /// CHECK: check by CPI.
     #[account(mut)]
     pub store: UncheckedAccount<'info>,
-    /// Config to initialize with.
+    /// Config.
     #[account(has_one = store)]
     pub config: AccountLoader<'info, Config>,
     /// The new receiver.

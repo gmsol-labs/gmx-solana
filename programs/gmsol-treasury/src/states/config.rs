@@ -9,7 +9,7 @@ pub struct Config {
     pub(crate) bump: u8,
     padding: [u8; 15],
     pub(crate) store: Pubkey,
-    treasury: Pubkey,
+    treasury_config: Pubkey,
     gt_factor: u128,
     reserved: [u8; 256],
 }
@@ -28,20 +28,24 @@ impl Config {
         self.store = *store;
     }
 
-    /// Get the treasury address.
-    pub fn treasury(&self) -> Option<&Pubkey> {
-        if self.treasury == Pubkey::default() {
+    /// Get the treasury config address.
+    pub fn treasury_config(&self) -> Option<&Pubkey> {
+        if self.treasury_config == Pubkey::default() {
             None
         } else {
-            Some(&self.treasury)
+            Some(&self.treasury_config)
         }
     }
 
-    /// Set the treasury address.
-    pub(crate) fn set_treasury(&mut self, mut address: Pubkey) -> Result<Pubkey> {
-        require_neq!(self.treasury, address, CoreError::PreconditionsAreNotMet);
+    /// Set the treasury config address.
+    pub(crate) fn set_treasury_config(&mut self, mut address: Pubkey) -> Result<Pubkey> {
+        require_neq!(
+            self.treasury_config,
+            address,
+            CoreError::PreconditionsAreNotMet
+        );
 
-        std::mem::swap(&mut address, &mut self.treasury);
+        std::mem::swap(&mut address, &mut self.treasury_config);
 
         Ok(address)
     }

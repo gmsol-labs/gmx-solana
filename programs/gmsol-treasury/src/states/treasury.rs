@@ -92,11 +92,14 @@ impl TreasuryConfig {
         }
     }
 
-    pub(crate) fn tokens(&self) -> Vec<Pubkey> {
+    pub(crate) fn num_tokens(&self) -> usize {
+        self.tokens.len()
+    }
+
+    pub(crate) fn tokens(&self) -> impl Iterator<Item = Pubkey> + '_ {
         self.tokens
             .entries()
             .map(|(key, _)| Pubkey::new_from_array(*key))
-            .collect()
     }
 }
 

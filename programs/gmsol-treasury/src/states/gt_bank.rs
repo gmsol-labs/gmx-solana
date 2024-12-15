@@ -19,6 +19,7 @@ pub struct GtBank {
     padding: [u8; 14],
     pub(crate) treasury_config: Pubkey,
     pub(crate) gt_exchange_vault: Pubkey,
+    remaining_confirmed_gt_amount: u64,
     reserved: [u8; 256],
     balances: TokenBalances,
 }
@@ -133,6 +134,26 @@ impl GtBank {
             gt_exchange_vault: self.gt_exchange_vault,
             bump_bytes: [self.bump],
         }
+    }
+
+    /// # CHECK
+    /// `gt_amount` must be the total amount of the GT exchange vault
+    /// of this bank and it must have been confirmed.
+    pub(crate) fn unchecked_confirm(&mut self, gt_amount: u64) {
+        self.remaining_confirmed_gt_amount = gt_amount;
+    }
+
+    pub(crate) fn record_claimed(&mut self, gt_amount: u64) -> Result<()> {
+        let next_amount = self
+            .remaining_confirmed_gt_amount
+            .checked_sub(gt_amount)
+            .ok_or_else(|| error!(CoreError::InvalidArgument))?;
+        self.remaining_confirmed_gt_amount = next_amount;
+        Ok(())
+    }
+
+    pub(crate) fn remaining_confirmed_gt_amount(&self) -> u64 {
+        self.remaining_confirmed_gt_amount
     }
 }
 

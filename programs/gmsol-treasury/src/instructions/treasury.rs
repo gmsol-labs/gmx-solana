@@ -89,8 +89,11 @@ pub struct InsertTokenToTreasury<'info> {
     /// Store.
     /// CHECK: check by CPI.
     pub store: UncheckedAccount<'info>,
-    /// Config to initialize with.
-    #[account(has_one = store)]
+    /// Config.
+    #[account(
+        has_one = store,
+        // Insert to an unauthorized treasury config is allowed.
+    )]
     pub config: AccountLoader<'info, Config>,
     /// Treasury config.
     #[account(mut, has_one = config)]
@@ -147,8 +150,11 @@ pub struct RemoveTokenFromTreasury<'info> {
     /// Store.
     /// CHECK: check by CPI.
     pub store: UncheckedAccount<'info>,
-    /// Config to initialize with.
-    #[account(has_one = store)]
+    /// Config.
+    #[account(
+        has_one = store,
+        // Remove from an unauthorized treasury config is allowed.
+    )]
     pub config: AccountLoader<'info, Config>,
     /// Treasury Config.
     #[account(mut, has_one = config)]
@@ -206,8 +212,11 @@ pub struct ToggleTokenFlag<'info> {
     /// Store.
     /// CHECK: check by CPI.
     pub store: UncheckedAccount<'info>,
-    /// Config to initialize with.
-    #[account(has_one = store)]
+    /// Config.
+    #[account(
+        has_one = store,
+        // Toggle flags of an unauthorized treasury config is allowed.
+    )]
     pub config: AccountLoader<'info, Config>,
     /// Treasury Config.
     #[account(mut, has_one = config)]
@@ -269,8 +278,12 @@ pub struct DepositIntoTreasury<'info> {
     pub authority: Signer<'info>,
     /// Store.
     pub store: AccountLoader<'info, Store>,
-    /// Config to initialize with.
-    #[account(has_one = store)]
+    /// Config.
+    #[account(
+        has_one = store,
+        // Only allow depositing into the authorized treausry.
+        constraint = config.load()?.treasury_config() == Some(&treasury_config.key()) @ CoreError::InvalidArgument,
+    )]
     pub config: AccountLoader<'info, Config>,
     /// Treasury Config.
     #[account(
@@ -446,8 +459,12 @@ pub struct WithdrawFromTreasury<'info> {
     /// Store.
     /// CHECK: check by CPI.
     pub store: UncheckedAccount<'info>,
-    /// Config to initialize with.
-    #[account(has_one = store)]
+    /// Config.
+    #[account(
+        has_one = store,
+        // Only allow withdrawing from the authroized treausry.
+        constraint = config.load()?.treasury_config() == Some(&treasury_config.key()) @ CoreError::InvalidArgument,
+    )]
     pub config: AccountLoader<'info, Config>,
     /// Treasury Config.
     #[account(
@@ -534,8 +551,12 @@ pub struct ConfirmGtBuyback<'info> {
     pub authority: Signer<'info>,
     /// Store.
     pub store: AccountLoader<'info, Store>,
-    /// Config to initialize with.
-    #[account(has_one = store)]
+    /// Config.
+    #[account(
+        has_one = store,
+        // Only allow confirming buyback with the authorized treausry.
+        constraint = config.load()?.treasury_config() == Some(&treasury_config.key()) @ CoreError::InvalidArgument,
+    )]
     pub config: AccountLoader<'info, Config>,
     /// Treasury Config.
     #[account(
@@ -605,10 +626,12 @@ impl<'info> ConfirmGtBuyback<'info> {
         let signer = self.config.load()?.signer();
 
         // Confirm GT exchange vault first to make sure all preconditions are satified.
+        let total_gt_amount = self.gt_exchange_vault.load()?.amount();
         let ctx = self.confirm_gt_exchange_vault_ctx();
         confirm_gt_exchange_vault(ctx.with_signer(&[&signer.as_seeds()]))?;
+        self.gt_bank.load_mut()?.unchecked_confirm(total_gt_amount);
 
-        let tokens = self.treasury_config.load()?.tokens();
+        let tokens = self.treasury_config.load()?.tokens().collect();
 
         // Set prices.
         let ctx = self.set_prices_from_price_feed_ctx();

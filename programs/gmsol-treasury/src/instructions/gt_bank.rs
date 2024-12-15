@@ -5,9 +5,13 @@ use anchor_spl::{
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 use gmsol_store::{
+    cpi::{accounts::CloseGtExchange, close_gt_exchange},
     program::GmsolStore,
-    states::{gt::GtExchangeVault, Seed},
-    utils::{CpiAuthentication, WithStore},
+    states::{
+        gt::{GtExchange, GtExchangeVault},
+        Seed,
+    },
+    utils::{token::validate_associated_token_account, CpiAuthentication, WithStore},
     CoreError,
 };
 use gmsol_utils::InitSpace;
@@ -23,8 +27,12 @@ pub struct PrepareGtBank<'info> {
     /// Store.
     /// CHECK: check by CPI.
     pub store: UncheckedAccount<'info>,
-    /// Config to initialize with.
-    #[account(has_one = store)]
+    /// Config.
+    #[account(
+        has_one = store,
+        // Only allow creating GT bank for the authorized treausry.
+        constraint = config.load()?.treasury_config() == Some(&treasury_config.key()) @ CoreError::InvalidArgument,
+    )]
     pub config: AccountLoader<'info, Config>,
     /// Treasury Config.
     #[account(
@@ -130,8 +138,12 @@ pub struct SyncGtBank<'info> {
     /// Store.
     /// CHECK: check by CPI.
     pub store: UncheckedAccount<'info>,
-    /// Config to initialize with.
-    #[account(has_one = store)]
+    /// Config.
+    #[account(
+        has_one = store,
+        // Only allow depositing into the authorized treausry.
+        constraint = config.load()?.treasury_config() == Some(&treasury_config.key()) @ CoreError::InvalidArgument,
+    )]
     pub config: AccountLoader<'info, Config>,
     /// Treasury Config.
     #[account(
@@ -237,6 +249,168 @@ impl<'info> SyncGtBank<'info> {
                 mint: self.token.to_account_info(),
                 to: self.treasury_vault.to_account_info(),
                 authority: self.config.to_account_info(),
+            },
+        )
+    }
+}
+
+/// The accounts definition for [`complete_gt_exchange`](crate::gmsol_treasury::complete_exchange).
+///
+/// Remaining accounts expected by this instruction:
+///
+///   - 0..N. `[]` N token mint accounts, where N represents the total number of tokens defined
+///     in the treasury config.
+///   - N..2N. `[mutable]` N GT bank vault accounts.
+///   - 2N..3N. `[mutable]` N token accounts to receive the funds, owned by the `owner`.
+#[derive(Accounts)]
+pub struct CompleteGtExchange<'info> {
+    /// Owner.
+    pub owner: Signer<'info>,
+    /// Store.
+    /// CHECK: check by CPI.
+    pub store: UncheckedAccount<'info>,
+    /// Config.
+    #[account(
+        has_one = store,
+        // Only allow completing GT exchange with the authorized treasury.
+        constraint = config.load()?.treasury_config() == Some(&treasury_config.key()) @ CoreError::InvalidArgument,
+    )]
+    pub config: AccountLoader<'info, Config>,
+    /// Treasury Config.
+    #[account(
+        has_one = config,
+    )]
+    pub treasury_config: AccountLoader<'info, TreasuryConfig>,
+    /// GT exchange vault.
+    /// CHECK: check by CPI.
+    #[account(mut)]
+    pub gt_exchange_vault: UncheckedAccount<'info>,
+    /// GT bank.
+    #[account(
+        mut,
+        has_one = treasury_config,
+        has_one = gt_exchange_vault,
+    )]
+    pub gt_bank: AccountLoader<'info, GtBank>,
+    /// Exchange to complete.
+    #[account(mut)]
+    pub exchange: AccountLoader<'info, GtExchange>,
+    /// Store program.
+    pub store_program: Program<'info, GmsolStore>,
+    /// The token program.
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+pub(crate) fn complete_gt_exchange<'info>(
+    ctx: Context<'_, '_, 'info, 'info, CompleteGtExchange<'info>>,
+) -> Result<()> {
+    let remaining_accounts = ctx.remaining_accounts;
+    ctx.accounts.execute(remaining_accounts)?;
+    Ok(())
+}
+
+impl<'info> CompleteGtExchange<'info> {
+    fn execute(&self, remaining_accounts: &'info [AccountInfo<'info>]) -> Result<()> {
+        use gmsol_model::num::MulDiv;
+
+        let signer = self.config.load()?.signer();
+
+        let gt_amount = self.exchange.load()?.amount();
+
+        // Close GT exchange first to validate the preconditions.
+        // This should validate that the GT exchange vault has been confirmed.
+        let ctx = self.close_gt_exchange_ctx();
+        close_gt_exchange(ctx.with_signer(&[&signer.as_seeds()]))?;
+
+        if gt_amount == 0 {
+            return Ok(());
+        }
+
+        let len = self.treasury_config.load()?.num_tokens();
+        let total_len = len.checked_mul(3).expect("must not overflow");
+        require_gte!(remaining_accounts.len(), total_len);
+        let tokens = &remaining_accounts[0..len];
+        let vaults = &remaining_accounts[len..(2 * len)];
+        let targets = &remaining_accounts[len..total_len];
+
+        // Transfer funds.
+        {
+            let gt_bank_address = self.gt_bank.key();
+            let owner_address = self.owner.key();
+
+            let treasury_config = self.treasury_config.load()?;
+            let gt_bank_signer = self.gt_bank.load()?.signer();
+            let total_gt_amount = self.gt_bank.load()?.remaining_confirmed_gt_amount();
+
+            require_gte!(total_gt_amount, gt_amount, CoreError::Internal);
+
+            for (idx, token) in treasury_config.tokens().enumerate() {
+                let Some(balance) = self.gt_bank.load()?.get_balance(&token) else {
+                    continue;
+                };
+                if balance == 0 {
+                    continue;
+                }
+                let amount = balance
+                    .checked_mul_div(&gt_amount, &total_gt_amount)
+                    .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+
+                let mint = &tokens[idx];
+                require_eq!(*mint.key, token, CoreError::InvalidArgument);
+
+                let vault = &vaults[idx];
+                validate_associated_token_account(
+                    vault,
+                    &gt_bank_address,
+                    &token,
+                    &anchor_spl::associated_token::ID,
+                )?;
+
+                let target = &targets[idx];
+                require_eq!(
+                    anchor_spl::token::accessor::authority(target)?,
+                    owner_address
+                );
+
+                let mint = InterfaceAccount::<Mint>::try_from(mint)?;
+                let decimals = mint.decimals;
+
+                let ctx = CpiContext::new(
+                    self.token_program.to_account_info(),
+                    TransferChecked {
+                        from: vault.to_account_info(),
+                        mint: mint.to_account_info(),
+                        to: target.to_account_info(),
+                        authority: self.gt_bank.to_account_info(),
+                    },
+                );
+
+                transfer_checked(
+                    ctx.with_signer(&[&gt_bank_signer.as_seeds()]),
+                    amount,
+                    decimals,
+                )?;
+
+                self.gt_bank
+                    .load_mut()?
+                    .record_transferred_out(&token, amount)?;
+            }
+
+            self.gt_bank.load_mut()?.record_claimed(gt_amount)?;
+        }
+
+        Ok(())
+    }
+
+    fn close_gt_exchange_ctx(&self) -> CpiContext<'_, '_, '_, 'info, CloseGtExchange<'info>> {
+        CpiContext::new(
+            self.store_program.to_account_info(),
+            CloseGtExchange {
+                authority: self.config.to_account_info(),
+                store: self.store.to_account_info(),
+                owner: self.owner.to_account_info(),
+                vault: self.gt_exchange_vault.to_account_info(),
+                exchange: self.exchange.to_account_info(),
             },
         )
     }

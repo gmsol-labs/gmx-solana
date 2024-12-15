@@ -123,4 +123,11 @@ pub mod gmsol_treasury {
     pub fn sync_gt_bank(ctx: Context<SyncGtBank>) -> Result<()> {
         instructions::unchecked_sync_gt_bank(ctx)
     }
+
+    /// Complete GT Exchange.
+    pub fn complete_gt_exchange<'info>(
+        ctx: Context<'_, '_, 'info, 'info, CompleteGtExchange<'info>>,
+    ) -> Result<()> {
+        instructions::complete_gt_exchange(ctx)
+    }
 }
