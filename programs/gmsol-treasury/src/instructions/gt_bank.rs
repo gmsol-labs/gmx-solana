@@ -7,7 +7,7 @@ use gmsol_store::{
 };
 use gmsol_utils::InitSpace;
 
-use crate::states::{Config, GtBank};
+use crate::states::{Config, GtBank, TreasuryConfig};
 
 /// The accounts definition for [`prepare_gt_bank`](crate::gmsol_treasury::prepare_gt_bank).
 #[derive(Accounts)]
@@ -21,6 +21,11 @@ pub struct PrepareGtBank<'info> {
     /// Config to initialize with.
     #[account(has_one = store)]
     pub config: AccountLoader<'info, Config>,
+    /// Treasury Config.
+    #[account(
+        has_one = config,
+    )]
+    pub treasury_config: AccountLoader<'info, TreasuryConfig>,
     /// GT exchange vault.
     #[account(
         has_one = store,
@@ -52,12 +57,12 @@ pub struct PrepareGtBank<'info> {
 /// Only [`TREASURY_KEEPER`](crate::roles::TREASURY_KEEPER) can use.
 pub(crate) fn unchecked_prepare_gt_bank(ctx: Context<PrepareGtBank>) -> Result<()> {
     let bump = ctx.bumps.gt_bank;
-    let config = ctx.accounts.config.key();
+    let treasury_config = ctx.accounts.treasury_config.key();
     let gt_exchange_vault = ctx.accounts.gt_exchange_vault.key();
 
     match ctx.accounts.gt_bank.load_init() {
         Ok(mut gt_bank) => {
-            gt_bank.try_init(bump, gt_exchange_vault, config)?;
+            gt_bank.try_init(bump, treasury_config, gt_exchange_vault)?;
             drop(gt_bank);
             ctx.accounts.gt_bank.exit(&crate::ID)?;
         }
@@ -75,7 +80,11 @@ pub(crate) fn unchecked_prepare_gt_bank(ctx: Context<PrepareGtBank>) -> Result<(
     {
         let gt_bank = ctx.accounts.gt_bank.load()?;
         require_eq!(gt_bank.bump, bump, CoreError::InvalidArgument);
-        require_eq!(gt_bank.config, config, CoreError::InvalidArgument);
+        require_eq!(
+            gt_bank.treasury_config,
+            treasury_config,
+            CoreError::InvalidArgument
+        );
         require_eq!(
             gt_bank.gt_exchange_vault,
             gt_exchange_vault,

@@ -5,8 +5,12 @@ use anchor_spl::{
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 use gmsol_store::{
+    cpi::{
+        accounts::{ClearAllPrices, ConfirmGtExchangeVault, SetPricesFromPriceFeed},
+        clear_all_prices, confirm_gt_exchange_vault, set_prices_from_price_feed,
+    },
     program::GmsolStore,
-    states::{gt::GtExchangeVault, Seed, Store},
+    states::{gt::GtExchangeVault, Chainlink, Oracle, Seed, Store},
     utils::{CpiAuthentication, WithStore},
     CoreError,
 };
@@ -288,7 +292,7 @@ pub struct DepositIntoTreasury<'info> {
     /// GT bank.
     #[account(
         mut,
-        has_one = config,
+        has_one = treasury_config,
         has_one = gt_exchange_vault,
         seeds = [
             GtBank::SEED,
@@ -514,5 +518,215 @@ impl<'info> WithdrawFromTreasury<'info> {
                 authority: self.config.to_account_info(),
             },
         )
+    }
+}
+
+/// The accounts definition for [`confirm_gt_buyback`](crate::gmsol_treasury::confirm_gt_buyback).
+///
+/// Remaining accounts expected by this instruction:
+///
+///   - 0..N. `[]` N feed accounts, where N represents the total number of tokens defined in
+///     the treasury config.
+#[derive(Accounts)]
+pub struct ConfirmGtBuyback<'info> {
+    /// Authority.
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    /// Store.
+    pub store: AccountLoader<'info, Store>,
+    /// Config to initialize with.
+    #[account(has_one = store)]
+    pub config: AccountLoader<'info, Config>,
+    /// Treasury Config.
+    #[account(
+        has_one = config,
+    )]
+    pub treasury_config: AccountLoader<'info, TreasuryConfig>,
+    /// GT exchange vault.
+    #[account(
+        mut,
+        has_one = store,
+        constraint = gt_exchange_vault.load()?.is_initialized() @ CoreError::InvalidArgument,
+        constraint = gt_exchange_vault.load()?.validate_confirmable().map(|_| true)? @ CoreError::InvalidArgument,
+    )]
+    pub gt_exchange_vault: AccountLoader<'info, GtExchangeVault>,
+    /// GT Bank.
+    #[account(
+        mut,
+        has_one = treasury_config,
+        has_one = gt_exchange_vault,
+    )]
+    pub gt_bank: AccountLoader<'info, GtBank>,
+    /// Token map.
+    /// CHECK: check by CPI.
+    pub token_map: UncheckedAccount<'info>,
+    /// Oracle.
+    /// CHECK: the permissions should be checked by the CPI.
+    #[account(mut)]
+    pub oracle: AccountLoader<'info, Oracle>,
+    /// Store program.
+    pub store_program: Program<'info, GmsolStore>,
+    /// Chainlink program.
+    pub chainlink_program: Option<Program<'info, Chainlink>>,
+}
+
+/// Confirm GT buyback.
+/// # CHECK
+/// Only [`TREASURY_KEEPER`](crate::roles::TREASURY_KEEPER) can use.
+pub(crate) fn unchecked_confirm_gt_buyback<'info>(
+    ctx: Context<'_, '_, 'info, 'info, ConfirmGtBuyback<'info>>,
+) -> Result<()> {
+    let remaining_accounts = ctx.remaining_accounts.to_vec();
+    ctx.accounts.execute(remaining_accounts)
+}
+
+impl<'info> WithStore<'info> for ConfirmGtBuyback<'info> {
+    fn store_program(&self) -> AccountInfo<'info> {
+        self.store_program.to_account_info()
+    }
+
+    fn store(&self) -> AccountInfo<'info> {
+        self.store.to_account_info()
+    }
+}
+
+impl<'info> CpiAuthentication<'info> for ConfirmGtBuyback<'info> {
+    fn authority(&self) -> AccountInfo<'info> {
+        self.authority.to_account_info()
+    }
+
+    fn on_error(&self) -> Result<()> {
+        err!(CoreError::PermissionDenied)
+    }
+}
+
+impl<'info> ConfirmGtBuyback<'info> {
+    fn execute(&mut self, remaining_accounts: Vec<AccountInfo<'info>>) -> Result<()> {
+        let signer = self.config.load()?.signer();
+
+        // Confirm GT exchange vault first to make sure all preconditions are satified.
+        let ctx = self.confirm_gt_exchange_vault_ctx();
+        confirm_gt_exchange_vault(ctx.with_signer(&[&signer.as_seeds()]))?;
+
+        let tokens = self.treasury_config.load()?.tokens();
+
+        // Set prices.
+        let ctx = self.set_prices_from_price_feed_ctx();
+        set_prices_from_price_feed(
+            ctx.with_signer(&[&signer.as_seeds()])
+                .with_remaining_accounts(remaining_accounts),
+            tokens,
+        )?;
+
+        self.update_balances()?;
+
+        // Clear prices.
+        let ctx = self.clear_all_prices_ctx();
+        clear_all_prices(ctx.with_signer(&[&signer.as_seeds()]))?;
+
+        Ok(())
+    }
+
+    fn set_prices_from_price_feed_ctx(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, SetPricesFromPriceFeed<'info>> {
+        CpiContext::new(
+            self.store_program.to_account_info(),
+            SetPricesFromPriceFeed {
+                authority: self.config.to_account_info(),
+                store: self.store.to_account_info(),
+                oracle: self.oracle.to_account_info(),
+                token_map: self.token_map.to_account_info(),
+                chainlink_program: self.chainlink_program.as_ref().map(|a| a.to_account_info()),
+            },
+        )
+    }
+
+    fn clear_all_prices_ctx(&self) -> CpiContext<'_, '_, '_, 'info, ClearAllPrices<'info>> {
+        CpiContext::new(
+            self.store_program.to_account_info(),
+            ClearAllPrices {
+                authority: self.config.to_account_info(),
+                store: self.store.to_account_info(),
+                oracle: self.oracle.to_account_info(),
+            },
+        )
+    }
+
+    fn confirm_gt_exchange_vault_ctx(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, ConfirmGtExchangeVault<'info>> {
+        CpiContext::new(
+            self.store_program.to_account_info(),
+            ConfirmGtExchangeVault {
+                authority: self.config.to_account_info(),
+                store: self.store.to_account_info(),
+                vault: self.gt_exchange_vault.to_account_info(),
+            },
+        )
+    }
+
+    /// Reserve the final GT bank balances eligible for buyback.
+    /// # Note
+    /// We do not actually execute token transfers; instead, we only update
+    /// the token balances recorded in the GT bank. This is because tokens exceeding
+    /// the recorded amount can be transferred to the treasury bank at any time.
+    fn update_balances(&self) -> Result<()> {
+        use gmsol_model::num::MulDiv;
+
+        let buyback_amount = self.gt_exchange_vault.load()?.amount();
+
+        if buyback_amount == 0 {
+            self.gt_bank.load_mut()?.record_all_transferred_out()?;
+            return Ok(());
+        }
+
+        let (max_buyback_value, token_values) = {
+            let oracle = self.oracle.load()?;
+            self.gt_bank.load()?.total_values(&oracle)?
+        };
+
+        let buyback_amount = u128::from(self.gt_exchange_vault.load()?.amount());
+
+        let estimated_buyback_price = max_buyback_value
+            .checked_div(buyback_amount)
+            .ok_or_else(|| error!(CoreError::Internal))?;
+
+        let max_buyback_price = self.store.load()?.gt().minting_cost();
+
+        let buyback_price = estimated_buyback_price.min(max_buyback_price);
+        let buyback_value = buyback_amount
+            .checked_mul(buyback_price)
+            .ok_or_else(|| error!(CoreError::ValueOverflow))?;
+
+        if buyback_value == 0 {
+            self.gt_bank.load_mut()?.record_all_transferred_out()?;
+            return Ok(());
+        }
+
+        msg!(
+            "[Treasury] will buyback {} (unit) GT with value: {}",
+            buyback_price,
+            buyback_value,
+        );
+
+        // Update balances.
+        {
+            let mut gt_bank = self.gt_bank.load_mut()?;
+            for (token, value) in token_values {
+                let balance = gt_bank.get_balance(&token).expect("must exist");
+                require_neq!(balance, 0, CoreError::Internal);
+                let reserve_balance: u64 = u128::from(balance)
+                    .checked_mul_div(&value, &buyback_value)
+                    .and_then(|b| b.try_into().ok())
+                    .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+                let delta = balance
+                    .checked_sub(reserve_balance)
+                    .ok_or_else(|| error!(CoreError::Internal))?;
+                gt_bank.record_transferred_out(&token, delta)?;
+            }
+        }
+
+        Ok(())
     }
 }

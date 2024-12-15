@@ -227,7 +227,7 @@ impl Oracle {
     }
 
     /// Get primary price for the given token.
-    pub(crate) fn get_primary_price(
+    pub fn get_primary_price(
         &self,
         token: &Pubkey,
         allow_synthetic: bool,

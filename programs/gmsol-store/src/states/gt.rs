@@ -202,6 +202,11 @@ impl GtState {
         self.decimals
     }
 
+    /// Get minting cost.
+    pub fn minting_cost(&self) -> u128 {
+        self.minting_cost
+    }
+
     /// Get total minted.
     pub fn total_minted(&self) -> u64 {
         self.total_minted
@@ -823,7 +828,8 @@ impl GtExchangeVault {
         self.time_window
     }
 
-    fn validate_confirmable(&self) -> Result<()> {
+    /// Validate that this vault is confirmable.
+    pub fn validate_confirmable(&self) -> Result<()> {
         require!(self.is_initialized(), CoreError::PreconditionsAreNotMet);
         require!(!self.is_confirmed(), CoreError::PreconditionsAreNotMet);
 

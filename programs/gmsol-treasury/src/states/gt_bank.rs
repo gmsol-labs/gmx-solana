@@ -1,6 +1,12 @@
+use std::collections::HashMap;
+
 use anchor_lang::prelude::*;
 use bytemuck::Zeroable;
-use gmsol_store::{states::Seed, utils::pubkey::to_bytes, CoreError};
+use gmsol_store::{
+    states::{Oracle, Seed},
+    utils::pubkey::to_bytes,
+    CoreError,
+};
 
 use super::treasury::MAX_TOKENS;
 
@@ -11,7 +17,7 @@ pub struct GtBank {
     pub(crate) bump: u8,
     flags: GtBankFlagsContainer,
     padding: [u8; 14],
-    pub(crate) config: Pubkey,
+    pub(crate) treasury_config: Pubkey,
     pub(crate) gt_exchange_vault: Pubkey,
     reserved: [u8; 256],
     balances: TokenBalances,
@@ -29,18 +35,22 @@ impl GtBank {
     pub(crate) fn try_init(
         &mut self,
         bump: u8,
+        treasury_config: Pubkey,
         gt_exchange_vault: Pubkey,
-        config: Pubkey,
     ) -> Result<()> {
         require!(
             !self.flags.get_flag(GtBankFlags::Initialized),
             CoreError::PreconditionsAreNotMet
         );
         self.bump = bump;
-        self.config = config;
+        self.treasury_config = treasury_config;
         self.gt_exchange_vault = gt_exchange_vault;
         self.flags.set_flag(GtBankFlags::Initialized, true);
         Ok(())
+    }
+
+    pub(crate) fn get_balance(&self, token: &Pubkey) -> Option<u64> {
+        self.balances.get(token).map(|b| b.amount)
     }
 
     fn get_balance_or_insert(&mut self, token: &Pubkey) -> Result<&mut TokenBalance> {
@@ -77,19 +87,44 @@ impl GtBank {
             .amount
             .checked_sub(amount)
             .ok_or_else(|| error!(CoreError::NotEnoughTokenAmount))?;
+        balance.amount = next_balance;
 
-        if next_balance == 0 {
-            self.balances.remove(token);
-        } else {
-            balance.amount = next_balance;
-        }
+        Ok(())
+    }
 
+    pub(crate) fn record_all_transferred_out(&mut self) -> Result<()> {
+        self.balances.clear();
         Ok(())
     }
 
     /// Returns whether the GT bank is initialized.
     pub fn is_initialized(&self) -> bool {
         self.flags.get_flag(GtBankFlags::Initialized)
+    }
+
+    pub(crate) fn total_values(&self, oracle: &Oracle) -> Result<(u128, HashMap<Pubkey, u128>)> {
+        let mut total_value: u128 = 0;
+
+        let mut total_values = HashMap::with_capacity(self.balances.len());
+        for (token, balance) in self.balances.entries() {
+            let amount = u128::from(balance.amount);
+            if amount == 0 {
+                continue;
+            }
+            let token = Pubkey::new_from_array(*token);
+            let price = oracle.get_primary_price(&token, false)?.min;
+            let value = amount
+                .checked_mul(price)
+                .ok_or_else(|| error!(CoreError::ValueOverflow))?;
+            total_values.insert(token, value);
+            if value != 0 {
+                total_value = total_value
+                    .checked_add(value)
+                    .ok_or_else(|| error!(CoreError::ValueOverflow))?;
+            }
+        }
+
+        Ok((total_value, total_values))
     }
 }
 

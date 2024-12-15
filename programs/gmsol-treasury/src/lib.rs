@@ -92,6 +92,14 @@ pub mod gmsol_treasury {
         instructions::unchecked_withdraw_from_treasury(ctx, amount, decimals)
     }
 
+    /// Confirm GT buyback.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_KEEPER))]
+    pub fn confirm_gt_buyback<'info>(
+        ctx: Context<'_, '_, 'info, 'info, ConfirmGtBuyback<'info>>,
+    ) -> Result<()> {
+        instructions::unchecked_confirm_gt_buyback(ctx)
+    }
+
     /// Transfer the receiver permission to a new address.
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_OWNER))]
     pub fn transfer_receiver(ctx: Context<TransferReceiver>) -> Result<()> {

@@ -91,6 +91,13 @@ impl TreasuryConfig {
             bump_bytes: [self.bump],
         }
     }
+
+    pub(crate) fn tokens(&self) -> Vec<Pubkey> {
+        self.tokens
+            .entries()
+            .map(|(key, _)| Pubkey::new_from_array(*key))
+            .collect()
+    }
 }
 
 /// Treasury Signer.
