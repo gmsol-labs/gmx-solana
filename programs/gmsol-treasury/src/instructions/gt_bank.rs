@@ -1,4 +1,9 @@
 use anchor_lang::prelude::*;
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token_2022::{transfer_checked, TransferChecked},
+    token_interface::{Mint, TokenAccount, TokenInterface},
+};
 use gmsol_store::{
     program::GmsolStore,
     states::{gt::GtExchangeVault, Seed},
@@ -40,7 +45,7 @@ pub struct PrepareGtBank<'info> {
         space = 8 + GtBank::INIT_SPACE,
         seeds = [
             GtBank::SEED,
-            config.key().as_ref(),
+            treasury_config.key().as_ref(),
             gt_exchange_vault.key().as_ref(),
         ],
         bump,
@@ -113,5 +118,126 @@ impl<'info> CpiAuthentication<'info> for PrepareGtBank<'info> {
 
     fn on_error(&self) -> Result<()> {
         err!(CoreError::PermissionDenied)
+    }
+}
+
+/// The accounts definition for [`sync_gt_bank`](crate::gmsol_treasury::sync_gt_bank).
+#[derive(Accounts)]
+pub struct SyncGtBank<'info> {
+    /// Authority.
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    /// Store.
+    /// CHECK: check by CPI.
+    pub store: UncheckedAccount<'info>,
+    /// Config to initialize with.
+    #[account(has_one = store)]
+    pub config: AccountLoader<'info, Config>,
+    /// Treasury Config.
+    #[account(
+        has_one = config,
+        constraint = treasury_config.load()?.is_deposit_allowed(&token.key())? @ CoreError::InvalidArgument,
+    )]
+    pub treasury_config: AccountLoader<'info, TreasuryConfig>,
+    /// GT bank.
+    #[account(
+        mut,
+        has_one = treasury_config,
+    )]
+    pub gt_bank: AccountLoader<'info, GtBank>,
+    /// Token.
+    pub token: InterfaceAccount<'info, Mint>,
+    /// Treasury vault.
+    #[account(
+        init_if_needed,
+        payer = authority,
+        associated_token::authority = treasury_config,
+        associated_token::mint =  token,
+    )]
+    pub treasury_vault: InterfaceAccount<'info, TokenAccount>,
+    /// GT bank vault.
+    #[account(
+        init_if_needed,
+        payer = authority,
+        associated_token::authority = gt_bank,
+        associated_token::mint =  token,
+    )]
+    pub gt_bank_vault: InterfaceAccount<'info, TokenAccount>,
+    /// Store program.
+    pub store_program: Program<'info, GmsolStore>,
+    /// The token program.
+    pub token_program: Interface<'info, TokenInterface>,
+    /// Associated token program.
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    /// The system program.
+    pub system_program: Program<'info, System>,
+}
+
+/// Sync the GT bank and deposit the exceeding amount into treasury vault.
+/// # CHECK
+/// Only [`TREASURY_KEEPER`](crate::roles::TREASURY_KEEPER) can use.
+pub(crate) fn unchecked_sync_gt_bank(ctx: Context<SyncGtBank>) -> Result<()> {
+    let delta = {
+        let gt_bank = ctx.accounts.gt_bank.load_mut()?;
+        let token = ctx.accounts.token.key();
+
+        let recorded_balance = gt_bank.get_balance(&token).unwrap_or(0);
+        let balance = ctx.accounts.gt_bank_vault.amount;
+
+        require_gte!(balance, recorded_balance, CoreError::NotEnoughTokenAmount);
+
+        balance
+            .checked_sub(recorded_balance)
+            .ok_or_else(|| error!(CoreError::NotEnoughTokenAmount))?
+    };
+
+    if delta != 0 {
+        let cpi_ctx = ctx.accounts.transfer_checked_ctx();
+        let signer = ctx.accounts.gt_bank.load()?.signer();
+        transfer_checked(
+            cpi_ctx.with_signer(&[&signer.as_seeds()]),
+            delta,
+            ctx.accounts.token.decimals,
+        )?;
+        msg!(
+            "[Treasury] Synced GT Bank balance, deposit exceeding {} tokens into treasury",
+            delta
+        );
+    }
+
+    Ok(())
+}
+
+impl<'info> WithStore<'info> for SyncGtBank<'info> {
+    fn store_program(&self) -> AccountInfo<'info> {
+        self.store_program.to_account_info()
+    }
+
+    fn store(&self) -> AccountInfo<'info> {
+        self.store.to_account_info()
+    }
+}
+
+impl<'info> CpiAuthentication<'info> for SyncGtBank<'info> {
+    fn authority(&self) -> AccountInfo<'info> {
+        self.authority.to_account_info()
+    }
+
+    fn on_error(&self) -> Result<()> {
+        err!(CoreError::PermissionDenied)
+    }
+}
+
+impl<'info> SyncGtBank<'info> {
+    fn transfer_checked_ctx(&self) -> CpiContext<'_, '_, '_, 'info, TransferChecked<'info>> {
+        CpiContext::new(
+            self.token_program.to_account_info(),
+            TransferChecked {
+                from: self.gt_bank_vault.to_account_info(),
+                mint: self.token.to_account_info(),
+                to: self.treasury_vault.to_account_info(),
+                authority: self.config.to_account_info(),
+            },
+        )
     }
 }

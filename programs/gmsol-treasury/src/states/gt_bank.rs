@@ -126,6 +126,33 @@ impl GtBank {
 
         Ok((total_value, total_values))
     }
+
+    pub(crate) fn signer(&self) -> GtBankSigner {
+        GtBankSigner {
+            treasury_config: self.treasury_config,
+            gt_exchange_vault: self.gt_exchange_vault,
+            bump_bytes: [self.bump],
+        }
+    }
+}
+
+/// Gt Bank Signer.
+pub struct GtBankSigner {
+    treasury_config: Pubkey,
+    gt_exchange_vault: Pubkey,
+    bump_bytes: [u8; 1],
+}
+
+impl GtBankSigner {
+    /// As signer seeds.
+    pub fn as_seeds(&self) -> [&[u8]; 4] {
+        [
+            GtBank::SEED,
+            self.treasury_config.as_ref(),
+            self.gt_exchange_vault.as_ref(),
+            &self.bump_bytes,
+        ]
+    }
 }
 
 /// Token Balance.

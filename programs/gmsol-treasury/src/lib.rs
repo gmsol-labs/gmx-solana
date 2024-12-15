@@ -117,4 +117,10 @@ pub mod gmsol_treasury {
     pub fn prepare_gt_bank(ctx: Context<PrepareGtBank>) -> Result<()> {
         instructions::unchecked_prepare_gt_bank(ctx)
     }
+
+    /// Sync GT Bank.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_KEEPER))]
+    pub fn sync_gt_bank(ctx: Context<SyncGtBank>) -> Result<()> {
+        instructions::unchecked_sync_gt_bank(ctx)
+    }
 }
