@@ -106,6 +106,12 @@ pub mod gmsol_treasury {
         instructions::unchecked_transfer_receiver(ctx)
     }
 
+    /// Set referral reward factors.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_ADMIN))]
+    pub fn set_referral_reward(ctx: Context<SetReferralReward>, factors: Vec<u128>) -> Result<()> {
+        instructions::unchecked_set_referral_reward(ctx, factors)
+    }
+
     /// Claim fees.
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_KEEPER))]
     pub fn claim_fees(ctx: Context<ClaimFees>) -> Result<()> {

@@ -309,7 +309,7 @@ pub struct DepositIntoTreasury<'info> {
         has_one = gt_exchange_vault,
         seeds = [
             GtBank::SEED,
-            config.key().as_ref(),
+            treasury_config.key().as_ref(),
             gt_exchange_vault.key().as_ref(),
         ],
         bump = gt_bank.load()?.bump,

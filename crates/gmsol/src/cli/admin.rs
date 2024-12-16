@@ -4,6 +4,7 @@ use gmsol::{
     utils::TransactionBuilder,
 };
 use gmsol_store::states::RoleKey;
+use gmsol_treasury::roles as treasury_roles;
 use indexmap::IndexSet;
 
 use crate::GMSOLClient;
@@ -26,7 +27,13 @@ enum Command {
         #[arg(long)]
         new_authority: Pubkey,
         #[arg(long)]
-        send: bool,
+        confirm: bool,
+    },
+    /// Transfer receiver.
+    TransferReceiver {
+        new_receiver: Pubkey,
+        #[arg(long)]
+        confirm: bool,
     },
     /// Enable a role.
     EnableRole { role: String },
@@ -80,10 +87,10 @@ impl AdminArgs {
             }
             Command::TransferStoreAuthority {
                 new_authority,
-                send,
+                confirm,
             } => {
                 let rpc = client.transfer_store_authority(&store, new_authority);
-                if *send || serialize_only {
+                if *confirm || serialize_only {
                     crate::utils::send_or_serialize(
                         rpc.into_anchor_request_without_compute_budget(),
                         serialize_only,
@@ -105,7 +112,38 @@ impl AdminArgs {
                         .map_err(anchor_client::ClientError::from)?;
                     tracing::info!("Simulation result: {:#?}", response.value);
                     if response.value.err.is_none() {
-                        tracing::info!("The simulation was successful, but this operation is very dangerous. If you are sure you want to proceed, please reauthorize the command with `--send` flag");
+                        tracing::info!("The simulation was successful, but this operation is very dangerous. If you are sure you want to proceed, please reauthorize the command with `--confirm` flag");
+                    }
+                }
+            }
+            Command::TransferReceiver {
+                new_receiver,
+                confirm,
+            } => {
+                let rpc = client.transfer_receiver(&store, new_receiver);
+                if *confirm || serialize_only {
+                    crate::utils::send_or_serialize(
+                        rpc.into_anchor_request_without_compute_budget(),
+                        serialize_only,
+                        |signature| {
+                            tracing::info!(
+                                "transferred receiver authority to `{new_receiver}` at tx {signature}"
+                            );
+                            Ok(())
+                        },
+                    )
+                    .await?;
+                } else {
+                    let transaction = rpc.into_anchor_request().signed_transaction().await?;
+                    let response = client
+                        .store_program()
+                        .solana_rpc()
+                        .simulate_transaction(&transaction)
+                        .await
+                        .map_err(anchor_client::ClientError::from)?;
+                    tracing::info!("Simulation result: {:#?}", response.value);
+                    if response.value.err.is_none() {
+                        tracing::info!("The simulation was successful, but this operation is very dangerous. If you are sure you want to proceed, please reauthorize the command with `--confirm` flag");
                     }
                 }
             }
@@ -171,7 +209,11 @@ struct InitializeRoles {
     #[arg(long)]
     init_store: bool,
     #[arg(long)]
-    gt_controller: Pubkey,
+    treasury_admin: Pubkey,
+    #[arg(long)]
+    treasury_withdrawer: Pubkey,
+    #[arg(long)]
+    treasury_keeper: Pubkey,
     #[arg(long)]
     market_keeper: Pubkey,
     #[arg(long)]
@@ -204,6 +246,8 @@ impl InitializeRoles {
             builder.try_push(client.initialize_store(store_key, None))?;
         }
 
+        let treasury_global_config = client.find_config_address(&store);
+
         builder
             .push_many(
                 [
@@ -212,13 +256,38 @@ impl InitializeRoles {
                     RoleKey::ORDER_KEEPER,
                     RoleKey::FEATURE_KEEPER,
                     RoleKey::CONFIG_KEEPER,
+                    RoleKey::ORACLE_CONTROLLER,
+                    treasury_roles::TREASURY_OWNER,
+                    treasury_roles::TREASURY_ADMIN,
+                    treasury_roles::TREASURY_WITHDRAWER,
+                    treasury_roles::TREASURY_KEEPER,
                 ]
                 .iter()
                 .map(|role| client.enable_role(&store, role)),
                 false,
             )?
             .try_push(client.grant_role(&store, &self.market_keeper, RoleKey::MARKET_KEEPER))?
-            .try_push(client.grant_role(&store, &self.market_keeper, RoleKey::GT_CONTROLLER))?;
+            .try_push(client.grant_role(
+                &store,
+                &treasury_global_config,
+                RoleKey::ORACLE_CONTROLLER,
+            ))?
+            .try_push(client.grant_role(&store, &treasury_global_config, RoleKey::GT_CONTROLLER))?
+            .try_push(client.grant_role(
+                &store,
+                &self.treasury_admin,
+                treasury_roles::TREASURY_ADMIN,
+            ))?
+            .try_push(client.grant_role(
+                &store,
+                &self.treasury_withdrawer,
+                treasury_roles::TREASURY_WITHDRAWER,
+            ))?
+            .try_push(client.grant_role(
+                &store,
+                &self.treasury_keeper,
+                treasury_roles::TREASURY_KEEPER,
+            ))?;
 
         for keeper in self.unique_order_keepers() {
             builder.try_push(client.grant_role(&store, keeper, RoleKey::ORDER_KEEPER))?;

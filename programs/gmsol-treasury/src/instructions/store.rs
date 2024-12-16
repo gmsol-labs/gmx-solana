@@ -5,8 +5,8 @@ use anchor_spl::{
 };
 use gmsol_store::{
     cpi::{
-        accounts::{ClaimFeesFromMarket, SetReceiver},
-        claim_fees_from_market, set_receiver,
+        accounts::{ClaimFeesFromMarket, ConfigurateGt, SetReceiver},
+        claim_fees_from_market, gt_set_referral_reward_factors, set_receiver,
     },
     program::GmsolStore,
     utils::{CpiAuthentication, WithStore},
@@ -169,4 +169,89 @@ impl<'info> ClaimFees<'info> {
             },
         )
     }
+}
+
+/// The accounts definition for [`set_referral_reward`](crate::gmsol_treasury::set_referral_reward).
+#[derive(Accounts)]
+pub struct SetReferralReward<'info> {
+    /// Authority.
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    /// Store.
+    /// CHECK: check by CPI.
+    #[account(mut)]
+    pub store: UncheckedAccount<'info>,
+    /// Config.
+    #[account(has_one = store)]
+    pub config: AccountLoader<'info, Config>,
+    /// Store program.
+    pub store_program: Program<'info, GmsolStore>,
+}
+
+/// Set referral reward.
+/// # CHECK
+/// Only [`TREASURY_ADMIN`](crate::roles::TREASURY_ADMIN) can use.
+pub(crate) fn unchecked_set_referral_reward(
+    ctx: Context<SetReferralReward>,
+    factors: Vec<u128>,
+) -> Result<()> {
+    let signer = ctx.accounts.config.load()?.signer();
+    let cpi_ctx = ctx.accounts.configurate_gt_ctx();
+    gt_set_referral_reward_factors(cpi_ctx.with_signer(&[&signer.as_seeds()]), factors)?;
+    Ok(())
+}
+
+impl<'info> WithStore<'info> for SetReferralReward<'info> {
+    fn store_program(&self) -> AccountInfo<'info> {
+        self.store_program.to_account_info()
+    }
+
+    fn store(&self) -> AccountInfo<'info> {
+        self.store.to_account_info()
+    }
+}
+
+impl<'info> CpiAuthentication<'info> for SetReferralReward<'info> {
+    fn authority(&self) -> AccountInfo<'info> {
+        self.authority.to_account_info()
+    }
+
+    fn on_error(&self) -> Result<()> {
+        err!(CoreError::PermissionDenied)
+    }
+}
+
+impl<'info> SetReferralReward<'info> {
+    fn configurate_gt_ctx(&self) -> CpiContext<'_, '_, '_, 'info, ConfigurateGt<'info>> {
+        CpiContext::new(
+            self.store_program.to_account_info(),
+            ConfigurateGt {
+                authority: self.config.to_account_info(),
+                store: self.store.to_account_info(),
+            },
+        )
+    }
+}
+
+/// The accounts definition for [`initialize_treasury_oracle`](crate::gmsol_treasury::initialize_treasury_oracle).
+#[derive(Accounts)]
+pub struct InitializeTreasuryOracle<'info> {
+    /// Authority.
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    /// Store.
+    /// CHECK: check by CPI.
+    #[account(mut)]
+    pub store: UncheckedAccount<'info>,
+    /// Config.
+    #[account(has_one = store)]
+    pub config: AccountLoader<'info, Config>,
+    /// Oracle.
+    /// CHECK: check by CPI.
+    #[account(mut)]
+    pub oracle: UncheckedAccount<'info>,
+    /// Store program.
+    pub store_program: Program<'info, GmsolStore>,
+    //// System program.
+    pub system_program: Program<'info, System>,
 }

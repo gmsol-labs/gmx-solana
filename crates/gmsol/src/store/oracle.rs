@@ -19,6 +19,7 @@ pub trait OracleOps<C> {
         &'a self,
         store: &Pubkey,
         oracle: &'a dyn Signer,
+        authority: Option<&Pubkey>,
     ) -> impl Future<Output = crate::Result<(RpcBuilder<'a, C>, Pubkey)>>;
 
     /// Initialize Price Feed.
@@ -52,6 +53,7 @@ where
         &'a self,
         store: &Pubkey,
         oracle: &'a dyn Signer,
+        authority: Option<&Pubkey>,
     ) -> crate::Result<(RpcBuilder<'a, C>, Pubkey)> {
         use anchor_client::solana_sdk::system_instruction::create_account;
 
@@ -78,6 +80,7 @@ where
             .pre_instruction(create)
             .accounts(accounts::InitializeOracle {
                 payer,
+                authority: authority.copied().unwrap_or(payer),
                 store: *store,
                 oracle: oracle_address,
                 system_program: system_program::ID,

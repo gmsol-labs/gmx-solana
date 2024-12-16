@@ -17,8 +17,11 @@ pub use self::custom::*;
 /// [*See also the documentation for the instruction.*](crate::gmsol_store::initialize_oracle)
 #[derive(Accounts)]
 pub struct InitializeOracle<'info> {
-    /// The payer, and it will be set as the authority of the created oracle account.
+    /// The payer.
     pub payer: Signer<'info>,
+    /// The authority of the oracle.
+    /// CHECK: only used as an identifier.
+    pub authority: UncheckedAccount<'info>,
     /// The store account that will be the owner of the oracle account.
     pub store: AccountLoader<'info, Store>,
     /// The new oracle account.
@@ -32,7 +35,7 @@ pub(crate) fn initialize_oracle(ctx: Context<InitializeOracle>) -> Result<()> {
     ctx.accounts
         .oracle
         .load_init()?
-        .init(ctx.accounts.store.key(), ctx.accounts.payer.key());
+        .init(ctx.accounts.store.key(), ctx.accounts.authority.key());
     Ok(())
 }
 

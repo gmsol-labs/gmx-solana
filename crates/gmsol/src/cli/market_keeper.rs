@@ -47,8 +47,14 @@ pub(super) struct Args {
 
 #[derive(clap::Subcommand)]
 enum Command {
-    /// Create an `Oracle` account.
-    CreateOracle {},
+    /// Initialize Oracle.
+    InitOracle {
+        wallet: Option<PathBuf>,
+        #[arg(long, short)]
+        seed: Option<u64>,
+        #[arg(long)]
+        authority: Option<Pubkey>,
+    },
     /// Create a `TokenMap` account.
     CreateTokenMap,
     /// Create a `MarketConfigBuffer` account.
@@ -258,12 +264,6 @@ enum Command {
     SetReferralRewardFactors { factors: Vec<u128> },
     /// Set referred discount.
     SetReferredDiscountFactor { factor: u128 },
-    /// Initialize Oracle.
-    InitOracle {
-        wallet: Option<PathBuf>,
-        #[arg(long, short)]
-        seed: Option<u64>,
-    },
 }
 
 #[serde_with::serde_as]
@@ -321,19 +321,33 @@ impl Args {
         serialize_only: bool,
     ) -> gmsol::Result<()> {
         match &self.command {
-            Command::CreateOracle {} => {
-                let oracle_keypair = Keypair::new();
-                let (request, oracle) = client.initialize_oracle(store, &oracle_keypair).await?;
-                crate::utils::send_or_serialize(
-                    request.into_anchor_request_without_compute_budget(),
-                    serialize_only,
-                    |signature| {
-                        tracing::info!("created oracle {oracle} at tx {signature}");
-                        println!("{oracle}");
-                        Ok(())
-                    },
-                )
-                .await?;
+            Command::InitOracle {
+                wallet,
+                seed,
+                authority,
+            } => {
+                let oracle = match wallet {
+                    Some(path) => {
+                        Keypair::read_from_file(path).map_err(gmsol::Error::invalid_argument)?
+                    }
+                    None => {
+                        let mut rng = if let Some(seed) = seed {
+                            StdRng::seed_from_u64(*seed)
+                        } else {
+                            StdRng::from_entropy()
+                        };
+                        Keypair::generate(&mut rng)
+                    }
+                };
+                let (rpc, oracle) = client
+                    .initialize_oracle(store, &oracle, authority.as_ref())
+                    .await?;
+                crate::utils::send_or_serialize_rpc(rpc, serialize_only, false, |signature| {
+                    tracing::info!("initialized an oracle buffer account at tx {signature}");
+                    println!("{oracle}");
+                    Ok(())
+                })
+                .await?
             }
             Command::CreateTokenMap => {
                 if serialize_only {
@@ -838,28 +852,6 @@ impl Args {
                         Ok(())
                     },
                 )
-                .await?
-            }
-            Command::InitOracle { wallet, seed } => {
-                let oracle = match wallet {
-                    Some(path) => {
-                        Keypair::read_from_file(path).map_err(gmsol::Error::invalid_argument)?
-                    }
-                    None => {
-                        let mut rng = if let Some(seed) = seed {
-                            StdRng::seed_from_u64(*seed)
-                        } else {
-                            StdRng::from_entropy()
-                        };
-                        Keypair::generate(&mut rng)
-                    }
-                };
-                let (rpc, oracle) = client.initialize_oracle(store, &oracle).await?;
-                crate::utils::send_or_serialize_rpc(rpc, serialize_only, false, |signature| {
-                    tracing::info!("initialized an oracle buffer account at tx {signature}");
-                    println!("{oracle}");
-                    Ok(())
-                })
                 .await?
             }
         }

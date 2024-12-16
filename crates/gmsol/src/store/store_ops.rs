@@ -19,6 +19,9 @@ pub trait StoreOps<C> {
     /// Transfer Store authority.
     fn transfer_store_authority(&self, store: &Pubkey, new_authority: &Pubkey) -> RpcBuilder<C>;
 
+    /// Transfer receiver.
+    fn transfer_receiver(&self, store: &Pubkey, new_receiver: &Pubkey) -> RpcBuilder<C>;
+
     /// Set new token map.
     fn set_token_map(&self, store: &Pubkey, token_map: &Pubkey) -> RpcBuilder<C>;
 
@@ -53,6 +56,16 @@ where
             .accounts(accounts::TransferStoreAuthority {
                 authority: self.payer(),
                 store: *store,
+            })
+    }
+
+    fn transfer_receiver(&self, store: &Pubkey, new_receiver: &Pubkey) -> RpcBuilder<C> {
+        self.store_rpc()
+            .args(instruction::SetReceiver {})
+            .accounts(accounts::SetReceiver {
+                authority: self.payer(),
+                store: *store,
+                receiver: *new_receiver,
             })
     }
 

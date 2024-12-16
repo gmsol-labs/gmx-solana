@@ -650,7 +650,7 @@ impl Deployment {
                     .collect::<eyre::Result<Vec<_>>>()?,
                 false,
             )?
-            .push(client.initialize_oracle(store, &self.oracle).await?.0)?;
+            .push(client.initialize_oracle(store, &self.oracle, None).await?.0)?;
 
         _ = builder
             .send_all()

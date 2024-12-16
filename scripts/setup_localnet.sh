@@ -55,10 +55,28 @@ spl-token -ul mint $USDG 1000
 cargo gmsol -ul other init-mock-chainlink-verifier
 
 export STORE=$(cargo gmsol -ul admin create-store)
+
+export CONFIG=$(cargo gmsol -ul treasury init-config)
+
+cargo gmsol -ul admin transfer-receiver $CONFIG --confirm
+
 cargo gmsol -ul admin init-roles \
-    --gt-controller $KEEPER_ADDRESS \
     --market-keeper $KEEPER_ADDRESS \
-    --order-keeper $KEEPER_ADDRESS
+    --order-keeper $KEEPER_ADDRESS \
+    --treasury-admin $KEEPER_ADDRESS \
+    --treasury-withdrawer $KEEPER_ADDRESS \
+    --treasury-keeper $KEEPER_ADDRESS \
+    --allow-multiple-transactions
+
+export TREASURY=$(cargo gmsol -ul -w $GMSOL_KEEPER treasury init-treasury 0)
+cargo gmsol -ul -w $GMSOL_KEEPER treasury set-treasury $TREASURY
+
+cargo gmsol -ul -w $GMSOL_KEEPER treasury insert-token So11111111111111111111111111111111111111112
+cargo gmsol -ul -w $GMSOL_KEEPER treasury toggle-token-flag So11111111111111111111111111111111111111112 allow_deposit --enable
+cargo gmsol -ul -w $GMSOL_KEEPER treasury toggle-token-flag So11111111111111111111111111111111111111112 allow_withdrawal --enable
+cargo gmsol -ul -w $GMSOL_KEEPER treasury insert-token $USDG
+cargo gmsol -ul -w $GMSOL_KEEPER treasury toggle-token-flag $USDG allow_deposit --enable
+cargo gmsol -ul -w $GMSOL_KEEPER treasury toggle-token-flag $USDG allow_withdrawal --enable
 
 cargo gmsol -ul -w $GMSOL_KEEPER market init-gt \
     -c 100000000000 \
@@ -86,7 +104,7 @@ cargo gmsol -ul -w $GMSOL_KEEPER market set-order-fee-discount-factors \
     9000000000000000000 \
     10000000000000000000
 
-cargo gmsol -ul -w $GMSOL_KEEPER market set-referral-reward-factors \
+cargo gmsol -ul -w $GMSOL_KEEPER treasury set-referral-reward \
     0 \
     2000000000000000000 \
     3000000000000000000 \
@@ -101,7 +119,7 @@ cargo gmsol -ul -w $GMSOL_KEEPER market set-referral-reward-factors \
 cargo gmsol -ul -w $GMSOL_KEEPER market set-referred-discount-factor 10000000000000000000
 
 export TOKEN_MAP=$(cargo gmsol -ul market create-token-map)
-export ORACLE=$(cargo gmsol -ul market init-oracle --seed $GMSOL_ORACLE_SEED)
+export ORACLE=$(cargo gmsol -ul market init-oracle --seed $GMSOL_ORACLE_SEED --authority $CONFIG)
 cargo gmsol -ul -w $GMSOL_KEEPER market insert-token-configs $GMSOL_TOKENS --token-map $TOKEN_MAP --set-token-map
 cargo gmsol -ul -w $GMSOL_KEEPER market create-markets $GMSOL_MARKETS --enable
 cargo gmsol -ul -w $GMSOL_KEEPER market update-configs $GMSOL_MARKET_CONFIGS
@@ -113,6 +131,8 @@ export COMMON_ALT=$(cargo gmsol -ul alt extend --init common $ORACLE)
 export MARKET_ALT=$(cargo gmsol -ul alt extend --init market)
 
 echo "STORE: $STORE"
+echo "CONFIG: $CONFIG"
+echo "TREASURY: $TREASURY"
 echo "ORACLE: $ORACLE"
 echo "USDG: $USDG"
 echo "COMMON_ALT: $COMMON_ALT"

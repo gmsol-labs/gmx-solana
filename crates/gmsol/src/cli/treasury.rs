@@ -4,6 +4,7 @@ use gmsol::{
     treasury::TreasuryOps,
     utils::builder::{MakeTransactionBuilder, WithPullOracle},
 };
+use gmsol_treasury::states::treasury::TokenFlag;
 
 use crate::{utils::Side, GMSOLClient};
 
@@ -21,6 +22,22 @@ enum Command {
     InitTreasury { index: u8 },
     /// Set treasury.
     SetTreasury { treasury_config: Pubkey },
+    /// Insert token to the treasury.
+    InsertToken { token: Pubkey },
+    /// Toggle token flag.
+    ToggleTokenFlag {
+        token: Pubkey,
+        #[arg(requires = "toggle")]
+        flag: TokenFlag,
+        /// Enable the given flag.
+        #[arg(long, group = "toggle")]
+        enable: bool,
+        /// Disable the given flag.
+        #[arg(long, group = "toggle")]
+        disable: bool,
+    },
+    /// Set referral reward factors.
+    SetReferralReward { factors: Vec<u128> },
     /// Claim fees.
     ClaimFees {
         market_token: Pubkey,
@@ -50,13 +67,38 @@ impl Args {
         skip_preflight: bool,
     ) -> gmsol::Result<()> {
         let req = match &self.command {
-            Command::InitConfig => client.initialize_config(store),
+            Command::InitConfig => {
+                let (rpc, config) = client.initialize_config(store).swap_output(());
+                println!("{config}");
+                rpc
+            }
             Command::InitTreasury { index } => {
                 let (rpc, address) = client.initialize_treasury(store, *index).swap_output(());
                 println!("{address}");
                 rpc
             }
             Command::SetTreasury { treasury_config } => client.set_treasury(store, treasury_config),
+            Command::InsertToken { token } => {
+                client.insert_token_to_treasury(store, None, token).await?
+            }
+            Command::ToggleTokenFlag {
+                token,
+                flag,
+                enable,
+                disable,
+            } => {
+                assert!(*enable != *disable);
+                let value = *enable;
+                client
+                    .toggle_token_flag(store, None, token, *flag, value)
+                    .await?
+            }
+            Command::SetReferralReward { factors } => {
+                if factors.is_empty() {
+                    return Err(gmsol::Error::invalid_argument("factors must be provided"));
+                }
+                client.set_referral_reward(store, factors.clone())
+            }
             Command::ClaimFees { market_token, side } => {
                 let market = client.find_market_address(store, market_token);
                 let token_mint = client

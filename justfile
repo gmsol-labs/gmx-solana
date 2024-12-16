@@ -17,6 +17,7 @@ LOCALNET_USDG_KEYPAIR := RESOURCES / "keypair" / "usdg.json"
 
 VERIFIABLE := TARGET / "verifiable"
 STORE_PROGRAM := VERIFIABLE / "gmsol_store.so"
+TREASURY_PROGRAM := VERIFIABLE / "gmsol_treasury.so"
 MOCK_CHAINLINK_PROGRAM := VERIFIABLE / "mock_chainlink_verifier.so"
 
 default: lint test-crates test-programs
@@ -44,7 +45,7 @@ build-idls:
   anchor idl build -p gmsol_store -t {{IDL_OUT_DIR}}/gmsol_store.ts -o {{IDL_OUT_DIR}}/gmsol_store.json
 
 check-verifiable:
-  @if [ -f "{{STORE_PROGRAM}}" ] && [ -f {{MOCK_CHAINLINK_PROGRAM}} ]; then \
+  @if [ -f {{STORE_PROGRAM}} ] && [ -f {{TREASURY_PROGRAM}} ] && [ -f {{MOCK_CHAINLINK_PROGRAM}} ]; then \
     echo "Verifiable programs found."; \
   else \
     echo "Verifiable programs not found. Please build them."; \

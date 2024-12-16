@@ -27,7 +27,7 @@ use crate::{
 /// Treasury instructions.
 pub trait TreasuryOps<C> {
     /// Initialize [`Config`](crate::types::treasury::Config) account.
-    fn initialize_config(&self, store: &Pubkey) -> RpcBuilder<C>;
+    fn initialize_config(&self, store: &Pubkey) -> RpcBuilder<C, Pubkey>;
 
     /// Set treasury.
     fn set_treasury(&self, store: &Pubkey, treasury_config: &Pubkey) -> RpcBuilder<C>;
@@ -98,6 +98,9 @@ pub trait TreasuryOps<C> {
     /// Transfer receiver.
     fn transfer_receiver(&self, store: &Pubkey, new_receiver: &Pubkey) -> RpcBuilder<C>;
 
+    /// Set referral reward factors.
+    fn set_referral_reward(&self, store: &Pubkey, factors: Vec<u128>) -> RpcBuilder<C>;
+
     /// Claim fees to receiver vault.
     fn claim_fees_to_receiver_vault(
         &self,
@@ -140,15 +143,17 @@ where
     C: Deref<Target = S> + Clone,
     S: Signer,
 {
-    fn initialize_config(&self, store: &Pubkey) -> RpcBuilder<C> {
+    fn initialize_config(&self, store: &Pubkey) -> RpcBuilder<C, Pubkey> {
+        let config = self.find_config_address(store);
         self.treasury_rpc()
             .args(instruction::InitializeConfig {})
             .accounts(accounts::InitializeConfig {
                 payer: self.payer(),
                 store: *store,
-                config: self.find_config_address(store),
+                config,
                 system_program: system_program::ID,
             })
+            .with_output(config)
     }
 
     fn set_treasury(&self, store: &Pubkey, treasury_config: &Pubkey) -> RpcBuilder<C> {
@@ -376,6 +381,17 @@ where
                 receiver: *new_receiver,
                 store_program: *self.store_program_id(),
                 system_program: system_program::ID,
+            })
+    }
+
+    fn set_referral_reward(&self, store: &Pubkey, factors: Vec<u128>) -> RpcBuilder<C> {
+        self.treasury_rpc()
+            .args(instruction::SetReferralReward { factors })
+            .accounts(accounts::SetReferralReward {
+                authority: self.payer(),
+                store: *store,
+                config: self.find_config_address(store),
+                store_program: *self.store_program_id(),
             })
     }
 
