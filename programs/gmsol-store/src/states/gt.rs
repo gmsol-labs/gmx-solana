@@ -61,6 +61,7 @@ pub struct GtState {
     /* States */
     pub(crate) last_minted_at: i64,
     total_minted: u64,
+    // Must be immutable.
     grow_step_amount: u64,
     grow_steps: u64,
     supply: u64,
@@ -133,6 +134,11 @@ impl GtState {
         self.es_vesting_divisor = constants::DEFAULT_ES_GT_VESTING_DIVISOR;
 
         Ok(())
+    }
+
+    /// Returns whether the GT state is initialized.
+    pub fn is_initialized(&self) -> bool {
+        self.grow_step_amount != 0
     }
 
     pub(crate) fn set_order_fee_discount_factors(&mut self, factors: &[u128]) -> Result<()> {

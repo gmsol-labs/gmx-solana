@@ -69,8 +69,9 @@ check-geyser:
 start-localnet: check-geyser check-verifiable
   sh {{START_LOCALNET_SCRIPT}}
 
-setup-localnet keeper oracle="42":
+setup-localnet keeper oracle="42" time_window="600":
   @GMSOL_KEEPER={{absolute_path(keeper)}} \
   GMSOL_ORACLE_SEED={{oracle}} \
   LOCALNET_USDG_KEYPAIR={{absolute_path(LOCALNET_USDG_KEYPAIR)}} \
+  GMSOL_TIME_WINDOW={{time_window}} \
   sh {{SETUP_LOCALNET_SCRIPT}}

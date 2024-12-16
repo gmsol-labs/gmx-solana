@@ -79,7 +79,10 @@ pub struct ConfigurateGt<'info> {
     /// Authority.
     pub authority: Signer<'info>,
     /// Store.
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
+    )]
     pub store: AccountLoader<'info, Store>,
 }
 
@@ -159,6 +162,7 @@ pub(crate) fn unchecked_gt_set_receiver(
 pub struct PrepareGtExchangeVault<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
+    #[account(constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet)]
     pub store: AccountLoader<'info, Store>,
     #[account(
         init_if_needed,
@@ -228,7 +232,10 @@ pub(crate) fn prepare_gt_exchange_vault(
 pub struct RequestGtExchange<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
+    )]
     pub store: AccountLoader<'info, Store>,
     /// User Account.
     #[account(
@@ -322,7 +329,10 @@ pub struct ConfirmGtExchangeVault<'info> {
     /// Authority.
     pub authority: Signer<'info>,
     /// Store.
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
+    )]
     pub store: AccountLoader<'info, Store>,
     #[account(
         mut,
@@ -360,6 +370,9 @@ impl<'info> internal::Authentication<'info> for ConfirmGtExchangeVault<'info> {
 #[derive(Accounts)]
 pub struct CloseGtExchange<'info> {
     pub authority: Signer<'info>,
+    #[account(
+        constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
+    )]
     pub store: AccountLoader<'info, Store>,
     /// CHECK: only used to receive the funds.
     #[account(mut)]
@@ -414,7 +427,10 @@ impl<'info> internal::Authentication<'info> for CloseGtExchange<'info> {
 #[derive(Accounts)]
 pub struct ClaimEsGt<'info> {
     pub owner: Signer<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
+    )]
     pub store: AccountLoader<'info, Store>,
     /// User Account.
     #[account(
@@ -440,7 +456,10 @@ pub(crate) fn claim_es_gt(ctx: Context<ClaimEsGt>) -> Result<()> {
 pub struct RequestGtVesting<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
+    )]
     pub store: AccountLoader<'info, Store>,
     /// User Account.
     #[account(
@@ -532,7 +551,10 @@ impl<'info> RequestGtVesting<'info> {
 #[derive(Accounts)]
 pub struct UpdateGtVesting<'info> {
     pub owner: Signer<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
+    )]
     pub store: AccountLoader<'info, Store>,
     /// User Account.
     #[account(
@@ -571,6 +593,9 @@ pub(crate) fn update_gt_vesting(ctx: Context<UpdateGtVesting>) -> Result<()> {
 #[derive(Accounts)]
 pub struct CloseGtVesting<'info> {
     pub owner: Signer<'info>,
+    #[account(
+        constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
+    )]
     pub store: AccountLoader<'info, Store>,
     /// User Account.
     #[account(
@@ -613,7 +638,10 @@ pub(crate) fn close_gt_vesting(ctx: Context<CloseGtVesting>) -> Result<()> {
 pub struct ClaimEsGtVaultViaVesting<'info> {
     /// The owner.
     pub owner: Signer<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
+    )]
     pub store: AccountLoader<'info, Store>,
     /// User account.
     #[account(

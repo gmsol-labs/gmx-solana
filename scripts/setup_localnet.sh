@@ -42,6 +42,13 @@ else
     echo "LOCALNET_USDG_KEYPAIR is set to: $LOCALNET_USDG_KEYPAIR"
 fi
 
+if [ -z "${GMSOL_TIME_WINDOW}" ]; then
+    echo "Error: GMSOL_TIME_WINDOW is not set" >&2
+    exit 1
+else
+    echo "GMSOL_TIME_WINDOW is set to: $GMSOL_TIME_WINDOW"
+fi
+
 export KEEPER_ADDRESS=$(solana-keygen pubkey $GMSOL_KEEPER)
 solana -ul airdrop 10000 $KEEPER_ADDRESS
 solana -ul airdrop 1 11111111111111111111111111111112
@@ -117,6 +124,10 @@ cargo gmsol -ul -w $GMSOL_KEEPER treasury set-referral-reward \
     10000000000000000000
 
 cargo gmsol -ul -w $GMSOL_KEEPER market set-referred-discount-factor 10000000000000000000
+
+cargo gmsol -ul admin grant-role $KEEPER_ADDRESS GT_CONTROLLER
+cargo gmsol -ul -w $GMSOL_KEEPER gt set-exchange-time-window $GMSOL_TIME_WINDOW
+cargo gmsol -ul admin revoke-role $KEEPER_ADDRESS GT_CONTROLLER
 
 export TOKEN_MAP=$(cargo gmsol -ul market create-token-map)
 export ORACLE=$(cargo gmsol -ul market init-oracle --seed $GMSOL_ORACLE_SEED --authority $CONFIG)
