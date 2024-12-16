@@ -29,6 +29,7 @@ pub struct RpcBuilder<'a, C, T = ()> {
     program_id: Pubkey,
     cfg: Config<C>,
     signers: Vec<&'a dyn Signer>,
+    owned_signers: Vec<Box<dyn Signer>>,
     pre_instructions: Vec<Instruction>,
     accounts: Vec<AccountMeta>,
     instruction_data: Option<Vec<u8>>,
@@ -120,6 +121,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> RpcBuilder<'a, C> {
             program_id,
             cfg: cfg.clone(),
             signers: Default::default(),
+            owned_signers: Default::default(),
             pre_instructions: Default::default(),
             accounts: Default::default(),
             instruction_data: None,
@@ -179,6 +181,9 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> RpcBuilder<'a, C> {
         // Merge signers.
         self.signers.append(&mut other.signers);
 
+        // Merge owned signers.
+        self.owned_signers.append(&mut other.owned_signers);
+
         // Merge compute budget.
         self.compute_budget += std::mem::take(&mut other.compute_budget);
 
@@ -209,6 +214,12 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> RpcBuilder<'a, C, T> {
     /// Add a signer to the signer list.
     pub fn signer(mut self, signer: &'a dyn Signer) -> Self {
         self.signers.push(signer);
+        self
+    }
+
+    /// Add a owned sigenr to the signer list.
+    pub fn owned_signer(mut self, signer: impl Signer + 'static) -> Self {
+        self.owned_signers.push(Box::new(signer));
         self
     }
 
@@ -293,6 +304,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> RpcBuilder<'a, C, T> {
         let Self {
             cfg,
             signers,
+            owned_signers,
             output: previous,
             program_id,
             pre_instructions,
@@ -304,9 +316,10 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> RpcBuilder<'a, C, T> {
 
         (
             RpcBuilder {
-                signers,
-                output,
                 cfg,
+                signers,
+                owned_signers,
+                output,
                 program_id,
                 pre_instructions,
                 accounts,
@@ -430,6 +443,9 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> RpcBuilder<'a, C, T> {
 
         let mut signers = self.signers.clone();
         signers.push(&*self.cfg.payer);
+        for signer in self.owned_signers.iter() {
+            signers.push(&**signer);
+        }
 
         let tx = VersionedTransaction::try_new(message, &signers)?;
 
@@ -516,6 +532,9 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> RpcBuilder<'a, C, T> {
     }
 
     /// Build [`RequestBuilder`] and output.
+    ///
+    /// # Warning
+    /// Owned signers will be ignored currently.
     pub fn into_anchor_request_with_options(
         self,
         without_compute_budget: bool,
