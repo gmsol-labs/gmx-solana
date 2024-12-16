@@ -155,7 +155,7 @@ where
         {
             return Ok((long_token, short_token));
         }
-        let market = read_market(&self.client.data_store().solana_rpc(), market).await?;
+        let market = read_market(&self.client.store_program().solana_rpc(), market).await?;
         Ok((
             self.final_long_token
                 .unwrap_or_else(|| market.meta().long_token_mint),

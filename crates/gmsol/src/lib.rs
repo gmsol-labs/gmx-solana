@@ -11,11 +11,14 @@ pub mod discover;
 /// Error type for `gmsol`.
 pub mod error;
 
-/// Actions for `DataStore` program.
+/// Instructions for the store program.
 pub mod store;
 
-/// Actions for `Exchange` program.`
+/// Instructions for the exchange funtionality.
 pub mod exchange;
+
+/// Instructions for the treasury program.
+pub mod treasury;
 
 /// Address Lookup Table operations.
 pub mod alt;

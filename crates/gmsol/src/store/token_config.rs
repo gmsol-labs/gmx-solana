@@ -334,7 +334,7 @@ where
     }
 
     async fn token_config(&self, token_map: &Pubkey, token: &Pubkey) -> crate::Result<TokenConfig> {
-        let client = self.data_store().solana_rpc();
+        let client = self.store_program().solana_rpc();
         let name = self
             .token_name(token_map, token)
             .into_anchor_request()

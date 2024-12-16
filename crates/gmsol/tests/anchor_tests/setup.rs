@@ -449,7 +449,7 @@ impl Deployment {
         use anchor_spl::token::{Mint, ID};
         use spl_token::instruction;
 
-        let client = self.client.data_store().solana_rpc();
+        let client = self.client.store_program().solana_rpc();
         let rent = client
             .get_minimum_balance_for_rent_exemption(Mint::LEN)
             .await?;
@@ -513,7 +513,7 @@ impl Deployment {
         use anchor_spl::token::ID;
         use spl_associated_token_account::instruction;
 
-        let client = self.client.data_store().solana_rpc();
+        let client = self.client.store_program().solana_rpc();
         let mut builder = TransactionBuilder::new(client);
 
         let payer = self.client.payer();
@@ -900,7 +900,7 @@ impl Deployment {
     async fn fund_users(&self) -> eyre::Result<()> {
         const LAMPORTS: u64 = 2_000_000_000;
 
-        let client = self.client.data_store().solana_rpc();
+        let client = self.client.store_program().solana_rpc();
         let payer = self.client.payer();
         let lamports = client.get_balance(&payer).await?;
         tracing::info!(%payer, "before funding users: {lamports}");
@@ -936,7 +936,7 @@ impl Deployment {
         use spl_token::{instruction, native_mint};
 
         let payer = self.client.payer();
-        let client = self.client.data_store().solana_rpc();
+        let client = self.client.store_program().solana_rpc();
         let mut builder = TransactionBuilder::new(client);
 
         let users = self.users.keypairs().await.into_iter().collect::<Vec<_>>();
@@ -970,10 +970,10 @@ impl Deployment {
     }
 
     async fn refund_payer(&self) -> eyre::Result<()> {
-        let client = self.client.data_store().solana_rpc();
+        let client = self.client.store_program().solana_rpc();
         let payer = self.client.payer();
 
-        let mut builder = TransactionBuilder::new(self.client.data_store().solana_rpc());
+        let mut builder = TransactionBuilder::new(self.client.store_program().solana_rpc());
 
         let users = self.users.keypairs().await.into_iter().collect::<Vec<_>>();
         for user in &users {

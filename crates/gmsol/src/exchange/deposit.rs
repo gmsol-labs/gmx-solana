@@ -146,7 +146,7 @@ where
                     (long_token.is_none() && long_amount != 0)
                         || (short_token.is_none() && short_amount != 0)
                 );
-                let market = read_market(&self.client.data_store().solana_rpc(), market).await?;
+                let market = read_market(&self.client.store_program().solana_rpc(), market).await?;
                 if long_amount != 0 && long_token.is_none() {
                     long_token = Some(market.meta().long_token_mint);
                 }

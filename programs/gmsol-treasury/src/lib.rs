@@ -76,13 +76,13 @@ pub mod gmsol_treasury {
         instructions::unchecked_toggle_token_flag(ctx, &flag, value)
     }
 
-    /// Deposit into the treasury vault.
+    /// Deposit into a treasury vault.
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_KEEPER))]
     pub fn deposit_into_treasury(ctx: Context<DepositIntoTreasury>) -> Result<()> {
         instructions::unchecked_deposit_into_treasury(ctx)
     }
 
-    /// Withdraw from the treasury vault.
+    /// Withdraw from a treasury vault.
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_WITHDRAWER))]
     pub fn withdraw_from_treasury(
         ctx: Context<WithdrawFromTreasury>,

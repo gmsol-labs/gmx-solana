@@ -51,12 +51,12 @@ struct Cli {
         default_value = ""
     )]
     store: String,
-    /// `DataStore` Program ID.
+    /// Store Program ID.
     #[arg(long, env)]
     store_program: Option<Pubkey>,
-    /// `Exchange` Program ID.
+    /// Treasury Program ID.
     #[arg(long, env)]
-    exchange_program: Option<Pubkey>,
+    treasury_program: Option<Pubkey>,
     /// Print the Based64 encoded serialized instructions,
     /// instead of sending the transaction.
     #[arg(long, group = "tx-opts")]
@@ -144,7 +144,7 @@ impl Cli {
 
     async fn store(&self, client: &GMSOLClient) -> eyre::Result<(Pubkey, String)> {
         if let Some(address) = self.store_address {
-            let store = read_store(&client.data_store().solana_rpc(), &address).await?;
+            let store = read_store(&client.store_program().solana_rpc(), &address).await?;
             Ok((address, store.key()?.to_owned()))
         } else {
             let store = client.find_store_address(&self.store);
@@ -155,7 +155,8 @@ impl Cli {
     fn options(&self) -> gmsol::ClientOptions {
         gmsol::ClientOptions::builder()
             .commitment(self.commitment)
-            .data_store_program_id(self.store_program)
+            .store_program_id(self.store_program)
+            .treasury_program_id(self.treasury_program)
             .build()
     }
 

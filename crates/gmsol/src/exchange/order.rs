@@ -220,7 +220,7 @@ where
                 return Ok(hint);
             }
             let market =
-                read_market(&self.client.data_store().solana_rpc(), &self.market()).await?;
+                read_market(&self.client.store_program().solana_rpc(), &self.market()).await?;
             self.hint(market.meta());
         }
     }
@@ -790,12 +790,12 @@ where
                 None => {
                     let order = self.client.order(&self.order).await?;
                     let market = read_market(
-                        &self.client.data_store().solana_rpc(),
+                        &self.client.store_program().solana_rpc(),
                         order.header().market(),
                     )
                     .await?;
                     let store =
-                        read_store(&self.client.data_store().solana_rpc(), &self.store).await?;
+                        read_store(&self.client.store_program().solana_rpc(), &self.store).await?;
                     let token_map_address = self.get_token_map().await?;
                     let token_map = self.client.token_map(&token_map_address).await?;
                     let owner = order.header().owner();
@@ -1095,7 +1095,7 @@ where
         let (pre_builder, post_builder) = builder.build(self.client);
 
         let mut transaction_builder =
-            TransactionBuilder::new(self.client.data_store().solana_rpc());
+            TransactionBuilder::new(self.client.store_program().solana_rpc());
         transaction_builder
             .try_push(pre_builder)?
             .try_push(execute_order)?

@@ -288,7 +288,7 @@ impl KeeperArgs {
                 let mut builder = client.execute_withdrawal(store, &self.oracle, withdrawal, true);
                 let execution_fee = self
                     .get_or_estimate_execution_fee(
-                        &client.data_store().solana_rpc(),
+                        &client.store_program().solana_rpc(),
                         builder.build().await?,
                     )
                     .await?;

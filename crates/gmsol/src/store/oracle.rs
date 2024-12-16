@@ -60,7 +60,7 @@ where
 
         let size = 8 + Oracle::INIT_SPACE;
         let lamports = self
-            .data_store()
+            .store_program()
             .solana_rpc()
             .get_minimum_balance_for_rent_exemption(size)
             .await

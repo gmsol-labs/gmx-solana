@@ -48,7 +48,7 @@ use self::{
     withdrawal::{CloseWithdrawalBuilder, CreateWithdrawalBuilder, ExecuteWithdrawalBuilder},
 };
 
-/// Exchange instructions for GMSOL.
+/// Exchange instructions.
 pub trait ExchangeOps<C> {
     /// Toggle feature.
     fn toggle_feature(

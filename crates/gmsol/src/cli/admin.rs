@@ -98,7 +98,7 @@ impl AdminArgs {
                 } else {
                     let transaction = rpc.into_anchor_request().signed_transaction().await?;
                     let response = client
-                        .data_store()
+                        .store_program()
                         .solana_rpc()
                         .simulate_transaction(&transaction)
                         .await
@@ -194,7 +194,7 @@ impl InitializeRoles {
         let store = client.find_store_address(store_key);
 
         let mut builder = TransactionBuilder::new_with_options(
-            client.data_store().solana_rpc(),
+            client.store_program().solana_rpc(),
             !self.allow_multiple_transactions,
             self.max_transaction_size,
         );

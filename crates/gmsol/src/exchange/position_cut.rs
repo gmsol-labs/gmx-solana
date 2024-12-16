@@ -411,7 +411,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PositionCutBuilder<'a, C> {
         )
         .build(self.client);
 
-        let mut builder = TransactionBuilder::new(self.client.data_store().solana_rpc());
+        let mut builder = TransactionBuilder::new(self.client.store_program().solana_rpc());
         builder
             .try_push(pre_builder.merge(prepare_event_buffer))?
             .try_push(prepare.merge(exec_builder))?

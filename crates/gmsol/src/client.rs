@@ -36,7 +36,9 @@ const DISC_OFFSET: usize = 8;
 #[derive(Debug, Clone, TypedBuilder)]
 pub struct ClientOptions {
     #[builder(default)]
-    data_store_program_id: Option<Pubkey>,
+    store_program_id: Option<Pubkey>,
+    #[builder(default)]
+    treasury_program_id: Option<Pubkey>,
     #[builder(default)]
     commitment: CommitmentConfig,
     #[builder(default)]
@@ -53,7 +55,8 @@ impl Default for ClientOptions {
 pub struct Client<C> {
     cfg: Config<C>,
     anchor: Arc<anchor_client::Client<C>>,
-    data_store: Program<C>,
+    store_program: Program<C>,
+    treasury_program: Program<C>,
     pub_sub: OnceCell<PubsubClient>,
     subscription_config: SubscriptionConfig,
 }
@@ -66,7 +69,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         options: ClientOptions,
     ) -> crate::Result<Self> {
         let ClientOptions {
-            data_store_program_id,
+            store_program_id,
+            treasury_program_id,
             commitment,
             subscription,
         } = options;
@@ -74,8 +78,9 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             anchor_client::Client::new_with_options(cluster.clone(), payer.clone(), commitment);
         let cfg = Config::new(cluster, payer, commitment);
         Ok(Self {
-            data_store: Program::new(
-                data_store_program_id.unwrap_or(gmsol_store::id()),
+            store_program: Program::new(store_program_id.unwrap_or(gmsol_store::id()), cfg.clone()),
+            treasury_program: Program::new(
+                treasury_program_id.unwrap_or(gmsol_treasury::id()),
                 cfg.clone(),
             ),
             cfg,
@@ -99,7 +104,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             self.cluster().clone(),
             payer,
             ClientOptions {
-                data_store_program_id: Some(*self.store_program_id()),
+                store_program_id: Some(*self.store_program_id()),
+                treasury_program_id: Some(*self.treasury_program_id()),
                 commitment: self.commitment(),
                 subscription: self.subscription_config.clone(),
             },
@@ -111,7 +117,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         Ok(Self {
             cfg: self.cfg.clone(),
             anchor: self.anchor.clone(),
-            data_store: self.program(*self.store_program_id()),
+            store_program: self.program(*self.store_program_id()),
+            treasury_program: self.program(*self.treasury_program_id()),
             pub_sub: OnceCell::default(),
             subscription_config: self.subscription_config.clone(),
         })
@@ -148,19 +155,34 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         self.cfg.payer()
     }
 
-    /// Get `DataStore` Program.
-    pub fn data_store(&self) -> &Program<C> {
-        &self.data_store
+    /// Get the store program.
+    pub fn store_program(&self) -> &Program<C> {
+        &self.store_program
     }
 
-    /// Create a new `DataStore` Program.
-    pub fn new_data_store(&self) -> crate::Result<Program<C>> {
+    /// Get the treasury program.
+    pub fn treasury_program(&self) -> &Program<C> {
+        &self.treasury_program
+    }
+
+    /// Create a new store program.
+    pub fn new_store_program(&self) -> crate::Result<Program<C>> {
         Ok(self.program(*self.store_program_id()))
     }
 
-    /// Get the program id of `Store` program.
+    /// Create a new treasury program.
+    pub fn new_treasury_program(&self) -> crate::Result<Program<C>> {
+        Ok(self.program(*self.store_program_id()))
+    }
+
+    /// Get the program id of the store program.
     pub fn store_program_id(&self) -> &Pubkey {
-        self.data_store().id()
+        self.store_program().id()
+    }
+
+    /// Get the program id of the treasury program.
+    pub fn treasury_program_id(&self) -> &Pubkey {
+        self.treasury_program().id()
     }
 
     /// Create a rpc builder for `Store` Program.
@@ -175,7 +197,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         max_packet_size: Option<usize>,
     ) -> TransactionBuilder<'_, C> {
         TransactionBuilder::new_with_options(
-            self.data_store.solana_rpc(),
+            self.store_program.solana_rpc(),
             force_one_transaction,
             max_packet_size,
         )
@@ -374,7 +396,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     /// Get slot.
     pub async fn get_slot(&self, commitment: Option<CommitmentConfig>) -> crate::Result<u64> {
         let slot = self
-            .data_store()
+            .store_program()
             .solana_rpc()
             .get_slot_with_commitment(commitment.unwrap_or(self.commitment()))
             .await
@@ -402,7 +424,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                     .map(RpcFilterType::from),
             )
             .chain(other_filters);
-        accounts_lazy_with_context(self.data_store(), filters, config)
+        accounts_lazy_with_context(self.store_program(), filters, config)
             .await?
             .map(|iter| iter.collect())
             .transpose()
@@ -420,7 +442,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         T: AccountDeserialize,
     {
         config.encoding = Some(config.encoding.unwrap_or(UiAccountEncoding::Base64));
-        let client = self.data_store().solana_rpc();
+        let client = self.store_program().solana_rpc();
         account_with_context(&client, address, config).await
     }
 
@@ -575,7 +597,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             maximize_pool_value,
         );
         let status = crate::utils::view::<MarketStatus>(
-            &self.data_store().solana_rpc(),
+            &self.store_program().solana_rpc(),
             &req.into_anchor_request().signed_transaction().await?,
         )
         .await?;
@@ -593,7 +615,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     ) -> crate::Result<u128> {
         let req = self.get_market_token_price(store, market_token, prices, pnl_factor, maximize);
         let price = crate::utils::view::<u128>(
-            &self.data_store().solana_rpc(),
+            &self.store_program().solana_rpc(),
             &req.into_anchor_request().signed_transaction().await?,
         )
         .await?;
@@ -760,7 +782,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
 
         let program_id = self.store_program_id();
         let event_authority = self.store_event_authority();
-        let query = Arc::new(self.data_store().solana_rpc());
+        let query = Arc::new(self.store_program().solana_rpc());
         let commitment = commitment.unwrap_or(self.subscription_config.commitment);
         let signatures = self
             .pub_sub()
@@ -819,7 +841,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         };
 
         let commitment = commitment.unwrap_or(self.commitment());
-        let client = Arc::new(self.data_store().solana_rpc());
+        let client = Arc::new(self.store_program().solana_rpc());
         let signatures = fetch_transaction_history_with_config(
             client.clone(),
             address,

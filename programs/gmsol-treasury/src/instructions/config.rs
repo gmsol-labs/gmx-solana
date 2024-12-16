@@ -50,7 +50,7 @@ pub struct SetTreasury<'info> {
     pub config: AccountLoader<'info, Config>,
     /// Treasury.
     #[account(has_one = config)]
-    pub treasury: AccountLoader<'info, TreasuryConfig>,
+    pub treasury_config: AccountLoader<'info, TreasuryConfig>,
     /// Store program.
     pub store_program: Program<'info, GmsolStore>,
 }
@@ -59,16 +59,16 @@ pub struct SetTreasury<'info> {
 /// # CHECK
 /// Only [`TREASURY_ADMIN`](crate::roles::TREASURY_ADMIN) can use.
 pub(crate) fn unchecked_set_treasury(ctx: Context<SetTreasury>) -> Result<()> {
-    let treasury = ctx.accounts.treasury.key();
+    let address = ctx.accounts.treasury_config.key();
     let previous = ctx
         .accounts
         .config
         .load_mut()?
-        .set_treasury_config(treasury)?;
+        .set_treasury_config(address)?;
     msg!(
         "[Treasury] the treasury address has been updated from {} to {}",
         previous,
-        treasury
+        address
     );
     Ok(())
 }

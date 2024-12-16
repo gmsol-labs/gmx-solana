@@ -935,7 +935,7 @@ async fn insert_token_configs(
     configs: &IndexMap<String, TokenConfig>,
 ) -> gmsol::Result<()> {
     let mut builder = TransactionBuilder::new_with_options(
-        client.data_store().solana_rpc(),
+        client.store_program().solana_rpc(),
         false,
         max_transaction_size,
     );
@@ -1009,7 +1009,7 @@ async fn create_markets(
     markets: &IndexMap<String, Market>,
 ) -> gmsol::Result<()> {
     let mut builder = TransactionBuilder::new_with_options(
-        client.data_store().solana_rpc(),
+        client.store_program().solana_rpc(),
         false,
         max_transaction_size,
     );
@@ -1072,7 +1072,7 @@ impl MarketConfigMap {
         batch: NonZeroUsize,
     ) -> gmsol::Result<()> {
         let mut builder = TransactionBuilder::new_with_options(
-            client.data_store().solana_rpc(),
+            client.store_program().solana_rpc(),
             false,
             max_transaction_size,
         );
@@ -1142,7 +1142,7 @@ impl MarketConfigs {
         close_buffers: bool,
     ) -> gmsol::Result<()> {
         let mut builder = TransactionBuilder::new_with_options(
-            client.data_store().solana_rpc(),
+            client.store_program().solana_rpc(),
             false,
             max_transaction_size,
         );

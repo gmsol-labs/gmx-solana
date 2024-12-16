@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token_2022::{transfer_checked, TransferChecked},
+    token::Token,
+    token_2022::{transfer_checked, Token2022, TransferChecked},
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 use gmsol_store::{
@@ -293,12 +294,15 @@ pub struct CompleteGtExchange<'info> {
     )]
     pub gt_bank: AccountLoader<'info, GtBank>,
     /// Exchange to complete.
+    /// The ownership should be checked by the CPI.
     #[account(mut)]
     pub exchange: AccountLoader<'info, GtExchange>,
     /// Store program.
     pub store_program: Program<'info, GmsolStore>,
     /// The token program.
-    pub token_program: Interface<'info, TokenInterface>,
+    pub token_program: Program<'info, Token>,
+    /// The token-2022 program.
+    pub token_2022_program: Program<'info, Token2022>,
 }
 
 pub(crate) fn complete_gt_exchange<'info>(
@@ -372,11 +376,19 @@ impl<'info> CompleteGtExchange<'info> {
                     owner_address
                 );
 
+                let token_program = if mint.owner == self.token_program.key {
+                    self.token_program.to_account_info()
+                } else if mint.owner == self.token_2022_program.key {
+                    self.token_2022_program.to_account_info()
+                } else {
+                    return err!(CoreError::InvalidArgument);
+                };
+
                 let mint = InterfaceAccount::<Mint>::try_from(mint)?;
                 let decimals = mint.decimals;
 
                 let ctx = CpiContext::new(
-                    self.token_program.to_account_info(),
+                    token_program,
                     TransferChecked {
                         from: vault.to_account_info(),
                         mint: mint.to_account_info(),

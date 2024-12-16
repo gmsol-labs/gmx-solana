@@ -88,7 +88,11 @@ gmsol-store = { workspace = true, features = [
     "serde",
     "enum-iter",
 ] }
-gmsol-treasury = { workspace = true, features = ["no-entrypoint", "debug"] }
+gmsol-treasury = { workspace = true, features = [
+    "no-entrypoint",
+    "debug",
+    "enum-iter",
+] }
 gmsol-timelock = { workspace = true, features = ["no-entrypoint", "debug"] }
 gmsol-model = { workspace = true, features = ["strum", "serde"] }
 gmsol-decode = { workspace = true, optional = true, features = [
