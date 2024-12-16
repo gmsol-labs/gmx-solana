@@ -7,6 +7,7 @@ use crate::{
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use gmsol::{
     store::gt::GtOps,
+    treasury::TreasuryOps,
     types::gt::GtVesting,
     utils::{unsigned_amount_to_decimal, ZeroCopy},
 };
@@ -66,7 +67,7 @@ enum Command {
             group = "exchange-input",
             requires = "confirm"
         )]
-        close: Option<Pubkey>,
+        complete: Option<Pubkey>,
         #[arg(long, group = "exchange-input")]
         owner: Option<Pubkey>,
         /// Confirm the operation.
@@ -255,7 +256,7 @@ impl Args {
             }
             Command::Exchange {
                 request: amount,
-                close,
+                complete,
                 owner,
                 confirm: _,
                 prepare_vault,
@@ -264,7 +265,7 @@ impl Args {
                 let time_window = store_account.gt().exchange_time_window();
                 let decimals = store_account.gt().decimals();
 
-                match (amount, close) {
+                match (amount, complete) {
                     (Some(amount), None) => {
                         let amount = parse_amount(amount, decimals)?;
                         let request = client.request_gt_exchange_with_time_window(
@@ -288,7 +289,7 @@ impl Args {
                     }
                     (None, Some(exchange)) => {
                         let rpc = client
-                            .close_gt_exchange(store, exchange, None, None)
+                            .complete_gt_exchange(store, exchange, None, None, None)
                             .await?;
                         send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
                             println!("{signature}");

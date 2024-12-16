@@ -40,7 +40,7 @@ pub trait PythReceiverOps<C> {
     /// Post price update.
     fn post_price_update<'a>(
         &'a self,
-        price_update: &'a Keypair,
+        price_update: Keypair,
         update: &MerklePriceUpdate,
         encoded_vaa: &Pubkey,
     ) -> crate::Result<RpcBuilder<'a, C, Pubkey>>;
@@ -56,7 +56,7 @@ where
 {
     fn post_price_update<'a>(
         &'a self,
-        price_update: &'a Keypair,
+        price_update: Keypair,
         update: &MerklePriceUpdate,
         encoded_vaa: &Pubkey,
     ) -> crate::Result<RpcBuilder<'a, C, Pubkey>> {
@@ -77,7 +77,7 @@ where
                 system_program: system_program::ID,
                 write_authority: self.payer(),
             })
-            .signer(price_update)
+            .owned_signer(price_update)
             .compute_budget(ComputeBudget::default().with_limit(POST_PRICE_UPDATE_COMPUTE_BUDGET)))
     }
 

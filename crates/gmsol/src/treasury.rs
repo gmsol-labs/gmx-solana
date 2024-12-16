@@ -6,7 +6,7 @@ use anchor_client::{
     solana_sdk::{pubkey::Pubkey, signer::Signer},
 };
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
-use gmsol_store::states::{common::TokensWithFeed, Chainlink, PriceProviderKind};
+use gmsol_store::states::{common::TokensWithFeed, gt::GtExchange, Chainlink, PriceProviderKind};
 use gmsol_treasury::{
     accounts, instruction,
     states::{treasury::TokenFlag, Config, TreasuryConfig},
@@ -36,7 +36,7 @@ pub trait TreasuryOps<C> {
     fn set_gt_factor(&self, store: &Pubkey, factor: u128) -> crate::Result<RpcBuilder<C>>;
 
     /// Initialize [`TreasuryConfig`](crate::types::treasury::TreasuryConfig).
-    fn initialize_treasury(&self, store: &Pubkey, index: u8) -> RpcBuilder<C>;
+    fn initialize_treasury(&self, store: &Pubkey, index: u8) -> RpcBuilder<C, Pubkey>;
 
     /// Insert token to treasury.
     fn insert_token_to_treasury(
@@ -128,9 +128,10 @@ pub trait TreasuryOps<C> {
     fn complete_gt_exchange(
         &self,
         store: &Pubkey,
+        exchange: &Pubkey,
         treasury_config_hint: Option<&Pubkey>,
         tokens_hint: Option<Vec<(Pubkey, Pubkey)>>,
-        gt_exchange_vault: &Pubkey,
+        gt_exchange_vault_hint: Option<&Pubkey>,
     ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
 }
 
@@ -181,7 +182,7 @@ where
             }))
     }
 
-    fn initialize_treasury(&self, store: &Pubkey, index: u8) -> RpcBuilder<C> {
+    fn initialize_treasury(&self, store: &Pubkey, index: u8) -> RpcBuilder<C, Pubkey> {
         let config = self.find_config_address(store);
         let treasury_config = self.find_treasury_config_address(&config, index);
         self.treasury_rpc()
@@ -194,6 +195,7 @@ where
                 store_program: *self.store_program_id(),
                 system_program: system_program::ID,
             })
+            .with_output(treasury_config)
     }
 
     async fn insert_token_to_treasury(
@@ -471,15 +473,26 @@ where
     async fn complete_gt_exchange(
         &self,
         store: &Pubkey,
+        exchange: &Pubkey,
         treasury_config_hint: Option<&Pubkey>,
         tokens_hint: Option<Vec<(Pubkey, Pubkey)>>,
-        gt_exchange_vault: &Pubkey,
+        gt_exchange_vault_hint: Option<&Pubkey>,
     ) -> crate::Result<RpcBuilder<C>> {
         let owner = self.payer();
         let (config, treasury_config) =
             find_config_addresses(self, store, treasury_config_hint).await?;
-        let gt_bank = self.find_gt_bank_address(&treasury_config, gt_exchange_vault);
-        let exchange = self.find_gt_exchange_address(gt_exchange_vault, &owner);
+        let gt_exchange_vault = match gt_exchange_vault_hint {
+            Some(address) => *address,
+            None => {
+                let exchange = self
+                    .account::<ZeroCopy<GtExchange>>(exchange)
+                    .await?
+                    .ok_or(crate::Error::NotFound)?
+                    .0;
+                *exchange.vault()
+            }
+        };
+        let gt_bank = self.find_gt_bank_address(&treasury_config, &gt_exchange_vault);
 
         let tokens = match tokens_hint {
             Some(tokens) => tokens,
@@ -548,9 +561,9 @@ where
                 store: *store,
                 config,
                 treasury_config,
-                gt_exchange_vault: *gt_exchange_vault,
+                gt_exchange_vault,
                 gt_bank,
-                exchange,
+                exchange: *exchange,
                 store_program: *self.store_program_id(),
                 token_program: anchor_spl::token::ID,
                 token_2022_program: anchor_spl::token_2022::ID,

@@ -1,6 +1,6 @@
 use std::{future::Future, ops::Deref};
 
-use crate::utils::RpcBuilder;
+use crate::utils::{RpcBuilder, ZeroCopy};
 use anchor_client::{
     anchor_lang::system_program,
     solana_sdk::{pubkey::Pubkey, signer::Signer},
@@ -248,9 +248,10 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
             (Some(owner), Some(vault)) => (*owner, *vault),
             _ => {
                 let exchange = self
-                    .account::<GtExchange>(exchange)
+                    .account::<ZeroCopy<GtExchange>>(exchange)
                     .await?
-                    .ok_or(crate::Error::NotFound)?;
+                    .ok_or(crate::Error::NotFound)?
+                    .0;
                 (*exchange.owner(), *exchange.vault())
             }
         };

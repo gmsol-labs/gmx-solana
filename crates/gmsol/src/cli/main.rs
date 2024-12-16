@@ -184,7 +184,10 @@ impl Cli {
                 println!("{}", client.payer());
             }
             Command::Admin(args) => args.run(&client, &store_key, self.serialize_only).await?,
-            Command::Treasury(args) => args.run(&client, &store, self.serialize_only).await?,
+            Command::Treasury(args) => {
+                args.run(&client, &store, self.serialize_only, self.skip_preflight)
+                    .await?
+            }
             Command::Inspect(args) => args.run(&client, &store).await?,
             Command::Exchange(args) => {
                 if self.serialize_only {

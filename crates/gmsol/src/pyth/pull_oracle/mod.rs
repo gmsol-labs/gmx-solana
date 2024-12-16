@@ -10,6 +10,8 @@ pub mod hermes;
 /// Utils.
 pub mod utils;
 
+mod pull_oracle_impl;
+
 use std::{collections::HashMap, future::Future, ops::Deref};
 
 use anchor_client::{
@@ -30,7 +32,9 @@ use crate::utils::{transaction_builder::rpc_builder::Program, RpcBuilder, Transa
 
 use self::wormhole::WORMHOLE_PROGRAM_ID;
 
-pub use self::{receiver::PythReceiverOps, wormhole::WormholeOps};
+pub use self::{
+    pull_oracle_impl::PythPullOracleWithHermes, receiver::PythReceiverOps, wormhole::WormholeOps,
+};
 
 use self::hermes::PriceUpdate;
 
@@ -269,48 +273,60 @@ pub trait PythPullOracleOps<C> {
             }
 
             // Write vaas.
+            let mut encoded_vaas = HashMap::<_, _>::default();
             let mut vaas = HashMap::<_, _>::default();
             for (proof, _) in updates.values() {
                 let vaa = utils::get_vaa_buffer(proof);
                 if let Entry::Vacant(entry) = vaas.entry(vaa) {
                     let guardian_set_index = utils::get_guardian_set_index(proof)?;
-                    let id = ctx.add_encoded_vaa();
-                    entry.insert((id, guardian_set_index));
+
+                    let mut pubkey: Pubkey;
+                    loop {
+                        let keypair = Keypair::new();
+                        pubkey = keypair.pubkey();
+                        match encoded_vaas.entry(pubkey) {
+                            Entry::Vacant(entry) => {
+                                entry.insert(keypair);
+                                break;
+                            }
+                            Entry::Occupied(_) => continue,
+                        }
+                    }
+
+                    entry.insert((pubkey, guardian_set_index));
                 }
             }
-            for (vaa, (id, guardian_set_index)) in vaas.iter() {
-                let draft_vaa = &ctx.encoded_vaas[*id];
+
+            for (vaa, (pubkey, guardian_set_index)) in vaas.iter() {
+                let draft_vaa = encoded_vaas.remove(pubkey).expect("must exist");
                 let create = wormhole
                     .create_encoded_vaa(draft_vaa, vaa.len() as u64)
                     .await?;
-                let draft_vaa = draft_vaa.pubkey();
-                let write_1 = wormhole.write_encoded_vaa(&draft_vaa, 0, &vaa[0..VAA_SPLIT_INDEX]);
+                let draft_vaa = pubkey;
+                let write_1 = wormhole.write_encoded_vaa(draft_vaa, 0, &vaa[0..VAA_SPLIT_INDEX]);
                 let write_2 = wormhole.write_encoded_vaa(
-                    &draft_vaa,
+                    draft_vaa,
                     VAA_SPLIT_INDEX as u32,
                     &vaa[VAA_SPLIT_INDEX..],
                 );
-                let verify = wormhole.verify_encoded_vaa_v1(&draft_vaa, *guardian_set_index);
+                let verify = wormhole.verify_encoded_vaa_v1(draft_vaa, *guardian_set_index);
                 post.try_push(create.clear_output())?
                     .try_push(write_1)?
                     .try_push(write_2)?
                     .try_push(verify)?;
-                let close_encoded_vaa = wormhole.close_encoded_vaa(&draft_vaa);
+                let close_encoded_vaa = wormhole.close_encoded_vaa(draft_vaa);
                 close.try_push(close_encoded_vaa)?;
             }
 
             // Post price updates.
             for (feed_id, (proof, update)) in updates {
-                let Some(price_update) = ctx.feeds.get(&feed_id) else {
-                    continue;
-                };
+                let price_update = Keypair::new();
                 let vaa = utils::get_vaa_buffer(proof);
-                let Some((id, _)) = vaas.get(vaa) else {
+                let Some((encoded_vaa, _)) = vaas.get(vaa) else {
                     continue;
                 };
-                let encoded_vaa = ctx.encoded_vaas[*id].pubkey();
                 let (post_price_update, price_update) = pyth
-                    .post_price_update(price_update, update, &encoded_vaa)?
+                    .post_price_update(price_update, update, encoded_vaa)?
                     .swap_output(());
                 prices.insert(feed_id, price_update);
                 post.try_push(post_price_update)?;
