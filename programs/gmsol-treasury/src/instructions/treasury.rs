@@ -546,6 +546,7 @@ pub struct ConfirmGtBuyback<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
     /// Store.
+    #[account(mut)]
     pub store: AccountLoader<'info, Store>,
     /// Config.
     #[account(
