@@ -326,16 +326,14 @@ pub struct DepositIntoTreasury<'info> {
     pub receiver_vault: InterfaceAccount<'info, TokenAccount>,
     /// Treasury vault.
     #[account(
-        init_if_needed,
-        payer = authority,
+        mut,
         associated_token::authority = treasury_config,
         associated_token::mint =  token,
     )]
     pub treasury_vault: InterfaceAccount<'info, TokenAccount>,
     /// GT bank vault.
     #[account(
-        init_if_needed,
-        payer = authority,
+        mut,
         associated_token::authority = gt_bank,
         associated_token::mint =  token,
     )]
@@ -346,8 +344,6 @@ pub struct DepositIntoTreasury<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     /// Associated token program.
     pub associated_token_program: Program<'info, AssociatedToken>,
-    /// The system program.
-    pub system_program: Program<'info, System>,
 }
 
 /// Deposit tokens from the receiver vault to the treasury vault.

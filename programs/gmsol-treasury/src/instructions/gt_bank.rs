@@ -162,16 +162,14 @@ pub struct SyncGtBank<'info> {
     pub token: InterfaceAccount<'info, Mint>,
     /// Treasury vault.
     #[account(
-        init_if_needed,
-        payer = authority,
+        mut,
         associated_token::authority = treasury_config,
         associated_token::mint =  token,
     )]
     pub treasury_vault: InterfaceAccount<'info, TokenAccount>,
     /// GT bank vault.
     #[account(
-        init_if_needed,
-        payer = authority,
+        mut,
         associated_token::authority = gt_bank,
         associated_token::mint =  token,
     )]
@@ -182,8 +180,6 @@ pub struct SyncGtBank<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     /// Associated token program.
     pub associated_token_program: Program<'info, AssociatedToken>,
-    /// The system program.
-    pub system_program: Program<'info, System>,
 }
 
 /// Sync the GT bank and deposit the exceeding amount into treasury vault.

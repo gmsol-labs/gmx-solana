@@ -14,7 +14,7 @@ use gmsol_treasury::{
 use solana_account_decoder::UiAccountEncoding;
 
 use crate::{
-    store::{gt::GtOps, utils::FeedsParser},
+    store::{gt::GtOps, token::TokenAccountOps, utils::FeedsParser},
     utils::{
         builder::{
             FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
@@ -300,6 +300,14 @@ where
         let gt_bank_vault =
             get_associated_token_address_with_program_id(&gt_bank, token_mint, token_program_id);
 
+        let prepare_treasury_vault = self.prepare_associated_token_account(
+            token_mint,
+            token_program_id,
+            Some(&treasury_config),
+        );
+        let prepare_gt_bank_vault =
+            self.prepare_associated_token_account(token_mint, token_program_id, Some(&gt_bank));
+
         let deposit = self
             .treasury_rpc()
             .args(instruction::DepositIntoTreasury {})
@@ -317,10 +325,11 @@ where
                 store_program: *self.store_program_id(),
                 token_program: *token_program_id,
                 associated_token_program: anchor_spl::associated_token::ID,
-                system_program: system_program::ID,
             });
         Ok(prepare_gt_exchange_vault
             .merge(prepare_gt_bank)
+            .merge(prepare_treasury_vault)
+            .merge(prepare_gt_bank_vault)
             .merge(deposit)
             .with_output(gt_exchange_vault))
     }
@@ -467,7 +476,16 @@ where
         );
         let gt_bank_vault =
             get_associated_token_address_with_program_id(&gt_bank, token_mint, token_program_id);
-        Ok(self
+
+        let prepare_treasury_vault = self.prepare_associated_token_account(
+            token_mint,
+            token_program_id,
+            Some(&treasury_config),
+        );
+        let prepare_gt_bank_vault =
+            self.prepare_associated_token_account(token_mint, token_program_id, Some(&gt_bank));
+
+        let sync = self
             .treasury_rpc()
             .args(instruction::SyncGtBank {})
             .accounts(accounts::SyncGtBank {
@@ -482,8 +500,11 @@ where
                 store_program: *self.store_program_id(),
                 token_program: *token_program_id,
                 associated_token_program: anchor_spl::associated_token::ID,
-                system_program: system_program::ID,
-            }))
+            });
+
+        Ok(prepare_treasury_vault
+            .merge(prepare_gt_bank_vault)
+            .merge(sync))
     }
 
     async fn complete_gt_exchange(
