@@ -109,7 +109,7 @@ impl SwapParams {
         })
     }
 
-    /// Conver to tokens with feed.
+    /// Convert to tokens with feed.
     pub fn to_feeds(&self, map: &impl TokenMapAccess) -> Result<TokensWithFeed> {
         let records = self.to_token_records(map).collect::<Result<Vec<_>>>()?;
         TokensWithFeed::try_from_records(records)

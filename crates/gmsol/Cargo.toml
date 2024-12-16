@@ -92,6 +92,7 @@ gmsol-treasury = { workspace = true, features = [
     "no-entrypoint",
     "debug",
     "enum-iter",
+    "utils",
 ] }
 gmsol-timelock = { workspace = true, features = ["no-entrypoint", "debug"] }
 gmsol-model = { workspace = true, features = ["strum", "serde"] }

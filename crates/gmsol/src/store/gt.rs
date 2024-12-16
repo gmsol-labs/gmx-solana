@@ -48,14 +48,14 @@ pub trait GtOps<C> {
         store: &Pubkey,
         time_window_index: i64,
         time_window: u32,
-    ) -> RpcBuilder<C>;
+    ) -> RpcBuilder<C, Pubkey>;
 
     /// Prepare GT exchange vault with the given time window.
     fn prepare_gt_exchange_vault_with_time_window(
         &self,
         store: &Pubkey,
         time_window: u32,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<RpcBuilder<C, Pubkey>> {
         Ok(self.prepare_gt_exchange_vault_with_time_window_index(
             store,
             current_time_window_index(time_window)?,
@@ -191,18 +191,20 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
         store: &Pubkey,
         time_window_index: i64,
         time_window: u32,
-    ) -> RpcBuilder<C> {
+    ) -> RpcBuilder<C, Pubkey> {
+        let vault = self.find_gt_exchange_vault_address(store, time_window_index);
         self.store_rpc()
             .accounts(accounts::PrepareGtExchangeVault {
                 payer: self.payer(),
                 store: *store,
-                vault: self.find_gt_exchange_vault_address(store, time_window_index),
+                vault,
                 system_program: system_program::ID,
             })
             .args(instruction::PrepareGtExchangeVault {
                 time_window_index,
                 time_window,
             })
+            .with_output(vault)
     }
 
     fn confirm_gt_exchange_vault(&self, store: &Pubkey, vault: &Pubkey) -> RpcBuilder<C> {

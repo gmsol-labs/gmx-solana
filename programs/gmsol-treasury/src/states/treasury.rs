@@ -92,14 +92,37 @@ impl TreasuryConfig {
         }
     }
 
-    pub(crate) fn num_tokens(&self) -> usize {
+    /// Get the number of tokens.
+    pub fn num_tokens(&self) -> usize {
         self.tokens.len()
     }
 
-    pub(crate) fn tokens(&self) -> impl Iterator<Item = Pubkey> + '_ {
+    /// Get all tokens.
+    pub fn tokens(&self) -> impl Iterator<Item = Pubkey> + '_ {
         self.tokens
             .entries()
             .map(|(key, _)| Pubkey::new_from_array(*key))
+    }
+
+    /// Create tokens with feed.
+    #[cfg(feature = "utils")]
+    pub fn to_feeds(
+        &self,
+        map: &impl gmsol_store::states::TokenMapAccess,
+    ) -> Result<gmsol_store::states::common::TokensWithFeed> {
+        use gmsol_store::states::common::{TokenRecord, TokensWithFeed};
+
+        let records = self
+            .tokens()
+            .map(|token| {
+                let config = map
+                    .get(&token)
+                    .ok_or_else(|| error!(CoreError::UnknownOrDisabledToken))?;
+                TokenRecord::from_config(token, config)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        TokensWithFeed::try_from_records(records)
     }
 }
 

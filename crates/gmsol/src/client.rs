@@ -185,9 +185,14 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         self.treasury_program().id()
     }
 
-    /// Create a rpc builder for `Store` Program.
+    /// Create a rpc builder for the store program.
     pub fn store_rpc(&self) -> RpcBuilder<'_, C> {
-        RpcBuilder::new(*self.store_program_id(), &self.cfg)
+        self.store_program().rpc()
+    }
+
+    /// Create a rpc builder for the treasury program.
+    pub fn treasury_rpc(&self) -> RpcBuilder<'_, C> {
+        self.treasury_program().rpc()
     }
 
     /// Create a transaction builder with the given options.
@@ -389,6 +394,30 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             provider,
             token,
             self.store_program_id(),
+        )
+        .0
+    }
+
+    /// Find treasury global config address.
+    pub fn find_config_address(&self, store: &Pubkey) -> Pubkey {
+        crate::pda::find_config_pda(store, self.treasury_program_id()).0
+    }
+
+    /// Find treasury config address.
+    pub fn find_treasury_config_address(&self, config: &Pubkey, index: u8) -> Pubkey {
+        crate::pda::find_treasury_config_pda(config, index, self.treasury_program_id()).0
+    }
+
+    /// Find GT bank address.
+    pub fn find_gt_bank_address(
+        &self,
+        treasury_config: &Pubkey,
+        gt_exchange_vault: &Pubkey,
+    ) -> Pubkey {
+        crate::pda::find_gt_bank_pda(
+            treasury_config,
+            gt_exchange_vault,
+            self.treasury_program_id(),
         )
         .0
     }

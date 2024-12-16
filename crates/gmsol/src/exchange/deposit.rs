@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use anchor_client::{
-    anchor_lang::{system_program, Id},
+    anchor_lang::system_program,
     solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer},
 };
 use anchor_spl::associated_token::get_associated_token_address;
@@ -10,7 +10,7 @@ use gmsol_store::{
     ops::deposit::CreateDepositParams,
     states::{
         common::{action::Action, swap::SwapParams, TokensWithFeed},
-        Deposit, NonceBytes, PriceProviderKind, Pyth, TokenMapAccess,
+        Deposit, NonceBytes, PriceProviderKind, TokenMapAccess,
     },
 };
 
@@ -437,7 +437,6 @@ pub struct ExecuteDepositBuilder<'a, C> {
     oracle: Pubkey,
     deposit: Pubkey,
     execution_fee: u64,
-    price_provider: Pubkey,
     feeds_parser: FeedsParser,
     hint: Option<ExecuteDepositHint>,
     token_map: Option<Pubkey>,
@@ -495,7 +494,6 @@ where
             oracle: *oracle,
             deposit: *deposit,
             execution_fee: 0,
-            price_provider: Pyth::id(),
             hint: None,
             feeds_parser: Default::default(),
             token_map: None,
@@ -507,12 +505,6 @@ where
     /// Set whether to close the deposit after execution.
     pub fn close(&mut self, close: bool) -> &mut Self {
         self.close = close;
-        self
-    }
-
-    /// Set price provider to the given.
-    pub fn price_provider(&mut self, program: Pubkey) -> &mut Self {
-        self.price_provider = program;
         self
     }
 
@@ -610,7 +602,6 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
             oracle,
             deposit,
             execution_fee,
-            price_provider,
             cancel_on_execution_error,
             ..
         } = &self;
@@ -627,7 +618,6 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
                 is_signer: false,
                 is_writable: true,
             });
-        tracing::debug!(%price_provider, "constructing `execute_deposit` ix...");
 
         // Execution.
         let execute = client

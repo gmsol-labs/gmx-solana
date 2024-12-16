@@ -197,7 +197,9 @@ impl Args {
             }
             Command::PrepareExchangeVault => {
                 let time_window = client.store(store).await?.gt().exchange_time_window();
-                let rpc = client.prepare_gt_exchange_vault_with_time_window(store, time_window)?;
+                let (rpc, _vault) = client
+                    .prepare_gt_exchange_vault_with_time_window(store, time_window)?
+                    .swap_output(());
                 send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
                     println!("{signature}");
                     Ok(())
@@ -212,7 +214,8 @@ impl Args {
 
                 let init = (!*skip_init_current)
                     .then(|| client.prepare_gt_exchange_vault_with_time_window(store, time_window))
-                    .transpose()?;
+                    .transpose()?
+                    .map(|rpc| rpc.with_output(()));
 
                 let mut rpc = client.confirm_gt_exchange_vault(store, address);
 
@@ -271,7 +274,8 @@ impl Args {
                         )?;
                         let rpc = if *prepare_vault {
                             let prepare = client
-                                .prepare_gt_exchange_vault_with_time_window(store, time_window)?;
+                                .prepare_gt_exchange_vault_with_time_window(store, time_window)?
+                                .with_output(());
                             prepare.merge(request)
                         } else {
                             request

@@ -10,6 +10,7 @@ use gmsol_store::{
         Shift, Store, Withdrawal,
     },
 };
+use gmsol_treasury::states::{Config, GtBank, TreasuryConfig};
 use gmsol_utils::to_seed;
 
 use crate::utils::EVENT_AUTHORITY_SEED;
@@ -288,5 +289,38 @@ pub fn find_price_feed_pda(
             token.as_ref(),
         ],
         store_program_id,
+    )
+}
+
+/// Find the PDA for global treasury config.
+pub fn find_config_pda(store: &Pubkey, treasury_program_id: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[Config::SEED, store.as_ref()], treasury_program_id)
+}
+
+/// Find the PDA for a treasury config.
+pub fn find_treasury_config_pda(
+    config: &Pubkey,
+    index: u8,
+    treasury_program_id: &Pubkey,
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[TreasuryConfig::SEED, config.as_ref(), &[index]],
+        treasury_program_id,
+    )
+}
+
+/// Find the PDA for a GT bank.
+pub fn find_gt_bank_pda(
+    treasury_config: &Pubkey,
+    gt_exchange_vault: &Pubkey,
+    treasury_program_id: &Pubkey,
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[
+            GtBank::SEED,
+            treasury_config.as_ref(),
+            gt_exchange_vault.as_ref(),
+        ],
+        treasury_program_id,
     )
 }

@@ -23,6 +23,7 @@ debug = ["gmsol-store/debug"]
 no-mock = []
 multi-store = ["gmsol-store/multi-store"]
 enum-iter = []
+utils = []
 
 [dependencies]
 anchor-lang = { workspace = true, features = ["init-if-needed"] }
