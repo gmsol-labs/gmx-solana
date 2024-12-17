@@ -171,7 +171,7 @@ pub struct SyncGtBank<'info> {
     #[account(
         mut,
         associated_token::authority = gt_bank,
-        associated_token::mint =  token,
+        associated_token::mint = token,
     )]
     pub gt_bank_vault: InterfaceAccount<'info, TokenAccount>,
     /// Store program.
@@ -245,7 +245,7 @@ impl<'info> SyncGtBank<'info> {
                 from: self.gt_bank_vault.to_account_info(),
                 mint: self.token.to_account_info(),
                 to: self.treasury_vault.to_account_info(),
-                authority: self.config.to_account_info(),
+                authority: self.gt_bank.to_account_info(),
             },
         )
     }
@@ -331,7 +331,7 @@ impl<'info> CompleteGtExchange<'info> {
         require_gte!(remaining_accounts.len(), total_len);
         let tokens = &remaining_accounts[0..len];
         let vaults = &remaining_accounts[len..(2 * len)];
-        let targets = &remaining_accounts[len..total_len];
+        let targets = &remaining_accounts[(2 * len)..total_len];
 
         // Transfer funds.
         {
@@ -357,21 +357,6 @@ impl<'info> CompleteGtExchange<'info> {
 
                 let mint = &tokens[idx];
                 require_eq!(*mint.key, token, CoreError::InvalidArgument);
-
-                let vault = &vaults[idx];
-                validate_associated_token_account(
-                    vault,
-                    &gt_bank_address,
-                    &token,
-                    &anchor_spl::associated_token::ID,
-                )?;
-
-                let target = &targets[idx];
-                require_eq!(
-                    anchor_spl::token::accessor::authority(target)?,
-                    owner_address
-                );
-
                 let token_program = if mint.owner == self.token_program.key {
                     self.token_program.to_account_info()
                 } else if mint.owner == self.token_2022_program.key {
@@ -379,6 +364,20 @@ impl<'info> CompleteGtExchange<'info> {
                 } else {
                     return err!(CoreError::InvalidArgument);
                 };
+
+                let vault = &vaults[idx];
+                validate_associated_token_account(
+                    vault,
+                    &gt_bank_address,
+                    &token,
+                    &token_program.key(),
+                )?;
+
+                let target = &targets[idx];
+                require_eq!(
+                    anchor_spl::token::accessor::authority(target)?,
+                    owner_address
+                );
 
                 let mint = InterfaceAccount::<Mint>::try_from(mint)?;
                 let decimals = mint.decimals;

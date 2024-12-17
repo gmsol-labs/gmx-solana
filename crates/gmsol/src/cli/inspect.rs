@@ -218,6 +218,15 @@ enum Command {
     GtExchangeVault { address: Option<Pubkey> },
     /// Price Feed.
     PriceFeed { address: Pubkey },
+    /// GT Bank.
+    GtBank {
+        #[arg(group = "select-gt-bank")]
+        address: Option<Pubkey>,
+        #[arg(long, group = "select-gt-bank")]
+        gt_exchange_vault: Option<Pubkey>,
+        #[arg(long)]
+        debug: bool,
+    },
 }
 
 #[derive(clap::ValueEnum, Clone, Default)]
@@ -989,6 +998,44 @@ impl InspectArgs {
                     .ok_or(gmsol::Error::NotFound)?
                     .0;
                 println!("{feed:#?}");
+            }
+            Command::GtBank {
+                address,
+                debug,
+                gt_exchange_vault,
+            } => {
+                let address = if let Some(address) = address {
+                    *address
+                } else if let Some(gt_exchange_vault) = gt_exchange_vault {
+                    let config = client.find_config_address(store);
+                    let config = client
+                        .account::<ZeroCopy<types::treasury::Config>>(&config)
+                        .await?
+                        .ok_or(gmsol::Error::NotFound)?
+                        .0;
+                    let treasury_config = config.treasury_config().ok_or_else(|| {
+                        gmsol::Error::invalid_argument("treasury config is not set")
+                    })?;
+                    client.find_gt_bank_address(treasury_config, gt_exchange_vault)
+                } else {
+                    return Err(gmsol::Error::invalid_argument("missing gt bank selector"));
+                };
+
+                let bank = client
+                    .account::<ZeroCopy<types::treasury::GtBank>>(&address)
+                    .await?
+                    .ok_or(gmsol::Error::NotFound)?
+                    .0;
+                if *debug {
+                    println!("{bank:#?}");
+                } else {
+                    println!("Address: {address}");
+                    println!("Treasury: {}", bank.treasury_config());
+                    println!("GT Exchange Vault: {}", bank.gt_exchange_vault());
+                    for (token, balance) in bank.balances() {
+                        println!("{token}: {balance}");
+                    }
+                }
             }
         }
         Ok(())

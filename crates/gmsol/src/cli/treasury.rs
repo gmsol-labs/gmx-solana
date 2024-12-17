@@ -58,6 +58,13 @@ enum Command {
         #[arg(long)]
         oracle: Pubkey,
     },
+    /// Sync GT bank.
+    SyncGtBank {
+        gt_exchange_vault: Pubkey,
+        token_mint: Pubkey,
+        #[arg(long)]
+        token_program_id: Option<Pubkey>,
+    },
 }
 
 impl Args {
@@ -160,6 +167,21 @@ impl Args {
                     },
                 )
                 .await;
+            }
+            Command::SyncGtBank {
+                gt_exchange_vault,
+                token_mint,
+                token_program_id,
+            } => {
+                client
+                    .sync_gt_bank(
+                        store,
+                        None,
+                        gt_exchange_vault,
+                        token_mint,
+                        token_program_id.as_ref(),
+                    )
+                    .await?
             }
         };
         crate::utils::send_or_serialize_rpc(req, serialize_only, skip_preflight, |signature| {

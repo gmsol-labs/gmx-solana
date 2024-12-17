@@ -692,8 +692,6 @@ impl<'info> ConfirmGtBuyback<'info> {
     /// the token balances recorded in the GT bank. This is because tokens exceeding
     /// the recorded amount can be transferred to the treasury bank at any time.
     fn update_balances(&self) -> Result<()> {
-        use gmsol_model::num::MulDiv;
-
         let buyback_amount = self.gt_exchange_vault.load()?.amount();
 
         if buyback_amount == 0 {
@@ -701,9 +699,9 @@ impl<'info> ConfirmGtBuyback<'info> {
             return Ok(());
         }
 
-        let (max_buyback_value, token_values) = {
+        let max_buyback_value = {
             let oracle = self.oracle.load()?;
-            self.gt_bank.load()?.total_values(&oracle)?
+            self.gt_bank.load()?.total_value(&oracle)?
         };
 
         let buyback_amount = u128::from(self.gt_exchange_vault.load()?.amount());
@@ -730,22 +728,10 @@ impl<'info> ConfirmGtBuyback<'info> {
             buyback_value,
         );
 
-        // Update balances.
-        {
-            let mut gt_bank = self.gt_bank.load_mut()?;
-            for (token, value) in token_values {
-                let balance = gt_bank.get_balance(&token).expect("must exist");
-                require_neq!(balance, 0, CoreError::Internal);
-                let reserve_balance: u64 = u128::from(balance)
-                    .checked_mul_div(&value, &buyback_value)
-                    .and_then(|b| b.try_into().ok())
-                    .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
-                let delta = balance
-                    .checked_sub(reserve_balance)
-                    .ok_or_else(|| error!(CoreError::Internal))?;
-                gt_bank.record_transferred_out(&token, delta)?;
-            }
-        }
+        // Reserve balances for buyback.
+        self.gt_bank
+            .load_mut()?
+            .reserve_balances(&buyback_value, &max_buyback_value)?;
 
         Ok(())
     }

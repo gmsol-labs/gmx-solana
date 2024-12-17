@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use anchor_lang::prelude::*;
 use bytemuck::Zeroable;
 use gmsol_store::{
@@ -50,10 +48,6 @@ impl GtBank {
         Ok(())
     }
 
-    pub(crate) fn get_balance(&self, token: &Pubkey) -> Option<u64> {
-        self.balances.get(token).map(|b| b.amount)
-    }
-
     fn get_balance_or_insert(&mut self, token: &Pubkey) -> Result<&mut TokenBalance> {
         if self.balances.get(token).is_none() {
             self.balances
@@ -66,6 +60,31 @@ impl GtBank {
         self.balances
             .get_mut(token)
             .ok_or_else(|| error!(CoreError::NotFound))
+    }
+
+    /// Get balance of the given token
+    pub fn get_balance(&self, token: &Pubkey) -> Option<u64> {
+        self.balances.get(token).map(|b| b.amount)
+    }
+
+    /// Iterate over token balances.
+    #[cfg(feature = "utils")]
+    pub fn balances(&self) -> impl Iterator<Item = (Pubkey, u64)> + '_ {
+        self.balances
+            .entries()
+            .map(|(k, b)| (Pubkey::new_from_array(*k), b.amount))
+    }
+
+    /// Get treasury config address.
+    #[cfg(feature = "utils")]
+    pub fn treasury_config(&self) -> &Pubkey {
+        &self.treasury_config
+    }
+
+    /// Get GT exchange vault address.
+    #[cfg(feature = "utils")]
+    pub fn gt_exchange_vault(&self) -> &Pubkey {
+        &self.gt_exchange_vault
     }
 
     pub(crate) fn record_transferred_in(&mut self, token: &Pubkey, amount: u64) -> Result<()> {
@@ -103,10 +122,9 @@ impl GtBank {
         self.flags.get_flag(GtBankFlags::Initialized)
     }
 
-    pub(crate) fn total_values(&self, oracle: &Oracle) -> Result<(u128, HashMap<Pubkey, u128>)> {
+    pub(crate) fn total_value(&self, oracle: &Oracle) -> Result<u128> {
         let mut total_value: u128 = 0;
 
-        let mut total_values = HashMap::with_capacity(self.balances.len());
         for (token, balance) in self.balances.entries() {
             let amount = u128::from(balance.amount);
             if amount == 0 {
@@ -117,7 +135,7 @@ impl GtBank {
             let value = amount
                 .checked_mul(price)
                 .ok_or_else(|| error!(CoreError::ValueOverflow))?;
-            total_values.insert(token, value);
+
             if value != 0 {
                 total_value = total_value
                     .checked_add(value)
@@ -125,7 +143,30 @@ impl GtBank {
             }
         }
 
-        Ok((total_value, total_values))
+        Ok(total_value)
+    }
+
+    /// Reserve the balances of the given proportion.
+    /// # Warning
+    /// This method is not atomic.
+    pub(crate) fn reserve_balances(&mut self, numerator: &u128, denominator: &u128) -> Result<()> {
+        use gmsol_model::num::MulDiv;
+
+        require_gte!(denominator, numerator, CoreError::InvalidArgument);
+
+        for (_key, balance) in self.balances.entries_mut() {
+            if balance.amount == 0 {
+                continue;
+            }
+            let reserve_balance = u128::from(balance.amount)
+                .checked_mul_div(numerator, denominator)
+                .and_then(|b| b.try_into().ok())
+                .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+            require_gte!(balance.amount, reserve_balance, CoreError::Internal);
+            balance.amount = reserve_balance;
+        }
+
+        Ok(())
     }
 
     pub(crate) fn signer(&self) -> GtBankSigner {

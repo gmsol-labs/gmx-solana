@@ -161,6 +161,14 @@ macro_rules! fixed_map {
                     })
                 }
 
+                /// Entries with mutable access.
+                pub fn entries_mut(&mut self) -> impl Iterator<Item = (&[u8; $key_len], &mut $value)> {
+                    let len = self.len();
+                    self.data.iter_mut().take(len).map(|entry| {
+                        (&entry.key, &mut entry.value)
+                    })
+                }
+
                 /// Clear.
                 pub fn clear(&mut self) {
                     let len = self.len();

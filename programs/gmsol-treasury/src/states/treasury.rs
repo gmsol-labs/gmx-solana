@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use bytemuck::Zeroable;
 use gmsol_store::{states::Seed, utils::pubkey::to_bytes, CoreError};
 
-pub(crate) const MAX_TOKENS: usize = 64;
+pub(crate) const MAX_TOKENS: usize = 16;
 
 /// Treasury config account.
 #[account(zero_copy)]
