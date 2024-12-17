@@ -93,14 +93,20 @@ impl GtState {
         grow_step: u64,
         ranks: &[u64],
     ) -> Result<()> {
+        require!(!self.is_initialized(), CoreError::GTStateHasBeenInitialized);
         require_eq!(self.last_minted_at, 0, CoreError::GTStateHasBeenInitialized);
         require_eq!(self.total_minted, 0, CoreError::GTStateHasBeenInitialized);
-        require_eq!(self.grow_steps, 0, CoreError::GTStateHasBeenInitialized);
         require_eq!(self.supply, 0, CoreError::GTStateHasBeenInitialized);
         require_eq!(self.es_supply, 0, CoreError::GTStateHasBeenInitialized);
         require_eq!(self.es_factor, 0, CoreError::GTStateHasBeenInitialized);
 
         require!(grow_step != 0, CoreError::InvalidGTConfig);
+
+        require_gte!(
+            constants::MARKET_USD_UNIT,
+            constants::DEFAULT_ES_GT_RECEIVER_FACTOR,
+            CoreError::Internal
+        );
 
         let max_rank = ranks.len().min(MAX_RANK);
         let ranks = &ranks[0..max_rank];
@@ -132,6 +138,7 @@ impl GtState {
         self.reserve_factor = constants::DEFAULT_GT_RESERVE_FACTOR;
         self.exchange_time_window = constants::DEFAULT_GT_VAULT_TIME_WINDOW;
         self.es_vesting_divisor = constants::DEFAULT_ES_GT_VESTING_DIVISOR;
+        self.es_receiver_factor = constants::DEFAULT_ES_GT_RECEIVER_FACTOR;
 
         Ok(())
     }

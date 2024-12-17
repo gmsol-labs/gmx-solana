@@ -6,7 +6,7 @@ use anchor_spl::{
 use gmsol_store::{
     cpi::{
         accounts::{ClaimFeesFromMarket, ConfigurateGt, SetReceiver},
-        claim_fees_from_market, gt_set_referral_reward_factors, set_receiver,
+        claim_fees_from_market, gt_set_receiver, gt_set_referral_reward_factors, set_receiver,
     },
     program::GmsolStore,
     utils::{CpiAuthentication, WithStore},
@@ -233,9 +233,9 @@ impl<'info> SetReferralReward<'info> {
     }
 }
 
-/// The accounts definition for [`initialize_treasury_oracle`](crate::gmsol_treasury::initialize_treasury_oracle).
+/// The accounts definition for [`set_esgt_receiver`](crate::gmsol_treasury::set_esgt_receiver).
 #[derive(Accounts)]
-pub struct InitializeTreasuryOracle<'info> {
+pub struct SetEsgtReceiver<'info> {
     /// Authority.
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -246,12 +246,54 @@ pub struct InitializeTreasuryOracle<'info> {
     /// Config.
     #[account(has_one = store)]
     pub config: AccountLoader<'info, Config>,
-    /// Oracle.
-    /// CHECK: check by CPI.
-    #[account(mut)]
-    pub oracle: UncheckedAccount<'info>,
+    /// esGT Receiver.
+    /// CHECK: only used as an address.
+    pub esgt_receiver: UncheckedAccount<'info>,
     /// Store program.
     pub store_program: Program<'info, GmsolStore>,
-    //// System program.
-    pub system_program: Program<'info, System>,
+}
+
+/// Set esGT receiver.
+/// # CHECK
+/// Only [`TREASURY_ADMIN`](crate::roles::TREASURY_ADMIN) can use.
+pub(crate) fn unchecked_set_esgt_receiver(ctx: Context<SetEsgtReceiver>) -> Result<()> {
+    let signer = ctx.accounts.config.load()?.signer();
+    let cpi_ctx = ctx.accounts.configurate_gt_ctx();
+    gt_set_receiver(
+        cpi_ctx.with_signer(&[&signer.as_seeds()]),
+        ctx.accounts.esgt_receiver.key(),
+    )?;
+    Ok(())
+}
+
+impl<'info> WithStore<'info> for SetEsgtReceiver<'info> {
+    fn store_program(&self) -> AccountInfo<'info> {
+        self.store_program.to_account_info()
+    }
+
+    fn store(&self) -> AccountInfo<'info> {
+        self.store.to_account_info()
+    }
+}
+
+impl<'info> CpiAuthentication<'info> for SetEsgtReceiver<'info> {
+    fn authority(&self) -> AccountInfo<'info> {
+        self.authority.to_account_info()
+    }
+
+    fn on_error(&self) -> Result<()> {
+        err!(CoreError::PermissionDenied)
+    }
+}
+
+impl<'info> SetEsgtReceiver<'info> {
+    fn configurate_gt_ctx(&self) -> CpiContext<'_, '_, '_, 'info, ConfigurateGt<'info>> {
+        CpiContext::new(
+            self.store_program.to_account_info(),
+            ConfigurateGt {
+                authority: self.config.to_account_info(),
+                store: self.store.to_account_info(),
+            },
+        )
+    }
 }

@@ -101,6 +101,9 @@ pub trait TreasuryOps<C> {
     /// Set referral reward factors.
     fn set_referral_reward(&self, store: &Pubkey, factors: Vec<u128>) -> RpcBuilder<C>;
 
+    /// Set esGT receiver.
+    fn set_esgt_receiver(&self, store: &Pubkey, esgt_receiver: &Pubkey) -> RpcBuilder<C>;
+
     /// Claim fees to receiver vault.
     fn claim_fees_to_receiver_vault(
         &self,
@@ -400,6 +403,18 @@ where
                 authority: self.payer(),
                 store: *store,
                 config: self.find_config_address(store),
+                store_program: *self.store_program_id(),
+            })
+    }
+
+    fn set_esgt_receiver(&self, store: &Pubkey, esgt_receiver: &Pubkey) -> RpcBuilder<C> {
+        self.treasury_rpc()
+            .args(instruction::SetEsgtReceiver {})
+            .accounts(accounts::SetEsgtReceiver {
+                authority: self.payer(),
+                store: *store,
+                config: self.find_config_address(store),
+                esgt_receiver: *esgt_receiver,
                 store_program: *self.store_program_id(),
             })
     }

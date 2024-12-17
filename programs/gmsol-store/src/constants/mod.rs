@@ -67,3 +67,6 @@ pub const DEFAULT_GT_RESERVE_FACTOR: u128 = 5 * MARKET_USD_UNIT;
 
 /// Default esGT vesting divisor.
 pub const DEFAULT_ES_GT_VESTING_DIVISOR: u16 = 365 * 2;
+
+/// Default esGT receiver factor.
+pub const DEFAULT_ES_GT_RECEIVER_FACTOR: u128 = MARKET_USD_UNIT;

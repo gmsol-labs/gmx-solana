@@ -112,6 +112,12 @@ pub mod gmsol_treasury {
         instructions::unchecked_set_referral_reward(ctx, factors)
     }
 
+    /// Set esGT receiver.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_ADMIN))]
+    pub fn set_esgt_receiver(ctx: Context<SetEsgtReceiver>) -> Result<()> {
+        instructions::unchecked_set_esgt_receiver(ctx)
+    }
+
     /// Claim fees.
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_KEEPER))]
     pub fn claim_fees(ctx: Context<ClaimFees>) -> Result<()> {
