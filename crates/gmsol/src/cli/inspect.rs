@@ -25,6 +25,7 @@ use gmsol_model::{
 use gmsol_store::states::{
     self, AddressKey, AmountKey, FactorKey, MarketConfigKey, PriceProviderKind,
 };
+use gmsol_timelock::states::InstructionAccess;
 use indexmap::IndexMap;
 use num_format::{Locale, ToFormattedString};
 use prettytable::{row, Table};
@@ -227,6 +228,8 @@ enum Command {
         #[arg(long)]
         debug: bool,
     },
+    /// Timelocked instruction.
+    TimelockedIx { address: Pubkey },
 }
 
 #[derive(clap::ValueEnum, Clone, Default)]
@@ -1036,6 +1039,36 @@ impl InspectArgs {
                         println!("{token}: {balance}");
                     }
                 }
+            }
+            Command::TimelockedIx { address } => {
+                let buffer = client
+                    .instruction_buffer(address)
+                    .await?
+                    .ok_or(gmsol::Error::NotFound)?;
+                let config = client.find_timelock_config_address(store);
+                let delay = client
+                    .account::<ZeroCopy<types::timelock::TimelockConfig>>(&config)
+                    .await?
+                    .ok_or(gmsol::Error::NotFound)?
+                    .0
+                    .delay();
+                let delay = time::Duration::seconds(delay as i64);
+                let status = match buffer.header().approved_at() {
+                    Some(approved_at) => {
+                        let approved_at = time::OffsetDateTime::from_unix_timestamp(approved_at)
+                            .map_err(gmsol::Error::unknown)?;
+                        let executable_at = approved_at.saturating_add(delay);
+                        let now = time::OffsetDateTime::now_utc();
+                        let delta = executable_at - now;
+                        if delta.is_positive() {
+                            format!("executable in {delta}")
+                        } else {
+                            "executable".to_string()
+                        }
+                    }
+                    None => "is not approved".to_string(),
+                };
+                println!("Status: {status}");
             }
         }
         Ok(())

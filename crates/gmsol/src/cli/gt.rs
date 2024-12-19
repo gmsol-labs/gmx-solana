@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 
 use crate::{
     utils::{send_or_serialize_rpc, table_format},
-    GMSOLClient,
+    GMSOLClient, TimelockCtx,
 };
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use gmsol::{
@@ -108,7 +108,7 @@ impl Args {
         &self,
         client: &GMSOLClient,
         store: &Pubkey,
-        timelock: Option<&str>,
+        timelock: Option<TimelockCtx<'_>>,
         serialize_only: bool,
         skip_preflight: bool,
     ) -> gmsol::Result<()> {
@@ -146,7 +146,6 @@ impl Args {
                     let rpc = client.claim_es_gt(store);
                     send_or_serialize_rpc(
                         store,
-                        client,
                         rpc,
                         timelock,
                         serialize_only,
@@ -212,7 +211,6 @@ impl Args {
                     .swap_output(());
                 send_or_serialize_rpc(
                     store,
-                    client,
                     rpc,
                     timelock,
                     serialize_only,
@@ -243,7 +241,6 @@ impl Args {
 
                 send_or_serialize_rpc(
                     store,
-                    client,
                     rpc,
                     timelock,
                     serialize_only,
@@ -259,7 +256,6 @@ impl Args {
                 let rpc = client.gt_set_exchange_time_window(store, seconds.get());
                 send_or_serialize_rpc(
                     store,
-                    client,
                     rpc,
                     timelock,
                     serialize_only,
@@ -275,7 +271,6 @@ impl Args {
                 let rpc = client.gt_set_es_receiver(store, address);
                 send_or_serialize_rpc(
                     store,
-                    client,
                     rpc,
                     timelock,
                     serialize_only,
@@ -291,7 +286,6 @@ impl Args {
                 let rpc = client.gt_set_es_receiver_factor(store, *factor);
                 send_or_serialize_rpc(
                     store,
-                    client,
                     rpc,
                     timelock,
                     serialize_only,
@@ -332,7 +326,6 @@ impl Args {
                         };
                         send_or_serialize_rpc(
                             store,
-                            client,
                             rpc,
                             timelock,
                             serialize_only,
@@ -350,7 +343,6 @@ impl Args {
                             .await?;
                         send_or_serialize_rpc(
                             store,
-                            client,
                             rpc,
                             timelock,
                             serialize_only,
@@ -397,7 +389,6 @@ impl Args {
                     let rpc = client.update_gt_vesting(store);
                     send_or_serialize_rpc(
                         store,
-                        client,
                         rpc,
                         timelock,
                         serialize_only,
@@ -413,7 +404,6 @@ impl Args {
                     let rpc = client.claim_es_vesting_from_vault(store, amount);
                     send_or_serialize_rpc(
                         store,
-                        client,
                         rpc,
                         timelock,
                         serialize_only,
@@ -429,7 +419,6 @@ impl Args {
                     let rpc = client.request_gt_vesting(store, amount);
                     send_or_serialize_rpc(
                         store,
-                        client,
                         rpc,
                         timelock,
                         serialize_only,

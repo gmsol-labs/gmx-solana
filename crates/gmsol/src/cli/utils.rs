@@ -82,9 +82,8 @@ where
 
 pub(crate) async fn send_or_serialize_rpc<C, S>(
     store: &Pubkey,
-    client: &GMSOLClient,
     req: RpcBuilder<'_, C>,
-    timelock: Option<&str>,
+    timelock: Option<(&str, &GMSOLClient)>,
     serialize_only: bool,
     skip_preflight: bool,
     callback: impl FnOnce(Signature) -> gmsol::Result<()>,
@@ -97,9 +96,13 @@ where
         for (idx, ix) in req.instructions().into_iter().enumerate() {
             println!("ix[{idx}]: {}", gmsol::utils::serialize_instruction(&ix)?);
         }
-    } else if let Some(role) = timelock {
+    } else if let Some((role, client)) = timelock {
         let mut txn = client.transaction();
-        for (idx, ix) in req.instructions().into_iter().enumerate() {
+        for (idx, ix) in req
+            .instructions_with_options(true, None)
+            .into_iter()
+            .enumerate()
+        {
             let buffer = Keypair::new();
             let (rpc, buffer) = client
                 .create_timelocked_instruction(store, role, buffer, ix)?

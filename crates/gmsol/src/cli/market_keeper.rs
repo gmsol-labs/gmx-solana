@@ -35,7 +35,7 @@ use indexmap::IndexMap;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::de::DeserializeOwned;
 
-use crate::{ser::MarketConfigMap, GMSOLClient};
+use crate::{ser::MarketConfigMap, GMSOLClient, TimelockCtx};
 
 #[derive(clap::Args)]
 pub(super) struct Args {
@@ -318,7 +318,7 @@ impl Args {
         &self,
         client: &GMSOLClient,
         store: &Pubkey,
-        timelock: Option<&str>,
+        timelock: Option<TimelockCtx<'_>>,
         serialize_only: bool,
     ) -> gmsol::Result<()> {
         match &self.command {
@@ -345,7 +345,6 @@ impl Args {
                     .await?;
                 crate::utils::send_or_serialize_rpc(
                     store,
-                    client,
                     rpc,
                     timelock,
                     serialize_only,
@@ -595,7 +594,6 @@ impl Args {
             } => {
                 crate::utils::send_or_serialize_rpc(
                     store,
-                    client,
                     client.update_market_config_flag_by_key(store, market_token, *key, *value)?,
                     timelock,
                     serialize_only,
@@ -773,7 +771,6 @@ impl Args {
             } => {
                 crate::utils::send_or_serialize_rpc(
                     store,
-                    client,
                     client.toggle_gt_minting(store, market_token, toggle.is_enable()),
                     timelock,
                     serialize_only,
@@ -807,7 +804,6 @@ impl Args {
                 ranks.sort_unstable();
                 crate::utils::send_or_serialize_rpc(
                     store,
-                    client,
                     client.initialize_gt(
                         store,
                         *decimals,
@@ -832,7 +828,6 @@ impl Args {
                 }
                 crate::utils::send_or_serialize_rpc(
                     store,
-                    client,
                     client.gt_set_order_fee_discount_factors(store, factors.clone()),
                     timelock,
                     serialize_only,
@@ -850,7 +845,6 @@ impl Args {
                 }
                 crate::utils::send_or_serialize_rpc(
                     store,
-                    client,
                     client.gt_set_referral_reward_factors(store, factors.clone()),
                     timelock,
                     serialize_only,
@@ -865,7 +859,6 @@ impl Args {
             Command::SetReferredDiscountFactor { factor } => {
                 crate::utils::send_or_serialize_rpc(
                     store,
-                    client,
                     client.insert_factor(
                         store,
                         FactorKey::OrderFeeDiscountForReferredUser,

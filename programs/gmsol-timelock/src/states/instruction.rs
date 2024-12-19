@@ -239,7 +239,15 @@ pub trait InstructionAccess {
 
     /// Convert to instruction.
     fn to_instruction(&self) -> Instruction {
-        let accounts = self.accounts().map(From::from).collect();
+        let mut accounts = self
+            .accounts()
+            .map(From::from)
+            .collect::<Vec<AccountMeta>>();
+        let executor = self.header().executor;
+        accounts
+            .iter_mut()
+            .filter(|a| a.pubkey == executor)
+            .for_each(|a| a.is_signer = true);
         Instruction {
             program_id: self.header().program_id,
             accounts,

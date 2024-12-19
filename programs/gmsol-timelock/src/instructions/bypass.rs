@@ -9,6 +9,8 @@ use gmsol_store::{
 
 use crate::{roles, states::Executor};
 
+const NOT_BYPASSABLE_ROLES: [&str; 1] = [roles::TIMELOCKED_ADMIN];
+
 /// The accounts definition for [`revoke_role`](crate::gmsol_timelock::revoke_role).
 #[derive(Accounts)]
 pub struct RevokeRole<'info> {
@@ -41,6 +43,10 @@ pub struct RevokeRole<'info> {
 /// # CHECK
 /// Only [`TIMELOCKED_ADMIN`](roles::TIMELOCKED_ADMIN) can use.
 pub(crate) fn unchecked_revoke_role(ctx: Context<RevokeRole>, role: String) -> Result<()> {
+    require!(
+        !NOT_BYPASSABLE_ROLES.contains(&role.as_str()),
+        CoreError::InvalidArgument
+    );
     let signer = ctx.accounts.executor.load()?.signer();
     let cpi_ctx = ctx.accounts.revoke_role_ctx();
     revoke_role(

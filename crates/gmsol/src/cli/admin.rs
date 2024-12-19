@@ -4,10 +4,11 @@ use gmsol::{
     utils::TransactionBuilder,
 };
 use gmsol_store::states::RoleKey;
+use gmsol_timelock::roles as timelock_roles;
 use gmsol_treasury::roles as treasury_roles;
 use indexmap::IndexSet;
 
-use crate::GMSOLClient;
+use crate::{GMSOLClient, TimelockCtx};
 
 #[derive(clap::Args)]
 pub(super) struct AdminArgs {
@@ -62,7 +63,7 @@ impl AdminArgs {
         &self,
         client: &GMSOLClient,
         store_key: &str,
-        timelock: Option<&str>,
+        timelock: Option<TimelockCtx<'_>>,
         serialize_only: bool,
         skip_preflight: bool,
     ) -> gmsol::Result<()> {
@@ -95,7 +96,6 @@ impl AdminArgs {
                 if *confirm || serialize_only {
                     crate::utils::send_or_serialize_rpc(
                         &store,
-                        client,
                         rpc,
                         timelock,
                         serialize_only,
@@ -130,7 +130,6 @@ impl AdminArgs {
                 if *confirm || serialize_only {
                     crate::utils::send_or_serialize_rpc(
                         &store,
-                        client,
                         rpc,
                         timelock,
                         serialize_only,
@@ -160,7 +159,6 @@ impl AdminArgs {
             Command::EnableRole { role } => {
                 crate::utils::send_or_serialize_rpc(
                     &store,
-                    client,
                     client.enable_role(&store, role),
                     timelock,
                     serialize_only,
@@ -175,7 +173,6 @@ impl AdminArgs {
             Command::DisableRole { role } => {
                 crate::utils::send_or_serialize_rpc(
                     &store,
-                    client,
                     client.disable_role(&store, role),
                     timelock,
                     serialize_only,
@@ -190,7 +187,6 @@ impl AdminArgs {
             Command::GrantRole { role, authority } => {
                 crate::utils::send_or_serialize_rpc(
                     &store,
-                    client,
                     client.grant_role(&store, authority, role),
                     timelock,
                     serialize_only,
@@ -205,7 +201,6 @@ impl AdminArgs {
             Command::RevokeRole { role, authority } => {
                 crate::utils::send_or_serialize_rpc(
                     &store,
-                    client,
                     client.revoke_role(&store, authority, role),
                     timelock,
                     serialize_only,
@@ -232,6 +227,10 @@ struct InitializeRoles {
     treasury_withdrawer: Pubkey,
     #[arg(long)]
     treasury_keeper: Pubkey,
+    #[arg(long)]
+    timelock_admin: Pubkey,
+    #[arg(long)]
+    timelock_keeper: Pubkey,
     #[arg(long)]
     market_keeper: Pubkey,
     #[arg(long)]
@@ -279,6 +278,9 @@ impl InitializeRoles {
                     treasury_roles::TREASURY_ADMIN,
                     treasury_roles::TREASURY_WITHDRAWER,
                     treasury_roles::TREASURY_KEEPER,
+                    timelock_roles::TIMELOCK_ADMIN,
+                    timelock_roles::TIMELOCK_KEEPER,
+                    timelock_roles::TIMELOCKED_ADMIN,
                 ]
                 .iter()
                 .map(|role| client.enable_role(&store, role)),
@@ -305,6 +307,21 @@ impl InitializeRoles {
                 &store,
                 &self.treasury_keeper,
                 treasury_roles::TREASURY_KEEPER,
+            ))?
+            .try_push(client.grant_role(
+                &store,
+                &self.timelock_admin,
+                timelock_roles::TIMELOCK_ADMIN,
+            ))?
+            .try_push(client.grant_role(
+                &store,
+                &self.timelock_keeper,
+                timelock_roles::TIMELOCK_KEEPER,
+            ))?
+            .try_push(client.grant_role(
+                &store,
+                &client.payer(),
+                timelock_roles::TIMELOCKED_ADMIN,
             ))?;
 
         for keeper in self.unique_order_keepers() {

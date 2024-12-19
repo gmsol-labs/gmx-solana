@@ -61,11 +61,15 @@ spl-token -ul mint $USDG 1000
 
 cargo gmsol -ul other init-mock-chainlink-verifier
 
+export ADDRESS=$(solana address)
+
 export STORE=$(cargo gmsol -ul admin create-store)
 
 export CONFIG=$(cargo gmsol -ul treasury init-config)
 
 cargo gmsol -ul admin transfer-receiver $CONFIG --confirm
+
+export ADMIN_EXECUTOR=$(cargo gmsol -ul timelock init-executor ADMIN)
 
 cargo gmsol -ul admin init-roles \
     --market-keeper $KEEPER_ADDRESS \
@@ -73,7 +77,11 @@ cargo gmsol -ul admin init-roles \
     --treasury-admin $KEEPER_ADDRESS \
     --treasury-withdrawer $KEEPER_ADDRESS \
     --treasury-keeper $KEEPER_ADDRESS \
+    --timelock-admin $ADDRESS \
+    --timelock-keeper $KEEPER_ADDRESS \
     --allow-multiple-transactions
+
+cargo gmsol -ul timelock init-config --initial-delay 300
 
 export TREASURY=$(cargo gmsol -ul -w $GMSOL_KEEPER treasury init-treasury 0)
 cargo gmsol -ul -w $GMSOL_KEEPER treasury set-treasury $TREASURY
@@ -144,6 +152,7 @@ export COMMON_ALT=$(cargo gmsol -ul alt extend --init common $ORACLE)
 export MARKET_ALT=$(cargo gmsol -ul alt extend --init market)
 
 echo "STORE: $STORE"
+echo "ADMIN_EXECUTOR: $ADMIN_EXECUTOR"
 echo "CONFIG: $CONFIG"
 echo "TREASURY: $TREASURY"
 echo "ORACLE: $ORACLE"

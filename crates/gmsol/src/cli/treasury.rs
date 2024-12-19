@@ -7,7 +7,7 @@ use gmsol::{
 use gmsol_model::{BalanceExt, BaseMarket};
 use gmsol_treasury::states::treasury::TokenFlag;
 
-use crate::{utils::Side, GMSOLClient};
+use crate::{utils::Side, GMSOLClient, TimelockCtx};
 
 #[derive(clap::Args)]
 pub(super) struct Args {
@@ -79,7 +79,7 @@ impl Args {
         &self,
         client: &GMSOLClient,
         store: &Pubkey,
-        timelock: Option<&str>,
+        timelock: Option<TimelockCtx<'_>>,
         serialize_only: bool,
         skip_preflight: bool,
     ) -> gmsol::Result<()> {
@@ -224,7 +224,6 @@ impl Args {
         };
         crate::utils::send_or_serialize_rpc(
             store,
-            client,
             req,
             timelock,
             serialize_only,

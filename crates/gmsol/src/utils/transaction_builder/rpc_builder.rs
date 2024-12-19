@@ -194,9 +194,24 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> RpcBuilder<'a, C> {
 }
 
 impl<'a, C: Deref<Target = impl Signer> + Clone, T> RpcBuilder<'a, C, T> {
-    pub fn payer(mut self, payer: C) -> Self {
-        self.cfg.payer = payer;
-        self
+    /// Set payer.
+    pub fn payer<C2>(self, payer: C2) -> RpcBuilder<'a, C2, T> {
+        RpcBuilder {
+            output: self.output,
+            program_id: self.program_id,
+            cfg: Config {
+                cluster: self.cfg.cluster,
+                payer,
+                options: self.cfg.options,
+            },
+            signers: self.signers,
+            owned_signers: self.owned_signers,
+            pre_instructions: self.pre_instructions,
+            accounts: self.accounts,
+            instruction_data: self.instruction_data,
+            compute_budget: self.compute_budget,
+            alts: self.alts,
+        }
     }
 
     /// Set cluster.

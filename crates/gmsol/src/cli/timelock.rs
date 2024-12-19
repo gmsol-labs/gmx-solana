@@ -1,6 +1,7 @@
 use crate::GMSOLClient;
 use anchor_client::solana_sdk::pubkey::Pubkey;
-use gmsol::timelock::TimelockOps;
+use gmsol::{timelock::TimelockOps, utils::ZeroCopy};
+use gmsol_timelock::states::Executor;
 
 #[derive(clap::Args)]
 pub(super) struct Args {
@@ -10,6 +11,8 @@ pub(super) struct Args {
 
 #[derive(clap::Subcommand)]
 enum Command {
+    /// Get executor.
+    Executor { role: String },
     /// Initialize timelock config.
     InitConfig {
         #[arg(long, default_value_t = 86400)]
@@ -51,6 +54,20 @@ impl Args {
         skip_preflight: bool,
     ) -> gmsol::Result<()> {
         let req = match &self.command {
+            Command::Executor { role } => {
+                let executor = client.find_executor_address(store, role)?;
+                let account = client
+                    .account::<ZeroCopy<Executor>>(&executor)
+                    .await?
+                    .ok_or(gmsol::Error::NotFound)?;
+                if account.0.role_name()? != role {
+                    return Err(gmsol::Error::invalid_argument(format!(
+                        "invalid executor account found: {executor}"
+                    )));
+                }
+                println!("{executor}");
+                return Ok(());
+            }
             Command::InitConfig { initial_delay } => {
                 let (rpc, config) = client
                     .initialize_timelock_config(store, *initial_delay)
@@ -89,7 +106,6 @@ impl Args {
         };
         crate::utils::send_or_serialize_rpc(
             store,
-            client,
             req,
             None,
             serialize_only,

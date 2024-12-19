@@ -58,6 +58,9 @@ struct Cli {
     /// Treasury Program ID.
     #[arg(long, env)]
     treasury_program: Option<Pubkey>,
+    /// Timelock Program ID.
+    #[arg(long, env)]
+    timelock_program: Option<Pubkey>,
     /// Whether to create a timelocked buffer for this instruction.
     #[arg(long)]
     timelock: Option<String>,
@@ -124,21 +127,48 @@ async fn main() -> eyre::Result<()> {
 }
 
 type GMSOLClient = gmsol::Client<LocalSignerRef>;
+type TimelockCtx<'a> = (&'a str, &'a GMSOLClient);
 
 impl Cli {
     fn wallet(
         &self,
         wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
-    ) -> eyre::Result<LocalSignerRef> {
+    ) -> eyre::Result<(LocalSignerRef, Option<LocalSignerRef>)> {
         if let Some(payer) = self.payer {
             if self.serialize_only {
                 let payer = NullSigner::new(&payer);
-                Ok(gmsol::utils::local_signer(payer))
+                Ok((gmsol::utils::local_signer(payer), None))
             } else {
                 eyre::bail!("Setting payer is only allowed in `serialize-only` mode");
             }
         } else {
-            utils::signer_from_source(&self.wallet, false, "keypair", wallet_manager)
+            let wallet = utils::signer_from_source(&self.wallet, false, "keypair", wallet_manager)?;
+
+            if let Some(role) = self.timelock.as_ref() {
+                let store = if let Some(store_address) = self.store_address {
+                    store_address
+                } else {
+                    gmsol::pda::find_store_address(
+                        &self.store,
+                        self.store_program.as_ref().unwrap_or(&gmsol_store::ID),
+                    )
+                    .0
+                };
+                let executor = gmsol::pda::find_executor_pda(
+                    &store,
+                    role,
+                    self.timelock_program
+                        .as_ref()
+                        .unwrap_or(&gmsol_timelock::ID),
+                )?
+                .0;
+
+                let payer = NullSigner::new(&executor);
+
+                Ok((gmsol::utils::local_signer(payer), Some(wallet)))
+            } else {
+                Ok((wallet, None))
+            }
         }
     }
 
@@ -169,16 +199,19 @@ impl Cli {
     fn gmsol_client(
         &self,
         wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
-    ) -> eyre::Result<GMSOLClient> {
+    ) -> eyre::Result<(GMSOLClient, Option<GMSOLClient>)> {
         let cluster = self.cluster()?;
         tracing::debug!("using cluster: {cluster}");
-        let wallet = self.wallet(wallet_manager)?;
+        let (wallet, timelock_wallet) = self.wallet(wallet_manager)?;
         let payer = wallet.pubkey();
         tracing::debug!("using wallet: {}", payer);
         let commitment = self.commitment;
         tracing::debug!("using commitment config: {}", commitment.commitment);
-        let client = gmsol::Client::new_with_options(cluster, wallet, self.options())?;
-        Ok(client)
+        let client = gmsol::Client::new_with_options(cluster.clone(), wallet, self.options())?;
+        let timelock_client = timelock_wallet
+            .map(|wallet| gmsol::Client::new_with_options(cluster, wallet, self.options()))
+            .transpose()?;
+        Ok((client, timelock_client))
     }
 
     fn timelock(&self) -> Option<&str> {
@@ -187,7 +220,11 @@ impl Cli {
 
     async fn run(&self) -> eyre::Result<()> {
         let mut wallet_manager = None;
-        let client = self.gmsol_client(&mut wallet_manager)?;
+        let (client, timelock_client) = self.gmsol_client(&mut wallet_manager)?;
+        let timelock = timelock_client.as_ref().and_then(|client| {
+            let role = self.timelock()?;
+            Some((role, client))
+        });
         let (store, store_key) = self.store(&client).await?;
         match &self.command {
             Command::Whoami => {
@@ -197,7 +234,7 @@ impl Cli {
                 args.run(
                     &client,
                     &store_key,
-                    self.timelock(),
+                    timelock,
                     self.serialize_only,
                     self.skip_preflight,
                 )
@@ -207,7 +244,7 @@ impl Cli {
                 args.run(
                     &client,
                     &store,
-                    self.timelock(),
+                    timelock,
                     self.serialize_only,
                     self.skip_preflight,
                 )
@@ -231,14 +268,14 @@ impl Cli {
             }
             Command::Order(args) => args.run(&client, &store, self.serialize_only).await?,
             Command::Market(args) => {
-                args.run(&client, &store, self.timelock(), self.serialize_only)
+                args.run(&client, &store, timelock, self.serialize_only)
                     .await?
             }
             Command::Gt(args) => {
                 args.run(
                     &client,
                     &store,
-                    self.timelock(),
+                    timelock,
                     self.serialize_only,
                     self.skip_preflight,
                 )

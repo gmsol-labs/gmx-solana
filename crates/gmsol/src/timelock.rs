@@ -129,10 +129,13 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         store: &Pubkey,
         role: &str,
         buffer: impl Signer + 'static,
-        instruction: Instruction,
+        mut instruction: Instruction,
     ) -> crate::Result<RpcBuilder<C, Pubkey>> {
         let executor = self.find_executor_address(store, role)?;
         let instruction_buffer = buffer.pubkey();
+        instruction.accounts.iter_mut().for_each(|account| {
+            account.is_signer = false;
+        });
         let rpc = self
             .timelock_rpc()
             .args(instruction::CreateInstructionBuffer {
@@ -248,6 +251,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
                 )
             }
         };
+
         Ok(self
             .timelock_rpc()
             .args(instruction::ExecuteInstruction {})
