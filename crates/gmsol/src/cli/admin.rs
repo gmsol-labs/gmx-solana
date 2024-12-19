@@ -55,7 +55,7 @@ enum Command {
         role: String,
     },
     /// Initialize roles.
-    InitRoles(InitializeRoles),
+    InitRoles(Box<InitializeRoles>),
 }
 
 impl AdminArgs {
@@ -232,6 +232,8 @@ struct InitializeRoles {
     #[arg(long)]
     timelock_keeper: Pubkey,
     #[arg(long)]
+    tld_admin: Pubkey,
+    #[arg(long)]
     market_keeper: Pubkey,
     #[arg(long)]
     order_keeper: Vec<Pubkey>,
@@ -320,7 +322,7 @@ impl InitializeRoles {
             ))?
             .try_push(client.grant_role(
                 &store,
-                &client.payer(),
+                &self.tld_admin,
                 timelock_roles::TIMELOCKED_ADMIN,
             ))?;
 

@@ -50,6 +50,7 @@ pub(crate) fn unchecked_create_instruction_buffer<'info>(
     num_accounts: u16,
     data_len: u16,
     data: &[u8],
+    signers: &[u16],
 ) -> Result<()> {
     let remaining_accounts = ctx.remaining_accounts;
     let num_accounts = usize::from(num_accounts);
@@ -58,6 +59,7 @@ pub(crate) fn unchecked_create_instruction_buffer<'info>(
         num_accounts,
         CoreError::InvalidArgument
     );
+
     require_eq!(
         data.len(),
         usize::from(data_len),
@@ -78,6 +80,7 @@ pub(crate) fn unchecked_create_instruction_buffer<'info>(
         ctx.accounts.instruction_program.key(),
         data,
         &remaining_accounts[0..num_accounts],
+        signers,
     )?;
 
     Ok(())

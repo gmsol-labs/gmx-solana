@@ -42,8 +42,15 @@ pub mod gmsol_timelock {
         num_accounts: u16,
         data_len: u16,
         data: Vec<u8>,
+        signers: Vec<u16>,
     ) -> Result<()> {
-        instructions::unchecked_create_instruction_buffer(ctx, num_accounts, data_len, &data)
+        instructions::unchecked_create_instruction_buffer(
+            ctx,
+            num_accounts,
+            data_len,
+            &data,
+            &signers,
+        )
     }
 
     /// Approve instruction.

@@ -139,6 +139,7 @@ pub trait InstructionLoader<'info> {
         program_id: Pubkey,
         data: &[u8],
         accounts: &[AccountInfo<'info>],
+        signers: &[u16],
     ) -> Result<InstructionRef>;
 }
 
@@ -170,6 +171,7 @@ impl<'info> InstructionLoader<'info> for AccountLoader<'info, InstructionHeader>
         program_id: Pubkey,
         instruction_data: &[u8],
         instruction_accounts: &[AccountInfo<'info>],
+        signers: &[u16],
     ) -> Result<InstructionRef> {
         use gmsol_store::utils::dynamic_access::get_mut;
 
@@ -207,11 +209,14 @@ impl<'info> InstructionLoader<'info> for AccountLoader<'info, InstructionHeader>
             data.copy_from_slice(instruction_data);
 
             for (idx, account) in instruction_accounts.iter().enumerate() {
+                let idx_u16: u16 = idx
+                    .try_into()
+                    .map_err(|_| error!(CoreError::InvalidArgument))?;
                 let dst = get_mut::<InstructionAccount>(&mut accounts, idx)
                     .ok_or_else(|| error!(CoreError::InvalidArgument))?;
                 dst.pubkey = account.key();
                 dst.flags
-                    .set_flag(InstructionAccountFlag::Signer, account.is_signer);
+                    .set_flag(InstructionAccountFlag::Signer, signers.contains(&idx_u16));
                 dst.flags
                     .set_flag(InstructionAccountFlag::Writable, account.is_writable);
             }

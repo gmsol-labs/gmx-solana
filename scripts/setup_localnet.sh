@@ -79,6 +79,7 @@ cargo gmsol -ul admin init-roles \
     --treasury-keeper $KEEPER_ADDRESS \
     --timelock-admin $ADDRESS \
     --timelock-keeper $KEEPER_ADDRESS \
+    --tld-admin $ADDRESS \
     --allow-multiple-transactions
 
 cargo gmsol -ul timelock init-config --initial-delay 300

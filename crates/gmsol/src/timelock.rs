@@ -133,9 +133,20 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
     ) -> crate::Result<RpcBuilder<C, Pubkey>> {
         let executor = self.find_executor_address(store, role)?;
         let instruction_buffer = buffer.pubkey();
-        instruction.accounts.iter_mut().for_each(|account| {
-            account.is_signer = false;
-        });
+        let mut signers = vec![];
+        if instruction.accounts.len() > usize::from(u16::MAX) {
+            return Err(crate::Error::invalid_argument("too many accounts"));
+        }
+        instruction
+            .accounts
+            .iter_mut()
+            .enumerate()
+            .for_each(|(idx, account)| {
+                if account.is_signer {
+                    signers.push(idx as u16);
+                }
+                account.is_signer = false;
+            });
         let rpc = self
             .timelock_rpc()
             .args(instruction::CreateInstructionBuffer {
@@ -150,6 +161,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
                     .try_into()
                     .map_err(|_| crate::Error::invalid_argument("data too long"))?,
                 data: instruction.data,
+                signers,
             })
             .accounts(accounts::CreateInstructionBuffer {
                 authority: self.payer(),
@@ -237,7 +249,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         buffer: &Pubkey,
         hint: Option<(&Pubkey, &[AccountMeta])>,
     ) -> crate::Result<RpcBuilder<C>> {
-        let (executor, accounts) = match hint {
+        let (executor, mut accounts) = match hint {
             Some((executor, accounts)) => (*executor, accounts.to_owned()),
             None => {
                 let buffer = self
@@ -251,6 +263,11 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
                 )
             }
         };
+
+        accounts
+            .iter_mut()
+            .filter(|a| a.pubkey == executor)
+            .for_each(|a| a.is_signer = false);
 
         Ok(self
             .timelock_rpc()
