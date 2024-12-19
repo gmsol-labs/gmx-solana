@@ -133,10 +133,9 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
     ) -> crate::Result<RpcBuilder<C, Pubkey>> {
         let executor = self.find_executor_address(store, role)?;
         let instruction_buffer = buffer.pubkey();
+
         let mut signers = vec![];
-        if instruction.accounts.len() > usize::from(u16::MAX) {
-            return Err(crate::Error::invalid_argument("too many accounts"));
-        }
+
         instruction
             .accounts
             .iter_mut()
@@ -147,19 +146,24 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
                 }
                 account.is_signer = false;
             });
+
+        let num_accounts = instruction
+            .accounts
+            .len()
+            .try_into()
+            .map_err(|_| crate::Error::invalid_argument("too many accounts"))?;
+
+        let data_len = instruction
+            .data
+            .len()
+            .try_into()
+            .map_err(|_| crate::Error::invalid_argument("data too long"))?;
+
         let rpc = self
             .timelock_rpc()
             .args(instruction::CreateInstructionBuffer {
-                num_accounts: instruction
-                    .accounts
-                    .len()
-                    .try_into()
-                    .map_err(|_| crate::Error::invalid_argument("too many accounts"))?,
-                data_len: instruction
-                    .data
-                    .len()
-                    .try_into()
-                    .map_err(|_| crate::Error::invalid_argument("data too long"))?,
+                num_accounts,
+                data_len,
                 data: instruction.data,
                 signers,
             })

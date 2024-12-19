@@ -20,16 +20,16 @@ pub struct InstructionHeader {
     pub(crate) executor: Pubkey,
     /// Program ID.
     program_id: Pubkey,
-    /// Data length.
-    data_len: u16,
     /// Number of accounts.
     num_accounts: u16,
+    /// Data length.
+    data_len: u16,
     padding_1: [u8; 12],
 }
 
 impl InstructionHeader {
     /// Get space.
-    pub(crate) fn init_space(data_len: u16, num_accounts: u16) -> usize {
+    pub(crate) fn init_space(num_accounts: u16, data_len: u16) -> usize {
         std::mem::size_of::<Self>()
             + usize::from(data_len)
             + usize::from(num_accounts) * InstructionAccount::INIT_SPACE
@@ -182,8 +182,8 @@ impl<'info> InstructionLoader<'info> for AccountLoader<'info, InstructionHeader>
             let mut header = self.load_init()?;
             header.executor = executor;
             header.program_id = program_id;
-            header.data_len = data_len;
             header.num_accounts = num_accounts;
+            header.data_len = data_len;
 
             drop(header);
 
@@ -196,6 +196,8 @@ impl<'info> InstructionLoader<'info> for AccountLoader<'info, InstructionHeader>
             self.load_mut()?;
 
             let data = self.as_ref().try_borrow_mut_data()?;
+
+            msg!("[Timelock] buffer size: {}", data.len());
 
             let (_disc, remaining_data) = RefMut::map_split(data, |d| d.split_at_mut(8));
             let (header, remaining_data) = RefMut::map_split(remaining_data, |d| {
