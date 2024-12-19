@@ -66,6 +66,11 @@ impl InstructionHeader {
         let executable_at = approved_at.saturating_add_unsigned(delay as u64);
         Ok(now >= executable_at)
     }
+
+    /// Get executor.
+    pub fn executor(&self) -> &Pubkey {
+        &self.executor
+    }
 }
 
 /// Flags of Instruction.
@@ -258,5 +263,61 @@ impl<'a> InstructionAccess for InstructionRef<'a> {
         let num_accounts = self.num_accounts();
 
         (0..num_accounts).map(|idx| get(&self.accounts, idx).expect("must exist"))
+    }
+}
+
+/// Utils for using instruction buffer.
+#[cfg(feature = "utils")]
+pub mod utils {
+
+    use anchor_lang::AccountDeserialize;
+    use bytes::Bytes;
+    use gmsol_store::utils::de;
+
+    use super::{InstructionAccess, InstructionHeader};
+
+    /// Instruction Buffer.
+    pub struct InstructionBuffer {
+        header: InstructionHeader,
+        data: Bytes,
+        accounts: Bytes,
+    }
+
+    impl InstructionAccess for InstructionBuffer {
+        fn header(&self) -> &InstructionHeader {
+            &self.header
+        }
+
+        fn data(&self) -> &[u8] {
+            &self.data
+        }
+
+        fn accounts(&self) -> impl Iterator<Item = &super::InstructionAccount> {
+            use gmsol_store::utils::dynamic_access::get;
+
+            let num_accounts = self.num_accounts();
+
+            (0..num_accounts).map(|idx| get(&self.accounts, idx).expect("must exist"))
+        }
+    }
+
+    impl AccountDeserialize for InstructionBuffer {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            de::check_discriminator::<InstructionHeader>(buf)?;
+            Self::try_deserialize_unchecked(buf)
+        }
+
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let header = de::try_deserailize_unchecked::<InstructionHeader>(buf)?;
+            let (_disc, data) = buf.split_at(8);
+            let (_header, remaining_data) = data.split_at(std::mem::size_of::<InstructionHeader>());
+            let data_len = usize::from(header.data_len);
+            let (data, accounts) = remaining_data.split_at(data_len);
+            Ok(Self {
+                header,
+                data: Bytes::copy_from_slice(data),
+                accounts: Bytes::copy_from_slice(accounts),
+            })
+        }
     }
 }

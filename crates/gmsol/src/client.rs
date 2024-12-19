@@ -15,6 +15,7 @@ use gmsol_store::states::{
     market::status::MarketStatus, position::PositionKind, user::ReferralCodeBytes, NonceBytes,
     PriceProviderKind,
 };
+use gmsol_timelock::states::utils::InstructionBuffer;
 use solana_account_decoder::UiAccountEncoding;
 use tokio::sync::OnceCell;
 use typed_builder::TypedBuilder;
@@ -40,6 +41,8 @@ pub struct ClientOptions {
     #[builder(default)]
     treasury_program_id: Option<Pubkey>,
     #[builder(default)]
+    timelock_program_id: Option<Pubkey>,
+    #[builder(default)]
     commitment: CommitmentConfig,
     #[builder(default)]
     subscription: SubscriptionConfig,
@@ -57,6 +60,7 @@ pub struct Client<C> {
     anchor: Arc<anchor_client::Client<C>>,
     store_program: Program<C>,
     treasury_program: Program<C>,
+    timelock_program: Program<C>,
     pub_sub: OnceCell<PubsubClient>,
     subscription_config: SubscriptionConfig,
 }
@@ -71,6 +75,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         let ClientOptions {
             store_program_id,
             treasury_program_id,
+            timelock_program_id,
             commitment,
             subscription,
         } = options;
@@ -81,6 +86,10 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             store_program: Program::new(store_program_id.unwrap_or(gmsol_store::id()), cfg.clone()),
             treasury_program: Program::new(
                 treasury_program_id.unwrap_or(gmsol_treasury::id()),
+                cfg.clone(),
+            ),
+            timelock_program: Program::new(
+                timelock_program_id.unwrap_or(gmsol_timelock::id()),
                 cfg.clone(),
             ),
             cfg,
@@ -106,6 +115,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             ClientOptions {
                 store_program_id: Some(*self.store_program_id()),
                 treasury_program_id: Some(*self.treasury_program_id()),
+                timelock_program_id: Some(*self.timelock_program_id()),
                 commitment: self.commitment(),
                 subscription: self.subscription_config.clone(),
             },
@@ -119,6 +129,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             anchor: self.anchor.clone(),
             store_program: self.program(*self.store_program_id()),
             treasury_program: self.program(*self.treasury_program_id()),
+            timelock_program: self.program(*self.timelock_program_id()),
             pub_sub: OnceCell::default(),
             subscription_config: self.subscription_config.clone(),
         })
@@ -165,6 +176,11 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         &self.treasury_program
     }
 
+    /// Get the timelock program.
+    pub fn timelock_program(&self) -> &Program<C> {
+        &self.timelock_program
+    }
+
     /// Create a new store program.
     pub fn new_store_program(&self) -> crate::Result<Program<C>> {
         Ok(self.program(*self.store_program_id()))
@@ -185,6 +201,11 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         self.treasury_program().id()
     }
 
+    /// Get the program id of the timelock program.
+    pub fn timelock_program_id(&self) -> &Pubkey {
+        self.timelock_program().id()
+    }
+
     /// Create a rpc builder for the store program.
     pub fn store_rpc(&self) -> RpcBuilder<'_, C> {
         self.store_program().rpc()
@@ -193,6 +214,11 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     /// Create a rpc builder for the treasury program.
     pub fn treasury_rpc(&self) -> RpcBuilder<'_, C> {
         self.treasury_program().rpc()
+    }
+
+    /// Create a rpc builder for the timelock program.
+    pub fn timelock_rpc(&self) -> RpcBuilder<'_, C> {
+        self.timelock_program().rpc()
     }
 
     /// Create a transaction builder with the given options.
@@ -420,6 +446,16 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             self.treasury_program_id(),
         )
         .0
+    }
+
+    /// Find timelock config address.
+    pub fn find_timelock_config_address(&self, store: &Pubkey) -> Pubkey {
+        crate::pda::find_timelock_config_pda(store, self.timelock_program_id()).0
+    }
+
+    /// Find executor address.
+    pub fn find_executor_address(&self, store: &Pubkey, role: &str) -> crate::Result<Pubkey> {
+        Ok(crate::pda::find_executor_pda(store, role, self.timelock_program_id())?.0)
     }
 
     /// Get slot.
@@ -779,6 +815,14 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             .account::<ZeroCopy<types::PriceFeed>>(address)
             .await?
             .map(|a| a.0))
+    }
+
+    /// Fetch [`InstructionBuffer`] account with its address.
+    pub async fn instruction_buffer(
+        &self,
+        address: &Pubkey,
+    ) -> crate::Result<Option<InstructionBuffer>> {
+        self.account::<InstructionBuffer>(address).await
     }
 
     /// Get the [`PubsubClient`].

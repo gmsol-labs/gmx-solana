@@ -7,9 +7,11 @@ use gmsol_store::{
         position::PositionKind,
         user::{ReferralCode, ReferralCodeBytes, UserHeader},
         Deposit, GlvDeposit, NonceBytes, Order, Position, PriceFeed, PriceProviderKind, Seed,
-        Shift, Store, Withdrawal,
+        Shift, Store, Withdrawal, MAX_ROLE_NAME_LEN,
     },
+    utils::fixed_str::fixed_str_to_bytes,
 };
+use gmsol_timelock::states::{Executor, TimelockConfig};
 use gmsol_treasury::states::{Config, GtBank, TreasuryConfig};
 use gmsol_utils::to_seed;
 
@@ -323,4 +325,25 @@ pub fn find_gt_bank_pda(
         ],
         treasury_program_id,
     )
+}
+
+/// Find timelock config PDA.
+pub fn find_timelock_config_pda(store: &Pubkey, timelock_program_id: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[TimelockConfig::SEED, store.as_ref()], timelock_program_id)
+}
+
+/// Find executor PDA.
+pub fn find_executor_pda(
+    store: &Pubkey,
+    role: &str,
+    timelock_program_id: &Pubkey,
+) -> crate::Result<(Pubkey, u8)> {
+    Ok(Pubkey::find_program_address(
+        &[
+            Executor::SEED,
+            store.as_ref(),
+            &fixed_str_to_bytes::<MAX_ROLE_NAME_LEN>(role)?,
+        ],
+        timelock_program_id,
+    ))
 }

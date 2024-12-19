@@ -20,6 +20,9 @@ pub mod exchange;
 /// Instructions for the treasury program.
 pub mod treasury;
 
+/// Instructions for the timelock program.
+pub mod timelock;
+
 /// Address Lookup Table operations.
 pub mod alt;
 
