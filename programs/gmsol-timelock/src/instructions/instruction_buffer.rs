@@ -8,11 +8,10 @@ use gmsol_store::{
 
 use crate::{
     roles,
-    states::{Executor, InstructionAccess, InstructionHeader, InstructionLoader},
+    states::{
+        config::TimelockConfig, Executor, InstructionAccess, InstructionHeader, InstructionLoader,
+    },
 };
-
-/// Timelock delay.
-pub const TIMELOCK_DELAY: u32 = 86400;
 
 /// The accounts definition for [`create_instruction_buffer`](crate::gmsol_timelock::create_instruction_buffer).
 #[derive(Accounts)]
@@ -217,6 +216,9 @@ pub struct ExecuteInstruction<'info> {
     /// Store.
     /// CHECK: check by CPI.
     pub store: UncheckedAccount<'info>,
+    /// Timelock config.
+    #[account(has_one = store)]
+    pub timelock_config: AccountLoader<'info, TimelockConfig>,
     /// Executor.
     #[account(has_one = store)]
     pub executor: AccountLoader<'info, Executor>,
@@ -229,14 +231,15 @@ pub struct ExecuteInstruction<'info> {
 
 /// Execute instruction.
 /// # CHECK
-/// Only [`TIMELOCK_ADMIN`](crate::roles::TIMELOCK_ADMIN) can use.
+/// Only [`TIMELOCK_KEEPER`](crate::roles::TIMELOCK_KEEPER) can use.
 pub(crate) fn unchecked_execute_instruction(ctx: Context<ExecuteInstruction>) -> Result<()> {
     let remaining_accounts = ctx.remaining_accounts;
 
     let instruction = ctx.accounts.instruction.load_instruction()?;
 
+    let delay = ctx.accounts.timelock_config.load()?.delay();
     require!(
-        instruction.header().is_executable(TIMELOCK_DELAY)?,
+        instruction.header().is_executable(delay)?,
         CoreError::PreconditionsAreNotMet
     );
 

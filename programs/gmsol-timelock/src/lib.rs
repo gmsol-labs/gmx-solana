@@ -18,6 +18,18 @@ declare_id!("timedreYasWZUyAgofdmjFVJwk3LKZZq6QJtgpc1aqv");
 pub mod gmsol_timelock {
     use super::*;
 
+    /// Initialize timelock config.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TIMELOCK_ADMIN))]
+    pub fn initialize_config(ctx: Context<InitializeConfig>, delay: u32) -> Result<()> {
+        instructions::unchecked_initialize_config(ctx, delay)
+    }
+
+    /// Increase timelock delay.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TIMELOCK_ADMIN))]
+    pub fn increase_delay(ctx: Context<IncreaseDelay>, delta: u32) -> Result<()> {
+        instructions::unchecked_increase_delay(ctx, delta)
+    }
+
     /// Initialize executor.
     pub fn initialize_executor(ctx: Context<InitializeExecutor>, role: String) -> Result<()> {
         instructions::initialize_executor(ctx, &role)
@@ -46,8 +58,14 @@ pub mod gmsol_timelock {
     }
 
     /// Execute instruction.
-    #[access_control(CpiAuthenticate::only(&ctx, roles::TIMELOCK_ADMIN))]
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TIMELOCK_KEEPER))]
     pub fn execute_instruction(ctx: Context<ExecuteInstruction>) -> Result<()> {
         instructions::unchecked_execute_instruction(ctx)
+    }
+
+    /// Revoke role.
+    #[access_control(CpiAuthenticate::only(&ctx, roles::TIMELOCKED_ADMIN))]
+    pub fn revoke_role(ctx: Context<RevokeRole>, role: String) -> Result<()> {
+        instructions::unchecked_revoke_role(ctx, role)
     }
 }

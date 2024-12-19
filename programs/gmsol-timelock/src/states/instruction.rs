@@ -146,7 +146,7 @@ impl<'info> InstructionLoader<'info> for AccountLoader<'info, InstructionHeader>
 
         let (_disc, remaining_data) = Ref::map_split(data, |d| d.split_at(8));
         let (header, remaining_data) = Ref::map_split(remaining_data, |d| {
-            d.split_at(size_of::<InstructionHeader>())
+            d.split_at(std::mem::size_of::<InstructionHeader>())
         });
         let header = Ref::map(header, bytemuck::from_bytes::<InstructionHeader>);
         let data_len = usize::from(header.data_len);
@@ -192,7 +192,7 @@ impl<'info> InstructionLoader<'info> for AccountLoader<'info, InstructionHeader>
 
             let (_disc, remaining_data) = RefMut::map_split(data, |d| d.split_at_mut(8));
             let (header, remaining_data) = RefMut::map_split(remaining_data, |d| {
-                d.split_at_mut(size_of::<InstructionHeader>())
+                d.split_at_mut(std::mem::size_of::<InstructionHeader>())
             });
             let header = RefMut::map(header, bytemuck::from_bytes_mut::<InstructionHeader>);
             let data_len = usize::from(header.data_len);

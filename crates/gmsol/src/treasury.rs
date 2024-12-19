@@ -26,7 +26,7 @@ use crate::{
 
 /// Treasury instructions.
 pub trait TreasuryOps<C> {
-    /// Initialize [`Config`](crate::types::treasury::Config) account.
+    /// Initialize [`Config`] account.
     fn initialize_config(&self, store: &Pubkey) -> RpcBuilder<C, Pubkey>;
 
     /// Set treasury.
@@ -35,7 +35,7 @@ pub trait TreasuryOps<C> {
     /// Set GT factor.
     fn set_gt_factor(&self, store: &Pubkey, factor: u128) -> crate::Result<RpcBuilder<C>>;
 
-    /// Initialize [`TreasuryConfig`](crate::types::treasury::TreasuryConfig).
+    /// Initialize [`TreasuryConfig`].
     fn initialize_treasury(&self, store: &Pubkey, index: u8) -> RpcBuilder<C, Pubkey>;
 
     /// Insert token to treasury.
