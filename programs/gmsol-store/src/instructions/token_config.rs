@@ -3,8 +3,8 @@ use anchor_spl::token::Mint;
 
 use crate::{
     states::{
-        FeedConfig, PriceProviderKind, Store, TokenConfigBuilder, TokenMapAccess, TokenMapHeader,
-        TokenMapLoader, TokenMapMutAccess,
+        FeedConfig, PriceProviderKind, Store, TokenConfigBuilder, TokenMapAccess,
+        TokenMapAccessMut, TokenMapHeader, TokenMapLoader,
     },
     utils::internal,
     CoreError,

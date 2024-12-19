@@ -455,7 +455,9 @@ pub struct TokenMapMut<'a> {
 
 /// Token Map Loader.
 pub trait TokenMapLoader<'info> {
+    /// Load token map.
     fn load_token_map(&self) -> Result<TokenMapRef>;
+    /// Load token map with mutable access.
     fn load_token_map_mut(&self) -> Result<TokenMapMut>;
 }
 
@@ -525,7 +527,7 @@ impl<'a> TokenMapAccess for TokenMapRef<'a> {
 /// Token Map Operations.
 ///
 /// The token map is append-only.
-pub trait TokenMapMutAccess {
+pub trait TokenMapAccessMut {
     /// Get mutably the config of the given token.
     fn get_mut(&mut self, token: &Pubkey) -> Option<&mut TokenConfig>;
 
@@ -538,7 +540,7 @@ pub trait TokenMapMutAccess {
     ) -> Result<()>;
 }
 
-impl<'a> TokenMapMutAccess for TokenMapMut<'a> {
+impl<'a> TokenMapAccessMut for TokenMapMut<'a> {
     fn get_mut(&mut self, token: &Pubkey) -> Option<&mut TokenConfig> {
         self.header
             .get_token_config_mut_unchecked(token, &mut self.configs)
