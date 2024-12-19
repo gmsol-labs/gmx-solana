@@ -35,9 +35,8 @@ pub mod gmsol_timelock {
     }
 
     /// Approve instruction.
-    #[access_control(CpiAuthenticate::only(&ctx, roles::TIMELOCK_ADMIN))]
-    pub fn approve_instruction(ctx: Context<ApproveInstruction>) -> Result<()> {
-        instructions::unchecked_approve_instruction(ctx)
+    pub fn approve_instruction(ctx: Context<ApproveInstruction>, role: String) -> Result<()> {
+        instructions::approve_instruction(ctx, &role)
     }
 
     /// Cancel instruction.

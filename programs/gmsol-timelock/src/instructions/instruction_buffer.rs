@@ -1,11 +1,18 @@
 use anchor_lang::{prelude::*, solana_program::program::invoke_signed};
 use gmsol_store::{
     program::GmsolStore,
-    utils::{CpiAuthentication, WithStore},
+    states::{Seed, MAX_ROLE_NAME_LEN},
+    utils::{fixed_str::fixed_str_to_bytes, CpiAuthenticate, CpiAuthentication, WithStore},
     CoreError,
 };
 
-use crate::states::{Executor, InstructionAccess, InstructionHeader, InstructionLoader};
+use crate::{
+    roles,
+    states::{Executor, InstructionAccess, InstructionHeader, InstructionLoader},
+};
+
+/// Timelock delay.
+pub const TIMELOCK_DELAY: u32 = 86400;
 
 /// The accounts definition for [`create_instruction_buffer`](crate::gmsol_timelock::create_instruction_buffer).
 #[derive(Accounts)]
@@ -99,23 +106,41 @@ impl<'info> CpiAuthentication<'info> for CreateInstructionBuffer<'info> {
 
 /// The accounts definition for [`approve_instruction`](crate::gmsol_timelock::approve_instruction).
 #[derive(Accounts)]
+#[instruction(role: String)]
 pub struct ApproveInstruction<'info> {
     /// Authority.
     pub authority: Signer<'info>,
     /// Store.
     /// CHECK: check by CPI.
     pub store: UncheckedAccount<'info>,
+    /// Executor.
+    #[account(
+        has_one = store,
+        constraint = executor.load()?.role_name()? == role.as_str() @ CoreError::InvalidArgument,
+        seeds = [
+            Executor::SEED,
+            store.key.as_ref(),
+            &fixed_str_to_bytes::<MAX_ROLE_NAME_LEN>(&role)?,
+        ],
+        bump = executor.load()?.bump,
+    )]
+    pub executor: AccountLoader<'info, Executor>,
     /// Instruction to approve.
-    #[account(mut)]
+    #[account(mut, has_one = executor)]
     pub instruction: AccountLoader<'info, InstructionHeader>,
     /// Store program.
     pub store_program: Program<'info, GmsolStore>,
 }
 
 /// Approve instruction.
-/// # CHECK
-/// Only [`TIMELOCK_ADMIN`](crate::roles::TIMELOCK_ADMIN) can use.
-pub(crate) fn unchecked_approve_instruction(ctx: Context<ApproveInstruction>) -> Result<()> {
+pub(crate) fn approve_instruction(ctx: Context<ApproveInstruction>, role: &str) -> Result<()> {
+    let timelocked_role = [roles::TIMELOCKED, role].concat();
+    CpiAuthenticate::only(&ctx, &timelocked_role)?;
+    msg!(
+        "[Timelock] approving a `{}` instruction by a `{}`",
+        role,
+        timelocked_role
+    );
     ctx.accounts.instruction.load_mut()?.approve()
 }
 
@@ -147,8 +172,11 @@ pub struct CancelInstruction<'info> {
     /// Store.
     /// CHECK: check by CPI.
     pub store: UncheckedAccount<'info>,
+    /// Executor.
+    #[account(has_one = store)]
+    pub executor: AccountLoader<'info, Executor>,
     /// Instruction to cancel.
-    #[account(mut, close = authority)]
+    #[account(mut, has_one = executor, close = authority)]
     pub instruction: AccountLoader<'info, InstructionHeader>,
     /// Store program.
     pub store_program: Program<'info, GmsolStore>,
@@ -208,7 +236,7 @@ pub(crate) fn unchecked_execute_instruction(ctx: Context<ExecuteInstruction>) ->
     let instruction = ctx.accounts.instruction.load_instruction()?;
 
     require!(
-        instruction.header().is_executable(86400)?,
+        instruction.header().is_executable(TIMELOCK_DELAY)?,
         CoreError::PreconditionsAreNotMet
     );
 
