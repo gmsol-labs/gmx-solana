@@ -108,6 +108,7 @@ impl Args {
         &self,
         client: &GMSOLClient,
         store: &Pubkey,
+        timelock: Option<&str>,
         serialize_only: bool,
         skip_preflight: bool,
     ) -> gmsol::Result<()> {
@@ -143,10 +144,18 @@ impl Args {
 
                 if *claim {
                     let rpc = client.claim_es_gt(store);
-                    send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
-                        println!("{signature}");
-                        Ok(())
-                    })
+                    send_or_serialize_rpc(
+                        store,
+                        client,
+                        rpc,
+                        timelock,
+                        serialize_only,
+                        skip_preflight,
+                        |signature| {
+                            println!("{signature}");
+                            Ok(())
+                        },
+                    )
                     .await?;
                 } else {
                     let owner = owner.unwrap_or(client.payer());
@@ -201,10 +210,18 @@ impl Args {
                 let (rpc, _vault) = client
                     .prepare_gt_exchange_vault_with_time_window(store, time_window)?
                     .swap_output(());
-                send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
-                    println!("{signature}");
-                    Ok(())
-                })
+                send_or_serialize_rpc(
+                    store,
+                    client,
+                    rpc,
+                    timelock,
+                    serialize_only,
+                    skip_preflight,
+                    |signature| {
+                        println!("{signature}");
+                        Ok(())
+                    },
+                )
                 .await?;
             }
             Command::ConfirmExchangeVault {
@@ -224,34 +241,66 @@ impl Args {
                     rpc = rpc.merge(init);
                 }
 
-                send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
-                    println!("{signature}");
-                    Ok(())
-                })
+                send_or_serialize_rpc(
+                    store,
+                    client,
+                    rpc,
+                    timelock,
+                    serialize_only,
+                    skip_preflight,
+                    |signature| {
+                        println!("{signature}");
+                        Ok(())
+                    },
+                )
                 .await?;
             }
             Command::SetExchangeTimeWindow { seconds } => {
                 let rpc = client.gt_set_exchange_time_window(store, seconds.get());
-                send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
-                    println!("{signature}");
-                    Ok(())
-                })
+                send_or_serialize_rpc(
+                    store,
+                    client,
+                    rpc,
+                    timelock,
+                    serialize_only,
+                    skip_preflight,
+                    |signature| {
+                        println!("{signature}");
+                        Ok(())
+                    },
+                )
                 .await?;
             }
             Command::SetReceiver { address } => {
                 let rpc = client.gt_set_es_receiver(store, address);
-                send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
-                    println!("{signature}");
-                    Ok(())
-                })
+                send_or_serialize_rpc(
+                    store,
+                    client,
+                    rpc,
+                    timelock,
+                    serialize_only,
+                    skip_preflight,
+                    |signature| {
+                        println!("{signature}");
+                        Ok(())
+                    },
+                )
                 .await?;
             }
             Command::SetReceiverFactor { factor } => {
                 let rpc = client.gt_set_es_receiver_factor(store, *factor);
-                send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
-                    println!("{signature}");
-                    Ok(())
-                })
+                send_or_serialize_rpc(
+                    store,
+                    client,
+                    rpc,
+                    timelock,
+                    serialize_only,
+                    skip_preflight,
+                    |signature| {
+                        println!("{signature}");
+                        Ok(())
+                    },
+                )
                 .await?;
             }
             Command::Exchange {
@@ -281,20 +330,36 @@ impl Args {
                         } else {
                             request
                         };
-                        send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
-                            println!("{signature}");
-                            Ok(())
-                        })
+                        send_or_serialize_rpc(
+                            store,
+                            client,
+                            rpc,
+                            timelock,
+                            serialize_only,
+                            skip_preflight,
+                            |signature| {
+                                println!("{signature}");
+                                Ok(())
+                            },
+                        )
                         .await?;
                     }
                     (None, Some(exchange)) => {
                         let rpc = client
                             .complete_gt_exchange(store, exchange, None, None, None)
                             .await?;
-                        send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
-                            println!("{signature}");
-                            Ok(())
-                        })
+                        send_or_serialize_rpc(
+                            store,
+                            client,
+                            rpc,
+                            timelock,
+                            serialize_only,
+                            skip_preflight,
+                            |signature| {
+                                println!("{signature}");
+                                Ok(())
+                            },
+                        )
                         .await?;
                     }
                     (None, None) => {
@@ -330,26 +395,50 @@ impl Args {
 
                 if *claim {
                     let rpc = client.update_gt_vesting(store);
-                    send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
-                        println!("{signature}");
-                        Ok(())
-                    })
+                    send_or_serialize_rpc(
+                        store,
+                        client,
+                        rpc,
+                        timelock,
+                        serialize_only,
+                        skip_preflight,
+                        |signature| {
+                            println!("{signature}");
+                            Ok(())
+                        },
+                    )
                     .await?;
                 } else if let Some(amount) = from_vault {
                     let amount = parse_amount(amount, decimals)?;
                     let rpc = client.claim_es_vesting_from_vault(store, amount);
-                    send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
-                        println!("{signature}");
-                        Ok(())
-                    })
+                    send_or_serialize_rpc(
+                        store,
+                        client,
+                        rpc,
+                        timelock,
+                        serialize_only,
+                        skip_preflight,
+                        |signature| {
+                            println!("{signature}");
+                            Ok(())
+                        },
+                    )
                     .await?;
                 } else if let Some(amount) = request {
                     let amount = parse_amount(amount, decimals)?;
                     let rpc = client.request_gt_vesting(store, amount);
-                    send_or_serialize_rpc(rpc, serialize_only, skip_preflight, |signature| {
-                        println!("{signature}");
-                        Ok(())
-                    })
+                    send_or_serialize_rpc(
+                        store,
+                        client,
+                        rpc,
+                        timelock,
+                        serialize_only,
+                        skip_preflight,
+                        |signature| {
+                            println!("{signature}");
+                            Ok(())
+                        },
+                    )
                     .await?;
                 } else {
                     let owner = owner.unwrap_or(client.payer());

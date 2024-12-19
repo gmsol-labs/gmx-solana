@@ -2,14 +2,23 @@ use std::{collections::HashMap, fs, ops::Deref, path::PathBuf, rc::Rc};
 
 use anchor_client::{
     solana_client::rpc_config::RpcSendTransactionConfig,
-    solana_sdk::{signature::Signature, signer::Signer},
+    solana_sdk::{
+        pubkey::Pubkey,
+        signature::{Keypair, Signature},
+        signer::Signer,
+    },
     RequestBuilder,
 };
 use eyre::OptionExt;
-use gmsol::utils::{RpcBuilder, TransactionBuilder};
+use gmsol::{
+    timelock::TimelockOps,
+    utils::{RpcBuilder, TransactionBuilder},
+};
 use prettytable::format::{FormatBuilder, TableFormat};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use url::Url;
+
+use crate::GMSOLClient;
 
 #[derive(clap::ValueEnum, Clone, Copy, Default)]
 #[clap(rename_all = "kebab-case")]
@@ -72,7 +81,10 @@ where
 }
 
 pub(crate) async fn send_or_serialize_rpc<C, S>(
+    store: &Pubkey,
+    client: &GMSOLClient,
     req: RpcBuilder<'_, C>,
+    timelock: Option<&str>,
     serialize_only: bool,
     skip_preflight: bool,
     callback: impl FnOnce(Signature) -> gmsol::Result<()>,
@@ -84,6 +96,35 @@ where
     if serialize_only {
         for (idx, ix) in req.instructions().into_iter().enumerate() {
             println!("ix[{idx}]: {}", gmsol::utils::serialize_instruction(&ix)?);
+        }
+    } else if let Some(role) = timelock {
+        let mut txn = client.transaction();
+        for (idx, ix) in req.instructions().into_iter().enumerate() {
+            let buffer = Keypair::new();
+            let (rpc, buffer) = client
+                .create_timelocked_instruction(store, role, buffer, ix)?
+                .swap_output(());
+            txn.push(rpc)?;
+            println!("ix[{idx}]: {buffer}");
+        }
+
+        match txn
+            .send_all_with_opts(
+                None,
+                RpcSendTransactionConfig {
+                    skip_preflight,
+                    ..Default::default()
+                },
+                false,
+            )
+            .await
+        {
+            Ok(signatures) => {
+                tracing::info!("{signatures:#?}");
+            }
+            Err((signatures, error)) => {
+                tracing::error!(%error, "{signatures:#?}");
+            }
         }
     } else {
         let signature = req

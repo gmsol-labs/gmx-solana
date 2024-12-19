@@ -25,6 +25,7 @@ mod market_keeper;
 mod order_keeper;
 mod other;
 mod ser;
+mod timelock;
 mod treasury;
 mod utils;
 
@@ -57,6 +58,9 @@ struct Cli {
     /// Treasury Program ID.
     #[arg(long, env)]
     treasury_program: Option<Pubkey>,
+    /// Whether to create a timelocked buffer for this instruction.
+    #[arg(long)]
+    timelock: Option<String>,
     /// Print the Based64 encoded serialized instructions,
     /// instead of sending the transaction.
     #[arg(long, group = "tx-opts")]
@@ -83,6 +87,8 @@ enum Command {
     Admin(AdminArgs),
     /// Commands for treasury.
     Treasury(treasury::Args),
+    /// Commands for timelock.
+    Timelock(timelock::Args),
     /// Inspect the accounts defined by `DataStore` program.
     Inspect(inspect::InspectArgs),
     /// Commands for `Exchange` program.
@@ -175,6 +181,10 @@ impl Cli {
         Ok(client)
     }
 
+    fn timelock(&self) -> Option<&str> {
+        self.timelock.as_deref()
+    }
+
     async fn run(&self) -> eyre::Result<()> {
         let mut wallet_manager = None;
         let client = self.gmsol_client(&mut wallet_manager)?;
@@ -183,8 +193,32 @@ impl Cli {
             Command::Whoami => {
                 println!("{}", client.payer());
             }
-            Command::Admin(args) => args.run(&client, &store_key, self.serialize_only).await?,
+            Command::Admin(args) => {
+                args.run(
+                    &client,
+                    &store_key,
+                    self.timelock(),
+                    self.serialize_only,
+                    self.skip_preflight,
+                )
+                .await?
+            }
             Command::Treasury(args) => {
+                args.run(
+                    &client,
+                    &store,
+                    self.timelock(),
+                    self.serialize_only,
+                    self.skip_preflight,
+                )
+                .await?
+            }
+            Command::Timelock(args) => {
+                if self.timelock.is_some() {
+                    eyre::bail!(
+                        "`--timelock` option is not supported by the `timelock` subcommands"
+                    );
+                }
                 args.run(&client, &store, self.serialize_only, self.skip_preflight)
                     .await?
             }
@@ -196,10 +230,19 @@ impl Cli {
                 args.run(&client, &store).await?
             }
             Command::Order(args) => args.run(&client, &store, self.serialize_only).await?,
-            Command::Market(args) => args.run(&client, &store, self.serialize_only).await?,
-            Command::Gt(args) => {
-                args.run(&client, &store, self.serialize_only, self.skip_preflight)
+            Command::Market(args) => {
+                args.run(&client, &store, self.timelock(), self.serialize_only)
                     .await?
+            }
+            Command::Gt(args) => {
+                args.run(
+                    &client,
+                    &store,
+                    self.timelock(),
+                    self.serialize_only,
+                    self.skip_preflight,
+                )
+                .await?
             }
             Command::Controller(args) => args.run(&client, &store, self.serialize_only).await?,
             Command::Feature(args) => args.run(&client, &store, self.serialize_only).await?,

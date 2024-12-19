@@ -79,6 +79,7 @@ impl Args {
         &self,
         client: &GMSOLClient,
         store: &Pubkey,
+        timelock: Option<&str>,
         serialize_only: bool,
         skip_preflight: bool,
     ) -> gmsol::Result<()> {
@@ -221,10 +222,18 @@ impl Args {
                     .await?
             }
         };
-        crate::utils::send_or_serialize_rpc(req, serialize_only, skip_preflight, |signature| {
-            tracing::info!("{signature}");
-            Ok(())
-        })
+        crate::utils::send_or_serialize_rpc(
+            store,
+            client,
+            req,
+            timelock,
+            serialize_only,
+            skip_preflight,
+            |signature| {
+                tracing::info!("{signature}");
+                Ok(())
+            },
+        )
         .await
     }
 }

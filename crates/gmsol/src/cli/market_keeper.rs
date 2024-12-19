@@ -318,6 +318,7 @@ impl Args {
         &self,
         client: &GMSOLClient,
         store: &Pubkey,
+        timelock: Option<&str>,
         serialize_only: bool,
     ) -> gmsol::Result<()> {
         match &self.command {
@@ -342,11 +343,19 @@ impl Args {
                 let (rpc, oracle) = client
                     .initialize_oracle(store, &oracle, authority.as_ref())
                     .await?;
-                crate::utils::send_or_serialize_rpc(rpc, serialize_only, false, |signature| {
-                    tracing::info!("initialized an oracle buffer account at tx {signature}");
-                    println!("{oracle}");
-                    Ok(())
-                })
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    client,
+                    rpc,
+                    timelock,
+                    serialize_only,
+                    false,
+                    |signature| {
+                        tracing::info!("initialized an oracle buffer account at tx {signature}");
+                        println!("{oracle}");
+                        Ok(())
+                    },
+                )
                 .await?
             }
             Command::CreateTokenMap => {
@@ -585,7 +594,10 @@ impl Args {
                 value,
             } => {
                 crate::utils::send_or_serialize_rpc(
+                    store,
+                    client,
                     client.update_market_config_flag_by_key(store, market_token, *key, *value)?,
+                    timelock,
                     serialize_only,
                     false,
                     |signature| {
@@ -760,7 +772,10 @@ impl Args {
                 toggle,
             } => {
                 crate::utils::send_or_serialize_rpc(
+                    store,
+                    client,
                     client.toggle_gt_minting(store, market_token, toggle.is_enable()),
+                    timelock,
                     serialize_only,
                     false,
                     |signature| {
@@ -791,6 +806,8 @@ impl Args {
                 let mut ranks = ranks.clone();
                 ranks.sort_unstable();
                 crate::utils::send_or_serialize_rpc(
+                    store,
+                    client,
                     client.initialize_gt(
                         store,
                         *decimals,
@@ -799,6 +816,7 @@ impl Args {
                         *grow_step,
                         ranks.clone(),
                     ),
+                    timelock,
                     serialize_only,
                     false,
                     |signature| {
@@ -813,7 +831,10 @@ impl Args {
                     return Err(gmsol::Error::invalid_argument("factors must be provided"));
                 }
                 crate::utils::send_or_serialize_rpc(
+                    store,
+                    client,
                     client.gt_set_order_fee_discount_factors(store, factors.clone()),
+                    timelock,
                     serialize_only,
                     false,
                     |signature| {
@@ -828,7 +849,10 @@ impl Args {
                     return Err(gmsol::Error::invalid_argument("factors must be provided"));
                 }
                 crate::utils::send_or_serialize_rpc(
+                    store,
+                    client,
                     client.gt_set_referral_reward_factors(store, factors.clone()),
+                    timelock,
                     serialize_only,
                     false,
                     |signature| {
@@ -840,11 +864,14 @@ impl Args {
             }
             Command::SetReferredDiscountFactor { factor } => {
                 crate::utils::send_or_serialize_rpc(
+                    store,
+                    client,
                     client.insert_factor(
                         store,
                         FactorKey::OrderFeeDiscountForReferredUser,
                         *factor,
                     ),
+                    timelock,
                     serialize_only,
                     false,
                     |signature| {

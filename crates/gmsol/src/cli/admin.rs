@@ -62,7 +62,9 @@ impl AdminArgs {
         &self,
         client: &GMSOLClient,
         store_key: &str,
+        timelock: Option<&str>,
         serialize_only: bool,
+        skip_preflight: bool,
     ) -> gmsol::Result<()> {
         let store = client.find_store_address(store_key);
         match &self.command {
@@ -91,13 +93,17 @@ impl AdminArgs {
             } => {
                 let rpc = client.transfer_store_authority(&store, new_authority);
                 if *confirm || serialize_only {
-                    crate::utils::send_or_serialize(
-                        rpc.into_anchor_request_without_compute_budget(),
+                    crate::utils::send_or_serialize_rpc(
+                        &store,
+                        client,
+                        rpc,
+                        timelock,
                         serialize_only,
+                        skip_preflight,
                         |signature| {
                             tracing::info!(
-                                "transferred store authority to `{new_authority}` at tx {signature}"
-                            );
+                            "transferred store authority to `{new_authority}` at tx {signature}"
+                        );
                             Ok(())
                         },
                     )
@@ -122,9 +128,13 @@ impl AdminArgs {
             } => {
                 let rpc = client.transfer_receiver(&store, new_receiver);
                 if *confirm || serialize_only {
-                    crate::utils::send_or_serialize(
-                        rpc.into_anchor_request_without_compute_budget(),
+                    crate::utils::send_or_serialize_rpc(
+                        &store,
+                        client,
+                        rpc,
+                        timelock,
                         serialize_only,
+                        skip_preflight,
                         |signature| {
                             tracing::info!(
                                 "transferred receiver authority to `{new_receiver}` at tx {signature}"
@@ -148,11 +158,13 @@ impl AdminArgs {
                 }
             }
             Command::EnableRole { role } => {
-                crate::utils::send_or_serialize(
-                    client
-                        .enable_role(&store, role)
-                        .into_anchor_request_without_compute_budget(),
+                crate::utils::send_or_serialize_rpc(
+                    &store,
+                    client,
+                    client.enable_role(&store, role),
+                    timelock,
                     serialize_only,
+                    skip_preflight,
                     |signature| {
                         tracing::info!("enabled role `{role}` at tx {signature}");
                         Ok(())
@@ -161,11 +173,13 @@ impl AdminArgs {
                 .await?;
             }
             Command::DisableRole { role } => {
-                crate::utils::send_or_serialize(
-                    client
-                        .disable_role(&store, role)
-                        .into_anchor_request_without_compute_budget(),
+                crate::utils::send_or_serialize_rpc(
+                    &store,
+                    client,
+                    client.disable_role(&store, role),
+                    timelock,
                     serialize_only,
+                    skip_preflight,
                     |signature| {
                         tracing::info!("disabled role `{role}` at tx {signature}");
                         Ok(())
@@ -174,11 +188,13 @@ impl AdminArgs {
                 .await?;
             }
             Command::GrantRole { role, authority } => {
-                crate::utils::send_or_serialize(
-                    client
-                        .grant_role(&store, authority, role)
-                        .into_anchor_request_without_compute_budget(),
+                crate::utils::send_or_serialize_rpc(
+                    &store,
+                    client,
+                    client.grant_role(&store, authority, role),
+                    timelock,
                     serialize_only,
+                    skip_preflight,
                     |signature| {
                         tracing::info!("granted a role for user {authority} at tx {signature}");
                         Ok(())
@@ -187,11 +203,13 @@ impl AdminArgs {
                 .await?;
             }
             Command::RevokeRole { role, authority } => {
-                crate::utils::send_or_serialize(
-                    client
-                        .revoke_role(&store, authority, role)
-                        .into_anchor_request_without_compute_budget(),
+                crate::utils::send_or_serialize_rpc(
+                    &store,
+                    client,
+                    client.revoke_role(&store, authority, role),
+                    timelock,
                     serialize_only,
+                    skip_preflight,
                     |signature| {
                         tracing::info!("revoked a role for user {authority} at tx {signature}");
                         Ok(())
