@@ -57,18 +57,18 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullO
         feed_ids: &FeedIds,
         _after: Option<OffsetDateTime>, // Sb always calculates price on the fly.
     ) -> crate::Result<Self::PriceUpdates> {
-        let feeds = &feed_ids.feeds;
+        let feeds = filter_feed_ids(feed_ids, PriceProviderKind::Switchboard)?;
         let mut num_signatures = 3;
         let mut feed_configs = Vec::new();
         let mut queue = Pubkey::default();
 
-        for feed in feeds {
+        for feed in &feeds {
             let data = *self
                 .ctx
                 .pull_feed_cache
                 .entry(*feed)
                 .or_insert_with(OnceCell::new)
-                .get_or_try_init(|| PullFeed::load_data(&self.client, feed))
+                .get_or_try_init(|| PullFeed::load_data(&self.client, &feed))
                 .await
                 .map_err(|_| crate::Error::transport("fetching job data failed"))?;
             let jobs = data
@@ -220,4 +220,15 @@ fn encode_jobs(job_array: &[OracleJob]) -> Vec<String> {
         .iter()
         .map(|job| BASE64_STANDARD.encode(job.encode_length_delimited_to_vec()))
         .collect()
+}
+
+fn filter_feed_ids(feed_ids: &FeedIds, provider: PriceProviderKind) -> crate::Result<Vec<Pubkey>> {
+    let sb_idx = feed_ids.providers.iter().position(|x| *x == provider as u8);
+    if sb_idx.is_none() {
+        return Err(crate::Error::transport("no switchboard feed found"));
+    }
+    let sb_idx = sb_idx.unwrap();
+    let offset = feed_ids.nums[..sb_idx].into_iter().sum::<u16>() as usize;
+    let feeds = feed_ids.feeds[offset..offset + feed_ids.nums[sb_idx] as usize].to_vec();
+    Ok(feeds)
 }
