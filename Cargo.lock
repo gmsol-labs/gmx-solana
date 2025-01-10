@@ -2239,7 +2239,6 @@ dependencies = [
  "num_enum 0.7.3",
  "paste",
  "ruint",
- "rust_decimal",
  "serde",
  "static_assertions",
  "thiserror",

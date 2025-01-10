@@ -70,11 +70,11 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullO
                 .or_insert_with(OnceCell::new)
                 .get_or_try_init(|| PullFeed::load_data(&self.client, &feed))
                 .await
-                .map_err(|_| crate::Error::transport("fetching job data failed"))?;
+                .map_err(|_| crate::Error::switchboard_error("fetching job data failed"))?;
             let jobs = data
                 .fetch_jobs(&self.crossbar.clone().unwrap_or_default())
                 .await
-                .map_err(|_| crate::Error::transport("fetching job data failed"))?;
+                .map_err(|_| crate::Error::switchboard_error("fetching job data failed"))?;
             let encoded_jobs = encode_jobs(&jobs);
             let max_variance = data.max_variance / 1_000_000_000;
             let min_responses = data.min_responses;
@@ -90,7 +90,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullO
             queue = data.queue;
         }
         let slothash = SlotHashSysvar::get_latest_slothash(&self.client).await
-            .map_err(|_| crate::Error::transport("fetching slot hash failed"))?;
+            .map_err(|_| crate::Error::switchboard_error("fetching slot hash failed"))?;
         let price_signatures = self.gateway
             .fetch_signatures_batch(FetchSignaturesBatchParams {
                 recent_hash: Some(slothash.to_base58_hash()),
@@ -99,7 +99,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullO
                 ..Default::default()
             })
             .await
-            .map_err(|_| crate::Error::transport("fetching signatures failed"))?;
+            .map_err(|_| crate::Error::switchboard_error("fetching signatures failed"))?;
 
         let mut all_submissions: Vec<Vec<Submission>> =
             vec![Default::default(); feeds.len()];
@@ -107,9 +107,9 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullO
         for resp in &price_signatures.oracle_responses {
             for x in &resp.feed_responses {
                 let oracle_key = hex::decode(&x.oracle_pubkey)
-                    .map_err(|_| crate::Error::transport("hex:decode failure"))?
+                    .map_err(|_| crate::Error::switchboard_error("hex:decode failure"))?
                     .try_into()
-                    .map_err(|_| crate::Error::transport("pubkey:decode failure"))?;
+                    .map_err(|_| crate::Error::switchboard_error("pubkey:decode failure"))?;
                 let oracle_key = Pubkey::new_from_array(oracle_key);
                 oracle_keys.insert(oracle_key);
             }
@@ -122,9 +122,9 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullO
                     value: value_i128,
                     signature: BASE64_STANDARD
                         .decode(x.signature.clone())
-                        .map_err(|_| crate::Error::transport("base64:decode failure"))?
+                        .map_err(|_| crate::Error::switchboard_error("base64:decode failure"))?
                         .try_into()
-                        .map_err(|_| crate::Error::transport("signature:decode failure"))?,
+                        .map_err(|_| crate::Error::switchboard_error("signature:decode failure"))?,
                     recovery_id: x.recovery_id as u8,
                     offset: 0,
                 });
@@ -161,11 +161,11 @@ impl<'a, C: Clone + Deref<Target = impl Signer>> PostPullOraclePrices<'a, C> for
         );
 
         let oracle_luts = oracle_luts_result
-            .map_err(|_| crate::Error::transport("fetching oracle luts failed"))?;
+            .map_err(|_| crate::Error::switchboard_error("fetching oracle luts failed"))?;
         let pull_feed_luts = pull_feed_luts_result
-            .map_err(|_| crate::Error::transport("fetching pull feed luts failed"))?;
+            .map_err(|_| crate::Error::switchboard_error("fetching pull feed luts failed"))?;
         let queue_lut = queue_lut_result
-            .map_err(|_| crate::Error::transport("fetching queue lut failed"))?;
+            .map_err(|_| crate::Error::switchboard_error("fetching queue lut failed"))?;
 
         let mut luts = oracle_luts;
         luts.extend(pull_feed_luts);
@@ -225,7 +225,7 @@ fn encode_jobs(job_array: &[OracleJob]) -> Vec<String> {
 fn filter_feed_ids(feed_ids: &FeedIds, provider: PriceProviderKind) -> crate::Result<Vec<Pubkey>> {
     let sb_idx = feed_ids.providers.iter().position(|x| *x == provider as u8);
     if sb_idx.is_none() {
-        return Err(crate::Error::transport("no switchboard feed found"));
+        return Err(crate::Error::switchboard_error("no switchboard feed found"));
     }
     let sb_idx = sb_idx.unwrap();
     let offset = feed_ids.nums[..sb_idx].into_iter().sum::<u16>() as usize;

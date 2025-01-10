@@ -81,6 +81,9 @@ pub enum Error {
     /// Transport Error.
     #[error("transport: {0}")]
     Transport(String),
+    /// Switchboard Error.
+    #[error("switchboard: {0}")]
+    Switchboard(String),
 }
 
 impl Error {
@@ -97,6 +100,11 @@ impl Error {
     /// Create a transport error.
     pub fn transport(msg: impl ToString) -> Self {
         Self::Transport(msg.to_string())
+    }
+
+    /// Create a switchboard error.
+    pub fn switchboard_error(msg: impl ToString) -> Self {
+        Self::Switchboard(msg.to_string())
     }
 
     /// Anchor Error Code.
