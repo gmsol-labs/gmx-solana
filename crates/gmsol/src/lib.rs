@@ -40,6 +40,9 @@ pub mod constants {
     pub use gmsol_store::constants::*;
 }
 
+/// Switchboard integration.
+pub mod switchboard;
+
 /// Chainlink intergartion.
 pub mod chainlink;
 

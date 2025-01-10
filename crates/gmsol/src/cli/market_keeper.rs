@@ -270,6 +270,13 @@ enum Command {
 #[derive(Debug, clap::Args, serde::Serialize, serde::Deserialize)]
 #[group(required = true, multiple = true)]
 struct Feeds {
+    /// Switchboard feed id.
+    #[arg(long)]
+    switchboard_feed_id: Option<String>,
+    /// Switchboard feed timestamp adjustment.
+    #[arg(long, default_value_t = DEFAULT_TIMESTAMP_ADJUSTMENT)]
+    #[serde(default = "default_timestamp_adjustment")]
+    switchboard_feed_timestamp_adjustment: u32,
     /// Pyth feed id.
     #[arg(long)]
     pyth_feed_id: Option<String>,
@@ -315,6 +322,14 @@ impl Feeds {
         };
         let feed_id = parse_feed_id(feed_id)?;
         let feed_id_as_key = Pubkey::new_from_array(feed_id);
+        Ok(Some(feed_id_as_key))
+    }
+
+    fn switchboard_feed_id(&self) -> gmsol::Result<Option<Pubkey>> {
+        let Some(feed_id) = self.switchboard_feed_id.as_ref() else {
+            return Ok(None);
+        };
+        let feed_id_as_key = Pubkey::from_str(feed_id)?;
         Ok(Some(feed_id_as_key))
     }
 }
@@ -468,6 +483,15 @@ impl Args {
                     .with_heartbeat_duration(*heartbeat_duration)
                     .with_precision(*precision)
                     .with_expected_provider(*expected_provider);
+                if let Some(feed_id) = feeds.switchboard_feed_id()? {
+                    builder = builder
+                        .update_price_feed(
+                            &PriceProviderKind::SWitchboard,
+                            feed_id,
+                            Some(feeds.switchboard_feed_timestamp_adjustment),
+                        )
+                        .map_err(anchor_client::ClientError::from)?;
+                }
                 if let Some(feed_id) = feeds.pyth_feed_id()? {
                     builder = builder
                         .update_price_feed(
@@ -970,6 +994,13 @@ impl<'a> TryFrom<&'a TokenConfig> for TokenConfigBuilder {
             .with_expected_provider(config.expected_provider)
             .with_heartbeat_duration(config.heartbeat_duration)
             .with_precision(config.precision);
+        if let Some(feed_id) = config.feeds.switchboard_feed_id()? {
+            builder = builder.update_price_feed(
+                &PriceProviderKind::Switchboard,
+                feed_id,
+                Some(config.feeds.switchboard_feed_timestamp_adjustment),
+            )?;
+        }
         if let Some(pyth_feed_id) = config.feeds.pyth_feed_id()? {
             builder = builder.update_price_feed(
                 &PriceProviderKind::Pyth,
