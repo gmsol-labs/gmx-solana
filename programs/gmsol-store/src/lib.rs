@@ -2749,7 +2749,7 @@ pub mod gmsol_store {
     ///   - Address must be PDA derived from [`GLV_TOKEN_SEED`](crate::states::Glv::GLV_TOKEN_SEED),
     ///     [`store`] and `index`
     /// - The [`glv`](InitializeGlv::glv) must be:
-    ///   - Uninitialized  
+    ///   - Uninitialized
     ///   - Address must be PDA derived from the SEED of [`Glv`](states::Glv) and the address of the
     ///     [`glv_token`](InitializeGlv::glv_token)
     /// - The remaining required accounts are documented in [`InitializeGlv`].
@@ -3680,6 +3680,9 @@ pub enum CoreError {
     /// The decimals of token is immutable.
     #[msg("The decimals of token is immutable")]
     TokenDecimalsChanged,
+    /// Price is stale.
+    #[msg("Price is stale")]
+    PriceIsStale,
 }
 
 impl CoreError {

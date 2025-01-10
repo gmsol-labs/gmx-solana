@@ -4,6 +4,7 @@ use anchor_lang::{
     prelude::{borsh, AnchorDeserialize, AnchorSerialize},
     InitSpace,
 };
+use rust_decimal::Decimal as RustDecimal;
 
 /// Decimal type for storing prices.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
@@ -12,6 +13,25 @@ pub struct Decimal {
     pub value: u32,
     /// Decimal multiplier.
     pub decimal_multiplier: u8,
+}
+
+impl TryFrom<RustDecimal> for Decimal {
+    type Error = DecimalError;
+
+    fn try_from(value: RustDecimal) -> Result<Self, Self::Error> {
+        Ok(Self {
+            value: value.mantissa().try_into().map_err(|_| DecimalError::ExceedMaxDecimals)?,
+            decimal_multiplier: value.scale().try_into().map_err(|_| DecimalError::ExceedMaxDecimals)?,
+        })
+    }
+}
+
+impl TryFrom<Option<RustDecimal>> for Decimal {
+    type Error = DecimalError;
+
+    fn try_from(value: Option<RustDecimal>) -> Result<Self, Self::Error> {
+        value.ok_or(DecimalError::InvalidDecimal)?.try_into()
+    }
 }
 
 impl Decimal {
@@ -131,6 +151,8 @@ pub enum DecimalError {
     /// Overflow.
     #[error("overflow")]
     Overflow,
+    #[error("invalid decimal")]
+    InvalidDecimal,
 }
 
 #[cfg(test)]

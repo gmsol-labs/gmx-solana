@@ -76,6 +76,7 @@ url = "2.5.3"
 humantime = "2.1.0"
 num-format = "0.4.4"
 time = "0.3.36"
+switchboard-on-demand = { version = "0.2.0", features = ["anchor"] }
 
 [workspace.dependencies.gmsol-model]
 path = "crates/gmsol-model"

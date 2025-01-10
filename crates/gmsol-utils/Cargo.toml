@@ -17,6 +17,7 @@ static_assertions = { workspace = true }
 ruint = { workspace = true, default-features = false }
 bitmaps = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
+rust_decimal = { workspace = true }
 
 [dev-dependencies]
 num_enum = { workspace = true }
