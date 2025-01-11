@@ -182,7 +182,6 @@ pin-project-lite = { workspace = true, optional = true }
 
 # Dependencies for switchboard support
 switchboard-on-demand-client = { workspace = true }
-prost = { workspace = true }
 spl-token = { workspace = true }
 
 [dev-dependencies]

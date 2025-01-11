@@ -7,7 +7,6 @@ use anchor_client::solana_sdk::{pubkey::Pubkey, signer::Signer};
 use anchor_spl::associated_token::get_associated_token_address;
 use base64::prelude::*;
 use gmsol_store::states::PriceProviderKind;
-use prost::Message;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     system_program,
@@ -19,6 +18,7 @@ use std::{
     sync::Arc,
 };
 use switchboard_on_demand_client::{
+    prost::Message,
     fetch_and_cache_luts, oracle_job::OracleJob, BatchFeedRequest, CrossbarClient,
     FetchSignaturesBatchParams, Gateway, OracleAccountData, PullFeed, PullFeedAccountData,
     PullFeedSubmitResponse, PullFeedSubmitResponseParams, QueueAccountData, SbContext,
