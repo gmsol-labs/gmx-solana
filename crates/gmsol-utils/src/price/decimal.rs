@@ -131,8 +131,6 @@ pub enum DecimalError {
     /// Overflow.
     #[error("overflow")]
     Overflow,
-    #[error("invalid decimal")]
-    InvalidDecimal,
 }
 
 #[cfg(test)]

@@ -329,7 +329,7 @@ impl Feeds {
         let Some(feed_id) = self.switchboard_feed_id.as_ref() else {
             return Ok(None);
         };
-        let feed_id_as_key = Pubkey::from_str(feed_id)?;
+        let feed_id_as_key = feed_id.parse().map_err(gmsol::Error::invalid_argument)?;
         Ok(Some(feed_id_as_key))
     }
 }
@@ -486,7 +486,7 @@ impl Args {
                 if let Some(feed_id) = feeds.switchboard_feed_id()? {
                     builder = builder
                         .update_price_feed(
-                            &PriceProviderKind::SWitchboard,
+                            &PriceProviderKind::Switchboard,
                             feed_id,
                             Some(feeds.switchboard_feed_timestamp_adjustment),
                         )

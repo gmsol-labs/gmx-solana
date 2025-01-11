@@ -32,10 +32,10 @@ use self::price_map::PriceMap;
 use super::{HasMarketMeta, Seed, Store, TokenConfig, TokenMapHeader, TokenMapRef};
 
 pub use self::{
-    switchboard::Switchboard,
     chainlink::Chainlink,
     feed::{PriceFeed, PriceFeedPrice},
     pyth::Pyth,
+    switchboard::Switchboard,
     time::{ValidateOracleTime, ValidateOracleTimeExt},
     validator::PriceValidator,
 };

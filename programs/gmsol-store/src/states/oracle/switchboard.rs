@@ -1,5 +1,5 @@
-use anchor_lang::prelude::*;
 use crate::{states::TokenConfig, CoreError};
+use anchor_lang::prelude::*;
 use gmsol_utils::price::Decimal;
 use gmsol_utils::price::Price;
 use switchboard_on_demand::{SbFeed, ON_DEMAND_MAINNET_PID};
@@ -29,20 +29,37 @@ impl Switchboard {
         if feed.result.min_slot().unwrap_or(0) < oldest_slot {
             return Err(error!(CoreError::PriceIsStale));
         }
-        Ok((feed.result.slot, feed.result_ts(), Self::price_from(&feed, token_config)?))
+        Ok((
+            feed.result.slot,
+            feed.result_ts(),
+            Self::price_from(&feed, token_config)?,
+        ))
     }
 
     fn price_from(feed: &SbFeed, token_config: &TokenConfig) -> Result<Price> {
-        let min_price = feed.min_value()
+        let min_price = feed
+            .min_value()
             .ok_or_else(|| error!(CoreError::PriceIsStale))?;
-        let min_price = Decimal::try_from_price(min_price.mantissa() as u128, min_price.scale() as u8, token_config.token_decimals(), token_config.precision())
-            .map_err(|_| error!(CoreError::PriceIsStale))?;
-        let max_price = feed.max_value()
+        let min_price = Decimal::try_from_price(
+            min_price.mantissa() as u128,
+            min_price.scale() as u8,
+            token_config.token_decimals(),
+            token_config.precision(),
+        )
+        .map_err(|_| error!(CoreError::PriceIsStale))?;
+        let max_price = feed
+            .max_value()
             .ok_or_else(|| error!(CoreError::PriceIsStale))?;
-        let max_price = Decimal::try_from_price(max_price.mantissa() as u128, max_price.scale() as u8, token_config.token_decimals(), token_config.precision())
-            .map_err(|_| error!(CoreError::PriceIsStale))?;
-        Ok(Price { min: min_price, max: max_price })
+        let max_price = Decimal::try_from_price(
+            max_price.mantissa() as u128,
+            max_price.scale() as u8,
+            token_config.token_decimals(),
+            token_config.precision(),
+        )
+        .map_err(|_| error!(CoreError::PriceIsStale))?;
+        Ok(Price {
+            min: min_price,
+            max: max_price,
+        })
     }
 }
-
-
