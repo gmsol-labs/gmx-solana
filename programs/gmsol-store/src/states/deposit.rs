@@ -90,7 +90,7 @@ impl Deposit {
 
         if supply == 0 {
             Self::validate_first_deposit(
-                &self.header.receiver,
+                &self.header.receiver(),
                 self.params.min_market_token_amount,
                 market,
             )?;

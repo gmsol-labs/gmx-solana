@@ -201,7 +201,7 @@ pub struct CloseWithdrawal<'info> {
     #[account(
         mut,
         constraint = withdrawal.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
-        constraint = withdrawal.load()?.header.receiver == receiver.key() @ CoreError::ReceiverMismatched,
+        constraint = withdrawal.load()?.header.receiver() == receiver.key() @ CoreError::ReceiverMismatched,
         // The rent receiver of a withdrawal must be the owner.
         constraint = withdrawal.load()?.header.rent_receiver() == owner.key @ CoreError::RentReceiverMismatched,
         constraint = withdrawal.load()?.header.store == store.key() @ CoreError::StoreMismatched,

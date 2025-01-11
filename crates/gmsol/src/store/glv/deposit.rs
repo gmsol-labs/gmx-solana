@@ -17,14 +17,20 @@ use gmsol_store::{
             swap::{HasSwapParams, SwapParams},
             TokensWithFeed,
         },
-        Glv, GlvDeposit, HasMarketMeta, NonceBytes, TokenMapAccess,
+        Glv, GlvDeposit, HasMarketMeta, NonceBytes, PriceProviderKind, TokenMapAccess,
     },
 };
 
 use crate::{
     exchange::{generate_nonce, get_ata_or_owner_with_program_id},
     store::{token::TokenAccountOps, utils::FeedsParser},
-    utils::{fix_optional_account_metas, ComputeBudget, RpcBuilder, ZeroCopy},
+    utils::{
+        builder::{
+            FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
+            SetExecutionFee,
+        },
+        fix_optional_account_metas, ComputeBudget, RpcBuilder, TransactionBuilder, ZeroCopy,
+    },
 };
 
 use super::{split_to_accounts, GlvOps};
@@ -158,6 +164,12 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvDepositBuilder<'a, C> 
         self.initial_short_token = token.cloned();
         self.initial_short_token_amount = amount;
         self.initial_short_token_source = token_account.copied();
+        self
+    }
+
+    /// Set min GLV token amount.
+    pub fn min_glv_token_amount(&mut self, amount: u64) -> &mut Self {
+        self.min_glv_token_amount = amount;
         self
     }
 
@@ -405,7 +417,7 @@ impl CloseGlvDepositHint {
         Self {
             store: *glv_deposit.header().store(),
             owner: *glv_deposit.header().owner(),
-            receiver: *glv_deposit.header().receiver(),
+            receiver: glv_deposit.header().receiver(),
             glv_token: glv_deposit.tokens().glv_token(),
             market_token: glv_deposit.tokens().market_token(),
             initial_long_token: glv_deposit.tokens().initial_long_token.token(),
@@ -566,7 +578,8 @@ pub struct ExecuteGlvDepositHint {
     initial_short_token_escrow: Option<Pubkey>,
     glv_token_escrow: Pubkey,
     swap: SwapParams,
-    feeds: TokensWithFeed,
+    /// Feeds.
+    pub feeds: TokensWithFeed,
     should_unwrap_native_token: bool,
 }
 
@@ -588,7 +601,7 @@ impl ExecuteGlvDepositHint {
             store: *glv_deposit.header().store(),
             token_map: *token_map_address,
             owner: *glv_deposit.header().owner(),
-            receiver: *glv_deposit.header().receiver(),
+            receiver: glv_deposit.header().receiver(),
             glv_token: glv_deposit.tokens().glv_token(),
             glv_market_tokens,
             market_token: glv_deposit.tokens().market_token(),
@@ -626,12 +639,6 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvDepositBuilder<'a, C>
         }
     }
 
-    /// Set execution fee.
-    pub fn execution_fee(&mut self, lamports: u64) -> &mut Self {
-        self.execution_lamports = lamports;
-        self
-    }
-
     /// Set hint.
     pub fn hint(&mut self, hint: ExecuteGlvDepositHint) -> &mut Self {
         self.hint = Some(hint);
@@ -666,7 +673,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvDepositBuilder<'a, C>
         self
     }
 
-    async fn prepare_hint(&mut self) -> crate::Result<ExecuteGlvDepositHint> {
+    /// Prepare hint.
+    pub async fn prepare_hint(&mut self) -> crate::Result<ExecuteGlvDepositHint> {
         match &self.hint {
             Some(hint) => Ok(hint.clone()),
             None => {
@@ -713,9 +721,48 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvDepositBuilder<'a, C>
             }
         }
     }
+}
 
+#[cfg(feature = "pyth-pull-oracle")]
+mod pyth {
+    use crate::pyth::{
+        pull_oracle::{ExecuteWithPythPrices, Prices},
+        PythPullOracleContext,
+    };
+
+    use super::*;
+
+    impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteWithPythPrices<'a, C>
+        for ExecuteGlvDepositBuilder<'a, C>
+    {
+        fn set_execution_fee(&mut self, lamports: u64) {
+            SetExecutionFee::set_execution_fee(self, lamports);
+        }
+
+        async fn context(&mut self) -> crate::Result<PythPullOracleContext> {
+            let hint = self.prepare_hint().await?;
+            let ctx = PythPullOracleContext::try_from_feeds(&hint.feeds)?;
+            Ok(ctx)
+        }
+
+        async fn build_rpc_with_price_updates(
+            &mut self,
+            price_updates: Prices,
+        ) -> crate::Result<Vec<crate::utils::RpcBuilder<'a, C, ()>>> {
+            let txn = self
+                .parse_with_pyth_price_updates(price_updates)
+                .build()
+                .await?;
+            Ok(txn.into_builders())
+        }
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
+    for ExecuteGlvDepositBuilder<'a, C>
+{
     /// Build.
-    pub async fn build(&mut self) -> crate::Result<RpcBuilder<'a, C>> {
+    async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
 
         let token_program_id = anchor_spl::token::ID;
@@ -805,7 +852,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvDepositBuilder<'a, C>
             .compute_budget(ComputeBudget::default().with_limit(EXECUTE_GLV_DEPOSIT_COMPUTE_BUDGET))
             .lookup_tables(self.alts.clone());
 
-        if self.close {
+        let rpc = if self.close {
             let close = self
                 .client
                 .close_glv_deposit(&self.glv_deposit)
@@ -826,44 +873,41 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvDepositBuilder<'a, C>
                 })
                 .build()
                 .await?;
-            Ok(execute.merge(close))
+            execute.merge(close)
         } else {
-            Ok(execute)
-        }
+            execute
+        };
+
+        let mut tx = self.client.transaction();
+
+        tx.try_push(rpc)?;
+
+        Ok(tx)
     }
 }
 
-#[cfg(feature = "pyth-pull-oracle")]
-mod pyth {
-    use crate::pyth::{
-        pull_oracle::{ExecuteWithPythPrices, Prices},
-        PythPullOracleContext,
-    };
+impl<'a, C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
+    for ExecuteGlvDepositBuilder<'a, C>
+{
+    async fn feed_ids(&mut self) -> crate::Result<FeedIds> {
+        let hint = self.prepare_hint().await?;
+        Ok(hint.feeds)
+    }
 
-    use super::*;
+    fn process_feeds(
+        &mut self,
+        provider: PriceProviderKind,
+        map: FeedAddressMap,
+    ) -> crate::Result<()> {
+        self.feeds_parser
+            .insert_pull_oracle_feed_parser(provider, map);
+        Ok(())
+    }
+}
 
-    impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteWithPythPrices<'a, C>
-        for ExecuteGlvDepositBuilder<'a, C>
-    {
-        fn set_execution_fee(&mut self, lamports: u64) {
-            self.execution_fee(lamports);
-        }
-
-        async fn context(&mut self) -> crate::Result<PythPullOracleContext> {
-            let hint = self.prepare_hint().await?;
-            let ctx = PythPullOracleContext::try_from_feeds(&hint.feeds)?;
-            Ok(ctx)
-        }
-
-        async fn build_rpc_with_price_updates(
-            &mut self,
-            price_updates: Prices,
-        ) -> crate::Result<Vec<crate::utils::RpcBuilder<'a, C, ()>>> {
-            let rpc = self
-                .parse_with_pyth_price_updates(price_updates)
-                .build()
-                .await?;
-            Ok(vec![rpc])
-        }
+impl<'a, C> SetExecutionFee for ExecuteGlvDepositBuilder<'a, C> {
+    fn set_execution_fee(&mut self, lamports: u64) -> &mut Self {
+        self.execution_lamports = lamports;
+        self
     }
 }

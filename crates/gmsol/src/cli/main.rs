@@ -9,7 +9,7 @@ use anchor_client::{
 };
 use clap::Parser;
 use eyre::eyre;
-use gmsol::{store::utils::read_store, utils::LocalSignerRef};
+use gmsol::utils::LocalSignerRef;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
@@ -19,6 +19,7 @@ mod alt;
 mod controller;
 mod exchange;
 mod feature_keeper;
+mod glv;
 mod gt;
 mod inspect;
 mod market_keeper;
@@ -100,6 +101,8 @@ enum Command {
     Order(order_keeper::KeeperArgs),
     /// Commands for MARKET_KEEPER.
     Market(market_keeper::Args),
+    /// Commands for GLV.
+    Glv(glv::Args),
     /// Commands for GT.
     Gt(gt::Args),
     /// Commands for CONTROLLER.
@@ -183,7 +186,7 @@ impl Cli {
 
     async fn store(&self, client: &GMSOLClient) -> eyre::Result<(Pubkey, String)> {
         if let Some(address) = self.store_address {
-            let store = read_store(&client.store_program().solana_rpc(), &address).await?;
+            let store = client.store(&address).await?;
             Ok((address, store.key()?.to_owned()))
         } else {
             let store = client.find_store_address(&self.store);
@@ -273,6 +276,16 @@ impl Cli {
             Command::Market(args) => {
                 args.run(&client, &store, timelock, self.serialize_only)
                     .await?
+            }
+            Command::Glv(args) => {
+                args.run(
+                    &client,
+                    &store,
+                    timelock,
+                    self.serialize_only,
+                    self.skip_preflight,
+                )
+                .await?
             }
             Command::Gt(args) => {
                 args.run(

@@ -11,9 +11,12 @@ use anchor_client::{
 };
 
 use gmsol_model::{price::Prices, PnlFactorKind};
-use gmsol_store::states::{
-    deposit::find_first_deposit_receiver_pda, market::status::MarketStatus, position::PositionKind,
-    user::ReferralCodeBytes, NonceBytes, PriceProviderKind,
+use gmsol_store::{
+    states::{
+        deposit::find_first_deposit_receiver_pda, market::status::MarketStatus,
+        position::PositionKind, user::ReferralCodeBytes, NonceBytes, PriceProviderKind,
+    },
+    utils::pubkey::optional_address,
 };
 use gmsol_timelock::states::utils::InstructionBuffer;
 use solana_account_decoder::UiAccountEncoding;
@@ -582,11 +585,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     ) -> crate::Result<Option<Pubkey>> {
         let store = self.store(store).await?;
         let token_map = store.token_map;
-        if token_map == Pubkey::default() {
-            Ok(None)
-        } else {
-            Ok(Some(token_map))
-        }
+        Ok(optional_address(&token_map).copied())
     }
 
     /// Fetch [`TokenMap`](types::TokenMap) account with its address.

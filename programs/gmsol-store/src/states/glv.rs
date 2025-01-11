@@ -53,91 +53,6 @@ pub struct Glv {
     markets: GlvMarkets,
 }
 
-/// GLV Market Config Flag.
-#[derive(
-    num_enum::IntoPrimitive, Clone, Copy, strum::EnumString, strum::Display, PartialEq, Eq,
-)]
-#[strum(serialize_all = "snake_case")]
-#[cfg_attr(feature = "enum-iter", derive(strum::EnumIter))]
-#[repr(u8)]
-pub enum GlvMarketFlag {
-    /// Is deposit allowed.
-    IsDepositAllowed,
-    // CHECK: cannot have more than `MAX_FLAGS` flags.
-}
-
-gmsol_utils::flags!(GlvMarketFlag, MAX_FLAGS, u8);
-
-/// Market Config for GLV.
-#[zero_copy]
-#[cfg_attr(feature = "debug", derive(Debug))]
-pub struct GlvMarketConfig {
-    max_amount: u64,
-    flags: GlvMarketFlagContainer,
-    padding: [u8; 7],
-    max_value: u128,
-}
-
-impl Default for GlvMarketConfig {
-    fn default() -> Self {
-        use bytemuck::Zeroable;
-
-        Self::zeroed()
-    }
-}
-
-impl GlvMarketConfig {
-    fn validate_market_token_balance(
-        &self,
-        new_balance: u64,
-        market_pool_value: &i128,
-        market_token_supply: &u128,
-    ) -> Result<()> {
-        if self.max_amount == 0 && self.max_value == 0 {
-            return Ok(());
-        }
-
-        if self.max_amount > 0 {
-            require_gte!(
-                self.max_amount,
-                new_balance,
-                CoreError::ExceedMaxGlvMarketTokenBalanceAmount
-            );
-        }
-
-        if self.max_value > 0 {
-            if market_pool_value.is_negative() {
-                return err!(CoreError::GlvNegativeMarketPoolValue);
-            }
-
-            let value = gmsol_model::utils::market_token_amount_to_usd(
-                &(new_balance as u128),
-                &market_pool_value.unsigned_abs(),
-                market_token_supply,
-            )
-            .ok_or_else(|| error!(CoreError::FailedToCalculateGlvValueForMarket))?;
-            require_gte!(
-                self.max_value,
-                value,
-                CoreError::ExceedMaxGlvMarketTokenBalanceValue
-            );
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn toggle_flag(&mut self, flag: GlvMarketFlag, enable: bool) -> Result<bool> {
-        let current = self.flags.get_flag(flag);
-        require_neq!(current, enable, CoreError::PreconditionsAreNotMet);
-        Ok(self.flags.set_flag(flag, enable))
-    }
-
-    /// Get flag.
-    pub fn get_flag(&self, flag: GlvMarketFlag) -> bool {
-        self.flags.get_flag(flag)
-    }
-}
-
 gmsol_utils::fixed_map!(
     GlvMarkets,
     Pubkey,
@@ -515,6 +430,122 @@ impl Glv {
     }
 }
 
+#[cfg(feature = "utils")]
+impl Glv {
+    /// Get last shift executed ts.
+    pub fn shift_last_executed_at(&self) -> i64 {
+        self.shift_last_executed_at
+    }
+
+    /// Get min shift interval.
+    pub fn shift_min_interval_secs(&self) -> u32 {
+        self.shift_min_interval_secs
+    }
+
+    /// Get max shift price impact factor.
+    pub fn shift_max_price_impact_factor(&self) -> u128 {
+        self.shift_max_price_impact_factor
+    }
+}
+
+/// GLV Market Config Flag.
+#[derive(
+    num_enum::IntoPrimitive, Clone, Copy, strum::EnumString, strum::Display, PartialEq, Eq,
+)]
+#[strum(serialize_all = "snake_case")]
+#[cfg_attr(feature = "enum-iter", derive(strum::EnumIter))]
+#[repr(u8)]
+pub enum GlvMarketFlag {
+    /// Is deposit allowed.
+    IsDepositAllowed,
+    // CHECK: cannot have more than `MAX_FLAGS` flags.
+}
+
+gmsol_utils::flags!(GlvMarketFlag, MAX_FLAGS, u8);
+
+/// Market Config for GLV.
+#[zero_copy]
+#[cfg_attr(feature = "debug", derive(Debug))]
+pub struct GlvMarketConfig {
+    max_amount: u64,
+    flags: GlvMarketFlagContainer,
+    padding: [u8; 7],
+    max_value: u128,
+}
+
+impl Default for GlvMarketConfig {
+    fn default() -> Self {
+        use bytemuck::Zeroable;
+
+        Self::zeroed()
+    }
+}
+
+impl GlvMarketConfig {
+    fn validate_market_token_balance(
+        &self,
+        new_balance: u64,
+        market_pool_value: &i128,
+        market_token_supply: &u128,
+    ) -> Result<()> {
+        if self.max_amount == 0 && self.max_value == 0 {
+            return Ok(());
+        }
+
+        if self.max_amount > 0 {
+            require_gte!(
+                self.max_amount,
+                new_balance,
+                CoreError::ExceedMaxGlvMarketTokenBalanceAmount
+            );
+        }
+
+        if self.max_value > 0 {
+            if market_pool_value.is_negative() {
+                return err!(CoreError::GlvNegativeMarketPoolValue);
+            }
+
+            let value = gmsol_model::utils::market_token_amount_to_usd(
+                &(new_balance as u128),
+                &market_pool_value.unsigned_abs(),
+                market_token_supply,
+            )
+            .ok_or_else(|| error!(CoreError::FailedToCalculateGlvValueForMarket))?;
+            require_gte!(
+                self.max_value,
+                value,
+                CoreError::ExceedMaxGlvMarketTokenBalanceValue
+            );
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn toggle_flag(&mut self, flag: GlvMarketFlag, enable: bool) -> Result<bool> {
+        let current = self.flags.get_flag(flag);
+        require_neq!(current, enable, CoreError::PreconditionsAreNotMet);
+        Ok(self.flags.set_flag(flag, enable))
+    }
+
+    /// Get flag.
+    pub fn get_flag(&self, flag: GlvMarketFlag) -> bool {
+        self.flags.get_flag(flag)
+    }
+}
+
+#[cfg(feature = "utils")]
+impl GlvMarketConfig {
+    /// Get max amount.
+    pub fn max_amount(&self) -> u64 {
+        self.max_amount
+    }
+
+    /// Get max value.
+    pub fn max_value(&self) -> u128 {
+        self.max_value
+    }
+}
+
 pub(crate) struct SplitAccountsForGlv<'info> {
     pub(crate) markets: &'info [AccountInfo<'info>],
     pub(crate) market_tokens: &'info [AccountInfo<'info>],
@@ -620,7 +651,7 @@ impl GlvDeposit {
 
         if supply == 0 {
             Self::validate_first_deposit(
-                &self.header.receiver,
+                &self.header.receiver(),
                 self.params.min_glv_token_amount,
                 glv,
             )?;

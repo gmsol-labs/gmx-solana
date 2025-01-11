@@ -7,7 +7,7 @@ use super::Event;
 
 /// GT updated event.
 #[event]
-#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
 #[derive(InitSpace)]
 pub struct GtUpdated {
     /// Initiator.
@@ -28,6 +28,7 @@ pub struct GtUpdated {
     pub supply: u64,
     /// Vault.
     pub vault: u64,
+    #[cfg_attr(feature = "debug", debug(skip))]
     reserved: [u8; 64],
 }
 

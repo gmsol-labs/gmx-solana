@@ -177,7 +177,7 @@ pub struct CloseShift<'info> {
         mut,
         constraint = shift.load()?.header.store == store.key() @ CoreError::StoreMismatched,
         constraint = shift.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
-        constraint = shift.load()?.header.receiver == receiver.key() @ CoreError::ReceiverMismatched,
+        constraint = shift.load()?.header.receiver() == receiver.key() @ CoreError::ReceiverMismatched,
         // The rent receiver of a shift must be the owner.
         constraint = shift.load()?.header.rent_receiver() == owner.key @ CoreError::RentReceiverMismatched,
         constraint = shift.load()?.tokens.from_market_token_account() == from_market_token_escrow.key() @ CoreError::MarketTokenAccountMismatched,

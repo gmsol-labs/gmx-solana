@@ -204,7 +204,7 @@ impl CloseShiftHint {
         Ok(Self {
             store: *shift.header().store(),
             owner: *shift.header().owner(),
-            receiver: *shift.header().receiver(),
+            receiver: shift.header().receiver(),
             from_market_token: tokens.from_market_token(),
             from_market_token_escrow: tokens.from_market_token_account(),
             to_market_token: tokens.to_market_token(),
@@ -344,7 +344,7 @@ impl ExecuteShiftHint {
         Ok(Self {
             store: *shift.header().store(),
             owner: *shift.header().owner(),
-            receiver: *shift.header().receiver(),
+            receiver: shift.header().receiver(),
             from_market_token: token_infos.from_market_token(),
             from_market_token_escrow: token_infos.from_market_token_account(),
             to_market_token: token_infos.to_market_token(),

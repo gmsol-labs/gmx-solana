@@ -92,11 +92,12 @@ pub struct Market {
 }
 
 #[zero_copy]
-#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
 struct State {
     pools: Pools,
     clocks: Clocks,
     other: OtherState,
+    #[cfg_attr(feature = "debug", debug(skip))]
     reserved: [u8; 1024],
 }
 
@@ -425,15 +426,17 @@ gmsol_utils::flags!(MarketFlag, MAX_FLAGS, u8);
 
 /// Market State.
 #[zero_copy]
-#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
 #[derive(BorshSerialize, BorshDeserialize, InitSpace)]
 pub struct OtherState {
+    #[cfg_attr(feature = "debug", debug(skip))]
     padding: [u8; 16],
     rev: u64,
     trade_count: u64,
     long_token_balance: u64,
     short_token_balance: u64,
     funding_factor_per_second: i128,
+    #[cfg_attr(feature = "debug", debug(skip))]
     reserved: [u8; 256],
 }
 
@@ -560,9 +563,10 @@ impl HasMarketMeta for MarketMeta {
 
 /// Market clocks.
 #[zero_copy]
-#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
 #[derive(BorshSerialize, BorshDeserialize, InitSpace)]
 pub struct Clocks {
+    #[cfg_attr(feature = "debug", debug(skip))]
     padding: [u8; 8],
     rev: u64,
     /// Price impact distribution clock.
@@ -575,6 +579,7 @@ pub struct Clocks {
     adl_for_long: i64,
     /// ADL updated clock for short.
     adl_for_short: i64,
+    #[cfg_attr(feature = "debug", debug(skip))]
     reserved: [i64; 3],
 }
 
@@ -614,7 +619,7 @@ impl Clocks {
 
 /// Market indexer.
 #[zero_copy]
-#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
 pub struct Indexer {
     trade_count: u64,
     deposit_count: u64,
@@ -623,7 +628,9 @@ pub struct Indexer {
     shift_count: u64,
     glv_deposit_count: u64,
     glv_withdrawal_count: u64,
+    #[cfg_attr(feature = "debug", debug(skip))]
     padding_0: [u8; 8],
+    #[cfg_attr(feature = "debug", debug(skip))]
     reserved: [u8; 128],
 }
 

@@ -22,7 +22,7 @@ use crate::{
         user::UserHeader,
         Chainlink, Market, Oracle, Seed, Store, TokenMapHeader, TokenMapLoader,
     },
-    utils::internal,
+    utils::{internal, pubkey::DEFAULT_PUBKEY},
     CoreError,
 };
 
@@ -55,7 +55,7 @@ pub(crate) fn prepare_trade_event_buffer(
 ) -> Result<()> {
     match ctx.accounts.event.load_init() {
         Ok(mut event) => {
-            require_eq!(event.authority, Pubkey::default(), CoreError::Internal);
+            require_eq!(event.authority, DEFAULT_PUBKEY, CoreError::Internal);
             event.store = ctx.accounts.store.key();
             event.authority = ctx.accounts.authority.key();
         }

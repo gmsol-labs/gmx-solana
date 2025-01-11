@@ -14,6 +14,7 @@ use gmsol_utils::InitSpace;
 
 use crate::{
     states::{order::TransferOut, position::PositionState, Position, Seed},
+    utils::pubkey::DEFAULT_PUBKEY,
     CoreError,
 };
 
@@ -130,6 +131,8 @@ impl TradeEvent {
 #[cfg(feature = "display")]
 impl std::fmt::Display for TradeEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use crate::utils::pubkey::optional_address;
+
         f.debug_struct("TradeEvent")
             .field("trade_id", &self.trade_id)
             .field("store", &self.store.to_string())
@@ -139,7 +142,7 @@ impl std::fmt::Display for TradeEvent {
             .field("order", &self.order.to_string())
             .field(
                 "final_output_token",
-                &(self.final_output_token == Pubkey::default()).then_some(self.final_output_token),
+                &optional_address(&self.final_output_token),
             )
             .field("ts", &self.ts)
             .field("slot", &self.slot)
@@ -201,13 +204,14 @@ gmsol_utils::flags!(TradeFlag, 8, u8);
 /// Trade event data.
 #[account(zero_copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
 #[derive(BorshSerialize, BorshDeserialize, InitSpace)]
 pub struct TradeData {
     /// Trade flag.
     // FIXME: Use the type alias `TradeFlag` instead of the concrete type.
     // However, this causes the IDL build to fail in `anchor v0.30.1`.
     flags: u8,
+    #[cfg_attr(feature = "debug", debug(skip))]
     padding_0: [u8; 7],
     /// Trade id.
     pub trade_id: u64,
@@ -263,6 +267,7 @@ pub struct TradeData {
     pub after: PositionState,
     /// Transfer out.
     pub transfer_out: TransferOut,
+    #[cfg_attr(feature = "debug", debug(skip))]
     padding_1: [u8; 8],
     /// Prices.
     pub prices: TradePrices,
@@ -412,7 +417,7 @@ impl TradeData {
         self.user = position.owner;
         self.position = pubkey;
         self.order = order;
-        self.final_output_token = Pubkey::default();
+        self.final_output_token = DEFAULT_PUBKEY;
         self.ts = clock.unix_timestamp;
         self.slot = clock.slot;
         self.before = position.state;

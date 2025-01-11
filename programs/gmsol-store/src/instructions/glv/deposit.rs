@@ -294,7 +294,7 @@ pub struct CloseGlvDeposit<'info> {
         mut,
         constraint = glv_deposit.load()?.header.store == store.key() @ CoreError::StoreMismatched,
         constraint = glv_deposit.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
-        constraint = glv_deposit.load()?.header.receiver == receiver.key() @ CoreError::ReceiverMismatched,
+        constraint = glv_deposit.load()?.header.receiver() == receiver.key() @ CoreError::ReceiverMismatched,
         // The rent receiver of a GLV deposit must be the owner.
         constraint = glv_deposit.load()?.header.rent_receiver() == owner.key @ CoreError::RentReceiverMismatched,
         constraint = glv_deposit.load()?.tokens.market_token_account() == market_token_escrow.key() @ CoreError::MarketTokenAccountMismatched,

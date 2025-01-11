@@ -16,7 +16,7 @@ use crate::{
     ordered_tokens,
     states::{
         common::action::{Action, ActionExt},
-        glv::GlvShift,
+        glv::{GlvMarketFlag, GlvShift},
         Chainlink, Glv, Market, NonceBytes, Oracle, RoleKey, Seed, Store, StoreWalletSigner,
         TokenMapHeader,
     },
@@ -110,7 +110,14 @@ impl<'info> internal::Create<'info, GlvShift> for CreateGlvShift<'info> {
     }
 
     fn validate(&self, _params: &Self::CreateParams) -> Result<()> {
-        self.glv.load()?.validate_shift_interval()
+        let glv = self.glv.load()?;
+        let market_token = self.to_market_token.key();
+        let is_deposit_allowed = glv
+            .market_config(&market_token)
+            .ok_or_else(|| error!(CoreError::Internal))?
+            .get_flag(GlvMarketFlag::IsDepositAllowed);
+        require!(is_deposit_allowed, CoreError::GlvDepositIsNotAllowed);
+        glv.validate_shift_interval()
     }
 
     fn create_impl(

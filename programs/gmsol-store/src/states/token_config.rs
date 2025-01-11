@@ -6,7 +6,10 @@ use std::{
 use anchor_lang::prelude::*;
 
 use crate::{
-    utils::fixed_str::{bytes_to_fixed_str, fixed_str_to_bytes},
+    utils::{
+        fixed_str::{bytes_to_fixed_str, fixed_str_to_bytes},
+        pubkey::DEFAULT_PUBKEY,
+    },
     CoreError,
 };
 
@@ -94,7 +97,7 @@ impl TokenConfig {
             .feeds
             .get(index)
             .ok_or_else(|| error!(CoreError::NotFound))?;
-        if config.feed == Pubkey::default() {
+        if config.feed == DEFAULT_PUBKEY {
             err!(CoreError::NotFound)
         } else {
             Ok(config)
@@ -198,8 +201,16 @@ impl TokenConfig {
             heartbeat_duration,
             precision,
             feeds,
+            timestamp_adjustments,
             expected_provider,
         } = builder;
+
+        require_eq!(
+            feeds.len(),
+            timestamp_adjustments.len(),
+            CoreError::InvalidArgument
+        );
+
         self.name = fixed_str_to_bytes(name)?;
         self.set_synthetic(synthetic);
         self.set_enabled(enable);
@@ -207,6 +218,7 @@ impl TokenConfig {
         self.precision = precision;
         self.feeds = feeds
             .into_iter()
+            .zip(timestamp_adjustments.into_iter())
             .map(|(feed, timestamp_adjustment)| {
                 FeedConfig::new(feed).with_timestamp_adjustment(timestamp_adjustment)
             })
@@ -307,7 +319,8 @@ impl FeedConfig {
 pub struct TokenConfigBuilder {
     heartbeat_duration: u32,
     precision: u8,
-    feeds: Vec<(Pubkey, u32)>,
+    feeds: Vec<Pubkey>,
+    timestamp_adjustments: Vec<u32>,
     expected_provider: Option<u8>,
 }
 
@@ -316,7 +329,8 @@ impl Default for TokenConfigBuilder {
         Self {
             heartbeat_duration: DEFAULT_HEARTBEAT_DURATION,
             precision: DEFAULT_PRECISION,
-            feeds: vec![(Pubkey::default(), DEFAULT_TIMESTAMP_ADJUSTMENT); MAX_FEEDS],
+            feeds: vec![DEFAULT_PUBKEY; MAX_FEEDS],
+            timestamp_adjustments: vec![DEFAULT_TIMESTAMP_ADJUSTMENT; MAX_FEEDS],
             expected_provider: None,
         }
     }
@@ -324,14 +338,17 @@ impl Default for TokenConfigBuilder {
 
 impl<'a> From<&'a TokenConfig> for TokenConfigBuilder {
     fn from(config: &'a TokenConfig) -> Self {
+        let (feeds, timestamp_adjustments) = config
+            .feeds
+            .iter()
+            .map(|config| (config.feed, config.timestamp_adjustment))
+            .unzip();
+
         Self {
             heartbeat_duration: config.heartbeat_duration(),
             precision: config.precision(),
-            feeds: config
-                .feeds
-                .iter()
-                .map(|config| (config.feed, config.timestamp_adjustment))
-                .collect(),
+            feeds,
+            timestamp_adjustments,
             expected_provider: Some(config.expected_provider),
         }
     }
@@ -347,8 +364,12 @@ impl TokenConfigBuilder {
         new_timestamp_adjustment: Option<u32>,
     ) -> Result<Self> {
         let index = *kind as usize;
-        let (feed, timestamp_adjustment) = self
+        let feed = self
             .feeds
+            .get_mut(index)
+            .ok_or_else(|| error!(CoreError::NotFound))?;
+        let timestamp_adjustment = self
+            .timestamp_adjustments
             .get_mut(index)
             .ok_or_else(|| error!(CoreError::NotFound))?;
         *feed = new_feed;

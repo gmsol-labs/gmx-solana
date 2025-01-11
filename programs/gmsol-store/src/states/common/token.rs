@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{token::TokenAccount, token_interface};
 
-use crate::{states::TokenMapAccess, CoreError};
+use crate::{states::TokenMapAccess, utils::pubkey::optional_address, CoreError};
 
 use super::{swap::HasSwapParams, TokenRecord, TokensWithFeed};
 
@@ -33,20 +33,12 @@ impl TokenAndAccount {
 
     /// Get token.
     pub fn token(&self) -> Option<Pubkey> {
-        if self.token == Pubkey::default() {
-            None
-        } else {
-            Some(self.token)
-        }
+        optional_address(&self.token).copied()
     }
 
     /// Get account.
     pub fn account(&self) -> Option<Pubkey> {
-        if self.account == Pubkey::default() {
-            None
-        } else {
-            Some(self.account)
-        }
+        optional_address(&self.account).copied()
     }
 
     /// Get token and account.

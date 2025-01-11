@@ -4,6 +4,7 @@ use gmsol_utils::InitSpace;
 use crate::{
     events::Event,
     states::{NonceBytes, Seed},
+    utils::pubkey::optional_address,
     CoreError,
 };
 
@@ -108,7 +109,7 @@ pub struct ActionHeader {
     /// Rent receiver.
     rent_receiver: Pubkey,
     /// The output funds receiver.
-    pub(crate) receiver: Pubkey,
+    receiver: Pubkey,
     padding_1: [u8; 32],
     padding_2: [u8; 64],
     reserved: [u8; 128],
@@ -159,8 +160,8 @@ impl ActionHeader {
     }
 
     /// Get the receiver.
-    pub fn receiver(&self) -> &Pubkey {
-        &self.receiver
+    pub fn receiver(&self) -> Pubkey {
+        *optional_address(&self.receiver).unwrap_or_else(|| self.owner())
     }
 
     // Get the action id.
@@ -233,6 +234,13 @@ impl ActionHeader {
         self.store = store;
         self.market = market;
         self.owner = owner;
+
+        // Receiver must not be the `None` address.
+        require!(
+            optional_address(&receiver).is_some(),
+            CoreError::InvalidArgument
+        );
+
         self.receiver = receiver;
         self.nonce = nonce;
         self.max_execution_lamports = execution_lamports;

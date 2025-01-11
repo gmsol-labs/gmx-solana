@@ -1,16 +1,11 @@
 use std::{
     collections::HashMap,
     iter::{Peekable, Zip},
-    ops::Deref,
     slice::Iter,
 };
 
-use anchor_client::{
-    solana_client::nonblocking::rpc_client::RpcClient,
-    solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer},
-    Program,
-};
-use gmsol_store::states::{common::TokensWithFeed, Market, PriceProviderKind, Store};
+use anchor_client::solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
+use gmsol_store::states::{common::TokensWithFeed, PriceProviderKind};
 
 use crate::{pyth::find_pyth_feed_account, utils::builder::FeedAddressMap};
 
@@ -169,43 +164,4 @@ impl<'a> Iterator for Feeds<'a> {
             return Some(Ok((provider, *feed)));
         }
     }
-}
-
-/// Get token map from the store.
-pub async fn token_map<C, S>(program: &Program<C>, store: &Pubkey) -> crate::Result<Pubkey>
-where
-    C: Deref<Target = S> + Clone,
-    S: Signer,
-{
-    token_map_optional(program, store)
-        .await?
-        .ok_or_else(|| crate::Error::invalid_argument("the token map of the store is not set"))
-}
-
-/// Get token map from the store.
-pub async fn token_map_optional<C, S>(
-    program: &Program<C>,
-    store: &Pubkey,
-) -> crate::Result<Option<Pubkey>>
-where
-    C: Deref<Target = S> + Clone,
-    S: Signer,
-{
-    let store = read_store(&program.async_rpc(), store).await?;
-    let token_map = store.token_map;
-    if token_map == Pubkey::default() {
-        Ok(None)
-    } else {
-        Ok(Some(token_map))
-    }
-}
-
-/// Read store account.
-pub async fn read_store(client: &RpcClient, store: &Pubkey) -> crate::Result<Store> {
-    crate::utils::try_deserailize_zero_copy_account(client, store).await
-}
-
-/// Read marekt account.
-pub async fn read_market(client: &RpcClient, market: &Pubkey) -> crate::Result<Market> {
-    crate::utils::try_deserailize_zero_copy_account(client, market).await
 }

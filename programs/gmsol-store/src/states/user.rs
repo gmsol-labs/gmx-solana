@@ -1,7 +1,10 @@
 use anchor_lang::prelude::*;
 use gmsol_utils::InitSpace;
 
-use crate::CoreError;
+use crate::{
+    utils::pubkey::{optional_address, DEFAULT_PUBKEY},
+    CoreError,
+};
 
 use super::Seed;
 
@@ -98,14 +101,14 @@ impl UserHeader {
         );
         require_eq!(
             receiver_user.referral.code,
-            Pubkey::default(),
+            DEFAULT_PUBKEY,
             CoreError::PreconditionsAreNotMet
         );
 
         // Transfer the ownership.
         receiver_user.referral.code = self.referral.code;
         code.owner = receiver_user.owner;
-        self.referral.code = Pubkey::default();
+        self.referral.code = DEFAULT_PUBKEY;
         Ok(())
     }
 
@@ -128,7 +131,7 @@ pub type ReferralCodeBytes = [u8; 8];
 pub struct Referral {
     /// The (owner) address of the referrer.
     ///
-    /// `Pubkey::default()` means no referrer.
+    /// [`DEFAULT_PUBKEY`] means no referrer.
     pub(crate) referrer: Pubkey,
     /// Referral Code Address.
     pub(crate) code: Pubkey,
@@ -139,11 +142,7 @@ pub struct Referral {
 
 impl Referral {
     pub(crate) fn set_code(&mut self, code: &Pubkey) -> Result<()> {
-        require_eq!(
-            self.code,
-            Pubkey::default(),
-            CoreError::ReferralCodeHasBeenSet
-        );
+        require_eq!(self.code, DEFAULT_PUBKEY, CoreError::ReferralCodeHasBeenSet);
 
         self.code = *code;
 
@@ -151,14 +150,10 @@ impl Referral {
     }
 
     pub(crate) fn set_referrer(&mut self, referrer_user: &mut UserHeader) -> Result<()> {
-        require_eq!(
-            self.referrer,
-            Pubkey::default(),
-            CoreError::ReferrerHasBeenSet,
-        );
+        require_eq!(self.referrer, DEFAULT_PUBKEY, CoreError::ReferrerHasBeenSet,);
 
         require!(
-            referrer_user.owner != Pubkey::default(),
+            referrer_user.owner != DEFAULT_PUBKEY,
             CoreError::InvalidArgument
         );
 
@@ -171,20 +166,12 @@ impl Referral {
 
     /// Get the user account address of the referrer.
     pub fn referrer(&self) -> Option<&Pubkey> {
-        if self.referrer == Pubkey::default() {
-            None
-        } else {
-            Some(&self.referrer)
-        }
+        optional_address(&self.referrer)
     }
 
     /// Get the referral code account address.
     pub fn code(&self) -> Option<&Pubkey> {
-        if self.code == Pubkey::default() {
-            None
-        } else {
-            Some(&self.code)
-        }
+        optional_address(&self.code)
     }
 }
 

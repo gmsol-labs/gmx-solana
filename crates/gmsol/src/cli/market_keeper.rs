@@ -35,7 +35,7 @@ use indexmap::IndexMap;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::de::DeserializeOwned;
 
-use crate::{ser::MarketConfigMap, GMSOLClient, TimelockCtx};
+use crate::{ser::MarketConfigMap, utils::ToggleValue, GMSOLClient, TimelockCtx};
 
 #[derive(clap::Args)]
 pub(super) struct Args {
@@ -145,7 +145,7 @@ enum Command {
     ToggleTokenConfig {
         token: Pubkey,
         #[command(flatten)]
-        toggle: Toggle,
+        toggle: ToggleValue,
     },
     /// Set expected provider of token.
     SetExpectedProvider {
@@ -227,7 +227,7 @@ enum Command {
     ToggleMarket {
         market_token: Pubkey,
         #[command(flatten)]
-        toggle: Toggle,
+        toggle: ToggleValue,
     },
     /// Fund Market.
     FundMarket {
@@ -244,7 +244,7 @@ enum Command {
     ToggleGtMinting {
         market_token: Pubkey,
         #[command(flatten)]
-        toggle: Toggle,
+        toggle: ToggleValue,
     },
     /// Initialize GT.
     InitGt {
@@ -331,22 +331,6 @@ impl Feeds {
         };
         let feed_id_as_key = feed_id.parse().map_err(gmsol::Error::invalid_argument)?;
         Ok(Some(feed_id_as_key))
-    }
-}
-
-#[derive(clap::Args)]
-#[group(required = true, multiple = false)]
-struct Toggle {
-    #[arg(long)]
-    enable: bool,
-    #[arg(long)]
-    disable: bool,
-}
-
-impl Toggle {
-    fn is_enable(&self) -> bool {
-        debug_assert!(self.enable != self.disable);
-        self.enable
     }
 }
 

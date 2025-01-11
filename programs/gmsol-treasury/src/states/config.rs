@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use gmsol_store::{states::Seed, CoreError};
+use gmsol_store::{states::Seed, utils::pubkey::optional_address, CoreError};
 use gmsol_utils::InitSpace;
 
 use crate::constants;
@@ -35,11 +35,7 @@ impl Config {
 
     /// Get the treasury config address.
     pub fn treasury_config(&self) -> Option<&Pubkey> {
-        if self.treasury_config == Pubkey::default() {
-            None
-        } else {
-            Some(&self.treasury_config)
-        }
+        optional_address(&self.treasury_config)
     }
 
     /// Set the treasury config address.

@@ -256,7 +256,7 @@ pub struct CloseDeposit<'info> {
     #[account(
         mut,
         constraint = deposit.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
-        constraint = deposit.load()?.header.receiver == receiver.key() @ CoreError::ReceiverMismatched,
+        constraint = deposit.load()?.header.receiver() == receiver.key() @ CoreError::ReceiverMismatched,
         // The rent receiver of a deposit must be the owner.
         constraint = deposit.load()?.header.rent_receiver() == owner.key @ CoreError::RentReceiverMismatched,
         constraint = deposit.load()?.header.store == store.key() @ CoreError::StoreMismatched,

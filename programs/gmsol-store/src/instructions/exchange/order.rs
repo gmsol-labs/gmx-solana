@@ -507,7 +507,7 @@ pub struct CloseOrder<'info> {
         mut,
         constraint = order.load()?.header.store == store.key() @ CoreError::StoreMismatched,
         constraint = order.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
-        constraint = order.load()?.header.receiver == receiver.key() @ CoreError::ReceiverMismatched,
+        constraint = order.load()?.header.receiver() == receiver.key() @ CoreError::ReceiverMismatched,
         constraint = order.load()?.header.rent_receiver() == rent_receiver.key @ CoreError::RentReceiverMismatched,
         constraint = order.load()?.tokens.initial_collateral.account() == initial_collateral_token_escrow.as_ref().map(|a| a.key()) @ CoreError::TokenAccountMismatched,
         constraint = order.load()?.tokens.final_output_token.account() == final_output_token_escrow.as_ref().map(|a| a.key()) @ CoreError::TokenAccountMismatched,

@@ -25,10 +25,7 @@ use gmsol_store::{
 };
 
 use crate::{
-    store::{
-        token::TokenAccountOps,
-        utils::{read_market, read_store, FeedsParser},
-    },
+    store::{token::TokenAccountOps, utils::FeedsParser},
     utils::{
         builder::{
             FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
@@ -242,8 +239,7 @@ where
             if let Some(hint) = self.hint {
                 return Ok(hint);
             }
-            let market =
-                read_market(&self.client.store_program().solana_rpc(), &self.market()).await?;
+            let market = self.client.market(&self.market()).await?;
             self.hint(market.meta());
         }
     }
@@ -774,7 +770,7 @@ where
             market_token,
             position: params.position().copied(),
             owner,
-            receiver: *order.header().receiver(),
+            receiver: order.header().receiver(),
             rent_receiver,
             user: user_address,
             referrer,
@@ -810,13 +806,8 @@ where
                 Some(hint) => return Ok(hint.clone()),
                 None => {
                     let order = self.client.order(&self.order).await?;
-                    let market = read_market(
-                        &self.client.store_program().solana_rpc(),
-                        order.header().market(),
-                    )
-                    .await?;
-                    let store =
-                        read_store(&self.client.store_program().solana_rpc(), &self.store).await?;
+                    let market = self.client.market(order.header().market()).await?;
+                    let store = self.client.store(&self.store).await?;
                     let token_map_address = self.get_token_map().await?;
                     let token_map = self.client.token_map(&token_map_address).await?;
                     let owner = order.header().owner();
@@ -1195,7 +1186,7 @@ impl CloseOrderHint {
         let rent_receiver = *order.header().rent_receiver();
         Ok(Self {
             owner: *owner,
-            receiver: *order.header().receiver(),
+            receiver: order.header().receiver(),
             store: *store,
             user: user_address,
             referrer,

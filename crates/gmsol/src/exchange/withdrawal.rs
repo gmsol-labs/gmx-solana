@@ -16,10 +16,7 @@ use gmsol_store::{
 };
 
 use crate::{
-    store::{
-        token::TokenAccountOps,
-        utils::{read_market, FeedsParser},
-    },
+    store::{token::TokenAccountOps, utils::FeedsParser},
     utils::{
         builder::{
             FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
@@ -179,7 +176,7 @@ where
         {
             return Ok((long_token, short_token));
         }
-        let market = read_market(&self.client.store_program().solana_rpc(), market).await?;
+        let market = self.client.market(market).await?;
         Ok((
             self.final_long_token
                 .unwrap_or_else(|| market.meta().long_token_mint),
@@ -341,7 +338,7 @@ impl<'a> From<&'a Withdrawal> for CloseWithdrawalHint {
         let tokens = withdrawal.tokens();
         Self {
             owner: *withdrawal.header().owner(),
-            receiver: *withdrawal.header().receiver(),
+            receiver: withdrawal.header().receiver(),
             market_token: tokens.market_token(),
             final_long_token: tokens.final_long_token(),
             final_short_token: tokens.final_short_token(),
@@ -479,7 +476,7 @@ impl ExecuteWithdrawalHint {
         let swap = withdrawal.swap();
         Ok(Self {
             owner: *withdrawal.header().owner(),
-            receiver: *withdrawal.header().receiver(),
+            receiver: withdrawal.header().receiver(),
             market_token: tokens.market_token(),
             market_token_escrow: tokens.market_token_account(),
             final_long_token_escrow: tokens.final_long_token_account(),

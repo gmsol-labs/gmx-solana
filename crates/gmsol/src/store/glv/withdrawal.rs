@@ -14,14 +14,20 @@ use gmsol_store::{
     states::{
         common::{action::Action, swap::SwapParams, TokensWithFeed},
         glv::GlvWithdrawal,
-        Glv, HasMarketMeta, NonceBytes, TokenMapAccess,
+        Glv, HasMarketMeta, NonceBytes, PriceProviderKind, TokenMapAccess,
     },
 };
 
 use crate::{
     exchange::{generate_nonce, get_ata_or_owner_with_program_id},
     store::{token::TokenAccountOps, utils::FeedsParser},
-    utils::{fix_optional_account_metas, ComputeBudget, RpcBuilder, ZeroCopy},
+    utils::{
+        builder::{
+            FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
+            SetExecutionFee,
+        },
+        fix_optional_account_metas, ComputeBudget, RpcBuilder, TransactionBuilder, ZeroCopy,
+    },
 };
 
 use super::{split_to_accounts, GlvOps};
@@ -102,25 +108,29 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvWithdrawalBuilder<'a, 
         self
     }
 
-    /// Set long swap path.
-    pub fn long_token_swap_path(
+    /// Final long token config.
+    pub fn final_long_token(
         &mut self,
-        final_long_token: &Pubkey,
-        market_tokens: Vec<Pubkey>,
+        token: Option<&Pubkey>,
+        min_amount: u64,
+        swap_path: Vec<Pubkey>,
     ) -> &mut Self {
-        self.final_long_token = Some(*final_long_token);
-        self.long_token_swap_path = market_tokens;
+        self.final_long_token = token.copied();
+        self.min_final_long_token_amount = min_amount;
+        self.long_token_swap_path = swap_path;
         self
     }
 
-    /// Set short swap path.
-    pub fn short_token_swap_path(
+    /// Final short token config.
+    pub fn final_short_token(
         &mut self,
-        final_short_token: &Pubkey,
-        market_tokens: Vec<Pubkey>,
+        token: Option<&Pubkey>,
+        min_amount: u64,
+        swap_path: Vec<Pubkey>,
     ) -> &mut Self {
-        self.final_short_token = Some(*final_short_token);
-        self.short_token_swap_path = market_tokens;
+        self.final_short_token = token.copied();
+        self.min_final_short_token_amount = min_amount;
+        self.short_token_swap_path = swap_path;
         self
     }
 
@@ -145,8 +155,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvWithdrawalBuilder<'a, 
 
     /// Set receiver.
     /// Defaults to the payer.
-    pub fn receiver(&mut self, receiver: Pubkey) -> &mut Self {
-        self.receiver = receiver;
+    pub fn receiver(&mut self, receiver: Option<Pubkey>) -> &mut Self {
+        self.receiver = receiver.unwrap_or(self.client.payer());
         self
     }
 
@@ -155,7 +165,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvWithdrawalBuilder<'a, 
             .find_market_address(&self.store, &self.market_token)
     }
 
-    async fn prepare_hint(&mut self) -> crate::Result<CreateGlvWithdrawalHint> {
+    /// Prepare hint.
+    pub async fn prepare_hint(&mut self) -> crate::Result<CreateGlvWithdrawalHint> {
         match &self.hint {
             Some(hint) => Ok(hint.clone()),
             None => {
@@ -347,7 +358,7 @@ impl CloseGlvWithdrawalHint {
         Self {
             store: *glv_withdrawal.header().store(),
             owner: *glv_withdrawal.header().owner(),
-            receiver: *glv_withdrawal.header().receiver(),
+            receiver: glv_withdrawal.header().receiver(),
             glv_token: glv_withdrawal.tokens().glv_token(),
             market_token: glv_withdrawal.tokens().market_token(),
             final_long_token: glv_withdrawal.tokens().final_long_token(),
@@ -489,7 +500,8 @@ pub struct ExecuteGlvWithdrawalHint {
     token_map: Pubkey,
     glv_market_tokens: BTreeSet<Pubkey>,
     swap: SwapParams,
-    feeds: TokensWithFeed,
+    /// Feeds.
+    pub feeds: TokensWithFeed,
 }
 
 impl Deref for ExecuteGlvWithdrawalHint {
@@ -546,12 +558,6 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvWithdrawalBuilder<'a,
         }
     }
 
-    /// Set execution fee.
-    pub fn execution_fee(&mut self, lamports: u64) -> &mut Self {
-        self.execution_lamports = lamports;
-        self
-    }
-
     /// Set hint.
     pub fn hint(&mut self, hint: ExecuteGlvWithdrawalHint) -> &mut Self {
         self.hint = Some(hint);
@@ -586,7 +592,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvWithdrawalBuilder<'a,
         self
     }
 
-    async fn prepare_hint(&mut self) -> crate::Result<ExecuteGlvWithdrawalHint> {
+    /// Prepare hint.
+    pub async fn prepare_hint(&mut self) -> crate::Result<ExecuteGlvWithdrawalHint> {
         match &self.hint {
             Some(hint) => Ok(hint.clone()),
             None => {
@@ -633,9 +640,47 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvWithdrawalBuilder<'a,
             }
         }
     }
+}
 
-    /// Build.
-    pub async fn build(&mut self) -> crate::Result<RpcBuilder<'a, C>> {
+#[cfg(feature = "pyth-pull-oracle")]
+mod pyth {
+    use crate::pyth::{
+        pull_oracle::{ExecuteWithPythPrices, Prices},
+        PythPullOracleContext,
+    };
+
+    use super::*;
+
+    impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteWithPythPrices<'a, C>
+        for ExecuteGlvWithdrawalBuilder<'a, C>
+    {
+        fn set_execution_fee(&mut self, lamports: u64) {
+            SetExecutionFee::set_execution_fee(self, lamports);
+        }
+
+        async fn context(&mut self) -> crate::Result<PythPullOracleContext> {
+            let hint = self.prepare_hint().await?;
+            let ctx = PythPullOracleContext::try_from_feeds(&hint.feeds)?;
+            Ok(ctx)
+        }
+
+        async fn build_rpc_with_price_updates(
+            &mut self,
+            price_updates: Prices,
+        ) -> crate::Result<Vec<crate::utils::RpcBuilder<'a, C, ()>>> {
+            let txn = self
+                .parse_with_pyth_price_updates(price_updates)
+                .build()
+                .await?;
+            Ok(txn.into_builders())
+        }
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
+    for ExecuteGlvWithdrawalBuilder<'a, C>
+{
+    async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
 
         let token_program_id = anchor_spl::token::ID;
@@ -731,7 +776,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvWithdrawalBuilder<'a,
             )
             .lookup_tables(self.alts.clone());
 
-        if self.close {
+        let rpc = if self.close {
             let close = self
                 .client
                 .close_glv_withdrawal(&self.glv_withdrawal)
@@ -739,44 +784,41 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvWithdrawalBuilder<'a,
                 .hint(hint.close)
                 .build()
                 .await?;
-            Ok(execute.merge(close))
+            execute.merge(close)
         } else {
-            Ok(execute)
-        }
+            execute
+        };
+
+        let mut tx = self.client.transaction();
+
+        tx.try_push(rpc)?;
+
+        Ok(tx)
     }
 }
 
-#[cfg(feature = "pyth-pull-oracle")]
-mod pyth {
-    use crate::pyth::{
-        pull_oracle::{ExecuteWithPythPrices, Prices},
-        PythPullOracleContext,
-    };
+impl<'a, C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
+    for ExecuteGlvWithdrawalBuilder<'a, C>
+{
+    async fn feed_ids(&mut self) -> crate::Result<FeedIds> {
+        let hint = self.prepare_hint().await?;
+        Ok(hint.feeds)
+    }
 
-    use super::*;
+    fn process_feeds(
+        &mut self,
+        provider: PriceProviderKind,
+        map: FeedAddressMap,
+    ) -> crate::Result<()> {
+        self.feeds_parser
+            .insert_pull_oracle_feed_parser(provider, map);
+        Ok(())
+    }
+}
 
-    impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteWithPythPrices<'a, C>
-        for ExecuteGlvWithdrawalBuilder<'a, C>
-    {
-        fn set_execution_fee(&mut self, lamports: u64) {
-            self.execution_fee(lamports);
-        }
-
-        async fn context(&mut self) -> crate::Result<PythPullOracleContext> {
-            let hint = self.prepare_hint().await?;
-            let ctx = PythPullOracleContext::try_from_feeds(&hint.feeds)?;
-            Ok(ctx)
-        }
-
-        async fn build_rpc_with_price_updates(
-            &mut self,
-            price_updates: Prices,
-        ) -> crate::Result<Vec<crate::utils::RpcBuilder<'a, C, ()>>> {
-            let rpc = self
-                .parse_with_pyth_price_updates(price_updates)
-                .build()
-                .await?;
-            Ok(vec![rpc])
-        }
+impl<'a, C> SetExecutionFee for ExecuteGlvWithdrawalBuilder<'a, C> {
+    fn set_execution_fee(&mut self, lamports: u64) -> &mut Self {
+        self.execution_lamports = lamports;
+        self
     }
 }

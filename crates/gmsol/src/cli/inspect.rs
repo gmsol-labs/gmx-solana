@@ -4,6 +4,7 @@ use anchor_client::solana_sdk::pubkey::Pubkey;
 use eyre::OptionExt;
 use futures_util::{pin_mut, StreamExt};
 use gmsol::{
+    constants,
     pyth::Hermes,
     store::gt::current_time_window_index,
     types::{
@@ -969,6 +970,11 @@ impl InspectArgs {
                 index,
                 token,
             } => {
+                use anchor_spl::{
+                    associated_token::get_associated_token_address, token::TokenAccount,
+                };
+                use gmsol::types::glv::GlvMarketFlag;
+
                 let address = match (address, token, index) {
                     (Some(address), _, _) => *address,
                     (None, Some(token), _) => client.find_glv_address(token),
@@ -987,7 +993,59 @@ impl InspectArgs {
                     .await?
                     .ok_or(gmsol::Error::NotFound)?
                     .0;
-                println!("{glv:#?}");
+                println!("Address: {}", address);
+                println!("Token: {}", glv.glv_token());
+                println!(
+                    "Shift last executed: {}",
+                    format_ts(
+                        time::OffsetDateTime::now_utc(),
+                        glv.shift_last_executed_at()
+                    )?
+                );
+                println!("Shift min interval: {}s", glv.shift_min_interval_secs());
+                println!(
+                    "Shift max price impact: {}%",
+                    unsigned_value_to_decimal(glv.shift_max_price_impact_factor()).normalize()
+                        * rust_decimal::Decimal::ONE_HUNDRED
+                );
+                println!();
+                let mut table = Table::new();
+                table.set_titles(row![
+                    "Market Token",
+                    "Amount",
+                    "Max Amount",
+                    "Max Value",
+                    "Allow Deposit"
+                ]);
+                table.set_format(table_format());
+                for market_token in glv.market_tokens() {
+                    let config = glv.market_config(&market_token).unwrap();
+                    let vault = get_associated_token_address(&address, &market_token);
+                    let balance = client
+                        .account::<TokenAccount>(&vault)
+                        .await?
+                        .map(|a| a.amount)
+                        .unwrap_or(0);
+                    let balance =
+                        unsigned_amount_to_decimal(balance, constants::MARKET_TOKEN_DECIMALS)
+                            .normalize();
+                    let max_amount = unsigned_amount_to_decimal(
+                        config.max_amount(),
+                        constants::MARKET_TOKEN_DECIMALS,
+                    )
+                    .normalize();
+                    let max_value = unsigned_value_to_decimal(config.max_value()).normalize();
+                    let is_deposit_allowed = config.get_flag(GlvMarketFlag::IsDepositAllowed);
+
+                    table.add_row(row![
+                        market_token,
+                        balance,
+                        max_amount,
+                        max_value,
+                        is_deposit_allowed
+                    ]);
+                }
+                println!("{table}");
             }
             Command::GtExchangeVault { address } => {
                 let address = match address {
@@ -1223,18 +1281,7 @@ fn format_market(market: &SerializeMarket) -> gmsol::Result<String> {
     let now = time::OffsetDateTime::now_utc();
     for kind in ClockKind::iter() {
         if let Some(clock) = market.clocks.0.get(&kind) {
-            let ts =
-                time::OffsetDateTime::from_unix_timestamp(*clock).map_err(gmsol::Error::unknown)?;
-            let msg = if now >= ts {
-                let dur = now - ts;
-                format!(
-                    " ({} ago)",
-                    humantime::format_duration(dur.try_into().map_err(gmsol::Error::unknown)?)
-                )
-            } else {
-                String::new()
-            };
-            writeln!(f, "{kind}: {}{msg}", humantime::format_rfc3339(ts.into()))?;
+            writeln!(f, "{kind}: {}", format_ts(now, *clock)?)?;
         } else {
             writeln!(f, "{kind}: not enabled")?;
         }
@@ -1312,4 +1359,19 @@ fn truncate_pubkey(pubkey: &Pubkey) -> String {
     let end = &s[len - 4..];
 
     format!("{}...{}", start, end)
+}
+
+fn format_ts(now: time::OffsetDateTime, clock: i64) -> gmsol::Result<String> {
+    let ts = time::OffsetDateTime::from_unix_timestamp(clock).map_err(gmsol::Error::unknown)?;
+    let msg = if now >= ts {
+        let dur = now - ts;
+        format!(
+            " ({} ago)",
+            humantime::format_duration(dur.try_into().map_err(gmsol::Error::unknown)?)
+        )
+    } else {
+        String::new()
+    };
+
+    Ok(format!("{}{msg}", humantime::format_rfc3339(ts.into())))
 }

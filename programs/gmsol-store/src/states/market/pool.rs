@@ -31,7 +31,7 @@ impl PoolStorage {
 
 /// A pool for market.
 #[zero_copy]
-#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(BorshSerialize, BorshDeserialize, InitSpace)]
 pub struct Pool {
@@ -40,6 +40,7 @@ pub struct Pool {
     /// For a pure pool, only the `long_token_amount` field is used.
     is_pure: u8,
     #[cfg_attr(feature = "serde", serde(skip))]
+    #[cfg_attr(feature = "debug", debug(skip))]
     padding: [u8; 15],
     /// Long token amount.
     pub(super) long_token_amount: u128,
@@ -136,7 +137,7 @@ impl gmsol_model::Pool for Pool {
 
 /// Market Pools.
 #[zero_copy]
-#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
 pub struct Pools {
     /// Primary Pool.
     primary: PoolStorage,
@@ -172,6 +173,7 @@ pub struct Pools {
     total_borrowing: PoolStorage,
     /// Point pool.
     point: PoolStorage,
+    #[cfg_attr(feature = "debug", debug(skip))]
     reserved: [PoolStorage; 4],
 }
 

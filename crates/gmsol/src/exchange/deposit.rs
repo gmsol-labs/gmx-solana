@@ -16,10 +16,7 @@ use gmsol_store::{
 
 use crate::{
     exchange::ExchangeOps,
-    store::{
-        token::TokenAccountOps,
-        utils::{read_market, FeedsParser},
-    },
+    store::{token::TokenAccountOps, utils::FeedsParser},
     utils::{
         builder::{
             FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
@@ -170,7 +167,7 @@ where
                     (long_token.is_none() && long_amount != 0)
                         || (short_token.is_none() && short_amount != 0)
                 );
-                let market = read_market(&self.client.store_program().solana_rpc(), market).await?;
+                let market = self.client.market(market).await?;
                 if long_amount != 0 && long_token.is_none() {
                     long_token = Some(market.meta().long_token_mint);
                 }
@@ -356,7 +353,7 @@ impl<'a> CloseDepositHint {
     pub fn new(deposit: &'a Deposit) -> Self {
         Self {
             owner: *deposit.header().owner(),
-            receiver: *deposit.header().receiver(),
+            receiver: deposit.header().receiver(),
             market_token: deposit.tokens().market_token(),
             market_token_account: deposit.tokens().market_token_account(),
             initial_long_token: deposit.tokens().initial_long_token.token(),
@@ -502,7 +499,7 @@ impl ExecuteDepositHint {
     pub fn new(deposit: &Deposit, map: &impl TokenMapAccess) -> crate::Result<Self> {
         Ok(Self {
             owner: *deposit.header().owner(),
-            receiver: *deposit.header().receiver(),
+            receiver: deposit.header().receiver(),
             market_token_escrow: deposit.tokens().market_token_account(),
             market_token_mint: deposit.tokens().market_token(),
             feeds: deposit.swap().to_feeds(map)?,
