@@ -6478,9 +6478,9 @@ dependencies = [
 
 [[package]]
 name = "switchboard-on-demand"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7494300e425d03929feba0d02ba562dd62fba55897540eb63de7169b25bd421e"
+checksum = "cd6b8c786310104245a6f619c2d4fd92336c1cea7c915f7b1d264eb2cac8c968"
 dependencies = [
  "anchor-lang",
  "anchor-spl",

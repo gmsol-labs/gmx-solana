@@ -22,11 +22,9 @@ impl Switchboard {
     ) -> Result<(u64, i64, Price)> {
         let feed = AccountLoader::<SbFeed>::try_from(feed)?;
         let feed = feed.load()?;
-        let max_age: u64 = token_config.heartbeat_duration().into();
-        let oldest_slot = clock.slot - max_age;
-        // TODO: heartbeat_duration is supposed to be in seconds, not slots
-        // Review again in PR review there are other options
-        if feed.result.min_slot().unwrap_or(0) < oldest_slot {
+        let max_age = clock.unix_timestamp - token_config.heartbeat_duration() as i64;
+        let (min_result_ts, _) = feed.current_result_ts_range();
+        if min_result_ts < max_age {
             return Err(error!(CoreError::PriceIsStale));
         }
         Ok((
