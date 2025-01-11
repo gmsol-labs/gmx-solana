@@ -248,11 +248,9 @@ fn encode_jobs(job_array: &[OracleJob]) -> Vec<String> {
 }
 
 fn filter_feed_ids(feed_ids: &FeedIds, provider: PriceProviderKind) -> crate::Result<Vec<Pubkey>> {
-    let sb_idx = feed_ids.providers.iter().position(|x| *x == provider as u8);
-    if sb_idx.is_none() {
+    let Some(sb_idx) = feed_ids.providers.iter().position(|x| *x == provider as u8) else {
         return Err(crate::Error::switchboard_error("no switchboard feed found"));
-    }
-    let sb_idx = sb_idx.unwrap();
+    };
     let offset = feed_ids.nums[..sb_idx].iter().sum::<u16>() as usize;
     let feeds = feed_ids.feeds[offset..offset + feed_ids.nums[sb_idx] as usize].to_vec();
     Ok(feeds)
