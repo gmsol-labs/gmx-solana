@@ -159,7 +159,7 @@ impl Client {
 
     /// Create a new testnet [`Client`] with the given credential.
     pub fn with_testnet_credential(credential: Credential) -> Self {
-        Self::try_new(TESTNET_STREAMS_BASE, TESTNET_STREAMS_BASE, credential).unwrap()
+        Self::try_new(TESTNET_STREAMS_BASE, TESTNET_WS_STREAMS_BASE, credential).unwrap()
     }
 
     /// Create a new [`Client`] with default base url and default ENVs.
