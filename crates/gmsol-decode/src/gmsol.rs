@@ -6,7 +6,10 @@ use gmsol_store::{
         MarketFeesUpdated, MarketStateUpdated, OrderRemoved, PositionDecreased, PositionIncreased,
         ShiftRemoved, SwapExecuted, TradeEvent, WithdrawalExecuted, WithdrawalRemoved,
     },
-    states::{Deposit, Market, Order, Position, Store, Withdrawal},
+    states::{
+        Deposit, GlvDeposit, GlvShift, GlvWithdrawal, Market, Order, Position, Shift, Store,
+        Withdrawal,
+    },
 };
 
 use crate::{untagged, value::UnknownOwnedData};
@@ -16,7 +19,11 @@ impl_decode_for_zero_copy!(Position);
 impl_decode_for_zero_copy!(Market);
 impl_decode_for_zero_copy!(Deposit);
 impl_decode_for_zero_copy!(Withdrawal);
+impl_decode_for_zero_copy!(Shift);
 impl_decode_for_zero_copy!(Order);
+impl_decode_for_zero_copy!(GlvDeposit);
+impl_decode_for_zero_copy!(GlvWithdrawal);
+impl_decode_for_zero_copy!(GlvShift);
 
 impl_decode_for_cpi_event!(DepositRemoved);
 impl_decode_for_cpi_event!(DepositExecuted);
@@ -39,7 +46,11 @@ untagged!(
     [
         Deposit,
         Withdrawal,
+        Shift,
         Order,
+        GlvDeposit,
+        GlvWithdrawal,
+        GlvShift,
         Store,
         Market,
         Position,
