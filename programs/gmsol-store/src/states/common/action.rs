@@ -1,4 +1,5 @@
 use anchor_lang::{prelude::*, ZeroCopy};
+use bytemuck::Zeroable;
 use gmsol_utils::InitSpace;
 
 use crate::{
@@ -83,13 +84,13 @@ impl ActionState {
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct ActionHeader {
     /// Action id.
-    pub(crate) id: u64,
+    pub id: u64,
     /// Store.
-    pub(crate) store: Pubkey,
+    pub store: Pubkey,
     /// Market.
-    pub(crate) market: Pubkey,
+    pub market: Pubkey,
     /// Owner.
-    pub(crate) owner: Pubkey,
+    pub owner: Pubkey,
     /// Nonce bytes.
     pub(crate) nonce: [u8; 32],
     /// Max execution lamports.
@@ -113,6 +114,12 @@ pub struct ActionHeader {
     padding_1: [u8; 32],
     padding_2: [u8; 64],
     reserved: [u8; 128],
+}
+
+impl Default for ActionHeader {
+    fn default() -> Self {
+        Zeroable::zeroed()
+    }
 }
 
 /// Action Flags.
