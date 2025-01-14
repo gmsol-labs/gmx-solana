@@ -11,14 +11,20 @@ use gmsol_store::{
     ops::shift::CreateShiftParams,
     states::{
         common::{action::Action, TokensWithFeed},
-        HasMarketMeta, NonceBytes, Shift, Store, TokenMapAccess,
+        HasMarketMeta, NonceBytes, PriceProviderKind, Shift, Store, TokenMapAccess,
     },
 };
 
 use crate::{
     exchange::generate_nonce,
     store::{token::TokenAccountOps, utils::FeedsParser},
-    utils::{fix_optional_account_metas, RpcBuilder, ZeroCopy},
+    utils::{
+        builder::{
+            FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
+            SetExecutionFee,
+        },
+        fix_optional_account_metas, RpcBuilder, TransactionBuilder, ZeroCopy,
+    },
 };
 
 use super::ExchangeOps;
@@ -356,13 +362,18 @@ impl ExecuteShiftHint {
 }
 
 impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteShiftBuilder<'a, C> {
-    pub(super) fn new(client: &'a crate::Client<C>, oracle: &Pubkey, shift: &Pubkey) -> Self {
+    pub(super) fn new(
+        client: &'a crate::Client<C>,
+        oracle: &Pubkey,
+        shift: &Pubkey,
+        cancel_on_execution_error: bool,
+    ) -> Self {
         Self {
             client,
             shift: *shift,
             hint: None,
             execution_fee: 0,
-            cancel_on_execution_error: true,
+            cancel_on_execution_error,
             oracle: *oracle,
             close: true,
             feeds_parser: Default::default(),
@@ -372,12 +383,6 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteShiftBuilder<'a, C> {
     /// Set hint.
     pub fn hint(&mut self, hint: ExecuteShiftHint) -> &mut Self {
         self.hint = Some(hint);
-        self
-    }
-
-    /// Set execution fee.
-    pub fn execution_fee(&mut self, lamports: u64) -> &mut Self {
-        self.execution_fee = lamports;
         self
     }
 
@@ -435,7 +440,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteShiftBuilder<'a, C> {
     }
 
     /// Build a [`RpcBuilder`] for `execute_shift` instruction.
-    pub async fn build(&mut self) -> crate::Result<RpcBuilder<'a, C>> {
+    async fn build_rpc(&mut self) -> crate::Result<RpcBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
         let authority = self.client.payer();
 
@@ -518,7 +523,7 @@ mod pyth {
         for ExecuteShiftBuilder<'a, C>
     {
         fn set_execution_fee(&mut self, lamports: u64) {
-            self.execution_fee(lamports);
+            SetExecutionFee::set_execution_fee(self, lamports);
         }
 
         async fn context(&mut self) -> crate::Result<PythPullOracleContext> {
@@ -533,9 +538,45 @@ mod pyth {
         ) -> crate::Result<Vec<crate::utils::RpcBuilder<'a, C, ()>>> {
             let rpc = self
                 .parse_with_pyth_price_updates(price_updates)
-                .build()
+                .build_rpc()
                 .await?;
             Ok(vec![rpc])
         }
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
+    for ExecuteShiftBuilder<'a, C>
+{
+    async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+        let mut tx = self.client.transaction();
+        tx.try_push(self.build_rpc().await?)?;
+        Ok(tx)
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
+    for ExecuteShiftBuilder<'a, C>
+{
+    async fn feed_ids(&mut self) -> crate::Result<FeedIds> {
+        let hint = self.prepare_hint().await?;
+        Ok(FeedIds::new(hint.store, hint.feeds))
+    }
+
+    fn process_feeds(
+        &mut self,
+        provider: PriceProviderKind,
+        map: FeedAddressMap,
+    ) -> crate::Result<()> {
+        self.feeds_parser
+            .insert_pull_oracle_feed_parser(provider, map);
+        Ok(())
+    }
+}
+
+impl<'a, C> SetExecutionFee for ExecuteShiftBuilder<'a, C> {
+    fn set_execution_fee(&mut self, lamports: u64) -> &mut Self {
+        self.execution_fee = lamports;
+        self
     }
 }

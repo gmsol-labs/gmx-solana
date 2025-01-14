@@ -53,7 +53,7 @@ async fn shift() -> eyre::Result<()> {
     let signature = rpc.send_without_preflight().await?;
     tracing::info!(%shift, %signature, "created a shift");
 
-    let mut builder = keeper.execute_shift(oracle, &shift);
+    let mut builder = keeper.execute_shift(oracle, &shift, false);
     deployment
         .execute_with_pyth(&mut builder, None, true, true)
         .instrument(tracing::info_span!("execute shift", %shift))

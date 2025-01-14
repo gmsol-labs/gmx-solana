@@ -383,7 +383,12 @@ pub trait ExchangeOps<C> {
     fn close_shift(&self, shift: &Pubkey) -> CloseShiftBuilder<C>;
 
     /// Execute shift.
-    fn execute_shift(&self, oracle: &Pubkey, shift: &Pubkey) -> ExecuteShiftBuilder<C>;
+    fn execute_shift(
+        &self,
+        oracle: &Pubkey,
+        shift: &Pubkey,
+        cancel_on_execution_error: bool,
+    ) -> ExecuteShiftBuilder<C>;
 }
 
 impl<S, C> ExchangeOps<C> for crate::Client<C>
@@ -668,8 +673,13 @@ where
         CloseShiftBuilder::new(self, shift)
     }
 
-    fn execute_shift(&self, oracle: &Pubkey, shift: &Pubkey) -> ExecuteShiftBuilder<C> {
-        ExecuteShiftBuilder::new(self, oracle, shift)
+    fn execute_shift(
+        &self,
+        oracle: &Pubkey,
+        shift: &Pubkey,
+        cancel_on_execution_error: bool,
+    ) -> ExecuteShiftBuilder<C> {
+        ExecuteShiftBuilder::new(self, oracle, shift, cancel_on_execution_error)
     }
 }
 
