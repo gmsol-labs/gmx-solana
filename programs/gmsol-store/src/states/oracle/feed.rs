@@ -131,28 +131,7 @@ impl PriceFeed {
     }
 
     fn try_to_price(&self, token_config: &TokenConfig) -> Result<gmsol_utils::Price> {
-        use gmsol_utils::price::{Decimal, Price};
-
-        let token_decimals = token_config.token_decimals();
-        let precision = token_config.precision();
-
-        let min = Decimal::try_from_price(
-            self.price.min_price,
-            self.price.decimals,
-            token_decimals,
-            precision,
-        )
-        .map_err(|_| error!(CoreError::InvalidPriceFeedPrice))?;
-
-        let max = Decimal::try_from_price(
-            self.price.max_price,
-            self.price.decimals,
-            token_decimals,
-            precision,
-        )
-        .map_err(|_| error!(CoreError::InvalidPriceFeedPrice))?;
-
-        Ok(Price { min, max })
+        self.price().try_to_price(token_config)
     }
 }
 
@@ -207,9 +186,24 @@ impl PriceFeedPrice {
         self.flags.get_flag(PriceFlag::Open)
     }
 
-    pub(crate) fn from_chainlink_report(
-        report: &chainlink_datastreams::report::Report,
-    ) -> Result<Self> {
+    /// Try converting to [`Price`](gmsol_utils::Price).
+    pub fn try_to_price(&self, token_config: &TokenConfig) -> Result<gmsol_utils::Price> {
+        use gmsol_utils::price::{Decimal, Price};
+
+        let token_decimals = token_config.token_decimals();
+        let precision = token_config.precision();
+
+        let min = Decimal::try_from_price(self.min_price, self.decimals, token_decimals, precision)
+            .map_err(|_| error!(CoreError::InvalidPriceFeedPrice))?;
+
+        let max = Decimal::try_from_price(self.max_price, self.decimals, token_decimals, precision)
+            .map_err(|_| error!(CoreError::InvalidPriceFeedPrice))?;
+
+        Ok(Price { min, max })
+    }
+
+    /// Create from chainlink price report.
+    pub fn from_chainlink_report(report: &chainlink_datastreams::report::Report) -> Result<Self> {
         use chainlink_datastreams::report::Report;
         use gmsol_utils::price::{find_divisor_decimals, TEN, U192};
 
