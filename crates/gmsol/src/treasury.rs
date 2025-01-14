@@ -990,10 +990,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
 
         let token_program_id = anchor_spl::token::ID;
 
-        let feeds = self
-            .feeds_parser
-            .parse(&hint.feeds)
-            .collect::<Result<Vec<_>, _>>()?;
+        let feeds = self.feeds_parser.parse_and_sort_by_tokens(&hint.feeds)?;
         let tokens = hint.treasury_tokens.iter().map(|pubkey| AccountMeta {
             pubkey: *pubkey,
             is_signer: false,

@@ -454,10 +454,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteShiftBuilder<'a, C> {
             .client
             .find_market_vault_address(&hint.store, &hint.from_market_token);
 
-        let feeds = self
-            .feeds_parser
-            .parse(&hint.feeds)
-            .collect::<Result<Vec<_>, _>>()?;
+        let feeds = self.feeds_parser.parse_and_sort_by_tokens(&hint.feeds)?;
 
         let mut rpc = self
             .client

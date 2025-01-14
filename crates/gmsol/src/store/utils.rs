@@ -44,6 +44,24 @@ impl FeedsParser {
             .map(|res| res.and_then(|(provider, feed)| self.dispatch(&provider, &feed)))
     }
 
+    /// Parse and sort by tokens.
+    pub fn parse_and_sort_by_tokens(
+        &self,
+        tokens_with_feed: &TokensWithFeed,
+    ) -> crate::Result<Vec<AccountMeta>> {
+        let accounts = self
+            .parse(tokens_with_feed)
+            .collect::<crate::Result<Vec<_>>>()?;
+
+        let sorted = tokens_with_feed
+            .tokens
+            .iter()
+            .zip(accounts)
+            .collect::<Vec<_>>();
+
+        Ok(sorted.into_iter().map(|(_, account)| account).collect())
+    }
+
     fn dispatch(&self, provider: &PriceProviderKind, feed: &Pubkey) -> crate::Result<AccountMeta> {
         let Some(parser) = self.parsers.get(provider) else {
             return Ok(AccountMeta {

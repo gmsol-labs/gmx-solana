@@ -399,10 +399,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
             get_associated_token_address(&glv, &hint.from_market_token);
         let to_market_token_glv_vault = get_associated_token_address(&glv, &hint.to_market_token);
 
-        let feeds = self
-            .feeds_parser
-            .parse(&hint.feeds)
-            .collect::<Result<Vec<_>, _>>()?;
+        let feeds = self.feeds_parser.parse_and_sort_by_tokens(&hint.feeds)?;
 
         let mut rpc = self
             .client
