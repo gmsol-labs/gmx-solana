@@ -53,13 +53,15 @@ impl FeedsParser {
             .parse(tokens_with_feed)
             .collect::<crate::Result<Vec<_>>>()?;
 
-        let sorted = tokens_with_feed
+        let mut combined = tokens_with_feed
             .tokens
             .iter()
             .zip(accounts)
             .collect::<Vec<_>>();
 
-        Ok(sorted.into_iter().map(|(_, account)| account).collect())
+        combined.sort_by_key(|(key, _)| *key);
+
+        Ok(combined.into_iter().map(|(_, account)| account).collect())
     }
 
     fn dispatch(&self, provider: &PriceProviderKind, feed: &Pubkey) -> crate::Result<AccountMeta> {
