@@ -1,6 +1,6 @@
 use std::{fmt, ops::Deref, sync::Arc};
 
-use chainlink_datastreams::report::{decode, Report};
+use chainlink_datastreams::report::{decode, decode_full_report, Report};
 use futures_util::{Stream, StreamExt, TryStreamExt};
 use reqwest::{IntoUrl, Url};
 use reqwest_websocket::{Message, RequestBuilderExt};
@@ -359,7 +359,8 @@ impl ApiReportData {
     /// Decode the report.
     pub fn decode(&self) -> crate::Result<Report> {
         let report = self.report_bytes()?;
-        let report = decode(&report).map_err(crate::Error::invalid_argument)?;
+        let (_, blob) = decode_full_report(&report).map_err(crate::Error::invalid_argument)?;
+        let report = decode(blob).map_err(crate::Error::invalid_argument)?;
         Ok(report)
     }
 
