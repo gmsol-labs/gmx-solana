@@ -320,7 +320,11 @@ async fn send_all_txs(
                 }
             }
         }
-        tracing::debug!("sending transaction {idx}");
+        tracing::debug!(
+            commitment = ?client.commitment(),
+            ?config,
+            "sending transaction {idx}"
+        );
         match client
             .send_and_confirm_transaction_with_config(&tx, config)
             .await
