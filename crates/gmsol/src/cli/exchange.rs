@@ -5,7 +5,7 @@ use anchor_client::{
 use eyre::OptionExt;
 use gmsol::{
     exchange::ExchangeOps,
-    types::{common::action::Action, withdrawal::Withdrawal, Deposit, UpdateOrderParams},
+    types::{common::action::Action, withdrawal::Withdrawal, Deposit, Shift, UpdateOrderParams},
     utils::price_to_min_output_amount,
 };
 use rust_decimal::Decimal;
@@ -108,6 +108,29 @@ enum Command {
     CancelWithdrawal {
         /// The address of the withdrawal to cancel.
         withdrawal: Pubkey,
+    },
+    /// Create a shift.
+    CreateShift {
+        /// From market token.
+        #[arg(long, value_name = "FROM_MARKET_TOKEN")]
+        from: Pubkey,
+        /// To market token.
+        #[arg(long, value_name = "TO_MARKET_TOKEN")]
+        to: Pubkey,
+        /// Amount.
+        #[arg(long)]
+        amount: u64,
+        /// Min output amount.
+        #[arg(long, default_value_t = 0)]
+        min_output_amount: u64,
+        /// Extra execution fee allowed to use.
+        #[arg(long, short, default_value_t = 0)]
+        extra_execution_fee: u64,
+    },
+    /// Cancel a shift.
+    CancelShift {
+        /// The address of the shift to cancel.
+        shift: Pubkey,
     },
     /// Cancel an order.
     CancelOrder {
@@ -440,6 +463,29 @@ impl ExchangeArgs {
                     .send()
                     .await?;
                 tracing::info!(%withdrawal, "cancelled withdrawal at tx {signature}");
+                println!("{signature}");
+            }
+            Command::CreateShift {
+                from,
+                to,
+                amount,
+                min_output_amount,
+                extra_execution_fee,
+            } => {
+                let mut builder = client.create_shift(store, from, to, *amount);
+
+                builder
+                    .execution_fee(extra_execution_fee + Shift::MIN_EXECUTION_LAMPORTS)
+                    .min_to_market_token_amount(*min_output_amount);
+
+                let (rpc, shift) = builder.build_with_address()?;
+
+                let signature = rpc.send().await?;
+                println!("created shift {shift} at {signature}");
+            }
+            Command::CancelShift { shift } => {
+                let signature = client.close_shift(shift).build().await?.send().await?;
+                tracing::info!(%shift, "cancelled shift at tx {signature}");
                 println!("{signature}");
             }
             Command::CancelOrder { order } => {
