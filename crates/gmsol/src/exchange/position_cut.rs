@@ -287,10 +287,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
             hint.store.holding(),
             &time_key,
         );
-        let feeds = self
-            .feeds_parser
-            .parse(hint.feeds())
-            .collect::<Result<Vec<_>, _>>()?;
+        let feeds = self.feeds_parser.parse_and_sort_by_tokens(hint.feeds())?;
         let order = self.client.find_order_address(&store, &payer, &nonce);
 
         let long_token_escrow = get_associated_token_address(&order, &long_token_mint);
