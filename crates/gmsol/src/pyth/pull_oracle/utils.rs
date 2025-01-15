@@ -97,9 +97,9 @@ pub fn parse_feed_id(update: &MerklePriceUpdate) -> crate::Result<Identifier> {
 pub fn extract_pyth_feed_ids(feeds: &TokensWithFeed) -> crate::Result<Vec<Identifier>> {
     Feeds::new(feeds)
         .filter_map(|res| {
-            res.map(|(provider, feed)| {
-                if matches!(provider, PriceProviderKind::Pyth) {
-                    Some(Identifier::new(feed.to_bytes()))
+            res.map(|config| {
+                if matches!(config.provider, PriceProviderKind::Pyth) {
+                    Some(Identifier::new(config.feed.to_bytes()))
                 } else {
                     None
                 }

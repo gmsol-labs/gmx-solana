@@ -40,8 +40,9 @@ impl FeedsParser {
         &'a self,
         tokens_with_feed: &'a TokensWithFeed,
     ) -> impl Iterator<Item = crate::Result<AccountMeta>> + 'a {
-        Feeds::new(tokens_with_feed)
-            .map(|res| res.and_then(|(provider, feed)| self.dispatch(&provider, &feed)))
+        Feeds::new(tokens_with_feed).map(|res| {
+            res.and_then(|FeedConfig { provider, feed, .. }| self.dispatch(&provider, &feed))
+        })
     }
 
     /// Parse and sort by tokens.
@@ -136,6 +137,7 @@ mod pyth_pull_oracle {
 /// Feed account metas.
 pub struct Feeds<'a> {
     provider_with_lengths: Peekable<Zip<Iter<'a, u8>, Iter<'a, u16>>>,
+    tokens: Iter<'a, Pubkey>,
     feeds: Iter<'a, Pubkey>,
     current: usize,
     failed: bool,
@@ -147,18 +149,31 @@ impl<'a> Feeds<'a> {
         let providers = token_with_feeds.providers.iter();
         let nums = token_with_feeds.nums.iter();
         let provider_with_lengths = providers.zip(nums).peekable();
+        let tokens = token_with_feeds.tokens.iter();
         let feeds = token_with_feeds.feeds.iter();
         Self {
-            feeds,
             provider_with_lengths,
+            tokens,
+            feeds,
             current: 0,
             failed: false,
         }
     }
 }
 
+/// A feed config.
+#[derive(Debug, Clone)]
+pub struct FeedConfig {
+    /// Token.
+    pub token: Pubkey,
+    /// Provider Kind.
+    pub provider: PriceProviderKind,
+    /// Feed.
+    pub feed: Pubkey,
+}
+
 impl<'a> Iterator for Feeds<'a> {
-    type Item = crate::Result<(PriceProviderKind, Pubkey)>;
+    type Item = crate::Result<FeedConfig>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.failed {
@@ -180,8 +195,15 @@ impl<'a> Iterator for Feeds<'a> {
             let Some(feed) = self.feeds.next() else {
                 return Some(Err(crate::Error::invalid_argument("not enough feeds")));
             };
+            let Some(token) = self.tokens.next() else {
+                return Some(Err(crate::Error::invalid_argument("not enough tokens")));
+            };
             self.current += 1;
-            return Some(Ok((provider, *feed)));
+            return Some(Ok(FeedConfig {
+                token: *token,
+                provider,
+                feed: *feed,
+            }));
         }
     }
 }

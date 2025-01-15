@@ -88,6 +88,20 @@ impl<O: PullOracle, T: SetExecutionFee> SetExecutionFee for WithPullOracle<O, T>
     }
 }
 
+impl<O: PullOracle, T: PullOraclePriceConsumer> PullOraclePriceConsumer for WithPullOracle<O, T> {
+    fn feed_ids(&mut self) -> impl Future<Output = crate::Result<FeedIds>> {
+        self.builder.feed_ids()
+    }
+
+    fn process_feeds(
+        &mut self,
+        provider: PriceProviderKind,
+        map: FeedAddressMap,
+    ) -> crate::Result<()> {
+        self.builder.process_feeds(provider, map)
+    }
+}
+
 /// Feed IDs.
 #[derive(Debug, Clone)]
 pub struct FeedIds {

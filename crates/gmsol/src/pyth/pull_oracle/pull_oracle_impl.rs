@@ -67,6 +67,12 @@ impl<'a, C> PullOracle for PythPullOracleWithHermes<'a, C> {
         after: Option<OffsetDateTime>,
     ) -> crate::Result<Self::PriceUpdates> {
         let feed_ids = utils::extract_pyth_feed_ids(feed_ids)?;
+        if feed_ids.is_empty() {
+            return Ok(PriceUpdates {
+                num_feeds: Some(0),
+                updates: vec![],
+            });
+        }
         let update = self
             .hermes
             .latest_price_updates(&feed_ids, Some(EncodingType::Base64))
@@ -112,14 +118,18 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
         PriceUpdateInstructions<'a, C>,
         HashMap<PriceProviderKind, FeedAddressMap>,
     )> {
-        let wormhole = self.oracle.wormhole();
-        let pyth = self.oracle.pyth();
+        let mut ixns = PriceUpdateInstructions::new(self.gmsol);
 
         let PriceUpdates { updates, num_feeds } = price_updates;
 
+        if updates.is_empty() {
+            return Ok((ixns, Default::default()));
+        }
+
         let mut prices = HashMap::with_capacity(num_feeds.unwrap_or(0));
 
-        let mut ixns = PriceUpdateInstructions::new(self.gmsol);
+        let wormhole = self.oracle.wormhole();
+        let pyth = self.oracle.pyth();
 
         let datas = updates
             .iter()

@@ -1,6 +1,7 @@
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use anchor_spl::{associated_token::get_associated_token_address, token_interface::TokenAccount};
 use gmsol::{
+    chainlink::{self, pull_oracle::ChainlinkPullOracleFactory},
     client::SystemProgramOps,
     pyth::{pull_oracle::PythPullOracleWithHermes, Hermes, PythPullOracle},
     treasury::{CreateTreasurySwapOptions, TreasuryOps},
@@ -74,6 +75,8 @@ enum Command {
         gt_exchange_vault: SelectGtExchangeVault,
         #[arg(long)]
         oracle: Pubkey,
+        #[arg(long, short = 't')]
+        oracle_testnet: bool,
     },
     /// Sync GT bank.
     SyncGtBank {
@@ -223,17 +226,38 @@ impl Args {
             Command::ConfirmGtBuyback {
                 gt_exchange_vault,
                 oracle,
+                oracle_testnet,
             } => {
                 let gt_exchange_vault = gt_exchange_vault.get(store, client).await?;
                 let builder = client.confirm_gt_buyback(store, &gt_exchange_vault, oracle);
+
                 let hermes = Hermes::default();
                 let oracle = PythPullOracle::try_new(client)?;
-                // TODO: add support for chainlink.
                 let pyth = PythPullOracleWithHermes::from_parts(client, &hermes, &oracle);
-                let txns = WithPullOracle::new(&pyth, builder, None)
-                    .await?
-                    .build()
-                    .await?;
+                let mut with_pyth = WithPullOracle::new(&pyth, builder, None).await?;
+
+                let chainlink = if *oracle_testnet {
+                    chainlink::Client::from_testnet_defaults()
+                } else {
+                    chainlink::Client::from_defaults()
+                };
+
+                let txns = match chainlink.as_ref() {
+                    Ok(chainlink) => {
+                        let ctx = ChainlinkPullOracleFactory::new(store, 0).arced();
+                        let oracle = ctx.make_oracle(chainlink, client, false);
+
+                        WithPullOracle::new(oracle, with_pyth, None)
+                            .await?
+                            .build()
+                            .await?
+                    }
+                    Err(err) => {
+                        tracing::warn!(%err, "failed to connect to the chainlink client");
+
+                        with_pyth.build().await?
+                    }
+                };
 
                 return crate::utils::send_or_serialize_transactions(
                     txns,

@@ -81,7 +81,7 @@ async fn use_chainlink_data_streams() -> eyre::Result<()> {
 
     let ctx = deployment.chainlink_pull_oracle(&keeper).await?;
 
-    let chainlink = ctx.make_oracle(&chainlink, &keeper);
+    let chainlink = ctx.make_oracle(&chainlink, &keeper, true);
 
     let store = &deployment.store;
     let oracle = &deployment.oracle();

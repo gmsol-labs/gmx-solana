@@ -282,8 +282,8 @@ fn encode_jobs(job_array: &[OracleJob]) -> Vec<String> {
 fn filter_switchboard_feed_ids(feed_ids: &FeedIds) -> crate::Result<Vec<Pubkey>> {
     Feeds::new(feed_ids)
         .filter_map(|res| {
-            res.map(|(provider, feed)| {
-                matches!(provider, PriceProviderKind::Switchboard).then_some(feed)
+            res.map(|config| {
+                matches!(config.provider, PriceProviderKind::Switchboard).then_some(config.feed)
             })
             .transpose()
         })

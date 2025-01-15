@@ -39,6 +39,11 @@ impl ChainlinkPullOracleFactory {
         )
     }
 
+    /// Wrap in an [`Arc`].
+    pub fn arced(self) -> Arc<Self> {
+        Arc::new(self)
+    }
+
     /// Create a new [`ChainlinkPullOracleFactory`] with the given program ID and access controller address.
     pub fn with_program_id_and_access_controller(
         store: &Pubkey,
@@ -115,8 +120,9 @@ impl ChainlinkPullOracleFactory {
         self: Arc<Self>,
         chainlink: &'a Client,
         gmsol: &'a crate::Client<C>,
+        skip_feeds_preparation: bool,
     ) -> ChainlinkPullOracle<'a, C> {
-        ChainlinkPullOracle::new(chainlink, gmsol, self)
+        ChainlinkPullOracle::new(chainlink, gmsol, self, skip_feeds_preparation)
     }
 }
 
@@ -125,6 +131,7 @@ pub struct ChainlinkPullOracle<'a, C> {
     chainlink: &'a Client,
     gmsol: &'a crate::Client<C>,
     ctx: Arc<ChainlinkPullOracleFactory>,
+    skip_feeds_preparation: bool,
 }
 
 impl<'a, C> Clone for ChainlinkPullOracle<'a, C> {
@@ -142,16 +149,18 @@ impl<'a, C> ChainlinkPullOracle<'a, C> {
         chainlink: &'a Client,
         gmsol: &'a crate::Client<C>,
         ctx: Arc<ChainlinkPullOracleFactory>,
+        skip_feeds_preparation: bool,
     ) -> Self {
         Self {
             chainlink,
             gmsol,
             ctx,
+            skip_feeds_preparation,
         }
     }
 }
 
-impl<'a, C> PullOracle for ChainlinkPullOracle<'a, C> {
+impl<'a, C: Deref<Target = impl Signer> + Clone> PullOracle for ChainlinkPullOracle<'a, C> {
     type PriceUpdates = HashMap<FeedId, ApiReportData>;
 
     async fn fetch_price_updates(
@@ -159,15 +168,21 @@ impl<'a, C> PullOracle for ChainlinkPullOracle<'a, C> {
         feed_ids: &FeedIds,
         after: Option<OffsetDateTime>,
     ) -> crate::Result<Self::PriceUpdates> {
-        let feed_ids = Feeds::new(feed_ids)
+        let feeds = Feeds::new(feed_ids)
             .filter_map(|res| {
-                res.map(|(provider, feed)| {
-                    matches!(provider, PriceProviderKind::ChainlinkDataStreams)
-                        .then(|| hex::encode(feed.to_bytes()))
+                res.map(|config| {
+                    matches!(config.provider, PriceProviderKind::ChainlinkDataStreams)
+                        .then(|| (config.token, config.feed.to_bytes()))
                 })
                 .transpose()
             })
-            .collect::<crate::Result<Vec<_>>>()?;
+            .collect::<crate::Result<HashMap<_, _>>>()?;
+
+        let feed_ids = feeds.values().map(hex::encode).collect::<Vec<_>>();
+
+        if !self.skip_feeds_preparation {
+            self.ctx.prepare_feeds(self.gmsol, feeds).await?;
+        }
 
         let tasks = feed_ids
             .iter()
