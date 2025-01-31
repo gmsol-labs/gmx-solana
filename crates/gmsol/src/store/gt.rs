@@ -109,7 +109,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
         grow_step: u64,
         ranks: Vec<u64>,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::InitializeGt {
                 authority: self.payer(),
                 store: *store,
@@ -129,7 +129,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
         store: &Pubkey,
         factors: Vec<u128>,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::ConfigurateGt {
                 authority: self.payer(),
                 store: *store,
@@ -142,7 +142,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
         store: &Pubkey,
         factors: Vec<u128>,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::ConfigurateGt {
                 authority: self.payer(),
                 store: *store,
@@ -151,7 +151,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
     }
 
     fn gt_set_exchange_time_window(&self, store: &Pubkey, window: u32) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::ConfigurateGt {
                 authority: self.payer(),
                 store: *store,
@@ -166,7 +166,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
         time_window: u32,
     ) -> TransactionBuilder<C, Pubkey> {
         let vault = self.find_gt_exchange_vault_address(store, time_window_index, time_window);
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::PrepareGtExchangeVault {
                 payer: self.payer(),
                 store: *store,
@@ -178,7 +178,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
     }
 
     fn confirm_gt_exchange_vault(&self, store: &Pubkey, vault: &Pubkey) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::ConfirmGtExchangeVault {
                 authority: self.payer(),
                 store: *store,
@@ -198,7 +198,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
     ) -> TransactionBuilder<C> {
         let owner = self.payer();
         let vault = self.find_gt_exchange_vault_address(store, time_window_index, time_window);
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::RequestGtExchange {
                 owner,
                 store: *store,
@@ -232,7 +232,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
         };
 
         Ok(self
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::CloseGtExchange {
                 authority: self.payer(),
                 store: *store,

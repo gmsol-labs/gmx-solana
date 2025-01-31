@@ -155,17 +155,6 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         &self.anchor
     }
 
-    /// Create a [`BundleBuilder`]
-    pub fn bundle(&self) -> BundleBuilder<C> {
-        BundleBuilder::new_with_options(CreateBundleOptions {
-            cluster: self.cluster().clone(),
-            commitment: self.commitment(),
-            force_one_transaction: false,
-            max_packet_size: None,
-            max_instructions_for_one_tx: None,
-        })
-    }
-
     /// Create a new [`Program`] with the given program id.
     pub fn program(&self, program_id: Pubkey) -> Program<C> {
         Program::new(program_id, self.cfg.clone())
@@ -226,38 +215,40 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         self.timelock_program().id()
     }
 
-    /// Create a rpc builder for the store program.
-    pub fn store_rpc(&self) -> TransactionBuilder<'_, C> {
+    /// Create a transaction builder for the store program.
+    pub fn store_transaction(&self) -> TransactionBuilder<'_, C> {
         self.store_program().transaction()
     }
 
-    /// Create a rpc builder for the treasury program.
-    pub fn treasury_rpc(&self) -> TransactionBuilder<'_, C> {
+    /// Create a transaction builder for the treasury program.
+    pub fn treasury_transaction(&self) -> TransactionBuilder<'_, C> {
         self.treasury_program().transaction()
     }
 
-    /// Create a rpc builder for the timelock program.
-    pub fn timelock_rpc(&self) -> TransactionBuilder<'_, C> {
+    /// Create a transaction builder for the timelock program.
+    pub fn timelock_transaction(&self) -> TransactionBuilder<'_, C> {
         self.timelock_program().transaction()
     }
 
-    /// Create a transaction builder with the given options.
-    pub fn transaction_with_options(
+    /// Create a bundle builder with the given options.
+    pub fn bundle_with_options(
         &self,
         force_one_transaction: bool,
         max_packet_size: Option<usize>,
+        max_instructions_for_one_tx: Option<usize>,
     ) -> BundleBuilder<'_, C> {
-        BundleBuilder::from_rpc_client_with_options(
-            self.store_program.rpc(),
+        BundleBuilder::new_with_options(CreateBundleOptions {
+            cluster: self.cluster().clone(),
+            commitment: self.commitment(),
             force_one_transaction,
             max_packet_size,
-            None,
-        )
+            max_instructions_for_one_tx,
+        })
     }
 
-    /// Create a transaction builder with default options.
-    pub fn transaction(&self) -> BundleBuilder<'_, C> {
-        self.transaction_with_options(false, None)
+    /// Create a [`BundleBuilder`]
+    pub fn bundle(&self) -> BundleBuilder<C> {
+        self.bundle_with_options(false, None, None)
     }
 
     /// Find PDA for [`Store`](gmsol_store::states::Store) account.
@@ -1192,7 +1183,7 @@ impl<C: Clone + Deref<Target = impl Signer>> SystemProgramOps<C> for Client<C> {
             ));
         }
         Ok(self
-            .store_rpc()
+            .store_transaction()
             .pre_instruction(transfer(&self.payer(), to, lamports)))
     }
 }

@@ -196,7 +196,7 @@ where
 {
     fn initialize_config(&self, store: &Pubkey) -> TransactionBuilder<C, Pubkey> {
         let config = self.find_treasury_config_address(store);
-        self.treasury_rpc()
+        self.treasury_transaction()
             .anchor_args(instruction::InitializeConfig {})
             .anchor_accounts(accounts::InitializeConfig {
                 payer: self.payer(),
@@ -215,7 +215,7 @@ where
         treasury_vault_config: &Pubkey,
     ) -> TransactionBuilder<C> {
         let config = self.find_treasury_config_address(store);
-        self.treasury_rpc()
+        self.treasury_transaction()
             .anchor_args(instruction::SetTreasuryVaultConfig {})
             .anchor_accounts(accounts::SetTreasuryVaultConfig {
                 authority: self.payer(),
@@ -234,7 +234,7 @@ where
         }
         let config = self.find_treasury_config_address(store);
         Ok(self
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::SetGtFactor { factor })
             .anchor_accounts(accounts::UpdateConfig {
                 authority: self.payer(),
@@ -256,7 +256,7 @@ where
         }
         let config = self.find_treasury_config_address(store);
         Ok(self
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::SetBuybackFactor { factor })
             .anchor_accounts(accounts::UpdateConfig {
                 authority: self.payer(),
@@ -273,7 +273,7 @@ where
     ) -> TransactionBuilder<C, Pubkey> {
         let config = self.find_treasury_config_address(store);
         let treasury_vault_config = self.find_treasury_vault_config_address(&config, index);
-        self.treasury_rpc()
+        self.treasury_transaction()
             .anchor_args(instruction::InitializeTreasuryVaultConfig { index })
             .anchor_accounts(accounts::InitializeTreasuryVaultConfig {
                 authority: self.payer(),
@@ -295,7 +295,7 @@ where
         let (config, treasury_vault_config) =
             find_config_addresses(self, store, treasury_vault_config).await?;
         Ok(self
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::InsertTokenToTreasuryVault {})
             .anchor_accounts(accounts::InsertTokenToTreasuryVault {
                 authority: self.payer(),
@@ -316,7 +316,7 @@ where
         let (config, treasury_vault_config) =
             find_config_addresses(self, store, treasury_vault_config).await?;
         Ok(self
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::RemoveTokenFromTreasuryVault {})
             .anchor_accounts(accounts::RemoveTokenFromTreasuryVault {
                 authority: self.payer(),
@@ -339,7 +339,7 @@ where
         let (config, treasury_vault_config) =
             find_config_addresses(self, store, treasury_vault_config).await?;
         Ok(self
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::ToggleTokenFlag {
                 flag: flag.to_string(),
                 value,
@@ -397,7 +397,7 @@ where
             self.prepare_associated_token_account(token_mint, token_program_id, Some(&gt_bank));
 
         let deposit = self
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::DepositToTreasuryVault {})
             .anchor_accounts(accounts::DepositToTreasuryVault {
                 authority: self.payer(),
@@ -445,7 +445,7 @@ where
         );
 
         Ok(self
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::WithdrawFromTreasuryVault { amount, decimals })
             .anchor_accounts(accounts::WithdrawFromTreasuryVault {
                 authority: self.payer(),
@@ -472,7 +472,7 @@ where
     fn transfer_receiver(&self, store: &Pubkey, new_receiver: &Pubkey) -> TransactionBuilder<C> {
         let config = self.find_treasury_config_address(store);
         let receiver = self.find_treasury_receiver_address(&config);
-        self.treasury_rpc()
+        self.treasury_transaction()
             .anchor_args(instruction::TransferReceiver {})
             .anchor_accounts(accounts::TransferReceiver {
                 authority: self.payer(),
@@ -486,7 +486,7 @@ where
     }
 
     fn set_referral_reward(&self, store: &Pubkey, factors: Vec<u128>) -> TransactionBuilder<C> {
-        self.treasury_rpc()
+        self.treasury_transaction()
             .anchor_args(instruction::SetReferralReward { factors })
             .anchor_accounts(accounts::SetReferralReward {
                 authority: self.payer(),
@@ -508,7 +508,7 @@ where
         let receiver = self.find_treasury_receiver_address(&config);
         let receiver_vault =
             get_associated_token_address_with_program_id(&receiver, token_mint, &token_program_id);
-        self.treasury_rpc()
+        self.treasury_transaction()
             .anchor_args(instruction::ClaimFees { min_amount })
             .anchor_accounts(accounts::ClaimFees {
                 authority: self.payer(),
@@ -537,7 +537,7 @@ where
             find_config_addresses(self, store, treasury_vault_config_hint).await?;
         let gt_bank = self.find_gt_bank_address(&treasury_vault_config, gt_exchange_vault);
         Ok(self
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::PrepareGtBank {})
             .anchor_accounts(accounts::PrepareGtBank {
                 authority: self.payer(),
@@ -582,7 +582,7 @@ where
             self.prepare_associated_token_account(token_mint, token_program_id, Some(&gt_bank));
 
         let sync = self
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::SyncGtBank {})
             .anchor_accounts(accounts::SyncGtBank {
                 authority: self.payer(),
@@ -689,7 +689,7 @@ where
         });
 
         Ok(self
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::CompleteGtExchange {})
             .anchor_accounts(accounts::CompleteGtExchange {
                 owner,
@@ -775,7 +775,7 @@ where
         );
 
         let create = self
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::CreateSwap {
                 nonce,
                 swap_path_length: swap_path
@@ -869,7 +869,7 @@ where
         );
 
         let cancel = self
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::CancelSwap {})
             .anchor_accounts(accounts::CancelSwap {
                 authority: self.payer(),
@@ -1042,7 +1042,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
 
         let rpc = self
             .client
-            .treasury_rpc()
+            .treasury_transaction()
             .anchor_args(instruction::ConfirmGtBuyback {})
             .accounts(fix_optional_account_metas(
                 accounts::ConfirmGtBuyback {
@@ -1064,7 +1064,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             .accounts(feeds)
             .accounts(tokens.chain(vaults).collect::<Vec<_>>());
 
-        let mut tx = self.client.transaction();
+        let mut tx = self.client.bundle();
         tx.try_push(rpc)?;
 
         Ok(tx)

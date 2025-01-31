@@ -471,7 +471,7 @@ where
 
                 let prepare_position = self
                     .client
-                    .store_rpc()
+                    .store_transaction()
                     .anchor_accounts(accounts::PreparePosition {
                         owner: *owner,
                         store: self.store,
@@ -541,7 +541,7 @@ where
 
         let prepare_user = self
             .client
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::PrepareUser {
                 owner: *owner,
                 store: self.store,
@@ -552,7 +552,7 @@ where
 
         let create = self
             .client
-            .store_rpc()
+            .store_transaction()
             .accounts(crate::utils::fix_optional_account_metas(
                 accounts::CreateOrder {
                     store: self.store,
@@ -909,7 +909,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
                 require_claimable_accounts = true;
 
                 self.client
-                    .store_rpc()
+                    .store_transaction()
                     .accounts(fix_optional_account_metas(
                         accounts::ExecuteDecreaseOrder {
                             authority,
@@ -989,7 +989,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             }
             _ => self
                 .client
-                .store_rpc()
+                .store_transaction()
                 .accounts(crate::utils::fix_optional_account_metas(
                     accounts::ExecuteIncreaseOrSwapOrder {
                         authority,
@@ -1056,7 +1056,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
         if !kind.is_swap() {
             let prepare_event_buffer = self
                 .client
-                .store_rpc()
+                .store_transaction()
                 .anchor_accounts(accounts::PrepareTradeEventBuffer {
                     authority,
                     store: self.store,
@@ -1276,7 +1276,7 @@ where
             .map(|owner| self.client.find_user_address(&hint.store, &owner));
         Ok(self
             .client
-            .store_rpc()
+            .store_transaction()
             .accounts(crate::utils::fix_optional_account_metas(
                 accounts::CloseOrder {
                     store: hint.store,
@@ -1401,8 +1401,8 @@ impl ClaimableAccountsBuilder {
     ) -> (TransactionBuilder<'a, C>, TransactionBuilder<'a, C>) {
         use crate::store::token::TokenAccountOps;
 
-        let mut pre_builder = client.store_rpc();
-        let mut post_builder = client.store_rpc();
+        let mut pre_builder = client.store_transaction();
+        let mut post_builder = client.store_transaction();
         let mut accounts: HashSet<&Pubkey> = Default::default();
         if let Some((long_token_mint, account)) =
             self.claimable_long_token_account_for_user.as_ref()

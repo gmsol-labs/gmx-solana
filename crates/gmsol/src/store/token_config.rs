@@ -154,7 +154,7 @@ where
         token_map: &'a dyn Signer,
     ) -> (TransactionBuilder<'a, C>, Pubkey) {
         let builder = self
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::InitializeTokenMap {
                 payer: self.payer(),
                 store: *store,
@@ -177,7 +177,7 @@ where
         new: bool,
     ) -> TransactionBuilder<C> {
         let authority = self.payer();
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::PushToTokenMap {
                 authority,
                 store: *store,
@@ -205,7 +205,7 @@ where
         new: bool,
     ) -> TransactionBuilder<C> {
         let authority = self.payer();
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::PushToTokenMapSynthetic {
                 authority,
                 store: *store,
@@ -230,7 +230,7 @@ where
         enable: bool,
     ) -> TransactionBuilder<C> {
         let authority = self.payer();
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::ToggleTokenConfig {
                 authority,
                 store: *store,
@@ -250,7 +250,7 @@ where
         provider: PriceProviderKind,
     ) -> TransactionBuilder<C> {
         let authority = self.payer();
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::SetExpectedProvider {
                 authority,
                 store: *store,
@@ -263,7 +263,7 @@ where
     }
 
     fn token_name(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::TokenName { token: *token })
             .anchor_accounts(accounts::ReadTokenMap {
                 token_map: *token_map,
@@ -271,7 +271,7 @@ where
     }
 
     fn token_decimals(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::TokenDecimals { token: *token })
             .anchor_accounts(accounts::ReadTokenMap {
                 token_map: *token_map,
@@ -279,7 +279,7 @@ where
     }
 
     fn token_precision(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::TokenPrecision { token: *token })
             .anchor_accounts(accounts::ReadTokenMap {
                 token_map: *token_map,
@@ -287,7 +287,7 @@ where
     }
 
     fn is_token_config_enabled(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::IsTokenConfigEnabled { token: *token })
             .anchor_accounts(accounts::ReadTokenMap {
                 token_map: *token_map,
@@ -295,7 +295,7 @@ where
     }
 
     fn token_expected_provider(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::TokenExpectedProvider { token: *token })
             .anchor_accounts(accounts::ReadTokenMap {
                 token_map: *token_map,
@@ -308,7 +308,7 @@ where
         token: &Pubkey,
         provider: PriceProviderKind,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::TokenFeed {
                 token: *token,
                 provider: provider as u8,
@@ -324,7 +324,7 @@ where
         token: &Pubkey,
         provider: PriceProviderKind,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::TokenTimestampAdjustment {
                 token: *token,
                 provider: provider as u8,

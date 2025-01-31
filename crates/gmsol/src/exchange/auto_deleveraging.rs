@@ -85,7 +85,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> UpdateAdlBuilder<'a, C> {
             .collect::<Result<Vec<_>, _>>()?;
         let rpc = self
             .client
-            .store_rpc()
+            .store_transaction()
             .accounts(fix_optional_account_metas(
                 gmsol_store::accounts::UpdateAdlState {
                     authority: self.client.payer(),

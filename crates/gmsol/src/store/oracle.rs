@@ -75,7 +75,7 @@ where
         );
 
         let builder = self
-            .store_rpc()
+            .store_transaction()
             .pre_instruction(create)
             .anchor_accounts(accounts::InitializeOracle {
                 payer,
@@ -100,7 +100,7 @@ where
         let authority = self.payer();
         let price_feed = self.find_price_feed_address(store, &authority, index, provider, token);
         let rpc = self
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::InitializePriceFeed {
                 authority,
                 store: *store,
@@ -133,7 +133,7 @@ where
         let verifier_account = find_verifier_account_pda(chainlink);
         let config_account = find_config_account_pda(signed_report, chainlink);
         Ok(self
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::UpdatePriceFeedWithChainlink {
                 authority,
                 store: *store,

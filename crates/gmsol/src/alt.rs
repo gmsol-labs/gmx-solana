@@ -90,7 +90,7 @@ impl<C: Deref<Target = impl Signer> + Clone> AddressLookupTableOps<C> for crate:
         let (ix, address) =
             address_lookup_table::instruction::create_lookup_table(payer, payer, slot);
         let rpc = self
-            .store_rpc()
+            .store_transaction()
             .program(address_lookup_table::program::ID)
             .pre_instruction(ix);
 
@@ -103,7 +103,7 @@ impl<C: Deref<Target = impl Signer> + Clone> AddressLookupTableOps<C> for crate:
         new_addresses: Vec<Pubkey>,
         chunk_size: Option<usize>,
     ) -> crate::Result<BundleBuilder<C>> {
-        let mut tx = self.transaction();
+        let mut tx = self.bundle();
         let payer = self.payer();
 
         let chunk_size = chunk_size.unwrap_or(10);
@@ -115,7 +115,7 @@ impl<C: Deref<Target = impl Signer> + Clone> AddressLookupTableOps<C> for crate:
                 new_addresses.to_owned(),
             );
             let rpc = self
-                .store_rpc()
+                .store_transaction()
                 .program(address_lookup_table::program::ID)
                 .pre_instruction(ix);
             tx.try_push(rpc)?;
@@ -126,7 +126,7 @@ impl<C: Deref<Target = impl Signer> + Clone> AddressLookupTableOps<C> for crate:
     fn deactivate_alt(&self, alt: &Pubkey) -> TransactionBuilder<C> {
         let payer = self.payer();
         let ix = address_lookup_table::instruction::deactivate_lookup_table(*alt, payer);
-        self.store_rpc()
+        self.store_transaction()
             .program(address_lookup_table::program::ID)
             .pre_instruction(ix)
     }
@@ -134,7 +134,7 @@ impl<C: Deref<Target = impl Signer> + Clone> AddressLookupTableOps<C> for crate:
     fn close_alt(&self, alt: &Pubkey) -> TransactionBuilder<C> {
         let payer = self.payer();
         let ix = address_lookup_table::instruction::close_lookup_table(*alt, payer, payer);
-        self.store_rpc()
+        self.store_transaction()
             .program(address_lookup_table::program::ID)
             .pre_instruction(ix)
     }

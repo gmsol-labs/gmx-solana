@@ -79,7 +79,7 @@ where
         amount: &Amount,
     ) -> TransactionBuilder<C> {
         let authority = self.payer();
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::InsertAmount {
                 key: key.to_string(),
                 amount: *amount,
@@ -97,7 +97,7 @@ where
         factor: &Factor,
     ) -> TransactionBuilder<C> {
         let authority = self.payer();
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::InsertFactor {
                 key: key.to_string(),
                 factor: *factor,
@@ -115,7 +115,7 @@ where
         address: &Pubkey,
     ) -> TransactionBuilder<C> {
         let authority = self.payer();
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::InsertAddress {
                 key: key.to_string(),
                 address: *address,

@@ -37,7 +37,7 @@ where
         let authority = self.payer();
         let vault = self.find_market_vault_address(store, token);
         let builder = self
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::InitializeMarketVault {
                 authority,
                 store: *store,
@@ -182,7 +182,7 @@ where
         maximize_pnl: bool,
         maximize_pool_value: bool,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::GetMarketStatus {
                 prices,
                 maximize_pnl,
@@ -201,7 +201,7 @@ where
         pnl_factor: PnlFactorKind,
         maximize: bool,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::GetMarketTokenPrice {
                 prices,
                 pnl_factor: pnl_factor.to_string(),
@@ -221,7 +221,7 @@ where
         value: &Factor,
     ) -> crate::Result<TransactionBuilder<C>> {
         let req = self
-            .store_rpc()
+            .store_transaction()
             .anchor_args(instruction::UpdateMarketConfig {
                 key: key.to_string(),
                 value: *value,
@@ -242,7 +242,7 @@ where
         value: bool,
     ) -> crate::Result<TransactionBuilder<C>> {
         let req = self
-            .store_rpc()
+            .store_transaction()
             .anchor_args(instruction::UpdateMarketConfigFlag {
                 key: key.to_string(),
                 value,
@@ -261,7 +261,7 @@ where
         market_token: &Pubkey,
         enable: bool,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::ToggleMarket { enable })
             .anchor_accounts(accounts::ToggleMarket {
                 authority: self.payer(),
@@ -276,7 +276,7 @@ where
         market_token: &Pubkey,
         enable: bool,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::ToggleGtMinting { enable })
             .anchor_accounts(accounts::ToggleGTMinting {
                 authority: self.payer(),
@@ -291,7 +291,7 @@ where
         buffer: &'a dyn Signer,
         expire_after_secs: u32,
     ) -> TransactionBuilder<'a, C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::InitializeMarketConfigBuffer { expire_after_secs })
             .anchor_accounts(accounts::InitializeMarketConfigBuffer {
                 authority: self.payer(),
@@ -307,7 +307,7 @@ where
         buffer: &Pubkey,
         receiver: Option<&Pubkey>,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::CloseMarketConfigBuffer {})
             .anchor_accounts(accounts::CloseMarketConfigBuffer {
                 authority: self.payer(),
@@ -321,7 +321,7 @@ where
         buffer: &Pubkey,
         new_configs: impl IntoIterator<Item = (K, Factor)>,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::PushToMarketConfigBuffer {
                 new_configs: new_configs
                     .into_iter()
@@ -343,7 +343,7 @@ where
         buffer: &Pubkey,
         new_authority: &Pubkey,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::SetMarketConfigBufferAuthority {
                 new_authority: *new_authority,
             })
@@ -359,7 +359,7 @@ where
         market_token: &Pubkey,
         buffer: &Pubkey,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::UpdateMarketConfigWithBuffer {})
             .anchor_accounts(accounts::UpdateMarketConfigWithBuffer {
                 authority: self.payer(),

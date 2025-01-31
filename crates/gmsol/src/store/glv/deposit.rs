@@ -325,7 +325,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvDepositBuilder<'a, C> 
 
         let create = self
             .client
-            .store_rpc()
+            .store_transaction()
             .accounts(fix_optional_account_metas(
                 accounts::CreateGlvDeposit {
                     owner,
@@ -513,7 +513,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvDepositBuilder<'a, C> {
 
         let rpc = self
             .client
-            .store_rpc()
+            .store_transaction()
             .accounts(fix_optional_account_metas(
                 accounts::CloseGlvDeposit {
                     executor: payer,
@@ -817,7 +817,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
 
         let execute = self
             .client
-            .store_rpc()
+            .store_transaction()
             .accounts(fix_optional_account_metas(
                 accounts::ExecuteGlvDeposit {
                     authority,
@@ -883,7 +883,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             execute
         };
 
-        let mut tx = self.client.transaction();
+        let mut tx = self.client.bundle();
 
         tx.try_push(rpc)?;
 

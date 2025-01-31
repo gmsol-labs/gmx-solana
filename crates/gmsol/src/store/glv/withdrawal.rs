@@ -274,7 +274,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvWithdrawalBuilder<'a, 
 
         let create = self
             .client
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::CreateGlvWithdrawal {
                 owner,
                 receiver,
@@ -450,7 +450,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvWithdrawalBuilder<'a, C
 
         let rpc = self
             .client
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::CloseGlvWithdrawal {
                 executor: payer,
                 store: hint.store,
@@ -738,7 +738,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
 
         let execute = self
             .client
-            .store_rpc()
+            .store_transaction()
             .accounts(fix_optional_account_metas(
                 accounts::ExecuteGlvWithdrawal {
                     authority,
@@ -794,7 +794,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             execute
         };
 
-        let mut tx = self.client.transaction();
+        let mut tx = self.client.bundle();
 
         tx.try_push(rpc)?;
 

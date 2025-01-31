@@ -323,7 +323,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             ));
         let prepare_event_buffer = self
             .client
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::PrepareTradeEventBuffer {
                 authority: payer,
                 store,
@@ -335,7 +335,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             });
         let mut exec_builder = self
             .client
-            .store_rpc()
+            .store_transaction()
             .accounts(fix_optional_account_metas(
                 accounts::PositionCut {
                     authority: payer,

@@ -387,7 +387,7 @@ impl Deployment {
 
         let signature = self
             .client
-            .store_rpc()
+            .store_transaction()
             .program(ID)
             .anchor_accounts(accounts::Initialize {
                 payer: self.client.payer(),
@@ -471,7 +471,7 @@ impl Deployment {
             tracing::info!(%name, "creating mint account {pubkey}");
             let rpc = self
                 .client
-                .store_rpc()
+                .store_transaction()
                 .signer(token)
                 .pre_instruction(system_instruction::create_account(
                     &payer,
@@ -526,7 +526,7 @@ impl Deployment {
             for user in self.users.keypairs().await {
                 let pubkey = user.pubkey();
                 tracing::info!(token=%name, mint=%token.address, "creating token account for {pubkey}");
-                let rpc = self.client.store_rpc().pre_instruction(
+                let rpc = self.client.store_transaction().pre_instruction(
                     instruction::create_associated_token_account(
                         &payer,
                         &pubkey,
@@ -567,7 +567,7 @@ impl Deployment {
             .ok_or_eyre("the default keeper is not initialized")?;
         let keeper = keeper_keypair.pubkey();
 
-        let mut builder = client.transaction();
+        let mut builder = client.bundle();
 
         builder
             .push(client.initialize_store::<Keypair>(&self.store_key, None, None, None))?
@@ -606,7 +606,7 @@ impl Deployment {
         let client = self.user_client(Self::DEFAULT_KEEPER)?;
         let store = &self.store;
 
-        let mut builder = client.transaction();
+        let mut builder = client.bundle();
 
         let (rpc, address) = client.initialize_token_map(store, &self.token_map);
 
@@ -692,7 +692,7 @@ impl Deployment {
         });
 
         let client = self.user_client(Self::DEFAULT_KEEPER)?;
-        let mut builder = client.transaction();
+        let mut builder = client.bundle();
         let store = &self.store;
         let token_map = self.token_map.pubkey();
         for (name, [index, long, short]) in market_triples {
@@ -826,7 +826,7 @@ impl Deployment {
 
         self.glv_token = glv_token;
 
-        let mut txn = keeper.transaction();
+        let mut txn = keeper.bundle();
 
         for market_token in market_tokens {
             txn.push(keeper.toggle_glv_market_flag(
@@ -854,7 +854,7 @@ impl Deployment {
         let client = self.user_client(Self::DEFAULT_KEEPER)?;
         let store = &self.store;
 
-        let mut tx = client.transaction();
+        let mut tx = client.bundle();
 
         let gt_unit = 10u64.pow(decimals as u32);
 
@@ -978,7 +978,7 @@ impl Deployment {
                 continue;
             };
             builder
-                .try_push(self.client.store_rpc().signer(user).pre_instruction(
+                .try_push(self.client.store_transaction().signer(user).pre_instruction(
                     instruction::close_account(&ID, &address, &payer, &pubkey, &[&pubkey])?,
                 ))
                 .map_err(|(_, err)| err)?;
@@ -1011,7 +1011,7 @@ impl Deployment {
             tracing::info!(user = %pubkey, %lamports, "refund from user");
             let ix = system_instruction::transfer(&user.pubkey(), &payer, lamports);
             builder
-                .try_push(self.client.store_rpc().signer(user).pre_instruction(ix))
+                .try_push(self.client.store_transaction().signer(user).pre_instruction(ix))
                 .map_err(|(_, err)| err)?;
         }
 
@@ -1135,14 +1135,14 @@ impl Deployment {
 
         let signature = if token.address == native_mint::ID {
             self.client
-                .store_rpc()
+                .store_transaction()
                 .pre_instruction(system_instruction::transfer(&payer, &account, amount))
                 .pre_instruction(instruction::sync_native(&ID, &account)?)
                 .send()
                 .await?
         } else {
             self.client
-                .store_rpc()
+                .store_transaction()
                 .pre_instruction(instruction::mint_to_checked(
                     &ID,
                     &token.address,

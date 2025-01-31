@@ -67,7 +67,7 @@ impl ChainlinkPullOracleFactory {
         feed_ids: HashMap<Pubkey, FeedId>,
     ) -> crate::Result<()> {
         let provider = PriceProviderKind::ChainlinkDataStreams;
-        let mut txs = gmsol.transaction();
+        let mut txs = gmsol.bundle();
         let authority = gmsol.payer();
         for (token, feed_id) in feed_ids {
             let address = gmsol.find_price_feed_address(

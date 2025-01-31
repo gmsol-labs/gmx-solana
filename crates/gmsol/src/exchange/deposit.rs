@@ -260,7 +260,7 @@ where
         }
 
         let create = client
-            .store_rpc()
+            .store_transaction()
             .accounts(crate::utils::fix_optional_account_metas(
                 accounts::CreateDeposit {
                     owner,
@@ -430,7 +430,7 @@ where
             .as_ref()
             .map(|mint| get_ata_or_owner(&owner, mint, should_unwrap_native_token));
         Ok(client
-            .store_rpc()
+            .store_transaction()
             .accounts(crate::utils::fix_optional_account_metas(
                 accounts::CloseDeposit {
                     executor,
@@ -658,7 +658,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
 
         // Execution.
         let execute = client
-            .store_rpc()
+            .store_transaction()
             .accounts(crate::utils::fix_optional_account_metas(
                 accounts::ExecuteDeposit {
                     authority,
@@ -720,7 +720,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             execute
         };
 
-        let mut tx = self.client.transaction();
+        let mut tx = self.client.bundle();
 
         tx.try_push(rpc)?;
 

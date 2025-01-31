@@ -100,7 +100,7 @@ where
             );
         }
     } else if let Some((instruction_buffer, client, draft)) = instruction_buffer_ctx {
-        let mut txn = client.transaction();
+        let mut bundle = client.bundle();
 
         match instruction_buffer {
             InstructionBuffer::Timelock { role } => {
@@ -119,7 +119,7 @@ where
                     let (rpc, buffer) = client
                         .create_timelocked_instruction(store, role, buffer, ix)?
                         .swap_output(());
-                    txn.push(rpc)?;
+                    bundle.push(rpc)?;
                     println!("ix[{idx}]: {buffer}");
                 }
             }
@@ -157,11 +157,11 @@ where
                     return Ok(());
                 }
 
-                txn.push(rpc)?;
+                bundle.push(rpc)?;
             }
         }
 
-        match txn.send_all(skip_preflight).await {
+        match bundle.send_all(skip_preflight).await {
             Ok(signatures) => {
                 tracing::info!("{signatures:#?}");
             }

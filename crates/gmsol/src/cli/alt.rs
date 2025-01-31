@@ -53,7 +53,7 @@ impl Args {
                 address,
                 custom_addresses,
             } => {
-                let mut txns = client.transaction();
+                let mut txns = client.bundle();
 
                 let mut new_addresses = match kind {
                     AltKind::Custom => {

@@ -111,7 +111,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvShiftBuilder<'a, C> {
 
         let rpc = self
             .client
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::CreateGlvShift {
                 authority,
                 store: self.store,
@@ -215,7 +215,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvShiftBuilder<'a, C> {
         let authority = self.client.payer();
         let rpc = self
             .client
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::CloseGlvShift {
                 authority,
                 funder: hint.funder,
@@ -405,7 +405,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
 
         let mut rpc = self
             .client
-            .store_rpc()
+            .store_transaction()
             .accounts(fix_optional_account_metas(
                 accounts::ExecuteGlvShift {
                     authority,
@@ -493,7 +493,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     for ExecuteGlvShiftBuilder<'a, C>
 {
     async fn build(&mut self) -> crate::Result<BundleBuilder<'a, C>> {
-        let mut tx = self.client.transaction();
+        let mut tx = self.client.bundle();
 
         tx.try_push(self.build_rpc().await?)?;
 

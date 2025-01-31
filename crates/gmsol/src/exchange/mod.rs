@@ -404,7 +404,7 @@ where
         action: ActionDisabledFlag,
         enable: bool,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(gmsol_store::instruction::ToggleFeature {
                 domain: domian.to_string(),
                 action: action.to_string(),
@@ -490,7 +490,7 @@ where
         let prepare_short_token_vault = self.initialize_market_vault(store, short_token).0;
         let prepare_market_token_vault = self.initialize_market_vault(store, &market_token).0;
         let builder = self
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(gmsol_store::accounts::InitializeMarket {
                 authority,
                 store: *store,
@@ -541,7 +541,7 @@ where
         let vault = self.find_market_vault_address(store, &token);
         let market = self.find_market_address(store, market_token);
         Ok(self
-            .store_rpc()
+            .store_transaction()
             .anchor_args(gmsol_store::instruction::MarketTransferIn { amount })
             .anchor_accounts(gmsol_store::accounts::MarketTransferIn {
                 authority: self.payer(),
@@ -574,7 +574,7 @@ where
         params: UpdateOrderParams,
     ) -> crate::Result<TransactionBuilder<C>> {
         Ok(self
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(gmsol_store::accounts::UpdateOrder {
                 owner: self.payer(),
                 store: *store,
@@ -618,7 +618,7 @@ where
         };
 
         Ok(self
-            .store_rpc()
+            .store_transaction()
             .anchor_args(instruction::CancelOrderIfNoPosition {})
             .anchor_accounts(accounts::CancelOrderIfNoPosition {
                 authority: self.payer(),

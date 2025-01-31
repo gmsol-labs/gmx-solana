@@ -67,7 +67,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ClaimFeesBuilder<'a, C> {
 
         let rpc = self
             .client
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::ClaimFeesFromMarket {
                 authority,
                 store: self.store,

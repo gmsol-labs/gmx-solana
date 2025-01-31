@@ -141,7 +141,7 @@ impl Args {
                     .await?
             }
             Command::Execute { buffers } => {
-                let mut txns = client.transaction();
+                let mut txns = client.bundle();
                 for buffer in buffers {
                     let rpc = client
                         .execute_timelocked_instruction(store, buffer, None)

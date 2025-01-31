@@ -58,7 +58,7 @@ where
         amount: u64,
     ) -> TransactionBuilder<C> {
         let authority = self.payer();
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::UseClaimableAccount { timestamp, amount })
             .anchor_accounts(accounts::UseClaimableAccount {
                 authority,
@@ -80,7 +80,7 @@ where
         account: &Pubkey,
     ) -> TransactionBuilder<C> {
         let authority = self.payer();
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::CloseEmptyClaimableAccount { timestamp })
             .anchor_accounts(accounts::CloseEmptyClaimableAccount {
                 authority,
@@ -102,7 +102,7 @@ where
         let payer = self.payer();
         let owner = owner.copied().unwrap_or(payer);
         let account = get_associated_token_address_with_program_id(&owner, mint, token_program_id);
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::PrepareAssociatedTokenAccount {
                 payer,
                 owner,

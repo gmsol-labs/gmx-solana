@@ -154,8 +154,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PriceUpdateInstructions<'a, C> 
     /// Create a new empty price update instructions.
     pub fn new(client: &'a crate::Client<C>) -> Self {
         Self {
-            post: client.transaction(),
-            close: client.transaction(),
+            post: client.bundle(),
+            close: client.bundle(),
         }
     }
 }

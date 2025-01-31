@@ -228,7 +228,7 @@ where
             ));
         let prepare_final_long_token_ata = self
             .client
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::PrepareAssociatedTokenAccount {
                 payer: owner,
                 owner: receiver,
@@ -241,7 +241,7 @@ where
             .anchor_args(instruction::PrepareAssociatedTokenAccount {});
         let prepare_final_short_token_ata = self
             .client
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::PrepareAssociatedTokenAccount {
                 payer: owner,
                 owner: receiver,
@@ -254,7 +254,7 @@ where
             .anchor_args(instruction::PrepareAssociatedTokenAccount {});
         let create = self
             .client
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::CreateWithdrawal {
                 store: self.store,
                 token_program: anchor_spl::token::ID,
@@ -411,7 +411,7 @@ where
         );
         Ok(self
             .client
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::CloseWithdrawal {
                 store: self.store,
                 store_wallet: self.client.find_store_wallet_address(&self.store),
@@ -638,7 +638,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             });
         let execute = self
             .client
-            .store_rpc()
+            .store_transaction()
             .accounts(fix_optional_account_metas(
                 accounts::ExecuteWithdrawal {
                     authority,
@@ -707,7 +707,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             execute
         };
 
-        let mut tx = self.client.transaction();
+        let mut tx = self.client.bundle();
 
         tx.try_push(rpc)?;
 

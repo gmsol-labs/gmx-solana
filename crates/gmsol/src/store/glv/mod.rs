@@ -167,7 +167,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         );
 
         let rpc = self
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::InitializeGlv {
                 authority,
                 store: *store,
@@ -197,7 +197,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         max_value: Option<u128>,
     ) -> TransactionBuilder<C> {
         let glv = self.find_glv_address(glv_token);
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::UpdateGlvMarketConfig {
                 authority: self.payer(),
                 store: *store,
@@ -219,7 +219,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         enable: bool,
     ) -> TransactionBuilder<C> {
         let glv = self.find_glv_address(glv_token);
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::UpdateGlvMarketConfig {
                 authority: self.payer(),
                 store: *store,
@@ -239,7 +239,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         params: UpdateGlvParams,
     ) -> TransactionBuilder<C> {
         let glv = self.find_glv_address(glv_token);
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::UpdateGlvConfig {
                 authority: self.payer(),
                 store: *store,
@@ -260,7 +260,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         let market = self.find_market_address(store, market_token);
         let vault =
             get_associated_token_address_with_program_id(&glv, market_token, token_program_id);
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::InsertGlvMarket {
                 authority: self.payer(),
                 store: *store,
@@ -286,7 +286,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         let glv = self.find_glv_address(glv_token);
         let vault =
             get_associated_token_address_with_program_id(&glv, market_token, token_program_id);
-        self.store_rpc()
+        self.store_transaction()
             .anchor_accounts(accounts::RemoveGlvMarket {
                 authority: self.payer(),
                 store: *store,

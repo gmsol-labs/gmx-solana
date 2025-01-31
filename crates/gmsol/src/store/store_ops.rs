@@ -63,7 +63,7 @@ where
         let receiver_address = receiver.as_ref().map(|s| s.pubkey());
         let holding_address = holding.as_ref().map(|s| s.pubkey());
         let mut rpc = self
-            .store_rpc()
+            .store_transaction()
             .anchor_accounts(accounts::Initialize {
                 payer: self.payer(),
                 authority: authority_address,
@@ -88,7 +88,7 @@ where
         store: &Pubkey,
         next_authority: &Pubkey,
     ) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::TransferStoreAuthority {})
             .anchor_accounts(accounts::TransferStoreAuthority {
                 authority: self.payer(),
@@ -98,7 +98,7 @@ where
     }
 
     fn accept_store_authority(&self, store: &Pubkey) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::AcceptStoreAuthority {})
             .anchor_accounts(accounts::AcceptStoreAuthority {
                 next_authority: self.payer(),
@@ -107,7 +107,7 @@ where
     }
 
     fn transfer_receiver(&self, store: &Pubkey, new_receiver: &Pubkey) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::TransferReceiver {})
             .anchor_accounts(accounts::TransferReceiver {
                 authority: self.payer(),
@@ -117,7 +117,7 @@ where
     }
 
     fn set_token_map(&self, store: &Pubkey, token_map: &Pubkey) -> TransactionBuilder<C> {
-        self.store_rpc()
+        self.store_transaction()
             .anchor_args(instruction::SetTokenMap {})
             .anchor_accounts(accounts::SetTokenMap {
                 authority: self.payer(),
@@ -132,10 +132,12 @@ where
         key: FactorKey,
         factor: Factor,
     ) -> TransactionBuilder<C> {
-        let rpc = self.store_rpc().anchor_accounts(accounts::InsertConfig {
-            authority: self.payer(),
-            store: *store,
-        });
+        let rpc = self
+            .store_transaction()
+            .anchor_accounts(accounts::InsertConfig {
+                authority: self.payer(),
+                store: *store,
+            });
         match key {
             FactorKey::OrderFeeDiscountForReferredUser => {
                 rpc.anchor_args(instruction::InsertOrderFeeDiscountForReferredUser { factor })

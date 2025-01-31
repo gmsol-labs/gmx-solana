@@ -123,7 +123,7 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
         let proposal_pda = get_proposal_pda(multisig, transaction_index, Some(&ID)).0;
 
         let transaction_message = versioned_message_to_transaction_message(message);
-        let rpc = self.store_rpc().pre_instructions(vec![
+        let rpc = self.store_transaction().pre_instructions(vec![
             Instruction {
                 program_id: ID,
                 accounts: VaultTransactionCreateAccounts {
