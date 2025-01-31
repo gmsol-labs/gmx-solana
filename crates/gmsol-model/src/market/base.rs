@@ -76,7 +76,7 @@ pub trait BaseMarketMut<const DECIMALS: u8>: BaseMarket<DECIMALS> {
     fn claimable_fee_pool_mut(&mut self) -> crate::Result<&mut Self::Pool>;
 }
 
-impl<'a, M: BaseMarket<DECIMALS>, const DECIMALS: u8> BaseMarket<DECIMALS> for &'a mut M {
+impl<M: BaseMarket<DECIMALS>, const DECIMALS: u8> BaseMarket<DECIMALS> for &mut M {
     type Num = M::Num;
 
     type Signed = M::Signed;
@@ -136,7 +136,7 @@ impl<'a, M: BaseMarket<DECIMALS>, const DECIMALS: u8> BaseMarket<DECIMALS> for &
     }
 }
 
-impl<'a, M: BaseMarketMut<DECIMALS>, const DECIMALS: u8> BaseMarketMut<DECIMALS> for &'a mut M {
+impl<M: BaseMarketMut<DECIMALS>, const DECIMALS: u8> BaseMarketMut<DECIMALS> for &mut M {
     fn liquidity_pool_mut(&mut self) -> crate::Result<&mut Self::Pool> {
         (**self).liquidity_pool_mut()
     }

@@ -1,6 +1,6 @@
-use anchor_client::{anchor_lang::AnchorSerialize, solana_sdk::instruction::Instruction, Cluster};
+use anchor_client::{anchor_lang::AnchorSerialize, solana_sdk::instruction::Instruction};
 use base64::{engine::general_purpose::STANDARD, Engine};
-use solana_sdk::{message::VersionedMessage, pubkey::Pubkey};
+use solana_sdk::pubkey::Pubkey;
 use spl_governance::state::proposal_transaction::InstructionData;
 
 /// Instruction serialziation format.

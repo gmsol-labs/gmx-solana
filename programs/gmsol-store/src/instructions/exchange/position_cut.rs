@@ -327,7 +327,7 @@ impl<'info> internal::Authentication<'info> for PositionCut<'info> {
     }
 }
 
-impl<'info> PositionCut<'info> {
+impl PositionCut<'_> {
     #[inline(never)]
     fn pay_execution_fee(&self, execution_fee: u64) -> Result<()> {
         let execution_lamports = self.order.load()?.execution_lamports(execution_fee);

@@ -7,7 +7,6 @@ use anchor_client::{
         signature::{Keypair, Signature},
         signer::Signer,
     },
-    RequestBuilder,
 };
 use eyre::OptionExt;
 use gmsol::{timelock::TimelockOps, utils::instruction::InstructionSerialization};
@@ -64,29 +63,6 @@ pub(crate) fn generate_discriminator(
         namespace.unwrap_or(SIGHASH_GLOBAL_NAMESPACE),
         if force_snake_case { &snake_case } else { name },
     )
-}
-
-pub(crate) async fn send_or_serialize<C, S>(
-    req: RequestBuilder<'_, C>,
-    serialize_only: Option<InstructionSerialization>,
-    callback: impl FnOnce(Signature) -> gmsol::Result<()>,
-) -> gmsol::Result<()>
-where
-    C: Clone + Deref<Target = S>,
-    S: Signer,
-{
-    if let Some(format) = serialize_only {
-        for (idx, ix) in req.instructions()?.into_iter().enumerate() {
-            println!(
-                "ix[{idx}]: {}",
-                gmsol::utils::serialize_instruction(&ix, format, None)?
-            );
-        }
-    } else {
-        let signature = req.send().await?;
-        (callback)(signature)?;
-    }
-    Ok(())
 }
 
 pub(crate) enum InstructionBuffer<'a> {

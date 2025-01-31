@@ -172,7 +172,7 @@ pub struct FeedConfig {
     pub feed: Pubkey,
 }
 
-impl<'a> Iterator for Feeds<'a> {
+impl Iterator for Feeds<'_> {
     type Item = crate::Result<FeedConfig>;
 
     fn next(&mut self) -> Option<Self::Item> {

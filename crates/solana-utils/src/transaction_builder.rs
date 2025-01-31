@@ -117,7 +117,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> TransactionBuilder<'a, C> {
         }
     }
 
-    /// Merge other [`RpcBuilder`]. The rpc fields will be empty after merging,
+    /// Merge other [`TransactionBuilder`]. The rpc fields will be empty after merging,
     /// i.e., `take_rpc` will return `None`.
     /// ## Panics
     /// Return if there are any errors.
@@ -131,12 +131,12 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> TransactionBuilder<'a, C> {
         self
     }
 
-    /// Merge other [`RpcBuilder`]. The rpc fields will be empty after merging,
+    /// Merge other [`TransactionBuilder`]. The rpc fields will be empty after merging,
     /// i.e., `take_rpc` will return `None`.
     /// ## Errors
     /// Return error if the `payer`s are not the same.
     /// ## Notes
-    /// - When success, the `other` will become a empty [`RpcBuilder`].
+    /// - When success, the `other` will become a empty [`TransactionBuilder`].
     /// - All options including `cluster`, `commiment`, and `program_id` will still be
     ///   the same of `self` after merging.
     pub fn try_merge(&mut self, other: &mut Self) -> crate::Result<()> {
@@ -544,7 +544,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
 
     /// Estimated the size of the result transaction.
     ///
-    /// See [`transaction_size()`] for more information.
+    /// See [`transaction_size()`](crate::utils::transaction_size()) for more information.
     pub fn transaction_size(&self, is_versioned_transaction: bool) -> usize {
         let lookup_table = self.get_complete_lookup_table();
         crate::utils::transaction_size(

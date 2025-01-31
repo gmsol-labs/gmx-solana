@@ -126,7 +126,7 @@ impl<'info> internal::Authentication<'info> for UpdatePriceFeedWithChainlink<'in
     }
 }
 
-impl<'info> UpdatePriceFeedWithChainlink<'info> {
+impl UpdatePriceFeedWithChainlink<'_> {
     fn decode_and_validate_report(&self, compressed_full_report: &[u8]) -> Result<PriceFeedPrice> {
         use chainlink_datastreams::report::decode_compressed_full_report;
 

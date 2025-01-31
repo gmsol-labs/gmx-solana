@@ -214,7 +214,7 @@ pub(crate) struct CreateSwapOrderOperation<'a, 'info> {
     swap_out_token: &'a Account<'info, TokenAccount>,
 }
 
-impl<'a, 'info> CreateSwapOrderOperation<'a, 'info> {
+impl CreateSwapOrderOperation<'_, '_> {
     pub(crate) fn execute(self) -> Result<()> {
         self.common.validate()?;
         self.validate_params_excluding_swap()?;
@@ -266,7 +266,7 @@ pub(crate) struct CreateIncreaseOrderOperation<'a, 'info> {
     short_token: &'a Account<'info, TokenAccount>,
 }
 
-impl<'a, 'info> CreateIncreaseOrderOperation<'a, 'info> {
+impl CreateIncreaseOrderOperation<'_, '_> {
     pub(crate) fn execute(self) -> Result<()> {
         self.common.validate()?;
         self.validate_params_excluding_swap()?;
@@ -347,7 +347,7 @@ pub(crate) struct CreateDecreaseOrderOperation<'a, 'info> {
     short_token: &'a Account<'info, TokenAccount>,
 }
 
-impl<'a, 'info> CreateDecreaseOrderOperation<'a, 'info> {
+impl CreateDecreaseOrderOperation<'_, '_> {
     pub(crate) fn execute(self) -> Result<()> {
         self.common.validate()?;
         self.validate_params_excluding_swap()?;
@@ -441,7 +441,7 @@ pub(crate) struct ProcessTransferOutOperation<'a, 'info> {
     event_emitter: EventEmitter<'a, 'info>,
 }
 
-impl<'a, 'info> ProcessTransferOutOperation<'a, 'info> {
+impl<'info> ProcessTransferOutOperation<'_, 'info> {
     pub(crate) fn execute(self) -> Result<()> {
         let TransferOut {
             final_output_token,
@@ -766,7 +766,7 @@ enum SecondaryOrderType {
     AutoDeleveraging,
 }
 
-impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
+impl ExecuteOrderOperation<'_, '_> {
     #[inline(never)]
     pub(crate) fn execute(
         self,
@@ -1167,7 +1167,7 @@ impl<'a, 'info> ExecuteOrderOperation<'a, 'info> {
     }
 }
 
-impl<'a, 'info> ValidateOracleTime for ExecuteOrderOperation<'a, 'info> {
+impl ValidateOracleTime for ExecuteOrderOperation<'_, '_> {
     fn oracle_updated_after(&self) -> crate::CoreResult<Option<i64>> {
         let (kind, updated_at) = {
             let order = self.order.load().map_err(|_| CoreError::LoadAccountError)?;
@@ -1666,7 +1666,7 @@ impl PositionCutKind {
     }
 }
 
-impl<'a, 'info> PositionCutOperation<'a, 'info> {
+impl PositionCutOperation<'_, '_> {
     pub(crate) fn execute(self) -> Result<ShouldSendTradeEvent> {
         let (size_in_usd, is_long, is_collateral_long) = {
             let position = self.position.load()?;

@@ -42,7 +42,7 @@ pub(crate) struct MarketTransferInOperation<'a, 'info> {
     event_emitter: EventEmitter<'a, 'info>,
 }
 
-impl<'a, 'info> MarketTransferInOperation<'a, 'info> {
+impl MarketTransferInOperation<'_, '_> {
     pub(crate) fn execute(self) -> Result<()> {
         use anchor_spl::token;
 
@@ -89,7 +89,7 @@ pub(crate) struct MarketTransferOutOperation<'a, 'info> {
     event_emitter: EventEmitter<'a, 'info>,
 }
 
-impl<'a, 'info> MarketTransferOutOperation<'a, 'info> {
+impl MarketTransferOutOperation<'_, '_> {
     pub(crate) fn execute(self) -> Result<()> {
         use crate::utils::internal::TransferUtils;
 
@@ -164,7 +164,7 @@ impl<'a, 'info> RevertibleLiquidityMarketOperation<'a, 'info> {
     }
 }
 
-impl<'a, 'info> RevertibleLiquidityMarketOperation<'a, 'info> {
+impl<'info> RevertibleLiquidityMarketOperation<'_, 'info> {
     pub(crate) fn op<'ctx>(&'ctx mut self) -> Result<Execute<'ctx, 'info>> {
         let current_market_token = self.market_token_mint.key();
         let market = RevertibleLiquidityMarket::from_revertible_market(
@@ -550,7 +550,7 @@ impl<'a, 'info, T> Execute<'a, 'info, T> {
     }
 }
 
-impl<'a, 'info, T> Revertible for Execute<'a, 'info, T> {
+impl<T> Revertible for Execute<'_, '_, T> {
     fn commit(self) {
         self.market.commit();
         self.swap_markets.commit();

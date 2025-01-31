@@ -72,7 +72,7 @@ pub(crate) struct CreateGlvDepositOperation<'a, 'info> {
     swap_paths: &'info [AccountInfo<'info>],
 }
 
-impl<'a, 'info> CreateGlvDepositOperation<'a, 'info> {
+impl CreateGlvDepositOperation<'_, '_> {
     /// Execute.
     ///
     /// # CHECK
@@ -245,7 +245,7 @@ pub(crate) struct ExecuteGlvDepositOperation<'a, 'info> {
     event_emitter: EventEmitter<'a, 'info>,
 }
 
-impl<'a, 'info> ExecuteGlvDepositOperation<'a, 'info> {
+impl ExecuteGlvDepositOperation<'_, '_> {
     /// Execute.
     ///
     /// # CHECK
@@ -476,7 +476,7 @@ impl<'a, 'info> ExecuteGlvDepositOperation<'a, 'info> {
     }
 }
 
-impl<'a, 'info> ValidateOracleTime for ExecuteGlvDepositOperation<'a, 'info> {
+impl ValidateOracleTime for ExecuteGlvDepositOperation<'_, '_> {
     fn oracle_updated_after(&self) -> CoreResult<Option<i64>> {
         Ok(Some(
             self.glv_deposit
@@ -556,7 +556,7 @@ pub(crate) struct CreateGlvWithdrawalOperation<'a, 'info> {
     swap_paths: &'info [AccountInfo<'info>],
 }
 
-impl<'a, 'info> CreateGlvWithdrawalOperation<'a, 'info> {
+impl CreateGlvWithdrawalOperation<'_, '_> {
     /// Execute.
     ///
     /// # CHECK
@@ -662,7 +662,7 @@ pub(crate) struct ExecuteGlvWithdrawalOperation<'a, 'info> {
     event_emitter: EventEmitter<'a, 'info>,
 }
 
-impl<'a, 'info> ExecuteGlvWithdrawalOperation<'a, 'info> {
+impl ExecuteGlvWithdrawalOperation<'_, '_> {
     /// Execute.
     ///
     /// # CHECK
@@ -849,7 +849,7 @@ impl<'a, 'info> ExecuteGlvWithdrawalOperation<'a, 'info> {
     }
 }
 
-impl<'a, 'info> ValidateOracleTime for ExecuteGlvWithdrawalOperation<'a, 'info> {
+impl ValidateOracleTime for ExecuteGlvWithdrawalOperation<'_, '_> {
     fn oracle_updated_after(&self) -> CoreResult<Option<i64>> {
         Ok(Some(
             self.glv_withdrawal
@@ -1041,7 +1041,7 @@ pub(crate) struct ExecuteGlvShiftOperation<'a, 'info> {
     event_emitter: EventEmitter<'a, 'info>,
 }
 
-impl<'a, 'info> ExecuteGlvShiftOperation<'a, 'info> {
+impl ExecuteGlvShiftOperation<'_, '_> {
     /// Execute.
     ///
     /// # CHECK
@@ -1233,7 +1233,7 @@ impl<'a, 'info> ExecuteGlvShiftOperation<'a, 'info> {
     }
 }
 
-impl<'a, 'info> ValidateOracleTime for ExecuteGlvShiftOperation<'a, 'info> {
+impl ValidateOracleTime for ExecuteGlvShiftOperation<'_, '_> {
     fn oracle_updated_after(&self) -> CoreResult<Option<i64>> {
         Ok(Some(
             self.glv_shift

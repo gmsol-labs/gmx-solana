@@ -13,6 +13,7 @@ cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
+anchor-debug = ["anchor-lang/anchor-debug", "gmsol-store/anchor-debug"]
 debug-msg = []
 idl-build = [
     "anchor-lang/idl-build",
@@ -42,3 +43,4 @@ gmsol-model = { workspace = true, features = ["u128"] }
 num_enum = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 derive_more = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }

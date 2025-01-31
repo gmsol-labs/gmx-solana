@@ -118,7 +118,7 @@ pub trait PositionMut<const DECIMALS: u8>: Position<DECIMALS> + PositionStateMut
     ) -> crate::Result<()>;
 }
 
-impl<'a, const DECIMALS: u8, P: PositionState<DECIMALS>> PositionState<DECIMALS> for &'a mut P {
+impl<const DECIMALS: u8, P: PositionState<DECIMALS>> PositionState<DECIMALS> for &mut P {
     type Num = P::Num;
 
     type Signed = P::Signed;
@@ -148,7 +148,7 @@ impl<'a, const DECIMALS: u8, P: PositionState<DECIMALS>> PositionState<DECIMALS>
     }
 }
 
-impl<'a, const DECIMALS: u8, P: Position<DECIMALS>> Position<DECIMALS> for &'a mut P {
+impl<const DECIMALS: u8, P: Position<DECIMALS>> Position<DECIMALS> for &mut P {
     type Market = P::Market;
 
     fn market(&self) -> &Self::Market {
@@ -172,9 +172,7 @@ impl<'a, const DECIMALS: u8, P: Position<DECIMALS>> Position<DECIMALS> for &'a m
     }
 }
 
-impl<'a, const DECIMALS: u8, P: PositionStateMut<DECIMALS>> PositionStateMut<DECIMALS>
-    for &'a mut P
-{
+impl<const DECIMALS: u8, P: PositionStateMut<DECIMALS>> PositionStateMut<DECIMALS> for &mut P {
     fn collateral_amount_mut(&mut self) -> &mut Self::Num {
         (**self).collateral_amount_mut()
     }
@@ -203,7 +201,7 @@ impl<'a, const DECIMALS: u8, P: PositionStateMut<DECIMALS>> PositionStateMut<DEC
     }
 }
 
-impl<'a, const DECIMALS: u8, P: PositionMut<DECIMALS>> PositionMut<DECIMALS> for &'a mut P {
+impl<const DECIMALS: u8, P: PositionMut<DECIMALS>> PositionMut<DECIMALS> for &mut P {
     fn market_mut(&mut self) -> &mut Self::Market {
         (**self).market_mut()
     }

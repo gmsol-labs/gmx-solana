@@ -57,7 +57,7 @@ pub(crate) struct CreateDepositOperation<'a, 'info> {
     swap_paths: &'info [AccountInfo<'info>],
 }
 
-impl<'a, 'info> CreateDepositOperation<'a, 'info> {
+impl CreateDepositOperation<'_, '_> {
     /// Execute.
     pub(crate) fn execute(self) -> Result<()> {
         self.market.load()?.validate(&self.store.key())?;
@@ -198,7 +198,7 @@ pub(crate) struct ExecuteDepositOperation<'a, 'info> {
     event_emitter: EventEmitter<'a, 'info>,
 }
 
-impl<'a, 'info> ExecuteDepositOperation<'a, 'info> {
+impl ExecuteDepositOperation<'_, '_> {
     pub(crate) fn execute(self) -> Result<bool> {
         let throw_on_execution_error = self.throw_on_execution_error;
         match self.validate_oracle() {
@@ -269,7 +269,7 @@ impl<'a, 'info> ExecuteDepositOperation<'a, 'info> {
     }
 }
 
-impl<'a, 'info> ValidateOracleTime for ExecuteDepositOperation<'a, 'info> {
+impl ValidateOracleTime for ExecuteDepositOperation<'_, '_> {
     fn oracle_updated_after(&self) -> CoreResult<Option<i64>> {
         Ok(Some(
             self.deposit

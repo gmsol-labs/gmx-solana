@@ -127,7 +127,7 @@ impl<'info> internal::Create<'info, Shift> for CreateShift<'info> {
     }
 }
 
-impl<'info> CreateShift<'info> {
+impl CreateShift<'_> {
     fn transfer_tokens(&mut self, params: &CreateShiftParams) -> Result<()> {
         let amount = params.from_market_token_amount;
         let source = &self.from_market_token_source;

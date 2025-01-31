@@ -29,7 +29,7 @@ pub trait SwapMarketMut<const DECIMALS: u8>:
     fn swap_impact_pool_mut(&mut self) -> crate::Result<&mut Self::Pool>;
 }
 
-impl<'a, M: SwapMarket<DECIMALS>, const DECIMALS: u8> SwapMarket<DECIMALS> for &'a mut M {
+impl<M: SwapMarket<DECIMALS>, const DECIMALS: u8> SwapMarket<DECIMALS> for &mut M {
     fn swap_impact_params(&self) -> crate::Result<PriceImpactParams<Self::Num>> {
         (**self).swap_impact_params()
     }
@@ -39,7 +39,7 @@ impl<'a, M: SwapMarket<DECIMALS>, const DECIMALS: u8> SwapMarket<DECIMALS> for &
     }
 }
 
-impl<'a, M: SwapMarketMut<DECIMALS>, const DECIMALS: u8> SwapMarketMut<DECIMALS> for &'a mut M {
+impl<M: SwapMarketMut<DECIMALS>, const DECIMALS: u8> SwapMarketMut<DECIMALS> for &mut M {
     fn swap_impact_pool_mut(&mut self) -> crate::Result<&mut Self::Pool> {
         (**self).swap_impact_pool_mut()
     }

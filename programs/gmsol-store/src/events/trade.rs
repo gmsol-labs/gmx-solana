@@ -175,16 +175,16 @@ impl<'a> From<&'a TradeData> for TradeEventRef<'a> {
     }
 }
 
-impl<'a> anchor_lang::Discriminator for TradeEventRef<'a> {
+impl anchor_lang::Discriminator for TradeEventRef<'_> {
     const DISCRIMINATOR: [u8; 8] = TradeEvent::DISCRIMINATOR;
 }
 
-impl<'a> InitSpace for TradeEventRef<'a> {
+impl InitSpace for TradeEventRef<'_> {
     // The borsh init space of `TradeData` is used here.
     const INIT_SPACE: usize = <TradeData as anchor_lang::Space>::INIT_SPACE;
 }
 
-impl<'a> Event for TradeEventRef<'a> {}
+impl Event for TradeEventRef<'_> {}
 
 #[allow(clippy::enum_variant_names)]
 #[derive(num_enum::IntoPrimitive)]

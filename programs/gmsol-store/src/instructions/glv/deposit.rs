@@ -177,7 +177,7 @@ impl<'info> internal::Create<'info, GlvDeposit> for CreateGlvDeposit<'info> {
     }
 }
 
-impl<'info> CreateGlvDeposit<'info> {
+impl CreateGlvDeposit<'_> {
     fn transfer_tokens(&mut self, params: &CreateGlvDepositParams) -> Result<()> {
         use anchor_spl::token::{transfer_checked, TransferChecked};
 

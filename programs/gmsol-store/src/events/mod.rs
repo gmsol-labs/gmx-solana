@@ -60,7 +60,7 @@ impl<'a, 'info> From<(&'a AccountInfo<'info>, u8)> for EventEmitter<'a, 'info> {
     }
 }
 
-impl<'a, 'info> EventEmitter<'a, 'info> {
+impl EventEmitter<'_, '_> {
     /// Emit event through CPI with the given space.
     pub fn emit_cpi_with_space<E>(&self, event: &E, space: usize) -> Result<()>
     where

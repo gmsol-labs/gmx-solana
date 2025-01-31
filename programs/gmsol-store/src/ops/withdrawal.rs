@@ -57,7 +57,7 @@ pub(crate) struct CreateWithdrawalOperation<'a, 'info> {
     swap_paths: &'info [AccountInfo<'info>],
 }
 
-impl<'a, 'info> CreateWithdrawalOperation<'a, 'info> {
+impl CreateWithdrawalOperation<'_, '_> {
     /// Execute.
     pub(crate) fn execute(self) -> Result<()> {
         self.market.load()?.validate(&self.store.key())?;
@@ -162,7 +162,7 @@ pub(crate) struct ExecuteWithdrawalOperation<'a, 'info> {
     event_emitter: EventEmitter<'a, 'info>,
 }
 
-impl<'a, 'info> ExecuteWithdrawalOperation<'a, 'info> {
+impl ExecuteWithdrawalOperation<'_, '_> {
     pub(crate) fn execute(self) -> Result<Option<(u64, u64)>> {
         let throw_on_execution_error = self.throw_on_execution_error;
         match self.validate_oracle() {
@@ -230,7 +230,7 @@ impl<'a, 'info> ExecuteWithdrawalOperation<'a, 'info> {
     }
 }
 
-impl<'a, 'info> ValidateOracleTime for ExecuteWithdrawalOperation<'a, 'info> {
+impl ValidateOracleTime for ExecuteWithdrawalOperation<'_, '_> {
     fn oracle_updated_after(&self) -> CoreResult<Option<i64>> {
         Ok(Some(
             self.withdrawal

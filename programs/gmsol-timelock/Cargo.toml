@@ -13,6 +13,7 @@ cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
+anchor-debug = ["anchor-lang/anchor-debug", "gmsol-store/anchor-debug"]
 debug-msg = []
 idl-build = ["anchor-lang/idl-build", "gmsol-store/idl-build"]
 debug = ["gmsol-store/debug"]
@@ -30,3 +31,4 @@ bytemuck = { workspace = true }
 num_enum = { workspace = true }
 
 bytes = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }

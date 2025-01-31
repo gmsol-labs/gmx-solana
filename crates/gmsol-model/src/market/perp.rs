@@ -115,7 +115,7 @@ pub trait PerpMarketMut<const DECIMALS: u8>:
     }
 }
 
-impl<'a, M: PerpMarket<DECIMALS>, const DECIMALS: u8> PerpMarket<DECIMALS> for &'a mut M {
+impl<M: PerpMarket<DECIMALS>, const DECIMALS: u8> PerpMarket<DECIMALS> for &mut M {
     fn funding_factor_per_second(&self) -> &Self::Signed {
         (**self).funding_factor_per_second()
     }
@@ -156,7 +156,7 @@ impl<'a, M: PerpMarket<DECIMALS>, const DECIMALS: u8> PerpMarket<DECIMALS> for &
     }
 }
 
-impl<'a, M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> PerpMarketMut<DECIMALS> for &'a mut M {
+impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> PerpMarketMut<DECIMALS> for &mut M {
     fn funding_factor_per_second_mut(&mut self) -> &mut Self::Signed {
         (**self).funding_factor_per_second_mut()
     }

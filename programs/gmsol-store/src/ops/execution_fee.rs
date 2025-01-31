@@ -14,7 +14,7 @@ pub(crate) struct TransferExecutionFeeOperation<'a, 'info> {
     signer_seeds: Option<&'a [&'a [u8]]>,
 }
 
-impl<'a, 'info> TransferExecutionFeeOperation<'a, 'info> {
+impl TransferExecutionFeeOperation<'_, '_> {
     pub(crate) fn execute(self) -> Result<()> {
         use anchor_lang::system_program::{transfer, Transfer};
 
@@ -45,7 +45,7 @@ pub(crate) struct PayExecutionFeeOperation<'info> {
     execution_lamports: u64,
 }
 
-impl<'info> PayExecutionFeeOperation<'info> {
+impl PayExecutionFeeOperation<'_> {
     pub(crate) fn execute(self) -> Result<()> {
         let rent = Rent::get()?;
         let remaining_lamports = self

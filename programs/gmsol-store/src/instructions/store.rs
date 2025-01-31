@@ -67,7 +67,7 @@ pub(crate) fn initialize(ctx: Context<Initialize>, key: String) -> Result<()> {
     Ok(())
 }
 
-impl<'info> Initialize<'info> {
+impl Initialize<'_> {
     fn validate_key(&self, key: &str) -> Result<()> {
         #[cfg(not(feature = "multi-store"))]
         require!(key.is_empty(), CoreError::NonDefaultStore);

@@ -1272,9 +1272,9 @@ impl Deployment {
         self.oracle.pubkey()
     }
 
-    pub(crate) async fn chainlink_pull_oracle<'a>(
+    pub(crate) async fn chainlink_pull_oracle(
         &self,
-        gmsol: &'a gmsol::Client<SignerRef>,
+        gmsol: &gmsol::Client<SignerRef>,
     ) -> eyre::Result<Arc<ChainlinkPullOracleFactory>> {
         let oracle = ChainlinkPullOracleFactory::with_program_id_and_access_controller(
             &self.store,

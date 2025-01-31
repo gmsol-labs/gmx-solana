@@ -12,7 +12,7 @@ impl<'a> OwnedDataDecoder<'a> {
     }
 }
 
-impl<'a> Decoder for OwnedDataDecoder<'a> {
+impl Decoder for OwnedDataDecoder<'_> {
     fn decode_account<V>(&self, _visitor: V) -> Result<V::Value, crate::DecodeError>
     where
         V: crate::Visitor,

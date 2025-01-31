@@ -134,7 +134,7 @@ pub struct ChainlinkPullOracle<'a, C> {
     skip_feeds_preparation: bool,
 }
 
-impl<'a, C> Clone for ChainlinkPullOracle<'a, C> {
+impl<C> Clone for ChainlinkPullOracle<'_, C> {
     fn clone(&self) -> Self {
         Self {
             ctx: self.ctx.clone(),
@@ -160,7 +160,7 @@ impl<'a, C> ChainlinkPullOracle<'a, C> {
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> PullOracle for ChainlinkPullOracle<'a, C> {
+impl<C: Deref<Target = impl Signer> + Clone> PullOracle for ChainlinkPullOracle<'_, C> {
     type PriceUpdates = HashMap<FeedId, ApiReportData>;
 
     async fn fetch_price_updates(

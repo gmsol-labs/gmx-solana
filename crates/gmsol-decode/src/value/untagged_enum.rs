@@ -22,7 +22,6 @@ macro_rules! untagged {
                                 return Ok($name::[<$decoded>](decoded));
                             },
                             Err(err) => {
-                                #[cfg(feature = "tracing")]
                                 $crate::tracing::trace!(%err, "try variant `{}::{}`, failed", stringify!($name), stringify!($decoded));
                             }
                         }

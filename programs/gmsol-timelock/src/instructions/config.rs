@@ -105,7 +105,7 @@ impl<'info> CpiAuthentication<'info> for InitializeConfig<'info> {
     }
 }
 
-impl<'info> InitializeConfig<'info> {
+impl InitializeConfig<'_> {
     fn accept_store_authority(&self, admin_executor_wallet_bump: u8) -> Result<()> {
         use gmsol_store::cpi::{accept_store_authority, accounts::AcceptStoreAuthority};
 

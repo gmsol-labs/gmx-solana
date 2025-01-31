@@ -2430,6 +2430,7 @@ dependencies = [
  "gmsol-store",
  "gmsol-utils",
  "num_enum 0.7.3",
+ "serde",
 ]
 
 [[package]]
@@ -2444,6 +2445,7 @@ dependencies = [
  "gmsol-store",
  "gmsol-utils",
  "num_enum 0.7.3",
+ "serde",
  "strum",
 ]
 

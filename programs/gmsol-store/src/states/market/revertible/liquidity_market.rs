@@ -80,25 +80,25 @@ impl<'a, 'info> RevertibleLiquidityMarket<'a, 'info> {
     }
 }
 
-impl<'a, 'info> Key for RevertibleLiquidityMarket<'a, 'info> {
+impl Key for RevertibleLiquidityMarket<'_, '_> {
     fn key(&self) -> Pubkey {
         self.base.key()
     }
 }
 
-impl<'a, 'info> Revision for RevertibleLiquidityMarket<'a, 'info> {
+impl Revision for RevertibleLiquidityMarket<'_, '_> {
     fn rev(&self) -> u64 {
         self.base().rev()
     }
 }
 
-impl<'a, 'info> HasMarketMeta for RevertibleLiquidityMarket<'a, 'info> {
+impl HasMarketMeta for RevertibleLiquidityMarket<'_, '_> {
     fn market_meta(&self) -> &crate::states::MarketMeta {
         self.base.market_meta()
     }
 }
 
-impl<'a, 'info> Revertible for RevertibleLiquidityMarket<'a, 'info> {
+impl Revertible for RevertibleLiquidityMarket<'_, '_> {
     fn commit(self) {
         if self.to_mint != 0 {
             self.transfer()
@@ -215,8 +215,8 @@ impl<'a, 'info> gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }>
     }
 }
 
-impl<'a, 'info> gmsol_model::BaseMarketMut<{ constants::MARKET_DECIMALS }>
-    for RevertibleLiquidityMarket<'a, 'info>
+impl gmsol_model::BaseMarketMut<{ constants::MARKET_DECIMALS }>
+    for RevertibleLiquidityMarket<'_, '_>
 {
     fn liquidity_pool_mut(&mut self) -> gmsol_model::Result<&mut Self::Pool> {
         self.base.liquidity_pool_mut()
@@ -227,9 +227,7 @@ impl<'a, 'info> gmsol_model::BaseMarketMut<{ constants::MARKET_DECIMALS }>
     }
 }
 
-impl<'a, 'info> gmsol_model::SwapMarket<{ constants::MARKET_DECIMALS }>
-    for RevertibleLiquidityMarket<'a, 'info>
-{
+impl gmsol_model::SwapMarket<{ constants::MARKET_DECIMALS }> for RevertibleLiquidityMarket<'_, '_> {
     fn swap_impact_params(&self) -> gmsol_model::Result<PriceImpactParams<Self::Num>> {
         self.base.swap_impact_params()
     }
@@ -239,16 +237,16 @@ impl<'a, 'info> gmsol_model::SwapMarket<{ constants::MARKET_DECIMALS }>
     }
 }
 
-impl<'a, 'info> gmsol_model::SwapMarketMut<{ constants::MARKET_DECIMALS }>
-    for RevertibleLiquidityMarket<'a, 'info>
+impl gmsol_model::SwapMarketMut<{ constants::MARKET_DECIMALS }>
+    for RevertibleLiquidityMarket<'_, '_>
 {
     fn swap_impact_pool_mut(&mut self) -> gmsol_model::Result<&mut Self::Pool> {
         self.base.swap_impact_pool_mut()
     }
 }
 
-impl<'a, 'info> gmsol_model::PositionImpactMarket<{ constants::MARKET_DECIMALS }>
-    for RevertibleLiquidityMarket<'a, 'info>
+impl gmsol_model::PositionImpactMarket<{ constants::MARKET_DECIMALS }>
+    for RevertibleLiquidityMarket<'_, '_>
 {
     fn position_impact_pool(&self) -> gmsol_model::Result<&Self::Pool> {
         self.base.position_impact_pool()
@@ -270,8 +268,8 @@ impl<'a, 'info> gmsol_model::PositionImpactMarket<{ constants::MARKET_DECIMALS }
     }
 }
 
-impl<'a, 'info> gmsol_model::PositionImpactMarketMut<{ constants::MARKET_DECIMALS }>
-    for RevertibleLiquidityMarket<'a, 'info>
+impl gmsol_model::PositionImpactMarketMut<{ constants::MARKET_DECIMALS }>
+    for RevertibleLiquidityMarket<'_, '_>
 {
     fn position_impact_pool_mut(&mut self) -> gmsol_model::Result<&mut Self::Pool> {
         self.base.position_impact_pool_mut()
@@ -285,8 +283,8 @@ impl<'a, 'info> gmsol_model::PositionImpactMarketMut<{ constants::MARKET_DECIMAL
     }
 }
 
-impl<'a, 'info> gmsol_model::BorrowingFeeMarket<{ constants::MARKET_DECIMALS }>
-    for RevertibleLiquidityMarket<'a, 'info>
+impl gmsol_model::BorrowingFeeMarket<{ constants::MARKET_DECIMALS }>
+    for RevertibleLiquidityMarket<'_, '_>
 {
     fn borrowing_factor_pool(&self) -> gmsol_model::Result<&Self::Pool> {
         self.base.borrowing_factor_pool()
@@ -313,8 +311,8 @@ impl<'a, 'info> gmsol_model::BorrowingFeeMarket<{ constants::MARKET_DECIMALS }>
     }
 }
 
-impl<'a, 'info> gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }>
-    for RevertibleLiquidityMarket<'a, 'info>
+impl gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }>
+    for RevertibleLiquidityMarket<'_, '_>
 {
     fn total_supply(&self) -> Self::Num {
         let supply = u128::from(self.market_token.supply);
@@ -328,8 +326,8 @@ impl<'a, 'info> gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }>
     }
 }
 
-impl<'a, 'info> gmsol_model::LiquidityMarketMut<{ constants::MARKET_DECIMALS }>
-    for RevertibleLiquidityMarket<'a, 'info>
+impl gmsol_model::LiquidityMarketMut<{ constants::MARKET_DECIMALS }>
+    for RevertibleLiquidityMarket<'_, '_>
 {
     fn mint(&mut self, amount: &Self::Num) -> gmsol_model::Result<()> {
         let new_mint: u64 = (*amount)

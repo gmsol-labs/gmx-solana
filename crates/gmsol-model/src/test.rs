@@ -827,7 +827,7 @@ where
     pub fn ops<'a>(
         &'a mut self,
         market: &'a mut TestMarket<T, DECIMALS>,
-    ) -> TestPositionOps<T, DECIMALS> {
+    ) -> TestPositionOps<'a, T, DECIMALS> {
         TestPositionOps {
             market,
             position: self,
@@ -869,7 +869,7 @@ where
     position: &'a mut TestPosition<T, DECIMALS>,
 }
 
-impl<'a, T, const DECIMALS: u8> PositionState<DECIMALS> for TestPositionOps<'a, T, DECIMALS>
+impl<T, const DECIMALS: u8> PositionState<DECIMALS> for TestPositionOps<'_, T, DECIMALS>
 where
     T: CheckedSub + fmt::Display + FixedPointOps<DECIMALS>,
     T::Signed: Num + std::fmt::Debug,
@@ -907,7 +907,7 @@ where
     }
 }
 
-impl<'a, T, const DECIMALS: u8> Position<DECIMALS> for TestPositionOps<'a, T, DECIMALS>
+impl<T, const DECIMALS: u8> Position<DECIMALS> for TestPositionOps<'_, T, DECIMALS>
 where
     T: CheckedSub + fmt::Display + FixedPointOps<DECIMALS>,
     T::Signed: Num + std::fmt::Debug,
@@ -935,7 +935,7 @@ where
     }
 }
 
-impl<'a, T, const DECIMALS: u8> PositionMut<DECIMALS> for TestPositionOps<'a, T, DECIMALS>
+impl<T, const DECIMALS: u8> PositionMut<DECIMALS> for TestPositionOps<'_, T, DECIMALS>
 where
     T: CheckedSub + fmt::Display + FixedPointOps<DECIMALS>,
     T::Signed: Num + std::fmt::Debug,
@@ -971,7 +971,7 @@ where
     }
 }
 
-impl<'a, T, const DECIMALS: u8> PositionStateMut<DECIMALS> for TestPositionOps<'a, T, DECIMALS>
+impl<T, const DECIMALS: u8> PositionStateMut<DECIMALS> for TestPositionOps<'_, T, DECIMALS>
 where
     T: CheckedSub + fmt::Display + FixedPointOps<DECIMALS>,
     T::Signed: Num + std::fmt::Debug,

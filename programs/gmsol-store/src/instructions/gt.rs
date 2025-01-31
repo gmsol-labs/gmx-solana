@@ -53,7 +53,7 @@ impl<'info> internal::Authentication<'info> for InitializeGt<'info> {
     }
 }
 
-impl<'info> InitializeGt<'info> {
+impl InitializeGt<'_> {
     fn initialize_gt_state(
         &self,
         decimals: u8,
@@ -270,7 +270,7 @@ pub(crate) fn request_gt_exchange(ctx: Context<RequestGtExchange>, amount: u64) 
     Ok(())
 }
 
-impl<'info> RequestGtExchange<'info> {
+impl RequestGtExchange<'_> {
     fn validate_and_init_exchange_if_needed(&mut self, bump: u8) -> Result<()> {
         match self.exchange.load_init() {
             Ok(mut exchange) => {

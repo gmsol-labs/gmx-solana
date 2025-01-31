@@ -111,7 +111,6 @@ gmsol-timelock = { workspace = true, features = [
 ] }
 gmsol-model = { workspace = true, features = ["strum", "serde"] }
 gmsol-decode = { workspace = true, optional = true, features = [
-    "tracing",
     "gmsol",
     "solana-decoder",
 ] }

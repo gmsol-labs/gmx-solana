@@ -283,7 +283,7 @@ impl<'a> AsPosition<'a> {
     }
 }
 
-impl<'a> gmsol_model::PositionState<{ constants::MARKET_DECIMALS }> for AsPosition<'a> {
+impl gmsol_model::PositionState<{ constants::MARKET_DECIMALS }> for AsPosition<'_> {
     type Num = u128;
 
     type Signed = i128;
@@ -315,7 +315,7 @@ impl<'a> gmsol_model::PositionState<{ constants::MARKET_DECIMALS }> for AsPositi
     }
 }
 
-impl<'a> gmsol_model::Position<{ constants::MARKET_DECIMALS }> for AsPosition<'a> {
+impl gmsol_model::Position<{ constants::MARKET_DECIMALS }> for AsPosition<'_> {
     type Market = Market;
 
     fn market(&self) -> &Self::Market {

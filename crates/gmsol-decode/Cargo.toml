@@ -5,12 +5,11 @@ edition.workspace = true
 
 [features]
 default = []
-tracing = ["dep:tracing"]
 gmsol = ["gmsol-store/debug", "gmsol-store/display"]
 solana-decoder = ["solana-transaction-status", "bs58"]
 
 [dependencies]
-tracing = { workspace = true, optional = true }
+tracing = { workspace = true }
 thiserror = { workspace = true }
 anchor-lang = { workspace = true }
 solana-sdk = { workspace = true }

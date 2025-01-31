@@ -35,7 +35,7 @@ pub trait LiquidityMarketMut<const DECIMALS: u8>:
     fn burn(&mut self, amount: &Self::Num) -> crate::Result<()>;
 }
 
-impl<'a, M: LiquidityMarket<DECIMALS>, const DECIMALS: u8> LiquidityMarket<DECIMALS> for &'a mut M {
+impl<M: LiquidityMarket<DECIMALS>, const DECIMALS: u8> LiquidityMarket<DECIMALS> for &mut M {
     fn total_supply(&self) -> Self::Num {
         (**self).total_supply()
     }
@@ -45,9 +45,7 @@ impl<'a, M: LiquidityMarket<DECIMALS>, const DECIMALS: u8> LiquidityMarket<DECIM
     }
 }
 
-impl<'a, M: LiquidityMarketMut<DECIMALS>, const DECIMALS: u8> LiquidityMarketMut<DECIMALS>
-    for &'a mut M
-{
+impl<M: LiquidityMarketMut<DECIMALS>, const DECIMALS: u8> LiquidityMarketMut<DECIMALS> for &mut M {
     fn mint(&mut self, amount: &Self::Num) -> Result<(), crate::Error> {
         (**self).mint(amount)
     }

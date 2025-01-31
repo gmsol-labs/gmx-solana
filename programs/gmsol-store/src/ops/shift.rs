@@ -53,7 +53,7 @@ where
     params: &'a CreateShiftParams,
 }
 
-impl<'a, 'info, T> CreateShiftOperation<'a, 'info, T>
+impl<T> CreateShiftOperation<'_, '_, T>
 where
     T: anchor_lang::ZeroCopy + anchor_lang::Owner + Action + InitSpace,
     T: BorrowMut<Shift>,
@@ -163,7 +163,7 @@ pub struct ExecuteShiftOperation<'a, 'info> {
     event_emitter: EventEmitter<'a, 'info>,
 }
 
-impl<'a, 'info> ExecuteShiftOperation<'a, 'info> {
+impl ExecuteShiftOperation<'_, '_> {
     pub(crate) fn execute(self) -> Result<bool> {
         let throw_on_execution_error = self.throw_on_execution_error;
 
@@ -261,7 +261,7 @@ impl<'a, 'info> ExecuteShiftOperation<'a, 'info> {
     }
 }
 
-impl<'a, 'info> ValidateOracleTime for ExecuteShiftOperation<'a, 'info> {
+impl ValidateOracleTime for ExecuteShiftOperation<'_, '_> {
     fn oracle_updated_after(&self) -> CoreResult<Option<i64>> {
         Ok(Some(
             self.shift

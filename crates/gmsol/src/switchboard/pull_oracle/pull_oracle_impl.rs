@@ -74,7 +74,7 @@ pub struct SbPriceUpdates {
     pub oracle_keys: Vec<Pubkey>,
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullOracle<'a, C> {
+impl<C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullOracle<'_, C> {
     type PriceUpdates = SbPriceUpdates;
 
     async fn fetch_price_updates(

@@ -374,7 +374,7 @@ impl<'a, 'info> SwapMarkets<'a, 'info> {
     }
 }
 
-impl<'a, 'info> Revertible for SwapMarkets<'a, 'info> {
+impl Revertible for SwapMarkets<'_, '_> {
     /// Commit the swap.
     /// ## Panic
     /// Panic if one of the commitments panics.
@@ -390,7 +390,7 @@ pub(crate) enum SwapDirection<'a, M> {
     Into(&'a mut M),
 }
 
-impl<'a, M> SwapDirection<'a, M>
+impl<M> SwapDirection<'_, M>
 where
     M: Key,
 {
@@ -401,7 +401,7 @@ where
     }
 }
 
-impl<'a, M> Revision for SwapDirection<'a, M>
+impl<M> Revision for SwapDirection<'_, M>
 where
     M: Revision,
 {
@@ -412,7 +412,7 @@ where
     }
 }
 
-impl<'a, M> SwapDirection<'a, M> {
+impl<M> SwapDirection<'_, M> {
     fn current_market_mut(&mut self) -> &mut M {
         match self {
             Self::From(m) | Self::Into(m) => m,
@@ -430,7 +430,7 @@ impl<'a, M> SwapDirection<'a, M> {
     }
 }
 
-impl<'a, M> SwapDirection<'a, M>
+impl<M> SwapDirection<'_, M>
 where
     M: Key
         + Revision

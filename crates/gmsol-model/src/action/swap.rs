@@ -478,7 +478,7 @@ where
     claimable_fee: M::Pool,
 }
 
-impl<'a, M, const DECIMALS: u8> BaseMarket<DECIMALS> for Cache<'a, M, DECIMALS>
+impl<M, const DECIMALS: u8> BaseMarket<DECIMALS> for Cache<'_, M, DECIMALS>
 where
     M: BaseMarket<DECIMALS>,
 {

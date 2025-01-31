@@ -20,7 +20,7 @@ pub trait AccountAccess {
     fn slot(&self) -> Result<u64, DecodeError>;
 }
 
-impl<'a, A: AccountAccess> AccountAccess for &'a A {
+impl<A: AccountAccess> AccountAccess for &A {
     fn owner(&self) -> Result<Pubkey, DecodeError> {
         (**self).owner()
     }

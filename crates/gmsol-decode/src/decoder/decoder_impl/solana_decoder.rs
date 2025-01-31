@@ -148,7 +148,7 @@ impl<'a> TransactionDecoder<'a> {
     }
 }
 
-impl<'a> Decoder for TransactionDecoder<'a> {
+impl Decoder for TransactionDecoder<'_> {
     fn decode_account<V>(&self, _visitor: V) -> Result<V::Value, DecodeError>
     where
         V: Visitor,
@@ -248,7 +248,7 @@ impl CPIEvent {
     }
 }
 
-impl<'a> Decoder for &'a CPIEvent {
+impl Decoder for &CPIEvent {
     fn decode_account<V>(&self, _visitor: V) -> Result<V::Value, DecodeError>
     where
         V: Visitor,

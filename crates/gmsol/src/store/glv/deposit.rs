@@ -891,8 +891,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
-    for ExecuteGlvDepositBuilder<'a, C>
+impl<C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
+    for ExecuteGlvDepositBuilder<'_, C>
 {
     async fn feed_ids(&mut self) -> crate::Result<FeedIds> {
         let hint = self.prepare_hint().await?;
@@ -910,7 +910,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
     }
 }
 
-impl<'a, C> SetExecutionFee for ExecuteGlvDepositBuilder<'a, C> {
+impl<C> SetExecutionFee for ExecuteGlvDepositBuilder<'_, C> {
     fn set_execution_fee(&mut self, lamports: u64) -> &mut Self {
         self.execution_lamports = lamports;
         self

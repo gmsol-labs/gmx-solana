@@ -301,7 +301,7 @@ impl MulDiv for u64 {
         let x = *self as u128;
         let numerator = *numerator as u128;
         let denominator = *denominator as u128;
-        let ans = (x * numerator + denominator - 1) / denominator;
+        let ans = (x * numerator).div_ceil(denominator);
         ans.try_into().ok()
     }
 }

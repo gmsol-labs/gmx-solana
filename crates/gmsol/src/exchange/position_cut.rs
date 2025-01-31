@@ -5,10 +5,7 @@ use anchor_client::{
     solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey, signer::Signer},
 };
 use anchor_spl::associated_token::get_associated_token_address;
-use gmsol_solana_utils::{
-    bundle_builder::BundleBuilder, compute_budget::ComputeBudget,
-    transaction_builder::TransactionBuilder,
-};
+use gmsol_solana_utils::{bundle_builder::BundleBuilder, compute_budget::ComputeBudget};
 use gmsol_store::{
     accounts, instruction,
     ops::order::PositionCutKind,
@@ -250,7 +247,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteWithPythPrices<'a, C>
     async fn build_rpc_with_price_updates(
         &mut self,
         price_updates: Prices,
-    ) -> crate::Result<Vec<TransactionBuilder<'a, C, ()>>> {
+    ) -> crate::Result<Vec<gmsol_solana_utils::transaction_builder::TransactionBuilder<'a, C, ()>>>
+    {
         let tx = self
             .parse_with_pyth_price_updates(price_updates)
             .build()
@@ -451,9 +449,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
-    for PositionCutBuilder<'a, C>
-{
+impl<C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer for PositionCutBuilder<'_, C> {
     async fn feed_ids(&mut self) -> crate::Result<FeedIds> {
         let hint = self.prepare_hint().await?;
         Ok(FeedIds::new(hint.store_address, hint.tokens_with_feed))
@@ -470,7 +466,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
     }
 }
 
-impl<'a, C> SetExecutionFee for PositionCutBuilder<'a, C> {
+impl<C> SetExecutionFee for PositionCutBuilder<'_, C> {
     fn set_execution_fee(&mut self, lamports: u64) -> &mut Self {
         self.execution_fee = lamports;
         self

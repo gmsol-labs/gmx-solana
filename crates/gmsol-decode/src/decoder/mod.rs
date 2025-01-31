@@ -43,7 +43,7 @@ pub trait Decoder {
         V: Visitor;
 }
 
-impl<'a, D: Decoder> Decoder for &'a D {
+impl<D: Decoder> Decoder for &D {
     fn decode_account<V>(&self, visitor: V) -> Result<V::Value, DecodeError>
     where
         V: Visitor,

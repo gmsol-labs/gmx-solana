@@ -161,7 +161,7 @@ impl<'info> internal::Create<'info, GlvWithdrawal> for CreateGlvWithdrawal<'info
     }
 }
 
-impl<'info> CreateGlvWithdrawal<'info> {
+impl CreateGlvWithdrawal<'_> {
     fn transfer_glv_tokens(&mut self, params: &CreateGlvWithdrawalParams) -> Result<()> {
         use anchor_spl::token_interface::{transfer_checked, TransferChecked};
 

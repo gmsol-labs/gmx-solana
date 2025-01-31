@@ -89,7 +89,7 @@ pub trait BalanceExt: Balance {
 
 impl<P: Balance + ?Sized> BalanceExt for P {}
 
-impl<'a, P: Balance> Balance for &'a P {
+impl<P: Balance> Balance for &P {
     type Num = P::Num;
 
     type Signed = P::Signed;

@@ -28,5 +28,4 @@ pub use self::gmsol::{GMSOLAccountData, GMSOLCPIEvent, GMSOLData};
 
 pub use paste;
 
-#[cfg(feature = "tracing")]
 pub use tracing;

@@ -54,7 +54,7 @@ pub struct CreateDepositBuilder<'a, C> {
     should_unwrap_native_token: bool,
 }
 
-impl<'a, C> CreateDepositBuilder<'a, C> {
+impl<C> CreateDepositBuilder<'_, C> {
     /// Set execution fee. Defaults to min execution fee.
     pub fn execution_fee(&mut self, fee: u64) -> &mut Self {
         self.execution_fee = fee;
@@ -348,9 +348,9 @@ pub struct CloseDepositHint {
     should_unwrap_native_token: bool,
 }
 
-impl<'a> CloseDepositHint {
+impl CloseDepositHint {
     /// Create from deposit.
-    pub fn new(deposit: &'a Deposit) -> Self {
+    pub fn new(deposit: &Deposit) -> Self {
         Self {
             owner: *deposit.header().owner(),
             receiver: deposit.header().receiver(),
@@ -728,8 +728,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
-    for ExecuteDepositBuilder<'a, C>
+impl<C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
+    for ExecuteDepositBuilder<'_, C>
 {
     async fn feed_ids(&mut self) -> crate::Result<FeedIds> {
         let hint = self.prepare_hint().await?;
@@ -747,7 +747,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
     }
 }
 
-impl<'a, C> SetExecutionFee for ExecuteDepositBuilder<'a, C> {
+impl<C> SetExecutionFee for ExecuteDepositBuilder<'_, C> {
     fn set_execution_fee(&mut self, lamports: u64) -> &mut Self {
         self.execution_fee = lamports;
         self

@@ -300,7 +300,7 @@ pub trait InstructionAccess {
     }
 }
 
-impl<'a> InstructionAccess for InstructionRef<'a> {
+impl InstructionAccess for InstructionRef<'_> {
     fn header(&self) -> &InstructionHeader {
         &self.header
     }

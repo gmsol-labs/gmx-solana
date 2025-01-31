@@ -162,6 +162,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PriceUpdateInstructions<'a, C> 
 
 impl<'a, C: Deref<Target = impl Signer> + Clone> PriceUpdateInstructions<'a, C> {
     /// Push a post price update instruction.
+    #[allow(clippy::result_large_err)]
     pub fn try_push_post(
         &mut self,
         instruction: TransactionBuilder<'a, C>,
@@ -171,6 +172,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PriceUpdateInstructions<'a, C> 
     }
 
     /// Push a close instruction.
+    #[allow(clippy::result_large_err)]
     pub fn try_push_close(
         &mut self,
         instruction: TransactionBuilder<'a, C>,

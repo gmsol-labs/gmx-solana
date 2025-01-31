@@ -26,9 +26,7 @@ pub trait BorrowingFeeMarket<const DECIMALS: u8>: BaseMarket<DECIMALS> {
     ) -> crate::Result<BorrowingFeeKinkModelParams<Self::Num>>;
 }
 
-impl<'a, M: BorrowingFeeMarket<DECIMALS>, const DECIMALS: u8> BorrowingFeeMarket<DECIMALS>
-    for &'a mut M
-{
+impl<M: BorrowingFeeMarket<DECIMALS>, const DECIMALS: u8> BorrowingFeeMarket<DECIMALS> for &mut M {
     fn borrowing_factor_pool(&self) -> crate::Result<&Self::Pool> {
         (**self).borrowing_factor_pool()
     }

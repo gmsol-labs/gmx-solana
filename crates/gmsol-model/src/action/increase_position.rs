@@ -450,7 +450,7 @@ where
             .position
             .collateral_amount_mut()
             .checked_add_with_signed(&collateral_delta_amount)
-            .ok_or_else(|| {
+            .ok_or({
                 if is_collateral_delta_positive {
                     crate::Error::Computation("collateral amount overflow")
                 } else {

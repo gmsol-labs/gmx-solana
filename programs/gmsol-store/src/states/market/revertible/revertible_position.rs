@@ -60,16 +60,14 @@ impl<'a, 'info> RevertiblePosition<'a, 'info> {
     }
 }
 
-impl<'a, 'info> Revertible for RevertiblePosition<'a, 'info> {
+impl Revertible for RevertiblePosition<'_, '_> {
     fn commit(mut self) {
         self.market.commit();
         self.storage.state = self.state;
     }
 }
 
-impl<'a, 'info> gmsol_model::PositionState<{ constants::MARKET_DECIMALS }>
-    for RevertiblePosition<'a, 'info>
-{
+impl gmsol_model::PositionState<{ constants::MARKET_DECIMALS }> for RevertiblePosition<'_, '_> {
     type Num = u128;
 
     type Signed = i128;
@@ -126,9 +124,7 @@ impl<'a, 'info> gmsol_model::Position<{ constants::MARKET_DECIMALS }>
     }
 }
 
-impl<'a, 'info> gmsol_model::PositionMut<{ constants::MARKET_DECIMALS }>
-    for RevertiblePosition<'a, 'info>
-{
+impl gmsol_model::PositionMut<{ constants::MARKET_DECIMALS }> for RevertiblePosition<'_, '_> {
     fn market_mut(&mut self) -> &mut Self::Market {
         &mut self.market
     }
@@ -175,9 +171,7 @@ impl<'a, 'info> gmsol_model::PositionMut<{ constants::MARKET_DECIMALS }>
     }
 }
 
-impl<'a, 'info> gmsol_model::PositionStateMut<{ constants::MARKET_DECIMALS }>
-    for RevertiblePosition<'a, 'info>
-{
+impl gmsol_model::PositionStateMut<{ constants::MARKET_DECIMALS }> for RevertiblePosition<'_, '_> {
     fn collateral_amount_mut(&mut self) -> &mut Self::Num {
         self.state.collateral_amount_mut()
     }

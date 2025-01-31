@@ -572,7 +572,7 @@ pub trait TokenMapAccess {
     }
 }
 
-impl<'a> TokenMapAccess for TokenMapRef<'a> {
+impl TokenMapAccess for TokenMapRef<'_> {
     fn get(&self, token: &Pubkey) -> Option<&TokenConfig> {
         self.header.get_token_config_unchecked(token, &self.configs)
     }
@@ -594,7 +594,7 @@ pub trait TokenMapAccessMut {
     ) -> Result<()>;
 }
 
-impl<'a> TokenMapAccessMut for TokenMapMut<'a> {
+impl TokenMapAccessMut for TokenMapMut<'_> {
     fn get_mut(&mut self, token: &Pubkey) -> Option<&mut TokenConfig> {
         self.header
             .get_token_config_mut_unchecked(token, &mut self.configs)

@@ -140,7 +140,7 @@ impl<'info> internal::Create<'info, Withdrawal> for CreateWithdrawal<'info> {
     }
 }
 
-impl<'info> CreateWithdrawal<'info> {
+impl CreateWithdrawal<'_> {
     fn transfer_tokens(&mut self, params: &CreateWithdrawalParams) -> Result<()> {
         let amount = params.market_token_amount;
         let source = &self.market_token_source;

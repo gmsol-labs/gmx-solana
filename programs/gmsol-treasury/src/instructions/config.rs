@@ -58,7 +58,7 @@ pub(crate) fn initialize_config(ctx: Context<InitializeConfig>) -> Result<()> {
     Ok(())
 }
 
-impl<'info> InitializeConfig<'info> {
+impl InitializeConfig<'_> {
     fn accept_receiver(&self, receiver_bump: u8) -> Result<()> {
         if self.store.load()?.receiver() != self.receiver.key() {
             let signer = ReceiverSigner::new(self.config.key(), receiver_bump);

@@ -410,7 +410,7 @@ impl<'info> internal::Create<'info, Order> for CreateOrder<'info> {
     }
 }
 
-impl<'info> CreateOrder<'info> {
+impl CreateOrder<'_> {
     fn transfer_tokens(&mut self, params: &CreateOrderParams) -> Result<()> {
         let kind = params.kind;
         if !matches!(

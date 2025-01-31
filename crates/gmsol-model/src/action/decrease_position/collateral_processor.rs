@@ -339,7 +339,7 @@ where
     processor: &'a mut CollateralProcessor<'market, M, DECIMALS>,
 }
 
-impl<'a, 'market, M, const DECIMALS: u8> Deref for Context<'a, 'market, M, DECIMALS>
+impl<'market, M, const DECIMALS: u8> Deref for Context<'_, 'market, M, DECIMALS>
 where
     M: BaseMarket<DECIMALS>,
 {
@@ -350,7 +350,7 @@ where
     }
 }
 
-impl<'a, 'market, M, const DECIMALS: u8> DerefMut for Context<'a, 'market, M, DECIMALS>
+impl<M, const DECIMALS: u8> DerefMut for Context<'_, '_, M, DECIMALS>
 where
     M: BaseMarket<DECIMALS>,
 {
@@ -359,7 +359,7 @@ where
     }
 }
 
-impl<'a, 'market, M, const DECIMALS: u8> Context<'a, 'market, M, DECIMALS>
+impl<M, const DECIMALS: u8> Context<'_, '_, M, DECIMALS>
 where
     M: PerpMarketMut<DECIMALS>,
 {

@@ -58,7 +58,7 @@ impl<'a, C> PythPullOracleWithHermes<'a, C> {
     }
 }
 
-impl<'a, C> PullOracle for PythPullOracleWithHermes<'a, C> {
+impl<C> PullOracle for PythPullOracleWithHermes<'_, C> {
     type PriceUpdates = PriceUpdates;
 
     async fn fetch_price_updates(
@@ -96,7 +96,7 @@ impl<'a, C> PullOracle for PythPullOracleWithHermes<'a, C> {
     }
 }
 
-impl<'r, 'a, C> PullOracle for &'r PythPullOracleWithHermes<'a, C> {
+impl<C> PullOracle for &PythPullOracleWithHermes<'_, C> {
     type PriceUpdates = PriceUpdates;
 
     async fn fetch_price_updates(

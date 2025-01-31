@@ -148,7 +148,7 @@ impl<'info> internal::Create<'info, Deposit> for CreateDeposit<'info> {
     }
 }
 
-impl<'info> CreateDeposit<'info> {
+impl CreateDeposit<'_> {
     fn transfer_tokens(&mut self, params: &CreateDepositParams) -> Result<()> {
         use anchor_spl::token::{transfer_checked, TransferChecked};
 

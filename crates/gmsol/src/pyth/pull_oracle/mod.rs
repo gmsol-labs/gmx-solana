@@ -52,7 +52,7 @@ pub struct WithPythPrices<'a, C> {
     close: BundleBuilder<'a, C>,
 }
 
-impl<'a, S, C> WithPythPrices<'a, C>
+impl<S, C> WithPythPrices<'_, C>
 where
     C: Deref<Target = S> + Clone,
     S: Signer,

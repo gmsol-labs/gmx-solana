@@ -155,8 +155,8 @@ impl<'a> MarketStateUpdatedRef<'a> {
     }
 }
 
-impl<'a> anchor_lang::Discriminator for MarketStateUpdatedRef<'a> {
+impl anchor_lang::Discriminator for MarketStateUpdatedRef<'_> {
     const DISCRIMINATOR: [u8; 8] = MarketStateUpdated::DISCRIMINATOR;
 }
 
-impl<'a> Event for MarketStateUpdatedRef<'a> {}
+impl Event for MarketStateUpdatedRef<'_> {}

@@ -36,8 +36,8 @@ pub trait PositionImpactMarketMut<const DECIMALS: u8>:
     fn just_passed_in_seconds_for_position_impact_distribution(&mut self) -> crate::Result<u64>;
 }
 
-impl<'a, M: PositionImpactMarket<DECIMALS>, const DECIMALS: u8> PositionImpactMarket<DECIMALS>
-    for &'a mut M
+impl<M: PositionImpactMarket<DECIMALS>, const DECIMALS: u8> PositionImpactMarket<DECIMALS>
+    for &mut M
 {
     fn position_impact_pool(&self) -> crate::Result<&Self::Pool> {
         (**self).position_impact_pool()
@@ -58,8 +58,8 @@ impl<'a, M: PositionImpactMarket<DECIMALS>, const DECIMALS: u8> PositionImpactMa
     }
 }
 
-impl<'a, M: PositionImpactMarketMut<DECIMALS>, const DECIMALS: u8> PositionImpactMarketMut<DECIMALS>
-    for &'a mut M
+impl<M: PositionImpactMarketMut<DECIMALS>, const DECIMALS: u8> PositionImpactMarketMut<DECIMALS>
+    for &mut M
 {
     fn position_impact_pool_mut(&mut self) -> crate::Result<&mut Self::Pool> {
         (**self).position_impact_pool_mut()

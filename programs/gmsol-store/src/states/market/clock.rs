@@ -8,7 +8,7 @@ pub struct AsClockMut<'a> {
     last: &'a mut i64,
 }
 
-impl<'a> AsClockMut<'a> {
+impl AsClockMut<'_> {
     /// Just passed in seconds.
     pub fn just_passed_in_seconds(&mut self) -> gmsol_model::Result<u64> {
         let current = Clock::get().map_err(Error::from)?.unix_timestamp;
@@ -33,7 +33,7 @@ pub struct AsClock<'a> {
     last: &'a i64,
 }
 
-impl<'a> AsClock<'a> {
+impl AsClock<'_> {
     /// Passed in seconds.
     pub fn passed_in_seconds(&mut self) -> gmsol_model::Result<u64> {
         let current = Clock::get().map_err(Error::from)?.unix_timestamp;

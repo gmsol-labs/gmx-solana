@@ -327,7 +327,7 @@ impl<'a, M> AsLiquidityMarket<'a, M> {
     }
 }
 
-impl<'a, M> HasMarketMeta for AsLiquidityMarket<'a, M>
+impl<M> HasMarketMeta for AsLiquidityMarket<'_, M>
 where
     M: AsRef<Market>,
 {
@@ -340,7 +340,7 @@ where
     }
 }
 
-impl<'a, M> gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for AsLiquidityMarket<'a, M>
+impl<M> gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for AsLiquidityMarket<'_, M>
 where
     M: gmsol_model::BaseMarket<
         { constants::MARKET_DECIMALS },
@@ -412,8 +412,8 @@ where
     }
 }
 
-impl<'a, M> gmsol_model::PositionImpactMarket<{ constants::MARKET_DECIMALS }>
-    for AsLiquidityMarket<'a, M>
+impl<M> gmsol_model::PositionImpactMarket<{ constants::MARKET_DECIMALS }>
+    for AsLiquidityMarket<'_, M>
 where
     M: gmsol_model::PositionImpactMarket<
         { constants::MARKET_DECIMALS },
@@ -442,8 +442,7 @@ where
     }
 }
 
-impl<'a, M> gmsol_model::BorrowingFeeMarket<{ constants::MARKET_DECIMALS }>
-    for AsLiquidityMarket<'a, M>
+impl<M> gmsol_model::BorrowingFeeMarket<{ constants::MARKET_DECIMALS }> for AsLiquidityMarket<'_, M>
 where
     M: gmsol_model::BorrowingFeeMarket<
         { constants::MARKET_DECIMALS },
@@ -475,8 +474,7 @@ where
     }
 }
 
-impl<'a, M> gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }>
-    for AsLiquidityMarket<'a, M>
+impl<M> gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }> for AsLiquidityMarket<'_, M>
 where
     M: gmsol_model::BorrowingFeeMarket<
         { constants::MARKET_DECIMALS },
