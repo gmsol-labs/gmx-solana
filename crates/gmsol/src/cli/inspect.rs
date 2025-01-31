@@ -20,6 +20,7 @@ use gmsol_model::{
     price::{Price, Prices},
     Balance, BalanceExt, ClockKind, PnlFactorKind, PoolKind, PositionExt, PositionStateExt,
 };
+use gmsol_solana_utils::utils::inspect_transaction;
 use gmsol_store::states::{
     self, AddressKey, AmountKey, FactorKey, MarketConfigKey, PriceProviderKind,
 };
@@ -1184,7 +1185,7 @@ impl InspectArgs {
                 let message = Message::new(&instructions, Some(&client.payer()));
                 println!(
                     "{}",
-                    gmsol::utils::instruction::inspect_transaction(
+                    inspect_transaction(
                         &VersionedMessage::Legacy(message),
                         Some(client.cluster()),
                         *raw,
@@ -1207,7 +1208,7 @@ impl InspectArgs {
                 let message = vault_transaction.to_message();
                 println!(
                     "{}",
-                    gmsol::utils::instruction::inspect_transaction(
+                    inspect_transaction(
                         &VersionedMessage::V0(message),
                         Some(client.cluster()),
                         *raw

@@ -39,9 +39,10 @@ use gmsol::{
         glv::GlvMarketFlag, FactorKey, MarketConfigKey, PriceProviderKind, RoleKey,
         UpdateTokenConfigParams,
     },
-    utils::{shared_signer, SendTransactionOptions, SignerRef, TransactionBuilder},
+    utils::{shared_signer, SignerRef},
     Client, ClientOptions,
 };
+use gmsol_solana_utils::bundle_builder::{BundleBuilder, SendBundleOptions};
 use rand::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
 use tokio::{
     sync::{Mutex, OnceCell, OwnedMutexGuard},
@@ -388,13 +389,13 @@ impl Deployment {
             .client
             .store_rpc()
             .program(ID)
-            .accounts(accounts::Initialize {
+            .anchor_accounts(accounts::Initialize {
                 payer: self.client.payer(),
                 verifier_account: chainlink_verifier,
                 access_controller,
                 system_program: system_program::ID,
             })
-            .args(instruction::Initialize { user: self.store })
+            .anchor_args(instruction::Initialize { user: self.store })
             .send()
             .await?;
 
@@ -452,11 +453,11 @@ impl Deployment {
         use anchor_spl::token::{Mint, ID};
         use spl_token::instruction;
 
-        let client = self.client.store_program().solana_rpc();
+        let client = self.client.store_program().rpc();
         let rent = client
             .get_minimum_balance_for_rent_exemption(Mint::LEN)
             .await?;
-        let mut builder = TransactionBuilder::new(client);
+        let mut builder = BundleBuilder::from_rpc_client(client);
 
         let tokens = configs
             .into_iter()
@@ -516,8 +517,8 @@ impl Deployment {
         use anchor_spl::token::ID;
         use spl_associated_token_account::instruction;
 
-        let client = self.client.store_program().solana_rpc();
-        let mut builder = TransactionBuilder::new(client);
+        let client = self.client.store_program().rpc();
+        let mut builder = BundleBuilder::from_rpc_client(client);
 
         let payer = self.client.payer();
 
@@ -538,7 +539,7 @@ impl Deployment {
         }
 
         match builder
-            .send_all_with_opts(SendTransactionOptions {
+            .send_all_with_opts(SendBundleOptions {
                 config: RpcSendTransactionConfig {
                     skip_preflight: true,
                     ..Default::default()
@@ -926,12 +927,12 @@ impl Deployment {
     async fn fund_users(&self) -> eyre::Result<()> {
         const LAMPORTS: u64 = 2_000_000_000;
 
-        let client = self.client.store_program().solana_rpc();
+        let client = self.client.store_program().rpc();
         let payer = self.client.payer();
         let lamports = client.get_balance(&payer).await?;
         tracing::info!(%payer, "before funding users: {lamports}");
 
-        let mut builder = TransactionBuilder::new(client);
+        let mut builder = BundleBuilder::from_rpc_client(client);
         builder.push_many(
             self.users
                 .pubkeys()
@@ -962,8 +963,7 @@ impl Deployment {
         use spl_token::{instruction, native_mint};
 
         let payer = self.client.payer();
-        let client = self.client.store_program().solana_rpc();
-        let mut builder = TransactionBuilder::new(client);
+        let mut builder = self.client.bundle();
 
         let users = self.users.keypairs().await.into_iter().collect::<Vec<_>>();
         for user in &users {
@@ -996,10 +996,10 @@ impl Deployment {
     }
 
     async fn refund_payer(&self) -> eyre::Result<()> {
-        let client = self.client.store_program().solana_rpc();
+        let client = self.client.store_program().rpc();
         let payer = self.client.payer();
 
-        let mut builder = TransactionBuilder::new(self.client.store_program().solana_rpc());
+        let mut builder = self.client.bundle();
 
         let users = self.users.keypairs().await.into_iter().collect::<Vec<_>>();
         for user in &users {
@@ -1138,7 +1138,6 @@ impl Deployment {
                 .store_rpc()
                 .pre_instruction(system_instruction::transfer(&payer, &account, amount))
                 .pre_instruction(instruction::sync_native(&ID, &account)?)
-                .into_anchor_request()
                 .send()
                 .await?
         } else {
@@ -1153,7 +1152,6 @@ impl Deployment {
                     amount,
                     token.config.decimals,
                 )?)
-                .into_anchor_request()
                 .send()
                 .await?
         };

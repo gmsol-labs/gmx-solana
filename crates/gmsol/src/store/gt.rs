@@ -1,10 +1,11 @@
 use std::{future::Future, ops::Deref};
 
-use crate::utils::{RpcBuilder, ZeroCopy};
+use crate::utils::ZeroCopy;
 use anchor_client::{
     anchor_lang::system_program,
     solana_sdk::{pubkey::Pubkey, signer::Signer},
 };
+use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_store::{
     accounts, instruction,
     states::gt::{get_time_window_index, GtExchange},
@@ -21,20 +22,24 @@ pub trait GtOps<C> {
         grow_factor: u128,
         grow_step: u64,
         ranks: Vec<u64>,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Configurate GT order fee dicounts.
     fn gt_set_order_fee_discount_factors(
         &self,
         store: &Pubkey,
         factors: Vec<u128>,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Configurate GT referral rewards
-    fn gt_set_referral_reward_factors(&self, store: &Pubkey, factors: Vec<u128>) -> RpcBuilder<C>;
+    fn gt_set_referral_reward_factors(
+        &self,
+        store: &Pubkey,
+        factors: Vec<u128>,
+    ) -> TransactionBuilder<C>;
 
     /// Configurate the time window size for GT exchange.
-    fn gt_set_exchange_time_window(&self, store: &Pubkey, window: u32) -> RpcBuilder<C>;
+    fn gt_set_exchange_time_window(&self, store: &Pubkey, window: u32) -> TransactionBuilder<C>;
 
     /// Initialize GT exchange vault with the given time window index.
     fn prepare_gt_exchange_vault_with_time_window_index(
@@ -42,14 +47,14 @@ pub trait GtOps<C> {
         store: &Pubkey,
         time_window_index: i64,
         time_window: u32,
-    ) -> RpcBuilder<C, Pubkey>;
+    ) -> TransactionBuilder<C, Pubkey>;
 
     /// Prepare GT exchange vault with the given time window.
     fn prepare_gt_exchange_vault_with_time_window(
         &self,
         store: &Pubkey,
         time_window: u32,
-    ) -> crate::Result<RpcBuilder<C, Pubkey>> {
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>> {
         Ok(self.prepare_gt_exchange_vault_with_time_window_index(
             store,
             current_time_window_index(time_window)?,
@@ -58,7 +63,7 @@ pub trait GtOps<C> {
     }
 
     /// Confirm the given GT exchange vault.
-    fn confirm_gt_exchange_vault(&self, store: &Pubkey, vault: &Pubkey) -> RpcBuilder<C>;
+    fn confirm_gt_exchange_vault(&self, store: &Pubkey, vault: &Pubkey) -> TransactionBuilder<C>;
 
     /// Request GT exchange with the given time window index.
     fn request_gt_exchange_with_time_window_index(
@@ -67,7 +72,7 @@ pub trait GtOps<C> {
         time_window_index: i64,
         time_window: u32,
         amount: u64,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Request GT exchange with the given time window.
     fn request_gt_exchange_with_time_window(
@@ -75,7 +80,7 @@ pub trait GtOps<C> {
         store: &Pubkey,
         time_window: u32,
         amount: u64,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         Ok(self.request_gt_exchange_with_time_window_index(
             store,
             current_time_window_index(time_window)?,
@@ -91,7 +96,7 @@ pub trait GtOps<C> {
         exchange: &Pubkey,
         hint_owner: Option<&Pubkey>,
         hint_vault: Option<&Pubkey>,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
@@ -103,14 +108,14 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
         grow_factor: u128,
         grow_step: u64,
         ranks: Vec<u64>,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .accounts(accounts::InitializeGt {
+            .anchor_accounts(accounts::InitializeGt {
                 authority: self.payer(),
                 store: *store,
                 system_program: system_program::ID,
             })
-            .args(instruction::InitializeGt {
+            .anchor_args(instruction::InitializeGt {
                 decimals,
                 initial_minting_cost,
                 grow_factor,
@@ -123,31 +128,35 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
         &self,
         store: &Pubkey,
         factors: Vec<u128>,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .accounts(accounts::ConfigurateGt {
+            .anchor_accounts(accounts::ConfigurateGt {
                 authority: self.payer(),
                 store: *store,
             })
-            .args(instruction::GtSetOrderFeeDiscountFactors { factors })
+            .anchor_args(instruction::GtSetOrderFeeDiscountFactors { factors })
     }
 
-    fn gt_set_referral_reward_factors(&self, store: &Pubkey, factors: Vec<u128>) -> RpcBuilder<C> {
+    fn gt_set_referral_reward_factors(
+        &self,
+        store: &Pubkey,
+        factors: Vec<u128>,
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .accounts(accounts::ConfigurateGt {
+            .anchor_accounts(accounts::ConfigurateGt {
                 authority: self.payer(),
                 store: *store,
             })
-            .args(instruction::GtSetReferralRewardFactors { factors })
+            .anchor_args(instruction::GtSetReferralRewardFactors { factors })
     }
 
-    fn gt_set_exchange_time_window(&self, store: &Pubkey, window: u32) -> RpcBuilder<C> {
+    fn gt_set_exchange_time_window(&self, store: &Pubkey, window: u32) -> TransactionBuilder<C> {
         self.store_rpc()
-            .accounts(accounts::ConfigurateGt {
+            .anchor_accounts(accounts::ConfigurateGt {
                 authority: self.payer(),
                 store: *store,
             })
-            .args(instruction::GtSetExchangeTimeWindow { window })
+            .anchor_args(instruction::GtSetExchangeTimeWindow { window })
     }
 
     fn prepare_gt_exchange_vault_with_time_window_index(
@@ -155,29 +164,29 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
         store: &Pubkey,
         time_window_index: i64,
         time_window: u32,
-    ) -> RpcBuilder<C, Pubkey> {
+    ) -> TransactionBuilder<C, Pubkey> {
         let vault = self.find_gt_exchange_vault_address(store, time_window_index, time_window);
         self.store_rpc()
-            .accounts(accounts::PrepareGtExchangeVault {
+            .anchor_accounts(accounts::PrepareGtExchangeVault {
                 payer: self.payer(),
                 store: *store,
                 vault,
                 system_program: system_program::ID,
             })
-            .args(instruction::PrepareGtExchangeVault { time_window_index })
-            .with_output(vault)
+            .anchor_args(instruction::PrepareGtExchangeVault { time_window_index })
+            .output(vault)
     }
 
-    fn confirm_gt_exchange_vault(&self, store: &Pubkey, vault: &Pubkey) -> RpcBuilder<C> {
+    fn confirm_gt_exchange_vault(&self, store: &Pubkey, vault: &Pubkey) -> TransactionBuilder<C> {
         self.store_rpc()
-            .accounts(accounts::ConfirmGtExchangeVault {
+            .anchor_accounts(accounts::ConfirmGtExchangeVault {
                 authority: self.payer(),
                 store: *store,
                 vault: *vault,
                 event_authority: self.store_event_authority(),
                 program: *self.store_program_id(),
             })
-            .args(instruction::ConfirmGtExchangeVault {})
+            .anchor_args(instruction::ConfirmGtExchangeVault {})
     }
 
     fn request_gt_exchange_with_time_window_index(
@@ -186,11 +195,11 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
         time_window_index: i64,
         time_window: u32,
         amount: u64,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let owner = self.payer();
         let vault = self.find_gt_exchange_vault_address(store, time_window_index, time_window);
         self.store_rpc()
-            .accounts(accounts::RequestGtExchange {
+            .anchor_accounts(accounts::RequestGtExchange {
                 owner,
                 store: *store,
                 user: self.find_user_address(store, &owner),
@@ -200,7 +209,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
                 event_authority: self.store_event_authority(),
                 program: *self.store_program_id(),
             })
-            .args(instruction::RequestGtExchange { amount })
+            .anchor_args(instruction::RequestGtExchange { amount })
     }
 
     async fn close_gt_exchange(
@@ -209,7 +218,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
         exchange: &Pubkey,
         hint_owner: Option<&Pubkey>,
         hint_vault: Option<&Pubkey>,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let (owner, vault) = match (hint_owner, hint_vault) {
             (Some(owner), Some(vault)) => (*owner, *vault),
             _ => {
@@ -224,14 +233,14 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
 
         Ok(self
             .store_rpc()
-            .accounts(accounts::CloseGtExchange {
+            .anchor_accounts(accounts::CloseGtExchange {
                 authority: self.payer(),
                 store: *store,
                 owner,
                 vault,
                 exchange: *exchange,
             })
-            .args(instruction::CloseGtExchange {}))
+            .anchor_args(instruction::CloseGtExchange {}))
     }
 }
 

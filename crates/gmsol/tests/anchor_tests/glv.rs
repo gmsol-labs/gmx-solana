@@ -358,7 +358,7 @@ async fn glv_shift() -> eyre::Result<()> {
         .build_with_address()?;
     let err = rpc.send().await.expect_err("should throw an error");
     assert_eq!(
-        err.anchor_error_code(),
+        gmsol::Error::from(err).anchor_error_code(),
         Some(CoreError::GlvShiftIntervalNotYetPassed.into())
     );
 

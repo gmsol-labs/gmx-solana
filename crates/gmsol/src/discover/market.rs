@@ -5,11 +5,11 @@ use std::{
     time::Duration,
 };
 
-use anchor_client::{
-    solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair},
-    Cluster,
+use anchor_client::solana_sdk::{
+    commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair,
 };
 use futures_util::Stream;
+use gmsol_solana_utils::cluster::Cluster;
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tower::discover::Change;

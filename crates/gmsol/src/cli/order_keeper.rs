@@ -18,12 +18,13 @@ use gmsol::{
         WithdrawalCreated,
     },
     utils::{
-        builder::{MakeTransactionBuilder, SetExecutionFee},
+        builder::{MakeBundleBuilder, SetExecutionFee},
         instruction::InstructionSerialization,
-        ComputeBudget, SendTransactionOptions, ZeroCopy,
+        ZeroCopy,
     },
 };
 use gmsol_model::PositionState;
+use gmsol_solana_utils::{bundle_builder::SendBundleOptions, compute_budget::ComputeBudget};
 use gmsol_store::states::PriceProviderKind;
 use tokio::{sync::mpsc::UnboundedSender, time::Instant};
 
@@ -284,7 +285,7 @@ impl KeeperArgs {
                     let compute_unit_price_micro_lamports =
                         self.get_compute_budget().map(|budget| budget.price());
                     let signatures = builder
-                        .send_all_with_opts(SendTransactionOptions {
+                        .send_all_with_opts(SendBundleOptions {
                             compute_unit_price_micro_lamports,
                             ..Default::default()
                         })
@@ -303,9 +304,9 @@ impl KeeperArgs {
                         builder
                             .build()
                             .and_then(|builder| async move {
-                                builder
+                                Ok(builder
                                     .estimate_execution_fee(Some(self.compute_unit_price))
-                                    .await
+                                    .await?)
                             })
                             .right_future()
                     })
@@ -348,7 +349,7 @@ impl KeeperArgs {
                     let compute_unit_price_micro_lamports =
                         self.get_compute_budget().map(|budget| budget.price());
                     let signatures = builder
-                        .send_all_with_opts(SendTransactionOptions {
+                        .send_all_with_opts(SendBundleOptions {
                             compute_unit_price_micro_lamports,
                             ..Default::default()
                         })
@@ -392,9 +393,9 @@ impl KeeperArgs {
                         builder
                             .build()
                             .and_then(|builder| async move {
-                                builder
+                                Ok(builder
                                     .estimate_execution_fee(Some(self.compute_unit_price))
-                                    .await
+                                    .await?)
                             })
                             .right_future()
                     })
@@ -437,7 +438,7 @@ impl KeeperArgs {
                     let compute_unit_price_micro_lamports =
                         self.get_compute_budget().map(|budget| budget.price());
                     let signatures = builder
-                        .send_all_with_opts(SendTransactionOptions {
+                        .send_all_with_opts(SendBundleOptions {
                             compute_unit_price_micro_lamports,
                             ..Default::default()
                         })
@@ -458,9 +459,9 @@ impl KeeperArgs {
                         builder
                             .build()
                             .and_then(|builder| async move {
-                                builder
+                                Ok(builder
                                     .estimate_execution_fee(Some(self.compute_unit_price))
-                                    .await
+                                    .await?)
                             })
                             .right_future()
                     })
@@ -503,7 +504,7 @@ impl KeeperArgs {
                     let compute_unit_price_micro_lamports =
                         self.get_compute_budget().map(|budget| budget.price());
                     let signatures = builder
-                        .send_all_with_opts(SendTransactionOptions {
+                        .send_all_with_opts(SendBundleOptions {
                             compute_unit_price_micro_lamports,
                             ..Default::default()
                         })
@@ -536,9 +537,9 @@ impl KeeperArgs {
                         builder
                             .build()
                             .and_then(|builder| async move {
-                                builder
+                                Ok(builder
                                     .estimate_execution_fee(Some(self.compute_unit_price))
-                                    .await
+                                    .await?)
                             })
                             .right_future()
                     })
@@ -581,7 +582,7 @@ impl KeeperArgs {
                     let compute_unit_price_micro_lamports =
                         self.get_compute_budget().map(|budget| budget.price());
                     let signatures = builder
-                        .send_all_with_opts(SendTransactionOptions {
+                        .send_all_with_opts(SendBundleOptions {
                             compute_unit_price_micro_lamports,
                             ..Default::default()
                         })
@@ -631,9 +632,11 @@ impl KeeperArgs {
                     let signatures = builder
                         .build()
                         .await?
-                        .into_anchor_request_with_options(false, compute_unit_price_micro_lamports)
-                        .0
-                        .send()
+                        .send_with_options(
+                            false,
+                            compute_unit_price_micro_lamports,
+                            Default::default(),
+                        )
                         .await?;
                     tracing::info!(%market_token, ?side, "updated ADL state with txs: {signatures:#?}");
                 }
@@ -693,7 +696,7 @@ impl KeeperArgs {
                     let compute_unit_price_micro_lamports =
                         self.get_compute_budget().map(|budget| budget.price());
                     let signatures = builder
-                        .send_all_with_opts(SendTransactionOptions {
+                        .send_all_with_opts(SendBundleOptions {
                             compute_unit_price_micro_lamports,
                             ..Default::default()
                         })
@@ -735,7 +738,7 @@ impl KeeperArgs {
                     let compute_unit_price_micro_lamports =
                         self.get_compute_budget().map(|budget| budget.price());
                     let signatures = builder
-                        .send_all_with_opts(SendTransactionOptions {
+                        .send_all_with_opts(SendBundleOptions {
                             compute_unit_price_micro_lamports,
                             ..Default::default()
                         })
@@ -777,7 +780,7 @@ impl KeeperArgs {
                     let compute_unit_price_micro_lamports =
                         self.get_compute_budget().map(|budget| budget.price());
                     let signatures = builder
-                        .send_all_with_opts(SendTransactionOptions {
+                        .send_all_with_opts(SendBundleOptions {
                             compute_unit_price_micro_lamports,
                             ..Default::default()
                         })

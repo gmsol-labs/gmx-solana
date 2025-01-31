@@ -4,12 +4,10 @@ use anchor_client::{
     anchor_lang::Id,
     solana_sdk::{pubkey::Pubkey, signer::Signer},
 };
+use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_store::states::{common::TokensWithFeed, Market, Pyth};
 
-use crate::{
-    store::utils::FeedsParser,
-    utils::{fix_optional_account_metas, RpcBuilder},
-};
+use crate::{store::utils::FeedsParser, utils::fix_optional_account_metas};
 
 /// The compute budget for `auto_deleverage`.
 pub const ADL_COMPUTE_BUDGET: u32 = 800_000;
@@ -78,8 +76,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> UpdateAdlBuilder<'a, C> {
         self
     }
 
-    /// Build [`RpcBuilder`] for auto-delevearaging the position.
-    pub async fn build(&mut self) -> crate::Result<RpcBuilder<'a, C>> {
+    /// Build [`TransactionBuilder`] for auto-delevearaging the position.
+    pub async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
         let feeds = self
             .feeds_parser
@@ -102,7 +100,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> UpdateAdlBuilder<'a, C> {
                 &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
                 self.client.store_program_id(),
             ))
-            .args(gmsol_store::instruction::UpdateAdlState {
+            .anchor_args(gmsol_store::instruction::UpdateAdlState {
                 is_long: self.is_long,
             })
             .accounts(feeds);
@@ -176,7 +174,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteWithPythPrices<'a, C>
     async fn build_rpc_with_price_updates(
         &mut self,
         price_updates: Prices,
-    ) -> crate::Result<Vec<crate::utils::RpcBuilder<'a, C, ()>>> {
+    ) -> crate::Result<Vec<TransactionBuilder<'a, C, ()>>> {
         let tx = self
             .parse_with_pyth_price_updates(price_updates)
             .build()

@@ -1,8 +1,9 @@
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use gmsol::{
     store::{roles::RolesOps, store_ops::StoreOps},
-    utils::{instruction::InstructionSerialization, TransactionBuilder},
+    utils::instruction::InstructionSerialization,
 };
+use gmsol_solana_utils::bundle_builder::BundleBuilder;
 use gmsol_store::states::RoleKey;
 use gmsol_timelock::roles as timelock_roles;
 use gmsol_treasury::roles as treasury_roles;
@@ -75,11 +76,12 @@ impl AdminArgs {
                     "Initialize store with key={store_key}, address={store}, admin={}",
                     client.payer()
                 );
-                crate::utils::send_or_serialize(
-                    client
-                        .initialize_store::<Keypair>(store_key, None, None, None)
-                        .into_anchor_request_without_compute_budget(),
+                crate::utils::send_or_serialize_rpc(
+                    &store,
+                    client.initialize_store::<Keypair>(store_key, None, None, None),
+                    timelock,
                     serialize_only,
+                    false,
                     |signature| {
                         tracing::info!("initialized a new data store at tx {signature}");
                         println!("{store}");
@@ -109,10 +111,10 @@ impl AdminArgs {
                     )
                     .await?;
                 } else {
-                    let transaction = rpc.into_anchor_request().signed_transaction().await?;
+                    let transaction = rpc.signed_transaction_with_options(true, None).await?;
                     let response = client
                         .store_program()
-                        .solana_rpc()
+                        .rpc()
                         .simulate_transaction(&transaction)
                         .await
                         .map_err(anchor_client::ClientError::from)?;
@@ -157,10 +159,10 @@ impl AdminArgs {
                     )
                     .await?;
                 } else {
-                    let transaction = rpc.into_anchor_request().signed_transaction().await?;
+                    let transaction = rpc.signed_transaction_with_options(true, None).await?;
                     let response = client
                         .store_program()
-                        .solana_rpc()
+                        .rpc()
                         .simulate_transaction(&transaction)
                         .await
                         .map_err(anchor_client::ClientError::from)?;
@@ -264,10 +266,11 @@ impl InitializeRoles {
     ) -> gmsol::Result<()> {
         let store = client.find_store_address(store_key);
 
-        let mut builder = TransactionBuilder::new_with_options(
-            client.store_program().solana_rpc(),
+        let mut builder = BundleBuilder::from_rpc_client_with_options(
+            client.store_program().rpc(),
             !self.allow_multiple_transactions,
             self.max_transaction_size,
+            None,
         );
 
         if self.init_store {

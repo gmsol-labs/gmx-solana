@@ -79,7 +79,7 @@ impl Args {
                     txns.append(extend_txns, false)?;
                 }
 
-                if !txns.is_emtpy() {
+                if !txns.is_empty() {
                     crate::utils::send_or_serialize_transactions(
                         txns,
                         serialize_only,

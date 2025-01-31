@@ -1,12 +1,11 @@
 use std::{collections::HashMap, future::Future, ops::Deref};
 
 use anchor_client::solana_sdk::{pubkey::Pubkey, signer::Signer};
+use gmsol_solana_utils::{bundle_builder::BundleBuilder, transaction_builder::TransactionBuilder};
 use gmsol_store::states::{common::TokensWithFeed, PriceProviderKind};
 use time::OffsetDateTime;
 
-use crate::utils::{RpcBuilder, TransactionBuilder};
-
-use super::{MakeTransactionBuilder, SetExecutionFee};
+use super::{MakeBundleBuilder, SetExecutionFee};
 
 /// A mapping from feed id to the corresponding feed address.
 pub type FeedAddressMap = std::collections::HashMap<Pubkey, Pubkey>;
@@ -51,13 +50,13 @@ impl<O: PullOracle, T> WithPullOracle<O, T> {
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone, O, T> MakeTransactionBuilder<'a, C>
+impl<'a, C: Deref<Target = impl Signer> + Clone, O, T> MakeBundleBuilder<'a, C>
     for WithPullOracle<O, T>
 where
     O: PostPullOraclePrices<'a, C>,
-    T: PullOraclePriceConsumer + MakeTransactionBuilder<'a, C>,
+    T: PullOraclePriceConsumer + MakeBundleBuilder<'a, C>,
 {
-    async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+    async fn build(&mut self) -> crate::Result<BundleBuilder<'a, C>> {
         let (instructions, map) = self
             .pull_oracle
             .fetch_price_update_instructions(&self.price_updates)
@@ -147,8 +146,8 @@ pub trait PullOracle {
 
 /// Price Update Instructions.
 pub struct PriceUpdateInstructions<'a, C> {
-    post: TransactionBuilder<'a, C>,
-    close: TransactionBuilder<'a, C>,
+    post: BundleBuilder<'a, C>,
+    close: BundleBuilder<'a, C>,
 }
 
 impl<'a, C: Deref<Target = impl Signer> + Clone> PriceUpdateInstructions<'a, C> {
@@ -165,8 +164,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PriceUpdateInstructions<'a, C> 
     /// Push a post price update instruction.
     pub fn try_push_post(
         &mut self,
-        instruction: RpcBuilder<'a, C>,
-    ) -> Result<(), (RpcBuilder<'a, C>, crate::Error)> {
+        instruction: TransactionBuilder<'a, C>,
+    ) -> Result<(), (TransactionBuilder<'a, C>, gmsol_solana_utils::Error)> {
         self.post.try_push(instruction)?;
         Ok(())
     }
@@ -174,14 +173,14 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PriceUpdateInstructions<'a, C> 
     /// Push a close instruction.
     pub fn try_push_close(
         &mut self,
-        instruction: RpcBuilder<'a, C>,
-    ) -> Result<(), (RpcBuilder<'a, C>, crate::Error)> {
+        instruction: TransactionBuilder<'a, C>,
+    ) -> Result<(), (TransactionBuilder<'a, C>, gmsol_solana_utils::Error)> {
         self.close.try_push(instruction)?;
         Ok(())
     }
 
     /// Merge.
-    pub fn merge(&mut self, other: Self) -> crate::Result<()> {
+    pub fn merge(&mut self, other: Self) -> gmsol_solana_utils::Result<()> {
         self.post.append(other.post, false)?;
         self.close.append(other.close, false)?;
         Ok(())

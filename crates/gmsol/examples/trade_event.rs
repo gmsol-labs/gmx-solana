@@ -1,8 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
-use anchor_client::{solana_sdk::signature::Keypair, Cluster};
+use anchor_client::solana_sdk::signature::Keypair;
 use futures_util::StreamExt;
 use gmsol::{pda::find_default_store, Client};
+use gmsol_solana_utils::cluster::Cluster;
 use tracing::level_filters::LevelFilter;
 
 #[tokio::main]

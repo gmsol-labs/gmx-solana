@@ -1,16 +1,14 @@
 use crate::{
     store::utils::Feeds,
-    utils::{
-        builder::{
-            FeedAddressMap, FeedIds, PostPullOraclePrices, PriceUpdateInstructions, PullOracle,
-        },
-        transaction_builder::rpc_builder::Program,
+    utils::builder::{
+        FeedAddressMap, FeedIds, PostPullOraclePrices, PriceUpdateInstructions, PullOracle,
     },
 };
 use anchor_client::solana_client::nonblocking::rpc_client::RpcClient;
 use anchor_client::solana_sdk::{pubkey::Pubkey, signer::Signer};
 use anchor_spl::associated_token::get_associated_token_address;
 use base64::prelude::*;
+use gmsol_solana_utils::program::Program;
 use gmsol_store::states::PriceProviderKind;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
@@ -51,7 +49,7 @@ impl<'a, C> SwitchboardPullOracle<'a, C> {
         Self {
             gmsol,
             switchboard,
-            client: switchboard.solana_rpc(),
+            client: switchboard.rpc(),
             ctx: SbContext::new(),
             gateway,
             crossbar,
@@ -256,7 +254,7 @@ impl<'a, C: Clone + Deref<Target = impl Signer>> PostPullOraclePrices<'a, C>
             submit_ix.accounts.extend(remaining_accounts);
             let ix = self
                 .switchboard
-                .rpc()
+                .transaction()
                 .pre_instruction(submit_ix)
                 .lookup_tables(
                     luts.clone()

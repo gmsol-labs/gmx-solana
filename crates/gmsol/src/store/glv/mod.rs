@@ -5,6 +5,7 @@ use anchor_client::{
     solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer},
 };
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
+use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_store::{
     accounts, instruction,
     states::{
@@ -12,8 +13,6 @@ use gmsol_store::{
         Market,
     },
 };
-
-use crate::utils::RpcBuilder;
 
 mod deposit;
 mod shift;
@@ -42,7 +41,7 @@ pub trait GlvOps<C> {
         store: &Pubkey,
         index: u8,
         market_tokens: impl IntoIterator<Item = Pubkey>,
-    ) -> crate::Result<(RpcBuilder<C>, Pubkey)>;
+    ) -> crate::Result<(TransactionBuilder<C>, Pubkey)>;
 
     /// GLV Update Market Config.
     fn update_glv_market_config(
@@ -52,7 +51,7 @@ pub trait GlvOps<C> {
         market_token: &Pubkey,
         max_amount: Option<u64>,
         max_value: Option<u128>,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// GLV toggle market flag.
     fn toggle_glv_market_flag(
@@ -62,7 +61,7 @@ pub trait GlvOps<C> {
         market_token: &Pubkey,
         flag: GlvMarketFlag,
         enable: bool,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Update GLV config.
     fn update_glv_config(
@@ -70,7 +69,7 @@ pub trait GlvOps<C> {
         store: &Pubkey,
         glv_token: &Pubkey,
         params: UpdateGlvParams,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Insert GLV market.
     fn insert_glv_market(
@@ -79,7 +78,7 @@ pub trait GlvOps<C> {
         glv_token: &Pubkey,
         market_token: &Pubkey,
         token_program_id: Option<&Pubkey>,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Remove GLV market.
     fn remove_glv_market(
@@ -88,7 +87,7 @@ pub trait GlvOps<C> {
         glv_token: &Pubkey,
         market_token: &Pubkey,
         token_program_id: Option<&Pubkey>,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Create a GLV deposit.
     fn create_glv_deposit(
@@ -153,7 +152,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         store: &Pubkey,
         index: u8,
         market_tokens: impl IntoIterator<Item = Pubkey>,
-    ) -> crate::Result<(RpcBuilder<C>, Pubkey)> {
+    ) -> crate::Result<(TransactionBuilder<C>, Pubkey)> {
         let authority = self.payer();
         let glv_token = self.find_glv_token_address(store, index);
         let glv = self.find_glv_address(&glv_token);
@@ -169,7 +168,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
 
         let rpc = self
             .store_rpc()
-            .accounts(accounts::InitializeGlv {
+            .anchor_accounts(accounts::InitializeGlv {
                 authority,
                 store: *store,
                 glv_token,
@@ -179,7 +178,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
                 market_token_program: market_token_program_id,
                 associated_token_program: anchor_spl::associated_token::ID,
             })
-            .args(instruction::InitializeGlv {
+            .anchor_args(instruction::InitializeGlv {
                 index,
                 length: length
                     .try_into()
@@ -196,16 +195,16 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         market_token: &Pubkey,
         max_amount: Option<u64>,
         max_value: Option<u128>,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let glv = self.find_glv_address(glv_token);
         self.store_rpc()
-            .accounts(accounts::UpdateGlvMarketConfig {
+            .anchor_accounts(accounts::UpdateGlvMarketConfig {
                 authority: self.payer(),
                 store: *store,
                 glv,
                 market_token: *market_token,
             })
-            .args(instruction::UpdateGlvMarketConfig {
+            .anchor_args(instruction::UpdateGlvMarketConfig {
                 max_amount,
                 max_value,
             })
@@ -218,16 +217,16 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         market_token: &Pubkey,
         flag: GlvMarketFlag,
         enable: bool,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let glv = self.find_glv_address(glv_token);
         self.store_rpc()
-            .accounts(accounts::UpdateGlvMarketConfig {
+            .anchor_accounts(accounts::UpdateGlvMarketConfig {
                 authority: self.payer(),
                 store: *store,
                 glv,
                 market_token: *market_token,
             })
-            .args(instruction::ToggleGlvMarketFlag {
+            .anchor_args(instruction::ToggleGlvMarketFlag {
                 flag: flag.to_string(),
                 enable,
             })
@@ -238,15 +237,15 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         store: &Pubkey,
         glv_token: &Pubkey,
         params: UpdateGlvParams,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let glv = self.find_glv_address(glv_token);
         self.store_rpc()
-            .accounts(accounts::UpdateGlvConfig {
+            .anchor_accounts(accounts::UpdateGlvConfig {
                 authority: self.payer(),
                 store: *store,
                 glv,
             })
-            .args(instruction::UpdateGlvConfig { params })
+            .anchor_args(instruction::UpdateGlvConfig { params })
     }
 
     fn insert_glv_market(
@@ -255,14 +254,14 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         glv_token: &Pubkey,
         market_token: &Pubkey,
         token_program_id: Option<&Pubkey>,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let token_program_id = token_program_id.unwrap_or(&anchor_spl::token::ID);
         let glv = self.find_glv_address(glv_token);
         let market = self.find_market_address(store, market_token);
         let vault =
             get_associated_token_address_with_program_id(&glv, market_token, token_program_id);
         self.store_rpc()
-            .accounts(accounts::InsertGlvMarket {
+            .anchor_accounts(accounts::InsertGlvMarket {
                 authority: self.payer(),
                 store: *store,
                 glv,
@@ -273,7 +272,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
                 token_program: *token_program_id,
                 associated_token_program: anchor_spl::associated_token::ID,
             })
-            .args(instruction::InsertGlvMarket {})
+            .anchor_args(instruction::InsertGlvMarket {})
     }
 
     fn remove_glv_market(
@@ -282,13 +281,13 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         glv_token: &Pubkey,
         market_token: &Pubkey,
         token_program_id: Option<&Pubkey>,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let token_program_id = token_program_id.unwrap_or(&anchor_spl::token::ID);
         let glv = self.find_glv_address(glv_token);
         let vault =
             get_associated_token_address_with_program_id(&glv, market_token, token_program_id);
         self.store_rpc()
-            .accounts(accounts::RemoveGlvMarket {
+            .anchor_accounts(accounts::RemoveGlvMarket {
                 authority: self.payer(),
                 store: *store,
                 store_wallet: self.find_store_wallet_address(store),
@@ -297,7 +296,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
                 vault,
                 token_program: *token_program_id,
             })
-            .args(instruction::RemoveGlvMarket {})
+            .anchor_args(instruction::RemoveGlvMarket {})
     }
 
     fn create_glv_deposit(

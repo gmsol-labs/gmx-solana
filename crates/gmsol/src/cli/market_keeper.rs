@@ -25,8 +25,9 @@ use gmsol::{
         market::config::{MarketConfigBuffer, MarketConfigFlag},
         FactorKey, DEFAULT_TIMESTAMP_ADJUSTMENT,
     },
-    utils::{instruction::InstructionSerialization, TransactionBuilder},
+    utils::instruction::InstructionSerialization,
 };
+use gmsol_solana_utils::bundle_builder::BundleBuilder;
 use gmsol_store::states::{
     Factor, MarketConfigKey, PriceProviderKind, UpdateTokenConfigParams,
     DEFAULT_HEARTBEAT_DURATION, DEFAULT_PRECISION,
@@ -392,9 +393,12 @@ impl Args {
                 }
                 let token_map = Keypair::new();
                 let (rpc, map) = client.initialize_token_map(store, &token_map);
-                crate::utils::send_or_serialize(
-                    rpc.into_anchor_request_without_compute_budget(),
-                    None,
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    rpc,
+                    timelock,
+                    serialize_only,
+                    false,
                     |signature| {
                         tracing::info!("created token config map {map} at tx {signature}");
                         println!("{map}");
@@ -404,11 +408,12 @@ impl Args {
                 .await?;
             }
             Command::SetTokenMap { token_map } => {
-                crate::utils::send_or_serialize(
-                    client
-                        .set_token_map(store, token_map)
-                        .into_anchor_request_without_compute_budget(),
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    client.set_token_map(store, token_map),
+                    timelock,
                     serialize_only,
+                    false,
                     |signature| {
                         tracing::info!("set new token map at {signature}");
                         Ok(())
@@ -513,9 +518,12 @@ impl Args {
                         store, &token_map, name, token, builder, true, !*update,
                     )
                 };
-                crate::utils::send_or_serialize(
-                    req.into_anchor_request_without_compute_budget(),
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    req,
+                    timelock,
                     serialize_only,
+                    false,
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -525,11 +533,12 @@ impl Args {
             }
             Command::ToggleTokenConfig { token, toggle } => {
                 let token_map = self.token_map(client, store).await?;
-                crate::utils::send_or_serialize(
-                    client
-                        .toggle_token_config(store, &token_map, token, toggle.is_enable())
-                        .into_anchor_request(),
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    client.toggle_token_config(store, &token_map, token, toggle.is_enable()),
+                    timelock,
                     serialize_only,
+                    false,
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -539,11 +548,12 @@ impl Args {
             }
             Command::SetExpectedProvider { token, provider } => {
                 let token_map = self.token_map(client, store).await?;
-                crate::utils::send_or_serialize(
-                    client
-                        .set_expected_provider(store, &token_map, token, *provider)
-                        .into_anchor_request(),
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    client.set_expected_provider(store, &token_map, token, *provider),
+                    timelock,
                     serialize_only,
+                    false,
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -553,9 +563,12 @@ impl Args {
             }
             Command::CreateVault { token } => {
                 let (rpc, vault) = client.initialize_market_vault(store, token);
-                crate::utils::send_or_serialize(
-                    rpc.into_anchor_request(),
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    rpc,
+                    timelock,
                     serialize_only,
+                    false,
                     |signature| {
                         tracing::info!("created a new vault {vault} at tx {signature}");
                         println!("{vault}");
@@ -582,7 +595,7 @@ impl Args {
                         None,
                     )
                     .await?;
-                crate::utils::send_or_serialize(request.into_anchor_request_without_compute_budget(), serialize_only, |signature| {
+                crate::utils::send_or_serialize_rpc(store, request, timelock, serialize_only, false,|signature| {
                     tracing::info!(
                         "created a new market with {market_token} as its token address at tx {signature}"
                     );
@@ -716,9 +729,12 @@ impl Args {
                     &buffer_keypair,
                     expire_after.as_secs().try_into().unwrap_or(u32::MAX),
                 );
-                crate::utils::send_or_serialize(
-                    rpc.into_anchor_request_without_compute_budget(),
-                    None,
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    rpc,
+                    timelock,
+                    serialize_only,
+                    false,
                     |signature| {
                         let pubkey = buffer_keypair.pubkey();
                         tracing::info!("created market config buffer `{pubkey}` at tx {signature}");
@@ -729,11 +745,12 @@ impl Args {
                 .await?;
             }
             Command::CloseBuffer { buffer, receiver } => {
-                crate::utils::send_or_serialize(
-                    client
-                        .close_marekt_config_buffer(buffer, receiver.as_ref())
-                        .into_anchor_request_without_compute_budget(),
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    client.close_marekt_config_buffer(buffer, receiver.as_ref()),
+                    timelock,
                     serialize_only,
+                    false,
                     |signature| {
                         tracing::info!("market config buffer `{buffer}` closed at tx {signature}");
                         Ok(())
@@ -781,11 +798,13 @@ impl Args {
                 buffer,
                 new_authority,
             } => {
-                crate::utils::send_or_serialize(
+                crate::utils::send_or_serialize_rpc(
+                    store,
                     client
-                        .set_market_config_buffer_authority(buffer, new_authority)
-                        .into_anchor_request_without_compute_budget(),
+                        .set_market_config_buffer_authority(buffer, new_authority),
+                    timelock,
                     serialize_only,
+                    false,
                     |signature| {
                         tracing::info!("set the authority of buffer `{buffer}` to `{new_authority}` at tx {signature}");
                         Ok(())
@@ -806,12 +825,14 @@ impl Args {
                     Side::Short => market.meta().short_token_mint,
                 };
                 let source_account = get_associated_token_address(&client.payer(), &token);
-                crate::utils::send_or_serialize(
+                crate::utils::send_or_serialize_rpc(
+                    store,
                     client
                         .fund_market(store, market_token, &source_account, *amount, Some(&token))
-                        .await?
-                        .into_anchor_request_without_compute_budget(),
+                        .await?,
+                    timelock,
                     serialize_only,
+                    false,
                     |signature| {
                         tracing::info!("funded at tx {signature}");
                         Ok(())
@@ -1026,10 +1047,11 @@ async fn insert_token_configs(
     max_transaction_size: Option<usize>,
     configs: &IndexMap<String, TokenConfig>,
 ) -> gmsol::Result<()> {
-    let mut builder = TransactionBuilder::new_with_options(
-        client.store_program().solana_rpc(),
+    let mut builder = BundleBuilder::from_rpc_client_with_options(
+        client.store_program().rpc(),
         false,
         max_transaction_size,
+        None,
     );
 
     if set_token_map {
@@ -1100,10 +1122,11 @@ async fn create_markets(
     max_transaction_size: Option<usize>,
     markets: &IndexMap<String, Market>,
 ) -> gmsol::Result<()> {
-    let mut builder = TransactionBuilder::new_with_options(
-        client.store_program().solana_rpc(),
+    let mut builder = BundleBuilder::from_rpc_client_with_options(
+        client.store_program().rpc(),
         false,
         max_transaction_size,
+        None,
     );
     let token_map = client
         .authorized_token_map_address(store)
@@ -1163,10 +1186,11 @@ impl MarketConfigMap {
         max_transaction_size: Option<usize>,
         batch: NonZeroUsize,
     ) -> gmsol::Result<()> {
-        let mut builder = TransactionBuilder::new_with_options(
-            client.store_program().solana_rpc(),
+        let mut builder = BundleBuilder::from_rpc_client_with_options(
+            client.store_program().rpc(),
             false,
             max_transaction_size,
+            None,
         );
 
         let buffer_keypair = Keypair::new();
@@ -1233,10 +1257,11 @@ impl MarketConfigs {
         receiver: Option<&Pubkey>,
         close_buffers: bool,
     ) -> gmsol::Result<()> {
-        let mut builder = TransactionBuilder::new_with_options(
-            client.store_program().solana_rpc(),
+        let mut builder = BundleBuilder::from_rpc_client_with_options(
+            client.store_program().rpc(),
             false,
             max_transaction_size,
+            None,
         );
 
         let mut buffers_to_close = HashSet::<Pubkey>::default();

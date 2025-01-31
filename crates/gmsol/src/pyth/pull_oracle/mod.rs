@@ -23,15 +23,15 @@ use anchor_client::{
     },
 };
 use either::Either;
+use gmsol_solana_utils::{
+    bundle_builder::{BundleBuilder, SendBundleOptions},
+    program::Program,
+    transaction_builder::TransactionBuilder,
+};
 use gmsol_store::states::common::TokensWithFeed;
 use hermes::BinaryPriceUpdate;
 use pyth_sdk::Identifier;
 use pythnet_sdk::wire::v1::AccumulatorUpdateData;
-
-use crate::utils::{
-    transaction_builder::{rpc_builder::Program, SendTransactionOptions},
-    RpcBuilder, TransactionBuilder,
-};
 
 use self::wormhole::WORMHOLE_PROGRAM_ID;
 
@@ -47,9 +47,9 @@ const VAA_SPLIT_INDEX: usize = 755;
 
 /// With Pyth Prices.
 pub struct WithPythPrices<'a, C> {
-    post: TransactionBuilder<'a, C>,
-    consume: TransactionBuilder<'a, C>,
-    close: TransactionBuilder<'a, C>,
+    post: BundleBuilder<'a, C>,
+    consume: BundleBuilder<'a, C>,
+    close: BundleBuilder<'a, C>,
 }
 
 impl<'a, S, C> WithPythPrices<'a, C>
@@ -85,11 +85,11 @@ where
         compute_unit_price_micro_lamports: Option<u64>,
         skip_preflight: bool,
     ) -> Result<Vec<Signature>, (Vec<Signature>, crate::Error)> {
-        let mut error = None;
+        let mut error: Option<crate::Error> = None;
 
         let mut signatures = match self
             .post
-            .send_all_with_opts(SendTransactionOptions {
+            .send_all_with_opts(SendBundleOptions {
                 without_compute_budget: false,
                 compute_unit_price_micro_lamports,
                 update_recent_block_hash_before_send: false,
@@ -103,7 +103,7 @@ where
         {
             Ok(signatures) => signatures,
             Err((signatures, err)) => {
-                error = Some(err);
+                error = Some(err.into());
                 signatures
             }
         };
@@ -111,7 +111,7 @@ where
         if error.is_none() {
             let mut consume_signatures = match self
                 .consume
-                .send_all_with_opts(SendTransactionOptions {
+                .send_all_with_opts(SendBundleOptions {
                     without_compute_budget: false,
                     compute_unit_price_micro_lamports,
                     update_recent_block_hash_before_send: false,
@@ -125,7 +125,7 @@ where
             {
                 Ok(signatures) => signatures,
                 Err((signatures, err)) => {
-                    error = Some(err);
+                    error = Some(err.into());
                     signatures
                 }
             };
@@ -135,7 +135,7 @@ where
 
         let mut close_signatures = match self
             .close
-            .send_all_with_opts(SendTransactionOptions {
+            .send_all_with_opts(SendBundleOptions {
                 without_compute_budget: false,
                 compute_unit_price_micro_lamports,
                 update_recent_block_hash_before_send: false,
@@ -150,7 +150,7 @@ where
             Ok(signatures) => signatures,
             Err((signatures, err)) => {
                 match &error {
-                    None => error = Some(err),
+                    None => error = Some(err.into()),
                     Some(post_err) => {
                         error = Some(crate::Error::unknown(format!(
                             "post error: {post_err}, close error: {err}"
@@ -234,7 +234,7 @@ pub trait PythPullOracleOps<C> {
     where
         C: Deref<Target = S> + Clone + 'a,
         S: Signer,
-        It: IntoIterator<Item = RpcBuilder<'a, C>>,
+        It: IntoIterator<Item = TransactionBuilder<'a, C>>,
         Fut: Future<Output = crate::Result<It>>,
     {
         self.with_pyth_price_updates(ctx, [&update.binary], consume)
@@ -250,7 +250,7 @@ pub trait PythPullOracleOps<C> {
     where
         C: Deref<Target = S> + Clone + 'a,
         S: Signer,
-        It: IntoIterator<Item = RpcBuilder<'a, C>>,
+        It: IntoIterator<Item = TransactionBuilder<'a, C>>,
         Fut: Future<Output = crate::Result<It>>,
     {
         use std::collections::hash_map::Entry;
@@ -259,9 +259,9 @@ pub trait PythPullOracleOps<C> {
             let wormhole = self.wormhole();
             let pyth = self.pyth();
             let mut prices = HashMap::with_capacity(ctx.feeds.len());
-            let mut post = TransactionBuilder::new(pyth.solana_rpc());
-            let mut consume_txns = TransactionBuilder::new(pyth.solana_rpc());
-            let mut close = TransactionBuilder::new(pyth.solana_rpc());
+            let mut post = BundleBuilder::from_rpc_client(pyth.rpc());
+            let mut consume_txns = BundleBuilder::from_rpc_client(pyth.rpc());
+            let mut close = BundleBuilder::from_rpc_client(pyth.rpc());
 
             let datas = updates
                 .into_iter()
@@ -455,7 +455,7 @@ pub trait ExecuteWithPythPrices<'a, C> {
     fn build_rpc_with_price_updates(
         &mut self,
         price_updates: Prices,
-    ) -> impl Future<Output = crate::Result<Vec<RpcBuilder<'a, C, ()>>>>;
+    ) -> impl Future<Output = crate::Result<Vec<TransactionBuilder<'a, C, ()>>>>;
 
     /// Execute with options
     fn execute_with_options<S>(

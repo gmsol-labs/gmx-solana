@@ -1,7 +1,4 @@
-use anchor_client::{
-    solana_client::rpc_config::RpcSendTransactionConfig,
-    solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey},
-};
+use anchor_client::solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use eyre::OptionExt;
 use gmsol::{
     exchange::ExchangeOps,
@@ -406,7 +403,7 @@ impl ExchangeArgs {
                     .receiver(receiver)
                     .build_with_address()
                     .await?;
-                let signature = builder.into_anchor_request().send().await?;
+                let signature = builder.send().await?;
                 println!("created deposit {deposit} at {signature}");
             }
             Command::CancelDeposit { deposit } => {
@@ -414,7 +411,6 @@ impl ExchangeArgs {
                     .close_deposit(store, deposit)
                     .build()
                     .await?
-                    .into_anchor_request()
                     .send()
                     .await?;
                 tracing::info!(%deposit, "cancelled deposit at tx {signature}");
@@ -489,13 +485,7 @@ impl ExchangeArgs {
                 println!("{signature}");
             }
             Command::CancelOrder { order } => {
-                let signature = client
-                    .close_order(order)?
-                    .build()
-                    .await?
-                    .into_anchor_request()
-                    .send()
-                    .await?;
+                let signature = client.close_order(order)?.build().await?.send().await?;
                 tracing::info!(%order, "cancelled order at tx {signature}");
                 println!("{signature}");
             }
@@ -524,13 +514,7 @@ impl ExchangeArgs {
                 }
 
                 let (rpc, order) = builder.swap_path(swap.clone()).build_with_address().await?;
-                let request = rpc.into_anchor_request();
-                let signature = request
-                    .send_with_spinner_and_config(RpcSendTransactionConfig {
-                        skip_preflight: true,
-                        ..Default::default()
-                    })
-                    .await?;
+                let signature = rpc.send_without_preflight().await?;
                 tracing::info!("created a market increase order {order} at tx {signature}");
                 if *wait {
                     self.wait_for_order(client, &order).await?;
@@ -769,7 +753,7 @@ impl ExchangeArgs {
 
                 let builder = client.update_order(store, order.market_token(), address, params)?;
 
-                let signature = builder.into_anchor_request().send().await?;
+                let signature = builder.send().await?;
                 tracing::info!("updated a limit swap order {address} at tx {signature}");
             }
             Command::UpdateOrder {
@@ -799,7 +783,7 @@ impl ExchangeArgs {
                     let builder =
                         client.update_order(store, order.market_token(), address, params)?;
 
-                    let signature = builder.into_anchor_request().send().await?;
+                    let signature = builder.send().await?;
                     tracing::info!("updated an order {address} at tx {signature}");
                 } else {
                     return Err(gmsol::Error::invalid_argument(format!(

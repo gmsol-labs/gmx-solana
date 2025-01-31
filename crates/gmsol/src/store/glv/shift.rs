@@ -5,6 +5,7 @@ use anchor_client::{
     solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey, signer::Signer},
 };
 use anchor_spl::associated_token::get_associated_token_address;
+use gmsol_solana_utils::{bundle_builder::BundleBuilder, transaction_builder::TransactionBuilder};
 use gmsol_store::{
     accounts, instruction,
     instructions::ordered_tokens,
@@ -21,10 +22,9 @@ use crate::{
     store::utils::FeedsParser,
     utils::{
         builder::{
-            FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
-            SetExecutionFee,
+            FeedAddressMap, FeedIds, MakeBundleBuilder, PullOraclePriceConsumer, SetExecutionFee,
         },
-        fix_optional_account_metas, RpcBuilder, TransactionBuilder, ZeroCopy,
+        fix_optional_account_metas, ZeroCopy,
     },
 };
 
@@ -88,8 +88,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvShiftBuilder<'a, C> {
         }
     }
 
-    /// Build a [`RpcBuilder`] to create shift account and return the address of the shift account to create.
-    pub fn build_with_address(&self) -> crate::Result<(RpcBuilder<'a, C>, Pubkey)> {
+    /// Build a [`TransactionBuilder`] to create shift account and return the address of the shift account to create.
+    pub fn build_with_address(&self) -> crate::Result<(TransactionBuilder<'a, C>, Pubkey)> {
         let authority = self.client.payer();
         let nonce = self.nonce.unwrap_or_else(generate_nonce);
         let glv = self.client.find_glv_address(&self.glv_token);
@@ -112,7 +112,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvShiftBuilder<'a, C> {
         let rpc = self
             .client
             .store_rpc()
-            .accounts(accounts::CreateGlvShift {
+            .anchor_accounts(accounts::CreateGlvShift {
                 authority,
                 store: self.store,
                 from_market,
@@ -127,7 +127,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvShiftBuilder<'a, C> {
                 associated_token_program: anchor_spl::associated_token::ID,
                 glv,
             })
-            .args(instruction::CreateGlvShift {
+            .anchor_args(instruction::CreateGlvShift {
                 nonce,
                 params: self.get_create_shift_params(),
             });
@@ -209,14 +209,14 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvShiftBuilder<'a, C> {
         Ok(hint)
     }
 
-    /// Build a [`RpcBuilder`] to close shift account.
-    pub async fn build(&mut self) -> crate::Result<RpcBuilder<'a, C>> {
+    /// Build a [`TransactionBuilder`] to close shift account.
+    pub async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
         let authority = self.client.payer();
         let rpc = self
             .client
             .store_rpc()
-            .accounts(accounts::CloseGlvShift {
+            .anchor_accounts(accounts::CloseGlvShift {
                 authority,
                 funder: hint.funder,
                 store: hint.store,
@@ -231,7 +231,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvShiftBuilder<'a, C> {
                 event_authority: self.client.store_event_authority(),
                 program: *self.client.store_program_id(),
             })
-            .args(instruction::CloseGlvShift {
+            .anchor_args(instruction::CloseGlvShift {
                 reason: self.reason.clone(),
             });
 
@@ -380,8 +380,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
         Ok(hint)
     }
 
-    /// Build a [`RpcBuilder`] for `execute_shift` instruction.
-    async fn build_rpc(&mut self) -> crate::Result<RpcBuilder<'a, C>> {
+    /// Build a [`TransactionBuilder`] for `execute_shift` instruction.
+    async fn build_rpc(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
         let authority = self.client.payer();
 
@@ -429,7 +429,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
                 &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
                 self.client.store_program_id(),
             ))
-            .args(instruction::ExecuteGlvShift {
+            .anchor_args(instruction::ExecuteGlvShift {
                 execution_lamports: self.execution_fee,
                 throw_on_execution_error: !self.cancel_on_execution_error,
             })
@@ -479,7 +479,7 @@ mod pyth {
         async fn build_rpc_with_price_updates(
             &mut self,
             price_updates: Prices,
-        ) -> crate::Result<Vec<crate::utils::RpcBuilder<'a, C, ()>>> {
+        ) -> crate::Result<Vec<TransactionBuilder<'a, C, ()>>> {
             let txn = self
                 .parse_with_pyth_price_updates(price_updates)
                 .build()
@@ -489,10 +489,10 @@ mod pyth {
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     for ExecuteGlvShiftBuilder<'a, C>
 {
-    async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+    async fn build(&mut self) -> crate::Result<BundleBuilder<'a, C>> {
         let mut tx = self.client.transaction();
 
         tx.try_push(self.build_rpc().await?)?;

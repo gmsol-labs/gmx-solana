@@ -58,13 +58,13 @@ impl Args {
                 let rpc = client
                     .store_rpc()
                     .program(ID)
-                    .accounts(accounts::Initialize {
+                    .anchor_accounts(accounts::Initialize {
                         payer: client.payer(),
                         verifier_account: chainlink_verifier,
                         access_controller,
                         system_program: system_program::ID,
                     })
-                    .args(instruction::Initialize { user: *store });
+                    .anchor_args(instruction::Initialize { user: *store });
 
                 crate::utils::send_or_serialize_rpc(
                     store,

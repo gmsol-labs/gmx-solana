@@ -13,6 +13,10 @@ use anchor_client::{
 };
 use anchor_spl::associated_token::get_associated_token_address;
 use gmsol_model::action::decrease_position::DecreasePositionSwapType;
+use gmsol_solana_utils::{
+    bundle_builder::BundleBuilder, compute_budget::ComputeBudget,
+    transaction_builder::TransactionBuilder,
+};
 use gmsol_store::{
     accounts, instruction,
     ops::order::CreateOrderParams,
@@ -29,11 +33,9 @@ use crate::{
     store::{token::TokenAccountOps, utils::FeedsParser},
     utils::{
         builder::{
-            FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
-            SetExecutionFee,
+            FeedAddressMap, FeedIds, MakeBundleBuilder, PullOraclePriceConsumer, SetExecutionFee,
         },
-        fix_optional_account_metas, ComputeBudget, RpcBuilder, TokenAccountParams,
-        TransactionBuilder, ZeroCopy,
+        fix_optional_account_metas, TokenAccountParams, ZeroCopy,
     },
 };
 
@@ -333,16 +335,18 @@ where
         }
     }
 
-    /// Create [`RpcBuilder`] and return order address.
-    pub async fn build_with_address(&mut self) -> crate::Result<(RpcBuilder<'a, C>, Pubkey)> {
+    /// Create [`TransactionBuilder`] and return order address.
+    pub async fn build_with_address(
+        &mut self,
+    ) -> crate::Result<(TransactionBuilder<'a, C>, Pubkey)> {
         let (rpc, order, _) = self.build_with_addresses().await?;
         Ok((rpc, order))
     }
 
-    /// Create [`RpcBuilder`] and return order address and optional position address.
+    /// Create [`TransactionBuilder`] and return order address and optional position address.
     pub async fn build_with_addresses(
         &mut self,
-    ) -> crate::Result<(RpcBuilder<'a, C>, Pubkey, Option<Pubkey>)> {
+    ) -> crate::Result<(TransactionBuilder<'a, C>, Pubkey, Option<Pubkey>)> {
         let token_program_id = anchor_spl::token::ID;
 
         let nonce = self.nonce.unwrap_or_else(generate_nonce);
@@ -468,14 +472,14 @@ where
                 let prepare_position = self
                     .client
                     .store_rpc()
-                    .accounts(accounts::PreparePosition {
+                    .anchor_accounts(accounts::PreparePosition {
                         owner: *owner,
                         store: self.store,
                         market: self.market(),
                         position: position.expect("must provided"),
                         system_program: system_program::ID,
                     })
-                    .args(instruction::PreparePosition {
+                    .anchor_args(instruction::PreparePosition {
                         params: params.clone(),
                     });
 
@@ -538,13 +542,13 @@ where
         let prepare_user = self
             .client
             .store_rpc()
-            .accounts(accounts::PrepareUser {
+            .anchor_accounts(accounts::PrepareUser {
                 owner: *owner,
                 store: self.store,
                 user,
                 system_program: system_program::ID,
             })
-            .args(instruction::PrepareUser {});
+            .anchor_args(instruction::PrepareUser {});
 
         let create = self
             .client
@@ -575,7 +579,7 @@ where
                 &gmsol_store::id(),
                 self.client.store_program_id(),
             ))
-            .args(instruction::CreateOrder { nonce, params })
+            .anchor_args(instruction::CreateOrder { nonce, params })
             .accounts(
                 self.swap_path
                     .iter()
@@ -869,10 +873,10 @@ where
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     for ExecuteOrderBuilder<'a, C>
 {
-    async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+    async fn build(&mut self) -> crate::Result<BundleBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
         let [claimable_long_token_account_for_user, claimable_short_token_account_for_user, claimable_pnl_token_account_for_holding] =
             self.claimable_accounts().await?;
@@ -977,7 +981,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
                         &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
                         self.client.store_program_id(),
                     ))
-                    .args(instruction::ExecuteDecreaseOrder {
+                    .anchor_args(instruction::ExecuteDecreaseOrder {
                         recent_timestamp: self.recent_timestamp,
                         execution_fee: self.execution_fee,
                         throw_on_execution_error: !self.cancel_on_execution_error,
@@ -1037,7 +1041,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
                     &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
                     self.client.store_program_id(),
                 ))
-                .args(instruction::ExecuteIncreaseOrSwapOrder {
+                .anchor_args(instruction::ExecuteIncreaseOrSwapOrder {
                     recent_timestamp: self.recent_timestamp,
                     execution_fee: self.execution_fee,
                     throw_on_execution_error: !self.cancel_on_execution_error,
@@ -1053,13 +1057,13 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
             let prepare_event_buffer = self
                 .client
                 .store_rpc()
-                .accounts(accounts::PrepareTradeEventBuffer {
+                .anchor_accounts(accounts::PrepareTradeEventBuffer {
                     authority,
                     store: self.store,
                     event,
                     system_program: system_program::ID,
                 })
-                .args(instruction::PrepareTradeEventBuffer {
+                .anchor_args(instruction::PrepareTradeEventBuffer {
                     index: self.event_buffer_index,
                 });
             execute_order = prepare_event_buffer.merge(execute_order);
@@ -1113,7 +1117,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
         let (pre_builder, post_builder) = builder.build(self.client);
 
         let mut transaction_builder =
-            TransactionBuilder::new(self.client.store_program().solana_rpc());
+            BundleBuilder::from_rpc_client(self.client.store_program().rpc());
         transaction_builder
             .try_push(pre_builder)?
             .try_push(execute_order)?
@@ -1262,8 +1266,8 @@ where
         }
     }
 
-    /// Build [`RpcBuilder`] for cancelling the order.
-    pub async fn build(&mut self) -> crate::Result<RpcBuilder<'a, C>> {
+    /// Build [`TransactionBuilder`] for cancelling the order.
+    pub async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
         let payer = self.client.payer();
         let owner = hint.owner;
@@ -1324,7 +1328,7 @@ where
                 &gmsol_store::ID,
                 self.client.store_program_id(),
             ))
-            .args(instruction::CloseOrder {
+            .anchor_args(instruction::CloseOrder {
                 reason: self.reason.clone(),
             }))
     }
@@ -1394,7 +1398,7 @@ impl ClaimableAccountsBuilder {
     pub(super) fn build<'a, C: Deref<Target = impl Signer> + Clone>(
         &self,
         client: &'a crate::Client<C>,
-    ) -> (RpcBuilder<'a, C>, RpcBuilder<'a, C>) {
+    ) -> (TransactionBuilder<'a, C>, TransactionBuilder<'a, C>) {
         use crate::store::token::TokenAccountOps;
 
         let mut pre_builder = client.store_rpc();
@@ -1485,7 +1489,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteWithPythPrices<'a, C>
     async fn build_rpc_with_price_updates(
         &mut self,
         price_updates: Prices,
-    ) -> crate::Result<Vec<crate::utils::RpcBuilder<'a, C, ()>>> {
+    ) -> crate::Result<Vec<TransactionBuilder<'a, C, ()>>> {
         let tx = self
             .parse_with_pyth_price_updates(price_updates)
             .build()

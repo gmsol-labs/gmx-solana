@@ -8,6 +8,10 @@ use anchor_client::{
     solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey, signer::Signer},
 };
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
+use gmsol_solana_utils::{
+    bundle_builder::BundleBuilder, compute_budget::ComputeBudget,
+    transaction_builder::TransactionBuilder,
+};
 use gmsol_store::{
     accounts, instruction,
     ops::glv::CreateGlvWithdrawalParams,
@@ -23,10 +27,9 @@ use crate::{
     store::{token::TokenAccountOps, utils::FeedsParser},
     utils::{
         builder::{
-            FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
-            SetExecutionFee,
+            FeedAddressMap, FeedIds, MakeBundleBuilder, PullOraclePriceConsumer, SetExecutionFee,
         },
-        fix_optional_account_metas, ComputeBudget, RpcBuilder, TransactionBuilder, ZeroCopy,
+        fix_optional_account_metas, ZeroCopy,
     },
 };
 
@@ -180,7 +183,9 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvWithdrawalBuilder<'a, 
     }
 
     /// Build.
-    pub async fn build_with_address(&mut self) -> crate::Result<(RpcBuilder<'a, C>, Pubkey)> {
+    pub async fn build_with_address(
+        &mut self,
+    ) -> crate::Result<(TransactionBuilder<'a, C>, Pubkey)> {
         let hint = self.prepare_hint().await?;
 
         let nonce = self.nonce.unwrap_or_else(generate_nonce);
@@ -270,7 +275,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvWithdrawalBuilder<'a, 
         let create = self
             .client
             .store_rpc()
-            .accounts(accounts::CreateGlvWithdrawal {
+            .anchor_accounts(accounts::CreateGlvWithdrawal {
                 owner,
                 receiver,
                 store: self.store,
@@ -291,7 +296,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvWithdrawalBuilder<'a, 
                 glv_token_program: glv_token_program_id,
                 associated_token_program: anchor_spl::associated_token::ID,
             })
-            .args(instruction::CreateGlvWithdrawal {
+            .anchor_args(instruction::CreateGlvWithdrawal {
                 nonce,
                 params: CreateGlvWithdrawalParams {
                     execution_lamports: self.max_execution_lamports,
@@ -412,7 +417,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvWithdrawalBuilder<'a, C
     }
 
     /// Build.
-    pub async fn build(&mut self) -> crate::Result<RpcBuilder<'a, C>> {
+    pub async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
 
         let token_program_id = anchor_spl::token::ID;
@@ -446,7 +451,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvWithdrawalBuilder<'a, C
         let rpc = self
             .client
             .store_rpc()
-            .accounts(accounts::CloseGlvWithdrawal {
+            .anchor_accounts(accounts::CloseGlvWithdrawal {
                 executor: payer,
                 store: hint.store,
                 store_wallet: self.client.find_store_wallet_address(&hint.store),
@@ -472,7 +477,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvWithdrawalBuilder<'a, C
                 event_authority: self.client.store_event_authority(),
                 program: *self.client.store_program_id(),
             })
-            .args(instruction::CloseGlvWithdrawal {
+            .anchor_args(instruction::CloseGlvWithdrawal {
                 reason: self.reason.clone(),
             });
         Ok(rpc)
@@ -667,7 +672,7 @@ mod pyth {
         async fn build_rpc_with_price_updates(
             &mut self,
             price_updates: Prices,
-        ) -> crate::Result<Vec<crate::utils::RpcBuilder<'a, C, ()>>> {
+        ) -> crate::Result<Vec<TransactionBuilder<'a, C, ()>>> {
             let txn = self
                 .parse_with_pyth_price_updates(price_updates)
                 .build()
@@ -677,10 +682,10 @@ mod pyth {
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     for ExecuteGlvWithdrawalBuilder<'a, C>
 {
-    async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+    async fn build(&mut self) -> crate::Result<BundleBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
 
         let token_program_id = anchor_spl::token::ID;
@@ -765,7 +770,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
                 &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
                 self.client.store_program_id(),
             ))
-            .args(instruction::ExecuteGlvWithdrawal {
+            .anchor_args(instruction::ExecuteGlvWithdrawal {
                 execution_lamports: self.execution_lamports,
                 throw_on_execution_error: !self.cancel_on_execution_error,
             })

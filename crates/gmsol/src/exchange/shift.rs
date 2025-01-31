@@ -5,6 +5,7 @@ use anchor_client::{
     solana_sdk::{pubkey::Pubkey, signer::Signer},
 };
 use anchor_spl::associated_token::get_associated_token_address;
+use gmsol_solana_utils::{bundle_builder::BundleBuilder, transaction_builder::TransactionBuilder};
 use gmsol_store::{
     accounts, instruction,
     instructions::ordered_tokens,
@@ -20,10 +21,9 @@ use crate::{
     store::{token::TokenAccountOps, utils::FeedsParser},
     utils::{
         builder::{
-            FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
-            SetExecutionFee,
+            FeedAddressMap, FeedIds, MakeBundleBuilder, PullOraclePriceConsumer, SetExecutionFee,
         },
-        fix_optional_account_metas, RpcBuilder, TransactionBuilder, ZeroCopy,
+        fix_optional_account_metas, ZeroCopy,
     },
 };
 
@@ -114,8 +114,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateShiftBuilder<'a, C> {
         }
     }
 
-    /// Build a [`RpcBuilder`] to create shift account and return the address of the shift account to create.
-    pub fn build_with_address(&self) -> crate::Result<(RpcBuilder<'a, C>, Pubkey)> {
+    /// Build a [`TransactionBuilder`] to create shift account and return the address of the shift account to create.
+    pub fn build_with_address(&self) -> crate::Result<(TransactionBuilder<'a, C>, Pubkey)> {
         let token_program_id = anchor_spl::token::ID;
 
         let owner = self.client.payer();
@@ -157,7 +157,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateShiftBuilder<'a, C> {
         let rpc = self
             .client
             .store_rpc()
-            .accounts(accounts::CreateShift {
+            .anchor_accounts(accounts::CreateShift {
                 owner,
                 receiver,
                 store: self.store,
@@ -174,7 +174,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateShiftBuilder<'a, C> {
                 token_program: token_program_id,
                 associated_token_program: anchor_spl::associated_token::ID,
             })
-            .args(instruction::CreateShift {
+            .anchor_args(instruction::CreateShift {
                 nonce,
                 params: self.get_create_shift_params(),
             });
@@ -269,14 +269,14 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseShiftBuilder<'a, C> {
         Ok(hint)
     }
 
-    /// Build a [`RpcBuilder`] to close shift account.
-    pub async fn build(&mut self) -> crate::Result<RpcBuilder<'a, C>> {
+    /// Build a [`TransactionBuilder`] to close shift account.
+    pub async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
         let executor = self.client.payer();
         let rpc = self
             .client
             .store_rpc()
-            .accounts(accounts::CloseShift {
+            .anchor_accounts(accounts::CloseShift {
                 executor,
                 store: hint.store,
                 store_wallet: self.client.find_store_wallet_address(&hint.store),
@@ -295,7 +295,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseShiftBuilder<'a, C> {
                 event_authority: self.client.store_event_authority(),
                 program: *self.client.store_program_id(),
             })
-            .args(instruction::CloseShift {
+            .anchor_args(instruction::CloseShift {
                 reason: self.reason.clone(),
             });
 
@@ -444,8 +444,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteShiftBuilder<'a, C> {
         Ok(hint)
     }
 
-    /// Build a [`RpcBuilder`] for `execute_shift` instruction.
-    async fn build_rpc(&mut self) -> crate::Result<RpcBuilder<'a, C>> {
+    /// Build a [`TransactionBuilder`] for `execute_shift` instruction.
+    async fn build_rpc(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
         let authority = self.client.payer();
 
@@ -486,7 +486,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteShiftBuilder<'a, C> {
                 &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
                 self.client.store_program_id(),
             ))
-            .args(instruction::ExecuteShift {
+            .anchor_args(instruction::ExecuteShift {
                 execution_lamports: self.execution_fee,
                 throw_on_execution_error: !self.cancel_on_execution_error,
             })
@@ -537,7 +537,7 @@ mod pyth {
         async fn build_rpc_with_price_updates(
             &mut self,
             price_updates: Prices,
-        ) -> crate::Result<Vec<crate::utils::RpcBuilder<'a, C, ()>>> {
+        ) -> crate::Result<Vec<TransactionBuilder<'a, C, ()>>> {
             let rpc = self
                 .parse_with_pyth_price_updates(price_updates)
                 .build_rpc()
@@ -547,10 +547,10 @@ mod pyth {
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     for ExecuteShiftBuilder<'a, C>
 {
-    async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+    async fn build(&mut self) -> crate::Result<BundleBuilder<'a, C>> {
         let mut tx = self.client.transaction();
         tx.try_push(self.build_rpc().await?)?;
         Ok(tx)

@@ -2,9 +2,10 @@ use std::ops::Deref;
 
 use anchor_client::solana_sdk::{pubkey::Pubkey, signer::Signer};
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
+use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_store::{accounts, instruction};
 
-use crate::{store::token::TokenAccountOps, utils::RpcBuilder};
+use crate::store::token::TokenAccountOps;
 
 /// Claim fees builder.
 // TODO: implement this.
@@ -41,7 +42,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ClaimFeesBuilder<'a, C> {
     }
 
     /// Build.
-    pub async fn build(&self) -> crate::Result<RpcBuilder<'a, C>> {
+    pub async fn build(&self) -> crate::Result<TransactionBuilder<'a, C>> {
         let market = self
             .client
             .find_market_address(&self.store, &self.market_token);
@@ -67,7 +68,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ClaimFeesBuilder<'a, C> {
         let rpc = self
             .client
             .store_rpc()
-            .accounts(accounts::ClaimFeesFromMarket {
+            .anchor_accounts(accounts::ClaimFeesFromMarket {
                 authority,
                 store: self.store,
                 market,
@@ -78,7 +79,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ClaimFeesBuilder<'a, C> {
                 event_authority: self.client.store_event_authority(),
                 program: *self.client.store_program_id(),
             })
-            .args(instruction::ClaimFeesFromMarket {});
+            .anchor_args(instruction::ClaimFeesFromMarket {});
 
         Ok(prepare.merge(rpc))
     }

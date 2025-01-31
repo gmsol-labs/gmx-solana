@@ -45,7 +45,7 @@ async fn referral() -> eyre::Result<()> {
         .await
         .expect_err("should throw an error on self-referral");
     assert_eq!(
-        err.anchor_error_code(),
+        gmsol::Error::from(err).anchor_error_code(),
         Some(CoreError::SelfReferral.into())
     );
 
@@ -73,7 +73,7 @@ async fn referral() -> eyre::Result<()> {
         .await
         .expect_err("should throw an error on mutal-referral");
     assert_eq!(
-        err.anchor_error_code(),
+        gmsol::Error::from(err).anchor_error_code(),
         Some(CoreError::MutualReferral.into())
     );
 

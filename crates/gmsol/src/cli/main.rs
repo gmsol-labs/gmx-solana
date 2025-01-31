@@ -1,15 +1,13 @@
 use std::rc::Rc;
 
 use admin::AdminArgs;
-use anchor_client::{
-    solana_sdk::{
-        commitment_config::CommitmentConfig, pubkey::Pubkey, signature::NullSigner, signer::Signer,
-    },
-    Cluster,
+use anchor_client::solana_sdk::{
+    commitment_config::CommitmentConfig, pubkey::Pubkey, signature::NullSigner, signer::Signer,
 };
 use clap::Parser;
 use eyre::eyre;
 use gmsol::utils::{instruction::InstructionSerialization, LocalSignerRef};
+use gmsol_solana_utils::cluster::Cluster;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;

@@ -5,6 +5,7 @@ use anchor_client::{
     solana_sdk::{pubkey::Pubkey, signer::Signer},
 };
 use gmsol_model::{price::Prices, PnlFactorKind};
+use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_store::{
     accounts, instruction,
     states::{
@@ -13,12 +14,14 @@ use gmsol_store::{
     },
 };
 
-use crate::utils::RpcBuilder;
-
 /// Vault Operations.
 pub trait VaultOps<C> {
     /// Initialize a market vault for the given token.
-    fn initialize_market_vault(&self, store: &Pubkey, token: &Pubkey) -> (RpcBuilder<C>, Pubkey);
+    fn initialize_market_vault(
+        &self,
+        store: &Pubkey,
+        token: &Pubkey,
+    ) -> (TransactionBuilder<C>, Pubkey);
 }
 
 impl<C, S> VaultOps<C> for crate::Client<C>
@@ -26,12 +29,16 @@ where
     C: Deref<Target = S> + Clone,
     S: Signer,
 {
-    fn initialize_market_vault(&self, store: &Pubkey, token: &Pubkey) -> (RpcBuilder<C>, Pubkey) {
+    fn initialize_market_vault(
+        &self,
+        store: &Pubkey,
+        token: &Pubkey,
+    ) -> (TransactionBuilder<C>, Pubkey) {
         let authority = self.payer();
         let vault = self.find_market_vault_address(store, token);
         let builder = self
             .store_rpc()
-            .accounts(accounts::InitializeMarketVault {
+            .anchor_accounts(accounts::InitializeMarketVault {
                 authority,
                 store: *store,
                 mint: *token,
@@ -39,7 +46,7 @@ where
                 system_program: system_program::ID,
                 token_program: anchor_spl::token::ID,
             })
-            .args(instruction::InitializeMarketVault {});
+            .anchor_args(instruction::InitializeMarketVault {});
         (builder, vault)
     }
 }
@@ -54,7 +61,7 @@ pub trait MarketOps<C> {
         prices: Prices<u128>,
         maximize_pnl: bool,
         maximize_pool_value: bool,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Get market token price.
     fn get_market_token_price(
@@ -64,7 +71,7 @@ pub trait MarketOps<C> {
         prices: Prices<u128>,
         pnl_factor: PnlFactorKind,
         maximize: bool,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Update market config.
     fn update_market_config(
@@ -73,7 +80,7 @@ pub trait MarketOps<C> {
         market_token: &Pubkey,
         key: &str,
         value: &Factor,
-    ) -> crate::Result<RpcBuilder<C>>;
+    ) -> crate::Result<TransactionBuilder<C>>;
 
     /// Update market config flag
     fn update_market_config_flag(
@@ -82,7 +89,7 @@ pub trait MarketOps<C> {
         market_token: &Pubkey,
         key: &str,
         value: bool,
-    ) -> crate::Result<RpcBuilder<C>>;
+    ) -> crate::Result<TransactionBuilder<C>>;
 
     /// Update market config by key.
     fn update_market_config_by_key(
@@ -91,7 +98,7 @@ pub trait MarketOps<C> {
         market_token: &Pubkey,
         key: MarketConfigKey,
         value: &Factor,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let key = key.to_string();
         self.update_market_config(store, market_token, &key, value)
     }
@@ -103,13 +110,18 @@ pub trait MarketOps<C> {
         market_token: &Pubkey,
         key: MarketConfigFlag,
         value: bool,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let key = key.to_string();
         self.update_market_config_flag(store, market_token, &key, value)
     }
 
     /// Toggle market.
-    fn toggle_market(&self, store: &Pubkey, market_token: &Pubkey, enable: bool) -> RpcBuilder<C>;
+    fn toggle_market(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        enable: bool,
+    ) -> TransactionBuilder<C>;
 
     /// Toggle GT minting.
     fn toggle_gt_minting(
@@ -117,7 +129,7 @@ pub trait MarketOps<C> {
         store: &Pubkey,
         market_token: &Pubkey,
         enable: bool,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Initialize Market Config Buffer.
     fn initialize_market_config_buffer<'a>(
@@ -125,28 +137,28 @@ pub trait MarketOps<C> {
         store: &Pubkey,
         buffer: &'a dyn Signer,
         expire_after_secs: u32,
-    ) -> RpcBuilder<'a, C>;
+    ) -> TransactionBuilder<'a, C>;
 
     /// Close Market Config Buffer.
     fn close_marekt_config_buffer(
         &self,
         buffer: &Pubkey,
         receiver: Option<&Pubkey>,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Push to Market Config Buffer.
     fn push_to_market_config_buffer<S: ToString>(
         &self,
         buffer: &Pubkey,
         new_configs: impl IntoIterator<Item = (S, Factor)>,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Set the authority of the Market Config Buffer.
     fn set_market_config_buffer_authority(
         &self,
         buffer: &Pubkey,
         new_authority: &Pubkey,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Update Market Config with the buffer.
     fn update_market_config_with_buffer(
@@ -154,7 +166,7 @@ pub trait MarketOps<C> {
         store: &Pubkey,
         market_token: &Pubkey,
         buffer: &Pubkey,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 }
 
 impl<C, S> MarketOps<C> for crate::Client<C>
@@ -169,14 +181,14 @@ where
         prices: Prices<u128>,
         maximize_pnl: bool,
         maximize_pool_value: bool,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::GetMarketStatus {
+            .anchor_args(instruction::GetMarketStatus {
                 prices,
                 maximize_pnl,
                 maximize_pool_value,
             })
-            .accounts(accounts::ReadMarket {
+            .anchor_accounts(accounts::ReadMarket {
                 market: self.find_market_address(store, market_token),
             })
     }
@@ -188,14 +200,14 @@ where
         prices: Prices<u128>,
         pnl_factor: PnlFactorKind,
         maximize: bool,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::GetMarketTokenPrice {
+            .anchor_args(instruction::GetMarketTokenPrice {
                 prices,
                 pnl_factor: pnl_factor.to_string(),
                 maximize,
             })
-            .accounts(accounts::ReadMarketWithToken {
+            .anchor_accounts(accounts::ReadMarketWithToken {
                 market: self.find_market_address(store, market_token),
                 market_token: *market_token,
             })
@@ -207,14 +219,14 @@ where
         market_token: &Pubkey,
         key: &str,
         value: &Factor,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let req = self
             .store_rpc()
-            .args(instruction::UpdateMarketConfig {
+            .anchor_args(instruction::UpdateMarketConfig {
                 key: key.to_string(),
                 value: *value,
             })
-            .accounts(accounts::UpdateMarketConfig {
+            .anchor_accounts(accounts::UpdateMarketConfig {
                 authority: self.payer(),
                 store: *store,
                 market: self.find_market_address(store, market_token),
@@ -228,14 +240,14 @@ where
         market_token: &Pubkey,
         key: &str,
         value: bool,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let req = self
             .store_rpc()
-            .args(instruction::UpdateMarketConfigFlag {
+            .anchor_args(instruction::UpdateMarketConfigFlag {
                 key: key.to_string(),
                 value,
             })
-            .accounts(accounts::UpdateMarketConfig {
+            .anchor_accounts(accounts::UpdateMarketConfig {
                 authority: self.payer(),
                 store: *store,
                 market: self.find_market_address(store, market_token),
@@ -243,10 +255,15 @@ where
         Ok(req)
     }
 
-    fn toggle_market(&self, store: &Pubkey, market_token: &Pubkey, enable: bool) -> RpcBuilder<C> {
+    fn toggle_market(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        enable: bool,
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::ToggleMarket { enable })
-            .accounts(accounts::ToggleMarket {
+            .anchor_args(instruction::ToggleMarket { enable })
+            .anchor_accounts(accounts::ToggleMarket {
                 authority: self.payer(),
                 store: *store,
                 market: self.find_market_address(store, market_token),
@@ -258,10 +275,10 @@ where
         store: &Pubkey,
         market_token: &Pubkey,
         enable: bool,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::ToggleGtMinting { enable })
-            .accounts(accounts::ToggleGTMinting {
+            .anchor_args(instruction::ToggleGtMinting { enable })
+            .anchor_accounts(accounts::ToggleGTMinting {
                 authority: self.payer(),
                 store: *store,
                 market: self.find_market_address(store, market_token),
@@ -273,10 +290,10 @@ where
         store: &Pubkey,
         buffer: &'a dyn Signer,
         expire_after_secs: u32,
-    ) -> RpcBuilder<'a, C> {
+    ) -> TransactionBuilder<'a, C> {
         self.store_rpc()
-            .args(instruction::InitializeMarketConfigBuffer { expire_after_secs })
-            .accounts(accounts::InitializeMarketConfigBuffer {
+            .anchor_args(instruction::InitializeMarketConfigBuffer { expire_after_secs })
+            .anchor_accounts(accounts::InitializeMarketConfigBuffer {
                 authority: self.payer(),
                 store: *store,
                 buffer: buffer.pubkey(),
@@ -289,10 +306,10 @@ where
         &self,
         buffer: &Pubkey,
         receiver: Option<&Pubkey>,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::CloseMarketConfigBuffer {})
-            .accounts(accounts::CloseMarketConfigBuffer {
+            .anchor_args(instruction::CloseMarketConfigBuffer {})
+            .anchor_accounts(accounts::CloseMarketConfigBuffer {
                 authority: self.payer(),
                 buffer: *buffer,
                 receiver: receiver.copied().unwrap_or(self.payer()),
@@ -303,9 +320,9 @@ where
         &self,
         buffer: &Pubkey,
         new_configs: impl IntoIterator<Item = (K, Factor)>,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::PushToMarketConfigBuffer {
+            .anchor_args(instruction::PushToMarketConfigBuffer {
                 new_configs: new_configs
                     .into_iter()
                     .map(|(key, value)| EntryArgs {
@@ -314,7 +331,7 @@ where
                     })
                     .collect(),
             })
-            .accounts(accounts::PushToMarketConfigBuffer {
+            .anchor_accounts(accounts::PushToMarketConfigBuffer {
                 authority: self.payer(),
                 buffer: *buffer,
                 system_program: system_program::ID,
@@ -325,12 +342,12 @@ where
         &self,
         buffer: &Pubkey,
         new_authority: &Pubkey,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::SetMarketConfigBufferAuthority {
+            .anchor_args(instruction::SetMarketConfigBufferAuthority {
                 new_authority: *new_authority,
             })
-            .accounts(accounts::SetMarketConfigBufferAuthority {
+            .anchor_accounts(accounts::SetMarketConfigBufferAuthority {
                 authority: self.payer(),
                 buffer: *buffer,
             })
@@ -341,10 +358,10 @@ where
         store: &Pubkey,
         market_token: &Pubkey,
         buffer: &Pubkey,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::UpdateMarketConfigWithBuffer {})
-            .accounts(accounts::UpdateMarketConfigWithBuffer {
+            .anchor_args(instruction::UpdateMarketConfigWithBuffer {})
+            .anchor_accounts(accounts::UpdateMarketConfigWithBuffer {
                 authority: self.payer(),
                 store: *store,
                 market: self.find_market_address(store, market_token),

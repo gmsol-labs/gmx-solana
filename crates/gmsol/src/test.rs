@@ -5,8 +5,8 @@ use std::env;
 use tracing::subscriber::set_default;
 use tracing_subscriber::EnvFilter;
 
-pub(crate) fn default_cluster() -> anchor_client::Cluster {
-    anchor_client::Cluster::Devnet
+pub(crate) fn default_cluster() -> gmsol_solana_utils::cluster::Cluster {
+    gmsol_solana_utils::cluster::Cluster::Devnet
 }
 
 pub(crate) fn setup_fmt_tracing(default_rust_log: &str) -> impl Drop {

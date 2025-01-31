@@ -48,15 +48,20 @@ impl Args {
                 if enable == disable {
                     return Err(gmsol::Error::invalid_argument("invalid toggle flags"));
                 }
-                let req = client
-                    .toggle_feature(store, domain, action, enable)
-                    .into_anchor_request_without_compute_budget();
-                crate::utils::send_or_serialize(req, serialize_only, |signature| {
-                    let msg = if enable { "enabled" } else { "disabled" };
-                    tracing::info!("{msg} feature: {}", display_feature(domain, action));
-                    println!("{signature}");
-                    Ok(())
-                })
+                let req = client.toggle_feature(store, domain, action, enable);
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    req,
+                    None,
+                    serialize_only,
+                    false,
+                    |signature| {
+                        let msg = if enable { "enabled" } else { "disabled" };
+                        tracing::info!("{msg} feature: {}", display_feature(domain, action));
+                        println!("{signature}");
+                        Ok(())
+                    },
+                )
                 .await
             }
         }

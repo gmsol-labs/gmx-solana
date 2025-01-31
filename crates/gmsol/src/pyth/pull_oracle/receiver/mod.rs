@@ -3,9 +3,10 @@ use std::ops::Deref;
 use anchor_client::solana_sdk::{
     pubkey::Pubkey, signature::Keypair, signer::Signer, system_program,
 };
+use gmsol_solana_utils::{
+    compute_budget::ComputeBudget, program::Program, transaction_builder::TransactionBuilder,
+};
 use pythnet_sdk::wire::v1::MerklePriceUpdate;
-
-use crate::utils::{transaction_builder::rpc_builder::Program, ComputeBudget, RpcBuilder};
 
 mod accounts;
 mod instruction;
@@ -43,10 +44,10 @@ pub trait PythReceiverOps<C> {
         price_update: Keypair,
         update: &MerklePriceUpdate,
         encoded_vaa: &Pubkey,
-    ) -> crate::Result<RpcBuilder<'a, C, Pubkey>>;
+    ) -> crate::Result<TransactionBuilder<'a, C, Pubkey>>;
 
     /// Reclaim rent.
-    fn reclaim_rent(&self, price_update: &Pubkey) -> RpcBuilder<C>;
+    fn reclaim_rent(&self, price_update: &Pubkey) -> TransactionBuilder<C>;
 }
 
 impl<S, C> PythReceiverOps<C> for Program<C>
@@ -59,16 +60,16 @@ where
         price_update: Keypair,
         update: &MerklePriceUpdate,
         encoded_vaa: &Pubkey,
-    ) -> crate::Result<RpcBuilder<'a, C, Pubkey>> {
+    ) -> crate::Result<TransactionBuilder<'a, C, Pubkey>> {
         let treasury_id = rand::random();
         Ok(self
-            .rpc()
-            .with_output(price_update.pubkey())
-            .args(instruction::PostUpdate {
+            .transaction()
+            .output(price_update.pubkey())
+            .anchor_args(instruction::PostUpdate {
                 merkle_price_update: update.clone(),
                 treasury_id,
             })
-            .accounts(accounts::PostUpdate {
+            .anchor_accounts(accounts::PostUpdate {
                 payer: self.payer(),
                 encoded_vaa: *encoded_vaa,
                 config: find_config_pda().0,
@@ -81,10 +82,10 @@ where
             .compute_budget(ComputeBudget::default().with_limit(POST_PRICE_UPDATE_COMPUTE_BUDGET)))
     }
 
-    fn reclaim_rent(&self, price_update: &Pubkey) -> RpcBuilder<C> {
-        self.rpc()
-            .args(instruction::ReclaimRent {})
-            .accounts(accounts::ReclaimRent {
+    fn reclaim_rent(&self, price_update: &Pubkey) -> TransactionBuilder<C> {
+        self.transaction()
+            .anchor_args(instruction::ReclaimRent {})
+            .anchor_accounts(accounts::ReclaimRent {
                 payer: self.payer(),
                 price_update_account: *price_update,
             })

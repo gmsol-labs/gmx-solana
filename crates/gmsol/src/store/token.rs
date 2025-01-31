@@ -8,9 +8,9 @@ use anchor_client::{
     solana_sdk::{pubkey::Pubkey, signer::Signer},
 };
 use anchor_spl::{associated_token::get_associated_token_address_with_program_id, token::Token};
+use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_store::{accounts, instruction};
 
-use crate::utils::RpcBuilder;
 /// Token accounts management for GMSOL.
 pub trait TokenAccountOps<C> {
     /// Prepare a claimable account.
@@ -22,7 +22,7 @@ pub trait TokenAccountOps<C> {
         timestamp: i64,
         account: &Pubkey,
         amount: u64,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Close a claimable account if it is emtpy.
     fn close_empty_claimable_account(
@@ -32,7 +32,7 @@ pub trait TokenAccountOps<C> {
         user: &Pubkey,
         timestamp: i64,
         account: &Pubkey,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Prepare associated token account.
     fn prepare_associated_token_account(
@@ -40,7 +40,7 @@ pub trait TokenAccountOps<C> {
         mint: &Pubkey,
         token_program_id: &Pubkey,
         owner: Option<&Pubkey>,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 }
 
 impl<C, S> TokenAccountOps<C> for crate::Client<C>
@@ -56,11 +56,11 @@ where
         timestamp: i64,
         account: &Pubkey,
         amount: u64,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let authority = self.payer();
         self.store_rpc()
-            .args(instruction::UseClaimableAccount { timestamp, amount })
-            .accounts(accounts::UseClaimableAccount {
+            .anchor_args(instruction::UseClaimableAccount { timestamp, amount })
+            .anchor_accounts(accounts::UseClaimableAccount {
                 authority,
                 store: *store,
                 mint: *mint,
@@ -78,11 +78,11 @@ where
         owner: &Pubkey,
         timestamp: i64,
         account: &Pubkey,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let authority = self.payer();
         self.store_rpc()
-            .args(instruction::CloseEmptyClaimableAccount { timestamp })
-            .accounts(accounts::CloseEmptyClaimableAccount {
+            .anchor_args(instruction::CloseEmptyClaimableAccount { timestamp })
+            .anchor_accounts(accounts::CloseEmptyClaimableAccount {
                 authority,
                 store: *store,
                 mint: *mint,
@@ -98,12 +98,12 @@ where
         mint: &Pubkey,
         token_program_id: &Pubkey,
         owner: Option<&Pubkey>,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let payer = self.payer();
         let owner = owner.copied().unwrap_or(payer);
         let account = get_associated_token_address_with_program_id(&owner, mint, token_program_id);
         self.store_rpc()
-            .accounts(accounts::PrepareAssociatedTokenAccount {
+            .anchor_accounts(accounts::PrepareAssociatedTokenAccount {
                 payer,
                 owner,
                 mint: *mint,
@@ -112,6 +112,6 @@ where
                 token_program: *token_program_id,
                 associated_token_program: anchor_spl::associated_token::ID,
             })
-            .args(instruction::PrepareAssociatedTokenAccount {})
+            .anchor_args(instruction::PrepareAssociatedTokenAccount {})
     }
 }

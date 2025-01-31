@@ -1,10 +1,9 @@
 use std::ops::Deref;
 
 use anchor_client::solana_sdk::signer::Signer;
+use gmsol_solana_utils::bundle_builder::BundleBuilder;
 
-use crate::utils::TransactionBuilder;
-
-use super::MakeTransactionBuilder;
+use super::MakeBundleBuilder;
 
 /// Estimate Execution Fee.
 pub struct EstimateFee<T> {
@@ -33,12 +32,12 @@ pub trait SetExecutionFee {
     fn set_execution_fee(&mut self, lamports: u64) -> &mut Self;
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone, T> MakeTransactionBuilder<'a, C> for EstimateFee<T>
+impl<'a, C: Deref<Target = impl Signer> + Clone, T> MakeBundleBuilder<'a, C> for EstimateFee<T>
 where
     T: SetExecutionFee,
-    T: MakeTransactionBuilder<'a, C>,
+    T: MakeBundleBuilder<'a, C>,
 {
-    async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+    async fn build(&mut self) -> crate::Result<BundleBuilder<'a, C>> {
         let mut tx = self.builder.build().await?;
 
         if self.builder.is_execution_fee_estimation_required() {

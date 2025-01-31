@@ -4,8 +4,9 @@ use anchor_client::{
     solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction},
     ClientError,
 };
-
-use crate::utils::{transaction_builder::rpc_builder::Program, ComputeBudget, RpcBuilder};
+use gmsol_solana_utils::{
+    compute_budget::ComputeBudget, program::Program, transaction_builder::TransactionBuilder,
+};
 
 mod accounts;
 mod instruction;
@@ -49,16 +50,25 @@ pub trait WormholeOps<C> {
         &self,
         encoded_vaa: Keypair,
         vaa_buffer_len: u64,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C, Pubkey>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C, Pubkey>>>;
 
     /// Write to encoded vaa account.
-    fn write_encoded_vaa(&self, draft_vaa: &Pubkey, index: u32, data: &[u8]) -> RpcBuilder<C>;
+    fn write_encoded_vaa(
+        &self,
+        draft_vaa: &Pubkey,
+        index: u32,
+        data: &[u8],
+    ) -> TransactionBuilder<C>;
 
     /// Verify encoded vaa account.
-    fn verify_encoded_vaa_v1(&self, draft_vaa: &Pubkey, guardian_set_index: i32) -> RpcBuilder<C>;
+    fn verify_encoded_vaa_v1(
+        &self,
+        draft_vaa: &Pubkey,
+        guardian_set_index: i32,
+    ) -> TransactionBuilder<C>;
 
     /// Close encoded vaa account.
-    fn close_encoded_vaa(&self, encoded_vaa: &Pubkey) -> RpcBuilder<C>;
+    fn close_encoded_vaa(&self, encoded_vaa: &Pubkey) -> TransactionBuilder<C>;
 }
 
 impl<S, C> WormholeOps<C> for Program<C>
@@ -70,15 +80,15 @@ where
         &self,
         encoded_vaa: Keypair,
         vaa_buffer_len: u64,
-    ) -> crate::Result<RpcBuilder<C, Pubkey>> {
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>> {
         let space = vaa_buffer_len + VAA_START;
         let lamports = self
-            .solana_rpc()
+            .rpc()
             .get_minimum_balance_for_rent_exemption(space as usize)
             .await
             .map_err(ClientError::from)?;
         let request = self
-            .rpc()
+            .transaction()
             .pre_instruction(system_instruction::create_account(
                 &self.payer(),
                 &encoded_vaa.pubkey(),
@@ -86,34 +96,43 @@ where
                 space,
                 self.id(),
             ))
-            .args(instruction::InitEncodedVaa {})
-            .accounts(accounts::InitEncodedVaa {
+            .anchor_args(instruction::InitEncodedVaa {})
+            .anchor_accounts(accounts::InitEncodedVaa {
                 write_authority: self.payer(),
                 encoded_vaa: encoded_vaa.pubkey(),
             })
-            .with_output(encoded_vaa.pubkey())
+            .output(encoded_vaa.pubkey())
             .owned_signer(encoded_vaa)
             .compute_budget(ComputeBudget::default().with_limit(INIT_ENCODED_VAA_COMPUTE_BUDGET));
         Ok(request)
     }
 
-    fn write_encoded_vaa(&self, draft_vaa: &Pubkey, index: u32, data: &[u8]) -> RpcBuilder<C> {
-        self.rpc()
-            .args(instruction::WriteEncodedVaa {
+    fn write_encoded_vaa(
+        &self,
+        draft_vaa: &Pubkey,
+        index: u32,
+        data: &[u8],
+    ) -> TransactionBuilder<C> {
+        self.transaction()
+            .anchor_args(instruction::WriteEncodedVaa {
                 index,
                 data: data.to_owned(),
             })
-            .accounts(accounts::WriteEncodedVaa {
+            .anchor_accounts(accounts::WriteEncodedVaa {
                 write_authority: self.payer(),
                 draft_vaa: *draft_vaa,
             })
             .compute_budget(ComputeBudget::default().with_limit(WRITE_ENCODED_VAA_COMPUTE_BUDGET))
     }
 
-    fn verify_encoded_vaa_v1(&self, draft_vaa: &Pubkey, guardian_set_index: i32) -> RpcBuilder<C> {
-        self.rpc()
-            .args(instruction::VerifyEncodedVaaV1 {})
-            .accounts(accounts::VerifyEncodedVaaV1 {
+    fn verify_encoded_vaa_v1(
+        &self,
+        draft_vaa: &Pubkey,
+        guardian_set_index: i32,
+    ) -> TransactionBuilder<C> {
+        self.transaction()
+            .anchor_args(instruction::VerifyEncodedVaaV1 {})
+            .anchor_accounts(accounts::VerifyEncodedVaaV1 {
                 write_authority: self.payer(),
                 draft_vaa: *draft_vaa,
                 guardian_set: find_guardian_set_pda(guardian_set_index).0,
@@ -123,10 +142,10 @@ where
             )
     }
 
-    fn close_encoded_vaa(&self, encoded_vaa: &Pubkey) -> RpcBuilder<C> {
-        self.rpc()
-            .args(instruction::CloseEncodedVaa {})
-            .accounts(accounts::CloseEncodedVaa {
+    fn close_encoded_vaa(&self, encoded_vaa: &Pubkey) -> TransactionBuilder<C> {
+        self.transaction()
+            .anchor_args(instruction::CloseEncodedVaa {})
+            .anchor_accounts(accounts::CloseEncodedVaa {
                 write_authority: self.payer(),
                 encoded_vaa: *encoded_vaa,
             })

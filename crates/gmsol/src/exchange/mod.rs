@@ -26,6 +26,7 @@ use anchor_client::{
     solana_sdk::{pubkey::Pubkey, signer::Signer},
 };
 use auto_deleveraging::UpdateAdlBuilder;
+use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_store::{
     accounts, instruction,
     ops::order::PositionCutKind,
@@ -41,7 +42,7 @@ use rand::{distributions::Standard, Rng};
 use shift::{CloseShiftBuilder, CreateShiftBuilder, ExecuteShiftBuilder};
 use treasury::ClaimFeesBuilder;
 
-use crate::{store::market::VaultOps, utils::RpcBuilder};
+use crate::store::market::VaultOps;
 
 use self::{
     deposit::{CloseDepositBuilder, CreateDepositBuilder, ExecuteDepositBuilder},
@@ -58,7 +59,7 @@ pub trait ExchangeOps<C> {
         domian: DomainDisabledFlag,
         action: ActionDisabledFlag,
         enable: bool,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Claim fees.
     fn claim_fees(
@@ -79,7 +80,7 @@ pub trait ExchangeOps<C> {
         short_token: &Pubkey,
         enable: bool,
         token_map: Option<&Pubkey>,
-    ) -> impl Future<Output = crate::Result<(RpcBuilder<C>, Pubkey)>>;
+    ) -> impl Future<Output = crate::Result<(TransactionBuilder<C>, Pubkey)>>;
 
     /// Fund the given market.
     fn fund_market(
@@ -89,7 +90,7 @@ pub trait ExchangeOps<C> {
         source_account: &Pubkey,
         amount: u64,
         token: Option<&Pubkey>,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Create a deposit.
     fn create_deposit(&self, store: &Pubkey, market_token: &Pubkey) -> CreateDepositBuilder<C>;
@@ -142,7 +143,7 @@ pub trait ExchangeOps<C> {
         market_token: &Pubkey,
         order: &Pubkey,
         params: UpdateOrderParams,
-    ) -> crate::Result<RpcBuilder<C>>;
+    ) -> crate::Result<TransactionBuilder<C>>;
 
     /// Execute an order.
     fn execute_order(
@@ -162,7 +163,7 @@ pub trait ExchangeOps<C> {
         store: &Pubkey,
         order: &Pubkey,
         position_hint: Option<&Pubkey>,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Liquidate a position.
     fn liquidate(&self, oracle: &Pubkey, position: &Pubkey)
@@ -402,14 +403,14 @@ where
         domian: DomainDisabledFlag,
         action: ActionDisabledFlag,
         enable: bool,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(gmsol_store::instruction::ToggleFeature {
+            .anchor_args(gmsol_store::instruction::ToggleFeature {
                 domain: domian.to_string(),
                 action: action.to_string(),
                 enable,
             })
-            .accounts(gmsol_store::accounts::ToggleFeature {
+            .anchor_accounts(gmsol_store::accounts::ToggleFeature {
                 authority: self.payer(),
                 store: *store,
             })
@@ -474,7 +475,7 @@ where
         short_token: &Pubkey,
         enable: bool,
         token_map: Option<&Pubkey>,
-    ) -> crate::Result<(RpcBuilder<C>, Pubkey)> {
+    ) -> crate::Result<(TransactionBuilder<C>, Pubkey)> {
         let token_map = match token_map {
             Some(token_map) => *token_map,
             None => self
@@ -490,7 +491,7 @@ where
         let prepare_market_token_vault = self.initialize_market_vault(store, &market_token).0;
         let builder = self
             .store_rpc()
-            .accounts(gmsol_store::accounts::InitializeMarket {
+            .anchor_accounts(gmsol_store::accounts::InitializeMarket {
                 authority,
                 store: *store,
                 token_map,
@@ -503,7 +504,7 @@ where
                 system_program: system_program::ID,
                 token_program: anchor_spl::token::ID,
             })
-            .args(gmsol_store::instruction::InitializeMarket {
+            .anchor_args(gmsol_store::instruction::InitializeMarket {
                 name: name.to_string(),
                 index_token_mint: *index_token,
                 enable,
@@ -524,7 +525,7 @@ where
         source_account: &Pubkey,
         amount: u64,
         token: Option<&Pubkey>,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         use anchor_spl::token::TokenAccount;
 
         let token = match token {
@@ -541,8 +542,8 @@ where
         let market = self.find_market_address(store, market_token);
         Ok(self
             .store_rpc()
-            .args(gmsol_store::instruction::MarketTransferIn { amount })
-            .accounts(gmsol_store::accounts::MarketTransferIn {
+            .anchor_args(gmsol_store::instruction::MarketTransferIn { amount })
+            .anchor_accounts(gmsol_store::accounts::MarketTransferIn {
                 authority: self.payer(),
                 from_authority: self.payer(),
                 store: *store,
@@ -571,16 +572,16 @@ where
         market_token: &Pubkey,
         order: &Pubkey,
         params: UpdateOrderParams,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         Ok(self
             .store_rpc()
-            .accounts(gmsol_store::accounts::UpdateOrder {
+            .anchor_accounts(gmsol_store::accounts::UpdateOrder {
                 owner: self.payer(),
                 store: *store,
                 market: self.find_market_address(store, market_token),
                 order: *order,
             })
-            .args(gmsol_store::instruction::UpdateOrder { params }))
+            .anchor_args(gmsol_store::instruction::UpdateOrder { params }))
     }
 
     fn execute_order(
@@ -602,7 +603,7 @@ where
         store: &Pubkey,
         order: &Pubkey,
         position_hint: Option<&Pubkey>,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let position = match position_hint {
             Some(position) => *position,
             None => {
@@ -618,8 +619,8 @@ where
 
         Ok(self
             .store_rpc()
-            .args(instruction::CancelOrderIfNoPosition {})
-            .accounts(accounts::CancelOrderIfNoPosition {
+            .anchor_args(instruction::CancelOrderIfNoPosition {})
+            .anchor_accounts(accounts::CancelOrderIfNoPosition {
                 authority: self.payer(),
                 store: *store,
                 order: *order,

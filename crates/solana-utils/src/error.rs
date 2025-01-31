@@ -23,3 +23,9 @@ pub enum Error {
     #[error("signer: {0}")]
     Signer(#[from] solana_sdk::signer::SignerError),
 }
+
+impl<T> From<(T, Error)> for Error {
+    fn from(value: (T, crate::Error)) -> Self {
+        value.1
+    }
+}

@@ -5,7 +5,7 @@ use gmsol::{
     exchange::ExchangeOps,
     store::oracle::OracleOps,
     types::PriceProviderKind,
-    utils::builder::{EstimateFee, MakeTransactionBuilder, WithPullOracle},
+    utils::builder::{EstimateFee, MakeBundleBuilder, WithPullOracle},
 };
 
 use anchor_client::solana_sdk::pubkey::Pubkey;

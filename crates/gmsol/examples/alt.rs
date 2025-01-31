@@ -1,14 +1,12 @@
 use std::sync::Arc;
 
-use anchor_client::{
-    solana_sdk::{
-        signature::Keypair,
-        signer::{EncodableKey, Signer},
-    },
-    Cluster,
+use anchor_client::solana_sdk::{
+    signature::Keypair,
+    signer::{EncodableKey, Signer},
 };
 use eyre::eyre;
 use gmsol::alt::AddressLookupTableOps;
+use gmsol_solana_utils::cluster::Cluster;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {

@@ -4,13 +4,12 @@ use anchor_client::{
     anchor_lang::system_program,
     solana_sdk::{pubkey::Pubkey, signer::Signer},
 };
+use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_store::{
     accounts, instruction,
     states::{Oracle, PriceProviderKind},
 };
 use gmsol_utils::InitSpace;
-
-use crate::utils::RpcBuilder;
 
 /// Oracle management for GMSOL.
 pub trait OracleOps<C> {
@@ -20,7 +19,7 @@ pub trait OracleOps<C> {
         store: &Pubkey,
         oracle: &'a dyn Signer,
         authority: Option<&Pubkey>,
-    ) -> impl Future<Output = crate::Result<(RpcBuilder<'a, C>, Pubkey)>>;
+    ) -> impl Future<Output = crate::Result<(TransactionBuilder<'a, C>, Pubkey)>>;
 
     /// Initialize Price Feed.
     fn initailize_price_feed(
@@ -30,7 +29,7 @@ pub trait OracleOps<C> {
         provider: PriceProviderKind,
         token: &Pubkey,
         feed_id: &Pubkey,
-    ) -> (RpcBuilder<C>, Pubkey);
+    ) -> (TransactionBuilder<C>, Pubkey);
 
     /// Update price feed with chainlink.
     #[cfg(feature = "chainlink-datastreams")]
@@ -41,7 +40,7 @@ pub trait OracleOps<C> {
         chainlink: &Pubkey,
         access_controller: &Pubkey,
         signed_report: &[u8],
-    ) -> crate::Result<RpcBuilder<C>>;
+    ) -> crate::Result<TransactionBuilder<C>>;
 }
 
 impl<C, S> OracleOps<C> for crate::Client<C>
@@ -54,7 +53,7 @@ where
         store: &Pubkey,
         oracle: &'a dyn Signer,
         authority: Option<&Pubkey>,
-    ) -> crate::Result<(RpcBuilder<'a, C>, Pubkey)> {
+    ) -> crate::Result<(TransactionBuilder<'a, C>, Pubkey)> {
         use anchor_client::solana_sdk::system_instruction::create_account;
 
         let payer = self.payer();
@@ -63,7 +62,7 @@ where
         let size = 8 + Oracle::INIT_SPACE;
         let lamports = self
             .store_program()
-            .solana_rpc()
+            .rpc()
             .get_minimum_balance_for_rent_exemption(size)
             .await
             .map_err(anchor_client::ClientError::from)?;
@@ -78,14 +77,14 @@ where
         let builder = self
             .store_rpc()
             .pre_instruction(create)
-            .accounts(accounts::InitializeOracle {
+            .anchor_accounts(accounts::InitializeOracle {
                 payer,
                 authority: authority.copied().unwrap_or(payer),
                 store: *store,
                 oracle: oracle_address,
                 system_program: system_program::ID,
             })
-            .args(instruction::InitializeOracle {})
+            .anchor_args(instruction::InitializeOracle {})
             .signer(oracle);
         Ok((builder, oracle_address))
     }
@@ -97,18 +96,18 @@ where
         provider: PriceProviderKind,
         token: &Pubkey,
         feed_id: &Pubkey,
-    ) -> (RpcBuilder<C>, Pubkey) {
+    ) -> (TransactionBuilder<C>, Pubkey) {
         let authority = self.payer();
         let price_feed = self.find_price_feed_address(store, &authority, index, provider, token);
         let rpc = self
             .store_rpc()
-            .accounts(accounts::InitializePriceFeed {
+            .anchor_accounts(accounts::InitializePriceFeed {
                 authority,
                 store: *store,
                 price_feed,
                 system_program: system_program::ID,
             })
-            .args(instruction::InitializePriceFeed {
+            .anchor_args(instruction::InitializePriceFeed {
                 index,
                 provider: provider.into(),
                 token: *token,
@@ -125,7 +124,7 @@ where
         chainlink: &Pubkey,
         access_controller: &Pubkey,
         signed_report: &[u8],
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         use chainlink_datastreams::utils::{
             find_config_account_pda, find_verifier_account_pda, Compressor,
         };
@@ -135,7 +134,7 @@ where
         let config_account = find_config_account_pda(signed_report, chainlink);
         Ok(self
             .store_rpc()
-            .accounts(accounts::UpdatePriceFeedWithChainlink {
+            .anchor_accounts(accounts::UpdatePriceFeedWithChainlink {
                 authority,
                 store: *store,
                 verifier_account,
@@ -144,7 +143,7 @@ where
                 price_feed: *price_feed,
                 chainlink: *chainlink,
             })
-            .args(instruction::UpdatePriceFeedWithChainlink {
+            .anchor_args(instruction::UpdatePriceFeedWithChainlink {
                 compressed_report: Compressor::compress(signed_report)
                     .map_err(crate::Error::invalid_argument)?,
             }))

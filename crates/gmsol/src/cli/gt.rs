@@ -142,7 +142,7 @@ impl Args {
                 let init = (!*skip_init_current)
                     .then(|| client.prepare_gt_exchange_vault_with_time_window(store, time_window))
                     .transpose()?
-                    .map(|rpc| rpc.with_output(()));
+                    .map(|rpc| rpc.output(()));
 
                 let mut rpc = client.confirm_gt_exchange_vault(store, address);
 
@@ -200,7 +200,7 @@ impl Args {
                         let rpc = if *prepare_vault {
                             let prepare = client
                                 .prepare_gt_exchange_vault_with_time_window(store, time_window)?
-                                .with_output(());
+                                .output(());
                             prepare.merge(request)
                         } else {
                             request

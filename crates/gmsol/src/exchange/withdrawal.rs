@@ -5,6 +5,10 @@ use anchor_client::{
     solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer},
 };
 use anchor_spl::associated_token::get_associated_token_address;
+use gmsol_solana_utils::{
+    bundle_builder::BundleBuilder, compute_budget::ComputeBudget,
+    transaction_builder::TransactionBuilder,
+};
 use gmsol_store::{
     accounts, instruction,
     ops::withdrawal::CreateWithdrawalParams,
@@ -19,10 +23,9 @@ use crate::{
     store::{token::TokenAccountOps, utils::FeedsParser},
     utils::{
         builder::{
-            FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
-            SetExecutionFee,
+            FeedAddressMap, FeedIds, MakeBundleBuilder, PullOraclePriceConsumer, SetExecutionFee,
         },
-        fix_optional_account_metas, ComputeBudget, RpcBuilder, TransactionBuilder, ZeroCopy,
+        fix_optional_account_metas, ZeroCopy,
     },
 };
 
@@ -191,8 +194,8 @@ where
         self
     }
 
-    /// Create the [`RpcBuilder`] and return withdrawal address.
-    pub async fn build_with_address(&self) -> crate::Result<(RpcBuilder<'a, C>, Pubkey)> {
+    /// Create the [`TransactionBuilder`] and return withdrawal address.
+    pub async fn build_with_address(&self) -> crate::Result<(TransactionBuilder<'a, C>, Pubkey)> {
         let token_program_id = anchor_spl::token::ID;
 
         let owner = self.client.payer();
@@ -226,7 +229,7 @@ where
         let prepare_final_long_token_ata = self
             .client
             .store_rpc()
-            .accounts(accounts::PrepareAssociatedTokenAccount {
+            .anchor_accounts(accounts::PrepareAssociatedTokenAccount {
                 payer: owner,
                 owner: receiver,
                 mint: long_token,
@@ -235,11 +238,11 @@ where
                 token_program: anchor_spl::token::ID,
                 associated_token_program: anchor_spl::associated_token::ID,
             })
-            .args(instruction::PrepareAssociatedTokenAccount {});
+            .anchor_args(instruction::PrepareAssociatedTokenAccount {});
         let prepare_final_short_token_ata = self
             .client
             .store_rpc()
-            .accounts(accounts::PrepareAssociatedTokenAccount {
+            .anchor_accounts(accounts::PrepareAssociatedTokenAccount {
                 payer: owner,
                 owner: receiver,
                 mint: short_token,
@@ -248,11 +251,11 @@ where
                 token_program: anchor_spl::token::ID,
                 associated_token_program: anchor_spl::associated_token::ID,
             })
-            .args(instruction::PrepareAssociatedTokenAccount {});
+            .anchor_args(instruction::PrepareAssociatedTokenAccount {});
         let create = self
             .client
             .store_rpc()
-            .accounts(accounts::CreateWithdrawal {
+            .anchor_accounts(accounts::CreateWithdrawal {
                 store: self.store,
                 token_program: anchor_spl::token::ID,
                 system_program: system_program::ID,
@@ -269,7 +272,7 @@ where
                 final_short_token_escrow,
                 market_token_source: self.get_or_find_associated_market_token_account(),
             })
-            .args(instruction::CreateWithdrawal {
+            .anchor_args(instruction::CreateWithdrawal {
                 nonce,
                 params: CreateWithdrawalParams {
                     market_token_amount: self.amount,
@@ -391,8 +394,8 @@ where
         self
     }
 
-    /// Build a [`RpcBuilder`] for `close_withdrawal` instruction.
-    pub async fn build(&self) -> crate::Result<RpcBuilder<'a, C>> {
+    /// Build a [`TransactionBuilder`] for `close_withdrawal` instruction.
+    pub async fn build(&self) -> crate::Result<TransactionBuilder<'a, C>> {
         let payer = self.client.payer();
         let hint = self.get_or_fetch_withdrawal_hint().await?;
         let market_token_ata = get_associated_token_address(&hint.owner, &hint.market_token);
@@ -409,7 +412,7 @@ where
         Ok(self
             .client
             .store_rpc()
-            .accounts(accounts::CloseWithdrawal {
+            .anchor_accounts(accounts::CloseWithdrawal {
                 store: self.store,
                 store_wallet: self.client.find_store_wallet_address(&self.store),
                 withdrawal: self.withdrawal,
@@ -431,7 +434,7 @@ where
                 associated_token_program: anchor_spl::associated_token::ID,
                 program: *self.client.store_program_id(),
             })
-            .args(instruction::CloseWithdrawal {
+            .anchor_args(instruction::CloseWithdrawal {
                 reason: self.reason.clone(),
             }))
     }
@@ -605,7 +608,7 @@ mod pyth {
         async fn build_rpc_with_price_updates(
             &mut self,
             price_updates: Prices,
-        ) -> crate::Result<Vec<crate::utils::RpcBuilder<'a, C, ()>>> {
+        ) -> crate::Result<Vec<TransactionBuilder<'a, C, ()>>> {
             let txns = self
                 .parse_with_pyth_price_updates(price_updates)
                 .build()
@@ -615,10 +618,10 @@ mod pyth {
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     for ExecuteWithdrawalBuilder<'a, C>
 {
-    async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+    async fn build(&mut self) -> crate::Result<BundleBuilder<'a, C>> {
         let authority = self.client.payer();
         let hint = self.prepare_hint().await?;
         let feeds = self
@@ -670,7 +673,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
                 &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
                 self.client.store_program_id(),
             ))
-            .args(instruction::ExecuteWithdrawal {
+            .anchor_args(instruction::ExecuteWithdrawal {
                 execution_fee: self.execution_fee,
                 throw_on_execution_error: !self.cancel_on_execution_error,
             })

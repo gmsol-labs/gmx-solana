@@ -7,10 +7,15 @@ use anchor_client::{
         rpc_filter::{Memcmp, RpcFilterType},
     },
     solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signer::Signer},
-    Cluster,
 };
 
 use gmsol_model::{price::Prices, PnlFactorKind};
+use gmsol_solana_utils::{
+    bundle_builder::{BundleBuilder, CreateBundleOptions},
+    cluster::Cluster,
+    program::Program,
+    transaction_builder::{Config, TransactionBuilder},
+};
 use gmsol_store::{
     states::{
         deposit::find_first_deposit_receiver_pda, market::status::MarketStatus,
@@ -27,11 +32,8 @@ use crate::{
     store::market::MarketOps,
     types,
     utils::{
-        account_with_context, accounts_lazy_with_context,
-        transaction_builder::rpc_builder::{Config, Program},
-        workarounds::zero_copy::SharedZeroCopy,
-        ProgramAccountsConfig, PubsubClient, RpcBuilder, SubscriptionConfig, TransactionBuilder,
-        WithContext, ZeroCopy,
+        account_with_context, accounts_lazy_with_context, workarounds::zero_copy::SharedZeroCopy,
+        ProgramAccountsConfig, PubsubClient, SubscriptionConfig, WithContext, ZeroCopy,
     },
 };
 
@@ -83,8 +85,11 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             commitment,
             subscription,
         } = options;
-        let anchor =
-            anchor_client::Client::new_with_options(cluster.clone(), payer.clone(), commitment);
+        let anchor = anchor_client::Client::new_with_options(
+            cluster.clone().into(),
+            payer.clone(),
+            commitment,
+        );
         let cfg = Config::new(cluster, payer, commitment);
         Ok(Self {
             store_program: Program::new(store_program_id.unwrap_or(gmsol_store::id()), cfg.clone()),
@@ -150,6 +155,17 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         &self.anchor
     }
 
+    /// Create a [`BundleBuilder`]
+    pub fn bundle(&self) -> BundleBuilder<C> {
+        BundleBuilder::new_with_options(CreateBundleOptions {
+            cluster: self.cluster().clone(),
+            commitment: self.commitment(),
+            force_one_transaction: false,
+            max_packet_size: None,
+            max_instructions_for_one_tx: None,
+        })
+    }
+
     /// Create a new [`Program`] with the given program id.
     pub fn program(&self, program_id: Pubkey) -> Program<C> {
         Program::new(program_id, self.cfg.clone())
@@ -211,18 +227,18 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     }
 
     /// Create a rpc builder for the store program.
-    pub fn store_rpc(&self) -> RpcBuilder<'_, C> {
-        self.store_program().rpc()
+    pub fn store_rpc(&self) -> TransactionBuilder<'_, C> {
+        self.store_program().transaction()
     }
 
     /// Create a rpc builder for the treasury program.
-    pub fn treasury_rpc(&self) -> RpcBuilder<'_, C> {
-        self.treasury_program().rpc()
+    pub fn treasury_rpc(&self) -> TransactionBuilder<'_, C> {
+        self.treasury_program().transaction()
     }
 
     /// Create a rpc builder for the timelock program.
-    pub fn timelock_rpc(&self) -> RpcBuilder<'_, C> {
-        self.timelock_program().rpc()
+    pub fn timelock_rpc(&self) -> TransactionBuilder<'_, C> {
+        self.timelock_program().transaction()
     }
 
     /// Create a transaction builder with the given options.
@@ -230,16 +246,17 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         &self,
         force_one_transaction: bool,
         max_packet_size: Option<usize>,
-    ) -> TransactionBuilder<'_, C> {
-        TransactionBuilder::new_with_options(
-            self.store_program.solana_rpc(),
+    ) -> BundleBuilder<'_, C> {
+        BundleBuilder::from_rpc_client_with_options(
+            self.store_program.rpc(),
             force_one_transaction,
             max_packet_size,
+            None,
         )
     }
 
     /// Create a transaction builder with default options.
-    pub fn transaction(&self) -> TransactionBuilder<'_, C> {
+    pub fn transaction(&self) -> BundleBuilder<'_, C> {
         self.transaction_with_options(false, None)
     }
 
@@ -492,7 +509,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     pub async fn get_slot(&self, commitment: Option<CommitmentConfig>) -> crate::Result<u64> {
         let slot = self
             .store_program()
-            .solana_rpc()
+            .rpc()
             .get_slot_with_commitment(commitment.unwrap_or(self.commitment()))
             .await
             .map_err(anchor_client::ClientError::from)?;
@@ -537,7 +554,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         T: AccountDeserialize,
     {
         config.encoding = Some(config.encoding.unwrap_or(UiAccountEncoding::Base64));
-        let client = self.store_program().solana_rpc();
+        let client = self.store_program().rpc();
         account_with_context(&client, address, config).await
     }
 
@@ -688,8 +705,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             maximize_pool_value,
         );
         let status = crate::utils::view::<MarketStatus>(
-            &self.store_program().solana_rpc(),
-            &req.into_anchor_request().signed_transaction().await?,
+            &self.store_program().rpc(),
+            &req.signed_transaction_with_options(true, None).await?,
         )
         .await?;
         Ok(status)
@@ -706,8 +723,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     ) -> crate::Result<u128> {
         let req = self.get_market_token_price(store, market_token, prices, pnl_factor, maximize);
         let price = crate::utils::view::<u128>(
-            &self.store_program().solana_rpc(),
-            &req.into_anchor_request().signed_transaction().await?,
+            &self.store_program().rpc(),
+            &req.signed_transaction_with_options(true, None).await?,
         )
         .await?;
         Ok(price)
@@ -882,7 +899,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
 
         let program_id = self.store_program_id();
         let event_authority = self.store_event_authority();
-        let query = Arc::new(self.store_program().solana_rpc());
+        let query = Arc::new(self.store_program().rpc());
         let commitment = commitment.unwrap_or(self.subscription_config.commitment);
         let signatures = self
             .pub_sub()
@@ -944,7 +961,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         };
 
         let commitment = commitment.unwrap_or(self.commitment());
-        let client = Arc::new(self.store_program().solana_rpc());
+        let client = Arc::new(self.store_program().rpc());
         let signatures = fetch_transaction_history_with_config(
             client.clone(),
             address,
@@ -1162,11 +1179,11 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
 /// System Program Ops.
 pub trait SystemProgramOps<C> {
     /// Transfer to.
-    fn transfer(&self, to: &Pubkey, lamports: u64) -> crate::Result<RpcBuilder<C>>;
+    fn transfer(&self, to: &Pubkey, lamports: u64) -> crate::Result<TransactionBuilder<C>>;
 }
 
 impl<C: Clone + Deref<Target = impl Signer>> SystemProgramOps<C> for Client<C> {
-    fn transfer(&self, to: &Pubkey, lamports: u64) -> crate::Result<RpcBuilder<C>> {
+    fn transfer(&self, to: &Pubkey, lamports: u64) -> crate::Result<TransactionBuilder<C>> {
         use anchor_client::solana_sdk::system_instruction::transfer;
 
         if lamports == 0 {

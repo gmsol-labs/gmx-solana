@@ -5,7 +5,7 @@ edition.workspace = true
 
 [features]
 serde = ["dep:serde"]
-anchor = ["dep:anchor-lang"]
+anchor = ["dep:anchor-lang", "dep:anchor-client"]
 
 [dependencies]
 solana-sdk = { workspace = true }
@@ -19,3 +19,4 @@ base64 = { workspace = true }
 
 serde = { workspace = true, optional = true, features = ["derive"] }
 anchor-lang = { workspace = true, optional = true }
+anchor-client = { workspace = true, optional = true }

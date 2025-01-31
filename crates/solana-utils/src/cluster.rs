@@ -109,6 +109,20 @@ impl Cluster {
     }
 }
 
+#[cfg(feature = "anchor")]
+impl From<Cluster> for anchor_client::Cluster {
+    fn from(cluster: Cluster) -> Self {
+        match cluster {
+            Cluster::Testnet => Self::Testnet,
+            Cluster::Mainnet => Self::Mainnet,
+            Cluster::Devnet => Self::Devnet,
+            Cluster::Localnet => Self::Localnet,
+            Cluster::Debug => Self::Debug,
+            Cluster::Custom(url, ws_url) => Self::Custom(url, ws_url),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

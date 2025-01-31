@@ -360,3 +360,13 @@ async fn send_all_txs(
         Some(err) => Err((signatures, err)),
     }
 }
+
+impl<'a, C> IntoIterator for BundleBuilder<'a, C> {
+    type Item = TransactionBuilder<'a, C>;
+
+    type IntoIter = <Vec<TransactionBuilder<'a, C>> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.builders.into_iter()
+    }
+}

@@ -42,11 +42,12 @@ impl ControllerArgs {
     ) -> gmsol::Result<()> {
         match &self.command {
             Command::InsertAmount { amount, key } => {
-                crate::utils::send_or_serialize(
-                    client
-                        .insert_global_amount_by_key(store, *key, amount)
-                        .into_anchor_request_without_compute_budget(),
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    client.insert_global_amount_by_key(store, *key, amount),
+                    None,
                     serialize_only,
+                    true,
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -55,11 +56,12 @@ impl ControllerArgs {
                 .await?;
             }
             Command::InsertFactor { factor, key } => {
-                crate::utils::send_or_serialize(
-                    client
-                        .insert_global_factor_by_key(store, *key, factor)
-                        .into_anchor_request_without_compute_budget(),
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    client.insert_global_factor_by_key(store, *key, factor),
+                    None,
                     serialize_only,
+                    true,
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -68,11 +70,12 @@ impl ControllerArgs {
                 .await?;
             }
             Command::InsertAddress { address, key } => {
-                crate::utils::send_or_serialize(
-                    client
-                        .insert_global_address_by_key(store, *key, address)
-                        .into_anchor_request_without_compute_budget(),
+                crate::utils::send_or_serialize_rpc(
+                    store,
+                    client.insert_global_address_by_key(store, *key, address),
+                    None,
                     serialize_only,
+                    true,
                     |signature| {
                         println!("{signature}");
                         Ok(())

@@ -101,7 +101,7 @@ impl ChainlinkPullOracleFactory {
             self.feeds.write().unwrap().insert(feed_id, address);
         }
 
-        if !txs.is_emtpy() {
+        if !txs.is_empty() {
             match txs.send_all(false).await {
                 Ok(signatures) => {
                     tracing::info!("initialized feeds with txs: {signatures:#?}");

@@ -4,12 +4,13 @@ use anchor_client::{
     anchor_lang::system_program,
     solana_sdk::{pubkey::Pubkey, signer::Signer},
 };
+use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_store::{
     accounts, instruction,
     states::{PriceProviderKind, UpdateTokenConfigParams},
 };
 
-use crate::utils::{view, RpcBuilder};
+use crate::utils::view;
 
 /// Token Config.
 #[derive(Debug)]
@@ -55,7 +56,7 @@ pub trait TokenConfigOps<C> {
         &'a self,
         store: &Pubkey,
         token_map: &'a dyn Signer,
-    ) -> (RpcBuilder<'a, C>, Pubkey);
+    ) -> (TransactionBuilder<'a, C>, Pubkey);
 
     /// Insert or update config for the given token.
     #[allow(clippy::too_many_arguments)]
@@ -68,7 +69,7 @@ pub trait TokenConfigOps<C> {
         builder: UpdateTokenConfigParams,
         enable: bool,
         new: bool,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Insert or update config the given synthetic token.
     // FIXME: reduce the number of args.
@@ -83,7 +84,7 @@ pub trait TokenConfigOps<C> {
         builder: UpdateTokenConfigParams,
         enable: bool,
         new: bool,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Toggle token config.
     fn toggle_token_config(
@@ -92,7 +93,7 @@ pub trait TokenConfigOps<C> {
         token_map: &Pubkey,
         token: &Pubkey,
         enable: bool,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Set expected provider.
     fn set_expected_provider(
@@ -101,22 +102,22 @@ pub trait TokenConfigOps<C> {
         token_map: &Pubkey,
         token: &Pubkey,
         provider: PriceProviderKind,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Get the name for the given token.
-    fn token_name(&self, token_map: &Pubkey, token: &Pubkey) -> RpcBuilder<C>;
+    fn token_name(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C>;
 
     /// Get the token decimals for the given token.
-    fn token_decimals(&self, token_map: &Pubkey, token: &Pubkey) -> RpcBuilder<C>;
+    fn token_decimals(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C>;
 
     /// Get the price precision for the given token.
-    fn token_precision(&self, token_map: &Pubkey, token: &Pubkey) -> RpcBuilder<C>;
+    fn token_precision(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C>;
 
     /// Check if the config of the given token is enbaled.
-    fn is_token_config_enabled(&self, token_map: &Pubkey, token: &Pubkey) -> RpcBuilder<C>;
+    fn is_token_config_enabled(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C>;
 
     /// Get expected provider for the given token.
-    fn token_expected_provider(&self, token_map: &Pubkey, token: &Pubkey) -> RpcBuilder<C>;
+    fn token_expected_provider(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C>;
 
     /// Get feed address of the provider of the given token.
     fn token_feed(
@@ -124,7 +125,7 @@ pub trait TokenConfigOps<C> {
         token_map: &Pubkey,
         token: &Pubkey,
         provider: PriceProviderKind,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Get timestamp adjustment of the given token and provider.
     fn token_timestamp_adjustment(
@@ -132,7 +133,7 @@ pub trait TokenConfigOps<C> {
         token_map: &Pubkey,
         token: &Pubkey,
         provider: PriceProviderKind,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Get basic token config.
     fn token_config(
@@ -151,16 +152,16 @@ where
         &'a self,
         store: &Pubkey,
         token_map: &'a dyn Signer,
-    ) -> (RpcBuilder<'a, C>, Pubkey) {
+    ) -> (TransactionBuilder<'a, C>, Pubkey) {
         let builder = self
             .store_rpc()
-            .accounts(accounts::InitializeTokenMap {
+            .anchor_accounts(accounts::InitializeTokenMap {
                 payer: self.payer(),
                 store: *store,
                 token_map: token_map.pubkey(),
                 system_program: system_program::ID,
             })
-            .args(instruction::InitializeTokenMap {})
+            .anchor_args(instruction::InitializeTokenMap {})
             .signer(token_map);
         (builder, token_map.pubkey())
     }
@@ -174,17 +175,17 @@ where
         builder: UpdateTokenConfigParams,
         enable: bool,
         new: bool,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let authority = self.payer();
         self.store_rpc()
-            .accounts(accounts::PushToTokenMap {
+            .anchor_accounts(accounts::PushToTokenMap {
                 authority,
                 store: *store,
                 token_map: *token_map,
                 token: *token,
                 system_program: system_program::ID,
             })
-            .args(instruction::PushToTokenMap {
+            .anchor_args(instruction::PushToTokenMap {
                 name: name.to_owned(),
                 builder,
                 enable,
@@ -202,16 +203,16 @@ where
         builder: UpdateTokenConfigParams,
         enable: bool,
         new: bool,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let authority = self.payer();
         self.store_rpc()
-            .accounts(accounts::PushToTokenMapSynthetic {
+            .anchor_accounts(accounts::PushToTokenMapSynthetic {
                 authority,
                 store: *store,
                 token_map: *token_map,
                 system_program: system_program::ID,
             })
-            .args(instruction::PushToTokenMapSynthetic {
+            .anchor_args(instruction::PushToTokenMapSynthetic {
                 name: name.to_owned(),
                 token: *token,
                 token_decimals: decimals,
@@ -227,15 +228,15 @@ where
         token_map: &Pubkey,
         token: &Pubkey,
         enable: bool,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let authority = self.payer();
         self.store_rpc()
-            .accounts(accounts::ToggleTokenConfig {
+            .anchor_accounts(accounts::ToggleTokenConfig {
                 authority,
                 store: *store,
                 token_map: *token_map,
             })
-            .args(instruction::ToggleTokenConfig {
+            .anchor_args(instruction::ToggleTokenConfig {
                 token: *token,
                 enable,
             })
@@ -247,56 +248,56 @@ where
         token_map: &Pubkey,
         token: &Pubkey,
         provider: PriceProviderKind,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let authority = self.payer();
         self.store_rpc()
-            .accounts(accounts::SetExpectedProvider {
+            .anchor_accounts(accounts::SetExpectedProvider {
                 authority,
                 store: *store,
                 token_map: *token_map,
             })
-            .args(instruction::SetExpectedProvider {
+            .anchor_args(instruction::SetExpectedProvider {
                 token: *token,
                 provider: provider as u8,
             })
     }
 
-    fn token_name(&self, token_map: &Pubkey, token: &Pubkey) -> RpcBuilder<C> {
+    fn token_name(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::TokenName { token: *token })
-            .accounts(accounts::ReadTokenMap {
+            .anchor_args(instruction::TokenName { token: *token })
+            .anchor_accounts(accounts::ReadTokenMap {
                 token_map: *token_map,
             })
     }
 
-    fn token_decimals(&self, token_map: &Pubkey, token: &Pubkey) -> RpcBuilder<C> {
+    fn token_decimals(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::TokenDecimals { token: *token })
-            .accounts(accounts::ReadTokenMap {
+            .anchor_args(instruction::TokenDecimals { token: *token })
+            .anchor_accounts(accounts::ReadTokenMap {
                 token_map: *token_map,
             })
     }
 
-    fn token_precision(&self, token_map: &Pubkey, token: &Pubkey) -> RpcBuilder<C> {
+    fn token_precision(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::TokenPrecision { token: *token })
-            .accounts(accounts::ReadTokenMap {
+            .anchor_args(instruction::TokenPrecision { token: *token })
+            .anchor_accounts(accounts::ReadTokenMap {
                 token_map: *token_map,
             })
     }
 
-    fn is_token_config_enabled(&self, token_map: &Pubkey, token: &Pubkey) -> RpcBuilder<C> {
+    fn is_token_config_enabled(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::IsTokenConfigEnabled { token: *token })
-            .accounts(accounts::ReadTokenMap {
+            .anchor_args(instruction::IsTokenConfigEnabled { token: *token })
+            .anchor_accounts(accounts::ReadTokenMap {
                 token_map: *token_map,
             })
     }
 
-    fn token_expected_provider(&self, token_map: &Pubkey, token: &Pubkey) -> RpcBuilder<C> {
+    fn token_expected_provider(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::TokenExpectedProvider { token: *token })
-            .accounts(accounts::ReadTokenMap {
+            .anchor_args(instruction::TokenExpectedProvider { token: *token })
+            .anchor_accounts(accounts::ReadTokenMap {
                 token_map: *token_map,
             })
     }
@@ -306,13 +307,13 @@ where
         token_map: &Pubkey,
         token: &Pubkey,
         provider: PriceProviderKind,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::TokenFeed {
+            .anchor_args(instruction::TokenFeed {
                 token: *token,
                 provider: provider as u8,
             })
-            .accounts(accounts::ReadTokenMap {
+            .anchor_accounts(accounts::ReadTokenMap {
                 token_map: *token_map,
             })
     }
@@ -322,43 +323,38 @@ where
         token_map: &Pubkey,
         token: &Pubkey,
         provider: PriceProviderKind,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         self.store_rpc()
-            .args(instruction::TokenTimestampAdjustment {
+            .anchor_args(instruction::TokenTimestampAdjustment {
                 token: *token,
                 provider: provider as u8,
             })
-            .accounts(accounts::ReadTokenMap {
+            .anchor_accounts(accounts::ReadTokenMap {
                 token_map: *token_map,
             })
     }
 
     async fn token_config(&self, token_map: &Pubkey, token: &Pubkey) -> crate::Result<TokenConfig> {
-        let client = self.store_program().solana_rpc();
+        let client = self.store_program().rpc();
         let name = self
             .token_name(token_map, token)
-            .into_anchor_request()
-            .signed_transaction()
+            .signed_transaction_with_options(true, None)
             .await?;
         let token_decimals = self
             .token_decimals(token_map, token)
-            .into_anchor_request()
-            .signed_transaction()
+            .signed_transaction_with_options(true, None)
             .await?;
         let precision = self
             .token_precision(token_map, token)
-            .into_anchor_request()
-            .signed_transaction()
+            .signed_transaction_with_options(true, None)
             .await?;
         let expected_provider = self
             .token_expected_provider(token_map, token)
-            .into_anchor_request()
-            .signed_transaction()
+            .signed_transaction_with_options(true, None)
             .await?;
         let is_enabled = self
             .is_token_config_enabled(token_map, token)
-            .into_anchor_request()
-            .signed_transaction()
+            .signed_transaction_with_options(true, None)
             .await?;
 
         Ok(TokenConfig {

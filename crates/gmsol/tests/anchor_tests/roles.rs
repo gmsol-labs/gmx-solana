@@ -22,7 +22,10 @@ async fn enable_and_disable_roles() -> eyre::Result<()> {
         .send()
         .await
         .expect_err("should throw error when enabling a role by a non-admin");
-    assert_eq!(err.anchor_error_code(), Some(CoreError::NotAnAdmin.into()));
+    assert_eq!(
+        gmsol::Error::from(err).anchor_error_code(),
+        Some(CoreError::NotAnAdmin.into())
+    );
 
     // Enable the role.
     let signature = admin
@@ -38,7 +41,7 @@ async fn enable_and_disable_roles() -> eyre::Result<()> {
         .await
         .expect_err("should throw error when enabling an already enabled role");
     assert_eq!(
-        err.anchor_error_code(),
+        gmsol::Error::from(err).anchor_error_code(),
         Some(CoreError::PreconditionsAreNotMet.into())
     );
 
@@ -48,7 +51,10 @@ async fn enable_and_disable_roles() -> eyre::Result<()> {
         .send()
         .await
         .expect_err("should throw error when disabling a role by a non-admin");
-    assert_eq!(err.anchor_error_code(), Some(CoreError::NotAnAdmin.into()));
+    assert_eq!(
+        gmsol::Error::from(err).anchor_error_code(),
+        Some(CoreError::NotAnAdmin.into())
+    );
 
     // Disable the role.
     let signature = admin
@@ -64,7 +70,7 @@ async fn enable_and_disable_roles() -> eyre::Result<()> {
         .await
         .expect_err("should throw error when disabling an already disabled role");
     assert_eq!(
-        err.anchor_error_code(),
+        gmsol::Error::from(err).anchor_error_code(),
         Some(CoreError::PreconditionsAreNotMet.into())
     );
 
@@ -92,7 +98,10 @@ async fn grant_and_revoke_role() -> eyre::Result<()> {
         .send()
         .await
         .expect_err("should throw error when granting a non-existent role");
-    assert_eq!(err.anchor_error_code(), Some(CoreError::NotFound.into()));
+    assert_eq!(
+        gmsol::Error::from(err).anchor_error_code(),
+        Some(CoreError::NotFound.into())
+    );
 
     // Enable the role.
     let signature = admin
@@ -115,7 +124,7 @@ async fn grant_and_revoke_role() -> eyre::Result<()> {
         .await
         .expect_err("should throw error when granting a disabled role");
     assert_eq!(
-        err.anchor_error_code(),
+        gmsol::Error::from(err).anchor_error_code(),
         Some(CoreError::PreconditionsAreNotMet.into())
     );
 
@@ -132,7 +141,10 @@ async fn grant_and_revoke_role() -> eyre::Result<()> {
         .send()
         .await
         .expect_err("should throw error when granting a role by a non-admin");
-    assert_eq!(err.anchor_error_code(), Some(CoreError::NotAnAdmin.into()));
+    assert_eq!(
+        gmsol::Error::from(err).anchor_error_code(),
+        Some(CoreError::NotAnAdmin.into())
+    );
 
     // Grant the role.
     let signature = admin
@@ -148,7 +160,7 @@ async fn grant_and_revoke_role() -> eyre::Result<()> {
         .await
         .expect_err("should throw error when granting a role if the user already has the role");
     assert_eq!(
-        err.anchor_error_code(),
+        gmsol::Error::from(err).anchor_error_code(),
         Some(CoreError::PreconditionsAreNotMet.into())
     );
 
@@ -158,7 +170,10 @@ async fn grant_and_revoke_role() -> eyre::Result<()> {
         .send()
         .await
         .expect_err("should throw error when revoking a non-existent role");
-    assert_eq!(err.anchor_error_code(), Some(CoreError::NotFound.into()));
+    assert_eq!(
+        gmsol::Error::from(err).anchor_error_code(),
+        Some(CoreError::NotFound.into())
+    );
 
     // Cannot revoke a role by a non-admin.
     let err = keeper
@@ -166,7 +181,10 @@ async fn grant_and_revoke_role() -> eyre::Result<()> {
         .send()
         .await
         .expect_err("should throw error when revoking a role by a non-admin");
-    assert_eq!(err.anchor_error_code(), Some(CoreError::NotAnAdmin.into()));
+    assert_eq!(
+        gmsol::Error::from(err).anchor_error_code(),
+        Some(CoreError::NotAnAdmin.into())
+    );
 
     // Revoke the role.
     let signature = admin

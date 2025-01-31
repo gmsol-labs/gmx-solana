@@ -1,6 +1,7 @@
 use std::{future::Future, ops::Deref};
 
 use anchor_client::anchor_lang;
+use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use solana_sdk::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction},
@@ -20,8 +21,6 @@ use squads_multisig::{
     squads_multisig_program::{self, VaultTransaction},
     state::TransactionMessage,
 };
-
-use crate::utils::RpcBuilder;
 
 pub use squads_multisig::pda::get_vault_pda;
 
@@ -91,7 +90,7 @@ pub trait SquadsOps<C> {
         message: &VersionedMessage,
         memo: Option<String>,
         draft: bool,
-    ) -> crate::Result<RpcBuilder<C, Pubkey>>;
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>>;
 
     /// Create Vault Transaction with next transaction index.
     fn squads_create_vault_transaction(
@@ -101,7 +100,7 @@ pub trait SquadsOps<C> {
         message: &VersionedMessage,
         memo: Option<String>,
         draft: bool,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C, Pubkey>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C, Pubkey>>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
@@ -113,7 +112,7 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
         message: &VersionedMessage,
         memo: Option<String>,
         draft: bool,
-    ) -> crate::Result<RpcBuilder<C, Pubkey>> {
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>> {
         use squads_multisig::{
             anchor_lang::{AnchorSerialize, InstructionData, ToAccountMetas},
             squads_multisig_program::ID,
@@ -164,7 +163,7 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
                 .data(),
             },
         ]);
-        Ok(rpc.with_output(transaction_pda))
+        Ok(rpc.output(transaction_pda))
     }
 
     async fn squads_create_vault_transaction(
@@ -174,8 +173,8 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
         message: &VersionedMessage,
         memo: Option<String>,
         draft: bool,
-    ) -> crate::Result<RpcBuilder<C, Pubkey>> {
-        let multisig_data = get_multisig(&self.store_program().solana_rpc(), multisig)
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>> {
+        let multisig_data = get_multisig(&self.store_program().rpc(), multisig)
             .await
             .map_err(crate::Error::unknown)?;
 

@@ -9,9 +9,6 @@ use anchor_client::{
 use anchor_spl::associated_token::get_associated_token_address;
 use base64::{prelude::BASE64_STANDARD, Engine};
 
-/// Transaction Builder.
-pub mod transaction_builder;
-
 /// Workarounds
 pub mod workarounds;
 
@@ -47,10 +44,6 @@ pub use self::{
     },
     signer::{local_signer, shared_signer, LocalSignerRef, SignerRef},
     token::price_to_min_output_amount,
-    transaction_builder::{
-        compute_budget::ComputeBudget, rpc_builder::RpcBuilder, transaction_size::transaction_size,
-        SendTransactionOptions, TransactionBuilder,
-    },
     workarounds::{
         optional::fix_optional_account_metas,
         zero_copy::{try_deserailize_zero_copy_account, ZeroCopy},

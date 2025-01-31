@@ -1,9 +1,9 @@
-use anchor_client::Cluster;
 use futures_util::future::poll_fn;
 use gmsol::{
     discover::{market::MarketDiscovery, token::TokenDiscovery},
     pda::find_default_store,
 };
+use gmsol_solana_utils::cluster::Cluster;
 use tower::discover::Discover;
 use tracing::level_filters::LevelFilter;
 

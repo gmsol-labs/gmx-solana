@@ -8,6 +8,10 @@ use anchor_client::{
     solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey, signer::Signer},
 };
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
+use gmsol_solana_utils::{
+    bundle_builder::BundleBuilder, compute_budget::ComputeBudget,
+    transaction_builder::TransactionBuilder,
+};
 use gmsol_store::{
     accounts, instruction,
     ops::glv::CreateGlvDepositParams,
@@ -26,10 +30,9 @@ use crate::{
     store::{token::TokenAccountOps, utils::FeedsParser},
     utils::{
         builder::{
-            FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
-            SetExecutionFee,
+            FeedAddressMap, FeedIds, MakeBundleBuilder, PullOraclePriceConsumer, SetExecutionFee,
         },
-        fix_optional_account_metas, ComputeBudget, RpcBuilder, TransactionBuilder, ZeroCopy,
+        fix_optional_account_metas, ZeroCopy,
     },
 };
 
@@ -212,7 +215,9 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvDepositBuilder<'a, C> 
     }
 
     /// Build.
-    pub async fn build_with_address(&mut self) -> crate::Result<(RpcBuilder<'a, C>, Pubkey)> {
+    pub async fn build_with_address(
+        &mut self,
+    ) -> crate::Result<(TransactionBuilder<'a, C>, Pubkey)> {
         let hint = self.prepare_hint().await?;
 
         let nonce = self.nonce.unwrap_or_else(generate_nonce);
@@ -348,7 +353,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvDepositBuilder<'a, C> 
                 &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
                 self.client.store_program_id(),
             ))
-            .args(instruction::CreateGlvDeposit {
+            .anchor_args(instruction::CreateGlvDeposit {
                 nonce,
                 params: CreateGlvDepositParams {
                     execution_lamports: self.max_execution_lamports,
@@ -370,7 +375,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvDepositBuilder<'a, C> 
                     should_unwrap_native_token: self.should_unwrap_native_token,
                 },
             })
-            .accounts(
+            .anchor_accounts(
                 self.long_token_swap_path
                     .iter()
                     .chain(self.short_token_swap_path.iter())
@@ -471,7 +476,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvDepositBuilder<'a, C> {
     }
 
     /// Build.
-    pub async fn build(&mut self) -> crate::Result<RpcBuilder<'a, C>> {
+    pub async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
 
         let token_program_id = anchor_spl::token::ID;
@@ -539,7 +544,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvDepositBuilder<'a, C> {
                 &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
                 self.client.store_program_id(),
             ))
-            .args(instruction::CloseGlvDeposit {
+            .anchor_args(instruction::CloseGlvDeposit {
                 reason: self.reason.clone(),
             });
 
@@ -748,7 +753,7 @@ mod pyth {
         async fn build_rpc_with_price_updates(
             &mut self,
             price_updates: Prices,
-        ) -> crate::Result<Vec<crate::utils::RpcBuilder<'a, C, ()>>> {
+        ) -> crate::Result<Vec<TransactionBuilder<'a, C, ()>>> {
             let txn = self
                 .parse_with_pyth_price_updates(price_updates)
                 .build()
@@ -758,11 +763,11 @@ mod pyth {
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     for ExecuteGlvDepositBuilder<'a, C>
 {
     /// Build.
-    async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+    async fn build(&mut self) -> crate::Result<BundleBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
 
         let token_program_id = anchor_spl::token::ID;
@@ -843,7 +848,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
                 &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
                 self.client.store_program_id(),
             ))
-            .args(instruction::ExecuteGlvDeposit {
+            .anchor_args(instruction::ExecuteGlvDeposit {
                 execution_lamports: self.execution_lamports,
                 throw_on_execution_error: !self.cancel_on_execution_error,
             })

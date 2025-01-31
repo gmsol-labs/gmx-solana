@@ -11,7 +11,7 @@ use gmsol::{
     pyth::{pull_oracle::PythPullOracleWithHermes, Hermes, PythPullOracle},
     treasury::{CreateTreasurySwapOptions, TreasuryOps},
     utils::{
-        builder::{MakeTransactionBuilder, WithPullOracle},
+        builder::{MakeBundleBuilder, WithPullOracle},
         instruction::InstructionSerialization,
     },
 };

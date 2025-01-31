@@ -6,6 +6,7 @@ use anchor_client::{
     solana_sdk::{pubkey::Pubkey, signer::Signer},
 };
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
+use gmsol_solana_utils::{bundle_builder::BundleBuilder, transaction_builder::TransactionBuilder};
 use gmsol_store::states::{
     common::TokensWithFeed, gt::GtExchange, Chainlink, NonceBytes, PriceProviderKind,
 };
@@ -20,33 +21,40 @@ use crate::{
     store::{gt::GtOps, token::TokenAccountOps, utils::FeedsParser},
     utils::{
         builder::{
-            FeedAddressMap, FeedIds, MakeTransactionBuilder, PullOraclePriceConsumer,
-            SetExecutionFee,
+            FeedAddressMap, FeedIds, MakeBundleBuilder, PullOraclePriceConsumer, SetExecutionFee,
         },
-        fix_optional_account_metas, RpcBuilder, TransactionBuilder, ZeroCopy,
+        fix_optional_account_metas, ZeroCopy,
     },
 };
 
 /// Treasury instructions.
 pub trait TreasuryOps<C> {
     /// Initialize [`Config`] account.
-    fn initialize_config(&self, store: &Pubkey) -> RpcBuilder<C, Pubkey>;
+    fn initialize_config(&self, store: &Pubkey) -> TransactionBuilder<C, Pubkey>;
 
     /// Set treasury vault config.
     fn set_treasury_vault_config(
         &self,
         store: &Pubkey,
         treasury_vault_config: &Pubkey,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Set GT factor.
-    fn set_gt_factor(&self, store: &Pubkey, factor: u128) -> crate::Result<RpcBuilder<C>>;
+    fn set_gt_factor(&self, store: &Pubkey, factor: u128) -> crate::Result<TransactionBuilder<C>>;
 
     /// Set buyback factor.
-    fn set_buyback_factor(&self, store: &Pubkey, factor: u128) -> crate::Result<RpcBuilder<C>>;
+    fn set_buyback_factor(
+        &self,
+        store: &Pubkey,
+        factor: u128,
+    ) -> crate::Result<TransactionBuilder<C>>;
 
     /// Initialize [`TreasuryVaultConfig`].
-    fn initialize_treasury_vault_config(&self, store: &Pubkey, index: u8) -> RpcBuilder<C, Pubkey>;
+    fn initialize_treasury_vault_config(
+        &self,
+        store: &Pubkey,
+        index: u8,
+    ) -> TransactionBuilder<C, Pubkey>;
 
     /// Insert token to treasury.
     fn insert_token_to_treasury(
@@ -54,7 +62,7 @@ pub trait TreasuryOps<C> {
         store: &Pubkey,
         treasury_vault_config: Option<&Pubkey>,
         token_mint: &Pubkey,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Remove token from treasury.
     fn remove_token_from_treasury(
@@ -62,7 +70,7 @@ pub trait TreasuryOps<C> {
         store: &Pubkey,
         treasury_vault_config: Option<&Pubkey>,
         token_mint: &Pubkey,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Toggle token flag.
     fn toggle_token_flag(
@@ -72,7 +80,7 @@ pub trait TreasuryOps<C> {
         token_mint: &Pubkey,
         flag: TokenFlag,
         value: bool,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Deposit to treasury vault.
     fn deposit_to_treasury_valut(
@@ -82,7 +90,7 @@ pub trait TreasuryOps<C> {
         token_mint: &Pubkey,
         token_program_id: Option<&Pubkey>,
         time_window: u32,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C, Pubkey>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C, Pubkey>>>;
 
     /// Withdraw from treasury vault.
     #[allow(clippy::too_many_arguments)]
@@ -95,7 +103,7 @@ pub trait TreasuryOps<C> {
         amount: u64,
         decimals: u8,
         target: &Pubkey,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Confirm GT buyback.
     fn confirm_gt_buyback(
@@ -106,10 +114,10 @@ pub trait TreasuryOps<C> {
     ) -> ConfirmGtBuybackBuilder<C>;
 
     /// Transfer receiver.
-    fn transfer_receiver(&self, store: &Pubkey, new_receiver: &Pubkey) -> RpcBuilder<C>;
+    fn transfer_receiver(&self, store: &Pubkey, new_receiver: &Pubkey) -> TransactionBuilder<C>;
 
     /// Set referral reward factors.
-    fn set_referral_reward(&self, store: &Pubkey, factors: Vec<u128>) -> RpcBuilder<C>;
+    fn set_referral_reward(&self, store: &Pubkey, factors: Vec<u128>) -> TransactionBuilder<C>;
 
     /// Claim fees to receiver vault.
     fn claim_fees_to_receiver_vault(
@@ -118,7 +126,7 @@ pub trait TreasuryOps<C> {
         market_token: &Pubkey,
         token_mint: &Pubkey,
         min_amount: u64,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Prepare GT bank.
     fn prepare_gt_bank(
@@ -126,7 +134,7 @@ pub trait TreasuryOps<C> {
         store: &Pubkey,
         treasury_vault_config_hint: Option<&Pubkey>,
         gt_exchange_vault: &Pubkey,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C, Pubkey>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C, Pubkey>>>;
 
     /// Sync GT bank.
     fn sync_gt_bank(
@@ -136,7 +144,7 @@ pub trait TreasuryOps<C> {
         gt_exchange_vault: &Pubkey,
         token_mint: &Pubkey,
         token_program_id: Option<&Pubkey>,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Complete GT exchange.
     fn complete_gt_exchange(
@@ -146,7 +154,7 @@ pub trait TreasuryOps<C> {
         treasury_vault_config_hint: Option<&Pubkey>,
         tokens_hint: Option<Vec<(Pubkey, Pubkey)>>,
         gt_exchange_vault_hint: Option<&Pubkey>,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Create a swap.
     fn create_treasury_swap(
@@ -157,7 +165,7 @@ pub trait TreasuryOps<C> {
         swap_out_token: &Pubkey,
         swap_in_token_amount: u64,
         options: CreateTreasurySwapOptions,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C, Pubkey>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C, Pubkey>>>;
 
     /// Cancel a swap.
     fn cancel_treasury_swap(
@@ -165,7 +173,7 @@ pub trait TreasuryOps<C> {
         store: &Pubkey,
         order: &Pubkey,
         hint: Option<(&Pubkey, &Pubkey)>,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 }
 
 /// Create Treasury Swap Options.
@@ -186,11 +194,11 @@ where
     C: Deref<Target = S> + Clone,
     S: Signer,
 {
-    fn initialize_config(&self, store: &Pubkey) -> RpcBuilder<C, Pubkey> {
+    fn initialize_config(&self, store: &Pubkey) -> TransactionBuilder<C, Pubkey> {
         let config = self.find_treasury_config_address(store);
         self.treasury_rpc()
-            .args(instruction::InitializeConfig {})
-            .accounts(accounts::InitializeConfig {
+            .anchor_args(instruction::InitializeConfig {})
+            .anchor_accounts(accounts::InitializeConfig {
                 payer: self.payer(),
                 store: *store,
                 config,
@@ -198,18 +206,18 @@ where
                 store_program: *self.store_program_id(),
                 system_program: system_program::ID,
             })
-            .with_output(config)
+            .output(config)
     }
 
     fn set_treasury_vault_config(
         &self,
         store: &Pubkey,
         treasury_vault_config: &Pubkey,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let config = self.find_treasury_config_address(store);
         self.treasury_rpc()
-            .args(instruction::SetTreasuryVaultConfig {})
-            .accounts(accounts::SetTreasuryVaultConfig {
+            .anchor_args(instruction::SetTreasuryVaultConfig {})
+            .anchor_accounts(accounts::SetTreasuryVaultConfig {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -218,7 +226,7 @@ where
             })
     }
 
-    fn set_gt_factor(&self, store: &Pubkey, factor: u128) -> crate::Result<RpcBuilder<C>> {
+    fn set_gt_factor(&self, store: &Pubkey, factor: u128) -> crate::Result<TransactionBuilder<C>> {
         if factor > crate::constants::MARKET_USD_UNIT {
             return Err(crate::Error::invalid_argument(
                 "cannot use a factor greater than 1",
@@ -227,8 +235,8 @@ where
         let config = self.find_treasury_config_address(store);
         Ok(self
             .treasury_rpc()
-            .args(instruction::SetGtFactor { factor })
-            .accounts(accounts::UpdateConfig {
+            .anchor_args(instruction::SetGtFactor { factor })
+            .anchor_accounts(accounts::UpdateConfig {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -236,7 +244,11 @@ where
             }))
     }
 
-    fn set_buyback_factor(&self, store: &Pubkey, factor: u128) -> crate::Result<RpcBuilder<C>> {
+    fn set_buyback_factor(
+        &self,
+        store: &Pubkey,
+        factor: u128,
+    ) -> crate::Result<TransactionBuilder<C>> {
         if factor > crate::constants::MARKET_USD_UNIT {
             return Err(crate::Error::invalid_argument(
                 "cannot use a factor greater than 1",
@@ -245,8 +257,8 @@ where
         let config = self.find_treasury_config_address(store);
         Ok(self
             .treasury_rpc()
-            .args(instruction::SetBuybackFactor { factor })
-            .accounts(accounts::UpdateConfig {
+            .anchor_args(instruction::SetBuybackFactor { factor })
+            .anchor_accounts(accounts::UpdateConfig {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -254,12 +266,16 @@ where
             }))
     }
 
-    fn initialize_treasury_vault_config(&self, store: &Pubkey, index: u8) -> RpcBuilder<C, Pubkey> {
+    fn initialize_treasury_vault_config(
+        &self,
+        store: &Pubkey,
+        index: u8,
+    ) -> TransactionBuilder<C, Pubkey> {
         let config = self.find_treasury_config_address(store);
         let treasury_vault_config = self.find_treasury_vault_config_address(&config, index);
         self.treasury_rpc()
-            .args(instruction::InitializeTreasuryVaultConfig { index })
-            .accounts(accounts::InitializeTreasuryVaultConfig {
+            .anchor_args(instruction::InitializeTreasuryVaultConfig { index })
+            .anchor_accounts(accounts::InitializeTreasuryVaultConfig {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -267,7 +283,7 @@ where
                 store_program: *self.store_program_id(),
                 system_program: system_program::ID,
             })
-            .with_output(treasury_vault_config)
+            .output(treasury_vault_config)
     }
 
     async fn insert_token_to_treasury(
@@ -275,13 +291,13 @@ where
         store: &Pubkey,
         treasury_vault_config: Option<&Pubkey>,
         token_mint: &Pubkey,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let (config, treasury_vault_config) =
             find_config_addresses(self, store, treasury_vault_config).await?;
         Ok(self
             .treasury_rpc()
-            .args(instruction::InsertTokenToTreasuryVault {})
-            .accounts(accounts::InsertTokenToTreasuryVault {
+            .anchor_args(instruction::InsertTokenToTreasuryVault {})
+            .anchor_accounts(accounts::InsertTokenToTreasuryVault {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -296,13 +312,13 @@ where
         store: &Pubkey,
         treasury_vault_config: Option<&Pubkey>,
         token_mint: &Pubkey,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let (config, treasury_vault_config) =
             find_config_addresses(self, store, treasury_vault_config).await?;
         Ok(self
             .treasury_rpc()
-            .args(instruction::RemoveTokenFromTreasuryVault {})
-            .accounts(accounts::RemoveTokenFromTreasuryVault {
+            .anchor_args(instruction::RemoveTokenFromTreasuryVault {})
+            .anchor_accounts(accounts::RemoveTokenFromTreasuryVault {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -319,16 +335,16 @@ where
         token_mint: &Pubkey,
         flag: TokenFlag,
         value: bool,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let (config, treasury_vault_config) =
             find_config_addresses(self, store, treasury_vault_config).await?;
         Ok(self
             .treasury_rpc()
-            .args(instruction::ToggleTokenFlag {
+            .anchor_args(instruction::ToggleTokenFlag {
                 flag: flag.to_string(),
                 value,
             })
-            .accounts(accounts::ToggleTokenFlag {
+            .anchor_accounts(accounts::ToggleTokenFlag {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -345,7 +361,7 @@ where
         token_mint: &Pubkey,
         token_program_id: Option<&Pubkey>,
         time_window: u32,
-    ) -> crate::Result<RpcBuilder<C, Pubkey>> {
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>> {
         let (config, treasury_vault_config) =
             find_config_addresses(self, store, treasury_vault_config_hint).await?;
 
@@ -382,8 +398,8 @@ where
 
         let deposit = self
             .treasury_rpc()
-            .args(instruction::DepositToTreasuryVault {})
-            .accounts(accounts::DepositToTreasuryVault {
+            .anchor_args(instruction::DepositToTreasuryVault {})
+            .anchor_accounts(accounts::DepositToTreasuryVault {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -404,7 +420,7 @@ where
             .merge(prepare_treasury_vault)
             .merge(prepare_gt_bank_vault)
             .merge(deposit)
-            .with_output(gt_exchange_vault))
+            .output(gt_exchange_vault))
     }
 
     async fn withdraw_from_treasury_vault(
@@ -416,7 +432,7 @@ where
         amount: u64,
         decimals: u8,
         target: &Pubkey,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let token_program_id = token_program_id.unwrap_or(&anchor_spl::token::ID);
 
         let (config, treasury_vault_config) =
@@ -430,8 +446,8 @@ where
 
         Ok(self
             .treasury_rpc()
-            .args(instruction::WithdrawFromTreasuryVault { amount, decimals })
-            .accounts(accounts::WithdrawFromTreasuryVault {
+            .anchor_args(instruction::WithdrawFromTreasuryVault { amount, decimals })
+            .anchor_accounts(accounts::WithdrawFromTreasuryVault {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -453,12 +469,12 @@ where
         ConfirmGtBuybackBuilder::new(self, store, gt_exchange_vault, oracle)
     }
 
-    fn transfer_receiver(&self, store: &Pubkey, new_receiver: &Pubkey) -> RpcBuilder<C> {
+    fn transfer_receiver(&self, store: &Pubkey, new_receiver: &Pubkey) -> TransactionBuilder<C> {
         let config = self.find_treasury_config_address(store);
         let receiver = self.find_treasury_receiver_address(&config);
         self.treasury_rpc()
-            .args(instruction::TransferReceiver {})
-            .accounts(accounts::TransferReceiver {
+            .anchor_args(instruction::TransferReceiver {})
+            .anchor_accounts(accounts::TransferReceiver {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -469,10 +485,10 @@ where
             })
     }
 
-    fn set_referral_reward(&self, store: &Pubkey, factors: Vec<u128>) -> RpcBuilder<C> {
+    fn set_referral_reward(&self, store: &Pubkey, factors: Vec<u128>) -> TransactionBuilder<C> {
         self.treasury_rpc()
-            .args(instruction::SetReferralReward { factors })
-            .accounts(accounts::SetReferralReward {
+            .anchor_args(instruction::SetReferralReward { factors })
+            .anchor_accounts(accounts::SetReferralReward {
                 authority: self.payer(),
                 store: *store,
                 config: self.find_treasury_config_address(store),
@@ -486,15 +502,15 @@ where
         market_token: &Pubkey,
         token_mint: &Pubkey,
         min_amount: u64,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let config = self.find_treasury_config_address(store);
         let token_program_id = anchor_spl::token::ID;
         let receiver = self.find_treasury_receiver_address(&config);
         let receiver_vault =
             get_associated_token_address_with_program_id(&receiver, token_mint, &token_program_id);
         self.treasury_rpc()
-            .args(instruction::ClaimFees { min_amount })
-            .accounts(accounts::ClaimFees {
+            .anchor_args(instruction::ClaimFees { min_amount })
+            .anchor_accounts(accounts::ClaimFees {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -516,14 +532,14 @@ where
         store: &Pubkey,
         treasury_vault_config_hint: Option<&Pubkey>,
         gt_exchange_vault: &Pubkey,
-    ) -> crate::Result<RpcBuilder<C, Pubkey>> {
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>> {
         let (config, treasury_vault_config) =
             find_config_addresses(self, store, treasury_vault_config_hint).await?;
         let gt_bank = self.find_gt_bank_address(&treasury_vault_config, gt_exchange_vault);
         Ok(self
             .treasury_rpc()
-            .args(instruction::PrepareGtBank {})
-            .accounts(accounts::PrepareGtBank {
+            .anchor_args(instruction::PrepareGtBank {})
+            .anchor_accounts(accounts::PrepareGtBank {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -533,7 +549,7 @@ where
                 store_program: *self.store_program_id(),
                 system_program: system_program::ID,
             })
-            .with_output(gt_bank))
+            .output(gt_bank))
     }
 
     async fn sync_gt_bank(
@@ -543,7 +559,7 @@ where
         gt_exchange_vault: &Pubkey,
         token_mint: &Pubkey,
         token_program_id: Option<&Pubkey>,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let (config, treasury_vault_config) =
             find_config_addresses(self, store, treasury_vault_config_hint).await?;
         let gt_bank = self.find_gt_bank_address(&treasury_vault_config, gt_exchange_vault);
@@ -567,8 +583,8 @@ where
 
         let sync = self
             .treasury_rpc()
-            .args(instruction::SyncGtBank {})
-            .accounts(accounts::SyncGtBank {
+            .anchor_args(instruction::SyncGtBank {})
+            .anchor_accounts(accounts::SyncGtBank {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -594,7 +610,7 @@ where
         treasury_vault_config_hint: Option<&Pubkey>,
         tokens_hint: Option<Vec<(Pubkey, Pubkey)>>,
         gt_exchange_vault_hint: Option<&Pubkey>,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let owner = self.payer();
         let (config, treasury_vault_config) =
             find_config_addresses(self, store, treasury_vault_config_hint).await?;
@@ -624,7 +640,7 @@ where
 
                 let tokens = gt_bank.tokens().collect::<Vec<_>>();
                 self.treasury_program()
-                    .solana_rpc()
+                    .rpc()
                     .get_multiple_accounts_with_config(
                         &tokens,
                         RpcAccountInfoConfig {
@@ -674,8 +690,8 @@ where
 
         Ok(self
             .treasury_rpc()
-            .args(instruction::CompleteGtExchange {})
-            .accounts(accounts::CompleteGtExchange {
+            .anchor_args(instruction::CompleteGtExchange {})
+            .anchor_accounts(accounts::CompleteGtExchange {
                 owner,
                 store: *store,
                 config,
@@ -703,7 +719,7 @@ where
         swap_out_token: &Pubkey,
         swap_in_token_amount: u64,
         options: CreateTreasurySwapOptions,
-    ) -> crate::Result<RpcBuilder<C, Pubkey>> {
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>> {
         let nonce = options.nonce.unwrap_or_else(generate_nonce);
         let swap_path = options
             .swap_path
@@ -760,7 +776,7 @@ where
 
         let create = self
             .treasury_rpc()
-            .args(instruction::CreateSwap {
+            .anchor_args(instruction::CreateSwap {
                 nonce,
                 swap_path_length: swap_path
                     .len()
@@ -769,7 +785,7 @@ where
                 swap_in_amount: swap_in_token_amount,
                 min_swap_out_amount: options.min_swap_out_amount,
             })
-            .accounts(accounts::CreateSwap {
+            .anchor_accounts(accounts::CreateSwap {
                 authority: self.payer(),
                 store: *store,
                 config,
@@ -795,7 +811,7 @@ where
             .merge(prepare_swap_in_escrow)
             .merge(prepare_swap_out_escrow)
             .merge(create)
-            .with_output(order))
+            .output(order))
     }
 
     async fn cancel_treasury_swap(
@@ -803,7 +819,7 @@ where
         store: &Pubkey,
         order: &Pubkey,
         hint: Option<(&Pubkey, &Pubkey)>,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let config = self.find_treasury_config_address(store);
         let receiver = self.find_treasury_receiver_address(&config);
         let user = self.find_user_address(store, &receiver);
@@ -854,8 +870,8 @@ where
 
         let cancel = self
             .treasury_rpc()
-            .args(instruction::CancelSwap {})
-            .accounts(accounts::CancelSwap {
+            .anchor_args(instruction::CancelSwap {})
+            .anchor_accounts(accounts::CancelSwap {
                 authority: self.payer(),
                 store: *store,
                 store_wallet: self.find_store_wallet_address(store),
@@ -987,10 +1003,10 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ConfirmGtBuybackBuilder<'a, C> 
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     for ConfirmGtBuybackBuilder<'a, C>
 {
-    async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+    async fn build(&mut self) -> crate::Result<BundleBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
 
         let gt_bank = self
@@ -1027,7 +1043,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeTransactionBuilder<'a, C>
         let rpc = self
             .client
             .treasury_rpc()
-            .args(instruction::ConfirmGtBuyback {})
+            .anchor_args(instruction::ConfirmGtBuyback {})
             .accounts(fix_optional_account_metas(
                 accounts::ConfirmGtBuyback {
                     authority: self.client.payer(),

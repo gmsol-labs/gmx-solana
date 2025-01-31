@@ -4,13 +4,14 @@ use anchor_client::{
     anchor_lang::{prelude::AccountMeta, system_program},
     solana_sdk::{instruction::Instruction, pubkey::Pubkey, signer::Signer},
 };
+use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_store::states::{PriceProviderKind, RoleKey};
 use gmsol_timelock::{
     accounts, instruction, roles,
     states::{Executor, InstructionAccess, InstructionHeader},
 };
 
-use crate::utils::{RpcBuilder, ZeroCopy};
+use crate::utils::ZeroCopy;
 
 /// Timelock instructions.
 pub trait TimelockOps<C> {
@@ -19,17 +20,17 @@ pub trait TimelockOps<C> {
         &self,
         store: &Pubkey,
         initial_delay: u32,
-    ) -> RpcBuilder<C, Pubkey>;
+    ) -> TransactionBuilder<C, Pubkey>;
 
     /// Increase timelock delay.
-    fn increase_timelock_delay(&self, store: &Pubkey, delta: u32) -> RpcBuilder<C>;
+    fn increase_timelock_delay(&self, store: &Pubkey, delta: u32) -> TransactionBuilder<C>;
 
     /// Initialize [`Executor`] account.
     fn initialize_executor(
         &self,
         store: &Pubkey,
         role: &str,
-    ) -> crate::Result<RpcBuilder<C, Pubkey>>;
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>>;
 
     /// Create a timelocked instruction buffer for the given instruction.
     fn create_timelocked_instruction(
@@ -38,7 +39,7 @@ pub trait TimelockOps<C> {
         role: &str,
         buffer: impl Signer + 'static,
         instruction: Instruction,
-    ) -> crate::Result<RpcBuilder<C, Pubkey>>;
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>>;
 
     /// Approve timelocked instruction.
     fn approve_timelocked_instruction(
@@ -46,7 +47,7 @@ pub trait TimelockOps<C> {
         store: &Pubkey,
         buffer: &Pubkey,
         role_hint: Option<&str>,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Approve timelocked instruction.
     fn approve_timelocked_instructions(
@@ -54,7 +55,7 @@ pub trait TimelockOps<C> {
         store: &Pubkey,
         buffers: impl IntoIterator<Item = Pubkey>,
         role_hint: Option<&str>,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Cancel timelocked instruction.
     fn cancel_timelocked_instruction(
@@ -63,7 +64,7 @@ pub trait TimelockOps<C> {
         buffer: &Pubkey,
         executor_hint: Option<&Pubkey>,
         rent_receiver_hint: Option<&Pubkey>,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Cancel timelocked instruction.
     fn cancel_timelocked_instructions(
@@ -72,7 +73,7 @@ pub trait TimelockOps<C> {
         buffers: impl IntoIterator<Item = Pubkey>,
         executor_hint: Option<&Pubkey>,
         rent_receiver_hint: Option<&Pubkey>,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Execute timelocked instruction.
     fn execute_timelocked_instruction(
@@ -80,7 +81,7 @@ pub trait TimelockOps<C> {
         store: &Pubkey,
         buffer: &Pubkey,
         hint: Option<ExecuteTimelockedInstructionHint<'_>>,
-    ) -> impl Future<Output = crate::Result<RpcBuilder<C>>>;
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Timelock-bypassed revoke role.
     fn timelock_bypassed_revoke_role(
@@ -88,7 +89,7 @@ pub trait TimelockOps<C> {
         store: &Pubkey,
         role: &str,
         address: &Pubkey,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 
     /// Timelock-bypassed set expected price provider.
     fn timelock_bypassed_set_epxected_price_provider(
@@ -97,7 +98,7 @@ pub trait TimelockOps<C> {
         token_map: &Pubkey,
         token: &Pubkey,
         new_expected_price_provider: PriceProviderKind,
-    ) -> RpcBuilder<C>;
+    ) -> TransactionBuilder<C>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C> {
@@ -105,16 +106,16 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         &self,
         store: &Pubkey,
         initial_delay: u32,
-    ) -> RpcBuilder<C, Pubkey> {
+    ) -> TransactionBuilder<C, Pubkey> {
         let config = self.find_timelock_config_address(store);
         let executor = self
             .find_executor_address(store, roles::ADMIN)
             .expect("must success");
         self.timelock_rpc()
-            .args(instruction::InitializeConfig {
+            .anchor_args(instruction::InitializeConfig {
                 delay: initial_delay,
             })
-            .accounts(accounts::InitializeConfig {
+            .anchor_accounts(accounts::InitializeConfig {
                 authority: self.payer(),
                 store: *store,
                 timelock_config: config,
@@ -123,13 +124,13 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
                 store_program: *self.store_program_id(),
                 system_program: system_program::ID,
             })
-            .with_output(config)
+            .output(config)
     }
 
-    fn increase_timelock_delay(&self, store: &Pubkey, delta: u32) -> RpcBuilder<C> {
+    fn increase_timelock_delay(&self, store: &Pubkey, delta: u32) -> TransactionBuilder<C> {
         self.timelock_rpc()
-            .args(instruction::IncreaseDelay { delta })
-            .accounts(accounts::IncreaseDelay {
+            .anchor_args(instruction::IncreaseDelay { delta })
+            .anchor_accounts(accounts::IncreaseDelay {
                 authority: self.payer(),
                 store: *store,
                 timelock_config: self.find_timelock_config_address(store),
@@ -141,20 +142,20 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         &self,
         store: &Pubkey,
         role: &str,
-    ) -> crate::Result<RpcBuilder<C, Pubkey>> {
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>> {
         let executor = self.find_executor_address(store, role)?;
         Ok(self
             .timelock_rpc()
-            .args(instruction::InitializeExecutor {
+            .anchor_args(instruction::InitializeExecutor {
                 role: role.to_string(),
             })
-            .accounts(accounts::InitializeExecutor {
+            .anchor_accounts(accounts::InitializeExecutor {
                 payer: self.payer(),
                 store: *store,
                 executor,
                 system_program: system_program::ID,
             })
-            .with_output(executor))
+            .output(executor))
     }
 
     fn create_timelocked_instruction(
@@ -163,7 +164,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         role: &str,
         buffer: impl Signer + 'static,
         mut instruction: Instruction,
-    ) -> crate::Result<RpcBuilder<C, Pubkey>> {
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>> {
         let executor = self.find_executor_address(store, role)?;
         let instruction_buffer = buffer.pubkey();
 
@@ -194,13 +195,13 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
 
         let rpc = self
             .timelock_rpc()
-            .args(instruction::CreateInstructionBuffer {
+            .anchor_args(instruction::CreateInstructionBuffer {
                 num_accounts,
                 data_len,
                 data: instruction.data,
                 signers,
             })
-            .accounts(accounts::CreateInstructionBuffer {
+            .anchor_accounts(accounts::CreateInstructionBuffer {
                 authority: self.payer(),
                 store: *store,
                 executor,
@@ -211,7 +212,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
             })
             .accounts(instruction.accounts)
             .owned_signer(buffer)
-            .with_output(instruction_buffer);
+            .output(instruction_buffer);
         Ok(rpc)
     }
 
@@ -220,7 +221,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         store: &Pubkey,
         buffer: &Pubkey,
         role_hint: Option<&str>,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let role = match role_hint {
             Some(role) => role.to_string(),
             None => {
@@ -241,8 +242,8 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         let executor = self.find_executor_address(store, &role)?;
         Ok(self
             .timelock_rpc()
-            .args(instruction::ApproveInstruction { role })
-            .accounts(accounts::ApproveInstruction {
+            .anchor_args(instruction::ApproveInstruction { role })
+            .anchor_accounts(accounts::ApproveInstruction {
                 authority: self.payer(),
                 store: *store,
                 executor,
@@ -256,7 +257,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         store: &Pubkey,
         buffers: impl IntoIterator<Item = Pubkey>,
         role_hint: Option<&str>,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let mut buffers = buffers.into_iter().peekable();
         let buffer = buffers
             .peek()
@@ -281,8 +282,8 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         let executor = self.find_executor_address(store, &role)?;
         Ok(self
             .timelock_rpc()
-            .args(instruction::ApproveInstructions { role })
-            .accounts(accounts::ApproveInstructions {
+            .anchor_args(instruction::ApproveInstructions { role })
+            .anchor_accounts(accounts::ApproveInstructions {
                 authority: self.payer(),
                 store: *store,
                 executor,
@@ -305,7 +306,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         buffer: &Pubkey,
         executor_hint: Option<&Pubkey>,
         rent_receiver_hint: Option<&Pubkey>,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let (executor, rent_receiver) = match (executor_hint, rent_receiver_hint) {
             (Some(executor), Some(rent_receiver)) => (*executor, *rent_receiver),
             _ => {
@@ -322,8 +323,8 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         };
         Ok(self
             .timelock_rpc()
-            .args(instruction::CancelInstruction {})
-            .accounts(accounts::CancelInstruction {
+            .anchor_args(instruction::CancelInstruction {})
+            .anchor_accounts(accounts::CancelInstruction {
                 authority: self.payer(),
                 store: *store,
                 executor,
@@ -339,7 +340,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         buffers: impl IntoIterator<Item = Pubkey>,
         executor_hint: Option<&Pubkey>,
         rent_receiver_hint: Option<&Pubkey>,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let mut buffers = buffers.into_iter().peekable();
         let buffer = buffers
             .peek()
@@ -360,8 +361,8 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         };
         Ok(self
             .timelock_rpc()
-            .args(instruction::CancelInstructions {})
-            .accounts(accounts::CancelInstructions {
+            .anchor_args(instruction::CancelInstructions {})
+            .anchor_accounts(accounts::CancelInstructions {
                 authority: self.payer(),
                 store: *store,
                 executor,
@@ -384,7 +385,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         store: &Pubkey,
         buffer: &Pubkey,
         hint: Option<ExecuteTimelockedInstructionHint<'_>>,
-    ) -> crate::Result<RpcBuilder<C>> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let (executor, rent_receiver, mut accounts) = match hint {
             Some(hint) => (
                 *hint.executor,
@@ -415,8 +416,8 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
 
         Ok(self
             .timelock_rpc()
-            .args(instruction::ExecuteInstruction {})
-            .accounts(accounts::ExecuteInstruction {
+            .anchor_args(instruction::ExecuteInstruction {})
+            .anchor_accounts(accounts::ExecuteInstruction {
                 authority: self.payer(),
                 store: *store,
                 timelock_config: self.find_timelock_config_address(store),
@@ -434,16 +435,16 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         store: &Pubkey,
         role: &str,
         address: &Pubkey,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let executor = self
             .find_executor_address(store, roles::ADMIN)
             .expect("must success");
         let wallet = self.find_executor_wallet_address(&executor);
         self.timelock_rpc()
-            .args(instruction::RevokeRole {
+            .anchor_args(instruction::RevokeRole {
                 role: role.to_string(),
             })
-            .accounts(accounts::RevokeRole {
+            .anchor_accounts(accounts::RevokeRole {
                 authority: self.payer(),
                 store: *store,
                 executor,
@@ -459,16 +460,16 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         token_map: &Pubkey,
         token: &Pubkey,
         new_expected_price_provider: PriceProviderKind,
-    ) -> RpcBuilder<C> {
+    ) -> TransactionBuilder<C> {
         let executor = self
             .find_executor_address(store, RoleKey::MARKET_KEEPER)
             .expect("must success");
         let wallet = self.find_executor_wallet_address(&executor);
         self.timelock_rpc()
-            .args(instruction::SetExpectedPriceProvider {
+            .anchor_args(instruction::SetExpectedPriceProvider {
                 new_expected_price_provider: new_expected_price_provider.into(),
             })
-            .accounts(accounts::SetExpectedPriceProvider {
+            .anchor_accounts(accounts::SetExpectedPriceProvider {
                 authority: self.payer(),
                 store: *store,
                 executor,
