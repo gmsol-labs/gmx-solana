@@ -60,6 +60,7 @@ sha2 = "0.10.8"
 shellexpand = "3.1.0"
 snap = "1.1.1"
 solana-account-decoder = "1.18.26"
+solana-client = "1.18.26"
 solana-remote-wallet = "1.18.26"
 solana-sdk = "1.18.26"
 solana-transaction-status = "1.18.26"
@@ -110,6 +111,9 @@ path = "crates/chainlink-datastreams"
 
 [workspace.dependencies.data-streams-report]
 git = "https://github.com/smartcontractkit/data-streams-sdk.git"
+
+[workspace.dependencies.gmsol-solana-utils]
+path = "crates/solana-utils"
 
 [profile.release]
 overflow-checks = true

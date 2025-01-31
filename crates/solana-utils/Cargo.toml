@@ -1,0 +1,21 @@
+[package]
+name = "gmsol-solana-utils"
+version.workspace = true
+edition.workspace = true
+
+[features]
+serde = ["dep:serde"]
+anchor = ["dep:anchor-lang"]
+
+[dependencies]
+solana-sdk = { workspace = true }
+solana-client = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }
+tokio = { workspace = true }
+futures-util = { workspace = true }
+base64 = { workspace = true }
+
+serde = { workspace = true, optional = true, features = ["derive"] }
+anchor-lang = { workspace = true, optional = true }
