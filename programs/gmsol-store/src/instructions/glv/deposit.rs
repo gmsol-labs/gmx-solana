@@ -559,10 +559,9 @@ impl<'info> internal::Authentication<'info> for CloseGlvDeposit<'info> {
 ///   - 0..N. `[]` N market accounts, where N represents the total number of markets managed
 ///     by the given GLV.
 ///   - N..2N. `[]` N market token accounts (see above for the definition of N).
-///   - 2N..3N. `[]` N market token vault accounts (see above for the definition of N).
-///   - 3N..3N+M. `[]` M feed accounts, where M represents the total number of tokens in the
+///   - 2N..2N+M. `[]` M feed accounts, where M represents the total number of tokens in the
 ///     swap params.
-///   - 3N+M..3N+M+L. `[writable]` L market accounts, where L represents the total number of unique
+///   - 2N+M..2N+M+L. `[writable]` L market accounts, where L represents the total number of unique
 ///     markets excluding the current market in the swap params.
 #[event_cpi]
 #[derive(Accounts)]
@@ -580,6 +579,7 @@ pub struct ExecuteGlvDeposit<'info> {
     pub oracle: AccountLoader<'info, Oracle>,
     /// GLV account.
     #[account(
+        mut,
         has_one = store,
         constraint = glv.load()?.contains(&market_token.key()) @ CoreError::InvalidArgument,
     )]
@@ -699,21 +699,16 @@ pub(crate) fn unchecked_execute_glv_deposit<'info>(
     let accounts = ctx.accounts;
     let remaining_accounts = ctx.remaining_accounts;
 
-    let glv_address = accounts.glv.key();
-
     let SplitAccountsForGlv {
         markets,
         market_tokens,
-        market_token_vaults,
         remaining_accounts,
         tokens,
     } = {
         let glv_deposit = accounts.glv_deposit.load()?;
         let token_map = accounts.token_map.load_token_map()?;
         accounts.glv.load()?.validate_and_split_remaining_accounts(
-            &glv_address,
             &accounts.store.key(),
-            accounts.token_program.key,
             remaining_accounts,
             Some(&*glv_deposit),
             &token_map,
@@ -729,7 +724,6 @@ pub(crate) fn unchecked_execute_glv_deposit<'info>(
     let executed = accounts.perform_execution(
         markets,
         market_tokens,
-        market_token_vaults,
         &tokens,
         remaining_accounts,
         throw_on_execution_error,
@@ -925,7 +919,6 @@ impl<'info> ExecuteGlvDeposit<'info> {
         &mut self,
         markets: &'info [AccountInfo<'info>],
         market_tokens: &'info [AccountInfo<'info>],
-        market_token_vaults: &'info [AccountInfo<'info>],
         tokens: &[Pubkey],
         remaining_accounts: &'info [AccountInfo<'info>],
         throw_on_execution_error: bool,
@@ -946,7 +939,6 @@ impl<'info> ExecuteGlvDeposit<'info> {
             .market_token_vault(self.market_token_vault.to_account_info())
             .markets(markets)
             .market_tokens(market_tokens)
-            .market_token_vaults(market_token_vaults)
             .event_emitter(*event_emitter);
 
         self.oracle.load_mut()?.with_prices(

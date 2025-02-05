@@ -35,6 +35,7 @@ pub struct CreateGlvShift<'info> {
     pub store: AccountLoader<'info, Store>,
     /// GLV.
     #[account(
+        mut,
         has_one = store,
         constraint = glv.load()?.contains(&from_market_token.key()) @ CoreError::InvalidArgument,
         constraint = glv.load()?.contains(&to_market_token.key()) @ CoreError::InvalidArgument,

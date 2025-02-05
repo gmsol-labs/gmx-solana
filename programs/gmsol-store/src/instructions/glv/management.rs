@@ -361,6 +361,7 @@ impl<'info> internal::Authentication<'info> for InsertGlvMarket<'info> {
 #[derive(Accounts)]
 pub struct RemoveGlvMarket<'info> {
     /// Authority.
+    #[account(mut)]
     pub authority: Signer<'info>,
     /// Store.
     pub store: AccountLoader<'info, Store>,
@@ -386,8 +387,20 @@ pub struct RemoveGlvMarket<'info> {
         associated_token::authority = glv,
     )]
     pub vault: InterfaceAccount<'info, token_interface::TokenAccount>,
+    /// Store wallet ATA.
+    #[account(
+        init_if_needed,
+        payer = authority,
+        associated_token::mint = market_token,
+        associated_token::authority = store_wallet,
+    )]
+    pub store_wallet_ata: InterfaceAccount<'info, token_interface::TokenAccount>,
     /// Token program.
     pub token_program: Interface<'info, token_interface::TokenInterface>,
+    /// Associated token program.
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    /// System program.
+    pub system_program: Program<'info, System>,
 }
 
 /// Remove a new market from the GLV.
@@ -399,7 +412,12 @@ pub(crate) fn unchecked_remove_glv_market(ctx: Context<RemoveGlvMarket>) -> Resu
 
     let market_token = ctx.accounts.market_token.key();
     require_eq!(
-        ctx.accounts.vault.amount,
+        ctx.accounts
+            .glv
+            .load()?
+            .market_config(&market_token)
+            .ok_or_else(|| error!(CoreError::NotFound))?
+            .balance(),
         0,
         CoreError::PreconditionsAreNotMet
     );
@@ -411,6 +429,27 @@ pub(crate) fn unchecked_remove_glv_market(ctx: Context<RemoveGlvMarket>) -> Resu
     {
         let glv = ctx.accounts.glv.load()?;
         let signer = glv.signer_seeds();
+
+        let amount = ctx.accounts.vault.amount;
+
+        if amount != 0 {
+            let decimals = ctx.accounts.market_token.decimals;
+            token_interface::transfer_checked(
+                CpiContext::new(
+                    ctx.accounts.token_program.to_account_info(),
+                    token_interface::TransferChecked {
+                        from: ctx.accounts.vault.to_account_info(),
+                        mint: ctx.accounts.market_token.to_account_info(),
+                        to: ctx.accounts.store_wallet_ata.to_account_info(),
+                        authority: ctx.accounts.glv.to_account_info(),
+                    },
+                )
+                .with_signer(&[&signer]),
+                amount,
+                decimals,
+            )?;
+        }
+
         close_account(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),

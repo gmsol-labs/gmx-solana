@@ -238,7 +238,6 @@ pub(crate) struct ExecuteGlvDepositOperation<'a, 'info> {
     market_token_vault: AccountInfo<'info>,
     markets: &'info [AccountInfo<'info>],
     market_tokens: &'info [AccountInfo<'info>],
-    market_token_vaults: &'info [AccountInfo<'info>],
     oracle: &'a Oracle,
     remaining_accounts: &'info [AccountInfo<'info>],
     #[builder(setter(into))]
@@ -260,7 +259,7 @@ impl ExecuteGlvDepositOperation<'_, '_> {
     /// # Errors
     /// - The `market` must be owned by the `store` and be the current market of the `glv_deposit`.
     /// - The swap markets provided by `remaining_accounts` must be valid.
-    pub(crate) fn unchecked_execute(self) -> Result<bool> {
+    pub(crate) fn unchecked_execute(mut self) -> Result<bool> {
         let throw_on_execution_error = self.throw_on_execution_error;
         match self.validate_oracle() {
             Ok(()) => {}
@@ -278,14 +277,18 @@ impl ExecuteGlvDepositOperation<'_, '_> {
                 return Err(error!(err));
             }
         }
-        match self.perform_glv_deposit() {
-            Ok(()) => Ok(true),
+        let executed = match self.perform_glv_deposit() {
+            Ok(()) => true,
             Err(err) if !throw_on_execution_error => {
                 msg!("Execute GLV deposit error: {}", err);
-                Ok(false)
+                false
             }
-            Err(err) => Err(err),
-        }
+            Err(err) => return Err(err),
+        };
+
+        self.validate_after_execution()?;
+
+        Ok(executed)
     }
 
     fn validate_oracle(&self) -> CoreResult<()> {
@@ -310,8 +313,26 @@ impl ExecuteGlvDepositOperation<'_, '_> {
         Ok(())
     }
 
+    fn validate_after_execution(&self) -> Result<()> {
+        use anchor_spl::token::accessor::amount;
+
+        let glv = self.glv.load()?;
+        let market_token = self.market_token_mint.key();
+        let vault_balance = amount(&self.market_token_vault)?;
+
+        require_gte!(
+            vault_balance,
+            glv.market_config(&market_token)
+                .ok_or_else(|| error!(CoreError::NotFound))?
+                .balance(),
+            CoreError::Internal
+        );
+
+        Ok(())
+    }
+
     #[inline(never)]
-    fn perform_glv_deposit(self) -> Result<()> {
+    fn perform_glv_deposit(&mut self) -> Result<()> {
         use gmsol_model::utils::usd_to_market_token_amount;
 
         self.validate_before_execution()?;
@@ -352,15 +373,25 @@ impl ExecuteGlvDepositOperation<'_, '_> {
                 op = executed.with_output(());
             }
 
+            let market_token_mint = op.market().market_meta().market_token_mint;
+            let next_market_token_balance = self
+                .glv
+                .load()?
+                .market_config(&market_token_mint)
+                .ok_or_else(|| error!(CoreError::NotFound))?
+                .balance()
+                .checked_add(market_token_amount)
+                .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+
             // Calculate GLV token amount to mint.
             let glv_amount = {
                 let glv_supply = self.glv_token_mint.supply;
                 let glv_value = unchecked_get_glv_value(
+                    &*self.glv.load()?,
                     self.oracle,
                     &op,
                     self.markets,
                     self.market_tokens,
-                    self.market_token_vaults,
                     true,
                 )?;
 
@@ -376,19 +407,12 @@ impl ExecuteGlvDepositOperation<'_, '_> {
                 };
 
                 // Validate market token balance.
-                {
-                    let current_balance =
-                        anchor_spl::token::accessor::amount(&self.market_token_vault)?;
-                    let new_balance = current_balance
-                        .checked_add(market_token_amount)
-                        .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
-                    self.glv.load()?.validate_market_token_balance(
-                        &op.market().market_meta().market_token_mint,
-                        new_balance,
-                        &market_pool_value,
-                        &market_token_supply,
-                    )?;
-                }
+                self.glv.load()?.validate_market_token_balance(
+                    &market_token_mint,
+                    next_market_token_balance,
+                    &market_pool_value,
+                    &market_token_supply,
+                )?;
 
                 msg!(
                     "[GLV] Calculating GLV amount with glv_supply={}, glv_value={}, received_value={}",
@@ -408,6 +432,11 @@ impl ExecuteGlvDepositOperation<'_, '_> {
             };
 
             deposit.validate_output_amount(glv_amount)?;
+
+            // Update market token balance.
+            self.glv
+                .load_mut()?
+                .update_market_token_balance(&market_token_mint, next_market_token_balance)?;
 
             op.commit();
 
@@ -655,7 +684,6 @@ pub(crate) struct ExecuteGlvWithdrawalOperation<'a, 'info> {
     market_token_withdrawal_vault: AccountInfo<'info>,
     markets: &'info [AccountInfo<'info>],
     market_tokens: &'info [AccountInfo<'info>],
-    market_token_vaults: &'info [AccountInfo<'info>],
     oracle: &'a Oracle,
     remaining_accounts: &'info [AccountInfo<'info>],
     #[builder(setter(into))]
@@ -669,7 +697,7 @@ impl ExecuteGlvWithdrawalOperation<'_, '_> {
     ///
     /// # Errors
     ///
-    pub(crate) fn unchecked_execute(self) -> Result<Option<(u64, u64)>> {
+    pub(crate) fn unchecked_execute(mut self) -> Result<Option<(u64, u64)>> {
         let throw_on_execution_error = self.throw_on_execution_error;
         match self.validate_oracle() {
             Ok(()) => {}
@@ -687,14 +715,19 @@ impl ExecuteGlvWithdrawalOperation<'_, '_> {
                 return Err(error!(err));
             }
         }
-        match self.perform_glv_withdrawal() {
-            Ok(amounts) => Ok(Some(amounts)),
+
+        let executed = match self.perform_glv_withdrawal() {
+            Ok(amounts) => Some(amounts),
             Err(err) if !throw_on_execution_error => {
                 msg!("Execute GLV withdrawal error: {}", err);
-                Ok(None)
+                None
             }
-            Err(err) => Err(err),
-        }
+            Err(err) => return Err(err),
+        };
+
+        self.validate_after_execution()?;
+
+        Ok(executed)
     }
 
     fn validate_oracle(&self) -> CoreResult<()> {
@@ -706,8 +739,26 @@ impl ExecuteGlvWithdrawalOperation<'_, '_> {
         Ok(())
     }
 
+    fn validate_after_execution(&self) -> Result<()> {
+        use anchor_spl::token::accessor::amount;
+
+        let glv = self.glv.load()?;
+        let market_token = self.market_token_mint.key();
+        let vault_balance = amount(&self.market_token_glv_vault.to_account_info())?;
+
+        require_gte!(
+            vault_balance,
+            glv.market_config(&market_token)
+                .ok_or_else(|| error!(CoreError::NotFound))?
+                .balance(),
+            CoreError::Internal
+        );
+
+        Ok(())
+    }
+
     #[inline(never)]
-    fn perform_glv_withdrawal(self) -> Result<(u64, u64)> {
+    fn perform_glv_withdrawal(&mut self) -> Result<(u64, u64)> {
         use gmsol_model::utils::market_token_amount_to_usd;
 
         self.validate_market()?;
@@ -737,11 +788,11 @@ impl ExecuteGlvWithdrawalOperation<'_, '_> {
             let market_token_amount = {
                 let glv_supply = self.glv_token_mint.supply;
                 let glv_value = unchecked_get_glv_value(
+                    &*self.glv.load()?,
                     self.oracle,
                     &op,
                     self.markets,
                     self.market_tokens,
-                    self.market_token_vaults,
                     false,
                 )?;
 
@@ -794,24 +845,36 @@ impl ExecuteGlvWithdrawalOperation<'_, '_> {
 
             let amounts = executed.output;
 
+            // Update market token balance.
+            let next_market_token_balance = self
+                .glv
+                .load()?
+                .market_config(market_token_mint.key)
+                .ok_or_else(|| error!(CoreError::NotFound))?
+                .balance()
+                .checked_sub(market_token_amount)
+                .ok_or_else(|| error!(CoreError::NotEnoughTokenAmount))?;
+
+            self.glv
+                .load_mut()?
+                .update_market_token_balance(market_token_mint.key, next_market_token_balance)?;
+
             // Transfer market tokens from the GLV vault to the withdrawal vault before the commitment.
-            {
-                transfer_checked(
-                    CpiContext::new(
-                        self.token_program.to_account_info(),
-                        TransferChecked {
-                            from: self.market_token_glv_vault.to_account_info(),
-                            mint: market_token_mint,
-                            to: self.market_token_withdrawal_vault.to_account_info(),
-                            authority: self.glv.to_account_info(),
-                        },
-                    )
-                    .with_signer(&[&self.glv.load()?.signer_seeds()]),
-                    market_token_amount,
-                    market_token_decimals,
+            transfer_checked(
+                CpiContext::new(
+                    self.token_program.to_account_info(),
+                    TransferChecked {
+                        from: self.market_token_glv_vault.to_account_info(),
+                        mint: market_token_mint,
+                        to: self.market_token_withdrawal_vault.to_account_info(),
+                        authority: self.glv.to_account_info(),
+                    },
                 )
-                .expect("failed to transfer market tokens");
-            }
+                .with_signer(&[&self.glv.load()?.signer_seeds()]),
+                market_token_amount,
+                market_token_decimals,
+            )
+            .expect("failed to transfer market tokens");
 
             executed.commit();
 
@@ -889,21 +952,20 @@ impl ValidateOracleTime for ExecuteGlvWithdrawalOperation<'_, '_> {
 /// Get total GLV value.
 ///
 /// # CHECK
-/// TODO: basically one must make sure that `glv_markets`,
-/// `glv_market_tokens` and `glv_market_token_valuts` are aligned.
+/// TODO: basically one must make sure that `glv_markets` and
+/// `glv_market_tokens` are aligned.
 ///
 /// # Errors
 ///
 fn unchecked_get_glv_value<'info>(
+    glv: &Glv,
     oracle: &Oracle,
     op: &Execute<'_, 'info>,
     glv_markets: &'info [AccountInfo<'info>],
     glv_market_tokens: &'info [AccountInfo<'info>],
-    glv_market_token_vaults: &'info [AccountInfo<'info>],
     maximize: bool,
 ) -> Result<u128> {
     use crate::states::market::AsLiquidityMarket;
-    use anchor_spl::token::accessor;
 
     let mut value = 0u128;
 
@@ -912,15 +974,15 @@ fn unchecked_get_glv_value<'info>(
 
     let mut prices = oracle.market_prices(current_market)?;
 
-    for ((market, market_token), vault) in glv_markets
-        .iter()
-        .zip(glv_market_tokens)
-        .zip(glv_market_token_vaults)
-    {
+    for (market, market_token) in glv_markets.iter().zip(glv_market_tokens) {
         let key = market_token.key();
 
         // Get the current balance of market tokens in the GLV vault.
-        let balance = u128::from(accessor::amount(vault)?);
+        let balance = u128::from(
+            glv.market_config(&key)
+                .ok_or_else(|| error!(CoreError::NotFound))?
+                .balance(),
+        );
 
         let value_for_market = if key == current_market.key() {
             let market = current_market;
@@ -1048,7 +1110,7 @@ impl ExecuteGlvShiftOperation<'_, '_> {
     ///
     /// # Errors
     ///
-    pub(crate) fn unchecked_execute(self) -> Result<bool> {
+    pub(crate) fn unchecked_execute(mut self) -> Result<bool> {
         let throw_on_execution_error = self.throw_on_execution_error;
         match self.validate_oracle() {
             Ok(()) => {}
@@ -1066,14 +1128,19 @@ impl ExecuteGlvShiftOperation<'_, '_> {
                 return Err(error!(err));
             }
         }
-        match self.perform_glv_shift() {
-            Ok(()) => Ok(true),
+
+        let executed = match self.perform_glv_shift() {
+            Ok(()) => true,
             Err(err) if !throw_on_execution_error => {
                 msg!("Execute GLV shift error: {}", err);
-                Ok(false)
+                false
             }
-            Err(err) => Err(err),
-        }
+            Err(err) => return Err(err),
+        };
+
+        self.validate_after_execution()?;
+
+        Ok(executed)
     }
 
     fn validate_oracle(&self) -> CoreResult<()> {
@@ -1111,9 +1178,42 @@ impl ExecuteGlvShiftOperation<'_, '_> {
         Ok(())
     }
 
+    fn validate_after_execution(&self) -> Result<()> {
+        use anchor_spl::token::accessor::amount;
+
+        let glv = self.glv.load()?;
+
+        let from_market_token = self.from_market_token_mint.key();
+        let from_market_token_vault_balance =
+            amount(&self.from_market_token_glv_vault.to_account_info())?;
+        require_gte!(
+            from_market_token_vault_balance,
+            glv.market_config(&from_market_token)
+                .ok_or_else(|| error!(CoreError::NotFound))?
+                .balance(),
+            CoreError::Internal
+        );
+
+        let to_market_token = self.to_market_token_mint.key();
+        let to_market_token_vault_balance =
+            amount(&self.to_market_token_glv_vault.to_account_info())?;
+        require_gte!(
+            to_market_token_vault_balance,
+            glv.market_config(&to_market_token)
+                .ok_or_else(|| error!(CoreError::NotFound))?
+                .balance(),
+            CoreError::Internal
+        );
+
+        Ok(())
+    }
+
     #[inline(never)]
-    fn perform_glv_shift(self) -> Result<()> {
+    fn perform_glv_shift(&mut self) -> Result<()> {
         self.validate_before_execution()?;
+
+        let from_market_token_address = self.from_market_token_mint.key();
+        let to_market_token_address = self.to_market_token_mint.key();
 
         let from_market_token_mint = self.from_market_token_mint.to_account_info();
         let from_market_token_decimals = self.from_market_token_mint.decimals;
@@ -1154,13 +1254,17 @@ impl ExecuteGlvShiftOperation<'_, '_> {
         )?;
 
         // Validate to market token balance.
-        {
+        let next_to_market_token_balance = {
             let (_, market_pool_value, market_token_supply) = {
                 let mut prices = self.oracle.market_prices(to_market.market())?;
                 get_glv_value_for_market(self.oracle, &mut prices, to_market.market(), 0, true)?
             };
-            let current_balance =
-                anchor_spl::token::accessor::amount(&self.to_market_token_glv_vault)?;
+            let current_balance = self
+                .glv
+                .load()?
+                .market_config(&to_market_token_address)
+                .ok_or_else(|| error!(CoreError::NotFound))?
+                .balance();
             let new_balance = current_balance
                 .checked_add(received)
                 .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
@@ -1170,7 +1274,9 @@ impl ExecuteGlvShiftOperation<'_, '_> {
                 &market_pool_value,
                 &market_token_supply,
             )?;
-        }
+
+            new_balance
+        };
 
         // Validate max price impact and min shift value.
         {
@@ -1202,9 +1308,17 @@ impl ExecuteGlvShiftOperation<'_, '_> {
         }
 
         // Transfer market tokens from the GLV vault to the withdrawal vault before the commitment.
-        {
+        let next_from_market_token_balance = {
             let glv = self.glv.load()?;
             let seeds = glv.signer_seeds();
+
+            let amount = shift.params.from_market_token_amount;
+            let next_from_market_token_balance = glv
+                .market_config(&from_market_token_address)
+                .ok_or_else(|| error!(CoreError::NotFound))?
+                .balance()
+                .checked_sub(amount)
+                .ok_or_else(|| error!(CoreError::NotEnoughTokenAmount))?;
 
             transfer_checked(
                 CpiContext::new(
@@ -1217,17 +1331,31 @@ impl ExecuteGlvShiftOperation<'_, '_> {
                     },
                 )
                 .with_signer(&[&seeds]),
-                shift.params.from_market_token_amount,
+                amount,
                 from_market_token_decimals,
             )
             .expect("failed to transfer from market tokens");
-        }
 
-        self.glv.load_mut()?.update_shift_last_executed_ts()?;
+            next_from_market_token_balance
+        };
 
         // Commit the changes.
         from_market.commit();
         to_market.commit();
+
+        // Invertible operations after the commitment.
+        {
+            let mut glv = self.glv.load_mut().expect("must success");
+            glv.update_shift_last_executed_ts()
+                .expect("failed to update shift last executed ts");
+            glv.update_market_token_balance(
+                &from_market_token_address,
+                next_from_market_token_balance,
+            )
+            .expect("failed to update from market token balance");
+            glv.update_market_token_balance(&to_market_token_address, next_to_market_token_balance)
+                .expect("failed to update from market token balance");
+        }
 
         Ok(())
     }

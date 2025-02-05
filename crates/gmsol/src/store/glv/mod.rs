@@ -164,6 +164,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
             store,
             self.store_program_id(),
             &market_token_program_id,
+            true,
         );
 
         let rpc = self
@@ -286,15 +287,24 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
         let glv = self.find_glv_address(glv_token);
         let vault =
             get_associated_token_address_with_program_id(&glv, market_token, token_program_id);
+        let store_wallet = self.find_store_wallet_address(store);
+        let store_wallet_ata = get_associated_token_address_with_program_id(
+            &store_wallet,
+            market_token,
+            token_program_id,
+        );
         self.store_transaction()
             .anchor_accounts(accounts::RemoveGlvMarket {
                 authority: self.payer(),
                 store: *store,
-                store_wallet: self.find_store_wallet_address(store),
+                store_wallet,
                 glv,
                 market_token: *market_token,
                 vault,
+                store_wallet_ata,
                 token_program: *token_program_id,
+                associated_token_program: anchor_spl::associated_token::ID,
+                system_program: system_program::ID,
             })
             .anchor_args(instruction::RemoveGlvMarket {})
     }
@@ -384,6 +394,7 @@ fn split_to_accounts(
     store: &Pubkey,
     store_program_id: &Pubkey,
     token_program_id: &Pubkey,
+    with_vaults: bool,
 ) -> (Vec<AccountMeta>, usize) {
     let market_token_addresses = market_tokens.into_iter().collect::<BTreeSet<_>>();
 
@@ -398,18 +409,23 @@ fn split_to_accounts(
         .iter()
         .map(|token| AccountMeta::new_readonly(*token, false));
 
-    let market_token_vaults = market_token_addresses.iter().map(|token| {
-        let market_token_vault =
-            get_associated_token_address_with_program_id(glv, token, token_program_id);
-
-        AccountMeta::new(market_token_vault, false)
-    });
-
     let length = market_token_addresses.len();
-    let accounts = markets
-        .chain(market_tokens)
-        .chain(market_token_vaults)
-        .collect::<Vec<_>>();
+
+    let accounts = if with_vaults {
+        let market_token_vaults = market_token_addresses.iter().map(|token| {
+            let market_token_vault =
+                get_associated_token_address_with_program_id(glv, token, token_program_id);
+
+            AccountMeta::new(market_token_vault, false)
+        });
+
+        markets
+            .chain(market_tokens)
+            .chain(market_token_vaults)
+            .collect::<Vec<_>>()
+    } else {
+        markets.chain(market_tokens).collect::<Vec<_>>()
+    };
 
     (accounts, length)
 }

@@ -11,7 +11,6 @@ use crate::{
     constants,
     events::{GlvDepositRemoved, GlvWithdrawalRemoved, ShiftRemoved},
     states::{Deposit, Market},
-    utils::token::validate_associated_token_account,
     CoreError,
 };
 
@@ -25,7 +24,7 @@ use super::{
     shift, Seed, Shift, TokenMapAccess,
 };
 
-const MAX_ALLOWED_NUMBER_OF_MARKETS: usize = 128;
+const MAX_ALLOWED_NUMBER_OF_MARKETS: usize = 96;
 /// Max number of flags.
 pub const MAX_FLAGS: usize = 8;
 
@@ -376,9 +375,7 @@ impl Glv {
     /// Split remaining accounts.
     pub(crate) fn validate_and_split_remaining_accounts<'info>(
         &self,
-        address: &Pubkey,
         store: &Pubkey,
-        token_program_id: &Pubkey,
         remaining_accounts: &'info [AccountInfo<'info>],
         action: Option<&impl HasSwapParams>,
         token_map: &impl TokenMapAccess,
@@ -387,25 +384,22 @@ impl Glv {
 
         let markets_end = len;
         let market_tokens_end = markets_end + len;
-        let market_token_vaults_end = market_tokens_end + len;
 
         require_gte!(
             remaining_accounts.len(),
-            market_token_vaults_end,
+            market_tokens_end,
             CoreError::InvalidArgument
         );
 
         let markets = &remaining_accounts[0..markets_end];
         let market_tokens = &remaining_accounts[markets_end..market_tokens_end];
-        let market_token_vaults = &remaining_accounts[market_tokens_end..market_token_vaults_end];
-        let remaining_accounts = &remaining_accounts[market_token_vaults_end..];
+        let remaining_accounts = &remaining_accounts[market_tokens_end..];
 
         let mut tokens_collector = self.tokens_collector(action);
 
         for idx in 0..len {
             let market = &markets[idx];
             let market_token = &market_tokens[idx];
-            let market_token_vault = &market_token_vaults[idx];
             let expected_market_token = Pubkey::new_from_array(
                 *self
                     .markets
@@ -439,19 +433,11 @@ impl Glv {
                 );
                 tokens_collector.insert_token(&meta.index_token_mint);
             }
-
-            validate_associated_token_account(
-                market_token_vault,
-                address,
-                market_token.key,
-                token_program_id,
-            )?;
         }
 
         Ok(SplitAccountsForGlv {
             markets,
             market_tokens,
-            market_token_vaults,
             remaining_accounts,
             tokens: tokens_collector.into_vec(token_map)?,
         })
@@ -468,7 +454,20 @@ impl Glv {
             .markets
             .get(market_token)
             .ok_or_else(|| error!(CoreError::NotFound))?;
-        config.validate_market_token_balance(new_balance, market_pool_value, market_token_supply)
+        config.validate_balance(new_balance, market_pool_value, market_token_supply)
+    }
+
+    pub(crate) fn update_market_token_balance(
+        &mut self,
+        market_token: &Pubkey,
+        new_balance: u64,
+    ) -> Result<()> {
+        let config = self
+            .markets
+            .get_mut(market_token)
+            .ok_or_else(|| error!(CoreError::NotFound))?;
+        config.update_balance(new_balance);
+        Ok(())
     }
 
     pub(crate) fn validate_shift_interval(&self) -> Result<()> {
@@ -601,8 +600,11 @@ pub struct GlvMarketConfig {
     max_amount: u64,
     flags: GlvMarketFlagContainer,
     #[cfg_attr(feature = "debug", debug(skip))]
-    padding: [u8; 7],
+    padding_0: [u8; 7],
     max_value: u128,
+    balance: u64,
+    #[cfg_attr(feature = "debug", debug(skip))]
+    padding_1: [u8; 8],
 }
 
 impl Default for GlvMarketConfig {
@@ -614,7 +616,7 @@ impl Default for GlvMarketConfig {
 }
 
 impl GlvMarketConfig {
-    fn validate_market_token_balance(
+    fn validate_balance(
         &self,
         new_balance: u64,
         market_pool_value: &i128,
@@ -653,6 +655,14 @@ impl GlvMarketConfig {
         Ok(())
     }
 
+    fn update_balance(&mut self, new_balance: u64) {
+        self.balance = new_balance;
+    }
+
+    pub(crate) fn balance(&self) -> u64 {
+        self.balance
+    }
+
     pub(crate) fn toggle_flag(&mut self, flag: GlvMarketFlag, enable: bool) -> Result<bool> {
         let current = self.flags.get_flag(flag);
         require_neq!(current, enable, CoreError::PreconditionsAreNotMet);
@@ -681,7 +691,6 @@ impl GlvMarketConfig {
 pub(crate) struct SplitAccountsForGlv<'info> {
     pub(crate) markets: &'info [AccountInfo<'info>],
     pub(crate) market_tokens: &'info [AccountInfo<'info>],
-    pub(crate) market_token_vaults: &'info [AccountInfo<'info>],
     pub(crate) remaining_accounts: &'info [AccountInfo<'info>],
     pub(crate) tokens: Vec<Pubkey>,
 }
