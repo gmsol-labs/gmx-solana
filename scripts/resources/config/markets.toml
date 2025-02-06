@@ -12,3 +12,8 @@ short_token = "usd3Kfir4jHvuyhVVWXvQ4YumrvysHSCyghTehg7UKT"
 index_token = "btcx3SkD6MNhkuKmgi3nayRbc9SQXomeuHMCxJJFaew"
 long_token = "btcx3SkD6MNhkuKmgi3nayRbc9SQXomeuHMCxJJFaew"
 short_token = "usd3Kfir4jHvuyhVVWXvQ4YumrvysHSCyghTehg7UKT"
+
+["BTC/USD[WSOL-USDG]"]
+index_token = "btcx3SkD6MNhkuKmgi3nayRbc9SQXomeuHMCxJJFaew"
+long_token = "So11111111111111111111111111111111111111112"
+short_token = "usd3Kfir4jHvuyhVVWXvQ4YumrvysHSCyghTehg7UKT"
