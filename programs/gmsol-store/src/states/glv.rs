@@ -659,7 +659,8 @@ impl GlvMarketConfig {
         self.balance = new_balance;
     }
 
-    pub(crate) fn balance(&self) -> u64 {
+    /// Get balance.
+    pub fn balance(&self) -> u64 {
         self.balance
     }
 

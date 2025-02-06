@@ -1024,6 +1024,7 @@ impl InspectArgs {
                 table.set_titles(row![
                     "Market Token",
                     "Amount",
+                    "Vault Balance",
                     "Max Amount",
                     "Max Value",
                     "Allow Deposit"
@@ -1031,6 +1032,10 @@ impl InspectArgs {
                 table.set_format(table_format());
                 for market_token in glv.market_tokens() {
                     let config = glv.market_config(&market_token).unwrap();
+                    let amount = config.balance();
+                    let amount =
+                        unsigned_amount_to_decimal(amount, constants::MARKET_TOKEN_DECIMALS)
+                            .normalize();
                     let vault = get_associated_token_address(&address, &market_token);
                     let balance = client
                         .account::<TokenAccount>(&vault)
@@ -1040,6 +1045,7 @@ impl InspectArgs {
                     let balance =
                         unsigned_amount_to_decimal(balance, constants::MARKET_TOKEN_DECIMALS)
                             .normalize();
+
                     let max_amount = unsigned_amount_to_decimal(
                         config.max_amount(),
                         constants::MARKET_TOKEN_DECIMALS,
@@ -1050,6 +1056,7 @@ impl InspectArgs {
 
                     table.add_row(row![
                         market_token,
+                        amount,
                         balance,
                         max_amount,
                         max_value,
