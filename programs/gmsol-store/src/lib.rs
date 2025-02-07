@@ -282,6 +282,20 @@ pub mod gmsol_store {
         instructions::initialize(ctx, key)
     }
 
+    /// Update last restarted slot.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](UpdateLastRestartedSlot).*
+    ///
+    /// # Errors
+    /// - The [`authority`](UpdateLastRestartedSlot::authority) must be a signer and the current
+    ///   admin of the store.
+    /// - The [`store`](UpdateLastRestartedSlot::store) must be an initialized store account
+    ///   owned by the store program.
+    pub fn update_last_restarted_slot(ctx: Context<UpdateLastRestartedSlot>) -> Result<()> {
+        instructions::update_last_restarted_slot(ctx)
+    }
+
     /// Request to transfer the authority (admin) of the given store to a new address.
     /// # Note
     /// This instruction only sets `next_authority`. Use [`accept_store_authority`] to
@@ -3515,6 +3529,9 @@ pub enum CoreError {
     /// Insufficient output amounts.
     #[msg("insufficient output amounts")]
     InsufficientOutputAmount,
+    /// Store Outdated.
+    #[msg("store outdated")]
+    StoreOutdated,
     // ===========================================
     //                 Store Errors
     // ===========================================

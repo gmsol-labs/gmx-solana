@@ -78,6 +78,37 @@ impl Initialize<'_> {
 }
 
 /// The accounts definition for
+/// [`update_last_restarted_slot`](crate::gmsol_store::update_last_restarted_slot).
+#[derive(Accounts)]
+pub struct UpdateLastRestartedSlot<'info> {
+    /// The caller of this instruction.
+    pub authority: Signer<'info>,
+    /// The store account whose authority is to be transferred.
+    #[account(mut)]
+    pub store: AccountLoader<'info, Store>,
+}
+
+/// Update last restarted slot.
+pub(crate) fn update_last_restarted_slot(ctx: Context<UpdateLastRestartedSlot>) -> Result<()> {
+    // Check if the authority is the store’s authority. Not using `Authenticate::only_admin`
+    // because the check of `last_restarted_slot` is not required.
+    require!(
+        ctx.accounts
+            .store
+            .load()?
+            .is_authority(ctx.accounts.authority.key),
+        CoreError::NotAnAdmin
+    );
+    let slot = ctx
+        .accounts
+        .store
+        .load_mut()?
+        .update_last_restarted_slot(true)?;
+    msg!("[Store] the last_restarted_slot is now {}", slot);
+    Ok(())
+}
+
+/// The accounts definition for
 /// [`transfer_store_authority`](crate::gmsol_store::transfer_store_authority).
 #[derive(Accounts)]
 pub struct TransferStoreAuthority<'info> {

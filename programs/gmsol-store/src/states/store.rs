@@ -1,6 +1,6 @@
 use std::{num::NonZeroU64, str::FromStr};
 
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program::last_restart_slot::LastRestartSlot};
 use bytemuck::Zeroable;
 use gmsol_utils::to_seed;
 
@@ -34,7 +34,9 @@ pub struct Store {
     /// Disabled features.
     disabled_features: DisabledFeatures,
     #[cfg_attr(feature = "debug", debug(skip))]
-    padding_1: [u8; 12],
+    padding_1: [u8; 4],
+    /// Cached last cluster restart slot.
+    last_restarted_slot: u64,
     /// Treasury Config.
     treasury: Treasury,
     /// Amounts.
@@ -107,6 +109,9 @@ impl Store {
         self.amount.init();
         self.factor.init();
         self.address.init(holding);
+
+        self.update_last_restarted_slot(false)?;
+
         Ok(())
     }
 
@@ -355,6 +360,29 @@ impl Store {
     ) {
         self.disabled_features
             .set_disabled(domain, action, disabled)
+    }
+
+    /// Validate last restarted slot.
+    pub fn validate_last_restarted_slot(&self) -> Result<&Self> {
+        require_eq!(
+            self.last_restarted_slot,
+            LastRestartSlot::get()?.last_restart_slot,
+            CoreError::StoreOutdated
+        );
+        Ok(self)
+    }
+
+    pub(crate) fn update_last_restarted_slot(&mut self, update: bool) -> Result<u64> {
+        let current = LastRestartSlot::get()?.last_restart_slot;
+        if update {
+            require_neq!(
+                self.last_restarted_slot,
+                current,
+                CoreError::PreconditionsAreNotMet
+            );
+        }
+        self.last_restarted_slot = current;
+        Ok(self.last_restarted_slot)
     }
 
     /// Get order fee discount factor.

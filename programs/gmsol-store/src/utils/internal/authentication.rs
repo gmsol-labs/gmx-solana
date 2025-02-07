@@ -16,7 +16,10 @@ pub(crate) trait Authentication<'info> {
     /// Check that the `authority` is an admin.
     fn only_admin(&self) -> Result<()> {
         require!(
-            self.store().load()?.is_authority(self.authority().key),
+            self.store()
+                .load()?
+                .validate_last_restarted_slot()?
+                .is_authority(self.authority().key),
             CoreError::NotAnAdmin
         );
         Ok(())
@@ -25,7 +28,10 @@ pub(crate) trait Authentication<'info> {
     /// Check that the `authority` has the given `role`.
     fn only_role(&self, role: &str) -> Result<()> {
         require!(
-            self.store().load()?.has_role(self.authority().key, role)?,
+            self.store()
+                .load()?
+                .validate_last_restarted_slot()?
+                .has_role(self.authority().key, role)?,
             CoreError::PermissionDenied
         );
         Ok(())
