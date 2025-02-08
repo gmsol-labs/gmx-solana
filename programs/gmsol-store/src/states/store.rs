@@ -394,13 +394,19 @@ impl Store {
         Ok(self.last_restarted_slot != LastRestartSlot::get()?.last_restart_slot)
     }
 
-    /// Validate last restarted slot.
-    pub fn validate_last_restarted_slot(&self) -> Result<&Self> {
+    /// Validate the cluster has not restarted.
+    pub fn validate_not_restarted(&self) -> Result<&Self> {
         require_eq!(
             self.last_restarted_slot,
             LastRestartSlot::get()?.last_restart_slot,
             CoreError::StoreOutdated
         );
+        Ok(self)
+    }
+
+    /// Validate the cluster has not restarted for mutable reference.
+    pub fn validate_not_restarted_mut(&mut self) -> Result<&mut Self> {
+        self.validate_not_restarted()?;
         Ok(self)
     }
 
