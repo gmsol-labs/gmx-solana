@@ -43,6 +43,10 @@ impl RoleKey {
 
     /// Config Keeper.
     pub const CONFIG_KEEPER: &'static str = "CONFIG_KEEPER";
+
+    /// Restart Admin.
+    /// When the cluster restarts, this role can be used for **any** role, including ADMIN."
+    pub const RESTART_ADMIN: &'static str = "RESTART_ADMIN";
 }
 
 impl Borrow<str> for RoleKey {

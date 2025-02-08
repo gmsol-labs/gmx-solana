@@ -14,12 +14,10 @@ pub struct CheckRole<'info> {
 
 /// Verify that the `user` is an admin of the given `store`.
 pub(crate) fn check_admin(ctx: Context<CheckRole>) -> Result<bool> {
-    Ok(ctx
-        .accounts
+    ctx.accounts
         .store
         .load()?
-        .validate_last_restarted_slot()?
-        .is_authority(ctx.accounts.authority.key))
+        .has_admin_role(ctx.accounts.authority.key)
 }
 
 /// Verify that the `authority` has the given role in the given `store`.
@@ -27,7 +25,6 @@ pub(crate) fn check_role(ctx: Context<CheckRole>, role: String) -> Result<bool> 
     ctx.accounts
         .store
         .load()?
-        .validate_last_restarted_slot()?
         .has_role(ctx.accounts.authority.key, &role)
 }
 
@@ -41,21 +38,12 @@ pub struct HasRole<'info> {
 
 /// Verify that the `user` is an admin of the given `store` without signing.
 pub fn has_admin(ctx: Context<HasRole>, authority: Pubkey) -> Result<bool> {
-    Ok(ctx
-        .accounts
-        .store
-        .load()?
-        .validate_last_restarted_slot()?
-        .is_authority(&authority))
+    ctx.accounts.store.load()?.has_admin_role(&authority)
 }
 
 /// Verify that the `authority` has the given role in the given `store` without signing.
 pub fn has_role(ctx: Context<HasRole>, authority: Pubkey, role: String) -> Result<bool> {
-    ctx.accounts
-        .store
-        .load()?
-        .validate_last_restarted_slot()?
-        .has_role(&authority, &role)
+    ctx.accounts.store.load()?.has_role(&authority, &role)
 }
 
 /// The accounts definition for [`enable_role`](crate::gmsol_store::enable_role).

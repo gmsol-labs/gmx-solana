@@ -292,6 +292,7 @@ pub mod gmsol_store {
     ///   admin of the store.
     /// - The [`store`](UpdateLastRestartedSlot::store) must be an initialized store account
     ///   owned by the store program.
+    #[access_control(internal::Authenticate::only_admin(&ctx))]
     pub fn update_last_restarted_slot(ctx: Context<UpdateLastRestartedSlot>) -> Result<()> {
         instructions::update_last_restarted_slot(ctx)
     }

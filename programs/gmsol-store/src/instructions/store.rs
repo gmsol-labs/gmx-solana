@@ -90,15 +90,6 @@ pub struct UpdateLastRestartedSlot<'info> {
 
 /// Update last restarted slot.
 pub(crate) fn update_last_restarted_slot(ctx: Context<UpdateLastRestartedSlot>) -> Result<()> {
-    // Check if the authority is the store’s authority. Not using `Authenticate::only_admin`
-    // because the check of `last_restarted_slot` is not required.
-    require!(
-        ctx.accounts
-            .store
-            .load()?
-            .is_authority(ctx.accounts.authority.key),
-        CoreError::NotAnAdmin
-    );
     let slot = ctx
         .accounts
         .store
@@ -106,6 +97,16 @@ pub(crate) fn update_last_restarted_slot(ctx: Context<UpdateLastRestartedSlot>) 
         .update_last_restarted_slot(true)?;
     msg!("[Store] the last_restarted_slot is now {}", slot);
     Ok(())
+}
+
+impl<'info> internal::Authentication<'info> for UpdateLastRestartedSlot<'info> {
+    fn authority(&self) -> &Signer<'info> {
+        &self.authority
+    }
+
+    fn store(&self) -> &AccountLoader<'info, Store> {
+        &self.store
+    }
 }
 
 /// The accounts definition for
