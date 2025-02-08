@@ -10,7 +10,7 @@ use gmsol_store::{
     program::GmsolStore,
     states::{
         gt::{GtExchange, GtExchangeVault},
-        Seed,
+        Seed, Store,
     },
     utils::{token::validate_associated_token_account, CpiAuthentication, WithStore},
     CoreError,
@@ -267,8 +267,8 @@ pub struct CompleteGtExchange<'info> {
     /// Owner.
     pub owner: Signer<'info>,
     /// Store.
-    /// CHECK: check by CPI.
-    pub store: UncheckedAccount<'info>,
+    #[account(constraint = store.load()?.validate_not_restarted().map(|_| true)?)]
+    pub store: AccountLoader<'info, Store>,
     /// Config.
     #[account(
         has_one = store,

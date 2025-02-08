@@ -667,6 +667,7 @@ pub(crate) fn claim_fees_from_market(ctx: Context<ClaimFeesFromMarket>) -> Resul
     ctx.accounts
         .store
         .load()?
+        .validate_not_restarted()?
         .validate_claim_fees_address(ctx.accounts.authority.key)?;
 
     let event_emitter = EventEmitter::new(&ctx.accounts.event_authority, ctx.bumps.event_authority);

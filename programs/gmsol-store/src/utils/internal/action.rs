@@ -31,9 +31,7 @@ pub(crate) trait Create<'info, A>: Sized + anchor_lang::Bumps {
     fn system_program(&self) -> AccountInfo<'info>;
 
     /// Validate.
-    fn validate(&self, _params: &Self::CreateParams) -> Result<()> {
-        Ok(())
-    }
+    fn validate(&self, _params: &Self::CreateParams) -> Result<()>;
 
     /// The implementation of the creation.
     fn create_impl(
@@ -103,9 +101,7 @@ where
     }
 
     /// Validate.
-    fn validate(&self) -> Result<()> {
-        Ok(())
-    }
+    fn validate(&self) -> Result<()>;
 
     /// Process before the close.
     fn process(

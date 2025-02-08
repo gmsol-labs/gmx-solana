@@ -109,6 +109,11 @@ impl<'info> internal::Create<'info, Withdrawal> for CreateWithdrawal<'info> {
         self.system_program.to_account_info()
     }
 
+    fn validate(&self, _params: &Self::CreateParams) -> Result<()> {
+        self.store.load()?.validate_not_restarted()?;
+        Ok(())
+    }
+
     fn create_impl(
         &mut self,
         params: &Self::CreateParams,
@@ -285,6 +290,12 @@ impl<'info> internal::Close<'info, Withdrawal> for CloseWithdrawal<'info> {
 
     fn store_wallet_bump(&self, bumps: &Self::Bumps) -> u8 {
         bumps.store_wallet
+    }
+
+    fn validate(&self) -> Result<()> {
+        // Note: There’s no feature to control withdrawal cancellation, so no need to check the store.
+        // self.store.load()?.validate_not_restarted()?;
+        Ok(())
     }
 
     fn process(

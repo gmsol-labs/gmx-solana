@@ -138,6 +138,7 @@ impl<'info> internal::Create<'info, GlvDeposit> for CreateGlvDeposit<'info> {
     }
 
     fn validate(&self, _params: &Self::CreateParams) -> Result<()> {
+        self.store.load()?.validate_not_restarted()?;
         let market_token = self.market_token.key();
         let is_deposit_allowed = self
             .glv
@@ -407,6 +408,12 @@ impl<'info> internal::Close<'info, GlvDeposit> for CloseGlvDeposit<'info> {
 
     fn store_wallet_bump(&self, bumps: &Self::Bumps) -> u8 {
         bumps.store_wallet
+    }
+
+    fn validate(&self) -> Result<()> {
+        // Note: There’s no feature to control GLV deposit cancellation, so no need to check the store.
+        // self.store.load()?.validate_not_restarted()?;
+        Ok(())
     }
 
     fn process(

@@ -163,7 +163,12 @@ pub struct AcceptStoreAuthority<'info> {
 }
 
 pub(crate) fn accept_store_authority(ctx: Context<AcceptStoreAuthority>) -> Result<()> {
-    let authority = ctx.accounts.store.load_mut()?.update_authority()?;
+    let authority = ctx
+        .accounts
+        .store
+        .load_mut()?
+        .validate_not_restarted_mut()?
+        .update_authority()?;
     msg!("[Store] the authority is now {}", authority);
     Ok(())
 }
@@ -188,6 +193,7 @@ pub(crate) fn transfer_receiver(ctx: Context<TransferReceiver>) -> Result<()> {
     ctx.accounts
         .store
         .load_mut()?
+        .validate_not_restarted_mut()?
         .set_next_receiver(ctx.accounts.next_receiver.key)?;
     msg!(
         "[Treasury] the next_receiver is now {}",
@@ -210,7 +216,12 @@ pub struct AcceptReceiver<'info> {
 }
 
 pub(crate) fn accept_receiver(ctx: Context<AcceptReceiver>) -> Result<()> {
-    let receiver = ctx.accounts.store.load_mut()?.update_receiver()?;
+    let receiver = ctx
+        .accounts
+        .store
+        .load_mut()?
+        .validate_not_restarted_mut()?
+        .update_receiver()?;
     msg!("[Treasury] the receiver is now {}", receiver);
     Ok(())
 }
@@ -254,5 +265,11 @@ pub struct ReadStore<'info> {
 
 /// Get the token map address of the store.
 pub(crate) fn _get_token_map(ctx: Context<ReadStore>) -> Result<Option<Pubkey>> {
-    Ok(ctx.accounts.store.load()?.token_map().copied())
+    Ok(ctx
+        .accounts
+        .store
+        .load()?
+        .validate_not_restarted()?
+        .token_map()
+        .copied())
 }

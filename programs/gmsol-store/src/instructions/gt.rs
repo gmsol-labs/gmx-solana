@@ -140,7 +140,7 @@ pub(crate) fn unchecked_gt_set_exchange_time_window(
 pub struct PrepareGtExchangeVault<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet)]
+    #[account(constraint = store.load()?.validate_not_restarted()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet)]
     pub store: AccountLoader<'info, Store>,
     #[account(
         init_if_needed,
@@ -213,7 +213,7 @@ pub struct RequestGtExchange<'info> {
     pub owner: Signer<'info>,
     #[account(
         mut,
-        constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
+        constraint = store.load()?.validate_not_restarted()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
     )]
     pub store: AccountLoader<'info, Store>,
     /// User Account.

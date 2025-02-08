@@ -179,7 +179,6 @@ pub struct TransferReferralCode<'info> {
         has_one = store,
         constraint = user.load()?.owner == referral_code.load()?.owner @ CoreError::OwnerMismatched,
         constraint = user.load()?.referral.code == referral_code.key() @ CoreError::ReferralCodeMismatched,
-
         seeds = [UserHeader::SEED, store.key().as_ref(), owner.key().as_ref()],
         bump = user.load()?.bump,
     )]

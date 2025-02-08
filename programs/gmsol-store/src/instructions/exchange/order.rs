@@ -305,6 +305,7 @@ impl<'info> internal::Create<'info, Order> for CreateOrder<'info> {
     fn validate(&self, params: &Self::CreateParams) -> Result<()> {
         self.store
             .load()?
+            .validate_not_restarted()?
             .validate_feature_enabled(params.kind.try_into()?, ActionDisabledFlag::CreateOrder)?;
         Ok(())
     }
@@ -609,10 +610,13 @@ impl<'info> internal::Close<'info, Order> for CloseOrder<'info> {
     fn validate(&self) -> Result<()> {
         let order = self.order.load()?;
         if order.header.action_state()?.is_pending() {
-            self.store.load()?.validate_feature_enabled(
-                order.params().kind()?.try_into()?,
-                ActionDisabledFlag::CancelOrder,
-            )?;
+            self.store
+                .load()?
+                .validate_not_restarted()?
+                .validate_feature_enabled(
+                    order.params().kind()?.try_into()?,
+                    ActionDisabledFlag::CancelOrder,
+                )?;
         }
         Ok(())
     }
@@ -861,10 +865,14 @@ pub(crate) fn update_order(ctx: Context<UpdateOrder>, params: &UpdateOrderParams
     // Validate feature enabled.
     {
         let order = ctx.accounts.order.load()?;
-        ctx.accounts.store.load()?.validate_feature_enabled(
-            order.params().kind()?.try_into()?,
-            ActionDisabledFlag::UpdateOrder,
-        )?;
+        ctx.accounts
+            .store
+            .load()?
+            .validate_not_restarted()?
+            .validate_feature_enabled(
+                order.params().kind()?.try_into()?,
+                ActionDisabledFlag::UpdateOrder,
+            )?;
     }
 
     let id = ctx

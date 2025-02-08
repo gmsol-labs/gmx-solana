@@ -111,6 +111,7 @@ impl<'info> internal::Create<'info, GlvShift> for CreateGlvShift<'info> {
     }
 
     fn validate(&self, _params: &Self::CreateParams) -> Result<()> {
+        self.store.load()?.validate_not_restarted()?;
         let glv = self.glv.load()?;
         let market_token = self.to_market_token.key();
         let is_deposit_allowed = glv
@@ -236,6 +237,12 @@ impl<'info> internal::Close<'info, GlvShift> for CloseGlvShift<'info> {
 
     fn store_wallet_bump(&self, bumps: &Self::Bumps) -> u8 {
         bumps.store_wallet
+    }
+
+    fn validate(&self) -> Result<()> {
+        // Note: There’s no feature to control GLV shift cancellation, so no need to check the store.
+        // self.store.load()?.validate_not_restarted()?;
+        Ok(())
     }
 
     fn process(
