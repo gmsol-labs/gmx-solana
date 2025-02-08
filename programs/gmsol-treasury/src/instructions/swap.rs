@@ -123,6 +123,7 @@ pub(crate) fn unchecked_create_swap<'info>(
         trigger_price: None,
         acceptable_price: None,
         should_unwrap_native_token: false,
+        valid_from_ts: None,
     };
     create_order(
         cpi_ctx

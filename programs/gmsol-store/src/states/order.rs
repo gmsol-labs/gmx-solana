@@ -27,13 +27,26 @@ use super::{
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct UpdateOrderParams {
     /// Size delta in USD.
-    pub size_delta_usd: u128,
+    pub size_delta_value: Option<u128>,
     /// Acceptable price.
     pub acceptable_price: Option<u128>,
     /// Trigger price.
     pub trigger_price: Option<u128>,
     /// Min output amount.
-    pub min_output_amount: u128,
+    pub min_output: Option<u128>,
+    /// Valid from this timestamp.
+    pub valid_from_ts: Option<i64>,
+}
+
+impl UpdateOrderParams {
+    /// Is empty.
+    pub fn is_empty(&self) -> bool {
+        self.size_delta_value.is_none()
+            && self.acceptable_price.is_none()
+            && self.trigger_price.is_none()
+            && self.min_output.is_none()
+            && self.valid_from_ts.is_none()
+    }
 }
 
 /// Order Kind.
@@ -412,6 +425,15 @@ impl Order {
         self.header.signer(Self::SEED)
     }
 
+    /// Validate that current timestamp >= `valid_from_ts`.
+    pub fn validate_valid_from_ts(&self) -> Result<()> {
+        if self.params.kind()?.is_market() {
+            return Ok(());
+        }
+        require_gte!(Clock::get()?.unix_timestamp, self.params.valid_from_ts);
+        Ok(())
+    }
+
     /// Validate trigger price.
     pub fn validate_trigger_price(&self, index_price: &Price<u128>) -> Result<()> {
         let params = &self.params;
@@ -599,16 +621,29 @@ impl Order {
     pub(crate) fn update(&mut self, id: u64, params: &UpdateOrderParams) -> Result<()> {
         let current = &mut self.params;
         require!(current.is_updatable()?, CoreError::InvalidArgument);
+        require!(!params.is_empty(), CoreError::InvalidArgument);
 
         self.header.id = id;
-        current.size_delta_value = params.size_delta_usd;
+
+        if let Some(size_delta_value) = params.size_delta_value {
+            current.size_delta_value = size_delta_value;
+        }
+
         if let Some(acceptable_price) = params.acceptable_price {
             current.acceptable_price = acceptable_price;
         }
+
         if let Some(trigger_price) = params.trigger_price {
             current.trigger_price = trigger_price;
         }
-        current.min_output = params.min_output_amount;
+
+        if let Some(min_output) = params.min_output {
+            current.min_output = min_output;
+        }
+
+        if let Some(ts) = params.valid_from_ts {
+            current.valid_from_ts = ts;
+        }
 
         self.header.updated()?;
 
@@ -693,18 +728,24 @@ pub struct OrderParams {
     pub(crate) trigger_price: u128,
     /// Acceptable price (in unit price).
     pub(crate) acceptable_price: u128,
+    pub(crate) valid_from_ts: i64,
+    #[cfg_attr(feature = "debug", debug(skip))]
+    padding_2: [u8; 8],
     #[cfg_attr(feature = "debug", debug(skip))]
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
     reserved: [u8; 64],
 }
 
 impl OrderParams {
+    const DEFAULT_VALID_FROM_TS: i64 = 0;
+
     pub(crate) fn init_swap(
         &mut self,
         kind: OrderKind,
         collateral_token: Pubkey,
         swap_in_amount: u64,
         min_output: Option<u128>,
+        valid_from_ts: Option<i64>,
     ) -> Result<()> {
         self.kind = kind.into();
         self.collateral_token = collateral_token;
@@ -712,6 +753,7 @@ impl OrderParams {
         match kind {
             OrderKind::MarketSwap => {
                 self.min_output = min_output.unwrap_or(0);
+                self.valid_from_ts = Self::DEFAULT_VALID_FROM_TS;
             }
             OrderKind::LimitSwap => {
                 let Some(min_output) = min_output else {
@@ -719,6 +761,8 @@ impl OrderParams {
                 };
                 require!(min_output != 0, CoreError::Internal);
                 self.min_output = min_output;
+
+                self.valid_from_ts = valid_from_ts.unwrap_or(Self::DEFAULT_VALID_FROM_TS);
             }
             _ => {
                 return err!(CoreError::Internal);
@@ -738,6 +782,8 @@ impl OrderParams {
         size_delta_value: u128,
         trigger_price: Option<u128>,
         acceptable_price: Option<u128>,
+        min_output: Option<u128>,
+        valid_from_ts: Option<i64>,
     ) -> Result<()> {
         self.kind = kind.into();
         self.side = if is_long {
@@ -750,6 +796,7 @@ impl OrderParams {
         self.initial_collateral_delta_amount = initial_collateral_delta_amount;
         self.size_delta_value = size_delta_value;
         self.position = position;
+        self.min_output = min_output.unwrap_or(0);
         match acceptable_price {
             Some(price) => {
                 self.acceptable_price = price;
@@ -765,12 +812,14 @@ impl OrderParams {
         match kind {
             OrderKind::MarketIncrease => {
                 require!(trigger_price.is_none(), CoreError::InvalidTriggerPrice);
+                self.valid_from_ts = Self::DEFAULT_VALID_FROM_TS;
             }
             OrderKind::LimitIncrease => {
                 let Some(price) = trigger_price else {
                     return err!(CoreError::InvalidTriggerPrice);
                 };
                 self.trigger_price = price;
+                self.valid_from_ts = valid_from_ts.unwrap_or(Self::DEFAULT_VALID_FROM_TS);
             }
             _ => {
                 return err!(CoreError::Internal);
@@ -792,6 +841,7 @@ impl OrderParams {
         acceptable_price: Option<u128>,
         min_output: Option<u128>,
         swap_type: DecreasePositionSwapType,
+        valid_from_ts: Option<i64>,
     ) -> Result<()> {
         self.kind = kind.into();
         self.side = if is_long {
@@ -821,12 +871,14 @@ impl OrderParams {
         match kind {
             OrderKind::MarketDecrease | OrderKind::Liquidation | OrderKind::AutoDeleveraging => {
                 require!(trigger_price.is_none(), CoreError::InvalidTriggerPrice);
+                self.valid_from_ts = Self::DEFAULT_VALID_FROM_TS;
             }
             OrderKind::LimitDecrease | OrderKind::StopLossDecrease => {
                 let Some(price) = trigger_price else {
                     return err!(CoreError::InvalidTriggerPrice);
                 };
                 self.trigger_price = price;
+                self.valid_from_ts = valid_from_ts.unwrap_or(Self::DEFAULT_VALID_FROM_TS);
             }
             _ => {
                 return err!(CoreError::Internal);

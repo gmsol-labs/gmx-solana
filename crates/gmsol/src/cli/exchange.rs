@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use anchor_client::solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use eyre::OptionExt;
 use gmsol::{
@@ -295,6 +297,9 @@ enum Command {
         /// New size.
         #[arg(long)]
         size: Option<u128>,
+        /// Valid from this timestamp.
+        #[arg(long)]
+        valid_from_ts: Option<humantime::Timestamp>,
     },
     /// Create a market swap order.
     MarketSwap {
@@ -348,6 +353,9 @@ enum Command {
         /// New limit price (`token_in` to `token_out` price).
         #[arg(long, value_parser = parse_decimal)]
         price: Decimal,
+        /// Valid from this timestamp.
+        #[arg(long)]
+        valid_from_ts: Option<humantime::Timestamp>,
     },
 }
 
@@ -718,7 +726,11 @@ impl ExchangeArgs {
                 tracing::info!("created a market swap order {order} at tx {signature}");
                 println!("{order}");
             }
-            Command::UpdateSwap { address, price } => {
+            Command::UpdateSwap {
+                address,
+                price,
+                valid_from_ts,
+            } => {
                 let order = client.order(address).await?;
                 let token_map = client
                     .token_map(
@@ -745,10 +757,11 @@ impl ExchangeArgs {
                 )
                 .ok_or_eyre("invalid price")?;
                 let params = UpdateOrderParams {
-                    size_delta_usd: order.params().size(),
-                    acceptable_price: Some(order.params().acceptable_price()),
-                    trigger_price: Some(order.params().trigger_price()),
-                    min_output_amount: min_output_amount.into(),
+                    size_delta_value: None,
+                    acceptable_price: None,
+                    trigger_price: None,
+                    min_output: Some(min_output_amount.into()),
+                    valid_from_ts: valid_from_ts.as_ref().map(to_unix_timestamp).transpose()?,
                 };
 
                 let builder = client.update_order(store, order.market_token(), address, params)?;
@@ -762,6 +775,7 @@ impl ExchangeArgs {
                 acceptable_price,
                 min_output_amount,
                 size,
+                valid_from_ts,
             } => {
                 let order = client.order(address).await?;
                 let params = order.params();
@@ -772,12 +786,11 @@ impl ExchangeArgs {
                         ));
                     }
                     let params = UpdateOrderParams {
-                        size_delta_usd: size.unwrap_or(params.size()),
-                        acceptable_price: Some(
-                            acceptable_price.unwrap_or(params.acceptable_price()),
-                        ),
-                        trigger_price: Some(price.unwrap_or(params.trigger_price())),
-                        min_output_amount: min_output_amount.unwrap_or(params.min_output()),
+                        size_delta_value: *size,
+                        acceptable_price: *acceptable_price,
+                        trigger_price: *price,
+                        min_output: *min_output_amount,
+                        valid_from_ts: valid_from_ts.as_ref().map(to_unix_timestamp).transpose()?,
                     };
 
                     let builder =
@@ -810,4 +823,12 @@ impl ExchangeArgs {
         }
         Ok(())
     }
+}
+
+fn to_unix_timestamp(ts: &humantime::Timestamp) -> gmsol::Result<i64> {
+    ts.duration_since(SystemTime::UNIX_EPOCH)
+        .map_err(gmsol::Error::unknown)?
+        .as_secs()
+        .try_into()
+        .map_err(gmsol::Error::unknown)
 }

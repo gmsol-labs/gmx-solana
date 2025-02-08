@@ -60,6 +60,8 @@ pub struct CreateOrderParams {
     pub acceptable_price: Option<u128>,
     /// Whether to unwrap native token when sending funds back.
     pub should_unwrap_native_token: bool,
+    /// Valid from timestamp.
+    pub valid_from_ts: Option<i64>,
 }
 
 impl ActionParams for CreateOrderParams {
@@ -227,6 +229,7 @@ impl CreateSwapOrderOperation<'_, '_> {
                 self.swap_out_token.mint,
                 create.initial_collateral_delta_amount,
                 create.min_output,
+                create.valid_from_ts,
             )?;
             Ok((self.swap_in_token.mint, self.swap_out_token.mint))
         })?;
@@ -292,6 +295,8 @@ impl CreateIncreaseOrderOperation<'_, '_> {
                 create.size_delta_value,
                 create.trigger_price,
                 create.acceptable_price,
+                create.min_output,
+                create.valid_from_ts,
             )?;
             Ok((self.initial_collateral_token.mint, collateral_token))
         })?;
@@ -373,6 +378,7 @@ impl CreateDecreaseOrderOperation<'_, '_> {
                 create.acceptable_price,
                 create.min_output,
                 create.decrease_position_swap_type.unwrap_or_default(),
+                create.valid_from_ts,
             )?;
             Ok((collateral_token, self.final_output_token.mint))
         })?;
@@ -773,6 +779,8 @@ impl ExecuteOrderOperation<'_, '_> {
     ) -> Result<(RemovePosition, Box<TransferOut>, ShouldSendTradeEvent)> {
         let mut remove_position = false;
 
+        self.order.load()?.validate_valid_from_ts()?;
+
         match self.validate_oracle_and_adl() {
             Ok(()) => {}
             Err(CoreError::OracleTimestampsAreLargerThanRequired)
@@ -1169,23 +1177,25 @@ impl ExecuteOrderOperation<'_, '_> {
 
 impl ValidateOracleTime for ExecuteOrderOperation<'_, '_> {
     fn oracle_updated_after(&self) -> crate::CoreResult<Option<i64>> {
-        let (kind, updated_at) = {
+        let (kind, updated_at, valid_from_ts) = {
             let order = self.order.load().map_err(|_| CoreError::LoadAccountError)?;
             (
                 order
-                    .params
+                    .params()
                     .kind()
                     .map_err(|_| CoreError::InvalidArgument)?,
                 order.header.updated_at,
+                order.params().valid_from_ts,
             )
         };
 
         match kind {
-            OrderKind::MarketSwap
-            | OrderKind::LimitSwap
-            | OrderKind::MarketIncrease
-            | OrderKind::MarketDecrease
-            | OrderKind::LimitIncrease => Ok(Some(updated_at)),
+            OrderKind::MarketSwap | OrderKind::MarketIncrease | OrderKind::MarketDecrease => {
+                Ok(Some(updated_at))
+            }
+            OrderKind::LimitSwap | OrderKind::LimitIncrease => {
+                Ok(Some(updated_at.max(valid_from_ts)))
+            }
             OrderKind::LimitDecrease | OrderKind::StopLossDecrease => {
                 let position = self
                     .position
@@ -1194,7 +1204,7 @@ impl ValidateOracleTime for ExecuteOrderOperation<'_, '_> {
                     .load()
                     .map_err(|_| CoreError::LoadAccountError)?;
                 let last_updated = updated_at.max(position.state.increased_at);
-                Ok(Some(last_updated))
+                Ok(Some(last_updated.max(valid_from_ts)))
             }
             OrderKind::Liquidation => {
                 let position = self
@@ -1724,6 +1734,7 @@ impl PositionCutOperation<'_, '_> {
             trigger_price: None,
             acceptable_price: None,
             should_unwrap_native_token: self.should_unwrap_native_token,
+            valid_from_ts: None,
         };
         let output_token_account = if is_collateral_long {
             self.long_token_account

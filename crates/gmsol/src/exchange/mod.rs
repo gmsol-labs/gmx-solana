@@ -205,6 +205,7 @@ pub trait ExchangeOps<C> {
             acceptable_price: None,
             trigger_price: None,
             is_long,
+            valid_from_ts: None,
         };
         self.create_order(store, market_token, is_collateral_token_long, params)
     }
@@ -228,6 +229,7 @@ pub trait ExchangeOps<C> {
             acceptable_price: None,
             trigger_price: None,
             is_long,
+            valid_from_ts: None,
         };
         self.create_order(store, market_token, is_collateral_token_long, params)
     }
@@ -255,6 +257,7 @@ pub trait ExchangeOps<C> {
             acceptable_price: None,
             trigger_price: None,
             is_long: true,
+            valid_from_ts: None,
         };
         let mut builder = self.create_order(store, market_token, is_output_token_long, params);
         builder
@@ -284,6 +287,7 @@ pub trait ExchangeOps<C> {
             acceptable_price: None,
             trigger_price: Some(price),
             is_long,
+            valid_from_ts: None,
         };
         self.create_order(store, market_token, is_collateral_token_long, params)
     }
@@ -309,6 +313,7 @@ pub trait ExchangeOps<C> {
             acceptable_price: None,
             trigger_price: Some(price),
             is_long,
+            valid_from_ts: None,
         };
         self.create_order(store, market_token, is_collateral_token_long, params)
     }
@@ -334,6 +339,7 @@ pub trait ExchangeOps<C> {
             acceptable_price: None,
             trigger_price: Some(price),
             is_long,
+            valid_from_ts: None,
         };
         self.create_order(store, market_token, is_collateral_token_long, params)
     }
@@ -363,6 +369,7 @@ pub trait ExchangeOps<C> {
             acceptable_price: None,
             trigger_price: None,
             is_long: true,
+            valid_from_ts: None,
         };
         let mut builder = self.create_order(store, market_token, is_output_token_long, params);
         builder

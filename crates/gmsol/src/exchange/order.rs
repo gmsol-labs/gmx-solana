@@ -69,6 +69,8 @@ pub struct OrderParams {
     pub acceptable_price: Option<u128>,
     /// Whether the order is for a long or short position.
     pub is_long: bool,
+    /// Valid from timestamp.
+    pub valid_from_ts: Option<i64>,
 }
 
 impl OrderParams {
@@ -215,6 +217,12 @@ where
     /// Set acceptable price.
     pub fn acceptable_price(&mut self, unit_price: u128) -> &mut Self {
         self.params.acceptable_price = Some(unit_price);
+        self
+    }
+
+    /// Set valid from ts.
+    pub fn valid_from_ts(&mut self, ts: i64) -> &mut Self {
+        self.params.valid_from_ts = Some(ts);
         self
     }
 
@@ -405,6 +413,7 @@ where
             trigger_price: self.params.trigger_price,
             acceptable_price: self.params.acceptable_price,
             should_unwrap_native_token: self.should_unwrap_native_token,
+            valid_from_ts: self.params.valid_from_ts,
         };
 
         let prepare = match kind {
