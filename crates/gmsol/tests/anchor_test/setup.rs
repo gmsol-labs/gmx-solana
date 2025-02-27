@@ -98,7 +98,7 @@ pub struct Deployment {
     /// Chainlink access controller.
     pub chainlink_access_controller: Pubkey,
     /// Chainlink Feed Index.
-    pub chainlink_feed_index: u8,
+    pub chainlink_feed_index: u16,
 }
 
 impl fmt::Debug for Deployment {

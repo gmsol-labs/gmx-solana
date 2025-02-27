@@ -1171,7 +1171,7 @@ pub mod gmsol_store {
     #[access_control(internal::Authenticate::only_price_keeper(&ctx))]
     pub fn initialize_price_feed(
         ctx: Context<InitializePriceFeed>,
-        index: u8,
+        index: u16,
         provider: u8,
         token: Pubkey,
         feed_id: Pubkey,

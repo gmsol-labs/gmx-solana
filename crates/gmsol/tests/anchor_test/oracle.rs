@@ -35,7 +35,7 @@ async fn update_chainlink_price_feed() -> eyre::Result<()> {
     let feed_id_hex = "0x0003dc85e8b01946bf9dfd8b0db860129181eb6105a8c8981d9f28e00b6f60d9";
     let feed_id = Pubkey::new_from_array(parse_feed_id(feed_id_hex)?);
 
-    let (rpc, feed) = keeper.initailize_price_feed(
+    let (rpc, feed) = keeper.initialize_price_feed(
         store,
         index,
         PriceProviderKind::ChainlinkDataStreams,

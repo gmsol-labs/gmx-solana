@@ -430,7 +430,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         &self,
         store: &Pubkey,
         authority: &Pubkey,
-        index: u8,
+        index: u16,
         provider: PriceProviderKind,
         token: &Pubkey,
     ) -> Pubkey {

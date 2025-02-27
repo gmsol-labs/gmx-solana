@@ -10,7 +10,7 @@ use crate::{
 
 /// The accounts definition for [`initialize_price_feed`](crate::initialize_price_feed) instruction.
 #[derive(Accounts)]
-#[instruction(index: u8, provider: u8, token: Pubkey)]
+#[instruction(index: u16, provider: u8, token: Pubkey)]
 pub struct InitializePriceFeed<'info> {
     /// Authority.
     #[account(mut)]
@@ -26,7 +26,7 @@ pub struct InitializePriceFeed<'info> {
             PriceFeed::SEED,
             store.key().as_ref(),
             authority.key().as_ref(),
-            &[index],
+            &index.to_le_bytes(),
             &[provider],
             token.as_ref(),
         ],
@@ -40,7 +40,7 @@ pub struct InitializePriceFeed<'info> {
 /// CHECK: only PRICE_KEEPER is allowed to initialize price feed.
 pub(crate) fn unchecked_initialize_price_feed(
     ctx: Context<InitializePriceFeed>,
-    index: u8,
+    index: u16,
     provider: PriceProviderKind,
     token: &Pubkey,
     feed_id: &Pubkey,

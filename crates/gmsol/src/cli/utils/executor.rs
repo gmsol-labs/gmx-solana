@@ -31,7 +31,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> Executor<'a, C> {
         store: &Pubkey,
         client: &'a gmsol::Client<C>,
         testnet: bool,
-        feed_index: u8,
+        feed_index: u16,
         use_switchboard: bool,
     ) -> gmsol::Result<Self> {
         let pyth = PythPullOracle::try_new(client)?;

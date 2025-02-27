@@ -23,13 +23,13 @@ pub struct ChainlinkPullOracleFactory {
     chainlink_program: Pubkey,
     access_controller: Pubkey,
     store: Pubkey,
-    feed_index: u8,
+    feed_index: u16,
     feeds: RwLock<FeedAddressMap>,
 }
 
 impl ChainlinkPullOracleFactory {
     /// Create a new [`ChainlinkPullOracleFactory`] with default program ID and access controller address.
-    pub fn new(store: &Pubkey, feed_index: u8) -> Self {
+    pub fn new(store: &Pubkey, feed_index: u16) -> Self {
         use chainlink_datastreams::verifier;
 
         Self::with_program_id_and_access_controller(
@@ -48,7 +48,7 @@ impl ChainlinkPullOracleFactory {
     /// Create a new [`ChainlinkPullOracleFactory`] with the given program ID and access controller address.
     pub fn with_program_id_and_access_controller(
         store: &Pubkey,
-        feed_index: u8,
+        feed_index: u16,
         chainlink_program: &Pubkey,
         access_controller: &Pubkey,
     ) -> Self {
@@ -89,7 +89,7 @@ impl ChainlinkPullOracleFactory {
                 None => {
                     txs.push(
                         gmsol
-                            .initailize_price_feed(
+                            .initialize_price_feed(
                                 &self.store,
                                 self.feed_index,
                                 provider,

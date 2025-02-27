@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ExecuteOrder` -> `Execute`
   - `CancelOrder` -> `Cancel`
 - programs: Changed the default byte order to little-endian.
+- programs: Changed the index type for `PriceFeed` to `u16`.
 - sdk: Changed the arguments of `SwitchboardPullOracle::from_parts` function.
 - tests: Renamed `anchor_tests` testing suite to `anchor_test` in the `gmsol` tests.
 - Updated dependencies:

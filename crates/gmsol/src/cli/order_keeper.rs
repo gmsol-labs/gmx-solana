@@ -38,7 +38,7 @@ pub(super) struct KeeperArgs {
     disable_switchboard: bool,
     /// Feed index.
     #[arg(long, default_value_t = 0)]
-    feed_index: u8,
+    feed_index: u16,
     /// ALTs.
     #[arg(long, short = 'a')]
     alts: Vec<Pubkey>,

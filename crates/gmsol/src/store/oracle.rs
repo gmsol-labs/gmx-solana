@@ -22,10 +22,10 @@ pub trait OracleOps<C> {
     ) -> impl Future<Output = crate::Result<(TransactionBuilder<'a, C>, Pubkey)>>;
 
     /// Initialize Price Feed.
-    fn initailize_price_feed(
+    fn initialize_price_feed(
         &self,
         store: &Pubkey,
-        index: u8,
+        index: u16,
         provider: PriceProviderKind,
         token: &Pubkey,
         feed_id: &Pubkey,
@@ -89,10 +89,10 @@ where
         Ok((builder, oracle_address))
     }
 
-    fn initailize_price_feed(
+    fn initialize_price_feed(
         &self,
         store: &Pubkey,
-        index: u8,
+        index: u16,
         provider: PriceProviderKind,
         token: &Pubkey,
         feed_id: &Pubkey,
