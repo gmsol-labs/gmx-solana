@@ -2046,7 +2046,7 @@ pub mod gmsol_store {
     #[allow(rustdoc::broken_intra_doc_links)]
     pub fn prepare_trade_event_buffer(
         ctx: Context<PrepareTradeEventBuffer>,
-        index: u8,
+        index: u16,
     ) -> Result<()> {
         instructions::prepare_trade_event_buffer(ctx, index)
     }

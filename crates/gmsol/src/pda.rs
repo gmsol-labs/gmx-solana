@@ -181,7 +181,7 @@ pub fn find_claimable_account_pda(
 pub fn find_trade_event_buffer_pda(
     store: &Pubkey,
     authority: &Pubkey,
-    index: u8,
+    index: u16,
     store_program_id: &Pubkey,
 ) -> (Pubkey, u8) {
     Pubkey::find_program_address(
@@ -189,7 +189,7 @@ pub fn find_trade_event_buffer_pda(
             TradeData::SEED,
             store.as_ref(),
             authority.as_ref(),
-            &[index],
+            &index.to_le_bytes(),
         ],
         store_program_id,
     )

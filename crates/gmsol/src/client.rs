@@ -359,7 +359,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         &self,
         store: &Pubkey,
         authority: &Pubkey,
-        index: u8,
+        index: u16,
     ) -> Pubkey {
         crate::pda::find_trade_event_buffer_pda(store, authority, index, self.store_program_id()).0
     }

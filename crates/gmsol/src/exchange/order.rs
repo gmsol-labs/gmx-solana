@@ -622,7 +622,7 @@ pub struct ExecuteOrderBuilder<'a, C> {
     token_map: Option<Pubkey>,
     cancel_on_execution_error: bool,
     close: bool,
-    event_buffer_index: u8,
+    event_buffer_index: u16,
     alts: HashMap<Pubkey, Vec<Pubkey>>,
 }
 
@@ -752,7 +752,7 @@ where
     }
 
     /// Set event buffer index.
-    pub fn event_buffer_index(&mut self, index: u8) -> &mut Self {
+    pub fn event_buffer_index(&mut self, index: u16) -> &mut Self {
         self.event_buffer_index = index;
         self
     }

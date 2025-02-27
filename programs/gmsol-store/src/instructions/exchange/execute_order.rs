@@ -28,7 +28,7 @@ use crate::{
 
 /// The accounts definition for [`prepare_trade_event_buffer`](crate::gmsol_store::prepare_trade_event_buffer).
 #[derive(Accounts)]
-#[instruction(index: u8)]
+#[instruction(index: u16)]
 pub struct PrepareTradeEventBuffer<'info> {
     /// Authority.
     #[account(mut)]
@@ -41,7 +41,7 @@ pub struct PrepareTradeEventBuffer<'info> {
         payer = authority,
         // The "zero-copy" init space of `TradeData` is used here.
         space = 8 + <TradeData as gmsol_utils::InitSpace>::INIT_SPACE,
-        seeds = [TradeData::SEED, store.key().as_ref(), authority.key().as_ref(), &[index]],
+        seeds = [TradeData::SEED, store.key().as_ref(), authority.key().as_ref(), &index.to_le_bytes()],
         bump,
     )]
     pub event: AccountLoader<'info, TradeData>,
@@ -51,7 +51,7 @@ pub struct PrepareTradeEventBuffer<'info> {
 
 pub(crate) fn prepare_trade_event_buffer(
     ctx: Context<PrepareTradeEventBuffer>,
-    _index: u8,
+    _index: u16,
 ) -> Result<()> {
     match ctx.accounts.event.load_init() {
         Ok(mut event) => {
