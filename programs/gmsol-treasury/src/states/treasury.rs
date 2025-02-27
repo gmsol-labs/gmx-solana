@@ -10,9 +10,9 @@ pub(crate) const MAX_TOKENS: usize = 16;
 pub struct TreasuryVaultConfig {
     version: u8,
     pub(crate) bump: u8,
-    index: u8,
+    index: u16,
     #[cfg_attr(feature = "debug", debug(skip))]
-    padding: [u8; 13],
+    padding: [u8; 12],
     pub(crate) config: Pubkey,
     #[cfg_attr(feature = "debug", debug(skip))]
     reserved: [u8; 256],
@@ -28,7 +28,7 @@ impl gmsol_utils::InitSpace for TreasuryVaultConfig {
 }
 
 impl TreasuryVaultConfig {
-    pub(crate) fn init(&mut self, bump: u8, index: u8, config: &Pubkey) {
+    pub(crate) fn init(&mut self, bump: u8, index: u16, config: &Pubkey) {
         self.bump = bump;
         self.index = index;
         self.config = *config;
@@ -90,7 +90,7 @@ impl TreasuryVaultConfig {
     pub(crate) fn signer(&self) -> TreasuryVaultSigner {
         TreasuryVaultSigner {
             config: self.config,
-            index_bytes: [self.index],
+            index_bytes: self.index.to_le_bytes(),
             bump_bytes: [self.bump],
         }
     }
@@ -111,7 +111,7 @@ impl TreasuryVaultConfig {
 /// Treasury Vault Signer.
 pub struct TreasuryVaultSigner {
     config: Pubkey,
-    index_bytes: [u8; 1],
+    index_bytes: [u8; 2],
     bump_bytes: [u8; 1],
 }
 

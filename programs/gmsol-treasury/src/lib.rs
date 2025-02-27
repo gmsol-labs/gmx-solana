@@ -48,7 +48,7 @@ pub mod gmsol_treasury {
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_ADMIN))]
     pub fn initialize_treasury_vault_config(
         ctx: Context<InitializeTreasuryVaultConfig>,
-        index: u8,
+        index: u16,
     ) -> Result<()> {
         instructions::unchecked_initialize_treasury_vault_config(ctx, index)
     }

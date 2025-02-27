@@ -451,7 +451,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     }
 
     /// Find treasury vault config address.
-    pub fn find_treasury_vault_config_address(&self, config: &Pubkey, index: u8) -> Pubkey {
+    pub fn find_treasury_vault_config_address(&self, config: &Pubkey, index: u16) -> Pubkey {
         crate::pda::find_treasury_vault_config_pda(config, index, self.treasury_program_id()).0
     }
 

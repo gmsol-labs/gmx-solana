@@ -56,7 +56,7 @@ pub trait TreasuryOps<C> {
     fn initialize_treasury_vault_config(
         &self,
         store: &Pubkey,
-        index: u8,
+        index: u16,
     ) -> TransactionBuilder<C, Pubkey>;
 
     /// Insert token to treasury.
@@ -272,7 +272,7 @@ where
     fn initialize_treasury_vault_config(
         &self,
         store: &Pubkey,
-        index: u8,
+        index: u16,
     ) -> TransactionBuilder<C, Pubkey> {
         let config = self.find_treasury_config_address(store);
         let treasury_vault_config = self.find_treasury_vault_config_address(&config, index);

@@ -35,7 +35,7 @@ enum Command {
     /// Initialize Global Config.
     InitConfig,
     /// Initialize Treasury.
-    InitTreasury { index: u8 },
+    InitTreasury { index: u16 },
     /// Transfer Receiver.
     TransferReceiver {
         #[arg(long)]

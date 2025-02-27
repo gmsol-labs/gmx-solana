@@ -29,7 +29,7 @@ use crate::{
 
 /// The accounts definition for [`initialize_treasury_vault_config`](crate::gmsol_treasury::initialize_treasury_vault_config).
 #[derive(Accounts)]
-#[instruction(index: u8)]
+#[instruction(index: u16)]
 pub struct InitializeTreasuryVaultConfig<'info> {
     /// Authority.
     #[account(mut)]
@@ -45,7 +45,7 @@ pub struct InitializeTreasuryVaultConfig<'info> {
         init,
         payer = authority,
         space = 8 + TreasuryVaultConfig::INIT_SPACE,
-        seeds = [TreasuryVaultConfig::SEED, config.key().as_ref(), &[index]],
+        seeds = [TreasuryVaultConfig::SEED, config.key().as_ref(), &index.to_le_bytes()],
         bump,
     )]
     pub treasury_vault_config: AccountLoader<'info, TreasuryVaultConfig>,
@@ -60,7 +60,7 @@ pub struct InitializeTreasuryVaultConfig<'info> {
 /// Only [`TREASURY_ADMIN`](crate::roles::TREASURY_ADMIN) can use.
 pub(crate) fn unchecked_initialize_treasury_vault_config(
     ctx: Context<InitializeTreasuryVaultConfig>,
-    index: u8,
+    index: u16,
 ) -> Result<()> {
     ctx.accounts.treasury_vault_config.load_init()?.init(
         ctx.bumps.treasury_vault_config,

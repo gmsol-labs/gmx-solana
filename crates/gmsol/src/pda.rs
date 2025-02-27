@@ -301,11 +301,15 @@ pub fn find_treasury_config_pda(store: &Pubkey, treasury_program_id: &Pubkey) ->
 /// Find the PDA for a treasury vault config.
 pub fn find_treasury_vault_config_pda(
     config: &Pubkey,
-    index: u8,
+    index: u16,
     treasury_program_id: &Pubkey,
 ) -> (Pubkey, u8) {
     Pubkey::find_program_address(
-        &[TreasuryVaultConfig::SEED, config.as_ref(), &[index]],
+        &[
+            TreasuryVaultConfig::SEED,
+            config.as_ref(),
+            &index.to_le_bytes(),
+        ],
         treasury_program_id,
     )
 }
