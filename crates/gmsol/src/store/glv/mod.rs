@@ -39,7 +39,7 @@ pub trait GlvOps<C> {
     fn initialize_glv(
         &self,
         store: &Pubkey,
-        index: u8,
+        index: u16,
         market_tokens: impl IntoIterator<Item = Pubkey>,
     ) -> crate::Result<(TransactionBuilder<C>, Pubkey)>;
 
@@ -150,7 +150,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
     fn initialize_glv(
         &self,
         store: &Pubkey,
-        index: u8,
+        index: u16,
         market_tokens: impl IntoIterator<Item = Pubkey>,
     ) -> crate::Result<(TransactionBuilder<C>, Pubkey)> {
         let authority = self.payer();

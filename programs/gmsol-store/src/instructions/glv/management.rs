@@ -28,7 +28,7 @@ use crate::{
 ///     which will be initialized as the associated token accounts of the GLV.
 ///     This vault accounts should be sorted by market token addresses.
 #[derive(Accounts)]
-#[instruction(index: u8)]
+#[instruction(index: u16)]
 pub struct InitializeGlv<'info> {
     /// Authority.
     #[account(mut)]
@@ -44,7 +44,7 @@ pub struct InitializeGlv<'info> {
         seeds = [
             Glv::GLV_TOKEN_SEED,
             store.key().as_ref(),
-            &[index],
+            &index.to_le_bytes(),
         ],
         bump,
         owner = token_program.key(),
@@ -74,7 +74,7 @@ pub struct InitializeGlv<'info> {
 /// - Only MARKET_KEEPER is allowed to call this function.
 pub(crate) fn unchecked_initialize_glv<'info>(
     ctx: Context<'_, '_, 'info, 'info, InitializeGlv<'info>>,
-    index: u8,
+    index: u16,
     length: usize,
 ) -> Result<()> {
     let remaining_accounts = ctx.remaining_accounts;

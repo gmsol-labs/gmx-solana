@@ -179,7 +179,7 @@ struct GlvToken {
     glv_token: Option<Pubkey>,
     /// Index.
     #[arg(long)]
-    index: Option<u8>,
+    index: Option<u16>,
 }
 
 #[derive(clap::Args)]

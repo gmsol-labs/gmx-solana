@@ -2805,7 +2805,7 @@ pub mod gmsol_store {
     #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
     pub fn initialize_glv<'info>(
         ctx: Context<'_, '_, 'info, 'info, InitializeGlv<'info>>,
-        index: u8,
+        index: u16,
         length: u16,
     ) -> Result<()> {
         instructions::unchecked_initialize_glv(ctx, index, length as usize)

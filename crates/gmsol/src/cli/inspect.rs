@@ -210,7 +210,7 @@ enum Command {
         #[arg(group = "select-glv")]
         address: Option<Pubkey>,
         #[arg(long, short, group = "select-glv")]
-        index: Option<u8>,
+        index: Option<u16>,
         #[arg(long, short, group = "select-glv")]
         token: Option<Pubkey>,
     },

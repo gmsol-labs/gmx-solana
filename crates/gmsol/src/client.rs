@@ -375,7 +375,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     }
 
     /// Find GLV token address.
-    pub fn find_glv_token_address(&self, store: &Pubkey, index: u8) -> Pubkey {
+    pub fn find_glv_token_address(&self, store: &Pubkey, index: u16) -> Pubkey {
         types::Glv::find_glv_token_pda(store, index, self.store_program_id()).0
     }
 

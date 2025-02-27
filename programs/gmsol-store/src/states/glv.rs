@@ -36,10 +36,10 @@ pub struct Glv {
     /// Bump seed.
     pub(crate) bump: u8,
     bump_bytes: [u8; 1],
-    /// Index.
-    pub(crate) index: u8,
     #[cfg_attr(feature = "debug", debug(skip))]
-    padding_0: [u8; 4],
+    padding_0: [u8; 3],
+    /// Index.
+    pub(crate) index: u16,
     pub(crate) store: Pubkey,
     pub(crate) glv_token: Pubkey,
     pub(crate) long_token: Pubkey,
@@ -82,9 +82,9 @@ impl Glv {
     pub const MAX_ALLOWED_NUMBER_OF_MARKETS: usize = MAX_ALLOWED_NUMBER_OF_MARKETS;
 
     /// Find GLV token address.
-    pub fn find_glv_token_pda(store: &Pubkey, index: u8, program_id: &Pubkey) -> (Pubkey, u8) {
+    pub fn find_glv_token_pda(store: &Pubkey, index: u16, program_id: &Pubkey) -> (Pubkey, u8) {
         Pubkey::find_program_address(
-            &[Self::GLV_TOKEN_SEED, store.as_ref(), &[index]],
+            &[Self::GLV_TOKEN_SEED, store.as_ref(), &index.to_le_bytes()],
             program_id,
         )
     }
@@ -122,7 +122,7 @@ impl Glv {
     pub(crate) fn unchecked_init(
         &mut self,
         bump: u8,
-        index: u8,
+        index: u16,
         store: &Pubkey,
         glv_token: &Pubkey,
         long_token: &Pubkey,
@@ -206,7 +206,7 @@ impl Glv {
     }
 
     /// Get the index of the glv token.
-    pub fn index(&self) -> u8 {
+    pub fn index(&self) -> u16 {
         self.index
     }
 
