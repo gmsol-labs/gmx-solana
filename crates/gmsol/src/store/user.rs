@@ -39,6 +39,21 @@ pub trait UserOps<C> {
         receiver: &Pubkey,
         hint_code: Option<ReferralCodeBytes>,
     ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
+
+    /// Cancel referral code transfer.
+    fn cancel_referral_code_transfer(
+        &self,
+        store: &Pubkey,
+        hint_code: Option<ReferralCodeBytes>,
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
+
+    /// Accept referral code transfer.
+    fn accept_referral_code(
+        &self,
+        store: &Pubkey,
+        code: ReferralCodeBytes,
+        hint_owner: Option<Pubkey>,
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> UserOps<C> for crate::Client<C> {
@@ -152,6 +167,79 @@ impl<C: Deref<Target = impl Signer> + Clone> UserOps<C> for crate::Client<C> {
             })
             .anchor_args(instruction::TransferReferralCode {});
 
+        Ok(rpc)
+    }
+
+    async fn cancel_referral_code_transfer(
+        &self,
+        store: &Pubkey,
+        hint_code: Option<ReferralCodeBytes>,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let owner = self.payer();
+        let user = self.find_user_address(store, &owner);
+
+        let referral_code = match hint_code {
+            Some(code) => self.find_referral_code_address(store, code),
+            None => {
+                let user = self
+                    .account::<ZeroCopy<UserHeader>>(&user)
+                    .await?
+                    .ok_or(crate::Error::NotFound)?;
+                *user
+                    .0
+                    .referral()
+                    .code()
+                    .ok_or(crate::Error::invalid_argument("referral code is not set"))?
+            }
+        };
+
+        let rpc = self
+            .store_transaction()
+            .anchor_accounts(accounts::CancelReferralCodeTransfer {
+                owner,
+                store: *store,
+                user,
+                referral_code,
+            })
+            .anchor_args(instruction::CancelReferralCodeTransfer {});
+
+        Ok(rpc)
+    }
+
+    async fn accept_referral_code(
+        &self,
+        store: &Pubkey,
+        code: ReferralCodeBytes,
+        hint_owner: Option<Pubkey>,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let next_owner = self.payer();
+        let receiver_user = self.find_user_address(store, &next_owner);
+        let referral_code = self.find_referral_code_address(store, code);
+
+        let owner = match hint_owner {
+            Some(owner) => owner,
+            None => {
+                let code = self
+                    .account::<ZeroCopy<ReferralCodeV2>>(&referral_code)
+                    .await?
+                    .ok_or(crate::Error::NotFound)?
+                    .0;
+                code.owner
+            }
+        };
+
+        let user = self.find_user_address(store, &owner);
+
+        let rpc = self
+            .store_transaction()
+            .anchor_accounts(accounts::AcceptReferralCode {
+                next_owner,
+                store: *store,
+                user,
+                referral_code,
+                receiver_user,
+            })
+            .anchor_args(instruction::AcceptReferralCode {});
         Ok(rpc)
     }
 }

@@ -63,7 +63,14 @@ async fn referral() -> eyre::Result<()> {
         .await?
         .send_without_preflight()
         .await?;
-    tracing::info!(%signature, "transferred referral code to user 2");
+    tracing::info!(%signature, "requested to referral code to user 2");
+
+    let signature = client2
+        .accept_referral_code(store, code, None)
+        .await?
+        .send_without_preflight()
+        .await?;
+    tracing::info!(%signature, "user 2 accepted the referral code");
 
     // Mutual-referral.
     let err = client

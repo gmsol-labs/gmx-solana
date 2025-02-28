@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs: Added `cancel_referral_code_transfer` instruction to cancel a referral code transfer.
 - sdk: Added the `gmsol::cli` module.
 - sdk: Added `SwitchboardPullOracleFactory` structure.
+- sdk: Added support for `accept_referral_code` and `cancel_referral_code_transfer` instructions.
 - cli: Added support for Switchboard to the `order` subcommand.
 - tests: Added an integration testing suite `integration_test` to the `gmsol` tests.
 - docs: Created a `CHANGELOG.md` file to document project updates.
