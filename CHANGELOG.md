@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs: Changed the index type for `TradeData` to `u16`.
 - programs: Changed the index type for `Glv` to `u16`.
 - programs: Changed the index type for `TreasuryVaultConfig` to `u16`.
+- programs: Added a required function `HasSwapParams::swap_extension` for `HasSwapParams` trait.
+- programs: Removed duplicated `swap` function from actions that implement the `HasSwapParams` trait.
 - sdk: Changed the arguments of `SwitchboardPullOracle::from_parts` function.
 - tests: Renamed `anchor_tests` testing suite to `anchor_test` in the `gmsol` tests.
 - Updated dependencies:
@@ -35,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs: Added validation for `MarketDecrease` orders to ensure the oracle prices are updated after the position's last increase ts, similar to `LimitDecrease` orders.
 - programs: Added features to control the enablement of instructions for (GLV) deposit, (GLV) withdrawal, and (GLV) shift.
 - programs: Added a new config `adl_prices_max_staleness`, allowing the oracle prices to be stale relative to the ADL last update time by this amount.
+- programs: Added `SwapExtension` for storing additional information about the swap path.
 - sdk: Added the `gmsol::cli` module.
 - sdk: Added `SwitchboardPullOracleFactory` structure.
 - cli: Added support for Switchboard to the `order` subcommand.

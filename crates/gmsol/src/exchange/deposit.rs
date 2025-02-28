@@ -14,7 +14,11 @@ use gmsol_store::{
     accounts, instruction,
     ops::deposit::CreateDepositParams,
     states::{
-        common::{action::Action, swap::SwapParams, TokensWithFeed},
+        common::{
+            action::Action,
+            swap::{HasSwapParams, SwapParams},
+            TokensWithFeed,
+        },
         Deposit, NonceBytes, PriceProviderKind, TokenMapAccess,
     },
 };

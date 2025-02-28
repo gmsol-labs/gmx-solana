@@ -15,7 +15,7 @@ use crate::{
 use super::{
     common::{
         action::{Action, ActionHeader, ActionSigner, Closable},
-        swap::SwapParams,
+        swap::{HasSwapParams, SwapParams, SwapParamsExtension},
         token::TokenAndAccount,
     },
     user::UserHeader,
@@ -368,9 +368,10 @@ pub struct Order {
     pub(crate) gt_reward: u64,
     #[cfg_attr(feature = "debug", debug(skip))]
     padding_1: [u8; 8],
-    #[cfg_attr(feature = "debug", debug(skip))]
+    pub(crate) swap_extension: SwapParamsExtension,
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 128],
+    #[cfg_attr(feature = "debug", debug(skip))]
+    reserved: [u8; 64],
 }
 
 impl Seed for Order {
@@ -557,11 +558,6 @@ impl Order {
         &self.params
     }
 
-    /// Get swap params.
-    pub fn swap(&self) -> &SwapParams {
-        &self.swap
-    }
-
     /// Get market token.
     pub fn market_token(&self) -> &Pubkey {
         &self.market_token
@@ -657,6 +653,16 @@ impl Order {
         self.header.updated()?;
 
         Ok(())
+    }
+}
+
+impl HasSwapParams for Order {
+    fn swap(&self) -> &SwapParams {
+        &self.swap
+    }
+
+    fn swap_extension(&self) -> &SwapParamsExtension {
+        &self.swap_extension
     }
 }
 

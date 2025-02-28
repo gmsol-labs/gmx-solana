@@ -167,6 +167,7 @@ impl<'a, 'info> CreateOrderOperation<'a, 'info> {
                 tokens,
                 params,
                 swap,
+                swap_extension,
                 ..
             } = &mut *order;
 
@@ -202,6 +203,7 @@ impl<'a, 'info> CreateOrderOperation<'a, 'info> {
                 &self.store.key(),
                 (&from, &from),
                 (&to, &from),
+                swap_extension,
             )?;
         }
         Ok(())

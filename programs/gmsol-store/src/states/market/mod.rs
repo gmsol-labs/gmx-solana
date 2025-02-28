@@ -27,7 +27,7 @@
 
 use std::{collections::BTreeSet, str::FromStr};
 
-use anchor_lang::{prelude::*, Bump};
+use anchor_lang::{prelude::*, solana_program::pubkey::PubkeyError, Bump};
 use anchor_spl::token::Mint;
 use borsh::{BorshDeserialize, BorshSerialize};
 use config::MarketConfigFlag;
@@ -136,7 +136,7 @@ impl AsRef<Market> for Market {
 }
 
 impl Market {
-    /// Find PDA for [`Market`] account.
+    /// Find a [`Market`] PDA.
     pub fn find_market_address(
         store: &Pubkey,
         token: &Pubkey,
@@ -144,6 +144,19 @@ impl Market {
     ) -> (Pubkey, u8) {
         Pubkey::find_program_address(
             &[Self::SEED, store.as_ref(), token.as_ref()],
+            store_program_id,
+        )
+    }
+
+    /// Create a [`Market`] PDA.
+    pub fn create_market_address(
+        store: &Pubkey,
+        token: &Pubkey,
+        store_program_id: &Pubkey,
+        bump: u8,
+    ) -> std::result::Result<Pubkey, PubkeyError> {
+        Pubkey::create_program_address(
+            &[Self::SEED, store.as_ref(), token.as_ref(), &[bump]],
             store_program_id,
         )
     }

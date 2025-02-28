@@ -9,7 +9,10 @@ use crate::{
         withdrawal::ExecuteWithdrawalOperation,
     },
     states::{
-        common::action::{ActionExt, ActionSigner},
+        common::{
+            action::{ActionExt, ActionSigner},
+            swap::HasSwapParams,
+        },
         feature::{ActionDisabledFlag, DomainDisabledFlag},
         withdrawal::Withdrawal,
         Chainlink, Market, Oracle, Store, TokenMapHeader, TokenMapLoader,
@@ -288,8 +291,9 @@ impl<'info> ExecuteWithdrawal<'info> {
             let market = self
                 .withdrawal
                 .load()?
-                .swap
-                .find_and_unpack_last_market(store, true, remaining_accounts)?
+                .with_swap_params(|swap, extension| {
+                    swap.find_and_unpack_last_market(store, true, remaining_accounts, extension)
+                })?
                 .unwrap_or(self.market.clone());
             let vault = &self.final_long_token_vault;
             let escrow = &self.final_long_token_escrow;
@@ -310,8 +314,9 @@ impl<'info> ExecuteWithdrawal<'info> {
             let market = self
                 .withdrawal
                 .load()?
-                .swap
-                .find_and_unpack_last_market(store, false, remaining_accounts)?
+                .with_swap_params(|swap, extension| {
+                    swap.find_and_unpack_last_market(store, false, remaining_accounts, extension)
+                })?
                 .unwrap_or(self.market.clone());
             let vault = &self.final_short_token_vault;
             let escrow = &self.final_short_token_escrow;

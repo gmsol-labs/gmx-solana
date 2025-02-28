@@ -14,7 +14,11 @@ use gmsol_store::{
     accounts, instruction,
     ops::withdrawal::CreateWithdrawalParams,
     states::{
-        common::{action::Action, swap::SwapParams, TokensWithFeed},
+        common::{
+            action::Action,
+            swap::{HasSwapParams, SwapParams},
+            TokensWithFeed,
+        },
         withdrawal::Withdrawal,
         NonceBytes, PriceProviderKind, Pyth, TokenMapAccess,
     },

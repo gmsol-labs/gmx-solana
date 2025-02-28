@@ -150,8 +150,14 @@ impl CreateGlvDepositOperation<'_, '_> {
         glv_deposit.params.market_token_amount = self.params.market_token_amount;
         glv_deposit.params.min_glv_token_amount = self.params.min_glv_token_amount;
 
+        let GlvDeposit {
+            swap,
+            swap_extension,
+            ..
+        } = &mut *glv_deposit;
+
         // Init swap paths.
-        glv_deposit.swap.validate_and_init(
+        swap.validate_and_init(
             &*self.market.load()?,
             self.params.long_token_swap_length,
             self.params.short_token_swap_length,
@@ -159,6 +165,7 @@ impl CreateGlvDepositOperation<'_, '_> {
             &self.store.key(),
             (&primary_token_in, &secondary_token_in),
             (&long_token, &short_token),
+            swap_extension,
         )?;
 
         Ok(())
@@ -638,8 +645,14 @@ impl CreateGlvWithdrawalOperation<'_, '_> {
         params.min_final_long_token_amount = self.params.min_final_long_token_amount;
         params.min_final_short_token_amount = self.params.min_final_short_token_amount;
 
+        let GlvWithdrawal {
+            swap,
+            swap_extension,
+            ..
+        } = &mut *glv_withdrawal;
+
         // Init swap paths.
-        glv_withdrawal.swap.validate_and_init(
+        swap.validate_and_init(
             &*self.market.load()?,
             self.params.long_token_swap_length,
             self.params.short_token_swap_length,
@@ -647,6 +660,7 @@ impl CreateGlvWithdrawalOperation<'_, '_> {
             &self.store.key(),
             (&long_token, &short_token),
             (&self.final_long_token.mint, &self.final_short_token.mint),
+            swap_extension,
         )?;
 
         Ok(())

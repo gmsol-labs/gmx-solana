@@ -15,7 +15,10 @@ use crate::{
         },
     },
     states::{
-        common::action::{ActionExt, ActionSigner},
+        common::{
+            action::{ActionExt, ActionSigner},
+            swap::HasSwapParams,
+        },
         feature::ActionDisabledFlag,
         order::{Order, TransferOut},
         position::Position,
@@ -368,8 +371,9 @@ impl<'info> ExecuteIncreaseOrSwapOrder<'info> {
             let market = self
                 .order
                 .load()?
-                .swap
-                .find_and_unpack_first_market(store, true, remaining_accounts)?
+                .with_swap_params(|swap, extension| {
+                    swap.find_and_unpack_first_market(store, true, remaining_accounts, extension)
+                })?
                 .unwrap_or(self.market.clone());
             let vault = self
                 .initial_collateral_token_vault
@@ -403,8 +407,9 @@ impl<'info> ExecuteIncreaseOrSwapOrder<'info> {
             let market = self
                 .order
                 .load()?
-                .swap
-                .find_and_unpack_first_market(store, true, remaining_accounts)?
+                .with_swap_params(|swap, extension| {
+                    swap.find_and_unpack_first_market(store, true, remaining_accounts, extension)
+                })?
                 .unwrap_or(self.market.clone());
             let vault = self
                 .initial_collateral_token_vault
@@ -482,8 +487,14 @@ impl<'info> ExecuteIncreaseOrSwapOrder<'info> {
         let final_output_market = self
             .order
             .load()?
-            .swap
-            .find_and_unpack_last_market(&self.store.key(), true, remaining_accounts)?
+            .with_swap_params(|swap, extension| {
+                swap.find_and_unpack_last_market(
+                    &self.store.key(),
+                    true,
+                    remaining_accounts,
+                    extension,
+                )
+            })?
             .unwrap_or(self.market.clone());
         ProcessTransferOutOperation::builder()
             .token_program(self.token_program.to_account_info())
@@ -832,8 +843,14 @@ impl<'info> ExecuteDecreaseOrder<'info> {
         let final_output_market = self
             .order
             .load()?
-            .swap
-            .find_and_unpack_last_market(&self.store.key(), true, remaining_accounts)?
+            .with_swap_params(|swap, extension| {
+                swap.find_and_unpack_last_market(
+                    &self.store.key(),
+                    true,
+                    remaining_accounts,
+                    extension,
+                )
+            })?
             .unwrap_or(self.market.clone());
         ProcessTransferOutOperation::builder()
             .token_program(self.token_program.to_account_info())

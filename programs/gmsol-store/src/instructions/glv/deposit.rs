@@ -16,7 +16,10 @@ use crate::{
         market::{MarketTransferInOperation, MarketTransferOutOperation},
     },
     states::{
-        common::action::{Action, ActionExt, ActionSigner},
+        common::{
+            action::{Action, ActionExt, ActionSigner},
+            swap::HasSwapParams,
+        },
         feature::{ActionDisabledFlag, DomainDisabledFlag},
         glv::{GlvMarketFlag, SplitAccountsForGlv},
         Chainlink, Glv, GlvDeposit, Market, NonceBytes, Oracle, RoleKey, Seed, Store,
@@ -859,8 +862,14 @@ impl<'info> ExecuteGlvDeposit<'info> {
             let market = self
                 .glv_deposit
                 .load()?
-                .swap
-                .find_and_unpack_first_market(store, is_primary, remaining_accounts)?
+                .with_swap_params(|swap, extension| {
+                    swap.find_and_unpack_first_market(
+                        store,
+                        is_primary,
+                        remaining_accounts,
+                        extension,
+                    )
+                })?
                 .unwrap_or(self.market.clone());
             let vault = vault.ok_or_else(|| error!(CoreError::TokenAccountNotProvided))?;
             builder
@@ -920,8 +929,14 @@ impl<'info> ExecuteGlvDeposit<'info> {
             let market = self
                 .glv_deposit
                 .load()?
-                .swap
-                .find_and_unpack_first_market(store, is_primary, remaining_accounts)?
+                .with_swap_params(|swap, extension| {
+                    swap.find_and_unpack_first_market(
+                        store,
+                        is_primary,
+                        remaining_accounts,
+                        extension,
+                    )
+                })?
                 .unwrap_or(self.market.clone());
             let token = token.ok_or_else(|| error!(CoreError::TokenMintNotProvided))?;
             let vault = vault.ok_or_else(|| error!(CoreError::TokenAccountNotProvided))?;

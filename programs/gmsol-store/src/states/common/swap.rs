@@ -11,11 +11,12 @@ use super::{TokenRecord, TokensWithFeed};
 
 const MAX_STEPS: usize = 10;
 const MAX_TOKENS: usize = 2 * MAX_STEPS + 2 + 3;
+const MAX_FLAGS: usize = 8;
 
 /// Swap params.
 #[zero_copy]
 #[derive(Default)]
-#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SwapParams {
     /// The length of primary swap path.
@@ -24,6 +25,7 @@ pub struct SwapParams {
     secondary_length: u8,
     /// The number of tokens.
     num_tokens: u8,
+    #[cfg_attr(feature = "debug", debug(skip))]
     padding_0: [u8; 1],
     current_market_token: Pubkey,
     /// Swap paths.
@@ -116,6 +118,7 @@ impl SwapParams {
         TokensWithFeed::try_from_records(records)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn validate_and_init<'info>(
         &mut self,
         current_market: &impl HasMarketMeta,
@@ -125,7 +128,10 @@ impl SwapParams {
         store: &Pubkey,
         token_ins: (&Pubkey, &Pubkey),
         token_outs: (&Pubkey, &Pubkey),
+        extension: &mut SwapParamsExtension,
     ) -> Result<()> {
+        require!(!extension.is_enabled(), CoreError::PreconditionsAreNotMet);
+
         let primary_end = usize::from(primary_length);
         let end = primary_end.saturating_add(usize::from(secondary_length));
         require_gte!(
@@ -168,8 +174,11 @@ impl SwapParams {
         self.secondary_length = secondary_length;
         self.num_tokens = tokens.len() as u8;
 
-        for (idx, market_token) in primary_path.iter().chain(secondary_path.iter()).enumerate() {
+        for (idx, (market_token, bump)) in
+            primary_path.iter().chain(secondary_path.iter()).enumerate()
+        {
             self.paths[idx] = *market_token;
+            extension.bumps[idx] = *bump;
         }
 
         for (idx, token) in tokens.into_iter().enumerate() {
@@ -177,6 +186,9 @@ impl SwapParams {
         }
 
         self.current_market_token = meta.market_token_mint;
+        extension
+            .flags
+            .set_flag(SwapParamsExtensionFlag::Enabled, true);
 
         Ok(())
     }
@@ -221,17 +233,17 @@ impl SwapParams {
         store: &Pubkey,
         is_primary: bool,
         remaining_accounts: &'info [AccountInfo<'info>],
+        extension: &SwapParamsExtension,
     ) -> Result<Option<&'info AccountInfo<'info>>> {
-        let path = if is_primary {
-            self.primary_swap_path()
-        } else {
-            self.secondary_swap_path()
-        };
-        let Some(first_market_token) = path.first() else {
+        let Some(MarketAddresses {
+            address: target,
+            token: first_market_token,
+        }) = extension.find_market_address_by_index(self, store, is_primary, Some(0))?
+        else {
             return Ok(None);
         };
-        let is_current_market = *first_market_token == self.current_market_token;
-        let target = Market::find_market_address(store, first_market_token, &crate::ID).0;
+
+        let is_current_market = first_market_token == self.current_market_token;
 
         match remaining_accounts.iter().find(|info| *info.key == target) {
             Some(info) => Ok(Some(info)),
@@ -246,8 +258,11 @@ impl SwapParams {
         store: &Pubkey,
         is_primary: bool,
         remaining_accounts: &'info [AccountInfo<'info>],
+        extension: &SwapParamsExtension,
     ) -> Result<Option<AccountLoader<'info, Market>>> {
-        let Some(info) = self.find_first_market(store, is_primary, remaining_accounts)? else {
+        let Some(info) =
+            self.find_first_market(store, is_primary, remaining_accounts, extension)?
+        else {
             return Ok(None);
         };
         let market = AccountLoader::<Market>::try_from(info)?;
@@ -261,17 +276,17 @@ impl SwapParams {
         store: &Pubkey,
         is_primary: bool,
         remaining_accounts: &'info [AccountInfo<'info>],
+        extension: &SwapParamsExtension,
     ) -> Result<Option<&'info AccountInfo<'info>>> {
-        let path = if is_primary {
-            self.primary_swap_path()
-        } else {
-            self.secondary_swap_path()
-        };
-        let Some(last_market_token) = path.last() else {
+        let Some(MarketAddresses {
+            address: target,
+            token: last_market_token,
+        }) = extension.find_market_address_by_index(self, store, is_primary, None)?
+        else {
             return Ok(None);
         };
-        let is_current_market = *last_market_token == self.current_market_token;
-        let target = Market::find_market_address(store, last_market_token, &crate::ID).0;
+
+        let is_current_market = last_market_token == self.current_market_token;
 
         match remaining_accounts.iter().find(|info| *info.key == target) {
             Some(info) => Ok(Some(info)),
@@ -286,8 +301,10 @@ impl SwapParams {
         store: &Pubkey,
         is_primary: bool,
         remaining_accounts: &'info [AccountInfo<'info>],
+        extension: &SwapParamsExtension,
     ) -> Result<Option<AccountLoader<'info, Market>>> {
-        let Some(info) = self.find_last_market(store, is_primary, remaining_accounts)? else {
+        let Some(info) = self.find_last_market(store, is_primary, remaining_accounts, extension)?
+        else {
             return Ok(None);
         };
         let market = AccountLoader::<Market>::try_from(info)?;
@@ -314,6 +331,107 @@ impl SwapParams {
     }
 }
 
+/// Swap params extension.
+#[zero_copy]
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SwapParamsExtension {
+    /// Flags.
+    flags: SwapParamsExtensionFlagContainer,
+    #[cfg_attr(feature = "debug", debug(skip))]
+    padding_0: [u8; 5],
+    /// Bump seeds of markets.
+    bumps: [u8; MAX_STEPS],
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
+    #[cfg_attr(feature = "debug", debug(skip))]
+    reserved: [u8; 48],
+}
+
+impl SwapParamsExtension {
+    fn is_enabled(&self) -> bool {
+        self.flags.get_flag(SwapParamsExtensionFlag::Enabled)
+    }
+
+    fn primary_bumps(&self, params: &SwapParams) -> &[u8] {
+        let end = params.primary_length();
+        &self.bumps[0..end]
+    }
+
+    fn secondary_bumps(&self, params: &SwapParams) -> &[u8] {
+        let start = params.primary_length();
+        let end = start.saturating_add(params.secondary_length());
+        &self.bumps[0..end]
+    }
+
+    /// Find market addresses by index.
+    ///
+    /// Return last market addresses if `index` is `None`.
+    fn find_market_address_by_index(
+        &self,
+        params: &SwapParams,
+        store: &Pubkey,
+        is_primary: bool,
+        index: Option<usize>,
+    ) -> Result<Option<MarketAddresses>> {
+        let (path, bumps) = if is_primary {
+            (params.primary_swap_path(), self.primary_bumps(params))
+        } else {
+            (params.secondary_swap_path(), self.secondary_bumps(params))
+        };
+
+        debug_assert_eq!(path.len(), bumps.len());
+
+        let index = match index {
+            Some(index) => index,
+            None => {
+                let len = path.len();
+                if len == 0 {
+                    return Ok(None);
+                } else {
+                    len - 1
+                }
+            }
+        };
+
+        let Some(market_token) = path.get(index) else {
+            return Ok(None);
+        };
+
+        let address = if self.is_enabled() {
+            let Some(bump) = bumps.get(index) else {
+                return err!(CoreError::Internal);
+            };
+
+            Market::create_market_address(store, market_token, &crate::ID, *bump)
+                .map_err(|_| error!(CoreError::Internal))?
+        } else {
+            Market::find_market_address(store, market_token, &crate::ID).0
+        };
+
+        Ok(Some(MarketAddresses {
+            address,
+            token: *market_token,
+        }))
+    }
+}
+
+struct MarketAddresses {
+    address: Pubkey,
+    token: Pubkey,
+}
+
+/// Flags for [`SwapParamsExtension`].
+#[derive(num_enum::IntoPrimitive)]
+#[repr(u8)]
+#[non_exhaustive]
+pub enum SwapParamsExtensionFlag {
+    /// Whether the extension is enabled.
+    Enabled,
+    // CHECK: Cannot have more than `MAX_FLAGS` flags.
+}
+
+gmsol_utils::flags!(SwapParamsExtensionFlag, MAX_FLAGS, u8);
+
 pub(crate) fn unpack_markets<'info>(
     path: &'info [AccountInfo<'info>],
 ) -> impl Iterator<Item = Result<AccountLoader<'info, Market>>> {
@@ -326,7 +444,7 @@ fn validate_path<'info>(
     store: &Pubkey,
     token_in: &Pubkey,
     token_out: &Pubkey,
-) -> Result<Vec<Pubkey>> {
+) -> Result<Vec<(Pubkey, u8)>> {
     let mut current = *token_in;
     let mut seen = HashSet::<_>::default();
 
@@ -350,7 +468,7 @@ fn validate_path<'info>(
         tokens.insert(meta.index_token_mint);
         tokens.insert(meta.long_token_mint);
         tokens.insert(meta.short_token_mint);
-        validated_market_tokens.push(meta.market_token_mint);
+        validated_market_tokens.push((meta.market_token_mint, market.bump));
     }
 
     require_keys_eq!(current, *token_out, CoreError::InvalidSwapPath);
@@ -362,4 +480,12 @@ fn validate_path<'info>(
 pub trait HasSwapParams {
     /// Get the swap params.
     fn swap(&self) -> &SwapParams;
+
+    /// Get the swap params extension.
+    fn swap_extension(&self) -> &SwapParamsExtension;
+
+    /// Run a function with the swap params.
+    fn with_swap_params<T>(&self, f: impl FnOnce(&SwapParams, &SwapParamsExtension) -> T) -> T {
+        (f)(self.swap(), self.swap_extension())
+    }
 }

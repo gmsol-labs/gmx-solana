@@ -17,7 +17,11 @@ use gmsol_store::{
     accounts, instruction,
     ops::glv::CreateGlvWithdrawalParams,
     states::{
-        common::{action::Action, swap::SwapParams, TokensWithFeed},
+        common::{
+            action::Action,
+            swap::{HasSwapParams, SwapParams},
+            TokensWithFeed,
+        },
         glv::GlvWithdrawal,
         Glv, HasMarketMeta, NonceBytes, PriceProviderKind, TokenMapAccess,
     },

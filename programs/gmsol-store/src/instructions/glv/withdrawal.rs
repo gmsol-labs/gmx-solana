@@ -18,7 +18,10 @@ use crate::{
         market::MarketTransferOutOperation,
     },
     states::{
-        common::action::{Action, ActionExt},
+        common::{
+            action::{Action, ActionExt},
+            swap::HasSwapParams,
+        },
         feature::{ActionDisabledFlag, DomainDisabledFlag},
         glv::{GlvWithdrawal, SplitAccountsForGlv},
         Chainlink, Glv, Market, NonceBytes, Oracle, RoleKey, Seed, Store, StoreWalletSigner,
@@ -780,8 +783,9 @@ impl<'info> ExecuteGlvWithdrawal<'info> {
             let market = self
                 .glv_withdrawal
                 .load()?
-                .swap
-                .find_and_unpack_last_market(store, true, remaining_accounts)?
+                .with_swap_params(|swap, extension| {
+                    swap.find_and_unpack_last_market(store, true, remaining_accounts, extension)
+                })?
                 .unwrap_or(self.market.clone());
             let vault = &self.final_long_token_vault;
             let escrow = &self.final_long_token_escrow;
@@ -802,8 +806,9 @@ impl<'info> ExecuteGlvWithdrawal<'info> {
             let market = self
                 .glv_withdrawal
                 .load()?
-                .swap
-                .find_and_unpack_last_market(store, false, remaining_accounts)?
+                .with_swap_params(|swap, extension| {
+                    swap.find_and_unpack_last_market(store, false, remaining_accounts, extension)
+                })?
                 .unwrap_or(self.market.clone());
             let vault = &self.final_short_token_vault;
             let escrow = &self.final_short_token_escrow;

@@ -108,7 +108,12 @@ impl CreateWithdrawalOperation<'_, '_> {
         // Initialize swap paths.
         let market = market.load()?;
         let meta = market.meta();
-        withdrawal.swap.validate_and_init(
+        let Withdrawal {
+            swap,
+            swap_extension,
+            ..
+        } = &mut *withdrawal;
+        swap.validate_and_init(
             &*market,
             params.long_token_swap_path_length,
             params.short_token_swap_path_length,
@@ -116,6 +121,7 @@ impl CreateWithdrawalOperation<'_, '_> {
             &store.key(),
             (&meta.long_token_mint, &meta.short_token_mint),
             (&final_long_token.mint, &final_short_token.mint),
+            swap_extension,
         )?;
 
         Ok(())

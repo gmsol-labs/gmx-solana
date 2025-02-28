@@ -17,7 +17,7 @@ use crate::{
 use super::{
     common::{
         action::{Action, ActionHeader, Closable},
-        swap::{unpack_markets, HasSwapParams, SwapParams},
+        swap::{unpack_markets, HasSwapParams, SwapParams, SwapParamsExtension},
         token::{TokenAndAccount, TokensCollector},
     },
     deposit::DepositParams,
@@ -718,10 +718,11 @@ pub struct GlvDeposit {
     /// Swap params.
     pub(crate) swap: SwapParams,
     #[cfg_attr(feature = "debug", debug(skip))]
-    padding_1: [u8; 4],
-    #[cfg_attr(feature = "debug", debug(skip))]
+    padding_0: [u8; 4],
+    pub(crate) swap_extension: SwapParamsExtension,
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 128],
+    #[cfg_attr(feature = "debug", debug(skip))]
+    reserved: [u8; 64],
 }
 
 impl Action for GlvDeposit {
@@ -847,6 +848,10 @@ impl HasSwapParams for GlvDeposit {
     fn swap(&self) -> &SwapParams {
         &self.swap
     }
+
+    fn swap_extension(&self) -> &SwapParamsExtension {
+        &self.swap_extension
+    }
 }
 
 /// Token and accounts.
@@ -927,21 +932,17 @@ pub struct GlvWithdrawal {
     /// Swap params.
     pub(crate) swap: SwapParams,
     #[cfg_attr(feature = "debug", debug(skip))]
-    padding_1: [u8; 4],
-    #[cfg_attr(feature = "debug", debug(skip))]
+    padding_0: [u8; 4],
+    pub(crate) swap_extension: SwapParamsExtension,
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 128],
+    #[cfg_attr(feature = "debug", debug(skip))]
+    reserved: [u8; 64],
 }
 
 impl GlvWithdrawal {
     /// Get tokens.
     pub fn tokens(&self) -> &GlvWithdrawalTokenAccounts {
         &self.tokens
-    }
-
-    /// Get swap params.
-    pub fn swap(&self) -> &SwapParams {
-        &self.swap
     }
 }
 
@@ -981,6 +982,10 @@ impl gmsol_utils::InitSpace for GlvWithdrawal {
 impl HasSwapParams for GlvWithdrawal {
     fn swap(&self) -> &SwapParams {
         &self.swap
+    }
+
+    fn swap_extension(&self) -> &SwapParamsExtension {
+        &self.swap_extension
     }
 }
 

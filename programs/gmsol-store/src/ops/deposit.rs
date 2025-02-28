@@ -6,7 +6,10 @@ use crate::{
     events::EventEmitter,
     ops::market::RevertibleLiquidityMarketOperation,
     states::{
-        common::action::{Action, ActionExt, ActionParams},
+        common::{
+            action::{Action, ActionExt, ActionParams},
+            swap::HasSwapParams,
+        },
         market::revertible::Revertible,
         Deposit, Market, NonceBytes, Oracle, Store, ValidateOracleTime,
     },
@@ -120,7 +123,13 @@ impl CreateDepositOperation<'_, '_> {
         deposit.params.initial_short_token_amount = params.initial_short_token_amount;
         deposit.params.min_market_token_amount = params.min_market_token_amount;
 
-        deposit.swap.validate_and_init(
+        let Deposit {
+            swap,
+            swap_extension,
+            ..
+        } = &mut *deposit;
+
+        swap.validate_and_init(
             &*market.load()?,
             params.long_token_swap_length,
             params.short_token_swap_length,
@@ -128,6 +137,7 @@ impl CreateDepositOperation<'_, '_> {
             &store.key(),
             (&primary_token_in, &secondary_token_in),
             (&long_token, &short_token),
+            swap_extension,
         )?;
 
         Ok(())

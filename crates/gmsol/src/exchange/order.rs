@@ -22,7 +22,11 @@ use gmsol_store::{
     accounts, instruction,
     ops::order::CreateOrderParams,
     states::{
-        common::{action::Action, swap::SwapParams, TokensWithFeed},
+        common::{
+            action::Action,
+            swap::{HasSwapParams, SwapParams},
+            TokensWithFeed,
+        },
         order::{Order, OrderKind},
         position::PositionKind,
         user::UserHeader,

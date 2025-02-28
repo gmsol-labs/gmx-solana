@@ -10,7 +10,10 @@ use crate::{
         market::{MarketTransferInOperation, MarketTransferOutOperation},
     },
     states::{
-        common::action::{ActionExt, ActionSigner},
+        common::{
+            action::{ActionExt, ActionSigner},
+            swap::HasSwapParams,
+        },
         feature::{ActionDisabledFlag, DomainDisabledFlag},
         Chainlink, Deposit, Market, Oracle, Seed, Store, TokenMapHeader, TokenMapLoader,
     },
@@ -207,8 +210,9 @@ impl<'info> ExecuteDeposit<'info> {
             let market = self
                 .deposit
                 .load()?
-                .swap
-                .find_and_unpack_first_market(store, true, remaining_accounts)?
+                .with_swap_params(|swap, extension| {
+                    swap.find_and_unpack_first_market(store, true, remaining_accounts, extension)
+                })?
                 .unwrap_or(self.market.clone());
             let vault = self
                 .initial_long_token_vault
@@ -228,8 +232,9 @@ impl<'info> ExecuteDeposit<'info> {
             let market = self
                 .deposit
                 .load()?
-                .swap
-                .find_and_unpack_first_market(store, false, remaining_accounts)?
+                .with_swap_params(|swap, extension| {
+                    swap.find_and_unpack_first_market(store, false, remaining_accounts, extension)
+                })?
                 .unwrap_or(self.market.clone());
             let vault = self
                 .initial_short_token_vault
@@ -265,8 +270,9 @@ impl<'info> ExecuteDeposit<'info> {
             let market = self
                 .deposit
                 .load()?
-                .swap
-                .find_and_unpack_first_market(store, true, remaining_accounts)?
+                .with_swap_params(|swap, extension| {
+                    swap.find_and_unpack_first_market(store, true, remaining_accounts, extension)
+                })?
                 .unwrap_or(self.market.clone());
             let vault = self
                 .initial_long_token_vault
@@ -292,8 +298,9 @@ impl<'info> ExecuteDeposit<'info> {
             let market = self
                 .deposit
                 .load()?
-                .swap
-                .find_and_unpack_first_market(store, false, remaining_accounts)?
+                .with_swap_params(|swap, extension| {
+                    swap.find_and_unpack_first_market(store, false, remaining_accounts, extension)
+                })?
                 .unwrap_or(self.market.clone());
             let vault = self
                 .initial_short_token_vault

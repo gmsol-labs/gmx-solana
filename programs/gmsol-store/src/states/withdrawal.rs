@@ -5,7 +5,7 @@ use crate::{events::WithdrawalRemoved, CoreError};
 use super::{
     common::{
         action::{Action, ActionHeader, Closable},
-        swap::SwapParams,
+        swap::{HasSwapParams, SwapParams, SwapParamsExtension},
         token::TokenAndAccount,
     },
     Seed,
@@ -25,10 +25,11 @@ pub struct Withdrawal {
     /// Swap params.
     pub(crate) swap: SwapParams,
     #[cfg_attr(feature = "debug", debug(skip))]
-    padding_1: [u8; 4],
-    #[cfg_attr(feature = "debug", debug(skip))]
+    padding_0: [u8; 4],
+    pub(crate) swap_extension: SwapParamsExtension,
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 128],
+    #[cfg_attr(feature = "debug", debug(skip))]
+    reserved: [u8; 64],
 }
 
 impl Withdrawal {
@@ -36,10 +37,15 @@ impl Withdrawal {
     pub fn tokens(&self) -> &TokenAccounts {
         &self.tokens
     }
+}
 
-    /// Get the swap params.
-    pub fn swap(&self) -> &SwapParams {
+impl HasSwapParams for Withdrawal {
+    fn swap(&self) -> &SwapParams {
         &self.swap
+    }
+
+    fn swap_extension(&self) -> &SwapParamsExtension {
+        &self.swap_extension
     }
 }
 

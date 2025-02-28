@@ -6,7 +6,7 @@ use crate::{events::DepositRemoved, states::MarketConfigKey, CoreError};
 use super::{
     common::{
         action::{Action, ActionHeader, Closable},
-        swap::SwapParams,
+        swap::{HasSwapParams, SwapParams, SwapParamsExtension},
         token::TokenAndAccount,
     },
     Market, Seed,
@@ -27,9 +27,10 @@ pub struct Deposit {
     pub(crate) swap: SwapParams,
     #[cfg_attr(feature = "debug", debug(skip))]
     padding_0: [u8; 4],
+    pub(crate) swap_extension: SwapParamsExtension,
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
     #[cfg_attr(feature = "debug", debug(skip))]
-    reserved: [u8; 128],
+    reserved: [u8; 64],
 }
 
 /// PDA for first deposit owner.
@@ -71,11 +72,6 @@ impl Deposit {
         &self.tokens
     }
 
-    /// Get swap params.
-    pub fn swap(&self) -> &SwapParams {
-        &self.swap
-    }
-
     pub(crate) fn validate_first_deposit(
         receiver: &Pubkey,
         min_amount: u64,
@@ -115,6 +111,16 @@ impl Action for Deposit {
 
     fn header(&self) -> &ActionHeader {
         &self.header
+    }
+}
+
+impl HasSwapParams for Deposit {
+    fn swap(&self) -> &SwapParams {
+        &self.swap
+    }
+
+    fn swap_extension(&self) -> &SwapParamsExtension {
+        &self.swap_extension
     }
 }
 
