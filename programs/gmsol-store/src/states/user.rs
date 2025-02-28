@@ -247,6 +247,20 @@ impl ReferralCodeV2 {
     /// The length of referral code.
     pub const LEN: usize = std::mem::size_of::<ReferralCodeBytes>();
 
+    pub(crate) fn init(
+        &mut self,
+        bump: u8,
+        code: ReferralCodeBytes,
+        store: &Pubkey,
+        owner: &Pubkey,
+    ) {
+        self.bump = bump;
+        self.code = code;
+        self.store = *store;
+        self.owner = *owner;
+        self.next_owner = *owner;
+    }
+
     /// Get next owner.
     pub fn next_owner(&self) -> &Pubkey {
         &self.next_owner

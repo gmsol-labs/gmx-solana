@@ -35,7 +35,6 @@ pub mod feature;
 pub mod glv;
 
 /// Instructions for migrations.
-#[cfg(not(feature = "migration"))]
 pub mod migration;
 
 pub use config::*;
@@ -44,12 +43,10 @@ pub use feature::*;
 pub use glv::*;
 pub use gt::*;
 pub use market::*;
+pub use migration::*;
 pub use oracle::*;
 pub use roles::*;
 pub use store::*;
 pub use token::*;
 pub use token_config::*;
 pub use user::*;
-
-// #[cfg(not(feature = "no-bug-fix"))]
-// pub use bug_fix::*;

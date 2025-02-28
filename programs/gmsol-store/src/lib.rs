@@ -3450,6 +3450,19 @@ pub mod gmsol_store {
     ) -> Result<()> {
         instructions::unchecked_execute_glv_shift(ctx, execution_lamports, throw_on_execution_error)
     }
+
+    #[access_control(internal::Authenticate::only_migration_keeper(&ctx))]
+    pub fn migrate_referral_code<'info>(
+        ctx: Context<'_, '_, 'info, 'info, MigrateReferralCode<'info>>,
+    ) -> Result<()> {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "migration")] {
+                instructions::unchecked_migrate_referral_code(ctx)
+            } else {
+                err!(CoreError::Unimplemented)
+            }
+        }
+    }
 }
 
 /// Result type with [`CoreError`] as error type.

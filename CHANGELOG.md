@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs: Added a new config `adl_prices_max_staleness`, allowing the oracle prices to be stale relative to the ADL last update time by this amount.
 - programs: Added `accept_referral_code` instruction to complete the referral code transfer.
 - programs: Added `cancel_referral_code_transfer` instruction to cancel a referral code transfer.
+- programs: Added `migrate_referral_code` instruction for `ReferralCode` account migration.
 - sdk: Added the `gmsol::cli` module.
 - sdk: Added `SwitchboardPullOracleFactory` structure.
 - sdk: Added support for `accept_referral_code` and `cancel_referral_code_transfer` instructions.

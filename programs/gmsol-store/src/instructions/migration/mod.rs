@@ -1,3 +1,3 @@
 mod referral_code;
 
-pub use referral_code::ReferralCode;
+pub use referral_code::*;

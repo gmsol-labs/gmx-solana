@@ -50,6 +50,9 @@ impl RoleKey {
 
     /// Price Keeper.
     pub const PRICE_KEEPER: &'static str = "PRICE_KEEPER";
+
+    /// Migration Keeper.
+    pub const MIGRATION_KEEPER: &'static str = "MIGRATION_KEEPER";
 }
 
 impl Borrow<str> for RoleKey {

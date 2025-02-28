@@ -22,6 +22,8 @@ mod glv;
 mod gt;
 mod inspect;
 mod market_keeper;
+#[cfg(feature = "migration")]
+mod migration;
 mod order_keeper;
 mod other;
 mod ser;
@@ -139,6 +141,9 @@ enum Command {
     Alt(alt::Args),
     /// Commands for other.
     Other(other::Args),
+    /// Commands for migration.
+    #[cfg(feature = "migration")]
+    Migrate(migration::Args),
 }
 
 #[tokio::main]
@@ -384,6 +389,16 @@ impl Cli {
             Command::Other(args) => {
                 args.run(&client, &store, instruction_buffer_ctx, self.serialize_only)
                     .await?
+            }
+            Command::Migrate(args) => {
+                args.run(
+                    &client,
+                    &store,
+                    instruction_buffer_ctx,
+                    self.serialize_only,
+                    self.skip_preflight,
+                )
+                .await?
             }
         }
         client.shutdown().await?;

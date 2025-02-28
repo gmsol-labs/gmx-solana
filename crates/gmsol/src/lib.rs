@@ -57,6 +57,10 @@ pub mod squads;
 /// CLI support.
 pub mod cli;
 
+#[cfg(feature = "migration")]
+/// Migration.
+pub mod migration;
+
 /// Test Utils.
 #[cfg(test)]
 mod test;

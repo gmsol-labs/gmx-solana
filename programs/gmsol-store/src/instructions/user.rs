@@ -100,13 +100,12 @@ pub(crate) fn initialize_referral_code(
     );
 
     // Initialize Referral Code Account.
-    let mut referral_code = ctx.accounts.referral_code.load_init()?;
-    referral_code.bump = ctx.bumps.referral_code;
-    referral_code.code = code;
-    referral_code.store = ctx.accounts.store.key();
-    let owner = ctx.accounts.owner.key();
-    referral_code.owner = owner;
-    referral_code.set_next_owner(&owner)?;
+    ctx.accounts.referral_code.load_init()?.init(
+        ctx.bumps.referral_code,
+        code,
+        &ctx.accounts.store.key(),
+        ctx.accounts.owner.key,
+    );
 
     // Set referral code address.
     ctx.accounts

@@ -95,6 +95,7 @@ devnet = [
 ]
 
 squads = ["squads-multisig"]
+migration = []
 
 [dependencies]
 gmsol-solana-utils = { workspace = true, features = ["anchor", "serde"] }
