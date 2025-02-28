@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs: Changed the index type for `TradeData` to `u16`.
 - programs: Changed the index type for `Glv` to `u16`.
 - programs: Changed the index type for `TreasuryVaultConfig` to `u16`.
+- programs: Replaced `ReferralCode` with `ReferralCodeV2`.
 - sdk: Changed the arguments of `SwitchboardPullOracle::from_parts` function.
 - tests: Renamed `anchor_tests` testing suite to `anchor_test` in the `gmsol` tests.
 - Updated dependencies:
@@ -35,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs: Added validation for `MarketDecrease` orders to ensure the oracle prices are updated after the position's last increase ts, similar to `LimitDecrease` orders.
 - programs: Added features to control the enablement of instructions for (GLV) deposit, (GLV) withdrawal, and (GLV) shift.
 - programs: Added a new config `adl_prices_max_staleness`, allowing the oracle prices to be stale relative to the ADL last update time by this amount.
+- programs: Added `accept_referral_code` instruction to complete the referral code transfer.
+- programs: Added `cancel_referral_code_transfer` instruction to cancel a referral code transfer.
 - sdk: Added the `gmsol::cli` module.
 - sdk: Added `SwitchboardPullOracleFactory` structure.
 - cli: Added support for Switchboard to the `order` subcommand.
@@ -49,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs: Changed to use the maximized `to_market_token_value` to estimate the price impact after a GLV shift.
 - programs: Cancelled the ADL execution fee refund to ensure the fairness of ADL.
 - programs: Set `GlvShift::MIN_EXECUTION_LAMPORTS` to `0`.
+- programs: The `transfer_referral_code` instruction only update the `next_owner` field of the referral code.
 - sdk: Changed to use `Gateway::fetch_signatures_multi` to fetch price signatures for Switchboard pull oracle implementation.
 - just: The `build-idls` recipe now builds IDLs that include docs.
 

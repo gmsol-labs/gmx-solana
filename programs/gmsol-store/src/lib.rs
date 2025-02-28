@@ -191,6 +191,8 @@
 //! - [`initialize_referral_code`](gmsol_store::initialize_referral_code): Initialize and set a referral code.
 //! - [`set_referrer`](gmsol_store::set_referrer): Set the referrer.
 //! - [`transfer_referral_code`](gmsol_store::transfer_referral_code): Transfer the referral code to others.
+//! - [`cancel_referral_code_transfer`](gmsol_store::cancel_referral_code_transfer): Cancel the referral code transfer.
+//! - [`accept_referral_code`](gmsol_store::accept_referral_code): Complete the referral code transfer.
 //!
 //! ## GT Model
 //!
@@ -2771,6 +2773,50 @@ pub mod gmsol_store {
     ///   - Not have an associated referral code
     pub fn transfer_referral_code(ctx: Context<TransferReferralCode>) -> Result<()> {
         instructions::transfer_referral_code(ctx)
+    }
+
+    /// Cancel referral code transfer.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](CancelReferralCodeTransfer)*
+    ///
+    /// # Errors
+    /// - The [`owner`](CancelReferralCodeTransfer::owner) must be a signer.
+    /// - The [`store`](CancelReferralCodeTransfer::store) must be properly initialized.
+    /// - The [`user`](CancelReferralCodeTransfer::user) account must be:
+    ///   - Properly initialized
+    ///   - Correspond to the `owner`
+    /// - The [`referral_code`](CancelReferralCodeTransfer::referral_code) account must be:
+    ///   - Properly initialized
+    ///   - Owned by the `store`
+    ///   - Correspond to the `owner`
+    ///   - The next owner must not have been the `owner`
+    pub fn cancel_referral_code_transfer(ctx: Context<CancelReferralCodeTransfer>) -> Result<()> {
+        instructions::cancel_referral_code_transfer(ctx)
+    }
+
+    /// Accept referral code.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](AcceptReferralCode)*
+    ///
+    /// # Errors
+    /// - The [`next_owner`](AcceptReferralCode::next_owner) must be a signer.
+    /// - The [`store`](AcceptReferralCode::store) must be properly initialized.
+    /// - The [`user`](AcceptReferralCode::user) account must be:
+    ///   - Properly initialized
+    ///   - Different from the [`receiver_user`](AcceptReferralCode::receiver_user)
+    /// - The [`referral_code`](AcceptReferralCode::referral_code) account must be:
+    ///   - Properly initialized
+    ///   - Owned by the `store`
+    ///   - Correspond to the owner of the `user`
+    ///   - Have the next owner be the `next_owner`
+    /// - The [`receiver_user`](AcceptReferralCode::receiver_user) account must be:
+    ///   - Properly initialized
+    ///   - Not have an associated referral code
+    ///   - Correspond to the `next_owner`
+    pub fn accept_referral_code(ctx: Context<AcceptReferralCode>) -> Result<()> {
+        instructions::accept_referral_code(ctx)
     }
 
     // ===========================================

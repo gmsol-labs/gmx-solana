@@ -11,7 +11,7 @@ use gmsol::{
         self,
         common::action::Action,
         feature::{display_feature, ActionDisabledFlag, DomainDisabledFlag},
-        user::ReferralCode,
+        user::ReferralCodeV2,
         TokenMapAccess,
     },
     utils::{unsigned_amount_to_decimal, unsigned_value_to_decimal, ZeroCopy},
@@ -316,7 +316,7 @@ impl InspectArgs {
                 let address = if let Some(address) = address {
                     *address
                 } else if let Some(code) = code {
-                    let code = ReferralCode::decode(code)?;
+                    let code = ReferralCodeV2::decode(code)?;
                     client.find_referral_code_address(store, code)
                 } else {
                     return Err(gmsol::Error::invalid_argument(
@@ -324,11 +324,11 @@ impl InspectArgs {
                     ));
                 };
                 let code = client
-                    .account::<ZeroCopy<ReferralCode>>(&address)
+                    .account::<ZeroCopy<ReferralCodeV2>>(&address)
                     .await?
                     .ok_or(gmsol::Error::NotFound)?
                     .0;
-                println!("Code: {}", ReferralCode::encode(&code.code, true));
+                println!("Code: {}", ReferralCodeV2::encode(&code.code, true));
                 println!("Owner: {}", code.owner);
             }
             Command::Store {

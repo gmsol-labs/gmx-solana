@@ -3,7 +3,7 @@ use gmsol_utils::InitSpace;
 
 use crate::{
     states::{
-        user::{ReferralCode, ReferralCodeBytes, UserHeader},
+        user::{ReferralCodeBytes, ReferralCodeV2, UserHeader},
         Seed, Store,
     },
     CoreError,
@@ -72,11 +72,11 @@ pub struct InitializeReferralCode<'info> {
     #[account(
         init,
         payer = owner,
-        space = 8 + ReferralCode::INIT_SPACE,
-        seeds = [ReferralCode::SEED, store.key().as_ref(), &code],
+        space = 8 + ReferralCodeV2::INIT_SPACE,
+        seeds = [ReferralCodeV2::SEED, store.key().as_ref(), &code],
         bump,
     )]
-    pub referral_code: AccountLoader<'info, ReferralCode>,
+    pub referral_code: AccountLoader<'info, ReferralCodeV2>,
     /// User Account.
     #[account(
         mut,
@@ -104,7 +104,9 @@ pub(crate) fn initialize_referral_code(
     referral_code.bump = ctx.bumps.referral_code;
     referral_code.code = code;
     referral_code.store = ctx.accounts.store.key();
-    referral_code.owner = ctx.accounts.owner.key();
+    let owner = ctx.accounts.owner.key();
+    referral_code.owner = owner;
+    referral_code.set_next_owner(&owner)?;
 
     // Set referral code address.
     ctx.accounts
@@ -136,10 +138,10 @@ pub struct SetReferrer<'info> {
     #[account(
         has_one = store,
         constraint = referral_code.load()?.code == code @ CoreError::ReferralCodeMismatched,
-        seeds = [ReferralCode::SEED, store.key().as_ref(), &code],
+        seeds = [ReferralCodeV2::SEED, store.key().as_ref(), &code],
         bump = referral_code.load()?.bump,
     )]
-    pub referral_code: AccountLoader<'info, ReferralCode>,
+    pub referral_code: AccountLoader<'info, ReferralCodeV2>,
     /// Referrer.
     #[account(
         mut,
@@ -167,14 +169,65 @@ pub(crate) fn set_referrer(ctx: Context<SetReferrer>, _code: ReferralCodeBytes) 
     Ok(())
 }
 
-/// The accounts definitions for `transfer_referral_code` instruction.
+/// The accounts definitions for [`accept_referral_code`](crate::gmsol_store::accept_referral_code) instruction.
+#[derive(Accounts)]
+pub struct AcceptReferralCode<'info> {
+    pub next_owner: Signer<'info>,
+    pub store: AccountLoader<'info, Store>,
+    /// User Account.
+    #[account(
+        mut,
+        has_one = store,
+        constraint = user.load()?.owner == referral_code.load()?.owner @ CoreError::OwnerMismatched,
+        constraint = user.load()?.referral.code == referral_code.key() @ CoreError::ReferralCodeMismatched,
+        seeds = [UserHeader::SEED, store.key().as_ref(), referral_code.load()?.owner.as_ref()],
+        bump = user.load()?.bump,
+    )]
+    pub user: AccountLoader<'info, UserHeader>,
+    /// Referral Code Account.
+    #[account(
+        mut,
+        has_one = store,
+        seeds = [ReferralCodeV2::SEED, store.key().as_ref(), &referral_code.load()?.code],
+        bump = referral_code.load()?.bump,
+    )]
+    pub referral_code: AccountLoader<'info, ReferralCodeV2>,
+    /// Receiver.
+    #[account(
+        mut,
+        has_one = store,
+        constraint = receiver_user.load()?.owner == next_owner.key() @ CoreError::OwnerMismatched,
+        constraint = receiver_user.key() != user.key() @ CoreError::SelfReferral,
+        seeds = [UserHeader::SEED, store.key().as_ref(), next_owner.key().as_ref()],
+        bump = receiver_user.load()?.bump,
+    )]
+    pub receiver_user: AccountLoader<'info, UserHeader>,
+}
+
+pub(crate) fn accept_referral_code(ctx: Context<AcceptReferralCode>) -> Result<()> {
+    let mut code = ctx.accounts.referral_code.load_mut()?;
+    let mut receiver_user = ctx.accounts.receiver_user.load_mut()?;
+    ctx.accounts
+        .user
+        .load_mut()?
+        .unchecked_complete_code_transfer(&mut code, &mut receiver_user)?;
+
+    msg!(
+        "[Referral] the owner of referral code `{:?}` is now {}",
+        code.code,
+        code.owner,
+    );
+
+    Ok(())
+}
+
+/// The accounts definitions for [`transfer_referral_code`](crate::gmsol_store::transfer_referral_code) instruction.
 #[derive(Accounts)]
 pub struct TransferReferralCode<'info> {
     pub owner: Signer<'info>,
     pub store: AccountLoader<'info, Store>,
     /// User Account.
     #[account(
-        mut,
         has_one = owner,
         has_one = store,
         constraint = user.load()?.owner == referral_code.load()?.owner @ CoreError::OwnerMismatched,
@@ -187,13 +240,12 @@ pub struct TransferReferralCode<'info> {
     #[account(
         mut,
         has_one = store,
-        seeds = [ReferralCode::SEED, store.key().as_ref(), &referral_code.load()?.code],
+        seeds = [ReferralCodeV2::SEED, store.key().as_ref(), &referral_code.load()?.code],
         bump = referral_code.load()?.bump,
     )]
-    pub referral_code: AccountLoader<'info, ReferralCode>,
-    /// Referrer.
+    pub referral_code: AccountLoader<'info, ReferralCodeV2>,
+    /// Receiver.
     #[account(
-        mut,
         has_one = store,
         constraint = receiver_user.key() != user.key() @ CoreError::SelfReferral,
         seeds = [UserHeader::SEED, store.key().as_ref(), receiver_user.load()?.owner.as_ref()],
@@ -204,16 +256,55 @@ pub struct TransferReferralCode<'info> {
 
 pub(crate) fn transfer_referral_code(ctx: Context<TransferReferralCode>) -> Result<()> {
     let mut code = ctx.accounts.referral_code.load_mut()?;
-    let mut receiver_user = ctx.accounts.receiver_user.load_mut()?;
+    let receiver_user = ctx.accounts.receiver_user.load()?;
     ctx.accounts
         .user
-        .load_mut()?
-        .unchecked_transfer_code(&mut code, &mut receiver_user)?;
+        .load()?
+        .unchecked_transfer_code(&mut code, &receiver_user)?;
 
     msg!(
-        "[Referral] the owner of referral code `{:?}` is now {}",
+        "[Referral] the next owner of referral code `{:?}` is now {}",
         code.code,
-        code.owner,
+        code.next_owner(),
+    );
+
+    Ok(())
+}
+
+/// The accounts definitions for [`cancel_referral_code_transfer`](crate::gmsol_store::cancel_referral_code_transfer) instruction.
+#[derive(Accounts)]
+pub struct CancelReferralCodeTransfer<'info> {
+    pub owner: Signer<'info>,
+    pub store: AccountLoader<'info, Store>,
+    /// User Account.
+    #[account(
+        has_one = owner,
+        has_one = store,
+        constraint = user.load()?.owner == referral_code.load()?.owner @ CoreError::OwnerMismatched,
+        constraint = user.load()?.referral.code == referral_code.key() @ CoreError::ReferralCodeMismatched,
+        seeds = [UserHeader::SEED, store.key().as_ref(), owner.key().as_ref()],
+        bump = user.load()?.bump,
+    )]
+    pub user: AccountLoader<'info, UserHeader>,
+    /// Referral Code Account.
+    #[account(
+        mut,
+        has_one = store,
+        seeds = [ReferralCodeV2::SEED, store.key().as_ref(), &referral_code.load()?.code],
+        bump = referral_code.load()?.bump,
+    )]
+    pub referral_code: AccountLoader<'info, ReferralCodeV2>,
+}
+
+pub(crate) fn cancel_referral_code_transfer(
+    ctx: Context<CancelReferralCodeTransfer>,
+) -> Result<()> {
+    let mut code = ctx.accounts.referral_code.load_mut()?;
+    code.set_next_owner(ctx.accounts.owner.key)?;
+    msg!(
+        "[Referral] the next owner of referral code `{:?}` is now {}",
+        code.code,
+        code.next_owner(),
     );
 
     Ok(())

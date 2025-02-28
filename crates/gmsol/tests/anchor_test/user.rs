@@ -1,4 +1,4 @@
-use gmsol::{store::user::UserOps, types::user::ReferralCode};
+use gmsol::{store::user::UserOps, types::user::ReferralCodeV2};
 use gmsol_store::CoreError;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
@@ -23,7 +23,7 @@ async fn referral() -> eyre::Result<()> {
         .await?;
     tracing::info!(%signature, "prepared user account for user 2");
 
-    let code = ReferralCode::decode("gmso1")?;
+    let code = ReferralCodeV2::decode("gmso1")?;
     let signature = client
         .initialize_referral_code(store, code)?
         .send_without_preflight()

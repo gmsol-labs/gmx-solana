@@ -5,7 +5,7 @@ use gmsol_store::{
         glv::GlvWithdrawal,
         gt::{GtExchange, GtExchangeVault},
         position::PositionKind,
-        user::{ReferralCode, ReferralCodeBytes, UserHeader},
+        user::{ReferralCodeBytes, ReferralCodeV2, UserHeader},
         Deposit, GlvDeposit, NonceBytes, Order, Position, PriceFeed, PriceProviderKind, Seed,
         Shift, Store, Withdrawal, MAX_ROLE_NAME_LEN,
     },
@@ -210,7 +210,7 @@ pub fn find_referral_code_pda(
     store_program_id: &Pubkey,
 ) -> (Pubkey, u8) {
     Pubkey::find_program_address(
-        &[ReferralCode::SEED, store.as_ref(), &code],
+        &[ReferralCodeV2::SEED, store.as_ref(), &code],
         store_program_id,
     )
 }

@@ -7,7 +7,7 @@ use anchor_client::{
 use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_store::{
     accounts, instruction,
-    states::user::{ReferralCode, ReferralCodeBytes, UserHeader},
+    states::user::{ReferralCodeBytes, ReferralCodeV2, UserHeader},
 };
 
 use crate::utils::ZeroCopy;
@@ -93,7 +93,7 @@ impl<C: Deref<Target = impl Signer> + Clone> UserOps<C> for crate::Client<C> {
             Some(referrer) => referrer,
             None => {
                 let code = self
-                    .account::<ZeroCopy<ReferralCode>>(&referral_code)
+                    .account::<ZeroCopy<ReferralCodeV2>>(&referral_code)
                     .await?
                     .ok_or(crate::Error::NotFound)?
                     .0;

@@ -1,5 +1,5 @@
 use gmsol::{
-    store::user::UserOps, types::user::ReferralCode, utils::instruction::InstructionSerialization,
+    store::user::UserOps, types::user::ReferralCodeV2, utils::instruction::InstructionSerialization,
 };
 use gmsol_solana_utils::bundle_builder::BundleOptions;
 use solana_sdk::pubkey::Pubkey;
@@ -44,14 +44,14 @@ impl Args {
                 .prepare_user(store)?
                 .into_bundle_with_options(options)?,
             Command::InitReferralCode { code } => client
-                .initialize_referral_code(store, ReferralCode::decode(code)?)?
+                .initialize_referral_code(store, ReferralCodeV2::decode(code)?)?
                 .into_bundle_with_options(options)?,
             Command::TransferReferralCode { receiver } => client
                 .transfer_referral_code(store, receiver, None)
                 .await?
                 .into_bundle_with_options(options)?,
             Command::SetReferrer { code } => client
-                .set_referrer(store, ReferralCode::decode(code)?, None)
+                .set_referrer(store, ReferralCodeV2::decode(code)?, None)
                 .await?
                 .into_bundle_with_options(options)?,
         };

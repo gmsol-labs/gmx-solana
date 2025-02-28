@@ -89,9 +89,10 @@ impl UserHeader {
     /// - current user must be initialized.
     /// - `receiver` must be initialized.
     /// - the code of `receiver` must not have been set.
-    pub(crate) fn unchecked_transfer_code(
+    /// - the `next_owner` of the code must be the owner of the `receiver_user`.
+    pub(crate) fn unchecked_complete_code_transfer(
         &mut self,
-        code: &mut ReferralCode,
+        code: &mut ReferralCodeV2,
         receiver_user: &mut Self,
     ) -> Result<()> {
         require!(
@@ -108,11 +109,50 @@ impl UserHeader {
             DEFAULT_PUBKEY,
             CoreError::PreconditionsAreNotMet
         );
+        require_keys_eq!(
+            receiver_user.owner,
+            code.next_owner,
+            CoreError::PreconditionsAreNotMet
+        );
 
         // Transfer the ownership.
         receiver_user.referral.code = self.referral.code;
         code.owner = receiver_user.owner;
         self.referral.code = DEFAULT_PUBKEY;
+        Ok(())
+    }
+
+    /// Transfer the ownership of the given code from this user to the receiver.
+    /// # CHECK
+    /// - `code` must be owned by current user.
+    /// - the store of `code` must be the same as current user and `receiver`.
+    /// # Errors
+    /// - `code` must be initialized.
+    /// - current user must be initialized.
+    /// - `receiver_user` must be initialized.
+    /// - the code of `receiver_user` must not have been set.
+    pub(crate) fn unchecked_transfer_code(
+        &self,
+        code: &mut ReferralCodeV2,
+        receiver_user: &Self,
+    ) -> Result<()> {
+        require!(
+            code.code != ReferralCodeBytes::default(),
+            CoreError::PreconditionsAreNotMet
+        );
+        require!(self.is_initialized(), CoreError::InvalidUserAccount);
+        require!(
+            receiver_user.is_initialized(),
+            CoreError::InvalidUserAccount
+        );
+        require_keys_eq!(
+            receiver_user.referral.code,
+            DEFAULT_PUBKEY,
+            CoreError::PreconditionsAreNotMet
+        );
+
+        code.set_next_owner(&receiver_user.owner)?;
+
         Ok(())
     }
 
@@ -184,8 +224,10 @@ impl Referral {
 
 /// Referral Code.
 #[account(zero_copy)]
-#[cfg_attr(feature = "debug", derive(Debug))]
-pub struct ReferralCode {
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ReferralCodeV2 {
+    version: u8,
     /// Bump.
     pub(crate) bump: u8,
     /// Code bytes.
@@ -194,11 +236,31 @@ pub struct ReferralCode {
     pub store: Pubkey,
     /// Owner.
     pub owner: Pubkey,
+    /// Next owner.
+    next_owner: Pubkey,
+    #[cfg_attr(feature = "debug", debug(skip))]
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
+    reserved: [u8; 64],
 }
 
-impl ReferralCode {
+impl ReferralCodeV2 {
     /// The length of referral code.
     pub const LEN: usize = std::mem::size_of::<ReferralCodeBytes>();
+
+    /// Get next owner.
+    pub fn next_owner(&self) -> &Pubkey {
+        &self.next_owner
+    }
+
+    pub(crate) fn set_next_owner(&mut self, next_owner: &Pubkey) -> Result<()> {
+        require_keys_neq!(
+            self.next_owner,
+            *next_owner,
+            CoreError::PreconditionsAreNotMet
+        );
+        self.next_owner = *next_owner;
+        Ok(())
+    }
 
     #[cfg(feature = "utils")]
     /// Decode the given code string to code bytes.
@@ -227,11 +289,11 @@ impl ReferralCode {
     }
 }
 
-impl InitSpace for ReferralCode {
+impl InitSpace for ReferralCodeV2 {
     const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
-impl Seed for ReferralCode {
+impl Seed for ReferralCodeV2 {
     const SEED: &'static [u8] = b"referral_code";
 }
 
