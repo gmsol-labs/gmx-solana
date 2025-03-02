@@ -20,6 +20,10 @@ enum Command {
     InitReferralCode { code: String },
     /// Transfer Referral Code.
     TransferReferralCode { receiver: Pubkey },
+    /// Cancel referral code transfer.
+    CancelReferralCodeTransfer,
+    /// Accept referral code transfer.
+    AcceptReferralCode { code: String },
     /// Set Referrer.
     SetReferrer { code: String },
 }
@@ -48,6 +52,14 @@ impl Args {
                 .into_bundle_with_options(options)?,
             Command::TransferReferralCode { receiver } => client
                 .transfer_referral_code(store, receiver, None)
+                .await?
+                .into_bundle_with_options(options)?,
+            Command::CancelReferralCodeTransfer => client
+                .cancel_referral_code_transfer(store, None)
+                .await?
+                .into_bundle_with_options(options)?,
+            Command::AcceptReferralCode { code } => client
+                .accept_referral_code(store, ReferralCodeV2::decode(code)?, None)
                 .await?
                 .into_bundle_with_options(options)?,
             Command::SetReferrer { code } => client

@@ -330,6 +330,7 @@ impl InspectArgs {
                     .0;
                 println!("Code: {}", ReferralCodeV2::encode(&code.code, true));
                 println!("Owner: {}", code.owner);
+                println!("Next Owner: {}", code.next_owner());
             }
             Command::Store {
                 address,
