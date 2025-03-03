@@ -53,7 +53,12 @@ enum Command {
         #[arg(long)]
         buffer: Pubkey,
         #[arg(long)]
-        keep_previous_buffer: bool,
+        keep_buffer: bool,
+    },
+    /// Close IDL account.
+    CloseIdl {
+        program_id: Pubkey,
+        account: Option<Pubkey>,
     },
 }
 
@@ -192,7 +197,7 @@ impl Args {
             Command::SetIdlBuffer {
                 program_id,
                 buffer,
-                keep_previous_buffer,
+                keep_buffer: keep_previous_buffer,
             } => {
                 use anchor_client::anchor_lang::idl::{IdlAccount, IdlInstruction, IDL_IX_TAG};
 
@@ -228,6 +233,40 @@ impl Args {
                             }),
                     );
                 }
+
+                crate::utils::send_or_serialize_transaction(
+                    store,
+                    tx,
+                    instruction_buffer,
+                    serialize_only,
+                    true,
+                    |signature| {
+                        tracing::info!("{signature}");
+                        Ok(())
+                    },
+                )
+                .await
+            }
+            Command::CloseIdl {
+                program_id,
+                account,
+            } => {
+                use anchor_client::anchor_lang::idl::{IdlAccount, IdlInstruction, IDL_IX_TAG};
+
+                let idl_address = account.unwrap_or_else(|| IdlAccount::address(program_id));
+                let tx = client
+                    .store_transaction()
+                    .program(*program_id)
+                    .accounts(vec![
+                        AccountMeta::new(idl_address, false),
+                        AccountMeta::new(client.payer(), true),
+                        AccountMeta::new(client.payer(), false),
+                    ])
+                    .args({
+                        let mut data = IDL_IX_TAG.to_le_bytes().to_vec();
+                        data.append(&mut IdlInstruction::Close.try_to_vec()?);
+                        data
+                    });
 
                 crate::utils::send_or_serialize_transaction(
                     store,

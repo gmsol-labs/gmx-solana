@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - model: Separated `BorrowingFeeMarketMut` trait from the `PerpMarketMut` trait.
 - sdk: Changed the arguments of `SwitchboardPullOracle::from_parts` function.
+- cli: Renamed the `--keep-previous-buffer` option of `other set-idl-buffer` to `--keep-buffer`.
 - tests: Renamed `anchor_tests` testing suite to `anchor_test` in the `gmsol` tests.
 - Renamed the `mock-chainlink-verifier` crate to `gmsol-mock-chainlink-verifier`.
 - Renamed the `chainlink-datastreams` crate to `gmsol-chainlink-datastreams`.
@@ -58,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk: Added support for `accept_referral_code` and `cancel_referral_code_transfer` instructions.
 - cli: Added support for Switchboard to the `order` subcommand.
 - cli: Added support for new referral code management instructions.
+- cli: Added the `other close-idl` command for closing IDL accounts.
 - tests: Added an integration testing suite `integration_test` to the `gmsol` tests.
 - docs: Created a `CHANGELOG.md` file to document project updates.
 
