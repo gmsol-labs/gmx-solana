@@ -66,6 +66,12 @@ enum Command {
         clear: bool,
         #[arg(long)]
         force_one_tx: bool,
+        /// Buffer to set after resizing.
+        #[arg(long, requires = "clear")]
+        set_buffer: Option<Pubkey>,
+        /// Whether to keep the buffer after it is set
+        #[arg(long)]
+        keep_buffer: bool,
     },
 }
 
@@ -251,27 +257,57 @@ impl Args {
                 new_len,
                 clear,
                 force_one_tx,
+                set_buffer,
+                keep_buffer,
             } => {
+                use anchor_client::anchor_lang::idl::IdlAccount;
+
                 const GROWTH_STEP: u64 = 10_000;
 
-                let data_len = *new_len;
-                let num_additional_instructions = data_len / GROWTH_STEP;
+                let (data_len, num_additional_instructions) = if *clear {
+                    (*new_len, *new_len / GROWTH_STEP)
+                } else {
+                    let idl_address = IdlAccount::address(program_id);
+                    let account = client
+                        .account::<IdlAccount>(&idl_address)
+                        .await?
+                        .ok_or_else(|| gmsol::Error::NotFound)?;
+                    let additional_len = (*new_len).saturating_sub(account.data_len.into());
 
-                let tx = if *clear {
+                    if additional_len == 0 {
+                        return Err(gmsol::Error::invalid_argument(format!(
+                            "the new_len = {new_len} is not greater than the current length = {}",
+                            account.data_len
+                        )));
+                    }
+
+                    (*new_len, additional_len / GROWTH_STEP)
+                };
+
+                let options = BundleOptions {
+                    force_one_transaction: *force_one_tx,
+                    max_packet_size: max_transaction_size,
+                    ..Default::default()
+                };
+                let mut bundle = if *clear {
                     client
                         .close_idl_account(program_id, None, None)?
                         .merge(client.create_idl_account(program_id, data_len)?)
                 } else {
                     client.resize_idl_account(program_id, None, data_len)?
-                };
+                }
+                .into_bundle_with_options(options)?;
 
-                let mut bundle = tx.into_bundle_with_options(BundleOptions {
-                    force_one_transaction: *force_one_tx,
-                    max_packet_size: max_transaction_size,
-                    ..Default::default()
-                })?;
                 for _ in 0..num_additional_instructions {
                     bundle.push(client.resize_idl_account(program_id, None, data_len)?)?;
+                }
+
+                if let Some(buffer) = set_buffer {
+                    bundle.push(client.set_idl_buffer(program_id, buffer)?)?;
+
+                    if !*keep_buffer {
+                        bundle.push(client.close_idl_account(program_id, Some(buffer), None)?)?;
+                    }
                 }
 
                 crate::utils::send_or_serialize_bundle_with_default_callback(
