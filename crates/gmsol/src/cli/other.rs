@@ -1,9 +1,6 @@
-use anchor_client::{
-    anchor_lang::{system_program, AnchorSerialize},
-    solana_sdk::pubkey::Pubkey,
-};
-use gmsol::utils::instruction::InstructionSerialization;
-use solana_sdk::instruction::AccountMeta;
+use anchor_client::{anchor_lang::system_program, solana_sdk::pubkey::Pubkey};
+use gmsol::{idl::IdlOps, utils::instruction::InstructionSerialization};
+use gmsol_solana_utils::bundle_builder::BundleOptions;
 
 use crate::{GMSOLClient, InstructionBufferCtx};
 
@@ -60,6 +57,16 @@ enum Command {
         program_id: Pubkey,
         account: Option<Pubkey>,
     },
+    /// Resize IDL account.
+    ResizeIdl {
+        program_id: Pubkey,
+        #[arg(long)]
+        new_len: u64,
+        #[arg(long)]
+        clear: bool,
+        #[arg(long)]
+        force_one_tx: bool,
+    },
 }
 
 impl Args {
@@ -69,6 +76,8 @@ impl Args {
         store: &Pubkey,
         instruction_buffer: Option<InstructionBufferCtx<'_>>,
         serialize_only: Option<InstructionSerialization>,
+        skip_preflight: bool,
+        max_transaction_size: Option<usize>,
     ) -> gmsol::Result<()> {
         match &self.command {
             Command::InitMockChainlinkVerifier => {
@@ -98,7 +107,7 @@ impl Args {
                     rpc,
                     instruction_buffer,
                     serialize_only,
-                    true,
+                    skip_preflight,
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -159,7 +168,7 @@ impl Args {
                     rpc,
                     instruction_buffer,
                     serialize_only,
-                    true,
+                    skip_preflight,
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -186,7 +195,7 @@ impl Args {
                     rpc,
                     instruction_buffer,
                     serialize_only,
-                    true,
+                    skip_preflight,
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -197,41 +206,12 @@ impl Args {
             Command::SetIdlBuffer {
                 program_id,
                 buffer,
-                keep_buffer: keep_previous_buffer,
+                keep_buffer,
             } => {
-                use anchor_client::anchor_lang::idl::{IdlAccount, IdlInstruction, IDL_IX_TAG};
+                let mut tx = client.set_idl_buffer(program_id, buffer)?;
 
-                let idl_address = IdlAccount::address(program_id);
-                let mut tx = client
-                    .store_transaction()
-                    .program(*program_id)
-                    .accounts(vec![
-                        AccountMeta::new(*buffer, false),
-                        AccountMeta::new(idl_address, false),
-                        AccountMeta::new(client.payer(), true),
-                    ])
-                    .args({
-                        let mut data = IDL_IX_TAG.to_le_bytes().to_vec();
-                        data.append(&mut IdlInstruction::SetBuffer.try_to_vec()?);
-                        data
-                    });
-
-                if !*keep_previous_buffer {
-                    tx = tx.merge(
-                        client
-                            .store_transaction()
-                            .program(*program_id)
-                            .accounts(vec![
-                                AccountMeta::new(*buffer, false),
-                                AccountMeta::new(client.payer(), true),
-                                AccountMeta::new(client.payer(), false),
-                            ])
-                            .args({
-                                let mut data = IDL_IX_TAG.to_le_bytes().to_vec();
-                                data.append(&mut IdlInstruction::Close.try_to_vec()?);
-                                data
-                            }),
-                    );
+                if !*keep_buffer {
+                    tx = tx.merge(client.close_idl_account(program_id, Some(buffer), None)?);
                 }
 
                 crate::utils::send_or_serialize_transaction(
@@ -239,7 +219,7 @@ impl Args {
                     tx,
                     instruction_buffer,
                     serialize_only,
-                    true,
+                    skip_preflight,
                     |signature| {
                         tracing::info!("{signature}");
                         Ok(())
@@ -251,33 +231,55 @@ impl Args {
                 program_id,
                 account,
             } => {
-                use anchor_client::anchor_lang::idl::{IdlAccount, IdlInstruction, IDL_IX_TAG};
-
-                let idl_address = account.unwrap_or_else(|| IdlAccount::address(program_id));
-                let tx = client
-                    .store_transaction()
-                    .program(*program_id)
-                    .accounts(vec![
-                        AccountMeta::new(idl_address, false),
-                        AccountMeta::new(client.payer(), true),
-                        AccountMeta::new(client.payer(), false),
-                    ])
-                    .args({
-                        let mut data = IDL_IX_TAG.to_le_bytes().to_vec();
-                        data.append(&mut IdlInstruction::Close.try_to_vec()?);
-                        data
-                    });
+                let tx = client.close_idl_account(program_id, account.as_ref(), None)?;
 
                 crate::utils::send_or_serialize_transaction(
                     store,
                     tx,
                     instruction_buffer,
                     serialize_only,
-                    true,
+                    skip_preflight,
                     |signature| {
                         tracing::info!("{signature}");
                         Ok(())
                     },
+                )
+                .await
+            }
+            Command::ResizeIdl {
+                program_id,
+                new_len,
+                clear,
+                force_one_tx,
+            } => {
+                const GROWTH_STEP: u64 = 10_000;
+
+                let data_len = *new_len;
+                let num_additional_instructions = data_len / GROWTH_STEP;
+
+                let tx = if *clear {
+                    client
+                        .close_idl_account(program_id, None, None)?
+                        .merge(client.create_idl_account(program_id, data_len)?)
+                } else {
+                    client.resize_idl_account(program_id, None, data_len)?
+                };
+
+                let mut bundle = tx.into_bundle_with_options(BundleOptions {
+                    force_one_transaction: *force_one_tx,
+                    max_packet_size: max_transaction_size,
+                    ..Default::default()
+                })?;
+                for _ in 0..num_additional_instructions {
+                    bundle.push(client.resize_idl_account(program_id, None, data_len)?)?;
+                }
+
+                crate::utils::send_or_serialize_bundle_with_default_callback(
+                    store,
+                    bundle,
+                    instruction_buffer,
+                    serialize_only,
+                    skip_preflight,
                 )
                 .await
             }

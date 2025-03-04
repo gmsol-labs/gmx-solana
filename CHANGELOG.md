@@ -57,9 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk: Added the `gmsol::cli` module.
 - sdk: Added `SwitchboardPullOracleFactory` structure.
 - sdk: Added support for `accept_referral_code` and `cancel_referral_code_transfer` instructions.
+- sdk: Added `IdlOps` trait and implemented it for `Client`.
 - cli: Added support for Switchboard to the `order` subcommand.
 - cli: Added support for new referral code management instructions.
 - cli: Added the `other close-idl` command for closing IDL accounts.
+- cli: Added the `other resize-idl` command for resizing IDL accounts.
 - tests: Added an integration testing suite `integration_test` to the `gmsol` tests.
 - docs: Created a `CHANGELOG.md` file to document project updates.
 

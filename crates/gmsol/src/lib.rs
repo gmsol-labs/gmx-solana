@@ -26,6 +26,9 @@ pub mod timelock;
 /// Address Lookup Table operations.
 pub mod alt;
 
+/// IDL operations.
+pub mod idl;
+
 /// Utils.
 pub mod utils;
 

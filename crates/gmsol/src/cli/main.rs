@@ -387,8 +387,15 @@ impl Cli {
                 args.run(&client, &store, self.serialize_only).await?
             }
             Command::Other(args) => {
-                args.run(&client, &store, instruction_buffer_ctx, self.serialize_only)
-                    .await?
+                args.run(
+                    &client,
+                    &store,
+                    instruction_buffer_ctx,
+                    self.serialize_only,
+                    self.skip_preflight,
+                    self.max_transaction_size,
+                )
+                .await?
             }
             #[cfg(feature = "migration")]
             Command::Migrate(args) => {
