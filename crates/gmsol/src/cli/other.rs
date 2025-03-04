@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use anchor_client::{anchor_lang::system_program, solana_sdk::pubkey::Pubkey};
 use gmsol::{idl::IdlOps, utils::instruction::InstructionSerialization};
 use gmsol_solana_utils::bundle_builder::BundleOptions;
@@ -81,6 +83,9 @@ enum Command {
         /// Whether to keep the buffer after it is set
         #[arg(long)]
         keep_buffer: bool,
+        /// Maximum number of resizes allowed in a single transaction.
+        #[arg(long, default_value_t = NonZeroUsize::new(6).unwrap())]
+        resize_limit: NonZeroUsize,
     },
 }
 
@@ -288,6 +293,7 @@ impl Args {
                 force_one_tx,
                 set_buffer,
                 keep_buffer,
+                resize_limit,
             } => {
                 use anchor_client::anchor_lang::idl::IdlAccount;
 
@@ -327,8 +333,13 @@ impl Args {
                 }
                 .into_bundle_with_options(options)?;
 
-                for _ in 0..num_additional_instructions {
-                    bundle.push(client.resize_idl_account(program_id, None, data_len)?)?;
+                let limit = resize_limit.get();
+
+                for count in 0..num_additional_instructions {
+                    bundle.try_push_with_opts(
+                        client.resize_idl_account(program_id, None, data_len)?,
+                        (count as usize + 1) % limit == 0,
+                    )?;
                 }
 
                 if let Some(buffer) = set_buffer {
