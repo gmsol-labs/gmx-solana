@@ -52,9 +52,18 @@ enum Command {
         #[arg(long)]
         keep_buffer: bool,
     },
+    /// Set the authority of the IDL account.
+    SetIdlAuthority {
+        program_id: Pubkey,
+        #[arg(long)]
+        account: Option<Pubkey>,
+        #[arg(long, short)]
+        new_authority: Pubkey,
+    },
     /// Close IDL account.
     CloseIdl {
         program_id: Pubkey,
+        #[arg(long)]
         account: Option<Pubkey>,
     },
     /// Resize IDL account.
@@ -219,6 +228,26 @@ impl Args {
                 if !*keep_buffer {
                     tx = tx.merge(client.close_idl_account(program_id, Some(buffer), None)?);
                 }
+
+                crate::utils::send_or_serialize_transaction(
+                    store,
+                    tx,
+                    instruction_buffer,
+                    serialize_only,
+                    skip_preflight,
+                    |signature| {
+                        tracing::info!("{signature}");
+                        Ok(())
+                    },
+                )
+                .await
+            }
+            Command::SetIdlAuthority {
+                program_id,
+                account,
+                new_authority,
+            } => {
+                let tx = client.set_idl_authority(program_id, account.as_ref(), new_authority)?;
 
                 crate::utils::send_or_serialize_transaction(
                     store,

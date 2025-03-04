@@ -31,6 +31,14 @@ pub trait IdlOps<C> {
         buffer: &Pubkey,
     ) -> crate::Result<TransactionBuilder<C>>;
 
+    /// Set IDL authority.
+    fn set_idl_authority(
+        &self,
+        program_id: &Pubkey,
+        account: Option<&Pubkey>,
+        new_authority: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>>;
+
     /// Close IDL buffer/account.
     fn close_idl_account(
         &self,
@@ -108,6 +116,30 @@ impl<C: Deref<Target = impl Signer> + Clone> IdlOps<C> for crate::Client<C> {
                 AccountMeta::new(self.payer(), true),
             ])
             .args(serialize_idl_ix(IdlInstruction::SetBuffer)?);
+
+        Ok(tx)
+    }
+
+    fn set_idl_authority(
+        &self,
+        program_id: &Pubkey,
+        account: Option<&Pubkey>,
+        new_authority: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let idl_address = account
+            .copied()
+            .unwrap_or_else(|| IdlAccount::address(program_id));
+
+        let tx = self
+            .store_transaction()
+            .program(*program_id)
+            .accounts(vec![
+                AccountMeta::new(idl_address, false),
+                AccountMeta::new_readonly(self.payer(), true),
+            ])
+            .args(serialize_idl_ix(IdlInstruction::SetAuthority {
+                new_authority: *new_authority,
+            })?);
 
         Ok(tx)
     }
