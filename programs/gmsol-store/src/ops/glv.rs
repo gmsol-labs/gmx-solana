@@ -10,7 +10,7 @@ use typed_builder::TypedBuilder;
 
 use crate::{
     constants,
-    events::EventEmitter,
+    events::{EventEmitter, GlvPricing, GlvPricingKind},
     states::{
         common::action::{Action, ActionExt, ActionParams, ActionSigner},
         glv::{GlvShift, GlvWithdrawal},
@@ -399,6 +399,7 @@ impl ExecuteGlvDepositOperation<'_, '_> {
 
             // Calculate GLV token amount to mint.
             let glv_amount = {
+                let maximize_value = true;
                 let glv_supply = self.glv_token_mint.supply;
                 let glv_value = unchecked_get_glv_value(
                     &*self.glv.load()?,
@@ -406,7 +407,7 @@ impl ExecuteGlvDepositOperation<'_, '_> {
                     &op,
                     self.markets,
                     self.market_tokens,
-                    true,
+                    maximize_value,
                 )?;
 
                 let (received_value, market_pool_value, market_token_supply) = {
@@ -449,7 +450,22 @@ impl ExecuteGlvDepositOperation<'_, '_> {
                     constants::MARKET_USD_TO_AMOUNT_DIVISOR,
                 )
                 .ok_or_else(|| error!(CoreError::FailedToCalculateGlvAmountToMint))?;
-                u64::try_from(glv_amount).map_err(|_| error!(CoreError::TokenAmountOverflow))?
+                let output_amount = u64::try_from(glv_amount)
+                    .map_err(|_| error!(CoreError::TokenAmountOverflow))?;
+
+                self.event_emitter.emit_cpi(&GlvPricing {
+                    glv_token: self.glv_token_mint.key(),
+                    market_token: market_token_mint.key(),
+                    supply: glv_supply,
+                    value_maximized: maximize_value,
+                    value: glv_value,
+                    input_amount: market_token_amount,
+                    input_value: received_value,
+                    output_amount,
+                    kind: GlvPricingKind::Deposit,
+                })?;
+
+                output_amount
             };
 
             deposit.validate_output_amount(glv_amount)?;
@@ -807,6 +823,7 @@ impl ExecuteGlvWithdrawalOperation<'_, '_> {
 
             // Calculate market token amount to withdrawal.
             let market_token_amount = {
+                let maximize_value = false;
                 let glv_supply = self.glv_token_mint.supply;
                 let glv_value = unchecked_get_glv_value(
                     &*self.glv.load()?,
@@ -814,7 +831,7 @@ impl ExecuteGlvWithdrawalOperation<'_, '_> {
                     &op,
                     self.markets,
                     self.market_tokens,
-                    false,
+                    maximize_value,
                 )?;
 
                 let market_token_value = market_token_amount_to_usd(
@@ -831,14 +848,28 @@ impl ExecuteGlvWithdrawalOperation<'_, '_> {
                     market_token_value,
                 );
 
-                get_market_token_amount_for_glv_value(
+                let amount = get_market_token_amount_for_glv_value(
                     self.oracle,
                     op.market(),
                     market_token_value,
                     true,
                 )?
                 .try_into()
-                .map_err(|_| error!(CoreError::TokenAmountOverflow))?
+                .map_err(|_| error!(CoreError::TokenAmountOverflow))?;
+
+                self.event_emitter.emit_cpi(&GlvPricing {
+                    glv_token: self.glv_token_mint.key(),
+                    market_token: market_token_mint.key(),
+                    supply: glv_supply,
+                    value_maximized: maximize_value,
+                    value: glv_value,
+                    input_amount: glv_token_amount,
+                    input_value: market_token_value,
+                    output_amount: amount,
+                    kind: GlvPricingKind::Withdrawal,
+                })?;
+
+                amount
             };
 
             require_gte!(

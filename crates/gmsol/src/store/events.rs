@@ -1,7 +1,7 @@
 use crate::{
     decode::untagged,
     types::{
-        BorrowingFeesUpdated, DepositExecuted, DepositRemoved, GlvDepositRemoved,
+        BorrowingFeesUpdated, DepositExecuted, DepositRemoved, GlvDepositRemoved, GlvPricing,
         GlvWithdrawalRemoved, GtUpdated, MarketFeesUpdated, MarketStateUpdated, OrderRemoved,
         PositionDecreased, PositionIncreased, ShiftRemoved, SwapExecuted, TradeEvent,
         WithdrawalExecuted, WithdrawalRemoved,
@@ -18,6 +18,7 @@ untagged!(
         ShiftRemoved,
         GlvDepositRemoved,
         GlvWithdrawalRemoved,
+        GlvPricing,
         PositionIncreased,
         PositionDecreased,
         OrderRemoved,

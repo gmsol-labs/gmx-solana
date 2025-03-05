@@ -128,3 +128,49 @@ impl InitSpace for GlvWithdrawalRemoved {
 }
 
 impl Event for GlvWithdrawalRemoved {}
+
+/// GLV pricing event.
+#[event]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[derive(Clone, InitSpace)]
+pub struct GlvPricing {
+    /// GLV token.
+    pub glv_token: Pubkey,
+    /// Market token.
+    pub market_token: Pubkey,
+    /// The supply of the GLV tokens.
+    pub supply: u64,
+    /// Whether the `value` is maximized.
+    pub value_maximized: bool,
+    /// Total value of the GLV.
+    pub value: u128,
+    /// Input amount.
+    /// - For GLV deposit, this is the total amount of market tokens received.
+    /// - For GLV withdrawal, this is the amount of GLV tokens received.
+    pub input_amount: u64,
+    /// The value of the input amount.
+    pub input_value: u128,
+    /// Output amount.
+    /// - For GLV deposit, this will be the amount of GLV tokens to be minted.
+    /// - For GLV withdrawal, this will be the amount of market tokens to be burned.
+    pub output_amount: u64,
+    /// The type of GLV pricing.
+    pub kind: GlvPricingKind,
+}
+
+impl InitSpace for GlvPricing {
+    const INIT_SPACE: usize = <Self as Space>::INIT_SPACE;
+}
+
+impl Event for GlvPricing {}
+
+/// Pricing kind.
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[derive(Clone, InitSpace, AnchorSerialize, AnchorDeserialize)]
+#[non_exhaustive]
+pub enum GlvPricingKind {
+    /// Deposit.
+    Deposit,
+    /// Withdrawal.
+    Withdrawal,
+}
