@@ -92,6 +92,18 @@ pub(crate) fn instruction_buffer_not_supported(
     }
 }
 
+pub(crate) fn serialize_only_not_supported(
+    serialize_only: Option<InstructionSerialization>,
+) -> gmsol::Result<()> {
+    if serialize_only.is_some() {
+        Err(gmsol::Error::invalid_argument(
+            "serialize-only is not supported",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 pub(crate) async fn send_or_serialize_transaction<C, S>(
     store: &Pubkey,
     rpc: TransactionBuilder<'_, C>,

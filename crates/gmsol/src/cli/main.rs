@@ -331,11 +331,15 @@ impl Cli {
             }
             Command::Inspect(args) => args.run(&client, &store).await?,
             Command::Exchange(args) => {
-                crate::utils::instruction_buffer_not_supported(instruction_buffer_ctx)?;
-                if self.serialize_only.is_some() {
-                    eyre::bail!("serialize-only mode not supported");
-                }
-                args.run(&client, &store).await?
+                args.run(
+                    &client,
+                    &store,
+                    instruction_buffer_ctx,
+                    self.serialize_only,
+                    self.skip_preflight,
+                    self.max_transaction_size,
+                )
+                .await?
             }
             Command::Order(args) => {
                 args.run(

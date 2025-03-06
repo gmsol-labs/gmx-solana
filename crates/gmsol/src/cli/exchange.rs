@@ -7,9 +7,10 @@ use gmsol::{
     types::{common::action::Action, withdrawal::Withdrawal, Deposit, Shift, UpdateOrderParams},
     utils::price_to_min_output_amount,
 };
+use gmsol_solana_utils::bundle_builder::BundleOptions;
 use rust_decimal::Decimal;
 
-use crate::{utils::Side, GMSOLClient};
+use crate::{utils::Side, GMSOLClient, InstructionBufferCtx, InstructionSerialization};
 
 #[derive(clap::Args)]
 pub(super) struct ExchangeArgs {
@@ -369,9 +370,17 @@ fn parse_decimal(value: &str) -> Result<Decimal, clap::Error> {
 }
 
 impl ExchangeArgs {
-    pub(super) async fn run(&self, client: &GMSOLClient, store: &Pubkey) -> gmsol::Result<()> {
+    pub(super) async fn run(
+        &self,
+        client: &GMSOLClient,
+        store: &Pubkey,
+        instruction_buffer: Option<InstructionBufferCtx<'_>>,
+        serialize_only: Option<InstructionSerialization>,
+        skip_preflight: bool,
+        max_transaction_size: Option<usize>,
+    ) -> gmsol::Result<()> {
         let nonce = self.nonce.map(|nonce| nonce.to_bytes());
-        match &self.command {
+        let tx = match &self.command {
             Command::CreateDeposit {
                 extra_execution_fee,
                 market_token,
@@ -418,18 +427,11 @@ impl ExchangeArgs {
                     .receiver(receiver)
                     .build_with_address()
                     .await?;
-                let signature = builder.send().await?;
-                println!("created deposit {deposit} at {signature}");
+                println!("Deposit: {deposit}");
+                builder
             }
             Command::CancelDeposit { deposit } => {
-                let signature = client
-                    .close_deposit(store, deposit)
-                    .build()
-                    .await?
-                    .send()
-                    .await?;
-                tracing::info!(%deposit, "cancelled deposit at tx {signature}");
-                println!("{signature}");
+                client.close_deposit(store, deposit).build().await?
             }
             Command::CreateWithdrawal {
                 market_token,
@@ -466,18 +468,11 @@ impl ExchangeArgs {
                     .short_token_swap_path(short_swap.clone())
                     .build_with_address()
                     .await?;
-                let signature = builder.send().await?;
-                println!("created withdrawal {withdrawal} at {signature}");
+                println!("Withdrawal: {withdrawal}");
+                builder
             }
             Command::CancelWithdrawal { withdrawal } => {
-                let signature = client
-                    .close_withdrawal(store, withdrawal)
-                    .build()
-                    .await?
-                    .send()
-                    .await?;
-                tracing::info!(%withdrawal, "cancelled withdrawal at tx {signature}");
-                println!("{signature}");
+                client.close_withdrawal(store, withdrawal).build().await?
             }
             Command::CreateShift {
                 from,
@@ -496,19 +491,12 @@ impl ExchangeArgs {
 
                 let (rpc, shift) = builder.build_with_address()?;
 
-                let signature = rpc.send().await?;
-                println!("created shift {shift} at {signature}");
+                println!("Shift: {shift}");
+
+                rpc
             }
-            Command::CancelShift { shift } => {
-                let signature = client.close_shift(shift).build().await?.send().await?;
-                tracing::info!(%shift, "cancelled shift at tx {signature}");
-                println!("{signature}");
-            }
-            Command::CancelOrder { order } => {
-                let signature = client.close_order(order)?.build().await?.send().await?;
-                tracing::info!(%order, "cancelled order at tx {signature}");
-                println!("{signature}");
-            }
+            Command::CancelShift { shift } => client.close_shift(shift).build().await?,
+            Command::CancelOrder { order } => client.close_order(order)?.build().await?,
             Command::MarketIncrease {
                 market_token,
                 collateral_side,
@@ -537,12 +525,19 @@ impl ExchangeArgs {
                 }
 
                 let (rpc, order) = builder.swap_path(swap.clone()).build_with_address().await?;
-                let signature = rpc.send_without_preflight().await?;
-                tracing::info!("created a market increase order {order} at tx {signature}");
+                println!("Order: {order}");
                 if *wait {
+                    crate::utils::serialize_only_not_supported(serialize_only)?;
+                    crate::utils::instruction_buffer_not_supported(instruction_buffer)?;
+
+                    let signature = rpc.send_without_preflight().await?;
+                    tracing::info!("created a market increase order {order} at tx {signature}");
+
                     self.wait_for_order(client, &order).await?;
+                    return Ok(());
+                } else {
+                    rpc
                 }
-                println!("{order}");
             }
             Command::MarketDecrease {
                 market_token,
@@ -568,13 +563,22 @@ impl ExchangeArgs {
                 if let Some(token) = final_output_token {
                     builder.final_output_token(token);
                 }
-                let (request, order) = builder.swap_path(swap.clone()).build_with_address().await?;
-                let signature = request.send().await?;
-                tracing::info!("created a market decrease order {order} at tx {signature}");
+                let (rpc, order) = builder.swap_path(swap.clone()).build_with_address().await?;
+
+                println!("Order: {order}");
+
                 if *wait {
+                    crate::utils::serialize_only_not_supported(serialize_only)?;
+                    crate::utils::instruction_buffer_not_supported(instruction_buffer)?;
+
+                    let signature = rpc.send_without_preflight().await?;
+                    tracing::info!("created a market decrease order {order} at tx {signature}");
+
                     self.wait_for_order(client, &order).await?;
+                    return Ok(());
+                } else {
+                    rpc
                 }
-                println!("{order}");
             }
             Command::MarketSwap {
                 market_token,
@@ -599,10 +603,11 @@ impl ExchangeArgs {
                     builder.initial_collateral_token(initial_swap_in_token, Some(account));
                 }
 
-                let (request, order) = builder.build_with_address().await?;
-                let signature = request.send().await?;
-                tracing::info!("created a market swap order {order} at tx {signature}");
-                println!("{order}");
+                let (rpc, order) = builder.build_with_address().await?;
+
+                println!("Order: {order}");
+
+                rpc
             }
             Command::LimitIncrease {
                 market_token,
@@ -633,13 +638,21 @@ impl ExchangeArgs {
                         .initial_collateral_token(token, initial_collateral_token_account.as_ref());
                 }
 
-                let (request, order) = builder.swap_path(swap.clone()).build_with_address().await?;
-                let signature = request.send().await?;
-                tracing::info!("created a limit increase order {order} at tx {signature}");
+                let (rpc, order) = builder.swap_path(swap.clone()).build_with_address().await?;
+                println!("Order: {order}");
+
                 if *wait {
+                    crate::utils::serialize_only_not_supported(serialize_only)?;
+                    crate::utils::instruction_buffer_not_supported(instruction_buffer)?;
+
+                    let signature = rpc.send_without_preflight().await?;
+                    tracing::info!("created a limit increase order {order} at tx {signature}");
+
                     self.wait_for_order(client, &order).await?;
+                    return Ok(());
+                } else {
+                    rpc
                 }
-                println!("{order}");
             }
             Command::LimitDecrease {
                 market_token,
@@ -667,13 +680,21 @@ impl ExchangeArgs {
                 if let Some(token) = final_output_token {
                     builder.final_output_token(token);
                 }
-                let (request, order) = builder.swap_path(swap.clone()).build_with_address().await?;
-                let signature = request.send().await?;
-                tracing::info!("created a limit decrease order {order} at tx {signature}");
+                let (rpc, order) = builder.swap_path(swap.clone()).build_with_address().await?;
+                println!("Order: {order}");
+
                 if *wait {
+                    crate::utils::serialize_only_not_supported(serialize_only)?;
+                    crate::utils::instruction_buffer_not_supported(instruction_buffer)?;
+
+                    let signature = rpc.send_without_preflight().await?;
+                    tracing::info!("created a limit decrease order {order} at tx {signature}");
+
                     self.wait_for_order(client, &order).await?;
+                    return Ok(());
+                } else {
+                    rpc
                 }
-                println!("{order}");
             }
             Command::StopLoss {
                 market_token,
@@ -701,13 +722,21 @@ impl ExchangeArgs {
                 if let Some(token) = final_output_token {
                     builder.final_output_token(token);
                 }
-                let (request, order) = builder.swap_path(swap.clone()).build_with_address().await?;
-                let signature = request.send().await?;
-                tracing::info!("created a stop-loss decrease order {order} at tx {signature}");
+                let (rpc, order) = builder.swap_path(swap.clone()).build_with_address().await?;
+                println!("Order: {order}");
+
                 if *wait {
+                    crate::utils::serialize_only_not_supported(serialize_only)?;
+                    crate::utils::instruction_buffer_not_supported(instruction_buffer)?;
+
+                    let signature = rpc.send_without_preflight().await?;
+                    tracing::info!("created a stop-loss order {order} at tx {signature}");
+
                     self.wait_for_order(client, &order).await?;
+                    return Ok(());
+                } else {
+                    rpc
                 }
-                println!("{order}");
             }
             Command::LimitSwap {
                 market_token,
@@ -754,10 +783,11 @@ impl ExchangeArgs {
                     builder.initial_collateral_token(initial_swap_in_token, Some(account));
                 }
 
-                let (request, order) = builder.build_with_address().await?;
-                let signature = request.send().await?;
-                tracing::info!("created a market swap order {order} at tx {signature}");
-                println!("{order}");
+                let (rpc, order) = builder.build_with_address().await?;
+
+                println!("Order: {order}");
+
+                rpc
             }
             Command::UpdateSwap {
                 address,
@@ -797,10 +827,7 @@ impl ExchangeArgs {
                     valid_from_ts: valid_from_ts.as_ref().map(to_unix_timestamp).transpose()?,
                 };
 
-                let builder = client.update_order(store, order.market_token(), address, params)?;
-
-                let signature = builder.send().await?;
-                tracing::info!("updated a limit swap order {address} at tx {signature}");
+                client.update_order(store, order.market_token(), address, params)?
             }
             Command::UpdateOrder {
                 address,
@@ -826,11 +853,7 @@ impl ExchangeArgs {
                         valid_from_ts: valid_from_ts.as_ref().map(to_unix_timestamp).transpose()?,
                     };
 
-                    let builder =
-                        client.update_order(store, order.market_token(), address, params)?;
-
-                    let signature = builder.send().await?;
-                    tracing::info!("updated an order {address} at tx {signature}");
+                    client.update_order(store, order.market_token(), address, params)?
                 } else {
                     return Err(gmsol::Error::invalid_argument(format!(
                         "{:?} is not updatable",
@@ -838,7 +861,20 @@ impl ExchangeArgs {
                     )));
                 }
             }
-        }
+        };
+
+        crate::utils::send_or_serialize_bundle_with_default_callback(
+            store,
+            tx.into_bundle_with_options(BundleOptions {
+                max_packet_size: max_transaction_size,
+                ..Default::default()
+            })?,
+            instruction_buffer,
+            serialize_only,
+            skip_preflight,
+        )
+        .await?;
+
         Ok(())
     }
 
