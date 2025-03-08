@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - cli: Added the `other set-idl-authority` command.
 - tests: Added an integration testing suite `integration_test` to the `gmsol` tests.
 - docs: Created a `CHANGELOG.md` file to document project updates.
+- just: Added `build-idls-no-docs` recipe for building IDLs without documentation.
 
 ### Changed
 
