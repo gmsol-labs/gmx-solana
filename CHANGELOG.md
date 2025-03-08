@@ -79,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs: The `transfer_referral_code` instruction only update the `next_owner` field of the referral code.
 - sdk: Changed to use `Gateway::fetch_signatures_multi` to fetch price signatures for Switchboard pull oracle implementation.
 - cli: Implemented instruction buffering and serialization support for the `exchange` command.
+- docs: Added the Audits section to the `README.md`.
 - just: The `build-idls` recipe now builds IDLs that include docs.
 
 ### Fixed

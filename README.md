@@ -1,5 +1,19 @@
 # GMX-Solana
 
+## Audits
+
+| Program          | Last Audit Date | Version   |
+| ---------------- | --------------- | --------- |
+| [gmsol-store]    | [2025-03-07]    | [2a66761] |
+| [gmsol-treasury] | [2025-03-07]    | [2a66761] |
+| [gmsol-timelock] | [2025-03-07]    | [2a66761] |
+
+[gmsol-store]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/gmsol-store
+[gmsol-treasury]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/gmsol-treasury
+[gmsol-timelock]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/gmsol-timelock
+[2025-03-07]: https://github.com/gmsol-labs/gmx-solana-audits/blob/main/GMX_Solana_Audit_Report_Mar_7_2025_Zenith.pdf
+[2a66761]: https://github.com/gmsol-labs/gmx-solana/commit/2a66761d6573a6db6160a19fc3057e2091aebbfe
+
 ## Integration
 
 ### Method 1: Using `declare_program!`
