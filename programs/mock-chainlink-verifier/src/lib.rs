@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 declare_id!("4nMxSRfeW7W2zFbN8FJ4YDvuTzEzCo1e6GzJxJLnDUoZ");
 
 #[program]
-pub mod mock_chainlink_verifier {
+pub mod gmsol_mock_chainlink_verifier {
 
     use super::*;
 

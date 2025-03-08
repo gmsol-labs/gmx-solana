@@ -409,6 +409,7 @@ impl Cli {
                     instruction_buffer_ctx,
                     self.serialize_only,
                     self.skip_preflight,
+                    self.max_transaction_size,
                 )
                 .await?
             }
