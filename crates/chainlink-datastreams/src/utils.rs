@@ -1,5 +1,5 @@
 use anchor_lang::prelude::Pubkey;
-use mock_chainlink_verifier::DEFAULT_VERIFIER_ACCOUNT_SEEDS;
+use gmsol_mock_chainlink_verifier::DEFAULT_VERIFIER_ACCOUNT_SEEDS;
 use snap::raw::{Decoder, Encoder};
 
 /// Find verifier account PDA.

@@ -10,7 +10,7 @@ skip-lint = false
 gmsol-store = "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
 gmsol-treasury = "GTuvYD5SxkTq4FLG6JV1FQ5dkczr1AfgDcBHaFsBdtBg"
 gmsol-timelock = "TimeBQ7gQyWyQMD3bTteAdy7hTVDNWSwELdSVZHfSXL"
-mock-chainlink-verifier = "4nMxSRfeW7W2zFbN8FJ4YDvuTzEzCo1e6GzJxJLnDUoZ"
+gmsol-mock-chainlink-verifier = "4nMxSRfeW7W2zFbN8FJ4YDvuTzEzCo1e6GzJxJLnDUoZ"
 
 [registry]
 url = "https://api.apr.dev"

@@ -11,7 +11,7 @@ keywords.workspace = true
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "mock_chainlink_verifier"
+name = "gmsol_mock_chainlink_verifier"
 
 [features]
 default = []

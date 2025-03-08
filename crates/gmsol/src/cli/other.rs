@@ -101,7 +101,7 @@ impl Args {
     ) -> gmsol::Result<()> {
         match &self.command {
             Command::InitMockChainlinkVerifier => {
-                use mock_chainlink_verifier::{
+                use gmsol_mock_chainlink_verifier::{
                     accounts, instruction, DEFAULT_ACCESS_CONTROLLER_ACCOUNT_SEEDS,
                     DEFAULT_VERIFIER_ACCOUNT_SEEDS, ID,
                 };
