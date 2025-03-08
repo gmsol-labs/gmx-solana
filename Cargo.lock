@@ -2275,7 +2275,7 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 
 [[package]]
 name = "gmsol"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anchor-client",
  "anchor-spl 0.30.1",
@@ -2351,7 +2351,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-chainlink-datastreams"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anchor-lang 0.30.1",
  "data-streams-report",
@@ -2365,7 +2365,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-decode"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anchor-lang 0.30.1",
  "base64 0.22.1",
@@ -2381,7 +2381,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-mock-chainlink-verifier"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anchor-lang 0.30.1",
  "cfg-if",
@@ -2391,7 +2391,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-model"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anchor-lang 0.30.1",
  "borsh 0.10.4",
@@ -2409,7 +2409,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-solana-utils"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anchor-client",
  "anchor-lang 0.30.1",
@@ -2429,7 +2429,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-store"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anchor-lang 0.30.1",
  "anchor-spl 0.30.1",
@@ -2460,7 +2460,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-timelock"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anchor-lang 0.30.1",
  "bytemuck",
@@ -2473,7 +2473,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-treasury"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anchor-lang 0.30.1",
  "anchor-spl 0.30.1",
@@ -2489,7 +2489,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-utils"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anchor-lang 0.30.1",
  "bitmaps 3.2.1",

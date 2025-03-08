@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*", "programs/*"]
 
 [workspace.package]
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 license-file = "LICENSE"
 description = "GMX-Solana is an extension of GMX on the Solana blockchain."
@@ -93,35 +93,35 @@ num-format = "0.4.4"
 time = "0.3.36"
 
 [workspace.dependencies.gmsol-model]
-version = "0.4.0"
+version = "0.5.0"
 path = "crates/gmsol-model"
 
 [workspace.dependencies.gmsol-utils]
-version = "0.4.0"
+version = "0.5.0"
 path = "crates/gmsol-utils"
 
 [workspace.dependencies.gmsol-store]
-version = "0.4.0"
+version = "0.5.0"
 path = "programs/gmsol-store"
 
 [workspace.dependencies.gmsol-treasury]
-version = "0.4.0"
+version = "0.5.0"
 path = "programs/gmsol-treasury"
 
 [workspace.dependencies.gmsol-timelock]
-version = "0.4.0"
+version = "0.5.0"
 path = "programs/gmsol-timelock"
 
 [workspace.dependencies.gmsol-mock-chainlink-verifier]
-version = "0.4.0"
+version = "0.5.0"
 path = "programs/mock-chainlink-verifier"
 
 [workspace.dependencies.gmsol-decode]
-version = "0.4.0"
+version = "0.5.0"
 path = "crates/gmsol-decode"
 
 [workspace.dependencies.gmsol-chainlink-datastreams]
-version = "0.4.0"
+version = "0.5.0"
 path = "crates/chainlink-datastreams"
 
 [workspace.dependencies.data-streams-report]
