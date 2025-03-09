@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - cli: Added the `treasury batch-withdraw` subcommand.
+- cli: Added `--authority` option for the `inspect price-feed` subcommand.
 
 ### Changed
 

@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use bytemuck::Zeroable;
 use gmsol_utils::InitSpace;
 
 use crate::{
@@ -19,7 +20,8 @@ pub struct PriceFeed {
     pub(crate) index: u16,
     padding_0: [u8; 12],
     pub(crate) store: Pubkey,
-    pub(crate) authority: Pubkey,
+    /// Authority.
+    pub authority: Pubkey,
     pub(crate) token: Pubkey,
     pub(crate) feed_id: Pubkey,
     last_published_at_slot: u64,
@@ -34,6 +36,12 @@ impl InitSpace for PriceFeed {
 
 impl Seed for PriceFeed {
     const SEED: &'static [u8] = b"price_feed";
+}
+
+impl Default for PriceFeed {
+    fn default() -> Self {
+        Zeroable::zeroed()
+    }
 }
 
 impl PriceFeed {

@@ -1,6 +1,9 @@
 use std::{collections::BTreeMap, num::NonZeroUsize};
 
-use anchor_client::solana_sdk::pubkey::Pubkey;
+use anchor_client::{
+    solana_client::rpc_filter::{Memcmp, RpcFilterType},
+    solana_sdk::pubkey::Pubkey,
+};
 use eyre::OptionExt;
 use futures_util::{pin_mut, StreamExt};
 use gmsol::{
@@ -12,7 +15,7 @@ use gmsol::{
         common::action::Action,
         feature::{display_feature, ActionDisabledFlag, DomainDisabledFlag},
         user::ReferralCodeV2,
-        TokenMapAccess,
+        PriceFeed, TokenMapAccess,
     },
     utils::{unsigned_amount_to_decimal, unsigned_value_to_decimal, ZeroCopy},
 };
@@ -217,7 +220,12 @@ enum Command {
     /// GT exchange vault.
     GtExchangeVault { address: Option<Pubkey> },
     /// Price Feed.
-    PriceFeed { address: Pubkey },
+    PriceFeed {
+        #[arg(group = "price-feed-input")]
+        address: Option<Pubkey>,
+        #[arg(long, group = "price-feed-input")]
+        authority: Option<Pubkey>,
+    },
     /// Treasury.
     Treasury,
     /// GT Bank.
@@ -1103,13 +1111,31 @@ impl InspectArgs {
                     .0;
                 println!("{vault:?}");
             }
-            Command::PriceFeed { address } => {
-                let feed = client
-                    .account::<ZeroCopy<types::PriceFeed>>(address)
-                    .await?
-                    .ok_or(gmsol::Error::NotFound)?
-                    .0;
-                println!("{feed:#?}");
+            Command::PriceFeed { address, authority } => {
+                if let Some(address) = address {
+                    let feed = client
+                        .account::<ZeroCopy<PriceFeed>>(address)
+                        .await?
+                        .ok_or(gmsol::Error::NotFound)?
+                        .0;
+                    println!("{feed:#?}");
+                } else if let Some(authority) = authority {
+                    let feeds = client
+                        .store_accounts::<ZeroCopy<PriceFeed>>(
+                            None,
+                            Some(RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
+                                8 + bytemuck::offset_of!(PriceFeed, authority),
+                                authority.as_ref().to_owned(),
+                            ))),
+                        )
+                        .await?;
+                    for (feed, _) in feeds {
+                        print!("{feed} ");
+                    }
+                    println!()
+                } else {
+                    unreachable!()
+                }
             }
             Command::Treasury => {
                 let config = client.find_treasury_config_address(store);
