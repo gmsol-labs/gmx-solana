@@ -103,6 +103,16 @@ impl ChainlinkPullOracleFactory {
             self.feeds.write().unwrap().insert(feed_id, address);
         }
 
+        let feeds = self
+            .feeds
+            .read()
+            .unwrap()
+            .values()
+            .copied()
+            .collect::<Vec<_>>();
+
+        tracing::info!("Using custom feeds: {feeds:#?}");
+
         Ok(txs)
     }
 
