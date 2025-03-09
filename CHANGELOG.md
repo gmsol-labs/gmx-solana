@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - programs: Renamed `mock_chainlink_verifier` to `gmsol_mock_chainlink_verifier`.
 
+### Added
+
+- cli: Added the `treasury batch-withdraw` subcommand.
+
 ### Changed
 
 - cli: Allowed the `migrate referral-code` subcommand to accept multiple addresses and allow the use of user account addresses or owner account addresses.

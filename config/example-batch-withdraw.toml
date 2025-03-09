@@ -1,0 +1,13 @@
+[[withdraw]]
+token = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+amount = "123.4"
+target = "11111111111111111111111111111112"
+
+[[withdraw]]
+token = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+amount = "234.5"
+target = "11111111111111111111111111111113"
+
+[[sync]]
+token = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+gt_exchange_vault = "7VDHNDFJ3G5wTHmn7Xcc9ycfhMw7AjwreDJeJtpezc5C"

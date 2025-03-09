@@ -397,3 +397,20 @@ where
     std::fs::File::open(path)?.read_to_string(&mut buffer)?;
     toml::from_str(&buffer).map_err(gmsol::Error::invalid_argument)
 }
+
+pub(crate) fn parse_amount(amount: &str, decimals: u8) -> gmsol::Result<u64> {
+    let amount: rust_decimal::Decimal = amount.parse().map_err(gmsol::Error::unknown)?;
+    decimal_to_amount(amount, decimals)
+}
+
+pub(crate) fn decimal_to_amount(
+    mut amount: rust_decimal::Decimal,
+    decimals: u8,
+) -> gmsol::Result<u64> {
+    amount.rescale(decimals as u32);
+    let amount = amount
+        .mantissa()
+        .try_into()
+        .map_err(gmsol::Error::invalid_argument)?;
+    Ok(amount)
+}

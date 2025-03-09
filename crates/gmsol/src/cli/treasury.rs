@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use anchor_spl::{
     associated_token::{
@@ -9,6 +11,7 @@ use gmsol::{
     chainlink::{self, pull_oracle::ChainlinkPullOracleFactory},
     client::SystemProgramOps,
     pyth::{pull_oracle::PythPullOracleWithHermes, Hermes, PythPullOracle},
+    store::token::TokenAccountOps,
     treasury::{CreateTreasurySwapOptions, TreasuryOps},
     utils::{
         builder::{MakeBundleBuilder, WithPullOracle},
@@ -18,9 +21,10 @@ use gmsol::{
 use gmsol_model::{BalanceExt, BaseMarket};
 use gmsol_solana_utils::bundle_builder::BundleOptions;
 use gmsol_treasury::states::treasury::TokenFlag;
+use rust_decimal::Decimal;
 
 use crate::{
-    utils::{SelectGtExchangeVault, Side},
+    utils::{decimal_to_amount, toml_from_file, SelectGtExchangeVault, Side},
     GMSOLClient, InstructionBufferCtx,
 };
 
@@ -139,6 +143,12 @@ enum Command {
         decimals: u8,
         #[arg(long)]
         target: Option<Pubkey>,
+    },
+    /// Batch withdraw.
+    BatchWithdraw {
+        file: PathBuf,
+        #[arg(long)]
+        force_one_tx: bool,
     },
 }
 
@@ -475,6 +485,77 @@ impl Args {
                     )
                     .await?
             }
+            Command::BatchWithdraw { file, force_one_tx } => {
+                let batch = toml_from_file::<BatchWithdraw>(file)?;
+
+                if batch.withdraw.is_empty() {
+                    return Ok(());
+                }
+
+                let mut bundle = client.bundle_with_options(BundleOptions {
+                    force_one_transaction: *force_one_tx,
+                    max_packet_size: max_transaction_size,
+                    ..Default::default()
+                });
+
+                for withdraw in batch.withdraw {
+                    let target = get_associated_token_address_with_program_id(
+                        &withdraw.target,
+                        &withdraw.token,
+                        &withdraw.token_program_id,
+                    );
+                    let decimals = if let Some(decimals) = withdraw.token_decimals {
+                        decimals
+                    } else {
+                        client
+                            .account::<anchor_spl::token_interface::Mint>(&withdraw.token)
+                            .await?
+                            .ok_or(gmsol::Error::NotFound)?
+                            .decimals
+                    };
+                    let amount = decimal_to_amount(withdraw.amount, decimals)?;
+                    let prepare = client.prepare_associated_token_account(
+                        &withdraw.token,
+                        &withdraw.token_program_id,
+                        Some(&withdraw.target),
+                    );
+                    let txn = client
+                        .withdraw_from_treasury_vault(
+                            store,
+                            None,
+                            &withdraw.token,
+                            Some(&withdraw.token_program_id),
+                            amount,
+                            decimals,
+                            &target,
+                        )
+                        .await?;
+                    bundle.push(prepare.merge(txn))?;
+                }
+
+                for sync in batch.sync {
+                    bundle.push(
+                        client
+                            .sync_gt_bank(
+                                store,
+                                None,
+                                &sync.gt_exchange_vault,
+                                &sync.token,
+                                Some(&sync.token_program_id),
+                            )
+                            .await?,
+                    )?;
+                }
+
+                return crate::utils::send_or_serialize_bundle_with_default_callback(
+                    store,
+                    bundle,
+                    ctx,
+                    serialize_only,
+                    skip_preflight,
+                )
+                .await;
+            }
         };
         crate::utils::send_or_serialize_transaction(
             store,
@@ -489,4 +570,42 @@ impl Args {
         )
         .await
     }
+}
+
+#[serde_with::serde_as]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct Withdraw {
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    token: Pubkey,
+    #[serde(default = "default_token_program_id")]
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    token_program_id: Pubkey,
+    #[serde(default)]
+    token_decimals: Option<u8>,
+    amount: Decimal,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    target: Pubkey,
+}
+
+fn default_token_program_id() -> Pubkey {
+    spl_token::ID
+}
+
+#[serde_with::serde_as]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct Sync {
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    token: Pubkey,
+    #[serde(default = "default_token_program_id")]
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    token_program_id: Pubkey,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    gt_exchange_vault: Pubkey,
+}
+
+#[serde_with::serde_as]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct BatchWithdraw {
+    withdraw: Vec<Withdraw>,
+    sync: Vec<Sync>,
 }

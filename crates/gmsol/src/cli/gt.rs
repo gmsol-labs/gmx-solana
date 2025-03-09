@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use crate::{
-    utils::{send_or_serialize_transaction, table_format},
+    utils::{parse_amount, send_or_serialize_transaction, table_format},
     GMSOLClient, InstructionBufferCtx,
 };
 use anchor_client::solana_sdk::pubkey::Pubkey;
@@ -11,7 +11,6 @@ use gmsol::{
     utils::{instruction::InstructionSerialization, unsigned_amount_to_decimal},
 };
 use prettytable::{row, Table};
-use rust_decimal::Decimal;
 
 #[derive(clap::Args)]
 pub(super) struct Args {
@@ -259,14 +258,4 @@ impl Args {
         }
         Ok(())
     }
-}
-
-fn parse_amount(amount: &str, decimals: u8) -> gmsol::Result<u64> {
-    let mut amount: Decimal = amount.parse().map_err(gmsol::Error::unknown)?;
-    amount.rescale(decimals as u32);
-    let amount = amount
-        .mantissa()
-        .try_into()
-        .map_err(gmsol::Error::invalid_argument)?;
-    Ok(amount)
 }
