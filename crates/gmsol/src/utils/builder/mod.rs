@@ -7,7 +7,7 @@ pub mod oracle;
 /// Surround transaction.
 pub mod surround;
 
-use std::future::Future;
+use std::{future::Future, ops::Deref};
 
 pub use self::{
     estimate_fee::{EstimateFee, SetExecutionFee},
@@ -18,7 +18,9 @@ pub use self::{
     surround::Surround,
 };
 
+use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 pub use gmsol_solana_utils::{bundle_builder::BundleBuilder, bundle_builder::BundleOptions};
+use solana_sdk::signer::Signer;
 
 /// Builder for [`BundleBuilder`]s.
 pub trait MakeBundleBuilder<'a, C> {
@@ -62,3 +64,14 @@ pub trait MakeBundleBuilderExt<'a, C>: MakeBundleBuilder<'a, C> {
 }
 
 impl<'a, C, T: MakeBundleBuilder<'a, C> + ?Sized> MakeBundleBuilderExt<'a, C> for T {}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
+    for TransactionBuilder<'a, C>
+{
+    async fn build_with_options(
+        &mut self,
+        options: BundleOptions,
+    ) -> crate::Result<BundleBuilder<'a, C>> {
+        Ok(self.clone().into_bundle_with_options(options)?)
+    }
+}

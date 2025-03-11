@@ -30,6 +30,10 @@ required-features = ["decode"]
 name = "chainlink"
 required-features = ["chainlink-pull-oracle", "cli"]
 
+[[example]]
+name = "squads_trader"
+required-features = ["cli", "squads"]
+
 [features]
 cli = [
     "chainlink-pull-oracle",
@@ -222,3 +226,4 @@ event-listener = { workspace = true }
 spl-associated-token-account = { workspace = true }
 shellexpand = { workspace = true }
 gmsol-mock-chainlink-verifier = { workspace = true }
+figment = { workspace = true, features = ["env", "toml"] }
