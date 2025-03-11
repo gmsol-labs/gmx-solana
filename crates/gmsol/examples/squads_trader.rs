@@ -36,9 +36,17 @@ struct Trader {
     #[serde_as(as = "DisplayFromStr")]
     market_token: Pubkey,
     #[clap(long, short)]
+    decrease: bool,
+    #[clap(long, short)]
     amount: u64,
     #[clap(long, short)]
     size: String,
+    #[clap(long)]
+    #[serde(default)]
+    approve: bool,
+    #[clap(long)]
+    #[serde(default)]
+    execute: bool,
 }
 
 impl Trader {
@@ -70,30 +78,47 @@ impl Trader {
 
         let store = multisig.find_store_address("");
 
-        let (txn, order) = multisig
-            .market_increase(
-                &store,
-                &self.market_token,
-                true,
-                self.amount,
-                true,
-                self.size.parse()?,
-            )
-            .build_with_address()
-            .await?;
+        let (txn, order) = if self.decrease {
+            multisig
+                .market_decrease(
+                    &store,
+                    &self.market_token,
+                    true,
+                    self.amount,
+                    true,
+                    self.size.parse()?,
+                )
+                .build_with_address()
+                .await?
+        } else {
+            multisig
+                .market_increase(
+                    &store,
+                    &self.market_token,
+                    true,
+                    self.amount,
+                    true,
+                    self.size.parse()?,
+                )
+                .build_with_address()
+                .await?
+        };
 
         tracing::info!("creating order: {order}");
 
-        proposer
+        let signatures = proposer
             .squads_from_bundle(&self.multisig, self.vault_index, txn)
+            .approve(self.approve)
+            .execute(self.execute)
             .build()
             .await?
             .send_all(true)
             .map_err(|(signatures, err)| {
-                tracing::info!("partial success: {signatures:#?}");
+                tracing::error!("partial success: {signatures:#?}");
                 err
             })
             .await?;
+        tracing::info!("success: {signatures:#?}");
         Ok(())
     }
 }

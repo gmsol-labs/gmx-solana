@@ -13,7 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- sdk: Added the `SquadsOps::squads_from_bundle` function.
+- sdk: Added more functions to `SquadsOps`:
+  - `SquadsOps::squads_create_vault_transaction_and_return_data`: Creates a vault transaction and return the data.
+  - `SquadsOps::squads_approve_proposal`: Approves a proposal.
+  - `SquadsOps::squads_execute_vault_transaction`: Executes a vault transaction.
+  - `SquadsOps::squads_from_bundle`: Creates a bundle of vault transactions for proposing transactions.
 - sdk: Implemented the `MakeBundleBuidler` trait for `TransactionBuilder`.
 - cli: Added the `treasury batch-withdraw` subcommand.
 - cli: Added `--authority` option for the `inspect price-feed` subcommand.
