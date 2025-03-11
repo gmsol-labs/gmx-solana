@@ -1,7 +1,10 @@
 use std::{future::Future, ops::Deref};
 
 use anchor_client::anchor_lang;
-use gmsol_solana_utils::transaction_builder::TransactionBuilder;
+use gmsol_solana_utils::{
+    bundle_builder::{BundleBuilder, BundleOptions},
+    transaction_builder::TransactionBuilder,
+};
 use solana_sdk::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction},
@@ -22,6 +25,8 @@ use squads_multisig::{
 };
 
 pub use squads_multisig::pda::{get_proposal_pda, get_transaction_pda, get_vault_pda};
+
+use crate::utils::builder::MakeBundleBuilder;
 
 /// Squads Vault Transaction.
 pub struct SquadsVaultTransaction(VaultTransaction);
@@ -135,6 +140,14 @@ pub trait SquadsOps<C> {
         draft: bool,
         offset: Option<u64>,
     ) -> impl Future<Output = crate::Result<TransactionBuilder<C, Pubkey>>>;
+
+    /// Create a [`Squads`] from the given [`BundleBuilder`].
+    fn squads_from_bundle<'a, T>(
+        &'a self,
+        multisig: &Pubkey,
+        vault_index: u8,
+        bundle: T,
+    ) -> Squads<'a, C, T>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
@@ -222,6 +235,20 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
             draft,
         )
     }
+
+    fn squads_from_bundle<'a, T>(
+        &'a self,
+        multisig: &Pubkey,
+        vault_index: u8,
+        bundle: T,
+    ) -> Squads<'a, C, T> {
+        Squads {
+            client: self,
+            multisig: *multisig,
+            vault_index,
+            builder: bundle,
+        }
+    }
 }
 
 fn versioned_message_to_transaction_message(message: &VersionedMessage) -> TransactionMessage {
@@ -281,5 +308,63 @@ fn versioned_message_to_transaction_message(message: &VersionedMessage) -> Trans
                 address_table_lookups: address_table_lookups.into(),
             }
         }
+    }
+}
+
+/// Squads bundle builder.
+#[derive(Clone)]
+pub struct Squads<'a, C, T> {
+    client: &'a crate::Client<C>,
+    multisig: Pubkey,
+    vault_index: u8,
+    builder: T,
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone, T> MakeBundleBuilder<'a, C> for Squads<'a, C, T>
+where
+    T: MakeBundleBuilder<'a, C>,
+{
+    async fn build_with_options(
+        &mut self,
+        options: BundleOptions,
+    ) -> crate::Result<BundleBuilder<'a, C>> {
+        let inner = self.builder.build_with_options(options).await?;
+
+        let multisig_data = get_multisig(&self.client.store_program().rpc(), &self.multisig)
+            .await
+            .map_err(crate::Error::unknown)?;
+        let mut txn_idx = multisig_data.transaction_index;
+
+        let mut bundle = inner.try_clone_empty()?;
+
+        let mut transactions = vec![];
+
+        for txn in inner.into_builders() {
+            txn_idx += 1;
+            let message = txn.message_with_blockhash_and_options(Default::default(), true, None)?;
+            let (rpc, transaction) = self
+                .client
+                .squads_create_vault_transaction_with_index(
+                    &self.multisig,
+                    self.vault_index,
+                    txn_idx,
+                    &message,
+                    None,
+                    false,
+                )?
+                .swap_output(());
+            bundle.push(rpc)?;
+            transactions.push(transaction);
+        }
+
+        if !transactions.is_empty() {
+            tracing::info!(
+                start_index = multisig_data.transaction_index + 1,
+                end_index = txn_idx,
+                "Creating vault transactions: {transactions:#?}"
+            );
+        }
+
+        Ok(bundle)
     }
 }
