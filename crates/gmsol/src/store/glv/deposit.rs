@@ -39,7 +39,7 @@ use crate::{
 
 use super::{split_to_accounts, GlvOps};
 
-pub const EXECUTE_GLV_DEPOSIT_COMPUTE_BUDGET: u32 = 400_000;
+pub const EXECUTE_GLV_DEPOSIT_COMPUTE_BUDGET: u32 = 800_000;
 
 /// Create GLV deposit builder.
 pub struct CreateGlvDepositBuilder<'a, C> {

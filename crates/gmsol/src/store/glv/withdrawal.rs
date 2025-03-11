@@ -36,7 +36,7 @@ use crate::{
 
 use super::{split_to_accounts, GlvOps};
 
-pub const EXECUTE_GLV_WITHDRAWAL_COMPUTE_BUDGET: u32 = 400_000;
+pub const EXECUTE_GLV_WITHDRAWAL_COMPUTE_BUDGET: u32 = 800_000;
 
 /// Create GLV withdrawal builder.
 pub struct CreateGlvWithdrawalBuilder<'a, C> {
