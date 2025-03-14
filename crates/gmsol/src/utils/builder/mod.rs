@@ -75,3 +75,30 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
         Ok(self.clone().into_bundle_with_options(options)?)
     }
 }
+
+/// Make bundle builder that can only be used once.
+pub struct OnceMakeBundleBuilder<'a, C>(Option<BundleBuilder<'a, C>>);
+
+impl<'a, C> From<BundleBuilder<'a, C>> for OnceMakeBundleBuilder<'a, C> {
+    fn from(value: BundleBuilder<'a, C>) -> Self {
+        Self(Some(value))
+    }
+}
+
+/// Create a [`MakeBundleBuilder`] from a [`BundleBuilder`].
+pub fn once_make_bundle<C>(bundle: BundleBuilder<C>) -> OnceMakeBundleBuilder<'_, C> {
+    bundle.into()
+}
+
+impl<'a, C> MakeBundleBuilder<'a, C> for OnceMakeBundleBuilder<'a, C> {
+    async fn build_with_options(
+        &mut self,
+        options: BundleOptions,
+    ) -> crate::Result<BundleBuilder<'a, C>> {
+        let mut bundle = self.0.take().ok_or_else(|| {
+            crate::Error::unknown("`OnceMakeBundleBuilder` can only be used once")
+        })?;
+        bundle.set_options(options);
+        Ok(bundle)
+    }
+}

@@ -133,6 +133,12 @@ impl<C> BundleBuilder<'_, C> {
             options: self.options.clone(),
         }))
     }
+
+    /// Set options.
+    pub fn set_options(&mut self, options: BundleOptions) -> &mut Self {
+        self.options = options;
+        self
+    }
 }
 
 impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {

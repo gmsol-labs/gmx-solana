@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `SquadsOps::squads_execute_vault_transaction`: Executes a vault transaction.
   - `SquadsOps::squads_from_bundle`: Creates a bundle of vault transactions for proposing transactions.
 - sdk: Implemented the `MakeBundleBuidler` trait for `TransactionBuilder`.
+- sdk: Introduced `OnceMakeBundleBuilder`, which implements `MakeBundleBuilder` and can be created directly from `BundleBuilder`.
 - cli: Added the `treasury batch-withdraw` subcommand.
 - cli: Added `--authority` option for the `inspect price-feed` subcommand.
 - cli: Introduced a new ALT type `PriceFeed` for the `alt extend` subcommand.
