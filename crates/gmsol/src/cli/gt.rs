@@ -23,7 +23,10 @@ pub(super) struct Args {
 #[derive(clap::Subcommand)]
 enum Command {
     /// Status.
-    Status,
+    Status {
+        #[arg(long)]
+        debug: bool,
+    },
     /// Balance.
     Balance {
         #[arg(long, group = "balance-input")]
@@ -80,9 +83,14 @@ impl Args {
         skip_preflight: bool,
     ) -> gmsol::Result<()> {
         match &self.command {
-            Command::Status => {
+            Command::Status { debug } => {
                 let store = client.store(store).await?;
                 let gt = store.gt();
+
+                if *debug {
+                    println!("{gt:#?}");
+                }
+
                 let decimals = gt.decimals();
 
                 println!(

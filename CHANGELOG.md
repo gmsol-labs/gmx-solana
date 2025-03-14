@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - cli: Added the `treasury batch-withdraw` subcommand.
 - cli: Added `--authority` option for the `inspect price-feed` subcommand.
 - cli: Introduced a new ALT type `PriceFeed` for the `alt extend` subcommand.
+- cli: Added a `--debug` option for the `gt status` subcommand.
 - examples: Added `squads_trader` example.
 
 ### Changed
