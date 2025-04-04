@@ -54,8 +54,11 @@ pub struct CreateBundleOptions {
 pub struct SendBundleOptions {
     /// Whether to send without compute budget.
     pub without_compute_budget: bool,
-    /// Compute unit price.
+    /// Set the compute unit price.
     pub compute_unit_price_micro_lamports: Option<u64>,
+    /// Set the min priority lamports.
+    /// `None` means the value is left unchanged.
+    pub compute_unit_min_priority_lamports: Option<u64>,
     /// Whether to update recent block hash before send.
     pub update_recent_block_hash_before_send: bool,
     /// Whether to continue on error.
@@ -276,6 +279,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
         let SendBundleOptions {
             without_compute_budget,
             compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
             update_recent_block_hash_before_send,
             continue_on_error,
             mut config,
@@ -294,11 +298,18 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
             .builders
             .into_iter()
             .enumerate()
-            .map(|(idx, builder)| {
+            .map(|(idx, mut builder)| {
                 tracing::debug!(
                     size = builder.transaction_size(true),
                     "signing transaction {idx}"
                 );
+
+                if let Some(lamports) = compute_unit_min_priority_lamports {
+                    builder
+                        .compute_budget_mut()
+                        .set_min_priority_lamports(Some(lamports));
+                }
+
                 builder.signed_transaction_with_blockhash_and_options(
                     latest_hash,
                     without_compute_budget,
