@@ -58,6 +58,7 @@ impl Args {
         client: &GMSOLClient,
         store: &Pubkey,
         serialize_only: Option<InstructionSerialization>,
+        priority_lamports: u64,
     ) -> gmsol::Result<()> {
         match &self.command {
             Command::Extend {
@@ -113,6 +114,7 @@ impl Args {
                         None,
                         serialize_only,
                         true,
+                        Some(priority_lamports),
                         |signatures, err| {
                             if let Some(err) = err {
                                 tracing::error!(%err, "some txns are failed");

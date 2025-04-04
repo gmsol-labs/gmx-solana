@@ -39,6 +39,7 @@ impl ControllerArgs {
         client: &GMSOLClient,
         store: &Pubkey,
         serialize_only: Option<InstructionSerialization>,
+        priority_lamports: u64,
     ) -> gmsol::Result<()> {
         match &self.command {
             Command::InsertAmount { amount, key } => {
@@ -48,6 +49,7 @@ impl ControllerArgs {
                     None,
                     serialize_only,
                     true,
+                    Some(priority_lamports),
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -62,6 +64,7 @@ impl ControllerArgs {
                     None,
                     serialize_only,
                     true,
+                    Some(priority_lamports),
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -76,6 +79,7 @@ impl ControllerArgs {
                     None,
                     serialize_only,
                     true,
+                    Some(priority_lamports),
                     |signature| {
                         println!("{signature}");
                         Ok(())

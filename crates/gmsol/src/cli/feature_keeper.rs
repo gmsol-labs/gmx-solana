@@ -37,6 +37,7 @@ impl Args {
         client: &GMSOLClient,
         store: &Pubkey,
         serialize_only: Option<InstructionSerialization>,
+        priority_lamports: u64,
     ) -> gmsol::Result<()> {
         match self.command {
             Command::Toggle {
@@ -55,6 +56,7 @@ impl Args {
                     None,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         let msg = if enable { "enabled" } else { "disabled" };
                         tracing::info!("{msg} feature: {}", display_feature(domain, action));

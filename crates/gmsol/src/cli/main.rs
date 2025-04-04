@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use std::rc::Rc;
 
 use admin::AdminArgs;
@@ -298,6 +300,7 @@ impl Cli {
                     instruction_buffer_ctx,
                     self.serialize_only,
                     self.skip_preflight,
+                    self.priority_lamports,
                     self.max_transaction_size,
                 )
                 .await?
@@ -309,6 +312,7 @@ impl Cli {
                     instruction_buffer_ctx,
                     self.serialize_only,
                     self.skip_preflight,
+                    self.priority_lamports,
                     self.max_transaction_size,
                 )
                 .await?
@@ -320,14 +324,21 @@ impl Cli {
                     instruction_buffer_ctx,
                     self.serialize_only,
                     self.skip_preflight,
+                    self.priority_lamports,
                     self.max_transaction_size,
                 )
                 .await?
             }
             Command::Timelock(args) => {
                 crate::utils::instruction_buffer_not_supported(instruction_buffer_ctx)?;
-                args.run(&client, &store, self.serialize_only, self.skip_preflight)
-                    .await?
+                args.run(
+                    &client,
+                    &store,
+                    self.serialize_only,
+                    self.skip_preflight,
+                    self.priority_lamports,
+                )
+                .await?
             }
             Command::Inspect(args) => args.run(&client, &store).await?,
             Command::Exchange(args) => {
@@ -337,6 +348,7 @@ impl Cli {
                     instruction_buffer_ctx,
                     self.serialize_only,
                     self.skip_preflight,
+                    self.priority_lamports,
                     self.max_transaction_size,
                 )
                 .await?
@@ -348,13 +360,20 @@ impl Cli {
                     instruction_buffer_ctx,
                     self.serialize_only,
                     self.skip_preflight,
+                    self.priority_lamports,
                     self.max_transaction_size,
                 )
                 .await?
             }
             Command::Market(args) => {
-                args.run(&client, &store, instruction_buffer_ctx, self.serialize_only)
-                    .await?
+                args.run(
+                    &client,
+                    &store,
+                    instruction_buffer_ctx,
+                    self.serialize_only,
+                    self.priority_lamports,
+                )
+                .await?
             }
             Command::Glv(args) => {
                 args.run(
@@ -375,20 +394,24 @@ impl Cli {
                     instruction_buffer_ctx,
                     self.serialize_only,
                     self.skip_preflight,
+                    self.priority_lamports,
                 )
                 .await?
             }
             Command::Controller(args) => {
                 crate::utils::instruction_buffer_not_supported(instruction_buffer_ctx)?;
-                args.run(&client, &store, self.serialize_only).await?
+                args.run(&client, &store, self.serialize_only, self.priority_lamports)
+                    .await?
             }
             Command::Feature(args) => {
                 crate::utils::instruction_buffer_not_supported(instruction_buffer_ctx)?;
-                args.run(&client, &store, self.serialize_only).await?
+                args.run(&client, &store, self.serialize_only, self.priority_lamports)
+                    .await?
             }
             Command::Alt(args) => {
                 crate::utils::instruction_buffer_not_supported(instruction_buffer_ctx)?;
-                args.run(&client, &store, self.serialize_only).await?
+                args.run(&client, &store, self.serialize_only, self.priority_lamports)
+                    .await?
             }
             Command::Other(args) => {
                 args.run(
@@ -397,6 +420,7 @@ impl Cli {
                     instruction_buffer_ctx,
                     self.serialize_only,
                     self.skip_preflight,
+                    self.priority_lamports,
                     self.max_transaction_size,
                 )
                 .await?
@@ -409,6 +433,7 @@ impl Cli {
                     instruction_buffer_ctx,
                     self.serialize_only,
                     self.skip_preflight,
+                    self.priority_lamports,
                     self.max_transaction_size,
                 )
                 .await?

@@ -377,6 +377,7 @@ impl ExchangeArgs {
         instruction_buffer: Option<InstructionBufferCtx<'_>>,
         serialize_only: Option<InstructionSerialization>,
         skip_preflight: bool,
+        priority_lamports: u64,
         max_transaction_size: Option<usize>,
     ) -> gmsol::Result<()> {
         let nonce = self.nonce.map(|nonce| nonce.to_bytes());
@@ -872,6 +873,7 @@ impl ExchangeArgs {
             instruction_buffer,
             serialize_only,
             skip_preflight,
+            Some(priority_lamports),
         )
         .await?;
 

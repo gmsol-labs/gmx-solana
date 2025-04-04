@@ -35,6 +35,7 @@ impl Args {
         instruction_buffer: Option<InstructionBufferCtx<'_>>,
         serialize_only: Option<InstructionSerialization>,
         skip_preflight: bool,
+        priority_lamports: u64,
         max_transaction_size: Option<usize>,
     ) -> gmsol::Result<()> {
         let bundle = match &self.command {
@@ -99,6 +100,7 @@ impl Args {
             instruction_buffer,
             serialize_only,
             skip_preflight,
+            Some(priority_lamports),
         )
         .await?;
         Ok(())

@@ -245,7 +245,7 @@ impl Args {
         max_transaction_size: Option<usize>,
     ) -> gmsol::Result<()> {
         let selected = &self.glv_token;
-        let mut rpc = match &self.command {
+        let rpc = match &self.command {
             Command::Init { market_tokens } => {
                 let Some(index) = selected.index else {
                     return Err(gmsol::Error::invalid_argument(
@@ -304,6 +304,7 @@ impl Args {
                             ctx,
                             serialize_only,
                             skip_preflight,
+                            Some(priority_lamports),
                             |signatures, err| {
                                 tracing::info!("{signatures:#?}");
                                 match err {
@@ -353,6 +354,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     skip_preflight,
+                    Some(priority_lamports),
                 )
                 .await;
             }
@@ -372,6 +374,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     skip_preflight,
+                    Some(priority_lamports),
                 )
                 .await;
             }
@@ -508,15 +511,13 @@ impl Args {
             }
         };
 
-        rpc.compute_budget_mut()
-            .set_min_priority_lamports(Some(priority_lamports));
-
         crate::utils::send_or_serialize_transaction(
             store,
             rpc,
             ctx,
             serialize_only,
             skip_preflight,
+            Some(priority_lamports),
             |signature| {
                 tracing::info!("{signature}");
                 Ok(())

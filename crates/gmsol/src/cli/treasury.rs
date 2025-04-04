@@ -160,6 +160,7 @@ impl Args {
         ctx: Option<InstructionBufferCtx<'_>>,
         serialize_only: Option<InstructionSerialization>,
         skip_preflight: bool,
+        priority_lamports: u64,
         max_transaction_size: Option<usize>,
     ) -> gmsol::Result<()> {
         let req = match &self.command {
@@ -337,6 +338,7 @@ impl Args {
                             ctx,
                             serialize_only,
                             skip_preflight,
+                            Some(priority_lamports),
                             |signatures, error| {
                                 match error {
                                     Some(err) => {
@@ -367,6 +369,7 @@ impl Args {
                             ctx,
                             serialize_only,
                             skip_preflight,
+                            Some(priority_lamports),
                             |signatures, error| {
                                 match error {
                                     Some(err) => {
@@ -553,6 +556,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     skip_preflight,
+                    Some(priority_lamports),
                 )
                 .await;
             }
@@ -563,6 +567,7 @@ impl Args {
             ctx,
             serialize_only,
             skip_preflight,
+            Some(priority_lamports),
             |signature| {
                 tracing::info!("{signature}");
                 Ok(())

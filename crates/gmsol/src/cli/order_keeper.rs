@@ -138,6 +138,7 @@ impl KeeperArgs {
         ctx: Option<InstructionBufferCtx<'_>>,
         serialize_only: Option<InstructionSerialization>,
         skip_preflight: bool,
+        priority_lamports: u64,
         max_transaction_size: Option<usize>,
     ) -> gmsol::Result<()> {
         if serialize_only.is_some() {
@@ -148,7 +149,7 @@ impl KeeperArgs {
         match &self.command {
             Command::Watch { wait } => {
                 crate::utils::instruction_buffer_not_supported(ctx)?;
-                let task = Box::pin(self.start_watching(client, store, *wait));
+                let task = Box::pin(self.start_watching(client, store, *wait, priority_lamports));
                 task.await?;
             }
             Command::Pending {
@@ -190,6 +191,7 @@ impl KeeperArgs {
                                         None,
                                         serialize_only,
                                         skip_preflight,
+                                        priority_lamports,
                                         max_transaction_size,
                                     ),
                                 )
@@ -227,6 +229,7 @@ impl KeeperArgs {
                                         None,
                                         serialize_only,
                                         skip_preflight,
+                                        priority_lamports,
                                         max_transaction_size,
                                     ),
                                 )
@@ -264,6 +267,7 @@ impl KeeperArgs {
                                         None,
                                         serialize_only,
                                         skip_preflight,
+                                        priority_lamports,
                                         max_transaction_size,
                                     ),
                                 )
@@ -291,6 +295,7 @@ impl KeeperArgs {
                         ctx,
                         serialize_only,
                         skip_preflight,
+                        priority_lamports,
                         max_transaction_size,
                         Some(self.compute_unit_price),
                     )
@@ -321,6 +326,7 @@ impl KeeperArgs {
                         ctx,
                         serialize_only,
                         skip_preflight,
+                        priority_lamports,
                         max_transaction_size,
                         Some(self.compute_unit_price),
                     )
@@ -342,6 +348,7 @@ impl KeeperArgs {
                         ctx,
                         serialize_only,
                         skip_preflight,
+                        priority_lamports,
                         max_transaction_size,
                         Some(self.compute_unit_price),
                     )
@@ -383,6 +390,7 @@ impl KeeperArgs {
                                 ctx,
                                 serialize_only,
                                 skip_preflight,
+                                priority_lamports,
                                 max_transaction_size,
                                 Some(self.compute_unit_price),
                             )
@@ -397,6 +405,7 @@ impl KeeperArgs {
                                 ctx,
                                 serialize_only,
                                 skip_preflight,
+                                priority_lamports,
                                 max_transaction_size,
                                 Some(self.compute_unit_price),
                             )
@@ -410,6 +419,7 @@ impl KeeperArgs {
                                 ctx,
                                 serialize_only,
                                 skip_preflight,
+                                priority_lamports,
                                 max_transaction_size,
                                 Some(self.compute_unit_price),
                             )
@@ -428,6 +438,7 @@ impl KeeperArgs {
                                 ctx,
                                 serialize_only,
                                 skip_preflight,
+                                priority_lamports,
                                 max_transaction_size,
                                 Some(self.compute_unit_price),
                             )
@@ -445,6 +456,7 @@ impl KeeperArgs {
                                 ctx,
                                 serialize_only,
                                 skip_preflight,
+                                priority_lamports,
                                 max_transaction_size,
                                 Some(self.compute_unit_price),
                             )
@@ -463,6 +475,7 @@ impl KeeperArgs {
                                 ctx,
                                 serialize_only,
                                 skip_preflight,
+                                priority_lamports,
                                 max_transaction_size,
                                 Some(self.compute_unit_price),
                             )
@@ -480,6 +493,7 @@ impl KeeperArgs {
                                 ctx,
                                 serialize_only,
                                 skip_preflight,
+                                priority_lamports,
                                 max_transaction_size,
                                 Some(self.compute_unit_price),
                             )
@@ -502,6 +516,7 @@ impl KeeperArgs {
         client: &GMSOLClient,
         store: &Pubkey,
         wait: u64,
+        priority_lamports: u64,
     ) -> gmsol::Result<()> {
         use tokio::sync::mpsc;
 
@@ -579,7 +594,7 @@ impl KeeperArgs {
                 tracing::info!(?command, "received new command");
                 match self
                     .with_command(command)
-                    .run(client, &store, None, None, true, None)
+                    .run(client, &store, None, None, true, priority_lamports, None)
                     .await
                 {
                     Ok(()) => {

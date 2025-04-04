@@ -81,6 +81,7 @@ impl Args {
         timelock: Option<InstructionBufferCtx<'_>>,
         serialize_only: Option<InstructionSerialization>,
         skip_preflight: bool,
+        priority_lamports: u64,
     ) -> gmsol::Result<()> {
         match &self.command {
             Command::Status { debug } => {
@@ -133,6 +134,7 @@ impl Args {
                     timelock,
                     serialize_only,
                     skip_preflight,
+                    Some(priority_lamports),
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -163,6 +165,7 @@ impl Args {
                     timelock,
                     serialize_only,
                     skip_preflight,
+                    Some(priority_lamports),
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -178,6 +181,7 @@ impl Args {
                     timelock,
                     serialize_only,
                     skip_preflight,
+                    Some(priority_lamports),
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -218,6 +222,7 @@ impl Args {
                             timelock,
                             serialize_only,
                             skip_preflight,
+                            Some(priority_lamports),
                             |signature| {
                                 println!("{signature}");
                                 Ok(())
@@ -235,6 +240,7 @@ impl Args {
                             timelock,
                             serialize_only,
                             skip_preflight,
+                            Some(priority_lamports),
                             |signature| {
                                 println!("{signature}");
                                 Ok(())

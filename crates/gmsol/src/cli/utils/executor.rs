@@ -81,6 +81,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> Executor<'a, C> {
         ctx: Option<InstructionBufferCtx<'_>>,
         serialize_only: Option<InstructionSerialization>,
         skip_preflight: bool,
+        priority_lamports: u64,
         max_transaction_size: Option<usize>,
         compute_unit_price: Option<u64>,
     ) -> gmsol::Result<()> {
@@ -153,6 +154,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> Executor<'a, C> {
             ctx,
             serialize_only,
             skip_preflight,
+            Some(priority_lamports),
         )
         .await?;
 

@@ -346,6 +346,7 @@ impl Args {
         store: &Pubkey,
         ctx: Option<InstructionBufferCtx<'_>>,
         serialize_only: Option<InstructionSerialization>,
+        priority_lamports: u64,
     ) -> gmsol::Result<()> {
         match &self.command {
             Command::InitOracle {
@@ -375,6 +376,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("initialized an oracle buffer account at tx {signature}");
                         println!("{oracle}");
@@ -397,6 +399,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("created token config map {map} at tx {signature}");
                         println!("{map}");
@@ -412,6 +415,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("set new token map at {signature}");
                         Ok(())
@@ -451,6 +455,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     *skip_preflight,
+                    priority_lamports,
                     *set_token_map,
                     *max_transaction_size,
                     &configs,
@@ -523,6 +528,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -538,6 +544,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -553,6 +560,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         println!("{signature}");
                         Ok(())
@@ -568,6 +576,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("created a new vault {vault} at tx {signature}");
                         println!("{vault}");
@@ -594,7 +603,7 @@ impl Args {
                         None,
                     )
                     .await?;
-                crate::utils::send_or_serialize_transaction(store, request, ctx, serialize_only, false,|signature| {
+                crate::utils::send_or_serialize_transaction(store, request, ctx, serialize_only, false,Some(priority_lamports),|signature| {
                     tracing::info!(
                         "created a new market with {market_token} as its token address at tx {signature}"
                     );
@@ -615,6 +624,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     *skip_preflight,
+                    priority_lamports,
                     *enable,
                     *max_transaction_size,
                     &markets,
@@ -648,6 +658,7 @@ impl Args {
                         ctx,
                         serialize_only,
                         false,
+                        priority_lamports,
                         None,
                         receiver.as_ref(),
                         !*keep_buffer,
@@ -665,6 +676,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!(
                             "market config flag is updated to {value} at tx {signature}"
@@ -689,6 +701,7 @@ impl Args {
                         ctx,
                         serialize_only,
                         *skip_preflight,
+                        priority_lamports,
                         *max_transaction_size,
                         receiver.as_ref(),
                         !*keep_buffers,
@@ -705,6 +718,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     true,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!(
                             "market set to be {} at tx {signature}",
@@ -737,6 +751,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         let pubkey = buffer_keypair.pubkey();
                         tracing::info!("created market config buffer `{pubkey}` at tx {signature}");
@@ -753,6 +768,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("market config buffer `{buffer}` closed at tx {signature}");
                         Ok(())
@@ -792,6 +808,7 @@ impl Args {
                         ctx,
                         serialize_only,
                         *skip_preflight,
+                        priority_lamports,
                         *max_transaction_size,
                         *batch,
                     )
@@ -808,6 +825,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("set the authority of buffer `{buffer}` to `{new_authority}` at tx {signature}");
                         Ok(())
@@ -836,6 +854,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("funded at tx {signature}");
                         Ok(())
@@ -853,6 +872,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!(
                             %market_token,
@@ -893,6 +913,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("initialized GT at tx {signature}");
                         Ok(())
@@ -910,6 +931,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("set order fee discount factors at tx {signature}");
                         Ok(())
@@ -927,6 +949,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("set referral reward factors at tx {signature}");
                         Ok(())
@@ -945,6 +968,7 @@ impl Args {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("set referred discount factor at tx {signature}");
                         Ok(())
@@ -1047,6 +1071,7 @@ async fn insert_token_configs(
     ctx: Option<InstructionBufferCtx<'_>>,
     serialize_only: Option<InstructionSerialization>,
     skip_preflight: bool,
+    priority_lamports: u64,
     set_token_map: bool,
     max_transaction_size: Option<usize>,
     configs: &IndexMap<String, TokenConfig>,
@@ -1095,6 +1120,7 @@ async fn insert_token_configs(
         ctx,
         serialize_only,
         skip_preflight,
+        Some(priority_lamports),
         |signatures, error| {
             tracing::info!("{signatures:#?}");
             match error {
@@ -1127,6 +1153,7 @@ async fn create_markets(
     ctx: Option<InstructionBufferCtx<'_>>,
     serialize_only: Option<InstructionSerialization>,
     skip_preflight: bool,
+    priority_lamports: u64,
     enable: bool,
     max_transaction_size: Option<usize>,
     markets: &IndexMap<String, Market>,
@@ -1164,6 +1191,7 @@ async fn create_markets(
         ctx,
         serialize_only,
         skip_preflight,
+        Some(priority_lamports),
         |signatures, error| {
             println!("{signatures:#?}");
             match error {
@@ -1196,6 +1224,7 @@ impl MarketConfigMap {
         ctx: Option<InstructionBufferCtx<'_>>,
         serialize_only: Option<InstructionSerialization>,
         skip_preflight: bool,
+        priority_lamports: u64,
         max_transaction_size: Option<usize>,
         batch: NonZeroUsize,
     ) -> gmsol::Result<()> {
@@ -1236,6 +1265,7 @@ impl MarketConfigMap {
             ctx,
             serialize_only,
             skip_preflight,
+            Some(priority_lamports),
             |signatures, error| {
                 tracing::info!("{signatures:#?}");
                 match error {
@@ -1271,6 +1301,7 @@ impl MarketConfigs {
         ctx: Option<InstructionBufferCtx<'_>>,
         serialize_only: Option<InstructionSerialization>,
         skip_preflight: bool,
+        priority_lamports: u64,
         max_transaction_size: Option<usize>,
         receiver: Option<&Pubkey>,
         close_buffers: bool,
@@ -1339,6 +1370,7 @@ impl MarketConfigs {
             ctx,
             serialize_only,
             skip_preflight,
+            Some(priority_lamports),
             |signatures, error| {
                 println!("{signatures:#?}");
                 match error {

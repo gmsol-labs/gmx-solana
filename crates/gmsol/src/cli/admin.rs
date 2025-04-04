@@ -67,14 +67,21 @@ impl AdminArgs {
         ctx: Option<InstructionBufferCtx<'_>>,
         serialize_only: Option<InstructionSerialization>,
         skip_preflight: bool,
+        priority_lamports: u64,
         max_transaction_size: Option<usize>,
     ) -> gmsol::Result<()> {
         let store = client.find_store_address(store_key);
         match &self.command {
             Command::InitRoles(args) => {
                 crate::utils::instruction_buffer_not_supported(ctx)?;
-                args.run(client, store_key, serialize_only, max_transaction_size)
-                    .await?
+                args.run(
+                    client,
+                    store_key,
+                    serialize_only,
+                    max_transaction_size,
+                    priority_lamports,
+                )
+                .await?
             }
             Command::CreateStore {} => {
                 tracing::info!(
@@ -87,6 +94,7 @@ impl AdminArgs {
                     ctx,
                     serialize_only,
                     false,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("initialized a new data store at tx {signature}");
                         println!("{store}");
@@ -107,6 +115,7 @@ impl AdminArgs {
                         ctx,
                         serialize_only,
                         skip_preflight,
+                        Some(priority_lamports),
                         |signature| {
                             tracing::info!(
                             "transferred store authority to `{new_authority}` at tx {signature}"
@@ -136,6 +145,7 @@ impl AdminArgs {
                     ctx,
                     serialize_only,
                     skip_preflight,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("accepted store authority at tx {signature}");
                         Ok(())
@@ -155,6 +165,7 @@ impl AdminArgs {
                         ctx,
                         serialize_only,
                         skip_preflight,
+                        Some(priority_lamports),
                         |signature| {
                             tracing::info!(
                                 "transferred receiver authority to `{new_receiver}` at tx {signature}"
@@ -184,6 +195,7 @@ impl AdminArgs {
                     ctx,
                     serialize_only,
                     skip_preflight,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("enabled role `{role}` at tx {signature}");
                         Ok(())
@@ -198,6 +210,7 @@ impl AdminArgs {
                     ctx,
                     serialize_only,
                     skip_preflight,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("disabled role `{role}` at tx {signature}");
                         Ok(())
@@ -212,6 +225,7 @@ impl AdminArgs {
                     ctx,
                     serialize_only,
                     skip_preflight,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("granted a role for user {authority} at tx {signature}");
                         Ok(())
@@ -226,6 +240,7 @@ impl AdminArgs {
                     ctx,
                     serialize_only,
                     skip_preflight,
+                    Some(priority_lamports),
                     |signature| {
                         tracing::info!("revoked a role for user {authority} at tx {signature}");
                         Ok(())
@@ -269,6 +284,7 @@ impl InitializeRoles {
         store_key: &str,
         serialize_only: Option<InstructionSerialization>,
         max_transaction_size: Option<usize>,
+        priority_lamports: u64,
     ) -> gmsol::Result<()> {
         let store = client.find_store_address(store_key);
 
@@ -361,6 +377,7 @@ impl InitializeRoles {
             None,
             serialize_only,
             self.skip_preflight,
+            Some(priority_lamports),
             |signatures, error| {
                 println!("{signatures:#?}");
                 match error {

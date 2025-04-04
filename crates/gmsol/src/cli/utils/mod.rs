@@ -1,14 +1,17 @@
 use std::ops::Deref;
 
-use anchor_client::solana_sdk::{
-    pubkey::Pubkey,
-    signature::{Keypair, Signature},
-    signer::Signer,
+use anchor_client::{
+    solana_client::rpc_config::RpcSendTransactionConfig,
+    solana_sdk::{
+        pubkey::Pubkey,
+        signature::{Keypair, Signature},
+        signer::Signer,
+    },
 };
 
 use gmsol::{timelock::TimelockOps, utils::instruction::InstructionSerialization};
 use gmsol_solana_utils::{
-    bundle_builder::{BundleBuilder, BundleOptions},
+    bundle_builder::{BundleBuilder, BundleOptions, SendBundleOptions},
     transaction_builder::TransactionBuilder,
 };
 use prettytable::format::{FormatBuilder, TableFormat};
@@ -110,6 +113,7 @@ pub(crate) async fn send_or_serialize_transaction<C, S>(
     instruction_buffer_ctx: Option<InstructionBufferCtx<'_>>,
     serialize_only: Option<InstructionSerialization>,
     skip_preflight: bool,
+    compute_unit_min_priority_lamports: Option<u64>,
     callback: impl FnOnce(Signature) -> gmsol::Result<()>,
 ) -> gmsol::Result<()>
 where
@@ -126,6 +130,7 @@ where
         instruction_buffer_ctx,
         serialize_only,
         skip_preflight,
+        compute_unit_min_priority_lamports,
         |mut signatures, err| match err {
             Some(err) => Err(err),
             None => {
@@ -144,12 +149,21 @@ pub(crate) async fn send_or_serialize_bundle<C, S>(
     instruction_buffer_ctx: Option<InstructionBufferCtx<'_>>,
     serialize_only: Option<InstructionSerialization>,
     skip_preflight: bool,
+    compute_unit_min_priority_lamports: Option<u64>,
     callback: impl FnOnce(Vec<Signature>, Option<gmsol::Error>) -> gmsol::Result<()>,
 ) -> gmsol::Result<()>
 where
     C: Clone + Deref<Target = S>,
     S: Signer,
 {
+    let options = SendBundleOptions {
+        compute_unit_min_priority_lamports,
+        config: RpcSendTransactionConfig {
+            skip_preflight,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
     if let Some(format) = serialize_only {
         for (idx, rpc) in builder.into_builders().into_iter().enumerate() {
             println!("Transaction {idx}:");
@@ -259,7 +273,7 @@ where
             return Ok(());
         }
 
-        match bundle.send_all(skip_preflight).await {
+        match bundle.send_all_with_opts(options).await {
             Ok(signatures) => {
                 tracing::info!("successful transactions: {signatures:#?}");
             }
@@ -268,9 +282,15 @@ where
             }
         }
     } else {
-        match builder.send_all(skip_preflight).await {
-            Ok(signatures) => (callback)(signatures, None)?,
-            Err((signatures, error)) => (callback)(signatures, Some(error.into()))?,
+        match builder.send_all_with_opts(options).await {
+            Ok(signatures) => (callback)(
+                signatures.into_iter().map(|w| w.into_value()).collect(),
+                None,
+            )?,
+            Err((signatures, error)) => (callback)(
+                signatures.into_iter().map(|w| w.into_value()).collect(),
+                Some(error.into()),
+            )?,
         }
     }
     Ok(())
@@ -282,6 +302,7 @@ pub(crate) async fn send_or_serialize_bundle_with_default_callback<C, S>(
     instruction_buffer_ctx: Option<InstructionBufferCtx<'_>>,
     serialize_only: Option<InstructionSerialization>,
     skip_preflight: bool,
+    compute_unit_min_priority_lamports: Option<u64>,
 ) -> gmsol::Result<()>
 where
     C: Clone + Deref<Target = S>,
@@ -293,6 +314,7 @@ where
         instruction_buffer_ctx,
         serialize_only,
         skip_preflight,
+        compute_unit_min_priority_lamports,
         |signatures, err| {
             tracing::info!("{signatures:#?}");
             match err {

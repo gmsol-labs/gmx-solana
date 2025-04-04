@@ -72,6 +72,7 @@ impl Args {
         store: &Pubkey,
         serialize_only: Option<InstructionSerialization>,
         skip_preflight: bool,
+        priority_lamports: u64,
     ) -> gmsol::Result<()> {
         let req = match &self.command {
             Command::Config => {
@@ -154,6 +155,7 @@ impl Args {
                     None,
                     serialize_only,
                     skip_preflight,
+                    Some(priority_lamports),
                     |signatures, error| {
                         match error {
                             Some(err) => {
@@ -194,6 +196,7 @@ impl Args {
             None,
             serialize_only,
             skip_preflight,
+            Some(priority_lamports),
             |signature| {
                 tracing::info!("{signature}");
                 Ok(())
