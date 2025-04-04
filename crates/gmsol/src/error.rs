@@ -14,7 +14,7 @@ pub enum Error {
     Anchor(AnchorError),
     /// Client Error.
     #[error("{0:#?}")]
-    Client(anchor_client::ClientError),
+    Client(Box<anchor_client::ClientError>),
     /// Model error.
     #[error("model: {0}")]
     Model(#[from] gmsol_model::Error),
@@ -127,10 +127,10 @@ impl From<anchor_client::ClientError> for Error {
             ClientError::AccountNotFound => Self::NotFound,
             ClientError::SolanaClientError(error) => match handle_solana_client_error(&error) {
                 Some(err) => err,
-                None => Self::Client(ClientError::SolanaClientError(error)),
+                None => Self::Client(Box::new(ClientError::SolanaClientError(error))),
             },
             ClientError::SolanaClientPubsubError(err) => Self::from(err),
-            err => Self::Client(err),
+            err => Self::Client(Box::new(err)),
         }
     }
 }
@@ -149,7 +149,7 @@ impl From<gmsol_solana_utils::Error> for Error {
 
 impl From<anchor_client::anchor_lang::error::Error> for Error {
     fn from(value: anchor_client::anchor_lang::error::Error) -> Self {
-        Self::Client(value.into())
+        Self::Client(Box::new(value.into()))
     }
 }
 

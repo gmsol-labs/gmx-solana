@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - programs: Renamed `mock_chainlink_verifier` to `gmsol_mock_chainlink_verifier`.
 - sdk: Added `compute_unit_min_priority_lamports` to `SendBundleOptions`.
+- sdk: Boxed `ClientError` in the `Error` definition.
 
 ### Added
 
