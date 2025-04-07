@@ -11,6 +11,10 @@ pub mod utils;
 #[cfg(feature = "js")]
 pub mod js;
 
+/// Maintains a graph structured with [`MarketModel`](crate::model::MarketModel) as edges.
+#[cfg(feature = "market-graph")]
+pub mod market_graph;
+
 /// Model support.
 pub mod model {
     pub use gmsol_model::*;

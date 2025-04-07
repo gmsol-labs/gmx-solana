@@ -13,7 +13,7 @@ keywords.workspace = true
 crate-type = ["cdylib"]
 
 [features]
-default = []
+default = ["treasury", "market-graph"]
 treasury = ["gmsol-programs/treasury"]
 js = [
     "wasm-bindgen",
@@ -24,12 +24,14 @@ js = [
     "gmsol-model/js",
 ]
 serde = ["dep:serde", "gmsol-model/serde"]
+market-graph = ["petgraph"]
 
 [dependencies]
 gmsol-programs = { workspace = true, features = ["model"] }
 gmsol-model = { workspace = true, features = ["u128"] }
 thiserror = { workspace = true }
 base64 = { workspace = true }
+solana-sdk = { workspace = true }
 
 # Dependencies for the `wasm` feature
 wasm-bindgen = { workspace = true, optional = true }
@@ -38,3 +40,9 @@ tsify-next = { workspace = true, optional = true, features = ["js"] }
 
 # Dependencies for the `serde` feature
 serde = { workspace = true, optional = true, features = ["derive"] }
+
+# Dependencies for the `market-graph` feature
+petgraph = { workspace = true, optional = true, default-features = false, features = [
+    "std",
+    "stable_graph",
+] }
