@@ -1,6 +1,9 @@
 /// Default decimals for calculation.
 pub const MARKET_DECIMALS: u8 = 20;
 
+/// Unit USD value i.e. `one`.
+pub const MARKET_USD_UNIT: u128 = 10u128.pow(MARKET_DECIMALS as u32);
+
 /// Decimals of market tokens.
 pub const MARKET_TOKEN_DECIMALS: u8 = 9;
 

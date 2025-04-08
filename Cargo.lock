@@ -2456,13 +2456,19 @@ name = "gmsol-sdk"
 version = "0.5.0"
 dependencies = [
  "base64 0.22.1",
+ "cfg_aliases",
+ "either",
  "gmsol-model",
  "gmsol-programs",
  "petgraph",
+ "rust_decimal",
+ "rust_decimal_macros",
  "serde",
  "serde-wasm-bindgen",
  "solana-sdk",
  "thiserror",
+ "tracing",
+ "tracing-subscriber",
  "tsify-next",
  "wasm-bindgen",
 ]
