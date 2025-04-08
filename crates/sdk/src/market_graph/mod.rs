@@ -143,4 +143,58 @@ impl MarketGraph {
         let ix = *self.markets.get(market_token)?;
         Some(&self.graph.edge_weight(ix)?.market)
     }
+
+    /// Get all markets.
+    pub fn markets(&self) -> impl Iterator<Item = &MarketModel> {
+        self.markets
+            .values()
+            .filter_map(|ix| Some(&self.graph.edge_weight(*ix)?.market))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use gmsol_programs::gmsol_store::accounts::Market;
+
+    use crate::utils::zero_copy::try_deserialize_zero_copy_from_base64;
+
+    use super::*;
+
+    fn get_market_updates() -> Vec<(String, u64)> {
+        const DATA: &str = include_str!("test_data/markets.csv");
+        DATA.trim()
+            .split('\n')
+            .enumerate()
+            .map(|(idx, data)| {
+                let (market, supply) = data
+                    .split_once(',')
+                    .unwrap_or_else(|| panic!("invalid data: {idx}"));
+                (
+                    market.to_string(),
+                    supply.parse().expect("invalid supply format"),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn create_and_update_market_graph() -> crate::Result<()> {
+        let mut graph = MarketGraph::default();
+        let updates = get_market_updates();
+        let mut market_tokens = HashSet::<Pubkey>::default();
+        for (data, supply) in updates {
+            let market = try_deserialize_zero_copy_from_base64::<Market>(&data)?.0;
+            market_tokens.insert(market.meta.market_token_mint);
+            graph.insert_market(MarketModel::from_parts(Arc::new(market), supply));
+        }
+        let num_markets = graph.markets().count();
+        assert_eq!(num_markets, market_tokens.len());
+        for market_token in market_tokens {
+            let market = graph.get_market(&market_token).expect("must exist");
+            assert_eq!(market.meta.market_token_mint, market_token);
+        }
+        Ok(())
+    }
 }
