@@ -1,6 +1,6 @@
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
-    num::NonZeroUsize,
+    fmt,
 };
 
 use either::Either;
@@ -104,12 +104,12 @@ pub struct MarketGraph {
 struct MarketGraphConfig {
     value: u128,
     base_cost: u128,
-    max_steps: NonZeroUsize,
+    max_steps: usize,
 }
 
 const DEFAULT_VALUE: u128 = 1_000 * constants::MARKET_USD_UNIT;
 const DEFAULT_BASE_COST: u128 = 2 * constants::MARKET_USD_UNIT / 100;
-const DEFAULT_MAX_STEPS: NonZeroUsize = NonZeroUsize::new(5).unwrap();
+const DEFAULT_MAX_STEPS: usize = 5;
 
 impl Default for MarketGraphConfig {
     fn default() -> Self {
@@ -267,8 +267,43 @@ impl MarketGraph {
 
     /// Update value for the estimation.
     pub fn update_value(&mut self, value: u128) {
-        self.config.value = value;
-        self.update_estimated(None);
+        self.update_config(
+            MarketGraphConfig {
+                value,
+                ..self.config
+            },
+            true,
+        );
+    }
+
+    /// Update base cost.
+    pub fn update_base_cost(&mut self, base_cost: u128) {
+        self.update_config(
+            MarketGraphConfig {
+                base_cost,
+                ..self.config
+            },
+            true,
+        );
+    }
+
+    /// Update max steps.
+    pub fn update_max_steps(&mut self, max_steps: usize) {
+        self.update_config(
+            MarketGraphConfig {
+                max_steps,
+                ..self.config
+            },
+            false,
+        );
+    }
+
+    /// Update config.
+    fn update_config(&mut self, config: MarketGraphConfig, should_update_estimation: bool) {
+        self.config = config;
+        if should_update_estimation {
+            self.update_estimated(None);
+        }
     }
 
     fn insert_collateral_token(&mut self, token: Pubkey, market_token: Pubkey) -> TokenIx {
@@ -359,7 +394,7 @@ impl MarketGraph {
             .ix;
 
         let g = &self.graph;
-        let max_steps = self.config.max_steps.get();
+        let max_steps = self.config.max_steps;
         let mut predecessors = vec![None; g.node_bound()];
         let mut distances = vec![None; g.node_bound()];
         distances[self.to_index(source)] = Some(Decimal::ZERO);
@@ -425,15 +460,104 @@ impl MarketGraph {
         Ok((result_distances.unwrap_or(distances), predecessors))
     }
 
+    fn dfs(&self, source: &Pubkey) -> crate::Result<(Distances, Predecessors)> {
+        let source = self
+            .collateral_tokens
+            .get(source)
+            .ok_or_else(|| crate::Error::unknown("the source is not a known collateral token"))?
+            .ix;
+
+        let g = &self.graph;
+        let mut predecessors = vec![None; g.node_bound()];
+        let mut distances = vec![None; g.node_bound()];
+
+        let mut visited = HashSet::<EdgeIndex>::new();
+
+        self.dfs_recursive(
+            source,
+            Some(Decimal::ZERO),
+            None,
+            0,
+            &mut visited,
+            &mut distances,
+            &mut predecessors,
+        );
+
+        Ok((distances, predecessors))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn dfs_recursive(
+        &self,
+        current: NodeIndex,
+        distance: Option<Decimal>,
+        predecessor: Option<(NodeIndex, Pubkey)>,
+        steps: usize,
+        visited: &mut HashSet<EdgeIndex>,
+        distances: &mut Distances,
+        predecessors: &mut Predecessors,
+    ) {
+        let i = current;
+        if steps > self.config.max_steps {
+            return;
+        }
+        let Some(d) = distance else {
+            return;
+        };
+        let best_d = distances[self.to_index(i)];
+        if best_d.map(|best| d >= best).unwrap_or(false) {
+            return;
+        }
+        distances[self.to_index(i)] = Some(d);
+        predecessors[self.to_index(i)] = predecessor;
+
+        for edge in self.graph.edges(i) {
+            let edge_ix = edge.id();
+            if visited.contains(&edge_ix) {
+                continue;
+            }
+            visited.insert(edge_ix);
+            let j = edge.target();
+            self.dfs_recursive(
+                j,
+                edge.weight().cost().map(|w| w + d),
+                Some((i, edge.weight().market_token)),
+                steps + 1,
+                visited,
+                distances,
+                predecessors,
+            );
+            visited.remove(&edge_ix);
+        }
+    }
+
     /// Find the best swap path for the given source and target.
-    pub fn best_swap_paths(&self, source: &Pubkey) -> crate::Result<BestSwapPaths<'_>> {
-        let (distances, predecessors) = self.bellman_ford(source)?;
+    pub fn best_swap_paths(
+        &self,
+        source: &Pubkey,
+        skip_bellman_ford: bool,
+    ) -> crate::Result<BestSwapPaths<'_>> {
+        let (distances, predecessors, arbitrage_exists) = if skip_bellman_ford {
+            let results = self.dfs(source)?;
+            (results.0, results.1, None)
+        } else {
+            match self.bellman_ford(source) {
+                Ok(results) => (results.0, results.1, Some(false)),
+                // Fallback to DFS.
+                Err(crate::Error::MarketGraph(MarketGraphError::NegativeCycle)) => {
+                    let results = self.dfs(source)?;
+                    (results.0, results.1, Some(true))
+                }
+                Err(err) => return Err(err),
+            }
+        };
 
         Ok(BestSwapPaths {
             graph: self,
             source: *source,
             distances,
             predecessors,
+            arbitrage_exists,
         })
     }
 }
@@ -444,6 +568,18 @@ pub struct BestSwapPaths<'a> {
     source: Pubkey,
     distances: Distances,
     predecessors: Predecessors,
+    arbitrage_exists: Option<bool>,
+}
+
+impl<'a> fmt::Debug for BestSwapPaths<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BestSwapPaths")
+            .field("source", &self.source)
+            .field("distances", &self.distances)
+            .field("predecessors", &self.predecessors)
+            .field("arbitrage_exists", &self.arbitrage_exists)
+            .finish()
+    }
 }
 
 impl<'a> BestSwapPaths<'a> {
@@ -452,35 +588,59 @@ impl<'a> BestSwapPaths<'a> {
         &self.source
     }
 
+    /// Return whether there is an arbitrage opportunity.
+    ///
+    /// Return `None` if it is unknown.
+    pub fn arbitrage_exists(&self) -> Option<bool> {
+        self.arbitrage_exists
+    }
+
     /// Get best swap path to the target.
     pub fn to(&self, target: &Pubkey) -> (Option<Decimal>, Vec<Pubkey>) {
         let Self {
             graph,
             distances,
             predecessors,
+            source,
             ..
         } = self;
 
-        let Some(target) = graph.collateral_tokens.get(target) else {
+        let Some(target_state) = graph.collateral_tokens.get(target) else {
             return (None, vec![]);
         };
 
-        let target = target.ix;
-        let ix = |i| graph.graph.to_index(i);
-        let target = ix(target);
+        let target_ix = target_state.ix;
+        let target_ix = graph.to_index(target_ix);
 
-        let distance = distances[target];
+        let distance = distances[target_ix];
+
+        if *source == *target {
+            return (distance, vec![]);
+        }
+
         let mut path = vec![];
-        let mut current = predecessors[target];
-
+        let mut current = predecessors[target_ix];
+        let mut steps = 0;
         while let Some((predecessor, market_token)) = current.as_ref() {
+            steps += 1;
+            if steps > graph.config.max_steps {
+                return (None, vec![]);
+            }
             path.push(*market_token);
-            current = predecessors[ix(*predecessor)];
+            current = predecessors[graph.to_index(*predecessor)];
         }
 
         path.reverse();
 
-        (distance.map(|d| (-d).exp()), path)
+        (
+            if path.is_empty() {
+                // Since `target != source`, an empty path means there's no valid distance.
+                None
+            } else {
+                distance.map(|d| (-d).exp())
+            },
+            path,
+        )
     }
 }
 
@@ -590,6 +750,7 @@ mod tests {
 
         // Update value.
         graph.update_value(10 * constants::MARKET_USD_UNIT);
+        graph.update_base_cost(constants::MARKET_USD_UNIT / 100);
 
         let num_markets = graph.markets().count();
         assert_eq!(num_markets, market_tokens.len());
@@ -607,25 +768,32 @@ mod tests {
         const WSOL: &str = "So11111111111111111111111111111111111111112";
         const BOME: &str = "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82";
 
+        let usdc: Pubkey = USDC.parse().unwrap();
+        let wsol: Pubkey = WSOL.parse().unwrap();
+        let bome: Pubkey = BOME.parse().unwrap();
+
         let _tracing = setup_fmt_tracing("info");
 
         let (mut g, _) = create_and_update_market_graph()?;
 
         g.update_value(constants::MARKET_USD_UNIT);
 
-        let usdc: Pubkey = USDC.parse().unwrap();
-        let wsol: Pubkey = WSOL.parse().unwrap();
-        let bome: Pubkey = BOME.parse().unwrap();
+        for steps in 0..=5 {
+            g.update_max_steps(steps);
 
-        let paths = g.best_swap_paths(&wsol)?;
+            let paths = g.best_swap_paths(&wsol, false)?;
+            let dfs_paths = g.best_swap_paths(&wsol, true)?;
 
-        let (rate, best_path) = paths.to(&bome);
-        assert!(rate.is_some());
-        assert!(best_path.len() >= 2);
+            let (rate, best_path) = paths.to(&bome);
+            let (dfs_rate, dfs_best_path) = dfs_paths.to(&bome);
+            assert_eq!(rate, dfs_rate);
+            assert_eq!(best_path, dfs_best_path);
 
-        let (rate, best_path) = paths.to(&usdc);
-        assert!(rate.is_some());
-        assert!(!best_path.is_empty());
+            let (rate, best_path) = paths.to(&usdc);
+            let (dfs_rate, dfs_best_path) = dfs_paths.to(&usdc);
+            assert_eq!(rate, dfs_rate);
+            assert_eq!(best_path, dfs_best_path);
+        }
 
         Ok(())
     }
