@@ -57,7 +57,7 @@ impl SwitchcboardPullOracleFactory {
     /// Create with gateways.
     pub fn from_gateways(gateways: Vec<Gateway>) -> crate::Result<Self> {
         if gateways.is_empty() {
-            return Err(crate::Error::unknown("switchboard: empty gateway list"));
+            return Err(crate::Error::custom("switchboard: empty gateway list"));
         }
         Ok(Self {
             switchboard: Pubkey::new_from_array(SWITCHBOARD_ON_DEMAND_PROGRAM_ID.to_bytes()),
@@ -76,7 +76,7 @@ impl SwitchcboardPullOracleFactory {
         use std::env;
 
         let gateway_url = env::var(Self::ENV_GATEWAY)
-            .map_err(|_| crate::Error::unknown(format!("{} is not set", Self::ENV_GATEWAY)))?;
+            .map_err(|_| crate::Error::custom(format!("{} is not set", Self::ENV_GATEWAY)))?;
 
         Ok(Self::new(&gateway_url))
     }
@@ -89,10 +89,10 @@ impl SwitchcboardPullOracleFactory {
     /// Create from queue.
     pub async fn from_queue(client: &RpcClient, queue: &Pubkey) -> crate::Result<Self> {
         let queue = QueueAccountData::load(client, queue).await.map_err(|err| {
-            crate::Error::unknown(format!("switchboard: loading queue data error: {err}"))
+            crate::Error::custom(format!("switchboard: loading queue data error: {err}"))
         })?;
         let gateways = queue.fetch_gateways(client).await.map_err(|err| {
-            crate::Error::unknown(format!("switchboard: fetching gateways error: {err}"))
+            crate::Error::custom(format!("switchboard: fetching gateways error: {err}"))
         })?;
         tracing::debug!("loaded {} gateways", gateways.len());
 
@@ -223,12 +223,12 @@ impl<C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullOracl
                     .or_insert_with(OnceCell::new)
                     .get_or_try_init(|| PullFeed::load_data(&self.client, feed))
                     .await
-                    .map_err(|_| crate::Error::unknown("switchboard: fetching job data failed"))?;
+                    .map_err(|_| crate::Error::custom("switchboard: fetching job data failed"))?;
                 tracing::trace!(%feed, ?data, "fechted feed data");
                 let jobs = data
                     .fetch_jobs(&self.crossbar.clone().unwrap_or_default())
                     .await
-                    .map_err(|_| crate::Error::unknown("switchboard: fetching job data failed"))?;
+                    .map_err(|_| crate::Error::custom("switchboard: fetching job data failed"))?;
                 tracing::trace!(%feed, ?jobs, "fetched jobs");
                 let encoded_jobs = encode_jobs(&jobs);
                 let max_variance = (data.max_variance / 1_000_000_000) as u32;
@@ -246,7 +246,7 @@ impl<C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullOracl
             }
             let slothash = SlotHashSysvar::get_latest_slothash(&self.client)
                 .await
-                .map_err(|_| crate::Error::unknown("switchboard: fetching slot hash failed"))?;
+                .map_err(|_| crate::Error::custom("switchboard: fetching slot hash failed"))?;
             let price_signatures = self
                 .gateway
                 .fetch_signatures_multi(FetchSignaturesMultiParams {
@@ -256,7 +256,7 @@ impl<C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullOracl
                     use_timestamp: Some(true),
                 })
                 .await
-                .map_err(|_| crate::Error::unknown("switchboard: fetching signatures failed"))?;
+                .map_err(|_| crate::Error::custom("switchboard: fetching signatures failed"))?;
             tracing::trace!("fetched price signatures: {price_signatures:#?}");
 
             let mut all_submissions: Vec<MultiSubmission> = Vec::new();
@@ -269,14 +269,14 @@ impl<C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullOracl
                         .map(|x| {
                             if let Some(after) = after {
                                 let Some(ts) = x.timestamp else {
-                                    return Err(crate::Error::unknown(
+                                    return Err(crate::Error::custom(
                                         "switchboard: missing timestamp of the feed result",
                                     ))?;
                                 };
                                 let ts = OffsetDateTime::from_unix_timestamp(ts)
-                                    .map_err(crate::Error::unknown)?;
+                                    .map_err(crate::Error::custom)?;
                                 if ts < after {
-                                    return Err(crate::Error::unknown(
+                                    return Err(crate::Error::custom(
                                         "switchboard: feed result is too old, ts={ts}, required={after}",
                                     ));
                                 }
@@ -286,21 +286,21 @@ impl<C: Deref<Target = impl Signer> + Clone> PullOracle for SwitchboardPullOracl
                         .collect::<crate::Result<Vec<_>>>()?,
                     signature: BASE64_STANDARD
                         .decode(resp.signature.clone())
-                        .map_err(|_| crate::Error::unknown("switchboard: base64:decode failure"))?
+                        .map_err(|_| crate::Error::custom("switchboard: base64:decode failure"))?
                         .try_into()
-                        .map_err(|_| crate::Error::unknown("switchboard: signature:decode failure"))?,
+                        .map_err(|_| crate::Error::custom("switchboard: signature:decode failure"))?,
                     recovery_id: resp.recovery_id as u8,
                 });
                 let oracle_key = hex::decode(
                     &resp
                         .feed_responses
                         .first()
-                        .ok_or_else(|| crate::Error::unknown("switchboard: empty response"))?
+                        .ok_or_else(|| crate::Error::custom("switchboard: empty response"))?
                         .oracle_pubkey,
                 )
-                .map_err(|_| crate::Error::unknown("switchboard: hex:decode failure"))?
+                .map_err(|_| crate::Error::custom("switchboard: hex:decode failure"))?
                 .try_into()
-                .map_err(|_| crate::Error::unknown("switchboard: pubkey:decode failure"))?;
+                .map_err(|_| crate::Error::custom("switchboard: pubkey:decode failure"))?;
                 let oracle_key = Pubkey::new_from_array(oracle_key);
                 oracle_keys.push(oracle_key);
             }
@@ -353,12 +353,11 @@ impl<'a, C: Clone + Deref<Target = impl Signer>> PostPullOraclePrices<'a, C>
             );
 
             let oracle_luts = oracle_luts_result
-                .map_err(|_| crate::Error::unknown("switchboard: fetching oracle luts failed"))?;
-            let pull_feed_luts = pull_feed_luts_result.map_err(|_| {
-                crate::Error::unknown("switchboard: fetching pull feed luts failed")
-            })?;
+                .map_err(|_| crate::Error::custom("switchboard: fetching oracle luts failed"))?;
+            let pull_feed_luts = pull_feed_luts_result
+                .map_err(|_| crate::Error::custom("switchboard: fetching pull feed luts failed"))?;
             let queue_lut = queue_lut_result
-                .map_err(|_| crate::Error::unknown("switchboard: fetching queue lut failed"))?;
+                .map_err(|_| crate::Error::custom("switchboard: fetching queue lut failed"))?;
 
             let mut luts = oracle_luts;
             luts.extend(pull_feed_luts);

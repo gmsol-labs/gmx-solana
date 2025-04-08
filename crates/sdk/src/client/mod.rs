@@ -1,13 +1,13 @@
-/// Pubsub client.
+/// Client for transaction subscription.
 pub mod pubsub;
 
-/// Utils for fetching program accounts.
+/// Utilities for program accounts.
 pub mod accounts;
 
-/// Utils for handling transaction history.
+/// Utilities for transaction history.
 pub mod transaction_history;
 
-/// Token map.
+/// Definition of [`TokenMap`].
 pub mod token_map;
 
 /// Operations.
@@ -19,7 +19,7 @@ pub mod feeds_parser;
 /// Pull oracle support.
 pub mod pull_oracle;
 
-/// Token account utils.
+/// Utilities for token accounts.
 pub mod token_account;
 
 /// Simulate a transaction and view its output.
@@ -121,7 +121,7 @@ impl Default for ClientOptions {
     }
 }
 
-/// GMSOL Client.
+/// Client for interacting with the GMX-Solana protocol.
 pub struct Client<C> {
     cfg: Config<C>,
     store_program: Program<C>,
@@ -175,7 +175,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         Self::new_with_options(cluster, payer, ClientOptions::default())
     }
 
-    /// Try to clone a new client with a new payer.
+    /// Create a clone of this client with a new payer.
     pub fn try_clone_with_payer<C2: Clone + Deref<Target = impl Signer>>(
         &self,
         payer: C2,
@@ -194,7 +194,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         )
     }
 
-    /// Try to clone the client.
+    /// Create a clone of this client.
     pub fn try_clone(&self) -> crate::Result<Self> {
         Ok(Self {
             cfg: self.cfg.clone(),
@@ -208,7 +208,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         })
     }
 
-    /// Replace the subscription config.
+    /// Replace subscription config with the given.
     pub fn set_subscription_config(&mut self, config: SubscriptionConfig) -> &mut Self {
         self.subscription_config = config;
         self
@@ -219,38 +219,38 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         Program::new(program_id, self.cfg.clone())
     }
 
-    /// Get the cluster.
+    /// Get current cluster.
     pub fn cluster(&self) -> &Cluster {
         self.cfg.cluster()
     }
 
-    /// Get the commitment config.
+    /// Get current commitment config.
     pub fn commitment(&self) -> CommitmentConfig {
         *self.cfg.commitment()
     }
 
-    /// Get the payer.
+    /// Get current payer.
     pub fn payer(&self) -> Pubkey {
         self.cfg.payer()
     }
 
-    /// Get RPC Client.
+    /// Get [`RpcClient`].
     pub fn rpc(&self) -> &RpcClient {
         self.rpc.get_or_init(|| self.cfg.rpc())
     }
 
-    /// Get the store program.
+    /// Get store program.
     pub fn store_program(&self) -> &Program<C> {
         &self.store_program
     }
 
-    /// Get the treasury program.
+    /// Get treasury program.
     pub fn treasury_program(&self) -> &Program<C> {
         &self.treasury_program
     }
 
-    /// Get the timelock program.
     #[cfg(feature = "timelock")]
+    /// Get timelock program.
     pub fn timelock_program(&self) -> &Program<C> {
         &self.timelock_program
     }
@@ -281,23 +281,23 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         self.timelock_program().id()
     }
 
-    /// Create a transaction builder for the store program.
+    /// Create a [`TransactionBuilder`] for the store program.
     pub fn store_transaction(&self) -> TransactionBuilder<'_, C> {
         self.store_program().transaction()
     }
 
-    /// Create a transaction builder for the treasury program.
+    /// Create a [`TransactionBuilder`] for the treasury program.
     pub fn treasury_transaction(&self) -> TransactionBuilder<'_, C> {
         self.treasury_program().transaction()
     }
 
-    /// Create a transaction builder for the timelock program.
     #[cfg(feature = "timelock")]
+    /// Create a [`TransactionBuilder`] for the timelock program.
     pub fn timelock_transaction(&self) -> TransactionBuilder<'_, C> {
         self.timelock_program().transaction()
     }
 
-    /// Create a bundle builder with the given options.
+    /// Create a [`BundleBuilder`] with the given options.
     pub fn bundle_with_options(&self, options: BundleOptions) -> BundleBuilder<'_, C> {
         BundleBuilder::new_with_options(CreateBundleOptions {
             cluster: self.cluster().clone(),
@@ -306,7 +306,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         })
     }
 
-    /// Create a [`BundleBuilder`]
+    /// Create a [`BundleBuilder`] with default options.
     pub fn bundle(&self) -> BundleBuilder<C> {
         self.bundle_with_options(Default::default())
     }
@@ -321,7 +321,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         crate::pda::find_store_wallet_address(store, self.store_program_id()).0
     }
 
-    /// Get the event authority address for the `Store` program.
+    /// Get the event authority PDA for the `Store` program.
     pub fn store_event_authority(&self) -> Pubkey {
         crate::pda::find_event_authority_address(self.store_program_id()).0
     }
@@ -364,12 +364,12 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         crate::pda::find_deposit_address(store, user, nonce, self.store_program_id()).0
     }
 
-    /// Find first deposit owner address.
+    /// Find PDA for first deposit owner.
     pub fn find_first_deposit_owner_address(&self) -> Pubkey {
         crate::pda::find_first_deposit_receiver_address(self.store_program_id()).0
     }
 
-    /// Find DPA for withdrawal account.
+    /// Find PDA for withdrawal account.
     pub fn find_withdrawal_address(
         &self,
         store: &Pubkey,
@@ -409,7 +409,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         .0)
     }
 
-    /// Find claimable account address.
+    /// Find PDA for claimable account.
     pub fn find_claimable_account_address(
         &self,
         store: &Pubkey,
@@ -427,7 +427,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         .0
     }
 
-    /// Find trade event buffer address.
+    /// Find PDA for trade event buffer account.
     pub fn find_trade_event_buffer_address(
         &self,
         store: &Pubkey,
@@ -443,27 +443,27 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         .0
     }
 
-    /// Find User account address.
+    /// Find PDA for user account.
     pub fn find_user_address(&self, store: &Pubkey, owner: &Pubkey) -> Pubkey {
         crate::pda::find_user_address(store, owner, self.store_program_id()).0
     }
 
-    /// Find referral code address.
+    /// Find PDA for referral code.
     pub fn find_referral_code_address(&self, store: &Pubkey, code: ReferralCodeBytes) -> Pubkey {
         crate::pda::find_referral_code_address(store, code, self.store_program_id()).0
     }
 
-    /// Find GLV token address.
+    /// Find PDA for GLV token mint.
     pub fn find_glv_token_address(&self, store: &Pubkey, index: u16) -> Pubkey {
         crate::pda::find_glv_token_address(store, index, self.store_program_id()).0
     }
 
-    /// Find GLV address.
+    /// Find PDA for GLV.
     pub fn find_glv_address(&self, glv_token: &Pubkey) -> Pubkey {
         crate::pda::find_glv_address(glv_token, self.store_program_id()).0
     }
 
-    /// Find GLV deposit address.
+    /// Find PDA for GLV deposit.
     pub fn find_glv_deposit_address(
         &self,
         store: &Pubkey,
@@ -473,7 +473,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         crate::pda::find_glv_deposit_address(store, owner, nonce, self.store_program_id()).0
     }
 
-    /// Find GLV withdrawal address.
+    /// Find PDA for GLV withdrawal.
     pub fn find_glv_withdrawal_address(
         &self,
         store: &Pubkey,
@@ -483,7 +483,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         crate::pda::find_glv_withdrawal_address(store, owner, nonce, self.store_program_id()).0
     }
 
-    /// Find GT exchange vault address.
+    /// Find PDA for GT exchange vault.
     pub fn find_gt_exchange_vault_address(
         &self,
         store: &Pubkey,
@@ -499,12 +499,12 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         .0
     }
 
-    /// Find GT exchange address.
+    /// Find PDA for GT exchange.
     pub fn find_gt_exchange_address(&self, vault: &Pubkey, owner: &Pubkey) -> Pubkey {
         crate::pda::find_gt_exchange_address(vault, owner, self.store_program_id()).0
     }
 
-    /// Find Custom Price Feed address.
+    /// Find PDA for custom price feed.
     pub fn find_price_feed_address(
         &self,
         store: &Pubkey,
@@ -524,17 +524,17 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         .0
     }
 
-    /// Find treasury global config address.
+    /// Find PDA for treasury global config.
     pub fn find_treasury_config_address(&self, store: &Pubkey) -> Pubkey {
         crate::pda::find_treasury_config_address(store, self.treasury_program_id()).0
     }
 
-    /// Find treasury vault config address.
+    /// Find PDA for treasury vault config.
     pub fn find_treasury_vault_config_address(&self, config: &Pubkey, index: u16) -> Pubkey {
         crate::pda::find_treasury_vault_config_address(config, index, self.treasury_program_id()).0
     }
 
-    /// Find GT bank address.
+    /// Find PDA for GT bank.
     pub fn find_gt_bank_address(
         &self,
         treasury_vault_config: &Pubkey,
@@ -548,30 +548,30 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         .0
     }
 
-    /// Find treasury receiver address.
+    /// Find PDA for treasury receiver.
     pub fn find_treasury_receiver_address(&self, config: &Pubkey) -> Pubkey {
         crate::pda::find_treasury_receiver_address(config, self.treasury_program_id()).0
     }
 
-    /// Find timelock config address.
     #[cfg(feature = "timelock")]
+    /// Find PDA for timelock config.
     pub fn find_timelock_config_address(&self, store: &Pubkey) -> Pubkey {
         crate::pda::find_timelock_config_address(store, self.timelock_program_id()).0
     }
 
-    /// Find executor address.
     #[cfg(feature = "timelock")]
+    /// Find PDA for timelock executor.
     pub fn find_executor_address(&self, store: &Pubkey, role: &str) -> crate::Result<Pubkey> {
         Ok(crate::pda::find_executor_address(store, role, self.timelock_program_id())?.0)
     }
 
-    /// Find the wallet address of the given executor.
     #[cfg(feature = "timelock")]
+    /// Find the wallet PDA for the given timelock executor.
     pub fn find_executor_wallet_address(&self, executor: &Pubkey) -> Pubkey {
         crate::pda::find_executor_wallet_address(executor, self.timelock_program_id()).0
     }
 
-    /// Get slot.
+    /// Get latest slot.
     pub async fn get_slot(&self, commitment: Option<CommitmentConfig>) -> crate::Result<u64> {
         let slot = self
             .store_program()
@@ -582,7 +582,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         Ok(slot)
     }
 
-    /// Fetch accounts owned by the Store Program.
+    /// Fetch accounts owned by the store program.
     pub async fn store_accounts_with_config<T>(
         &self,
         filter_by_store: Option<StoreFilter>,
@@ -608,7 +608,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             .transpose()
     }
 
-    /// Fetch account at the given address with config.
+    /// Fetch account with the given address with config.
     ///
     /// The value inside the returned context will be `None` if the account does not exist.
     pub async fn account_with_config<T>(
@@ -624,7 +624,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         account_with_context(&client, address, config).await
     }
 
-    /// Fetch account at the given address.
+    /// Fetch account with the given address.
     pub async fn account<T: AccountDeserialize>(
         &self,
         address: &Pubkey,
@@ -635,7 +635,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             .into_value())
     }
 
-    /// Fetch accounts owned by the Store Program.
+    /// Fetch accounts owned by the store program.
     pub async fn store_accounts<T>(
         &self,
         filter_by_store: Option<StoreFilter>,
@@ -794,7 +794,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         Ok(glvs)
     }
 
-    /// Fetch [`MarketStatus`] with the market token address.
+    /// Fetch [`MarketStatus`] with market token address.
     pub async fn market_status(
         &self,
         store: &Pubkey,
@@ -818,7 +818,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         Ok(status)
     }
 
-    /// Fetch current market token price with the market token address.
+    /// Fetch current market token price with market token address.
     pub async fn market_token_price(
         &self,
         store: &Pubkey,
@@ -1005,7 +1005,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             .await?
             .and_then(|txn| {
                 let signature = txn
-                    .map(|txn| txn.signature.parse().map_err(crate::Error::unknown))
+                    .map(|txn| txn.signature.parse().map_err(crate::Error::custom))
                     .transpose();
                 async move { signature }
             });
@@ -1118,7 +1118,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         futures_util::pin_mut!(events);
         match events.next().await.transpose()? {
             Some(events) => Ok(events.into_value()),
-            None => Err(crate::Error::unknown(format!(
+            None => Err(crate::Error::custom(format!(
                 "events not found, slot={before_slot}"
             ))),
         }
@@ -1226,7 +1226,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                 }
             }
         }
-        Err(crate::Error::unknown("the watch stream end"))
+        Err(crate::Error::custom("the watch stream end"))
     }
 
     /// Shutdown the client gracefully.
@@ -1287,7 +1287,7 @@ impl StoreFilter {
         }
     }
 
-    /// Ignore disc offset.
+    /// Ignore discriminator offset.
     pub fn ignore_disc_offset(mut self, ignore: bool) -> Self {
         self.ignore_disc_offset = ignore;
         self

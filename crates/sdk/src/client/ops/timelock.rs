@@ -192,13 +192,13 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
             .accounts
             .len()
             .try_into()
-            .map_err(|_| crate::Error::unknown("too many accounts"))?;
+            .map_err(|_| crate::Error::custom("too many accounts"))?;
 
         let data_len = instruction
             .data
             .len()
             .try_into()
-            .map_err(|_| crate::Error::unknown("data too long"))?;
+            .map_err(|_| crate::Error::custom("data too long"))?;
 
         let rpc = self
             .timelock_transaction()
@@ -268,7 +268,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         let mut buffers = buffers.into_iter().peekable();
         let buffer = buffers
             .peek()
-            .ok_or_else(|| crate::Error::unknown("no instructions to appove"))?;
+            .ok_or_else(|| crate::Error::custom("no instructions to appove"))?;
         let role = match role_hint {
             Some(role) => role.to_string(),
             None => {
@@ -351,7 +351,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         let mut buffers = buffers.into_iter().peekable();
         let buffer = buffers
             .peek()
-            .ok_or_else(|| crate::Error::unknown("no instructions to appove"))?;
+            .ok_or_else(|| crate::Error::custom("no instructions to appove"))?;
         let (executor, rent_receiver) = match (executor_hint, rent_receiver_hint) {
             (Some(executor), Some(rent_receiver)) => (*executor, *rent_receiver),
             _ => {

@@ -15,10 +15,10 @@ use gmsol_programs::gmsol_timelock::accounts as timelock_accounts;
 /// Nonce bytes.
 pub type NonceBytes = [u8; 32];
 
-/// Referral Code Bytes.
+/// Referral code bytes.
 pub type ReferralCodeBytes = [u8; 8];
 
-/// Event authority SEED.
+/// Seed for event authority.
 pub const EVENT_AUTHORITY_SEED: &[u8] = b"__event_authority";
 
 /// Seed for [`Store`](store_accounts::Store).
@@ -27,10 +27,10 @@ pub const STORE_SEED: &[u8] = b"data_store";
 /// Seed for store wallet.
 pub const STORE_WALLET_SEED: &[u8] = b"store_wallet";
 
-/// Market Vault Seed.
+/// Seed for market vault.
 pub const MARKET_VAULT_SEED: &[u8] = b"market_vault";
 
-/// Market Token Mint Address Seed.
+/// Seed for market token mint.
 pub const MAREKT_TOKEN_MINT_SEED: &[u8] = b"market_token_mint";
 
 /// Seed for [`Market`](store_accounts::Market).
@@ -54,10 +54,10 @@ pub const ORDER_SEED: &[u8] = b"order";
 /// Seed for [`Position`](store_accounts::Position).
 pub const POSITION_SEED: &[u8] = b"position";
 
-/// Claimable account seed.
+/// Seed for claimable account.
 pub const CLAIMABLE_ACCOUNT_SEED: &[u8] = b"claimable_account";
 
-/// Trade data seed.
+/// Seed for trade event buffer account.
 pub const TRADE_DATA_SEED: &[u8] = b"trade_event_data";
 
 /// Seed for [`User`](store_accounts::UserHeader).
@@ -66,7 +66,7 @@ pub const USER_SEED: &[u8] = b"user";
 /// Seed for [`ReferralCodeV2`](store_accounts::ReferralCodeV2).
 pub const REFERRAL_CODE_SEED: &[u8] = b"referral_code";
 
-/// GLV token seed.
+/// Seed for GLV token mint.
 pub const GLV_TOKEN_SEED: &[u8] = b"glv_token";
 
 /// Seed for [`Glv`](store_accounts::Glv).
@@ -99,7 +99,7 @@ pub const TREASURY_VAULT_CONFIG_SEED: &[u8] = b"treasury_vault_config";
 #[cfg(treasury)]
 pub const GT_BANK_SEED: &[u8] = b"gt_bank";
 
-/// Treasury receiver seed.
+/// Seed for treasury receiver.
 #[cfg(treasury)]
 pub const TREASURY_RECEIVER_SEED: &[u8] = b"receiver";
 
@@ -120,22 +120,22 @@ fn to_seed(key: &str) -> [u8; 32] {
     hash(key.as_bytes()).to_bytes()
 }
 
-/// Find the PDA for `event_authority` account.
+/// Find PDA for `event_authority` account.
 pub fn find_event_authority_address(program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[EVENT_AUTHORITY_SEED], program_id)
 }
 
-/// Find the PDA for [`Store`](store_accounts::Store) account.
+/// Find PDA for [`Store`](store_accounts::Store) account.
 pub fn find_store_address(key: &str, store_program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[STORE_SEED, &to_seed(key)], store_program_id)
 }
 
-/// Find the PDA for store wallet account.
+/// Find PDA for store wallet account.
 pub fn find_store_wallet_address(store: &Pubkey, store_program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[STORE_WALLET_SEED, store.as_ref()], store_program_id)
 }
 
-/// Find PDA for the market vault.
+/// Find PDA for market vault.
 pub fn find_market_vault_address(
     store: &Pubkey,
     token: &Pubkey,
@@ -167,7 +167,7 @@ pub fn find_market_token_address(
     )
 }
 
-/// Find the PDA for [`Market`](store_accounts::Market) account.
+/// Find PDA for [`Market`](store_accounts::Market) account.
 pub fn find_market_address(
     store: &Pubkey,
     token: &Pubkey,
@@ -179,7 +179,7 @@ pub fn find_market_address(
     )
 }
 
-/// Find the PDA for deposit.
+/// Find PDA for deposit.
 pub fn find_deposit_address(
     store: &Pubkey,
     user: &Pubkey,
@@ -192,12 +192,12 @@ pub fn find_deposit_address(
     )
 }
 
-/// Find the PDA for first deposit receiver.
+/// Find PDA for first deposit receiver.
 pub fn find_first_deposit_receiver_address(store_program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[FIRST_DEPOSIT_RECEIVER_SEED], store_program_id)
 }
 
-/// Find the PDA for withdrawal.
+/// Find PDA for withdrawal.
 pub fn find_withdrawal_address(
     store: &Pubkey,
     user: &Pubkey,
@@ -210,7 +210,7 @@ pub fn find_withdrawal_address(
     )
 }
 
-/// Find the PDA for shift.
+/// Find PDA for shift.
 pub fn find_shift_address(
     store: &Pubkey,
     owner: &Pubkey,
@@ -223,7 +223,7 @@ pub fn find_shift_address(
     )
 }
 
-/// Find the PDA for [`Order`](store_accounts::Order) account.
+/// Find PDA for [`Order`](store_accounts::Order) account.
 pub fn find_order_address(
     store: &Pubkey,
     owner: &Pubkey,
@@ -236,7 +236,7 @@ pub fn find_order_address(
     )
 }
 
-/// Create PDA for position.
+/// Find PDA for position.
 pub fn find_position_address(
     store: &Pubkey,
     owner: &Pubkey,
@@ -260,7 +260,7 @@ pub fn find_position_address(
     )
 }
 
-/// Find the PDA for claimable account.
+/// Find PDA for claimable account.
 pub fn find_claimable_account_address(
     store: &Pubkey,
     mint: &Pubkey,
@@ -280,7 +280,7 @@ pub fn find_claimable_account_address(
     )
 }
 
-/// Find the PDA for trade event buffer.
+/// Find PDA for trade event buffer.
 pub fn find_trade_event_buffer_address(
     store: &Pubkey,
     authority: &Pubkey,
@@ -310,7 +310,7 @@ pub fn find_user_address(
     )
 }
 
-/// Find the PDA for referral code account.
+/// Find PDA for referral code account.
 pub fn find_referral_code_address(
     store: &Pubkey,
     code: ReferralCodeBytes,
@@ -322,7 +322,7 @@ pub fn find_referral_code_address(
     )
 }
 
-/// Find the PDA for GLV token.
+/// Find PDA for GLV token.
 pub fn find_glv_token_address(store: &Pubkey, index: u16, program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(
         &[GLV_TOKEN_SEED, store.as_ref(), &index.to_le_bytes()],
@@ -330,12 +330,12 @@ pub fn find_glv_token_address(store: &Pubkey, index: u16, program_id: &Pubkey) -
     )
 }
 
-/// Find the PDA GLV account.
+/// Find PDA GLV account.
 pub fn find_glv_address(glv_token: &Pubkey, program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[GLV_SEED, glv_token.as_ref()], program_id)
 }
 
-/// Find the PDA for a GLV deposit account.
+/// Find PDA for a GLV deposit account.
 pub fn find_glv_deposit_address(
     store: &Pubkey,
     owner: &Pubkey,
@@ -348,7 +348,7 @@ pub fn find_glv_deposit_address(
     )
 }
 
-/// Find the PDA for a GLV withdrawal account.
+/// Find PDA for a GLV withdrawal account.
 pub fn find_glv_withdrawal_address(
     store: &Pubkey,
     owner: &Pubkey,
@@ -361,7 +361,7 @@ pub fn find_glv_withdrawal_address(
     )
 }
 
-/// Find the PDA for GT exchange vault account.
+/// Find PDA for GT exchange vault account.
 pub fn find_gt_exchange_vault_address(
     store: &Pubkey,
     time_window_index: i64,
@@ -379,7 +379,7 @@ pub fn find_gt_exchange_vault_address(
     )
 }
 
-/// Find the PDA for GT exchange account.
+/// Find PDA for GT exchange account.
 pub fn find_gt_exchange_address(
     vault: &Pubkey,
     owner: &Pubkey,
@@ -391,7 +391,7 @@ pub fn find_gt_exchange_address(
     )
 }
 
-/// Fint the PDA for custom price feed account.
+/// Fint PDA for custom price feed account.
 pub fn find_price_feed_address(
     store: &Pubkey,
     authority: &Pubkey,
@@ -413,13 +413,13 @@ pub fn find_price_feed_address(
     )
 }
 
-/// Find the PDA for global treasury config.
+/// Find PDA for global treasury config.
 #[cfg(treasury)]
 pub fn find_treasury_config_address(store: &Pubkey, treasury_program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[TREASURY_CONFIG_SEED, store.as_ref()], treasury_program_id)
 }
 
-/// Find the PDA for a treasury vault config.
+/// Find PDA for treasury vault config.
 #[cfg(treasury)]
 pub fn find_treasury_vault_config_address(
     config: &Pubkey,
@@ -436,7 +436,7 @@ pub fn find_treasury_vault_config_address(
     )
 }
 
-/// Find the PDA for a GT bank.
+/// Find PDA for GT bank.
 #[cfg(treasury)]
 pub fn find_gt_bank_address(
     treasury_vault_config: &Pubkey,
@@ -453,7 +453,7 @@ pub fn find_gt_bank_address(
     )
 }
 
-/// Find the PDA for treasury receiver.
+/// Find PDA for treasury receiver.
 #[cfg(treasury)]
 pub fn find_treasury_receiver_address(
     config: &Pubkey,
@@ -465,13 +465,13 @@ pub fn find_treasury_receiver_address(
     )
 }
 
-/// Find the PDA for timelock config.
+/// Find PDA for timelock config.
 #[cfg(timelock)]
 pub fn find_timelock_config_address(store: &Pubkey, timelock_program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[TIMELOCK_CONFIG_SEED, store.as_ref()], timelock_program_id)
 }
 
-/// Find the PDA for executor.
+/// Find PDA for executor.
 #[cfg(timelock)]
 pub fn find_executor_address(
     store: &Pubkey,
@@ -490,7 +490,7 @@ pub fn find_executor_address(
     ))
 }
 
-/// Find the PDA for executor wallet.
+/// Find PDA for executor wallet.
 #[cfg(timelock)]
 pub fn find_executor_wallet_address(
     executor: &Pubkey,

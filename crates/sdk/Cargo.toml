@@ -169,5 +169,5 @@ shellexpand = { workspace = true }
 eyre = { workspace = true }
 
 [package.metadata.docs.rs]
-features = ["client", "decode", "chainlink", "pyth"]
+features = ["client", "decode", "chainlink"]
 rustdoc-args = ["--cfg", "docsrs"]

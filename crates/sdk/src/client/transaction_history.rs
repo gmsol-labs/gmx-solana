@@ -83,7 +83,7 @@ pub fn extract_cpi_events(
                             },
                         )
                         .await
-                        .map_err(crate::Error::unknown)?;
+                        .map_err(crate::Error::custom)?;
                     let mut decoder = TransactionDecoder::new(tx.slot, signature, &tx.transaction);
                     match decoder
                         .add_cpi_event_authority_and_program_id(event_authority, program_id)
