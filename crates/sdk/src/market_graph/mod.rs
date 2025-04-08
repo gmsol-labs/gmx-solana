@@ -1,4 +1,7 @@
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    num::NonZeroUsize,
+};
 
 use either::Either;
 use gmsol_model::{
@@ -10,17 +13,24 @@ use gmsol_programs::{gmsol_store::types::MarketMeta, model::MarketModel};
 use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     prelude::StableDiGraph,
+    visit::{EdgeRef, IntoNodeIdentifiers, NodeIndexable},
 };
 use rust_decimal::{Decimal, MathematicalOps};
 use solana_sdk::pubkey::Pubkey;
 
-use crate::utils::fixed;
+use crate::{constants, utils::fixed};
+
+/// Error type.
+pub mod error;
+
+pub use self::error::MarketGraphError;
 
 type Graph = StableDiGraph<Node, Edge>;
 type TokenIx = NodeIndex;
 
 #[derive(Debug)]
 struct Node {
+    #[allow(dead_code)]
     token: Pubkey,
     price: Option<Price<u128>>,
 }
@@ -33,18 +43,25 @@ impl Node {
 
 #[derive(Debug)]
 struct Edge {
+    market_token: Pubkey,
     estimated: Option<Estimated>,
 }
 
 #[derive(Debug)]
 struct Estimated {
-    exchange_rate: Decimal,
     ln_exchange_rate: Decimal,
 }
 
 impl Edge {
-    fn new(estimated: Option<Estimated>) -> Self {
-        Self { estimated }
+    fn new(market_token: Pubkey, estimated: Option<Estimated>) -> Self {
+        Self {
+            market_token,
+            estimated,
+        }
+    }
+
+    fn cost(&self) -> Option<Decimal> {
+        Some(-self.estimated.as_ref()?.ln_exchange_rate)
     }
 }
 
@@ -84,10 +101,28 @@ pub struct MarketGraph {
     config: MarketGraphConfig,
 }
 
-#[derive(Default)]
 struct MarketGraphConfig {
     value: u128,
+    base_cost: u128,
+    max_steps: NonZeroUsize,
 }
+
+const DEFAULT_VALUE: u128 = 1_000 * constants::MARKET_USD_UNIT;
+const DEFAULT_BASE_COST: u128 = 2 * constants::MARKET_USD_UNIT / 100;
+const DEFAULT_MAX_STEPS: NonZeroUsize = NonZeroUsize::new(5).unwrap();
+
+impl Default for MarketGraphConfig {
+    fn default() -> Self {
+        Self {
+            value: DEFAULT_VALUE,
+            base_cost: DEFAULT_BASE_COST,
+            max_steps: DEFAULT_MAX_STEPS,
+        }
+    }
+}
+
+type Distances = Vec<Option<Decimal>>;
+type Predecessors = Vec<Option<(NodeIndex, Pubkey)>>;
 
 impl MarketGraphConfig {
     fn estimate(
@@ -130,13 +165,14 @@ impl MarketGraphConfig {
         let token_out_value = swap
             .token_out_amount()
             .checked_mul(prices.collateral_token_price(!is_from_long_side).max)?;
-        if token_out_value == 0 {
+        if token_out_value <= self.base_cost {
             #[cfg(tracing)]
             {
                 tracing::trace!("estimation failed with zero output value");
             }
             return None;
         }
+        let token_out_value = token_out_value.abs_diff(self.base_cost);
         let exchange_rate = div_to_factor::<_, { crate::constants::MARKET_DECIMALS }>(
             &token_out_value,
             &self.value,
@@ -144,10 +180,7 @@ impl MarketGraphConfig {
         )?;
         let exchange_rate = fixed::unsigned_value_to_decimal(exchange_rate);
         let ln_exchange_rate = exchange_rate.checked_ln()?;
-        Some(Estimated {
-            exchange_rate,
-            ln_exchange_rate,
-        })
+        Some(Estimated { ln_exchange_rate })
     }
 }
 
@@ -160,12 +193,12 @@ impl MarketGraph {
         let (long_token_ix, short_token_ix) = self.insert_tokens_with_meta(&market.meta);
         match self.markets.entry(key) {
             Entry::Vacant(e) => {
-                let long_edge = self
-                    .graph
-                    .add_edge(long_token_ix, short_token_ix, Edge::new(None));
+                let long_edge =
+                    self.graph
+                        .add_edge(long_token_ix, short_token_ix, Edge::new(key, None));
                 let short_edge =
                     self.graph
-                        .add_edge(short_token_ix, long_token_ix, Edge::new(None));
+                        .add_edge(short_token_ix, long_token_ix, Edge::new(key, None));
                 e.insert(MarketState::new(market, long_edge, short_edge));
                 self.update_estimated(Some(&key));
                 true
@@ -309,6 +342,146 @@ impl MarketGraph {
     pub fn markets(&self) -> impl Iterator<Item = &MarketModel> {
         self.markets.values().map(|state| &state.market)
     }
+
+    fn to_index(&self, ix: TokenIx) -> usize {
+        self.graph.to_index(ix)
+    }
+
+    /// Bellman-Ford algorithm with a maximum step limit.
+    ///
+    /// It computes the shortest paths in the subgraph reachable from the source
+    /// within at most `max_steps` steps.
+    fn bellman_ford(&self, source: &Pubkey) -> crate::Result<(Distances, Predecessors)> {
+        let source = self
+            .collateral_tokens
+            .get(source)
+            .ok_or_else(|| crate::Error::unknown("the source is not a known collateral token"))?
+            .ix;
+
+        let g = &self.graph;
+        let max_steps = self.config.max_steps.get();
+        let mut predecessors = vec![None; g.node_bound()];
+        let mut distances = vec![None; g.node_bound()];
+        distances[self.to_index(source)] = Some(Decimal::ZERO);
+
+        let mut result_distances = None;
+
+        for steps in 1..self.graph.node_count() {
+            let mut did_update = false;
+            for i in g.node_identifiers() {
+                for edge in g.edges(i) {
+                    let j = edge.target();
+                    let Some(w) = edge.weight().cost() else {
+                        continue;
+                    };
+                    let Some(d) = distances[self.to_index(i)] else {
+                        continue;
+                    };
+                    if distances[self.to_index(j)]
+                        .map(|current| d + w < current)
+                        .unwrap_or(true)
+                    {
+                        distances[self.to_index(j)] = distances[self.to_index(i)].map(|d| d + w);
+
+                        // Only update predecessors if the current step is within `max_steps`.
+                        if steps <= max_steps {
+                            predecessors[self.to_index(j)] = Some((i, edge.weight().market_token));
+                        }
+
+                        did_update = true;
+                    }
+                }
+            }
+
+            if !did_update {
+                break;
+            }
+
+            // Cache the result within the `max_steps`.
+            if steps == max_steps {
+                result_distances = Some(distances.clone());
+            }
+        }
+
+        // Check for negative weight cycle.
+        for i in g.node_identifiers() {
+            for edge in g.edges(i) {
+                let j = edge.target();
+                let Some(w) = edge.weight().cost() else {
+                    continue;
+                };
+                let Some(d) = distances[self.to_index(i)] else {
+                    continue;
+                };
+                if distances[self.to_index(j)]
+                    .map(|jd| d + w < jd)
+                    .unwrap_or(true)
+                {
+                    return Err(MarketGraphError::NegativeCycle.into());
+                }
+            }
+        }
+
+        Ok((result_distances.unwrap_or(distances), predecessors))
+    }
+
+    /// Find the best swap path for the given source and target.
+    pub fn best_swap_paths(&self, source: &Pubkey) -> crate::Result<BestSwapPaths<'_>> {
+        let (distances, predecessors) = self.bellman_ford(source)?;
+
+        Ok(BestSwapPaths {
+            graph: self,
+            source: *source,
+            distances,
+            predecessors,
+        })
+    }
+}
+
+/// Best Swap Paths.
+pub struct BestSwapPaths<'a> {
+    graph: &'a MarketGraph,
+    source: Pubkey,
+    distances: Distances,
+    predecessors: Predecessors,
+}
+
+impl<'a> BestSwapPaths<'a> {
+    /// Get the source.
+    pub fn source(&self) -> &Pubkey {
+        &self.source
+    }
+
+    /// Get best swap path to the target.
+    pub fn to(&self, target: &Pubkey) -> (Option<Decimal>, Vec<Pubkey>) {
+        let Self {
+            graph,
+            distances,
+            predecessors,
+            ..
+        } = self;
+
+        let Some(target) = graph.collateral_tokens.get(target) else {
+            return (None, vec![]);
+        };
+
+        let target = target.ix;
+        let ix = |i| graph.graph.to_index(i);
+        let target = ix(target);
+
+        let distance = distances[target];
+        let mut path = vec![];
+        let mut current = predecessors[target];
+
+        while let Some((predecessor, market_token)) = current.as_ref() {
+            path.push(*market_token);
+            current = predecessors[ix(*predecessor)];
+        }
+
+        path.reverse();
+
+        (distance.map(|d| (-d).exp()), path)
+    }
 }
 
 #[cfg(test)]
@@ -331,9 +504,17 @@ mod tests {
             .split('\n')
             .enumerate()
             .map(|(idx, data)| {
-                let (market, supply) = data
-                    .split_once(',')
-                    .unwrap_or_else(|| panic!("[{idx}] invalid data"));
+                let mut data = data.split(',');
+                let _market_token = data
+                    .next()
+                    .unwrap_or_else(|| panic!("[{idx}] missing market_token"));
+                let market = data
+                    .next()
+                    .unwrap_or_else(|| panic!("[{idx}] missing market data"));
+                let supply = data
+                    .next()
+                    .unwrap_or_else(|| panic!("[{idx}] missing supply"));
+
                 (
                     market.to_string(),
                     supply
@@ -380,10 +561,7 @@ mod tests {
             .collect()
     }
 
-    #[test]
-    fn create_and_update_market_graph() -> crate::Result<()> {
-        let _tracing = setup_fmt_tracing("info");
-
+    fn create_and_update_market_graph() -> crate::Result<(MarketGraph, HashSet<Pubkey>)> {
         let mut graph = MarketGraph::default();
         let updates = get_market_updates();
         let prices = get_price_updates();
@@ -401,6 +579,15 @@ mod tests {
             graph.update_token_price(&token, &price);
         }
 
+        Ok((graph, market_tokens))
+    }
+
+    #[test]
+    fn basic() -> crate::Result<()> {
+        let _tracing = setup_fmt_tracing("info");
+
+        let (mut graph, market_tokens) = create_and_update_market_graph()?;
+
         // Update value.
         graph.update_value(10 * constants::MARKET_USD_UNIT);
 
@@ -411,6 +598,35 @@ mod tests {
             assert_eq!(market.meta.market_token_mint, market_token);
         }
         println!("{:?}", Dot::new(&graph.graph));
+        Ok(())
+    }
+
+    #[test]
+    fn best_swap_path() -> crate::Result<()> {
+        const USDC: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+        const WSOL: &str = "So11111111111111111111111111111111111111112";
+        const BOME: &str = "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82";
+
+        let _tracing = setup_fmt_tracing("info");
+
+        let (mut g, _) = create_and_update_market_graph()?;
+
+        g.update_value(constants::MARKET_USD_UNIT);
+
+        let usdc: Pubkey = USDC.parse().unwrap();
+        let wsol: Pubkey = WSOL.parse().unwrap();
+        let bome: Pubkey = BOME.parse().unwrap();
+
+        let paths = g.best_swap_paths(&wsol)?;
+
+        let (rate, best_path) = paths.to(&bome);
+        assert!(rate.is_some());
+        assert!(best_path.len() >= 2);
+
+        let (rate, best_path) = paths.to(&usdc);
+        assert!(rate.is_some());
+        assert!(!best_path.is_empty());
+
         Ok(())
     }
 }

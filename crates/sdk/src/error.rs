@@ -19,6 +19,10 @@ pub enum Error {
     /// Unknown error.
     #[error("unknown: {0}")]
     Unknown(String),
+    /// Market Graph Errors
+    #[cfg(feature = "market-graph")]
+    #[error("market-graph: {0}")]
+    MarketGraph(#[from] crate::market_graph::error::MarketGraphError),
 }
 
 impl Error {
