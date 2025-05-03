@@ -11,8 +11,8 @@ pub trait PositionCalculations {
     fn status(&self, prices: &Prices<u128>) -> crate::Result<PositionStatus>;
 }
 
-impl PositionCalculations for PositionModel {
-    fn status(&self, _prices: &Prices<u128>) -> crate::Result<PositionStatus> {
-        Err(crate::Error::unknown("unimplemented"))
-    }
-}
+// impl PositionCalculations for PositionModel {
+//     fn status(&self, _prices: &Prices<u128>) -> crate::Result<PositionStatus> {
+//         Err(crate::Error::unknown("unimplemented"))
+//     }
+// }
