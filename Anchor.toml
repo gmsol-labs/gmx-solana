@@ -3,7 +3,7 @@ anchor_version = "0.31.1"
 solana_version = "2.1.21"
 
 [features]
-seeds = false
+resolution = true
 skip-lint = false
 
 [programs.localnet]
@@ -12,6 +12,7 @@ gmsol_store = "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
 gmsol_treasury = "GTuvYD5SxkTq4FLG6JV1FQ5dkczr1AfgDcBHaFsBdtBg"
 gmsol_timelock = "TimeBQ7gQyWyQMD3bTteAdy7hTVDNWSwELdSVZHfSXL"
 gmsol_mock_chainlink_verifier = "4nMxSRfeW7W2zFbN8FJ4YDvuTzEzCo1e6GzJxJLnDUoZ"
+gmsol_competition = "2AxuNr6euZPKQbTwNsLBjzFTZFAevA85F4PW9m9Dv8pc"
 
 [registry]
 url = "https://api.apr.dev"
@@ -50,50 +51,32 @@ url = "https://api.devnet.solana.com"
 ledger = ".anchor/test-ledger"
 rpc_port = 8899
 
-# Chainlink Verifier Program
 [[test.validator.clone]]
 address = "Gt9S41PtjR58CbG9JhJ3J6vxesqrNAswbWYbLNTMZA3c"
 
-# Chainlink Verifier Account
 [[test.validator.clone]]
 address = "HJR45sRiFdGncL69HVzRK4HLS2SXcVW3KeTPkp2aFmWC"
 
-# Chainlink Access Controller Account
 [[test.validator.clone]]
 address = "2k3DsgwBoqrnvXKVvd7jX7aptNxdcRBdcd5HkYsGgbrb"
 
-# # Chainlink Data Streams Config Account for ETH.
-# [[test.validator.clone]]
-# address = "6LozY6XRzHCG8ordYbA3o8a7WhXWbBcdeqpde98DeMJA"
-
-# # Chainlink Data Streams Config Account for USDC.
-# [[test.validator.clone]]
-# address = "B7uYzGctUxQhNKhmKEkQVq4w7Bh5qizHQECqWb87SbFe"
-
-# WBTC Token Mint
 [[test.validator.clone]]
 address = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh"
 
-# Pyth receiver program
 [[test.validator.clone]]
 address = "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ"
 
-# BTC Data Feed (Pyth)
 [[test.validator.clone]]
 address = "4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo"
 
-# SOL Data Feed (Pyth)
 [[test.validator.clone]]
 address = "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE"
 
-# USDC Data Feed (Pyth)
 [[test.validator.clone]]
 address = "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX"
 
-# Wormhole Guardian Set account
 [[test.validator.clone]]
 address = "5gxPdahvSzcKySxXxPuRXZZ9s6h8hZ88XDVKavWpaQGn"
 
-# Pyth Config account
 [[test.validator.clone]]
 address = "DaWUKXCyXsnzcvLUyeJRWou8KTn7XtadgTsdhJ6RHS7b"
