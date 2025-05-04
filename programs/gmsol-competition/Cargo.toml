@@ -1,0 +1,32 @@
+[package]
+name = "gmsol-competition"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+description.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/gmsol-competition"
+readme.workspace = true
+keywords.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "gmsol_competition"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+anchor-debug = ["anchor-lang/anchor-debug"]
+debug-msg = []
+mock = []
+multi-store = []
+devnet = []
+test-only = []
+migration = []
+
+[dependencies]
+anchor-lang = { workspace = true }

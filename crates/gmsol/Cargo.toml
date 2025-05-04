@@ -231,3 +231,4 @@ spl-associated-token-account = { workspace = true }
 shellexpand = { workspace = true }
 gmsol-mock-chainlink-verifier = { workspace = true }
 figment = { workspace = true, features = ["env", "toml"] }
+gmsol-competition = { workspace = true }

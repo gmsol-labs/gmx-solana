@@ -125,6 +125,10 @@ path = "programs/gmsol-timelock"
 version = "0.5.0"
 path = "programs/mock-chainlink-verifier"
 
+[workspace.dependencies.gmsol-competition]
+version = "0.5.0"
+path = "programs/gmsol-competition"
+
 [workspace.dependencies.gmsol-decode]
 version = "0.5.0"
 path = "crates/gmsol-decode"
