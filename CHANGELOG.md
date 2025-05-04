@@ -68,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs: Implemented `Default` for `Glv` and made the `store` field public.
 - programs: Introduced a separate `impl_fixed_map!` macro that implements fixed map functionality without defining the corresponding struct.
 - programs: Introduced a separated `impl_flags!` macro that implements flag map functionality without defining the container.
+- programs: Added the `gmsol-competition` program.
 - model: Re-exported `num_traits`.
 - sdk: Added more functions to `SquadsOps`:
   - `SquadsOps::squads_create_vault_transaction_and_return_data`: Creates a vault transaction and return the data.
