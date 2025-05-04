@@ -1,6 +1,5 @@
 use gmsol_model::{
     num::Unsigned, price::Prices, PerpMarket, PerpMarketExt, Position, PositionExt, PositionState,
-    PositionStateMut,
 };
 
 /// Position Status.
@@ -38,10 +37,6 @@ use rust_decimal::prelude::Zero;
 
 use super::PositionCalculations;
 
-// pub trait PositionCalculationTest {
-//     fn update_position_status(&self, prices: &Prices<u128>) -> crate::Result<PositionStatus>;
-// }
-
 impl PositionCalculations for PositionModel {
     fn status(&self, prices: &Prices<u128>) -> crate::Result<PositionStatus> {
         // collateral value
@@ -58,7 +53,7 @@ impl PositionCalculations for PositionModel {
         let (pending_pnl_value, _uncapped_pnl_value, _size_delta_in_tokens) =
             self.pnl_value(prices, position_size_in_usd)?;
         let entry_price = position_size_in_usd
-            .checked_div(position_size_in_tokens.clone())
+            .checked_div(*position_size_in_tokens)
             .ok_or(gmsol_model::Error::Computation("calculating entry price"))?;
 
         // borrowing fee value
@@ -123,7 +118,7 @@ impl PositionCalculations for PositionModel {
             false,
         )?;
 
-        let close_order_fee_value = total_position_fees.order_fees().fee_value().clone();
+        let close_order_fee_value = *total_position_fees.order_fees().fee_value();
 
         let net_value = collateral_value
             .to_signed()?
@@ -219,9 +214,9 @@ impl PositionCalculations for PositionModel {
             pending_claimable_funding_fee_value_in_long_token,
             pending_claimable_funding_fee_value_in_short_token,
             close_order_fee_value,
-            net_value: net_value,
-            leverage: leverage,
-            liquidation_price: liquidation_price,
+            net_value,
+            leverage,
+            liquidation_price,
         })
     }
 }
