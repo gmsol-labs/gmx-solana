@@ -129,3 +129,4 @@ const positionModel = position.to_model(model);
 console.log("size:", positionModel.size());
 console.log("size_in_tokens:", positionModel.size_in_tokens());
 console.log("collateral amount:", positionModel.collateral_amount());
+console.log("status:", positionModel.status(prices));

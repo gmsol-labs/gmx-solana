@@ -64,3 +64,5 @@ pub use position::{
 
 /// Alias for result.
 pub type Result<T> = std::result::Result<T, Error>;
+
+pub use num_traits;

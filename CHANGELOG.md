@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - programs: Implemented `Default` for `Glv` and made the `store` field public.
+- model: Re-exported `num_traits`.
 - sdk: Added more functions to `SquadsOps`:
   - `SquadsOps::squads_create_vault_transaction_and_return_data`: Creates a vault transaction and return the data.
   - `SquadsOps::squads_approve_proposal`: Approves a proposal.
