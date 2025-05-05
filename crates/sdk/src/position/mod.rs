@@ -147,7 +147,7 @@ impl PositionCalculations for PositionModel {
                 .and_then(|a| a.checked_sub(pending_funding_fee_value))
                 .and_then(|a| a.checked_sub(close_order_fee_value))
                 .and_then(|remaining_collateral_usd| {
-                    if self.is_collateral_token_long() {
+                    if self.is_long() {
                         liquidation_collateral_usd
                             .checked_add(*position_size_in_usd)?
                             .checked_sub(remaining_collateral_usd)?
