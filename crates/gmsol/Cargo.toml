@@ -235,3 +235,8 @@ shellexpand = { workspace = true }
 gmsol-mock-chainlink-verifier = { workspace = true }
 figment = { workspace = true, features = ["env", "toml"] }
 gmsol-competition = { workspace = true }
+anchor-lang = { workspace = true, default-features = false }
+anchor-client = { workspace = true, features = ["async"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+eyre = { workspace = true }
