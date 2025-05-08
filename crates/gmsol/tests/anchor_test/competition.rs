@@ -13,7 +13,12 @@ async fn competition_flow() -> Result<()> {
     let _guard = deployment.use_accounts().await?;
     let client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
 
-    let now = Utc::now().timestamp();
+    let slot = client.rpc().get_slot().await?;
+    let now = client
+        .rpc()
+        .get_block_time(slot)
+        .await
+        .unwrap_or_else(|_| Utc::now().timestamp());
     let end = now + 3600; // one hour window
     let store_program = COMP_ID; // placeholder until real store program is ready
 
@@ -121,5 +126,127 @@ async fn competition_flow() -> Result<()> {
         .await;
     assert!(res.is_err(), "trade outside window should fail");
 
+    Ok(())
+}
+
+// ---------------- additional negative‑path tests ----------------
+
+/// store_program ≠ competition.store_program  → should return InvalidCaller
+#[tokio::test]
+async fn competition_invalid_caller() -> Result<()> {
+    let deployment = current_deployment().await?;
+    let _g = deployment.use_accounts().await?;
+    let client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+
+    let now = Utc::now().timestamp();
+    let end = now + 3600;
+    let legit_store = COMP_ID;
+    let bogus_store = Pubkey::new_unique();
+
+    let comp_kp = Keypair::new();
+
+    // init with legit store_program
+    client
+        .store_transaction()
+        .program(COMP_ID)
+        .anchor_accounts(accounts::InitializeCompetition {
+            competition: comp_kp.pubkey(),
+            authority: client.payer(),
+            system_program: system_program::ID,
+        })
+        .anchor_args(instruction::InitializeCompetition {
+            start_time: now,
+            end_time: end,
+            store_program: legit_store,
+        })
+        .signer(&comp_kp)
+        .send()
+        .await?;
+
+    // attempt record_trade from bogus store_program
+    let trader = Keypair::new();
+    let participant_pda = Pubkey::find_program_address(
+        &[
+            b"participant",
+            comp_kp.pubkey().as_ref(),
+            trader.pubkey().as_ref(),
+        ],
+        &COMP_ID,
+    )
+    .0;
+
+    let res = client
+        .store_transaction()
+        .program(COMP_ID)
+        .anchor_accounts(accounts::RecordTrade {
+            competition: comp_kp.pubkey(),
+            participant: participant_pda,
+            store_program: bogus_store,
+            trader: trader.pubkey(),
+            payer: client.payer(),
+            system_program: system_program::ID,
+        })
+        .anchor_args(instruction::RecordTrade { volume: 1 })
+        .send()
+        .await;
+    assert!(res.is_err(), "record_trade with invalid caller should fail");
+    Ok(())
+}
+
+/// current < start_time  → should return OutsideCompetitionTime
+#[tokio::test]
+async fn competition_before_start() -> Result<()> {
+    let deployment = current_deployment().await?;
+    let _g = deployment.use_accounts().await?;
+    let client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+
+    let now = Utc::now().timestamp();
+    let start = now + 600; // 10 min later
+    let end = start + 600;
+
+    let comp_kp = Keypair::new();
+    client
+        .store_transaction()
+        .program(COMP_ID)
+        .anchor_accounts(accounts::InitializeCompetition {
+            competition: comp_kp.pubkey(),
+            authority: client.payer(),
+            system_program: system_program::ID,
+        })
+        .anchor_args(instruction::InitializeCompetition {
+            start_time: start,
+            end_time: end,
+            store_program: COMP_ID,
+        })
+        .signer(&comp_kp)
+        .send()
+        .await?;
+
+    let trader = Keypair::new();
+    let participant_pda = Pubkey::find_program_address(
+        &[
+            b"participant",
+            comp_kp.pubkey().as_ref(),
+            trader.pubkey().as_ref(),
+        ],
+        &COMP_ID,
+    )
+    .0;
+
+    let res = client
+        .store_transaction()
+        .program(COMP_ID)
+        .anchor_accounts(accounts::RecordTrade {
+            competition: comp_kp.pubkey(),
+            participant: participant_pda,
+            store_program: COMP_ID,
+            trader: trader.pubkey(),
+            payer: client.payer(),
+            system_program: system_program::ID,
+        })
+        .anchor_args(instruction::RecordTrade { volume: 42 })
+        .send()
+        .await;
+    assert!(res.is_err(), "trade before start_time should fail");
     Ok(())
 }
