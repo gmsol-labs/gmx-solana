@@ -27,7 +27,7 @@ impl<'a> From<&'a TradeData> for TradeEventRef<'a> {
 }
 
 impl anchor_lang::Discriminator for TradeEventRef<'_> {
-    const DISCRIMINATOR: [u8; 8] = TradeEvent::DISCRIMINATOR;
+    const DISCRIMINATOR: &'static [u8] = TradeEvent::DISCRIMINATOR;
 }
 
 impl InitSpace for TradeEventRef<'_> {

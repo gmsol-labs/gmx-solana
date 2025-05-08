@@ -49,11 +49,11 @@ anchor-spl = { workspace = true, default-features = false, features = [
     "token_2022_extensions",
     "associated_token",
 ] }
-chainlink_solana = { workspace = true }
+# chainlink_solana = { workspace = true }
 num_enum = { workspace = true }
 static_assertions = { workspace = true }
 clap = { workspace = true, optional = true }
-pyth-sdk-solana = { workspace = true }
+# pyth-sdk-solana = { workspace = true }
 pyth-solana-receiver-sdk = { workspace = true }
 paste = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
@@ -67,7 +67,9 @@ bs58 = { workspace = true, optional = true }
 derive_more = { workspace = true, optional = true }
 gmsol-chainlink-datastreams = { workspace = true }
 rust_decimal = { workspace = true }
-switchboard-on-demand = { workspace = true }
+switchboard-on-demand = { workspace = true, default-features = false, features = [
+    "no-entrypoint",
+] }
 cfg-if = { workspace = true }
 
 [package.metadata.docs.rs]

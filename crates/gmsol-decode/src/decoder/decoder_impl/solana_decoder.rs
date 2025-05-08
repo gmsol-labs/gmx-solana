@@ -135,7 +135,7 @@ impl<'a> TransactionDecoder<'a> {
                     .map_err(|err| {
                         DecodeError::custom(format!("decode ix data error, err={err}. Note that currently only Base58 is supported"))
                     })?;
-                if indexes.contains(&ix.accounts[0]) && data.starts_with(&EVENT_IX_TAG_LE) {
+                if indexes.contains(&ix.accounts[0]) && data.starts_with(EVENT_IX_TAG_LE) {
                     events.push(CPIEvent::new(*program_id, data));
                 }
             }

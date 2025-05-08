@@ -48,7 +48,7 @@ impl Owner for SbFeed {
 }
 
 impl Discriminator for SbFeed {
-    const DISCRIMINATOR: [u8; 8] = switchboard_on_demand::SbFeed::DISCRIMINATOR;
+    const DISCRIMINATOR: &'static [u8] = &switchboard_on_demand::SbFeed::DISCRIMINATOR;
 }
 
 impl Switchboard {

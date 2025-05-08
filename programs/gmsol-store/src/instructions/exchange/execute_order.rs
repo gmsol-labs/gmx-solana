@@ -82,30 +82,33 @@ pub(crate) fn prepare_trade_event_buffer(
     Ok(())
 }
 
-pub(crate) fn get_pnl_token(
+#[inline(never)]
+pub(crate) fn get_pnl_token<'a>(
     position: &Option<AccountLoader<'_, Position>>,
-    market: &Market,
-) -> Result<Pubkey> {
+    market: &'a Market,
+) -> Result<&'a Pubkey> {
     let is_long = position
         .as_ref()
         .ok_or_else(|| error!(CoreError::PositionIsRequired))?
         .load()?
         .try_is_long()?;
     if is_long {
-        Ok(market.meta().long_token_mint)
+        Ok(&market.meta.long_token_mint)
     } else {
-        Ok(market.meta.short_token_mint)
+        Ok(&market.meta.short_token_mint)
     }
 }
 
-pub(crate) fn check_delegation(account: &TokenAccount, target: Pubkey) -> Result<bool> {
+#[inline(never)]
+pub(crate) fn check_delegation(account: &TokenAccount, target: &Pubkey) -> Result<bool> {
     let is_matched = account
         .delegate
-        .map(|delegate| delegate == target)
+        .map(|delegate| delegate == *target)
         .ok_or_else(|| error!(CoreError::NoDelegatedAuthorityIsSet))?;
     Ok(is_matched)
 }
 
+#[inline(never)]
 pub(crate) fn validated_recent_timestamp(config: &Store, timestamp: i64) -> Result<i64> {
     let recent_time_window = config.amount.recent_time_window;
     let expiration_time = timestamp.saturating_add_unsigned(recent_time_window);
@@ -671,7 +674,7 @@ pub struct ExecuteDecreaseOrder<'info> {
         mut,
         token::mint = market.load()?.meta().long_token_mint,
         token::authority = store,
-        constraint = check_delegation(&claimable_long_token_account_for_user, order.load()?.header.owner)?,
+        constraint = check_delegation(&claimable_long_token_account_for_user, &order.load()?.header.owner)?,
         seeds = [
             constants::CLAIMABLE_ACCOUNT_SEED,
             store.key().as_ref(),
@@ -686,7 +689,7 @@ pub struct ExecuteDecreaseOrder<'info> {
         mut,
         token::mint = market.load()?.meta().short_token_mint,
         token::authority = store,
-        constraint = check_delegation(&claimable_short_token_account_for_user, order.load()?.header.owner)?,
+        constraint = check_delegation(&claimable_short_token_account_for_user, &order.load()?.header.owner)?,
         seeds = [
             constants::CLAIMABLE_ACCOUNT_SEED,
             store.key().as_ref(),
@@ -701,7 +704,7 @@ pub struct ExecuteDecreaseOrder<'info> {
         mut,
         token::mint = get_pnl_token(&Some(position.clone()), market.load()?.deref())?,
         token::authority = store,
-        constraint = check_delegation(&claimable_pnl_token_account_for_holding, store.load()?.address.holding)?,
+        constraint = check_delegation(&claimable_pnl_token_account_for_holding, &store.load()?.address.holding)?,
         seeds = [
             constants::CLAIMABLE_ACCOUNT_SEED,
             store.key().as_ref(),

@@ -7,7 +7,7 @@ use anchor_client::anchor_lang::{
 pub(super) struct InitEncodedVaa {}
 
 impl Discriminator for InitEncodedVaa {
-    const DISCRIMINATOR: [u8; 8] = [209, 193, 173, 25, 91, 202, 181, 218];
+    const DISCRIMINATOR: &[u8] = &[209, 193, 173, 25, 91, 202, 181, 218];
 }
 
 impl InstructionData for InitEncodedVaa {}
@@ -19,7 +19,7 @@ pub(super) struct WriteEncodedVaa {
 }
 
 impl Discriminator for WriteEncodedVaa {
-    const DISCRIMINATOR: [u8; 8] = [199, 208, 110, 177, 150, 76, 118, 42];
+    const DISCRIMINATOR: &[u8] = &[199, 208, 110, 177, 150, 76, 118, 42];
 }
 
 impl InstructionData for WriteEncodedVaa {}
@@ -28,7 +28,7 @@ impl InstructionData for WriteEncodedVaa {}
 pub(super) struct VerifyEncodedVaaV1 {}
 
 impl Discriminator for VerifyEncodedVaaV1 {
-    const DISCRIMINATOR: [u8; 8] = [103, 56, 177, 229, 240, 103, 68, 73];
+    const DISCRIMINATOR: &[u8] = &[103, 56, 177, 229, 240, 103, 68, 73];
 }
 
 impl InstructionData for VerifyEncodedVaaV1 {}
@@ -37,7 +37,7 @@ impl InstructionData for VerifyEncodedVaaV1 {}
 pub(super) struct CloseEncodedVaa {}
 
 impl Discriminator for CloseEncodedVaa {
-    const DISCRIMINATOR: [u8; 8] = [48, 221, 174, 198, 231, 7, 152, 38];
+    const DISCRIMINATOR: &[u8] = &[48, 221, 174, 198, 231, 7, 152, 38];
 }
 
 impl InstructionData for CloseEncodedVaa {}

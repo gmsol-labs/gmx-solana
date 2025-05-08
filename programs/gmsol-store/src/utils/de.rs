@@ -6,7 +6,7 @@ use anchor_lang::{err, Discriminator};
 pub fn check_discriminator<T: Discriminator>(data: &[u8]) -> anchor_lang::prelude::Result<()> {
     use anchor_lang::error::ErrorCode;
 
-    let disc = T::discriminator();
+    let disc = T::DISCRIMINATOR;
     if data.len() < disc.len() {
         return err!(ErrorCode::AccountDiscriminatorNotFound);
     }

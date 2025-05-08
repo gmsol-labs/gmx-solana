@@ -101,7 +101,7 @@ pub fn validate_associated_token_account<'info>(
 #[derive(TypedBuilder)]
 pub struct TransferAllFromEscrowToATA<'a, 'info> {
     /// Store wallet account, must be mutable.
-    store_wallet: AccountInfo<'info>,
+    store_wallet: &'a AccountInfo<'info>,
     store_wallet_signer: &'a StoreWalletSigner,
     system_program: AccountInfo<'info>,
     token_program: AccountInfo<'info>,
@@ -265,7 +265,7 @@ impl TransferAllFromEscrowToATA<'_, '_> {
                     token_program.clone(),
                     CloseAccount {
                         account: escrow.to_account_info(),
-                        destination: store_wallet.clone(),
+                        destination: store_wallet.to_account_info(),
                         authority: escrow_authority.clone(),
                     },
                 )
@@ -280,7 +280,7 @@ impl TransferAllFromEscrowToATA<'_, '_> {
                     CpiContext::new(
                         system_program.clone(),
                         system_program::Transfer {
-                            from: store_wallet.clone(),
+                            from: store_wallet.to_account_info(),
                             to: owner.clone(),
                         },
                     )
@@ -293,7 +293,7 @@ impl TransferAllFromEscrowToATA<'_, '_> {
                     CpiContext::new(
                         system_program.clone(),
                         system_program::Transfer {
-                            from: store_wallet.clone(),
+                            from: store_wallet.to_account_info(),
                             to: rent_receiver.clone(),
                         },
                     )
@@ -306,7 +306,7 @@ impl TransferAllFromEscrowToATA<'_, '_> {
                     CpiContext::new(
                         system_program.clone(),
                         system_program::Transfer {
-                            from: store_wallet.clone(),
+                            from: store_wallet.to_account_info(),
                             to: owner.clone(),
                         },
                     )

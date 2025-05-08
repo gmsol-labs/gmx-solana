@@ -91,8 +91,8 @@ pub trait Event: borsh::BorshSerialize + anchor_lang::Discriminator {
 
         let disc = anchor_lang::event::EVENT_IX_TAG_LE;
         let mut ix_data = Vec::with_capacity(16 + space);
-        ix_data.extend_from_slice(&disc);
-        ix_data.extend_from_slice(&Self::DISCRIMINATOR);
+        ix_data.extend_from_slice(disc);
+        ix_data.extend_from_slice(Self::DISCRIMINATOR);
         self.serialize(&mut ix_data)?;
         let ix = Instruction {
             program_id: crate::ID,

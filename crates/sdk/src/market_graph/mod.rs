@@ -507,7 +507,7 @@ pub struct BestSwapPaths<'a> {
     arbitrage_exists: Option<bool>,
 }
 
-impl<'a> fmt::Debug for BestSwapPaths<'a> {
+impl fmt::Debug for BestSwapPaths<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BestSwapPaths")
             .field("source", &self.source)
@@ -518,7 +518,7 @@ impl<'a> fmt::Debug for BestSwapPaths<'a> {
     }
 }
 
-impl<'a> BestSwapPaths<'a> {
+impl BestSwapPaths<'_> {
     /// Get the source.
     pub fn source(&self) -> &Pubkey {
         &self.source

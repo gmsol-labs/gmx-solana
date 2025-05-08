@@ -20,7 +20,7 @@ where
     fn visit_bytes(self, data: &[u8]) -> Result<Self::Value, crate::DecodeError> {
         use anchor_lang::prelude::{Error, ErrorCode};
 
-        let disc = T::discriminator();
+        let disc = T::DISCRIMINATOR;
         if data.len() < disc.len() {
             return Err(Error::from(ErrorCode::AccountDiscriminatorNotFound).into());
         }
@@ -116,7 +116,7 @@ where
         let data = &data[8..];
 
         // Validate the discriminator.
-        let disc = T::discriminator();
+        let disc = T::DISCRIMINATOR;
         if data.len() < disc.len() {
             return Err(Error::from(ErrorCode::InstructionDidNotDeserialize).into());
         }

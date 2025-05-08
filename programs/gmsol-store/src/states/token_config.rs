@@ -567,7 +567,7 @@ pub trait TokenMapAccess {
         for token in tokens.iter() {
             require!(self.get(token).is_some(), CoreError::UnknownToken);
         }
-        tokens.sort_by_key(|token| self.get(token).unwrap().expected_provider);
+        tokens.sort_by_cached_key(|token| self.get(token).unwrap().expected_provider);
         Ok(())
     }
 }

@@ -253,7 +253,7 @@ pub struct TransactionGroupIter<'a, C> {
     allow_partial_sign: bool,
 }
 
-impl<'a, C: Deref<Target = impl Signer>> Iterator for TransactionGroupIter<'a, C> {
+impl<C: Deref<Target = impl Signer>> Iterator for TransactionGroupIter<'_, C> {
     type Item = crate::Result<Vec<VersionedTransaction>>;
 
     fn next(&mut self) -> Option<Self::Item> {

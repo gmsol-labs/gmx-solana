@@ -611,6 +611,7 @@ impl<'info> internal::Close<'info, Order> for CloseOrder<'info> {
         self.rent_receiver.to_account_info()
     }
 
+    #[inline(never)]
     fn validate(&self) -> Result<()> {
         let order = self.order.load()?;
         if order.header.action_state()?.is_pending() {
@@ -629,6 +630,7 @@ impl<'info> internal::Close<'info, Order> for CloseOrder<'info> {
         bumps.store_wallet
     }
 
+    #[inline(never)]
     fn process(
         &self,
         init_if_needed: bool,
@@ -653,6 +655,7 @@ impl<'info> internal::Close<'info, Order> for CloseOrder<'info> {
 }
 
 impl<'info> CloseOrder<'info> {
+    #[inline(never)]
     fn transfer_to_atas(
         &self,
         init_if_needed: bool,
@@ -666,7 +669,7 @@ impl<'info> CloseOrder<'info> {
         let mut seen = HashSet::<_>::default();
 
         let builder = TransferAllFromEscrowToATA::builder()
-            .store_wallet(self.store_wallet.to_account_info())
+            .store_wallet(self.store_wallet.as_ref())
             .store_wallet_signer(store_wallet_signer)
             .system_program(self.system_program.to_account_info())
             .token_program(self.token_program.to_account_info())
@@ -781,6 +784,7 @@ impl<'info> CloseOrder<'info> {
         Ok(true)
     }
 
+    #[inline(never)]
     fn process_gt_reward(
         &self,
         event_emitter: &EventEmitter<'_, 'info>,

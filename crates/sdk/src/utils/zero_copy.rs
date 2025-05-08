@@ -8,7 +8,7 @@ use gmsol_programs::{
 pub fn check_discriminator<T: Discriminator>(data: &[u8]) -> anchor_lang::prelude::Result<()> {
     use anchor_lang::error::ErrorCode;
 
-    let disc = T::discriminator();
+    let disc = T::DISCRIMINATOR;
     if data.len() < disc.len() {
         return err!(ErrorCode::AccountDiscriminatorNotFound);
     }
@@ -84,7 +84,7 @@ impl<T> Discriminator for ZeroCopy<T>
 where
     T: Discriminator,
 {
-    const DISCRIMINATOR: [u8; 8] = T::DISCRIMINATOR;
+    const DISCRIMINATOR: &'static [u8] = T::DISCRIMINATOR;
 }
 
 impl<T> AsRef<T> for ZeroCopy<T> {

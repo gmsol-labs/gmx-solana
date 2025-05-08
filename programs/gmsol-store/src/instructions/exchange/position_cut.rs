@@ -170,7 +170,7 @@ pub struct PositionCut<'info> {
         mut,
         token::mint = market.load()?.meta().long_token_mint,
         token::authority = store,
-        constraint = check_delegation(&claimable_long_token_account_for_user, position.load()?.owner)?,
+        constraint = check_delegation(&claimable_long_token_account_for_user, &position.load()?.owner)?,
         seeds = [
             constants::CLAIMABLE_ACCOUNT_SEED,
             store.key().as_ref(),
@@ -185,7 +185,7 @@ pub struct PositionCut<'info> {
         mut,
         token::mint = market.load()?.meta().short_token_mint,
         token::authority = store,
-        constraint = check_delegation(&claimable_short_token_account_for_user, position.load()?.owner)?,
+        constraint = check_delegation(&claimable_short_token_account_for_user, &position.load()?.owner)?,
         seeds = [
             constants::CLAIMABLE_ACCOUNT_SEED,
             store.key().as_ref(),
@@ -200,7 +200,7 @@ pub struct PositionCut<'info> {
         mut,
         token::mint = get_pnl_token(&Some(position.clone()), market.load()?.deref())?,
         token::authority = store,
-        constraint = check_delegation(&claimable_pnl_token_account_for_holding, store.load()?.address.holding)?,
+        constraint = check_delegation(&claimable_pnl_token_account_for_holding, &store.load()?.address.holding)?,
         seeds = [
             constants::CLAIMABLE_ACCOUNT_SEED,
             store.key().as_ref(),

@@ -370,7 +370,7 @@ impl<'info> internal::Close<'info, GlvWithdrawal> for CloseGlvWithdrawal<'info> 
         let seeds = signer.as_seeds();
 
         let builder = TransferAllFromEscrowToATA::builder()
-            .store_wallet(self.store_wallet.to_account_info())
+            .store_wallet(self.store_wallet.as_ref())
             .store_wallet_signer(store_wallet_signer)
             .system_program(self.system_program.to_account_info())
             .associated_token_program(self.associated_token_program.to_account_info())

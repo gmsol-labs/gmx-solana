@@ -116,7 +116,7 @@ pub struct InstructionBuilder<'a> {
     accounts: Vec<AccountMeta>,
 }
 
-impl<'a> InstructionBuilder<'a> {
+impl InstructionBuilder<'_> {
     /// Append accounts.
     pub fn accounts(mut self, accounts: impl ToAccountMetas, convert_optional: bool) -> Self {
         let mut accounts = self.program.accounts(accounts, convert_optional);

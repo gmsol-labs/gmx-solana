@@ -47,6 +47,7 @@ pub async fn get_program_accounts_with_context(
         filters: config.filters,
         account_config: config.account_config,
         with_context: Some(true),
+        sort_results: None,
     };
     tracing::debug!(%program, ?config, "fetching program accounts");
     let res = client
@@ -109,7 +110,7 @@ pub async fn accounts_lazy_with_context<
         min_context_slot,
     } = config;
     let filters = (!skip_account_type_filter)
-        .then(|| RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &T::discriminator())))
+        .then(|| RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, T::DISCRIMINATOR)))
         .into_iter()
         .chain(filters)
         .collect::<Vec<_>>();

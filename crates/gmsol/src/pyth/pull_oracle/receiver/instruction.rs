@@ -11,7 +11,7 @@ pub(super) struct PostUpdate {
 }
 
 impl Discriminator for PostUpdate {
-    const DISCRIMINATOR: [u8; 8] = [133, 95, 207, 175, 11, 79, 118, 44];
+    const DISCRIMINATOR: &'static [u8] = &[133, 95, 207, 175, 11, 79, 118, 44];
 }
 
 impl InstructionData for PostUpdate {}
@@ -20,7 +20,7 @@ impl InstructionData for PostUpdate {}
 pub(super) struct ReclaimRent {}
 
 impl Discriminator for ReclaimRent {
-    const DISCRIMINATOR: [u8; 8] = [218, 200, 19, 197, 227, 89, 192, 22];
+    const DISCRIMINATOR: &'static [u8] = &[218, 200, 19, 197, 227, 89, 192, 22];
 }
 
 impl InstructionData for ReclaimRent {}
