@@ -1,5 +1,5 @@
-use anchor_lang::prelude::*;
 use crate::state::competition::Competition;
+use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct InitializeCompetition<'info> {
@@ -14,11 +14,13 @@ pub fn init_competition_handler(
     ctx: Context<InitializeCompetition>,
     start_time: i64,
     end_time: i64,
-    _store_program: Pubkey,
+    store_program: Pubkey,
 ) -> Result<()> {
     let comp = &mut ctx.accounts.competition;
-    comp.authority   = ctx.accounts.authority.key();
-    comp.start_time  = start_time;
-    comp.end_time    = end_time;
+    comp.authority = ctx.accounts.authority.key();
+    comp.start_time = start_time;
+    comp.end_time = end_time;
+    comp.is_active = true;
+    comp.store_program = store_program;
     Ok(())
 }

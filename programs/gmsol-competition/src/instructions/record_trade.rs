@@ -1,6 +1,6 @@
-use anchor_lang::prelude::*;
-use crate::state::competition::{Competition, Participant};
 use crate::error::CompetitionError;
+use crate::state::competition::{Competition, Participant};
+use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct RecordTrade<'info> {
@@ -29,11 +29,21 @@ pub struct RecordTrade<'info> {
 pub fn record_trade_handler(ctx: Context<RecordTrade>, volume: u64) -> Result<()> {
     let c = &mut ctx.accounts.competition;
     require!(c.is_active, CompetitionError::CompetitionNotActive);
-    require_keys_eq!(ctx.accounts.store_program.key(), c.store_program, CompetitionError::InvalidCaller);
-    require!(ctx.accounts.store_program.executable, CompetitionError::InvalidCaller);
+    require_keys_eq!(
+        ctx.accounts.store_program.key(),
+        c.store_program,
+        CompetitionError::InvalidCaller
+    );
+    require!(
+        ctx.accounts.store_program.executable,
+        CompetitionError::InvalidCaller
+    );
 
     let now = Clock::get()?.unix_timestamp;
-    require!(now >= c.start_time && now <= c.end_time, CompetitionError::OutsideCompetitionTime);
+    require!(
+        now >= c.start_time && now <= c.end_time,
+        CompetitionError::OutsideCompetitionTime
+    );
 
     let p = &mut ctx.accounts.participant;
     p.volume += volume;
