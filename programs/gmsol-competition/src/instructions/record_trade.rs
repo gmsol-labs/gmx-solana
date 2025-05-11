@@ -1,5 +1,5 @@
 use crate::error::CompetitionError;
-use crate::state::competition::{Competition, Participant};
+use crate::state::competition::{Competition, LeaderEntry, Participant};
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
@@ -46,7 +46,41 @@ pub fn record_trade_handler(ctx: Context<RecordTrade>, volume: u64) -> Result<()
     );
 
     let p = &mut ctx.accounts.participant;
+    // If this is a freshly created Participant, populate static fields
+    if p.owner == Pubkey::default() {
+        p.owner = ctx.accounts.trader.key();
+        p.competition = c.key();
+    }
+
+    // Safety check: the PDA must belong to the same trader
+    require_keys_eq!(
+        p.owner,
+        ctx.accounts.trader.key(),
+        CompetitionError::InvalidCaller
+    );
+
     p.volume += volume;
     p.last_updated_at = now;
+
+    // ------------- update in‑account leaderboard -------------
+    let lb = &mut c.leaderboard;
+
+    // (a) if trader already in leaderboard, update volume
+    if let Some(entry) = lb.iter_mut().find(|e| e.address == p.owner) {
+        entry.volume = p.volume;
+    } else {
+        // (b) otherwise push new entry then sort
+        lb.push(LeaderEntry {
+            address: p.owner,
+            volume: p.volume,
+        });
+    }
+
+    // sort desc by volume and keep only top‑5
+    lb.sort_by(|a, b| b.volume.cmp(&a.volume));
+    if lb.len() > 5 {
+        lb.truncate(5);
+    }
+
     Ok(())
 }

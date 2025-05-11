@@ -2,6 +2,7 @@ use crate::anchor_test::setup::{current_deployment, Deployment};
 use anchor_lang::solana_program::system_program;
 use chrono::{Duration as ChronoDur, Utc};
 use eyre::Result;
+use gmsol_competition::state::competition::{Competition, LeaderEntry};
 use gmsol_competition::{accounts, instruction, ID as COMP_ID};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signer};
@@ -248,5 +249,99 @@ async fn competition_before_start() -> Result<()> {
         .send()
         .await;
     assert!(res.is_err(), "trade before start_time should fail");
+    Ok(())
+}
+
+/// verify leaderboard ordering with 10 traders (highest volume first)
+#[tokio::test]
+async fn competition_ranking_order() -> Result<()> {
+    use gmsol_competition::state::competition::Competition;
+
+    // ---- setup ----
+    let deployment = current_deployment().await?;
+    let _g = deployment.use_accounts().await?;
+    let client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+
+    let slot = client.rpc().get_slot().await?;
+    let now = client
+        .rpc()
+        .get_block_time(slot)
+        .await
+        .unwrap_or_else(|_| Utc::now().timestamp());
+    let end = now + 3600;
+
+    let comp_kp = Keypair::new();
+    client
+        .store_transaction()
+        .program(COMP_ID)
+        .anchor_accounts(accounts::InitializeCompetition {
+            competition: comp_kp.pubkey(),
+            authority: client.payer(),
+            system_program: system_program::ID,
+        })
+        .anchor_args(instruction::InitializeCompetition {
+            start_time: now,
+            end_time: end,
+            store_program: COMP_ID,
+        })
+        .signer(&comp_kp)
+        .send()
+        .await?;
+
+    // ---- submit trades for 10 traders ----
+    let mut traders: Vec<(Keypair, u64)> = (0..10)
+        .map(|i| (Keypair::new(), (i + 1) * 10)) // volumes 10,20,…,100
+        .collect();
+
+    // send in reverse order to guarantee unsorted input
+    for (kp, volume) in traders.iter().rev() {
+        let pda = Pubkey::find_program_address(
+            &[
+                b"participant",
+                comp_kp.pubkey().as_ref(),
+                kp.pubkey().as_ref(),
+            ],
+            &COMP_ID,
+        )
+        .0;
+
+        client
+            .store_transaction()
+            .program(COMP_ID)
+            .anchor_accounts(accounts::RecordTrade {
+                competition: comp_kp.pubkey(),
+                participant: pda,
+                store_program: COMP_ID,
+                trader: kp.pubkey(),
+                payer: client.payer(),
+                system_program: system_program::ID,
+            })
+            .anchor_args(instruction::RecordTrade { volume: *volume })
+            .send()
+            .await?;
+    }
+
+    // ---- fetch competition account & verify leaderboard ----
+    let comp: Competition = client
+        .account(&comp_kp.pubkey())
+        .await?
+        .expect("competition account missing");
+
+    // leaderboard should keep only top‑5
+    assert_eq!(comp.leaderboard.len(), 5);
+
+    // ensure descending by volume
+    for w in comp.leaderboard.windows(2) {
+        assert!(
+            w[0].volume >= w[1].volume,
+            "leaderboard not sorted: {} < {}",
+            w[0].volume,
+            w[1].volume
+        );
+    }
+
+    assert_eq!(comp.leaderboard.first().unwrap().volume, 100);
+    assert_eq!(comp.leaderboard.last().unwrap().volume, 60);
+
     Ok(())
 }
