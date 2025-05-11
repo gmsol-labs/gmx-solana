@@ -22,5 +22,6 @@ pub fn init_competition_handler(
     comp.end_time = end_time;
     comp.is_active = true;
     comp.store_program = store_program;
+    comp.leaderboard = Vec::new();
     Ok(())
 }
