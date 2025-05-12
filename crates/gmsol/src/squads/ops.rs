@@ -1,6 +1,7 @@
 use std::{collections::HashMap, future::Future, ops::Deref};
 
 use anchor_client::{anchor_lang, solana_client::nonblocking::rpc_client::RpcClient};
+use anchor_lang::{AnchorSerialize, InstructionData, ToAccountMetas};
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions},
     transaction_builder::TransactionBuilder,
@@ -16,21 +17,22 @@ use solana_sdk::{
     pubkey::Pubkey,
     signer::Signer,
 };
-use squads_multisig::{
-    client::{
-        get_multisig, ProposalApproveData, ProposalCreateAccounts, ProposalCreateArgs,
-        ProposalCreateData, ProposalVoteAccounts, ProposalVoteArgs, VaultTransactionCreateAccounts,
-        VaultTransactionCreateArgs, VaultTransactionCreateData, VaultTransactionExecuteAccounts,
-        VaultTransactionExecuteData,
-    },
-    pda::get_ephemeral_signer_pda,
-    squads_multisig_program::{self, VaultTransaction},
-    state::{Proposal, TransactionMessage, VaultTransactionMessage},
-};
-
-pub use squads_multisig::pda::{get_proposal_pda, get_transaction_pda, get_vault_pda};
 
 use crate::utils::builder::MakeBundleBuilder;
+
+use super::{
+    pda::{get_ephemeral_signer_pda, get_proposal_pda, get_transaction_pda, get_vault_pda},
+    squads_multisig_v4::{
+        accounts::{Proposal, VaultTransaction},
+        client::{accounts, args},
+        types::{
+            ProposalCreateArgs, ProposalVoteArgs, VaultTransactionCreateArgs,
+            VaultTransactionMessage,
+        },
+        ID,
+    },
+    utils::{get_multisig, versioned_message_to_transaction_message},
+};
 
 /// Squads Vault Transaction.
 pub struct SquadsVaultTransaction(VaultTransaction);
@@ -44,15 +46,13 @@ impl Deref for SquadsVaultTransaction {
 }
 
 impl anchor_lang::Discriminator for SquadsVaultTransaction {
-    const DISCRIMINATOR: [u8; 8] =
-        <VaultTransaction as squads_multisig::anchor_lang::Discriminator>::DISCRIMINATOR;
+    const DISCRIMINATOR: &'static [u8] = VaultTransaction::DISCRIMINATOR;
 }
 
 impl anchor_lang::AccountDeserialize for SquadsVaultTransaction {
     fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-        let inner = <VaultTransaction as squads_multisig::anchor_lang::AccountDeserialize>::try_deserialize_unchecked(buf).map_err(|_err| {
-            anchor_lang::error::ErrorCode::AccountDidNotDeserialize
-        })?;
+        let inner = VaultTransaction::try_deserialize_unchecked(buf)
+            .map_err(|_err| anchor_lang::error::ErrorCode::AccountDidNotDeserialize)?;
 
         Ok(Self(inner))
     }
@@ -107,15 +107,12 @@ impl Deref for SquadsProposal {
 }
 
 impl anchor_lang::Discriminator for SquadsProposal {
-    const DISCRIMINATOR: [u8; 8] =
-        <Proposal as squads_multisig::anchor_lang::Discriminator>::DISCRIMINATOR;
+    const DISCRIMINATOR: &'static [u8] = Proposal::DISCRIMINATOR;
 }
 
 impl anchor_lang::AccountDeserialize for SquadsProposal {
     fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-        let inner = <Proposal as squads_multisig::anchor_lang::AccountDeserialize>::try_deserialize_unchecked(buf).map_err(|_err| {
-            anchor_lang::error::ErrorCode::AccountDidNotDeserialize
-        })?;
+        let inner = Proposal::try_deserialize_unchecked(buf)?;
 
         Ok(Self(inner))
     }
@@ -191,11 +188,6 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
         memo: Option<String>,
         draft: bool,
     ) -> crate::Result<TransactionBuilder<C, (Pubkey, VaultTransaction)>> {
-        use squads_multisig::{
-            anchor_lang::{AnchorSerialize, InstructionData, ToAccountMetas},
-            squads_multisig_program::ID,
-        };
-
         let payer = self.payer();
         let transaction_pda = get_transaction_pda(multisig, transaction_index, Some(&ID));
         let proposal_pda = get_proposal_pda(multisig, transaction_index, Some(&ID)).0;
@@ -205,7 +197,7 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
         let rpc = self.store_transaction().pre_instructions(vec![
             Instruction {
                 program_id: ID,
-                accounts: VaultTransactionCreateAccounts {
+                accounts: accounts::VaultTransactionCreate {
                     creator: payer,
                     rent_payer: payer,
                     transaction: transaction_pda.0,
@@ -213,7 +205,7 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
                     system_program: solana_sdk::system_program::id(),
                 }
                 .to_account_metas(Some(false)),
-                data: VaultTransactionCreateData {
+                data: args::VaultTransactionCreate {
                     args: VaultTransactionCreateArgs {
                         ephemeral_signers: 0,
                         vault_index,
@@ -225,7 +217,7 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
             },
             Instruction {
                 program_id: ID,
-                accounts: ProposalCreateAccounts {
+                accounts: accounts::ProposalCreate {
                     creator: payer,
                     rent_payer: payer,
                     proposal: proposal_pda,
@@ -233,7 +225,7 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
                     system_program: solana_sdk::system_program::id(),
                 }
                 .to_account_metas(Some(false)),
-                data: ProposalCreateData {
+                data: args::ProposalCreate {
                     args: ProposalCreateArgs {
                         draft,
                         transaction_index,
@@ -251,9 +243,7 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
             vault_index,
             vault_bump: vault_pda.1,
             ephemeral_signer_bumps: vec![],
-            message: transaction_message
-                .try_into()
-                .map_err(crate::Error::unknown)?,
+            message: transaction_message.try_into()?,
         };
 
         Ok(rpc.output((transaction_pda.0, data)))
@@ -311,22 +301,17 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
         proposal: &Pubkey,
         memo: Option<String>,
     ) -> crate::Result<TransactionBuilder<C>> {
-        use squads_multisig::{
-            anchor_lang::{InstructionData, ToAccountMetas},
-            squads_multisig_program::ID,
-        };
-
         let txn = self
             .store_transaction()
             .program(ID)
             .args(
-                ProposalApproveData {
+                args::ProposalApprove {
                     args: ProposalVoteArgs { memo },
                 }
                 .data(),
             )
             .accounts(
-                ProposalVoteAccounts {
+                accounts::ProposalApprove {
                     multisig: *multisig,
                     member: self.payer(),
                     proposal: *proposal,
@@ -343,11 +328,6 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
         data: VaultTransaction,
         luts_cache: Option<&HashMap<Pubkey, AddressLookupTableAccount>>,
     ) -> crate::Result<TransactionBuilder<C>> {
-        use squads_multisig::{
-            anchor_lang::{InstructionData, ToAccountMetas},
-            squads_multisig_program::ID,
-        };
-
         let program_id = ID;
 
         let vault_transaction = data;
@@ -370,9 +350,9 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
         let txn = self
             .store_transaction()
             .program(ID)
-            .args(VaultTransactionExecuteData {}.data())
+            .args(args::VaultTransactionExecute {}.data())
             .accounts(
-                VaultTransactionExecuteAccounts {
+                accounts::VaultTransactionExecute {
                     multisig: *multisig,
                     proposal,
                     transaction,
@@ -399,66 +379,6 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
             builder: bundle,
             approve: false,
             execute: false,
-        }
-    }
-}
-
-fn versioned_message_to_transaction_message(message: &VersionedMessage) -> TransactionMessage {
-    match message {
-        VersionedMessage::Legacy(message) => {
-            let num_accounts = message.account_keys.len() as u8;
-            let num_signers = message.header.num_required_signatures;
-            let num_non_signers = num_accounts - num_signers;
-            let instructions = message
-                .instructions
-                .iter()
-                .map(|ix| squads_multisig_program::CompiledInstruction {
-                    program_id_index: ix.program_id_index,
-                    account_indexes: ix.accounts.clone().into(),
-                    data: ix.data.clone().into(),
-                })
-                .collect::<Vec<_>>();
-            TransactionMessage {
-                num_signers,
-                num_writable_signers: num_signers - message.header.num_readonly_signed_accounts,
-                num_writable_non_signers: num_non_signers
-                    - message.header.num_readonly_unsigned_accounts,
-                account_keys: message.account_keys.clone().into(),
-                instructions: instructions.into(),
-                address_table_lookups: Vec::default().into(),
-            }
-        }
-        VersionedMessage::V0(message) => {
-            let num_accounts = message.account_keys.len() as u8;
-            let num_signers = message.header.num_required_signatures;
-            let num_non_signers = num_accounts - num_signers;
-            let instructions = message
-                .instructions
-                .iter()
-                .map(|ix| squads_multisig_program::CompiledInstruction {
-                    program_id_index: ix.program_id_index,
-                    account_indexes: ix.accounts.clone().into(),
-                    data: ix.data.clone().into(),
-                })
-                .collect::<Vec<_>>();
-            let address_table_lookups = message
-                .address_table_lookups
-                .iter()
-                .map(|atl| squads_multisig_program::MessageAddressTableLookup {
-                    account_key: atl.account_key,
-                    writable_indexes: atl.writable_indexes.clone().into(),
-                    readonly_indexes: atl.readonly_indexes.clone().into(),
-                })
-                .collect::<Vec<_>>();
-            TransactionMessage {
-                num_signers,
-                num_writable_signers: num_signers - message.header.num_readonly_signed_accounts,
-                num_writable_non_signers: num_non_signers
-                    - message.header.num_readonly_unsigned_accounts,
-                account_keys: message.account_keys.clone().into(),
-                instructions: instructions.into(),
-                address_table_lookups: address_table_lookups.into(),
-            }
         }
     }
 }

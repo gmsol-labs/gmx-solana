@@ -149,6 +149,8 @@ tokio = { workspace = true, features = ["sync"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 base64 = { workspace = true }
+anchor-lang = { workspace = true }
+borsh = { workspace = true }
 anchor-client = { workspace = true, features = ["async"] }
 anchor-spl = { workspace = true, default-features = false, features = [
     "token",

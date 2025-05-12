@@ -2151,11 +2151,13 @@ name = "gmsol"
 version = "0.5.0"
 dependencies = [
  "anchor-client",
+ "anchor-lang",
  "anchor-spl",
  "anchor-syn",
  "async-stream",
  "async-tungstenite",
  "base64 0.22.1",
+ "borsh 0.10.4",
  "bs58 0.5.1",
  "bytemuck",
  "byteorder",
