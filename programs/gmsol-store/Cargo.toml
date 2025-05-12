@@ -67,9 +67,9 @@ bs58 = { workspace = true, optional = true }
 derive_more = { workspace = true, optional = true }
 gmsol-chainlink-datastreams = { workspace = true }
 rust_decimal = { workspace = true }
-switchboard-on-demand = { workspace = true, default-features = false, features = [
-    "no-entrypoint",
-] }
+# switchboard-on-demand = { workspace = true, default-features = false, features = [
+#     "no-entrypoint",
+# ] }
 cfg-if = { workspace = true }
 
 [package.metadata.docs.rs]

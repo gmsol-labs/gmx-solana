@@ -383,7 +383,8 @@ impl OraclePrice {
             }
             PriceProviderKind::Switchboard => {
                 require_keys_eq!(feed_id, account.key(), CoreError::InvalidPriceFeedAccount);
-                Switchboard::check_and_get_price(clock, token_config, account)?
+                return err!(CoreError::Unimplemented);
+                // Switchboard::check_and_get_price(clock, token_config, account)?
             }
         };
 
