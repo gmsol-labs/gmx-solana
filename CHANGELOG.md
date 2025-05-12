@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- programs: Upgrade to `anchor v0.31.1` and `solana v2.1.21`.
+- programs: Removed support for Chainlink data feeds.
+- programs: Temporarily removed support for Switchboard.
+- sdk: Removed support for `spl-governance`.
+
 ## [0.5.0] - 2025-05-16
 
 ### Breaking Changes
