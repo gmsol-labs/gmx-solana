@@ -1,6 +1,6 @@
 {
   "name": "@gmsol-labs/gmsol-sdk",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "scripts": {
     "build": "rimraf dist pkg && webpack --mode production",
     "start": "rimraf dist pkg && webpack serve",
