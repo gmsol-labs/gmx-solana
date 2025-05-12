@@ -8,12 +8,9 @@ TARGET := "./target"
 RESOURCES := SCRIPTS / "resources"
 CONFIGS := RESOURCES / "config"
 
-GEYSER_PLUGIN_PATH := RESOURCES  / "geyser/plugin.geyser"
+GEYSER_PLUGIN_PATH := RESOURCES / "geyser/plugin.geyser"
 START_LOCALNET_SCRIPT := SCRIPTS / "start_localnet.sh"
 SETUP_LOCALNET_SCRIPT := SCRIPTS / "setup_localnet.sh"
-
-# Workaround for issue: https://github.com/solana-foundation/anchor/issues/3662
-BUILD_AND_TEST_SCRIPT := SCRIPTS / "build_and_test.sh"
 
 export GMSOL_TOKENS := CONFIGS / "tokens.toml"
 export GMSOL_MARKETS := CONFIGS / "markets.toml"
@@ -27,9 +24,6 @@ TREASURY_PROGRAM := VERIFIABLE / "gmsol_treasury.so"
 TIMELOCK_PROGRAM := VERIFIABLE / "gmsol_timelock.so"
 MOCK_CHAINLINK_PROGRAM := VERIFIABLE / "mock_chainlink_verifier.so"
 
-# Workaround for issue: https://github.com/solana-foundation/anchor/issues/3662
-IDL_BUILD_RUSTUP_TOOLCHAIN := "nightly-2025-04-01"
-
 default: lint test-crates test-programs
 
 lint: && build-docs
@@ -42,10 +36,10 @@ test-crates:
   cargo test --features {{FEATURES}}
 
 test-programs *ARGS:
-  sh {{BUILD_AND_TEST_SCRIPT}} {{ARGS}} -- --features mock --features {{DEVNET_FEATURES}}
+  anchor test {{ARGS}} -- --features mock --features {{DEVNET_FEATURES}}
 
 test-programs-debug *ARGS:
-  sh {{BUILD_AND_TEST_SCRIPT}} {{ARGS}} -- --features mock,debug-msg --features {{DEVNET_FEATURES}}
+  anchor test {{ARGS}} -- --features mock,debug-msg --features {{DEVNET_FEATURES}}
 
 it config="scripts/resources/config/integration_test.toml":
   GMSOL_IT={{absolute_path(config)}} \
@@ -56,13 +50,13 @@ build-docs *ARGS:
 
 build-idls:
   mkdir -p {{IDL_OUT_DIR}}
-  RUSTUP_TOOLCHAIN={{IDL_BUILD_RUSTUP_TOOLCHAIN}} anchor idl build -p gmsol_store -t {{IDL_OUT_DIR}}/gmsol_store.ts -o {{IDL_OUT_DIR}}/gmsol_store.json
-  RUSTUP_TOOLCHAIN={{IDL_BUILD_RUSTUP_TOOLCHAIN}} anchor idl build -p gmsol_treasury -t {{IDL_OUT_DIR}}/gmsol_treasury.ts -o {{IDL_OUT_DIR}}/gmsol_treasury.json
+  anchor idl build -p gmsol_store -t {{IDL_OUT_DIR}}/gmsol_store.ts -o {{IDL_OUT_DIR}}/gmsol_store.json
+  anchor idl build -p gmsol_treasury -t {{IDL_OUT_DIR}}/gmsol_treasury.ts -o {{IDL_OUT_DIR}}/gmsol_treasury.json
 
 build-idls-no-docs:
   mkdir -p {{IDL_OUT_DIR}}
-  RUSTUP_TOOLCHAIN={{IDL_BUILD_RUSTUP_TOOLCHAIN}} anchor idl build -p gmsol_store --no-docs -t {{IDL_OUT_DIR}}/gmsol_store.ts -o {{IDL_OUT_DIR}}/gmsol_store.json
-  RUSTUP_TOOLCHAIN={{IDL_BUILD_RUSTUP_TOOLCHAIN}} anchor idl build -p gmsol_treasury --no-docs -t {{IDL_OUT_DIR}}/gmsol_treasury.ts -o {{IDL_OUT_DIR}}/gmsol_treasury.json
+  anchor idl build -p gmsol_store --no-docs -t {{IDL_OUT_DIR}}/gmsol_store.ts -o {{IDL_OUT_DIR}}/gmsol_store.json
+  anchor idl build -p gmsol_treasury --no-docs -t {{IDL_OUT_DIR}}/gmsol_treasury.ts -o {{IDL_OUT_DIR}}/gmsol_treasury.json
 
 check-verifiable:
   @if [ -f {{STORE_PROGRAM}} ] && [ -f {{TREASURY_PROGRAM}} ] && [ -f {{TIMELOCK_PROGRAM}} ] && [ -f {{MOCK_CHAINLINK_PROGRAM}} ]; then \
