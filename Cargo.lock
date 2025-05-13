@@ -2403,6 +2403,8 @@ dependencies = [
  "base64 0.22.1",
  "bs58 0.5.1",
  "bytemuck",
+ "cfg-if",
+ "gmsol-programs",
  "gmsol-store",
  "paste",
  "solana-sdk",

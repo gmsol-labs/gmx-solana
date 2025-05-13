@@ -1053,7 +1053,7 @@ impl InspectArgs {
                 }
             }
             Command::IxData { data, program } => {
-                use gmsol::decode::{value::OwnedDataDecoder, Decode, GMSOLCPIEvent};
+                use gmsol::decode::{gmsol::store::GMSOLCPIEvent, value::OwnedDataDecoder, Decode};
 
                 let data = data.strip_prefix("0x").unwrap_or(data);
                 let data = hex::decode(data).map_err(gmsol::Error::invalid_argument)?;
