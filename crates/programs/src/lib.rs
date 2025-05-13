@@ -2,6 +2,8 @@
 anchor_lang::declare_program!(gmsol_store);
 #[cfg(feature = "treasury")]
 anchor_lang::declare_program!(gmsol_treasury);
+#[cfg(feature = "timelock")]
+anchor_lang::declare_program!(gmsol_timelock);
 
 /// Constants.
 pub mod constants;

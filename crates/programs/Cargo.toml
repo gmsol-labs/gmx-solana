@@ -13,6 +13,7 @@ keywords.workspace = true
 default = ["store"]
 store = []
 treasury = []
+timelock = []
 model = ["gmsol-model", "bitmaps", "time"]
 wasm-bindgen = ["time?/wasm-bindgen"]
 
