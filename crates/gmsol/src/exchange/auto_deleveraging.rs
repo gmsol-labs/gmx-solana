@@ -176,10 +176,15 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     async fn build_with_options(
         &mut self,
         options: BundleOptions,
-    ) -> crate::Result<BundleBuilder<'a, C>> {
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
         let mut bundle = self.client.bundle_with_options(options);
 
-        bundle.push_many(self.build_txns().await?, false)?;
+        bundle.push_many(
+            self.build_txns()
+                .await
+                .map_err(gmsol_solana_utils::Error::custom)?,
+            false,
+        )?;
 
         Ok(bundle)
     }

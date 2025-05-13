@@ -12,10 +12,6 @@ pub enum Error {
     /// Model Error.
     #[error("model: {0}")]
     Model(#[from] gmsol_model::Error),
-    /// Error from [`serde_wasm_bindgen`].
-    #[cfg(feature = "serde-wasm-bindgen")]
-    #[error("serde-wasm: {0}")]
-    SerdeWasm(#[from] serde_wasm_bindgen::Error),
     /// Base64 decode error.
     #[error("base64-decode: {0}")]
     Base64Decode(#[from] base64::DecodeError),
@@ -33,6 +29,20 @@ pub enum Error {
     /// Parse Pubkey Error.
     #[error("parse pubkey error: {0}")]
     ParsePubkey(#[from] solana_sdk::pubkey::ParsePubkeyError),
+    /// Pubsub client closed.
+    #[cfg(feature = "client")]
+    #[error("pubsub: closed")]
+    PubsubClosed,
+    /// Not found error.
+    #[error("not found")]
+    NotFound,
+    /// Decode error.
+    #[cfg(feature = "decode")]
+    #[error("decode: {0}")]
+    Decode(#[from] gmsol_decode::DecodeError),
+    /// Error from [`gmsol_programs`].
+    #[error("programs: {0}")]
+    Programs(#[from] gmsol_programs::Error),
 }
 
 impl Error {

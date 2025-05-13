@@ -8,9 +8,18 @@ anchor_lang::declare_program!(gmsol_timelock);
 /// Constants.
 pub mod constants;
 
+/// Utils.
+pub mod utils;
+
+/// Error.
+pub mod error;
+
 /// Model support.
 #[cfg(feature = "model")]
 pub mod model;
+
+pub use error::Error;
+pub type Result<T> = std::result::Result<T, Error>;
 
 pub use anchor_lang;
 pub use bytemuck;

@@ -27,11 +27,21 @@ pub mod js;
 #[cfg(feature = "market-graph")]
 pub mod market_graph;
 
+/// Client-style API, ported from the `gmsol` crate.
+#[cfg(feature = "client")]
+pub mod client;
+
 /// Model support.
 pub mod model {
     pub use gmsol_model::*;
     pub use gmsol_programs::model::*;
 }
+
+#[cfg(test)]
+pub(crate) mod test;
+
+#[cfg(feature = "client")]
+pub use client::Client;
 
 pub use error::Error;
 

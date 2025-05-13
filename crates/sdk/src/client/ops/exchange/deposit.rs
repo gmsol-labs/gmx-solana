@@ -1,43 +1,50 @@
 use std::ops::Deref;
 
-use anchor_client::{
-    anchor_lang::system_program,
-    solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer},
-};
 use anchor_spl::associated_token::get_associated_token_address;
+use gmsol_programs::gmsol_store::{
+    accounts::Deposit,
+    client::{accounts, args},
+    types::CreateDepositParams,
+    ID,
+};
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions},
     compute_budget::ComputeBudget,
+    make_bundle_builder::{MakeBundleBuilder, SetExecutionFee},
     transaction_builder::TransactionBuilder,
 };
-use gmsol_store::{
-    accounts, instruction,
-    ops::deposit::CreateDepositParams,
-    states::{
-        common::{action::Action, swap::SwapActionParams, TokensWithFeed},
-        Deposit, NonceBytes, PriceProviderKind, TokenMapAccess,
-    },
+use gmsol_utils::{
+    action::ActionFlag,
+    oracle::PriceProviderKind,
+    pubkey::optional_address,
+    swap::SwapActionParams,
+    token_config::{TokenMapAccess, TokensWithFeed},
 };
+use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer, system_program};
 
 use crate::{
-    exchange::ExchangeOps,
-    store::{token::TokenAccountOps, utils::FeedsParser},
-    utils::builder::{
-        FeedAddressMap, FeedIds, MakeBundleBuilder, PullOraclePriceConsumer, SetExecutionFee,
+    builders::utils::{generate_nonce, get_ata_or_owner},
+    client::{
+        feeds_parser::{FeedAddressMap, FeedsParser},
+        ops::token_account::TokenAccountOps,
+        pull_oracle::{FeedIds, PullOraclePriceConsumer},
+        Client,
     },
+    pda::NonceBytes,
+    utils::optional::fix_optional_account_metas,
 };
 
-use super::{generate_nonce, get_ata_or_owner};
+use super::ExchangeOps;
 
-#[cfg(feature = "pyth-pull-oracle")]
-use crate::pyth::pull_oracle::Prices;
-
-/// `execute_deposit` compute budget.
+/// Compute unit limit for `execute_deposit`
 pub const EXECUTE_DEPOSIT_COMPUTE_BUDGET: u32 = 400_000;
+
+/// Min execution lamports for deposit.
+pub const MIN_EXECUTION_LAMPORTS: u64 = 200_000;
 
 /// Create Deposit Builder.
 pub struct CreateDepositBuilder<'a, C> {
-    client: &'a crate::Client<C>,
+    client: &'a Client<C>,
     store: Pubkey,
     market_token: Pubkey,
     execution_fee: u64,
@@ -101,17 +108,13 @@ impl<C> CreateDepositBuilder<'_, C> {
     }
 }
 
-impl<'a, C, S> CreateDepositBuilder<'a, C>
-where
-    C: Deref<Target = S> + Clone,
-    S: Signer,
-{
-    pub(super) fn new(client: &'a crate::Client<C>, store: Pubkey, market_token: Pubkey) -> Self {
+impl<'a, C: Deref<Target = impl Signer> + Clone> CreateDepositBuilder<'a, C> {
+    pub(super) fn new(client: &'a Client<C>, store: Pubkey, market_token: Pubkey) -> Self {
         Self {
             client,
             store,
             market_token,
-            execution_fee: Deposit::MIN_EXECUTION_LAMPORTS,
+            execution_fee: MIN_EXECUTION_LAMPORTS,
             long_token_swap_path: vec![],
             short_token_swap_path: vec![],
             initial_long_token: None,
@@ -165,7 +168,7 @@ where
         ) {
             (Some(long_token), _, Some(short_token), _) => (Some(long_token), Some(short_token)),
             (_, 0, _, 0) => {
-                return Err(crate::Error::EmptyDeposit);
+                return Err(crate::Error::unknown("empty deposit"));
             }
             (None, 0, Some(short_token), _) => (None, Some(short_token)),
             (Some(long_token), _, None, 0) => (Some(long_token), None),
@@ -176,10 +179,10 @@ where
                 );
                 let market = self.client.market(market).await?;
                 if long_amount != 0 && long_token.is_none() {
-                    long_token = Some(market.meta().long_token_mint);
+                    long_token = Some(market.meta.long_token_mint);
                 }
                 if short_amount != 0 && short_token.is_none() {
-                    short_token = Some(market.meta().short_token_mint);
+                    short_token = Some(market.meta.short_token_mint);
                 }
                 (long_token, short_token)
             }
@@ -230,7 +233,7 @@ where
             should_unwrap_native_token,
             ..
         } = self;
-        let nonce = nonce.unwrap_or_else(generate_nonce);
+        let nonce = nonce.unwrap_or_else(|| generate_nonce().to_bytes());
         let owner = client.payer();
         let receiver = self.get_receiver();
         let deposit = client.find_deposit_address(store, &owner, &nonce);
@@ -268,7 +271,7 @@ where
 
         let create = client
             .store_transaction()
-            .accounts(crate::utils::fix_optional_account_metas(
+            .accounts(fix_optional_account_metas(
                 accounts::CreateDeposit {
                     owner,
                     receiver,
@@ -288,21 +291,21 @@ where
                     token_program: token_program_id,
                     associated_token_program: anchor_spl::associated_token::ID,
                 },
-                &gmsol_store::id(),
+                &ID,
                 client.store_program_id(),
             ))
-            .anchor_args(instruction::CreateDeposit {
+            .anchor_args(args::CreateDeposit {
                 nonce,
                 params: CreateDepositParams {
                     execution_lamports: *execution_fee,
                     long_token_swap_length: long_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::NumberOutOfRange)?,
+                        .map_err(|_| crate::Error::unknown("number out of range"))?,
                     short_token_swap_length: short_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::NumberOutOfRange)?,
+                        .map_err(|_| crate::Error::unknown("number out of range"))?,
                     initial_long_token_amount: *initial_long_token_amount,
                     initial_short_token_amount: *initial_short_token_amount,
                     min_market_token_amount: *min_market_token,
@@ -334,7 +337,7 @@ where
 
 /// Close Deposit Builder.
 pub struct CloseDepositBuilder<'a, C> {
-    client: &'a crate::Client<C>,
+    client: &'a Client<C>,
     store: Pubkey,
     deposit: Pubkey,
     reason: String,
@@ -359,15 +362,25 @@ impl CloseDepositHint {
     /// Create from deposit.
     pub fn new(deposit: &Deposit) -> Self {
         Self {
-            owner: *deposit.header().owner(),
-            receiver: deposit.header().receiver(),
-            market_token: deposit.tokens().market_token(),
-            market_token_account: deposit.tokens().market_token_account(),
-            initial_long_token: deposit.tokens().initial_long_token.token(),
-            initial_short_token: deposit.tokens().initial_short_token.token(),
-            initial_long_token_account: deposit.tokens().initial_long_token.account(),
-            initial_short_token_account: deposit.tokens().initial_short_token.account(),
-            should_unwrap_native_token: deposit.header().should_unwrap_native_token(),
+            owner: deposit.header.owner,
+            receiver: deposit.header.receiver,
+            market_token: deposit.tokens.market_token.token,
+            market_token_account: deposit.tokens.market_token.account,
+            initial_long_token: optional_address(&deposit.tokens.initial_long_token.token).copied(),
+            initial_short_token: optional_address(&deposit.tokens.initial_short_token.token)
+                .copied(),
+            initial_long_token_account: optional_address(
+                &deposit.tokens.initial_long_token.account,
+            )
+            .copied(),
+            initial_short_token_account: optional_address(
+                &deposit.tokens.initial_short_token.account,
+            )
+            .copied(),
+            should_unwrap_native_token: deposit
+                .header
+                .flags
+                .get_flag(ActionFlag::ShouldUnwrapNativeToken),
         }
     }
 }
@@ -377,7 +390,7 @@ where
     C: Deref<Target = S> + Clone,
     S: Signer,
 {
-    pub(super) fn new(client: &'a crate::Client<C>, store: &Pubkey, deposit: &Pubkey) -> Self {
+    pub(super) fn new(client: &'a Client<C>, store: &Pubkey, deposit: &Pubkey) -> Self {
         Self {
             client,
             store: *store,
@@ -438,7 +451,7 @@ where
             .map(|mint| get_ata_or_owner(&owner, mint, should_unwrap_native_token));
         Ok(client
             .store_transaction()
-            .accounts(crate::utils::fix_optional_account_metas(
+            .accounts(fix_optional_account_metas(
                 accounts::CloseDeposit {
                     executor,
                     store: *store,
@@ -461,10 +474,10 @@ where
                     event_authority: client.store_event_authority(),
                     program: *client.store_program_id(),
                 },
-                &gmsol_store::id(),
+                &ID,
                 client.store_program_id(),
             ))
-            .anchor_args(instruction::CloseDeposit {
+            .anchor_args(args::CloseDeposit {
                 reason: self.reason.clone(),
             }))
     }
@@ -472,7 +485,7 @@ where
 
 /// Execute Deposit Builder.
 pub struct ExecuteDepositBuilder<'a, C> {
-    client: &'a crate::Client<C>,
+    client: &'a Client<C>,
     store: Pubkey,
     oracle: Pubkey,
     deposit: Pubkey,
@@ -504,18 +517,30 @@ pub struct ExecuteDepositHint {
 impl ExecuteDepositHint {
     /// Create a new hint for the deposit.
     pub fn new(deposit: &Deposit, map: &impl TokenMapAccess) -> crate::Result<Self> {
+        let CloseDepositHint {
+            owner,
+            receiver,
+            market_token,
+            market_token_account,
+            initial_long_token,
+            initial_short_token,
+            initial_long_token_account,
+            initial_short_token_account,
+            should_unwrap_native_token,
+        } = CloseDepositHint::new(deposit);
+        let swap: SwapActionParams = deposit.swap.into();
         Ok(Self {
-            owner: *deposit.header().owner(),
-            receiver: deposit.header().receiver(),
-            market_token_escrow: deposit.tokens().market_token_account(),
-            market_token_mint: deposit.tokens().market_token(),
-            feeds: deposit.swap().to_feeds(map)?,
-            swap: *deposit.swap(),
-            initial_long_token: deposit.tokens().initial_long_token.token(),
-            initial_short_token: deposit.tokens().initial_short_token.token(),
-            initial_long_token_escrow: deposit.tokens().initial_long_token.account(),
-            initial_short_token_escrow: deposit.tokens().initial_short_token.account(),
-            should_unwrap_native_token: deposit.header().should_unwrap_native_token(),
+            owner,
+            receiver,
+            market_token_escrow: market_token_account,
+            market_token_mint: market_token,
+            feeds: swap.to_feeds(map).map_err(crate::Error::unknown)?,
+            swap,
+            initial_long_token,
+            initial_short_token,
+            initial_long_token_escrow: initial_long_token_account,
+            initial_short_token_escrow: initial_short_token_account,
+            should_unwrap_native_token,
         })
     }
 }
@@ -526,7 +551,7 @@ where
     S: Signer,
 {
     pub(super) fn new(
-        client: &'a crate::Client<C>,
+        client: &'a Client<C>,
         store: &Pubkey,
         oracle: &Pubkey,
         deposit: &Pubkey,
@@ -562,13 +587,6 @@ where
         Ok(self)
     }
 
-    /// Parse feeds with the given price udpates map.
-    #[cfg(feature = "pyth-pull-oracle")]
-    pub fn parse_with_pyth_price_updates(&mut self, price_updates: Prices) -> &mut Self {
-        self.feeds_parser.with_pyth_price_updates(price_updates);
-        self
-    }
-
     /// Prepare [`ExecuteDepositHint`].
     pub async fn prepare_hint(&mut self) -> crate::Result<ExecuteDepositHint> {
         match &self.hint {
@@ -600,23 +618,10 @@ where
         self.token_map = Some(address);
         self
     }
-}
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
-    for ExecuteDepositBuilder<'a, C>
-{
-    async fn build_with_options(
-        &mut self,
-        options: BundleOptions,
-    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
-        let token_map = self
-            .get_token_map()
-            .await
-            .map_err(gmsol_solana_utils::Error::custom)?;
-        let hint = self
-            .prepare_hint()
-            .await
-            .map_err(gmsol_solana_utils::Error::custom)?;
+    async fn build_txn(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+        let token_map = self.get_token_map().await?;
+        let hint = self.prepare_hint().await?;
         let Self {
             client,
             store,
@@ -630,8 +635,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
         let feeds = self
             .feeds_parser
             .parse(&hint.feeds)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(gmsol_solana_utils::Error::custom)?;
+            .collect::<Result<Vec<_>, _>>()?;
         let markets = hint
             .swap
             .unique_market_tokens_excluding_current(&hint.market_token_mint)
@@ -644,7 +648,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
         // Execution.
         let execute = client
             .store_transaction()
-            .accounts(crate::utils::fix_optional_account_metas(
+            .accounts(fix_optional_account_metas(
                 accounts::ExecuteDeposit {
                     authority,
                     store: *store,
@@ -672,10 +676,10 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
                     event_authority: client.store_event_authority(),
                     program: *client.store_program_id(),
                 },
-                &gmsol_store::ID,
+                &ID,
                 self.client.store_program_id(),
             ))
-            .anchor_args(instruction::ExecuteDeposit {
+            .anchor_args(args::ExecuteDeposit {
                 execution_fee: *execution_fee,
                 throw_on_execution_error: !*cancel_on_execution_error,
             })
@@ -699,16 +703,30 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
                 })
                 .reason("executed")
                 .build()
-                .await
-                .map_err(gmsol_solana_utils::Error::custom)?;
+                .await?;
             execute.merge(close)
         } else {
             execute
         };
 
+        Ok(rpc)
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
+    for ExecuteDepositBuilder<'a, C>
+{
+    async fn build_with_options(
+        &mut self,
+        options: BundleOptions,
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
         let mut tx = self.client.bundle_with_options(options);
 
-        tx.try_push(rpc)?;
+        tx.try_push(
+            self.build_txn()
+                .await
+                .map_err(gmsol_solana_utils::Error::custom)?,
+        )?;
 
         Ok(tx)
     }

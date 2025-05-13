@@ -1,42 +1,44 @@
 use std::ops::Deref;
 
-use anchor_client::{
-    anchor_lang::{system_program, Id},
-    solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer},
-};
 use anchor_spl::associated_token::get_associated_token_address;
+use gmsol_programs::gmsol_store::{
+    accounts::Withdrawal,
+    client::{accounts, args},
+    types::CreateWithdrawalParams,
+    ID,
+};
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions},
     compute_budget::ComputeBudget,
+    make_bundle_builder::{MakeBundleBuilder, SetExecutionFee},
     transaction_builder::TransactionBuilder,
 };
-use gmsol_store::{
-    accounts, instruction,
-    ops::withdrawal::CreateWithdrawalParams,
-    states::{
-        common::{action::Action, swap::SwapActionParams, TokensWithFeed},
-        withdrawal::Withdrawal,
-        NonceBytes, PriceProviderKind, Pyth, TokenMapAccess,
-    },
+use gmsol_utils::{
+    action::ActionFlag,
+    oracle::PriceProviderKind,
+    swap::SwapActionParams,
+    token_config::{TokenMapAccess, TokensWithFeed},
 };
+use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer, system_program};
 
 use crate::{
-    store::{token::TokenAccountOps, utils::FeedsParser},
-    utils::{
-        builder::{
-            FeedAddressMap, FeedIds, MakeBundleBuilder, PullOraclePriceConsumer, SetExecutionFee,
-        },
-        fix_optional_account_metas, ZeroCopy,
+    builders::utils::{generate_nonce, get_ata_or_owner},
+    client::{
+        feeds_parser::{FeedAddressMap, FeedsParser},
+        ops::token_account::TokenAccountOps,
+        pull_oracle::{FeedIds, PullOraclePriceConsumer},
     },
+    pda::NonceBytes,
+    utils::{optional::fix_optional_account_metas, zero_copy::ZeroCopy},
 };
 
-use super::{generate_nonce, get_ata_or_owner, ExchangeOps};
+use super::ExchangeOps;
 
-#[cfg(feature = "pyth-pull-oracle")]
-use crate::pyth::pull_oracle::Prices;
-
-/// `execute_withdrawal` compute budget.
+/// Compute unit limit for `execute_withdrawal`
 pub const EXECUTE_WITHDRAWAL_COMPUTE_BUDGET: u32 = 400_000;
+
+/// Min execution lamports for deposit.
+pub const MIN_EXECUTION_LAMPORTS: u64 = 200_000;
 
 /// Create Withdrawal Builder.
 pub struct CreateWithdrawalBuilder<'a, C> {
@@ -76,7 +78,7 @@ where
             store,
             market_token,
             nonce: None,
-            execution_fee: Withdrawal::MIN_EXECUTION_LAMPORTS,
+            execution_fee: MIN_EXECUTION_LAMPORTS,
             amount,
             min_long_token_amount: 0,
             min_short_token_amount: 0,
@@ -189,9 +191,9 @@ where
         let market = self.client.market(market).await?;
         Ok((
             self.final_long_token
-                .unwrap_or_else(|| market.meta().long_token_mint),
+                .unwrap_or_else(|| market.meta.long_token_mint),
             self.final_short_token
-                .unwrap_or_else(|| market.meta().short_token_mint),
+                .unwrap_or_else(|| market.meta.short_token_mint),
         ))
     }
 
@@ -207,7 +209,7 @@ where
 
         let owner = self.client.payer();
         let receiver = self.receiver;
-        let nonce = self.nonce.unwrap_or_else(generate_nonce);
+        let nonce = self.nonce.unwrap_or_else(|| generate_nonce().to_bytes());
         let withdrawal = self
             .client
             .find_withdrawal_address(&self.store, &owner, &nonce);
@@ -245,7 +247,7 @@ where
                 token_program: anchor_spl::token::ID,
                 associated_token_program: anchor_spl::associated_token::ID,
             })
-            .anchor_args(instruction::PrepareAssociatedTokenAccount {});
+            .anchor_args(args::PrepareAssociatedTokenAccount {});
         let prepare_final_short_token_ata = self
             .client
             .store_transaction()
@@ -258,7 +260,7 @@ where
                 token_program: anchor_spl::token::ID,
                 associated_token_program: anchor_spl::associated_token::ID,
             })
-            .anchor_args(instruction::PrepareAssociatedTokenAccount {});
+            .anchor_args(args::PrepareAssociatedTokenAccount {});
         let create = self
             .client
             .store_transaction()
@@ -279,7 +281,7 @@ where
                 final_short_token_escrow,
                 market_token_source: self.get_or_find_associated_market_token_account(),
             })
-            .anchor_args(instruction::CreateWithdrawal {
+            .anchor_args(args::CreateWithdrawal {
                 nonce,
                 params: CreateWithdrawalParams {
                     market_token_amount: self.amount,
@@ -290,12 +292,12 @@ where
                         .long_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::NumberOutOfRange)?,
+                        .map_err(|_| crate::Error::unknown("number out of range"))?,
                     short_token_swap_path_length: self
                         .short_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::NumberOutOfRange)?,
+                        .map_err(|_| crate::Error::unknown("number out of range"))?,
                     should_unwrap_native_token: self.should_unwrap_native_token,
                 },
             })
@@ -345,17 +347,20 @@ pub struct CloseWithdrawalHint {
 
 impl<'a> From<&'a Withdrawal> for CloseWithdrawalHint {
     fn from(withdrawal: &'a Withdrawal) -> Self {
-        let tokens = withdrawal.tokens();
+        let tokens = &withdrawal.tokens;
         Self {
-            owner: *withdrawal.header().owner(),
-            receiver: withdrawal.header().receiver(),
-            market_token: tokens.market_token(),
-            final_long_token: tokens.final_long_token(),
-            final_short_token: tokens.final_short_token(),
-            market_token_account: tokens.market_token_account(),
-            final_long_token_account: tokens.final_long_token_account(),
-            final_short_token_account: tokens.final_short_token_account(),
-            should_unwrap_native_token: withdrawal.header().should_unwrap_native_token(),
+            owner: withdrawal.header.owner,
+            receiver: withdrawal.header.receiver,
+            market_token: tokens.market_token.token,
+            final_long_token: tokens.final_long_token.token,
+            final_short_token: tokens.final_short_token.token,
+            market_token_account: tokens.market_token.account,
+            final_long_token_account: tokens.final_long_token.account,
+            final_short_token_account: tokens.final_short_token.account,
+            should_unwrap_native_token: withdrawal
+                .header
+                .flags
+                .get_flag(ActionFlag::ShouldUnwrapNativeToken),
         }
     }
 }
@@ -441,7 +446,7 @@ where
                 associated_token_program: anchor_spl::associated_token::ID,
                 program: *self.client.store_program_id(),
             })
-            .anchor_args(instruction::CloseWithdrawal {
+            .anchor_args(args::CloseWithdrawal {
                 reason: self.reason.clone(),
             }))
     }
@@ -454,7 +459,6 @@ pub struct ExecuteWithdrawalBuilder<'a, C> {
     oracle: Pubkey,
     withdrawal: Pubkey,
     execution_fee: u64,
-    price_provider: Pubkey,
     hint: Option<ExecuteWithdrawalHint>,
     feeds_parser: FeedsParser,
     token_map: Option<Pubkey>,
@@ -482,20 +486,30 @@ pub struct ExecuteWithdrawalHint {
 impl ExecuteWithdrawalHint {
     /// Create a new hint for the execution.
     pub fn new(withdrawal: &Withdrawal, map: &impl TokenMapAccess) -> crate::Result<Self> {
-        let tokens = withdrawal.tokens();
-        let swap = withdrawal.swap();
+        let CloseWithdrawalHint {
+            owner,
+            receiver,
+            market_token,
+            final_long_token,
+            final_short_token,
+            market_token_account,
+            final_long_token_account,
+            final_short_token_account,
+            should_unwrap_native_token,
+        } = CloseWithdrawalHint::from(withdrawal);
+        let swap = SwapActionParams::from(withdrawal.swap);
         Ok(Self {
-            owner: *withdrawal.header().owner(),
-            receiver: withdrawal.header().receiver(),
-            market_token: tokens.market_token(),
-            market_token_escrow: tokens.market_token_account(),
-            final_long_token_escrow: tokens.final_long_token_account(),
-            final_short_token_escrow: tokens.final_short_token_account(),
-            final_long_token: tokens.final_long_token(),
-            final_short_token: tokens.final_short_token(),
-            feeds: swap.to_feeds(map)?,
-            swap: *swap,
-            should_unwrap_native_token: withdrawal.header().should_unwrap_native_token(),
+            owner,
+            receiver,
+            market_token,
+            market_token_escrow: market_token_account,
+            final_long_token_escrow: final_long_token_account,
+            final_short_token_escrow: final_short_token_account,
+            final_long_token,
+            final_short_token,
+            feeds: swap.to_feeds(map).map_err(crate::Error::unknown)?,
+            swap,
+            should_unwrap_native_token,
         })
     }
 }
@@ -518,19 +532,12 @@ where
             oracle: *oracle,
             withdrawal: *withdrawal,
             execution_fee: 0,
-            price_provider: Pyth::id(),
             hint: None,
             feeds_parser: Default::default(),
             token_map: None,
             cancel_on_execution_error,
             close: true,
         }
-    }
-
-    /// Set price provider to the given.
-    pub fn price_provider(&mut self, program: Pubkey) -> &mut Self {
-        self.price_provider = program;
-        self
     }
 
     /// Set whether to close the withdrawal after execution.
@@ -547,13 +554,6 @@ where
     ) -> crate::Result<&mut Self> {
         self.hint = Some(ExecuteWithdrawalHint::new(withdrawal, map)?);
         Ok(self)
-    }
-
-    /// Parse feeds with the given price udpates map.
-    #[cfg(feature = "pyth-pull-oracle")]
-    pub fn parse_with_pyth_price_updates(&mut self, price_updates: Prices) -> &mut Self {
-        self.feeds_parser.with_pyth_price_updates(price_updates);
-        self
     }
 
     /// Prepare [`ExecuteWithdrawalHint`].
@@ -641,10 +641,10 @@ where
                     event_authority: self.client.store_event_authority(),
                     program: *self.client.store_program_id(),
                 },
-                &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
+                &ID,
                 self.client.store_program_id(),
             ))
-            .anchor_args(instruction::ExecuteWithdrawal {
+            .anchor_args(args::ExecuteWithdrawal {
                 execution_fee: self.execution_fee,
                 throw_on_execution_error: !self.cancel_on_execution_error,
             })

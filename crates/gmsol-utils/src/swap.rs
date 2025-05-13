@@ -31,7 +31,8 @@ pub struct SwapActionParams {
     pub secondary_length: u8,
     /// The number of tokens.
     pub num_tokens: u8,
-    padding_0: [u8; 1],
+    /// Padding.
+    pub padding_0: [u8; 1],
     pub current_market_token: Pubkey,
     /// Swap paths.
     pub paths: [Pubkey; MAX_STEPS],
@@ -166,4 +167,10 @@ impl SwapActionParams {
 pub trait HasSwapParams {
     /// Get the swap params.
     fn swap(&self) -> &SwapActionParams;
+}
+
+impl HasSwapParams for SwapActionParams {
+    fn swap(&self) -> &SwapActionParams {
+        self
+    }
 }

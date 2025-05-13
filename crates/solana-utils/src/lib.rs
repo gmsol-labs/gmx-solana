@@ -34,6 +34,10 @@ pub mod transaction_builder;
 #[cfg(client)]
 pub mod bundle_builder;
 
+/// Bundler for bundle builders.
+#[cfg(feature = "make-bundle-builder")]
+pub mod make_bundle_builder;
+
 /// RPC client extension.
 #[cfg(client)]
 pub mod client;

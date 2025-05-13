@@ -3,43 +3,49 @@ use std::{
     ops::Deref,
 };
 
-use anchor_client::{
-    anchor_lang::{prelude::AccountMeta, system_program},
-    solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey, signer::Signer},
-};
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
+use gmsol_programs::gmsol_store::{
+    accounts::{Glv, GlvDeposit},
+    client::{accounts, args},
+    types::CreateGlvDepositParams,
+    ID,
+};
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions},
     compute_budget::ComputeBudget,
+    make_bundle_builder::{MakeBundleBuilder, SetExecutionFee},
     transaction_builder::TransactionBuilder,
 };
-use gmsol_store::{
-    accounts, instruction,
-    ops::glv::CreateGlvDepositParams,
-    states::{
-        common::{
-            action::Action,
-            swap::{HasSwapParams, SwapActionParams},
-            TokensWithFeed,
-        },
-        Glv, GlvDeposit, HasMarketMeta, NonceBytes, PriceProviderKind, TokenMapAccess,
-    },
+use gmsol_utils::{
+    action::ActionFlag,
+    market::{HasMarketMeta, MarketMeta},
+    oracle::PriceProviderKind,
+    swap::SwapActionParams,
+    token_config::{TokenMapAccess, TokensWithFeed},
+};
+use solana_sdk::{
+    address_lookup_table::AddressLookupTableAccount, instruction::AccountMeta, pubkey::Pubkey,
+    signer::Signer, system_program,
 };
 
 use crate::{
-    exchange::{generate_nonce, get_ata_or_owner_with_program_id},
-    store::{token::TokenAccountOps, utils::FeedsParser},
-    utils::{
-        builder::{
-            FeedAddressMap, FeedIds, MakeBundleBuilder, PullOraclePriceConsumer, SetExecutionFee,
-        },
-        fix_optional_account_metas, ZeroCopy,
+    builders::utils::{generate_nonce, get_ata_or_owner_with_program_id},
+    client::{
+        feeds_parser::{FeedAddressMap, FeedsParser},
+        ops::{glv::split_to_accounts, token_account::TokenAccountOps},
+        pull_oracle::{FeedIds, PullOraclePriceConsumer},
     },
+    pda::NonceBytes,
+    utils::{optional::fix_optional_account_metas, zero_copy::ZeroCopy},
 };
 
-use super::{split_to_accounts, GlvOps};
+use super::ExchangeOps;
 
+/// Compute unit limit for `execute_glv_deposit`.
 pub const EXECUTE_GLV_DEPOSIT_COMPUTE_BUDGET: u32 = 800_000;
+
+/// Min execution lamports for GLV deposit.
+pub const MIN_EXECUTION_LAMPORTS: u64 = 200_000;
 
 /// Create GLV deposit builder.
 pub struct CreateGlvDepositBuilder<'a, C> {
@@ -105,7 +111,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvDepositBuilder<'a, C> 
             initial_short_token_amount: 0,
             min_market_token_amount: 0,
             min_glv_token_amount: 0,
-            max_execution_lamports: GlvDeposit::MIN_EXECUTION_LAMPORTS,
+            max_execution_lamports: MIN_EXECUTION_LAMPORTS,
             receiver: None,
             nonce: None,
             market_token_source: None,
@@ -220,7 +226,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvDepositBuilder<'a, C> 
             None => {
                 let market = self.market_address();
                 let market = self.client.market(&market).await?;
-                let hint = CreateGlvDepositHint::new(&*market);
+                let hint = CreateGlvDepositHint::new(&MarketMeta::from(market.meta));
                 self.hint = Some(hint.clone());
                 Ok(hint)
             }
@@ -233,7 +239,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvDepositBuilder<'a, C> 
     ) -> crate::Result<(TransactionBuilder<'a, C>, Pubkey)> {
         let hint = self.prepare_hint().await?;
 
-        let nonce = self.nonce.unwrap_or_else(generate_nonce);
+        let nonce = self.nonce.unwrap_or_else(|| generate_nonce().to_bytes());
         let owner = self.client.payer();
         let receiver = self.receiver.unwrap_or(owner);
         let glv_deposit = self
@@ -363,10 +369,10 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvDepositBuilder<'a, C> 
                     glv_token_program: glv_token_program_id,
                     associated_token_program: anchor_spl::associated_token::ID,
                 },
-                &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
+                &ID,
                 self.client.store_program_id(),
             ))
-            .anchor_args(instruction::CreateGlvDeposit {
+            .anchor_args(args::CreateGlvDeposit {
                 nonce,
                 params: CreateGlvDepositParams {
                     execution_lamports: self.max_execution_lamports,
@@ -374,12 +380,12 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvDepositBuilder<'a, C> 
                         .long_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::invalid_argument("swap path too long"))?,
+                        .map_err(|_| crate::Error::unknown("swap path too long"))?,
                     short_token_swap_length: self
                         .short_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::invalid_argument("swap path too long"))?,
+                        .map_err(|_| crate::Error::unknown("swap path too long"))?,
                     initial_long_token_amount: self.initial_long_token_amount,
                     initial_short_token_amount: self.initial_short_token_amount,
                     market_token_amount: self.market_token_amount,
@@ -433,18 +439,21 @@ impl CloseGlvDepositHint {
     /// Create from the GLV deposit.
     pub fn new(glv_deposit: &GlvDeposit) -> Self {
         Self {
-            store: *glv_deposit.header().store(),
-            owner: *glv_deposit.header().owner(),
-            receiver: glv_deposit.header().receiver(),
-            glv_token: glv_deposit.tokens().glv_token(),
-            market_token: glv_deposit.tokens().market_token(),
-            initial_long_token: glv_deposit.tokens().initial_long_token.token(),
-            initial_short_token: glv_deposit.tokens().initial_short_token.token(),
-            market_token_escrow: glv_deposit.tokens().market_token_account(),
-            initial_long_token_escrow: glv_deposit.tokens().initial_long_token.account(),
-            initial_short_token_escrow: glv_deposit.tokens().initial_short_token.account(),
-            glv_token_escrow: glv_deposit.tokens().glv_token_account(),
-            should_unwrap_native_token: glv_deposit.header().should_unwrap_native_token(),
+            store: glv_deposit.header.store,
+            owner: glv_deposit.header.owner,
+            receiver: glv_deposit.header.receiver,
+            glv_token: glv_deposit.tokens.glv_token.token,
+            market_token: glv_deposit.tokens.market_token.token,
+            initial_long_token: glv_deposit.tokens.initial_long_token.token(),
+            initial_short_token: glv_deposit.tokens.initial_short_token.token(),
+            market_token_escrow: glv_deposit.tokens.market_token.account,
+            initial_long_token_escrow: glv_deposit.tokens.initial_long_token.account(),
+            initial_short_token_escrow: glv_deposit.tokens.initial_short_token.account(),
+            glv_token_escrow: glv_deposit.tokens.glv_token.account,
+            should_unwrap_native_token: glv_deposit
+                .header
+                .flags
+                .get_flag(ActionFlag::ShouldUnwrapNativeToken),
         }
     }
 }
@@ -554,10 +563,10 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvDepositBuilder<'a, C> {
                     event_authority: self.client.store_event_authority(),
                     program: *self.client.store_program_id(),
                 },
-                &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
+                &ID,
                 self.client.store_program_id(),
             ))
-            .anchor_args(instruction::CloseGlvDeposit {
+            .anchor_args(args::CloseGlvDeposit {
                 reason: self.reason.clone(),
             });
 
@@ -610,28 +619,46 @@ impl ExecuteGlvDepositHint {
         token_map: &impl TokenMapAccess,
         index_tokens: impl IntoIterator<Item = Pubkey>,
     ) -> crate::Result<Self> {
+        let CloseGlvDepositHint {
+            store,
+            owner,
+            receiver,
+            glv_token,
+            market_token,
+            initial_long_token,
+            initial_short_token,
+            market_token_escrow,
+            initial_long_token_escrow,
+            initial_short_token_escrow,
+            glv_token_escrow,
+            should_unwrap_native_token,
+        } = CloseGlvDepositHint::new(glv_deposit);
         let glv_market_tokens = glv.market_tokens().collect();
-        let mut collector = glv.tokens_collector(Some(glv_deposit));
+        let swap = glv_deposit.swap.into();
+        let mut collector = glv.tokens_collector(Some(&swap));
         for token in index_tokens {
             collector.insert_token(&token);
         }
+
         Ok(Self {
-            store: *glv_deposit.header().store(),
+            store,
             token_map: *token_map_address,
-            owner: *glv_deposit.header().owner(),
-            receiver: glv_deposit.header().receiver(),
-            glv_token: glv_deposit.tokens().glv_token(),
+            owner,
+            receiver,
+            glv_token,
             glv_market_tokens,
-            market_token: glv_deposit.tokens().market_token(),
-            initial_long_token: glv_deposit.tokens().initial_long_token.token(),
-            initial_short_token: glv_deposit.tokens().initial_short_token.token(),
-            market_token_escrow: glv_deposit.tokens().market_token_account(),
-            initial_long_token_escrow: glv_deposit.tokens().initial_long_token.account(),
-            initial_short_token_escrow: glv_deposit.tokens().initial_short_token.account(),
-            glv_token_escrow: glv_deposit.tokens().glv_token_account(),
-            swap: *glv_deposit.swap(),
-            feeds: collector.to_feeds(token_map)?,
-            should_unwrap_native_token: glv_deposit.header().should_unwrap_native_token(),
+            market_token,
+            initial_long_token,
+            initial_short_token,
+            market_token_escrow,
+            initial_long_token_escrow,
+            initial_short_token_escrow,
+            glv_token_escrow,
+            swap,
+            feeds: collector
+                .to_feeds(token_map)
+                .map_err(crate::Error::unknown)?,
+            should_unwrap_native_token,
         })
     }
 }
@@ -675,16 +702,6 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvDepositBuilder<'a, C>
         self
     }
 
-    /// Parse feeds with the given price udpates map.
-    #[cfg(feature = "pyth-pull-oracle")]
-    pub fn parse_with_pyth_price_updates(
-        &mut self,
-        price_updates: crate::pyth::pull_oracle::Prices,
-    ) -> &mut Self {
-        self.feeds_parser.with_pyth_price_updates(price_updates);
-        self
-    }
-
     /// Insert an Address Lookup Table.
     pub fn add_alt(&mut self, account: AddressLookupTableAccount) -> &mut Self {
         self.alts.insert(account.key, account.addresses);
@@ -705,7 +722,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvDepositBuilder<'a, C>
 
                 let glv_address = self
                     .client
-                    .find_glv_address(&glv_deposit.tokens().glv_token());
+                    .find_glv_address(&glv_deposit.tokens.glv_token.token);
                 let glv = self
                     .client
                     .account::<ZeroCopy<Glv>>(&glv_address)
@@ -715,12 +732,12 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvDepositBuilder<'a, C>
 
                 let mut index_tokens = Vec::with_capacity(glv.num_markets());
                 for token in glv.market_tokens() {
-                    let market = self.client.find_market_address(glv.store(), &token);
+                    let market = self.client.find_market_address(&glv.store, &token);
                     let market = self.client.market(&market).await?;
-                    index_tokens.push(market.meta().index_token_mint);
+                    index_tokens.push(market.meta.index_token_mint);
                 }
 
-                let store = glv_deposit.header().store();
+                let store = &glv_deposit.header.store;
                 let token_map_address = self
                     .client
                     .authorized_token_map_address(store)
@@ -737,41 +754,6 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvDepositBuilder<'a, C>
                 self.hint = Some(hint.clone());
                 Ok(hint)
             }
-        }
-    }
-}
-
-#[cfg(feature = "pyth-pull-oracle")]
-mod pyth {
-    use crate::pyth::{
-        pull_oracle::{ExecuteWithPythPrices, Prices},
-        PythPullOracleContext,
-    };
-
-    use super::*;
-
-    impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteWithPythPrices<'a, C>
-        for ExecuteGlvDepositBuilder<'a, C>
-    {
-        fn set_execution_fee(&mut self, lamports: u64) {
-            SetExecutionFee::set_execution_fee(self, lamports);
-        }
-
-        async fn context(&mut self) -> crate::Result<PythPullOracleContext> {
-            let hint = self.prepare_hint().await?;
-            let ctx = PythPullOracleContext::try_from_feeds(&hint.feeds)?;
-            Ok(ctx)
-        }
-
-        async fn build_rpc_with_price_updates(
-            &mut self,
-            price_updates: Prices,
-        ) -> crate::Result<Vec<TransactionBuilder<'a, C, ()>>> {
-            let txn = self
-                .parse_with_pyth_price_updates(price_updates)
-                .build()
-                .await?;
-            Ok(txn.into_builders())
         }
     }
 }
@@ -865,10 +847,10 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
                     event_authority: self.client.store_event_authority(),
                     program: *self.client.store_program_id(),
                 },
-                &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
+                &ID,
                 self.client.store_program_id(),
             ))
-            .anchor_args(instruction::ExecuteGlvDeposit {
+            .anchor_args(args::ExecuteGlvDeposit {
                 execution_lamports: self.execution_lamports,
                 throw_on_execution_error: !self.cancel_on_execution_error,
             })

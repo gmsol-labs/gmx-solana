@@ -18,12 +18,15 @@ model = ["gmsol-model", "bitmaps", "time"]
 wasm-bindgen = ["time?/wasm-bindgen"]
 
 [dependencies]
+gmsol-model = { workspace = true, optional = true, features = ["u128"] }
+gmsol-utils = { workspace = true, optional = true }
+
 anchor-lang = { workspace = true }
+thiserror = { workspace = true }
 bytemuck = { workspace = true, features = [
     "min_const_generics",
     "align_offset",
 ] }
-gmsol-model = { workspace = true, optional = true, features = ["u128"] }
 bitmaps = { workspace = true, optional = true }
 time = { workspace = true, optional = true }
 

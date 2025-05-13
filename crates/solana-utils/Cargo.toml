@@ -20,6 +20,7 @@ client = [
     "tokio",
     "futures-util",
 ]
+make-bundle-builder = ["client"]
 
 [dependencies]
 solana-sdk = { workspace = true }

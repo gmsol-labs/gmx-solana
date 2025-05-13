@@ -1,59 +1,69 @@
-use std::{collections::HashMap, ops::Deref};
+use std::ops::Deref;
 
-use anchor_client::{
-    anchor_lang::system_program,
-    solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey, signer::Signer},
-};
 use anchor_spl::associated_token::get_associated_token_address;
+use gmsol_programs::gmsol_store::{
+    accounts::{Shift, Store},
+    client::{accounts, args},
+    types::CreateShiftParams,
+    ID,
+};
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions},
+    compute_budget::ComputeBudget,
+    make_bundle_builder::{MakeBundleBuilder, SetExecutionFee},
     transaction_builder::TransactionBuilder,
 };
-use gmsol_store::{
-    accounts, instruction,
-    ops::shift::CreateShiftParams,
-    states::{
-        common::{action::Action, TokensWithFeed},
-        glv::GlvShift,
-        HasMarketMeta, NonceBytes, PriceProviderKind, Shift, Store, TokenMapAccess,
-    },
+use gmsol_utils::{
+    market::{ordered_tokens, HasMarketMeta, MarketMeta},
+    oracle::PriceProviderKind,
+    pubkey::optional_address,
+    token_config::{token_records, TokenMapAccess, TokensWithFeed},
 };
-use gmsol_utils::market::ordered_tokens;
+use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
 
 use crate::{
-    exchange::generate_nonce,
-    store::utils::FeedsParser,
-    utils::{
-        builder::{
-            FeedAddressMap, FeedIds, MakeBundleBuilder, PullOraclePriceConsumer, SetExecutionFee,
-        },
-        fix_optional_account_metas, ZeroCopy,
+    builders::utils::generate_nonce,
+    client::{
+        feeds_parser::{FeedAddressMap, FeedsParser},
+        ops::token_account::TokenAccountOps,
+        pull_oracle::{FeedIds, PullOraclePriceConsumer},
     },
+    pda::NonceBytes,
+    utils::{optional::fix_optional_account_metas, zero_copy::ZeroCopy},
 };
 
-#[cfg(feature = "pyth-pull-oracle")]
-use crate::pyth::pull_oracle::Prices;
+use super::ExchangeOps;
 
-use super::GlvOps;
+/// Compute unit limit for `execute_shift`
+pub const EXECUTE_SHIFT_COMPUTE_BUDGET: u32 = 400_000;
+
+/// Min execution lamports for deposit.
+pub const MIN_EXECUTION_LAMPORTS: u64 = 200_000;
 
 /// Create Shift Builder.
-pub struct CreateGlvShiftBuilder<'a, C> {
+pub struct CreateShiftBuilder<'a, C> {
     client: &'a crate::Client<C>,
     store: Pubkey,
-    glv_token: Pubkey,
     from_market_token: Pubkey,
     to_market_token: Pubkey,
     execution_fee: u64,
     amount: u64,
     min_to_market_token_amount: u64,
     nonce: Option<NonceBytes>,
+    hint: CreateShiftHint,
+    receiver: Pubkey,
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvShiftBuilder<'a, C> {
+/// Hint for creating shift.
+#[derive(Default)]
+pub struct CreateShiftHint {
+    from_market_token_source: Option<Pubkey>,
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> CreateShiftBuilder<'a, C> {
     pub(super) fn new(
         client: &'a crate::Client<C>,
         store: &Pubkey,
-        glv_token: &Pubkey,
         from_market_token: &Pubkey,
         to_market_token: &Pubkey,
         amount: u64,
@@ -61,13 +71,14 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvShiftBuilder<'a, C> {
         Self {
             client,
             store: *store,
-            glv_token: *glv_token,
             from_market_token: *from_market_token,
             to_market_token: *to_market_token,
-            execution_fee: Shift::MIN_EXECUTION_LAMPORTS,
+            execution_fee: MIN_EXECUTION_LAMPORTS,
             amount,
             min_to_market_token_amount: 0,
             nonce: None,
+            hint: Default::default(),
+            receiver: client.payer(),
         }
     }
 
@@ -89,6 +100,26 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvShiftBuilder<'a, C> {
         self
     }
 
+    /// Set hint.
+    pub fn hint(&mut self, hint: CreateShiftHint) -> &mut Self {
+        self.hint = hint;
+        self
+    }
+
+    /// Set receiver.
+    /// Defaults to the payer.
+    pub fn receiver(&mut self, receiver: Pubkey) -> &mut Self {
+        self.receiver = receiver;
+        self
+    }
+
+    fn get_from_market_token_source(&self) -> Pubkey {
+        match self.hint.from_market_token_source {
+            Some(address) => address,
+            None => get_associated_token_address(&self.client.payer(), &self.from_market_token),
+        }
+    }
+
     fn get_create_shift_params(&self) -> CreateShiftParams {
         CreateShiftParams {
             execution_lamports: self.execution_fee,
@@ -99,14 +130,12 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvShiftBuilder<'a, C> {
 
     /// Build a [`TransactionBuilder`] to create shift account and return the address of the shift account to create.
     pub fn build_with_address(&self) -> crate::Result<(TransactionBuilder<'a, C>, Pubkey)> {
-        let authority = self.client.payer();
-        let nonce = self.nonce.unwrap_or_else(generate_nonce);
-        let glv = self.client.find_glv_address(&self.glv_token);
-        let glv_shift = self
-            .client
-            .find_shift_address(&self.store, &authority, &nonce);
-
         let token_program_id = anchor_spl::token::ID;
+
+        let owner = self.client.payer();
+        let receiver = self.receiver;
+        let nonce = self.nonce.unwrap_or_else(|| generate_nonce().to_bytes());
+        let shift = self.client.find_shift_address(&self.store, &owner, &nonce);
 
         let from_market = self
             .client
@@ -115,80 +144,116 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvShiftBuilder<'a, C> {
             .client
             .find_market_address(&self.store, &self.to_market_token);
 
-        let from_market_token_vault = get_associated_token_address(&glv, &self.from_market_token);
-        let to_market_token_vault = get_associated_token_address(&glv, &self.to_market_token);
+        let from_market_token_escrow =
+            get_associated_token_address(&shift, &self.from_market_token);
+        let to_market_token_escrow = get_associated_token_address(&shift, &self.to_market_token);
+        let to_market_token_ata = get_associated_token_address(&receiver, &self.to_market_token);
+
+        let prepare_escrow = self
+            .client
+            .prepare_associated_token_account(
+                &self.from_market_token,
+                &token_program_id,
+                Some(&shift),
+            )
+            .merge(self.client.prepare_associated_token_account(
+                &self.to_market_token,
+                &token_program_id,
+                Some(&shift),
+            ));
+
+        let prepare_ata = self.client.prepare_associated_token_account(
+            &self.to_market_token,
+            &token_program_id,
+            Some(&receiver),
+        );
 
         let rpc = self
             .client
             .store_transaction()
-            .anchor_accounts(accounts::CreateGlvShift {
-                authority,
+            .anchor_accounts(accounts::CreateShift {
+                owner,
+                receiver,
                 store: self.store,
                 from_market,
                 to_market,
-                glv_shift,
+                shift,
                 from_market_token: self.from_market_token,
                 to_market_token: self.to_market_token,
-                from_market_token_vault,
-                to_market_token_vault,
+                from_market_token_escrow,
+                to_market_token_escrow,
+                from_market_token_source: self.get_from_market_token_source(),
+                to_market_token_ata,
                 system_program: system_program::ID,
                 token_program: token_program_id,
                 associated_token_program: anchor_spl::associated_token::ID,
-                glv,
             })
-            .anchor_args(instruction::CreateGlvShift {
+            .anchor_args(args::CreateShift {
                 nonce,
                 params: self.get_create_shift_params(),
             });
 
-        Ok((rpc, glv_shift))
+        Ok((prepare_escrow.merge(prepare_ata).merge(rpc), shift))
     }
 }
 
-/// Close GLV Shift Builder.
-pub struct CloseGlvShiftBuilder<'a, C> {
+/// Close Shift Builder.
+pub struct CloseShiftBuilder<'a, C> {
     client: &'a crate::Client<C>,
-    glv_shift: Pubkey,
+    shift: Pubkey,
     reason: String,
-    hint: Option<CloseGlvShiftHint>,
+    hint: Option<CloseShiftHint>,
 }
 
 /// Hint for `close_shift` instruction.
 #[derive(Clone)]
-pub struct CloseGlvShiftHint {
+pub struct CloseShiftHint {
     store: Pubkey,
     owner: Pubkey,
-    funder: Pubkey,
+    receiver: Pubkey,
     from_market_token: Pubkey,
     to_market_token: Pubkey,
+    from_market_token_escrow: Pubkey,
+    to_market_token_escrow: Pubkey,
 }
 
-impl CloseGlvShiftHint {
+impl CloseShiftHint {
     /// Create hint for `close_shift` instruction.
-    pub fn new(glv_shift: &GlvShift) -> crate::Result<Self> {
-        let tokens = glv_shift.tokens();
+    pub fn new(shift: &Shift) -> crate::Result<Self> {
+        let tokens = &shift.tokens;
         Ok(Self {
-            store: *glv_shift.header().store(),
-            owner: *glv_shift.header().owner(),
-            funder: *glv_shift.funder(),
-            from_market_token: tokens.from_market_token(),
-            to_market_token: tokens.to_market_token(),
+            store: shift.header.store,
+            owner: shift.header.owner,
+            receiver: shift.header.receiver,
+            from_market_token: tokens.from_market_token.token,
+            from_market_token_escrow: tokens.from_market_token.account,
+            to_market_token: tokens.to_market_token.token,
+            to_market_token_escrow: tokens.to_market_token.account,
         })
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    fn from_market_token_ata(&self) -> Pubkey {
+        get_associated_token_address(&self.owner, &self.from_market_token)
+    }
+
+    fn to_market_token_ata(&self) -> Pubkey {
+        get_associated_token_address(&self.receiver, &self.to_market_token)
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvShiftBuilder<'a, C> {
+impl<'a, C: Deref<Target = impl Signer> + Clone> CloseShiftBuilder<'a, C> {
     pub(super) fn new(client: &'a crate::Client<C>, shift: &Pubkey) -> Self {
         Self {
             client,
-            glv_shift: *shift,
+            shift: *shift,
             hint: None,
             reason: String::from("cancelled"),
         }
     }
 
     /// Set hint.
-    pub fn hint(&mut self, hint: CloseGlvShiftHint) -> &mut Self {
+    pub fn hint(&mut self, hint: CloseShiftHint) -> &mut Self {
         self.hint = Some(hint);
         self
     }
@@ -200,16 +265,16 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvShiftBuilder<'a, C> {
     }
 
     /// Prepare hint if needed
-    pub async fn prepare_hint(&mut self) -> crate::Result<CloseGlvShiftHint> {
+    pub async fn prepare_hint(&mut self) -> crate::Result<CloseShiftHint> {
         let hint = match &self.hint {
             Some(hint) => hint.clone(),
             None => {
                 let shift = self
                     .client
-                    .account::<ZeroCopy<_>>(&self.glv_shift)
+                    .account::<ZeroCopy<_>>(&self.shift)
                     .await?
                     .ok_or(crate::Error::NotFound)?;
-                let hint = CloseGlvShiftHint::new(&shift.0)?;
+                let hint = CloseShiftHint::new(&shift.0)?;
                 self.hint = Some(hint.clone());
                 hint
             }
@@ -221,26 +286,30 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvShiftBuilder<'a, C> {
     /// Build a [`TransactionBuilder`] to close shift account.
     pub async fn build(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
-        let authority = self.client.payer();
+        let executor = self.client.payer();
         let rpc = self
             .client
             .store_transaction()
-            .anchor_accounts(accounts::CloseGlvShift {
-                authority,
-                funder: hint.funder,
+            .anchor_accounts(accounts::CloseShift {
+                executor,
                 store: hint.store,
                 store_wallet: self.client.find_store_wallet_address(&hint.store),
-                glv: hint.owner,
-                glv_shift: self.glv_shift,
+                owner: hint.owner,
+                receiver: hint.receiver,
+                shift: self.shift,
                 from_market_token: hint.from_market_token,
                 to_market_token: hint.to_market_token,
+                from_market_token_escrow: hint.from_market_token_escrow,
+                to_market_token_escrow: hint.to_market_token_escrow,
+                from_market_token_ata: hint.from_market_token_ata(),
+                to_market_token_ata: hint.to_market_token_ata(),
                 system_program: system_program::ID,
                 token_program: anchor_spl::token::ID,
                 associated_token_program: anchor_spl::associated_token::ID,
                 event_authority: self.client.store_event_authority(),
                 program: *self.client.store_program_id(),
             })
-            .anchor_args(instruction::CloseGlvShift {
+            .anchor_args(args::CloseShift {
                 reason: self.reason.clone(),
             });
 
@@ -248,78 +317,92 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CloseGlvShiftBuilder<'a, C> {
     }
 }
 
-/// Execute GLV Shift Instruction Builder.
-pub struct ExecuteGlvShiftBuilder<'a, C> {
+/// Execute Shift Instruction Builder.
+pub struct ExecuteShiftBuilder<'a, C> {
     client: &'a crate::Client<C>,
     shift: Pubkey,
     execution_fee: u64,
     cancel_on_execution_error: bool,
     oracle: Pubkey,
-    hint: Option<ExecuteGlvShiftHint>,
+    hint: Option<ExecuteShiftHint>,
     close: bool,
     feeds_parser: FeedsParser,
-    alts: HashMap<Pubkey, Vec<Pubkey>>,
 }
 
 /// Hint for `execute_shift` instruction.
 #[derive(Clone)]
-pub struct ExecuteGlvShiftHint {
+pub struct ExecuteShiftHint {
     store: Pubkey,
     token_map: Pubkey,
     owner: Pubkey,
-    funder: Pubkey,
+    receiver: Pubkey,
     from_market_token: Pubkey,
     to_market_token: Pubkey,
+    from_market_token_escrow: Pubkey,
+    to_market_token_escrow: Pubkey,
     /// Feeds.
     pub feeds: TokensWithFeed,
 }
 
-impl ExecuteGlvShiftHint {
+impl ExecuteShiftHint {
     /// Create hint for `execute_shift` instruction.
     pub fn new(
-        glv_shift: &GlvShift,
+        shift: &Shift,
         store: &Store,
         map: &impl TokenMapAccess,
         from_market: &impl HasMarketMeta,
         to_market: &impl HasMarketMeta,
     ) -> crate::Result<Self> {
-        use gmsol_store::states::common::token_with_feeds::token_records;
-
-        let token_infos = glv_shift.tokens();
-
         let ordered_tokens = ordered_tokens(from_market, to_market);
-        let token_records = token_records(map, &ordered_tokens)?;
-        let feeds = TokensWithFeed::try_from_records(token_records)?;
+        let token_records = token_records(map, &ordered_tokens).map_err(crate::Error::unknown)?;
+        let feeds =
+            TokensWithFeed::try_from_records(token_records).map_err(crate::Error::unknown)?;
+
+        let CloseShiftHint {
+            store: store_address,
+            owner,
+            receiver,
+            from_market_token,
+            to_market_token,
+            from_market_token_escrow,
+            to_market_token_escrow,
+        } = CloseShiftHint::new(shift)?;
 
         Ok(Self {
-            store: *glv_shift.header().store(),
-            owner: *glv_shift.header().owner(),
-            funder: *glv_shift.funder(),
-            from_market_token: token_infos.from_market_token(),
-            to_market_token: token_infos.to_market_token(),
-            token_map: *store.token_map().ok_or(crate::Error::NotFound)?,
+            store: store_address,
+            owner,
+            receiver,
+            from_market_token,
+            from_market_token_escrow,
+            to_market_token,
+            to_market_token_escrow,
+            token_map: *optional_address(&store.token_map).ok_or(crate::Error::NotFound)?,
             feeds,
         })
     }
 }
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
-    pub(super) fn new(client: &'a crate::Client<C>, oracle: &Pubkey, shift: &Pubkey) -> Self {
+impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteShiftBuilder<'a, C> {
+    pub(super) fn new(
+        client: &'a crate::Client<C>,
+        oracle: &Pubkey,
+        shift: &Pubkey,
+        cancel_on_execution_error: bool,
+    ) -> Self {
         Self {
             client,
             shift: *shift,
             hint: None,
             execution_fee: 0,
-            cancel_on_execution_error: true,
+            cancel_on_execution_error,
             oracle: *oracle,
             close: true,
             feeds_parser: Default::default(),
-            alts: Default::default(),
         }
     }
 
     /// Set hint.
-    pub fn hint(&mut self, hint: ExecuteGlvShiftHint) -> &mut Self {
+    pub fn hint(&mut self, hint: ExecuteShiftHint) -> &mut Self {
         self.hint = Some(hint);
         self
     }
@@ -336,51 +419,32 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
         self
     }
 
-    /// Insert an Address Lookup Table.
-    pub fn add_alt(&mut self, account: AddressLookupTableAccount) -> &mut Self {
-        self.alts.insert(account.key, account.addresses);
-        self
-    }
-
-    /// Parse feeds with the given price udpates map.
-    #[cfg(feature = "pyth-pull-oracle")]
-    pub fn parse_with_pyth_price_updates(&mut self, price_updates: Prices) -> &mut Self {
-        self.feeds_parser.with_pyth_price_updates(price_updates);
-        self
-    }
-
-    /// Prepare hint.
-    pub async fn prepare_hint(&mut self) -> crate::Result<ExecuteGlvShiftHint> {
+    async fn prepare_hint(&mut self) -> crate::Result<ExecuteShiftHint> {
         let hint = match &self.hint {
             Some(hint) => hint.clone(),
             None => {
                 let shift = self
                     .client
-                    .account::<ZeroCopy<GlvShift>>(&self.shift)
+                    .account::<ZeroCopy<Shift>>(&self.shift)
                     .await?
                     .ok_or(crate::Error::NotFound)?;
-                let store = self.client.store(shift.0.header().store()).await?;
-                let token_map_address = store
-                    .token_map()
-                    .ok_or(crate::Error::invalid_argument("token map is not set"))?;
+                let stote_address = &shift.0.header.store;
+                let store = self.client.store(stote_address).await?;
+                let token_map_address = optional_address(&store.token_map)
+                    .ok_or(crate::Error::unknown("token map is not set"))?;
                 let token_map = self.client.token_map(token_map_address).await?;
-                let from_market_token = shift.0.tokens().from_market_token();
-                let to_market_token = shift.0.tokens().to_market_token();
+                let from_market_token = shift.0.tokens.from_market_token.token;
+                let to_market_token = shift.0.tokens.to_market_token.token;
                 let from_market = self
                     .client
-                    .find_market_address(shift.0.header().store(), &from_market_token);
-                let from_market = self.client.market(&from_market).await?;
+                    .find_market_address(stote_address, &from_market_token);
+                let from_market = MarketMeta::from(self.client.market(&from_market).await?.meta);
                 let to_market = self
                     .client
-                    .find_market_address(shift.0.header().store(), &to_market_token);
-                let to_market = self.client.market(&to_market).await?;
-                let hint = ExecuteGlvShiftHint::new(
-                    &shift.0,
-                    &store,
-                    &token_map,
-                    &*from_market,
-                    &*to_market,
-                )?;
+                    .find_market_address(stote_address, &to_market_token);
+                let to_market = MarketMeta::from(self.client.market(&to_market).await?.meta);
+                let hint =
+                    ExecuteShiftHint::new(&shift.0, &store, &token_map, &from_market, &to_market)?;
                 self.hint = Some(hint.clone());
                 hint
             }
@@ -394,8 +458,6 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
         let hint = self.prepare_hint().await?;
         let authority = self.client.payer();
 
-        let glv = hint.owner;
-
         let from_market = self
             .client
             .find_market_address(&hint.store, &hint.from_market_token);
@@ -406,55 +468,52 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
             .client
             .find_market_vault_address(&hint.store, &hint.from_market_token);
 
-        let from_market_token_glv_vault =
-            get_associated_token_address(&glv, &hint.from_market_token);
-        let to_market_token_glv_vault = get_associated_token_address(&glv, &hint.to_market_token);
-
         let feeds = self.feeds_parser.parse_and_sort_by_tokens(&hint.feeds)?;
 
         let mut rpc = self
             .client
             .store_transaction()
             .accounts(fix_optional_account_metas(
-                accounts::ExecuteGlvShift {
+                accounts::ExecuteShift {
                     authority,
                     store: hint.store,
                     token_map: hint.token_map,
                     oracle: self.oracle,
-                    glv,
                     from_market,
                     to_market,
-                    glv_shift: self.shift,
+                    shift: self.shift,
                     from_market_token: hint.from_market_token,
                     to_market_token: hint.to_market_token,
-                    from_market_token_glv_vault,
-                    to_market_token_glv_vault,
+                    from_market_token_escrow: hint.from_market_token_escrow,
+                    to_market_token_escrow: hint.to_market_token_escrow,
                     from_market_token_vault,
                     token_program: anchor_spl::token::ID,
                     chainlink_program: None,
                     event_authority: self.client.store_event_authority(),
                     program: *self.client.store_program_id(),
                 },
-                &crate::program_ids::DEFAULT_GMSOL_STORE_ID,
+                &ID,
                 self.client.store_program_id(),
             ))
-            .anchor_args(instruction::ExecuteGlvShift {
+            .anchor_args(args::ExecuteShift {
                 execution_lamports: self.execution_fee,
                 throw_on_execution_error: !self.cancel_on_execution_error,
             })
             .accounts(feeds)
-            .lookup_tables(self.alts.clone());
+            .compute_budget(ComputeBudget::default().with_limit(EXECUTE_SHIFT_COMPUTE_BUDGET));
 
         if self.close {
             let close = self
                 .client
-                .close_glv_shift(&self.shift)
-                .hint(CloseGlvShiftHint {
+                .close_shift(&self.shift)
+                .hint(CloseShiftHint {
                     store: hint.store,
                     owner: hint.owner,
-                    funder: hint.funder,
+                    receiver: hint.receiver,
                     from_market_token: hint.from_market_token,
                     to_market_token: hint.to_market_token,
+                    from_market_token_escrow: hint.from_market_token_escrow,
+                    to_market_token_escrow: hint.to_market_token_escrow,
                 })
                 .reason("executed")
                 .build()
@@ -466,59 +525,25 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
     }
 }
 
-#[cfg(feature = "pyth-pull-oracle")]
-mod pyth {
-    use crate::pyth::{pull_oracle::ExecuteWithPythPrices, PythPullOracleContext};
-
-    use super::*;
-
-    impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteWithPythPrices<'a, C>
-        for ExecuteGlvShiftBuilder<'a, C>
-    {
-        fn set_execution_fee(&mut self, lamports: u64) {
-            SetExecutionFee::set_execution_fee(self, lamports);
-        }
-
-        async fn context(&mut self) -> crate::Result<PythPullOracleContext> {
-            let hint = self.prepare_hint().await?;
-            let ctx = PythPullOracleContext::try_from_feeds(&hint.feeds)?;
-            Ok(ctx)
-        }
-
-        async fn build_rpc_with_price_updates(
-            &mut self,
-            price_updates: Prices,
-        ) -> crate::Result<Vec<TransactionBuilder<'a, C, ()>>> {
-            let txn = self
-                .parse_with_pyth_price_updates(price_updates)
-                .build()
-                .await?;
-            Ok(txn.into_builders())
-        }
-    }
-}
-
 impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
-    for ExecuteGlvShiftBuilder<'a, C>
+    for ExecuteShiftBuilder<'a, C>
 {
     async fn build_with_options(
         &mut self,
         options: BundleOptions,
     ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
         let mut tx = self.client.bundle_with_options(options);
-
         tx.try_push(
             self.build_rpc()
                 .await
                 .map_err(gmsol_solana_utils::Error::custom)?,
         )?;
-
         Ok(tx)
     }
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
-    for ExecuteGlvShiftBuilder<'_, C>
+    for ExecuteShiftBuilder<'_, C>
 {
     async fn feed_ids(&mut self) -> crate::Result<FeedIds> {
         let hint = self.prepare_hint().await?;
@@ -536,7 +561,7 @@ impl<C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
     }
 }
 
-impl<C> SetExecutionFee for ExecuteGlvShiftBuilder<'_, C> {
+impl<C> SetExecutionFee for ExecuteShiftBuilder<'_, C> {
     fn set_execution_fee(&mut self, lamports: u64) -> &mut Self {
         self.execution_fee = lamports;
         self

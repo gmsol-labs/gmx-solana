@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anchor_lang::{err, Discriminator};
 use gmsol_programs::{
     anchor_lang,
@@ -106,4 +108,48 @@ pub fn try_deserialize_zero_copy_from_base64<T: anchor_lang::ZeroCopy>(
     data: &str,
 ) -> crate::Result<ZeroCopy<T>> {
     try_deserialize_zero_copy(&crate::utils::base64::decode_base64(data)?)
+}
+
+/// Workaround for deserializing zero-copy accounts and wrapping the result into Arc.
+pub struct SharedZeroCopy<T>(pub Arc<T>);
+
+impl<T> Clone for SharedZeroCopy<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T> SharedZeroCopy<T> {
+    /// Conver into inner value.
+    pub fn into_inner(self) -> Arc<T> {
+        self.0
+    }
+}
+
+impl<T> anchor_lang::AccountDeserialize for SharedZeroCopy<T>
+where
+    T: anchor_lang::ZeroCopy,
+{
+    fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+        let account = try_deserialize(buf)?;
+        Ok(Self(Arc::new(account)))
+    }
+
+    fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+        let account = try_deserialize_unchecked(buf)?;
+        Ok(Self(Arc::new(account)))
+    }
+}
+
+impl<T> Discriminator for SharedZeroCopy<T>
+where
+    T: Discriminator,
+{
+    const DISCRIMINATOR: &'static [u8] = T::DISCRIMINATOR;
+}
+
+impl<T> AsRef<T> for SharedZeroCopy<T> {
+    fn as_ref(&self) -> &T {
+        &self.0
+    }
 }

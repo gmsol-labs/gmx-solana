@@ -1,17 +1,16 @@
 use std::{collections::HashMap, future::Future, ops::Deref};
 
-use anchor_client::solana_sdk::{pubkey::Pubkey, signer::Signer};
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions},
+    make_bundle_builder::{MakeBundleBuilder, SetExecutionFee},
     transaction_builder::TransactionBuilder,
 };
-use gmsol_store::states::{common::TokensWithFeed, PriceProviderKind};
+
+use gmsol_utils::{oracle::PriceProviderKind, token_config::TokensWithFeed};
+use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use time::OffsetDateTime;
 
-use super::{MakeBundleBuilder, SetExecutionFee};
-
-/// A mapping from feed id to the corresponding feed address.
-pub type FeedAddressMap = std::collections::HashMap<Pubkey, Pubkey>;
+use super::{feeds_parser::FeedAddressMap, Client};
 
 /// Build with pull oracle instructions.
 pub struct WithPullOracle<O, T>
@@ -172,7 +171,7 @@ pub struct PriceUpdateInstructions<'a, C> {
 
 impl<'a, C: Deref<Target = impl Signer> + Clone> PriceUpdateInstructions<'a, C> {
     /// Create a new empty price update instructions.
-    pub fn new(client: &'a crate::Client<C>, options: BundleOptions) -> Self {
+    pub fn new(client: &'a Client<C>, options: BundleOptions) -> Self {
         Self {
             post: client.bundle_with_options(options.clone()),
             close: client.bundle_with_options(options),

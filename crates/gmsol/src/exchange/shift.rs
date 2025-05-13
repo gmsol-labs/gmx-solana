@@ -520,9 +520,13 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     async fn build_with_options(
         &mut self,
         options: BundleOptions,
-    ) -> crate::Result<BundleBuilder<'a, C>> {
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
         let mut tx = self.client.bundle_with_options(options);
-        tx.try_push(self.build_rpc().await?)?;
+        tx.try_push(
+            self.build_rpc()
+                .await
+                .map_err(gmsol_solana_utils::Error::custom)?,
+        )?;
         Ok(tx)
     }
 }

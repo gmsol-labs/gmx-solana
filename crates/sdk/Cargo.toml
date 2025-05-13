@@ -15,6 +15,7 @@ crate-type = ["cdylib"]
 [features]
 default = ["market-graph"]
 treasury = ["gmsol-programs/treasury"]
+timelock = ["gmsol-programs/timelock"]
 js = [
     "market-graph",
     "wasm-bindgen",
@@ -32,11 +33,34 @@ serde = [
     "gmsol-solana-utils/serde",
 ]
 market-graph = ["petgraph", "rust_decimal/maths"]
+client = [
+    "gmsol-programs/gmsol-utils",
+    "gmsol-solana-utils/make-bundle-builder",
+    "treasury",
+    "timelock",
+    "serde",
+    "serde_json",
+    "futures-util",
+    "tokio",
+    "tokio-stream",
+    "solana-client",
+    "solana-account-decoder",
+    "solana-transaction-status",
+    "hex",
+    "async-stream",
+    "bytes",
+    "time",
+]
+decode = ["gmsol-decode"]
 
 [dependencies]
 gmsol-programs = { workspace = true, features = ["model"] }
 gmsol-model = { workspace = true, features = ["u128"] }
 gmsol-solana-utils = { workspace = true }
+gmsol-utils = { workspace = true }
+gmsol-decode = { workspace = true, optional = true, features = [
+    "gmsol-programs",
+] }
 thiserror = { workspace = true }
 base64 = { workspace = true }
 solana-sdk = { workspace = true }
@@ -66,6 +90,19 @@ serde_with = { workspace = true, optional = true }
 petgraph = { workspace = true, optional = true, default-features = false, features = [
     "stable_graph",
 ] }
+
+# Dependencies for the `client` feature
+futures-util = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["full"] }
+tokio-stream = { workspace = true, optional = true }
+solana-client = { workspace = true, optional = true }
+solana-account-decoder = { workspace = true, optional = true }
+solana-transaction-status = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+async-stream = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
+time = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases = { workspace = true }
