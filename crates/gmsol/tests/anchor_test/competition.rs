@@ -9,9 +9,9 @@ use solana_sdk::signature::{Keypair, Signer};
 
 #[tokio::test]
 async fn competition_flow() -> Result<()> {
-    // -------- setup --------
+    // ---- setup ----
     let deployment = current_deployment().await?;
-    let _guard = deployment.use_accounts().await?;
+    let _g = deployment.use_accounts().await?;
     let client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
 
     let slot = client.rpc().get_slot().await?;
@@ -21,6 +21,7 @@ async fn competition_flow() -> Result<()> {
         .await
         .unwrap_or_else(|_| Utc::now().timestamp());
     let end = now + 3600; // one hour window
+
     let store_program = COMP_ID; // placeholder until real store program is ready
 
     // PDA to hold competition data
@@ -135,12 +136,19 @@ async fn competition_flow() -> Result<()> {
 /// store_program ≠ competition.store_program  → should return InvalidCaller
 #[tokio::test]
 async fn competition_invalid_caller() -> Result<()> {
+    // ---- setup ----
     let deployment = current_deployment().await?;
     let _g = deployment.use_accounts().await?;
     let client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
 
-    let now = Utc::now().timestamp();
-    let end = now + 3600;
+    let slot = client.rpc().get_slot().await?;
+    let now = client
+        .rpc()
+        .get_block_time(slot)
+        .await
+        .unwrap_or_else(|_| Utc::now().timestamp());
+    let end = now + 3600; // one hour window
+
     let legit_store = COMP_ID;
     let bogus_store = Pubkey::new_unique();
 
@@ -197,13 +205,20 @@ async fn competition_invalid_caller() -> Result<()> {
 /// current < start_time  → should return OutsideCompetitionTime
 #[tokio::test]
 async fn competition_before_start() -> Result<()> {
+    // ---- setup ----
     let deployment = current_deployment().await?;
     let _g = deployment.use_accounts().await?;
     let client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
 
-    let now = Utc::now().timestamp();
+    let slot = client.rpc().get_slot().await?;
+    let now = client
+        .rpc()
+        .get_block_time(slot)
+        .await
+        .unwrap_or_else(|_| Utc::now().timestamp());
+    let end = now + 3600; // one hour window
+
     let start = now + 600; // 10 min later
-    let end = start + 600;
 
     let comp_kp = Keypair::new();
     client
@@ -252,6 +267,7 @@ async fn competition_before_start() -> Result<()> {
     Ok(())
 }
 
+/// test for leaderboard
 /// verify leaderboard ordering with 10 traders (highest volume first)
 #[tokio::test]
 async fn competition_ranking_order() -> Result<()> {
@@ -268,7 +284,7 @@ async fn competition_ranking_order() -> Result<()> {
         .get_block_time(slot)
         .await
         .unwrap_or_else(|_| Utc::now().timestamp());
-    let end = now + 3600;
+    let end = now + 3600; // one hour window
 
     let comp_kp = Keypair::new();
     client
@@ -289,7 +305,7 @@ async fn competition_ranking_order() -> Result<()> {
         .await?;
 
     // ---- submit trades for 10 traders ----
-    let mut traders: Vec<(Keypair, u64)> = (0..10)
+    let traders: Vec<(Keypair, u64)> = (0..10)
         .map(|i| (Keypair::new(), (i + 1) * 10)) // volumes 10,20,…,100
         .collect();
 
@@ -342,6 +358,152 @@ async fn competition_ranking_order() -> Result<()> {
 
     assert_eq!(comp.leaderboard.first().unwrap().volume, 100);
     assert_eq!(comp.leaderboard.last().unwrap().volume, 60);
+
+    Ok(())
+}
+
+/// ensure leaderboard updates when existing participant volume grows
+/// and when a new big‑volume trader enters (truncate to top‑5)
+#[tokio::test]
+async fn competition_leaderboard_updates() -> eyre::Result<()> {
+    use gmsol_competition::state::competition::Competition;
+
+    // ---- setup ----
+    let deployment = current_deployment().await?;
+    let _g = deployment.use_accounts().await?;
+    let client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+
+    let slot = client.rpc().get_slot().await?;
+    let now = client
+        .rpc()
+        .get_block_time(slot)
+        .await
+        .unwrap_or_else(|_| Utc::now().timestamp());
+    let end = now + 3600; // one hour window
+
+    // create competition
+    let comp_kp = Keypair::new();
+    client
+        .store_transaction()
+        .program(COMP_ID)
+        .anchor_accounts(accounts::InitializeCompetition {
+            competition: comp_kp.pubkey(),
+            authority: client.payer(),
+            system_program: system_program::ID,
+        })
+        .anchor_args(instruction::InitializeCompetition {
+            start_time: now,
+            end_time: end,
+            store_program: COMP_ID,
+        })
+        .signer(&comp_kp)
+        .send()
+        .await?;
+
+    // -------- initial 5 traders --------
+    let base_volumes = [10u64, 20, 30, 40, 50];
+    let mut trader_keys: Vec<Keypair> = Vec::new();
+
+    for vol in base_volumes {
+        let kp = Keypair::new();
+
+        // derive participant PDA before moving `kp`
+        let pda = Pubkey::find_program_address(
+            &[
+                b"participant",
+                comp_kp.pubkey().as_ref(),
+                kp.pubkey().as_ref(),
+            ],
+            &COMP_ID,
+        )
+        .0;
+
+        // submit trade
+        client
+            .store_transaction()
+            .program(COMP_ID)
+            .anchor_accounts(accounts::RecordTrade {
+                competition: comp_kp.pubkey(),
+                participant: pda,
+                store_program: COMP_ID,
+                trader: kp.pubkey(),
+                payer: client.payer(),
+                system_program: system_program::ID,
+            })
+            .anchor_args(instruction::RecordTrade { volume: vol })
+            .send()
+            .await?;
+
+        // finally, preserve the Keypair for later use
+        trader_keys.push(kp);
+    }
+
+    // grow trader[0] by +45 (total 55)
+    let t0 = &trader_keys[0];
+    let pda0 = Pubkey::find_program_address(
+        &[
+            b"participant",
+            comp_kp.pubkey().as_ref(),
+            t0.pubkey().as_ref(),
+        ],
+        &COMP_ID,
+    )
+    .0;
+
+    client
+        .store_transaction()
+        .program(COMP_ID)
+        .anchor_accounts(accounts::RecordTrade {
+            competition: comp_kp.pubkey(),
+            participant: pda0,
+            store_program: COMP_ID,
+            trader: t0.pubkey(),
+            payer: client.payer(),
+            system_program: system_program::ID,
+        })
+        .anchor_args(instruction::RecordTrade { volume: 45 })
+        .send()
+        .await?;
+
+    // add new trader with volume 60 (pushes one out)
+    let newcomer = Keypair::new();
+    let pda_new = Pubkey::find_program_address(
+        &[
+            b"participant",
+            comp_kp.pubkey().as_ref(),
+            newcomer.pubkey().as_ref(),
+        ],
+        &COMP_ID,
+    )
+    .0;
+
+    client
+        .store_transaction()
+        .program(COMP_ID)
+        .anchor_accounts(accounts::RecordTrade {
+            competition: comp_kp.pubkey(),
+            participant: pda_new,
+            store_program: COMP_ID,
+            trader: newcomer.pubkey(),
+            payer: client.payer(),
+            system_program: system_program::ID,
+        })
+        .anchor_args(instruction::RecordTrade { volume: 60 })
+        .send()
+        .await?;
+
+    // ---- verify leaderboard ----
+    let comp: Competition = client
+        .account(&comp_kp.pubkey())
+        .await?
+        .expect("competition missing");
+
+    let vols: Vec<u64> = comp.leaderboard.iter().map(|e| e.volume).collect();
+    assert_eq!(
+        vols,
+        vec![60, 55, 50, 40, 30],
+        "unexpected leaderboard order/values"
+    );
 
     Ok(())
 }
