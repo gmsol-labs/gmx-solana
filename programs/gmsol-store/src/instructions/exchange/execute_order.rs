@@ -15,7 +15,10 @@ use crate::{
         },
     },
     states::{
-        common::action::{ActionExt, ActionSigner},
+        common::{
+            action::{ActionExt, ActionSigner},
+            swap::SwapActionParamsExt,
+        },
         feature::ActionDisabledFlag,
         order::{Order, TransferOut},
         position::Position,
@@ -443,7 +446,8 @@ impl<'info> ExecuteIncreaseOrSwapOrder<'info> {
             .order
             .load()?
             .swap
-            .to_feeds(&self.token_map.load_token_map()?)?;
+            .to_feeds(&self.token_map.load_token_map()?)
+            .map_err(CoreError::from)?;
         let ops = ExecuteOrderOperation::builder()
             .store(&self.store)
             .market(&self.market)
@@ -792,7 +796,8 @@ impl<'info> ExecuteDecreaseOrder<'info> {
             .order
             .load()?
             .swap
-            .to_feeds(&self.token_map.load_token_map()?)?;
+            .to_feeds(&self.token_map.load_token_map()?)
+            .map_err(CoreError::from)?;
         let ops = ExecuteOrderOperation::builder()
             .store(&self.store)
             .market(&self.market)

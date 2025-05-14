@@ -1,4 +1,5 @@
 use anchor_client::{solana_client::pubsub_client::PubsubClientError, solana_sdk};
+use gmsol_utils::token_config::TokenConfigError;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 pub use gmsol_store::CoreError;
@@ -159,6 +160,14 @@ impl From<PubsubClientError> for Error {
             PubsubClientError::ConnectionClosed(_) => Self::PubsubClosed,
             err => anchor_client::ClientError::from(err).into(),
         }
+    }
+}
+
+impl From<TokenConfigError> for Error {
+    fn from(value: TokenConfigError) -> Self {
+        Self::from(anchor_client::anchor_lang::error::Error::from(
+            CoreError::from(value),
+        ))
     }
 }
 

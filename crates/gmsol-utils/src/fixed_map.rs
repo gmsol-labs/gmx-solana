@@ -10,6 +10,7 @@ macro_rules! fixed_map {
     ($map:ident, $value:ty, $len:expr, $padding:expr) => {
         $crate::fixed_map!($map, str, $crate::fixed_map::to_key, $value, $len, $padding);
     };
+
     ($map:ident, $key:ty, $to_key:path, $value:ty, $len:expr, $padding:expr) => {
         $crate::fixed_map!($map, 32, $key, $to_key, $value, $len, $padding);
     };
@@ -42,6 +43,23 @@ macro_rules! fixed_map {
                 count: u32,
             }
 
+            $crate::impl_fixed_map!($map, $key_len, $key, $to_key, $value, $len);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_fixed_map {
+    ($map:ident, $value:ty, $len:expr) => {
+        $crate::impl_fixed_map!($map, str, $crate::fixed_map::to_key, $value, $len);
+    };
+
+    ($map:ident, $key:ty, $to_key:path, $value:ty, $len:expr) => {
+        $crate::impl_fixed_map!($map, 32, $key, $to_key, $value, $len);
+    };
+
+    ($map:ident, $key_len:expr, $key:ty, $to_key:path, $value:ty, $len:expr) => {
+        $crate::paste::paste! {
             impl $crate::InitSpace for $map {
                 const INIT_SPACE: usize = std::mem::size_of::<$map>();
             }

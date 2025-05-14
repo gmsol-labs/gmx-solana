@@ -103,7 +103,8 @@ impl Hermes {
                     .get_feed(&PriceProviderKind::Pyth)
                     .map(|feed| pubkey_to_identifier(&feed))
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(crate::Error::invalid_argument)?;
         let update = self
             .latest_price_updates(feeds.iter().collect::<HashSet<_>>(), None)
             .await?;

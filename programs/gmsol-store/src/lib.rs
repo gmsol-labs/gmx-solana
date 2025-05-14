@@ -3880,21 +3880,3 @@ pub enum CoreError {
     #[msg("Price is stale")]
     PriceIsStale,
 }
-
-impl CoreError {
-    pub(crate) const fn unknown_action_state(_kind: u8) -> Self {
-        Self::UnknownActionState
-    }
-
-    pub(crate) const fn unknown_order_kind(_kind: u8) -> Self {
-        Self::UnknownOrderKind
-    }
-
-    pub(crate) const fn unknown_order_side(_kind: u8) -> Self {
-        Self::UnknownOrderSide
-    }
-
-    pub(crate) const fn invalid_position_kind(_kind: u8) -> Self {
-        Self::InvalidPositionKind
-    }
-}

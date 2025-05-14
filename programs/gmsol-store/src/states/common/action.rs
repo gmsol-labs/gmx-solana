@@ -1,5 +1,8 @@
 use anchor_lang::{prelude::*, ZeroCopy};
-use gmsol_utils::InitSpace;
+use gmsol_utils::{
+    action::{ActionError, MAX_ACTION_FLAGS},
+    InitSpace,
+};
 
 use crate::{
     events::Event,
@@ -8,7 +11,7 @@ use crate::{
     CoreError,
 };
 
-const MAX_FLAGS: usize = 8;
+pub use gmsol_utils::action::{ActionFlag, ActionState};
 
 /// Action Header.
 #[zero_copy]
@@ -54,90 +57,12 @@ impl Default for ActionHeader {
     }
 }
 
-/// Action State.
-#[non_exhaustive]
-#[repr(u8)]
-#[derive(
-    Clone,
-    Copy,
-    num_enum::IntoPrimitive,
-    num_enum::TryFromPrimitive,
-    PartialEq,
-    Eq,
-    strum::EnumString,
-    strum::Display,
-    AnchorSerialize,
-    AnchorDeserialize,
-    InitSpace,
-)]
-#[strum(serialize_all = "snake_case")]
-#[num_enum(error_type(name = CoreError, constructor = CoreError::unknown_action_state))]
-#[cfg_attr(feature = "debug", derive(Debug))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
-pub enum ActionState {
-    /// Pending.
-    Pending,
-    /// Completed.
-    Completed,
-    /// Cancelled.
-    Cancelled,
-}
-
-impl ActionState {
-    /// Transition to Completed State.
-    pub fn completed(self) -> Result<Self> {
-        let Self::Pending = self else {
-            return err!(CoreError::PreconditionsAreNotMet);
-        };
-        Ok(Self::Completed)
-    }
-
-    /// Transition to Cancelled State.
-    pub fn cancelled(self) -> Result<Self> {
-        let Self::Pending = self else {
-            return err!(CoreError::PreconditionsAreNotMet);
-        };
-        Ok(Self::Cancelled)
-    }
-
-    /// Check if the state is completed or cancelled.
-    pub fn is_completed_or_cancelled(&self) -> bool {
-        matches!(self, Self::Completed | Self::Cancelled)
-    }
-
-    /// Check if the state is pending.
-    pub fn is_pending(&self) -> bool {
-        matches!(self, Self::Pending)
-    }
-
-    /// Check if the state is cancelled.
-    pub fn is_cancelled(&self) -> bool {
-        matches!(self, Self::Cancelled)
-    }
-
-    /// Check if the state is completed.
-    pub fn is_completed(&self) -> bool {
-        matches!(self, Self::Completed)
-    }
-}
-
-/// Action Flags.
-#[repr(u8)]
-#[non_exhaustive]
-#[derive(num_enum::IntoPrimitive, num_enum::TryFromPrimitive)]
-pub enum ActionFlag {
-    /// Should unwrap native token.
-    ShouldUnwrapNativeToken,
-    // CHECK: should have no more than `MAX_FLAGS` of flags.
-}
-
-gmsol_utils::flags!(ActionFlag, MAX_FLAGS, u8);
+gmsol_utils::flags!(ActionFlag, MAX_ACTION_FLAGS, u8);
 
 impl ActionHeader {
     /// Get action state.
     pub fn action_state(&self) -> Result<ActionState> {
-        ActionState::try_from(self.action_state).map_err(|err| error!(err))
+        ActionState::try_from(self.action_state).map_err(|_| error!(CoreError::UnknownActionState))
     }
 
     fn set_action_state(&mut self, new_state: ActionState) {
@@ -146,13 +71,23 @@ impl ActionHeader {
 
     /// Transition to Completed state.
     pub(crate) fn completed(&mut self) -> Result<()> {
-        self.set_action_state(self.action_state()?.completed()?);
+        self.set_action_state(
+            self.action_state()?
+                .completed()
+                .map_err(CoreError::from)
+                .map_err(|err| error!(err))?,
+        );
         Ok(())
     }
 
     /// Transition to Cancelled state.
     pub(crate) fn cancelled(&mut self) -> Result<()> {
-        self.set_action_state(self.action_state()?.cancelled()?);
+        self.set_action_state(
+            self.action_state()?
+                .cancelled()
+                .map_err(CoreError::from)
+                .map_err(|err| error!(err))?,
+        );
         Ok(())
     }
 
@@ -397,4 +332,13 @@ pub trait Closable {
 
     /// To closed event.
     fn to_closed_event(&self, address: &Pubkey, reason: &str) -> Result<Self::ClosedEvent>;
+}
+
+impl From<ActionError> for CoreError {
+    fn from(err: ActionError) -> Self {
+        msg!("Action error: {}", err);
+        match err {
+            ActionError::PreconditionsAreNotMet(_) => Self::PreconditionsAreNotMet,
+        }
+    }
 }

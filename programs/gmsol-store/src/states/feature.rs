@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
 
+use crate::CoreError;
+
 use super::order::OrderKind;
 
 type DisabledKey = (DomainDisabledFlag, ActionDisabledFlag);
@@ -108,6 +110,7 @@ impl TryFrom<OrderKind> for DomainDisabledFlag {
             OrderKind::LimitIncrease => Ok(Self::LimitIncrease),
             OrderKind::LimitDecrease => Ok(Self::LimitDecrease),
             OrderKind::StopLossDecrease => Ok(Self::StopLossDecrease),
+            _ => err!(CoreError::UnknownOrderKind),
         }
     }
 }

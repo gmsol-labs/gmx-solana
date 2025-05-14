@@ -25,13 +25,14 @@
 //! token used to open the position while the profit is realized in the long token and short token
 //! respectively.
 
-use std::{collections::BTreeSet, str::FromStr};
+use std::str::FromStr;
 
 use anchor_lang::{prelude::*, Bump};
 use anchor_spl::token::Mint;
 use borsh::{BorshDeserialize, BorshSerialize};
 use config::MarketConfigFlag;
 use gmsol_model::{price::Prices, ClockKind, PoolKind};
+use gmsol_utils::market::MarketError;
 use revertible::RevertibleBuffer;
 
 use crate::{
@@ -46,6 +47,7 @@ use self::{
     pool::{Pool, Pools},
 };
 
+pub use gmsol_utils::market::{HasMarketMeta, MarketMeta};
 pub use model::AsLiquidityMarket;
 
 /// Market Utils.
@@ -481,80 +483,6 @@ impl OtherState {
     }
 }
 
-/// Market Metadata.
-#[zero_copy]
-#[derive(BorshSerialize, BorshDeserialize)]
-#[cfg_attr(feature = "debug", derive(Debug))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct MarketMeta {
-    /// Market token.
-    pub market_token_mint: Pubkey,
-    /// Index token.
-    pub index_token_mint: Pubkey,
-    /// Long token.
-    pub long_token_mint: Pubkey,
-    /// Short token.
-    pub short_token_mint: Pubkey,
-}
-
-impl MarketMeta {
-    /// Check if the given token is a valid collateral token.
-    #[inline]
-    pub fn is_collateral_token(&self, token: &Pubkey) -> bool {
-        *token == self.long_token_mint || *token == self.short_token_mint
-    }
-
-    /// Get pnl token.
-    pub fn pnl_token(&self, is_long: bool) -> Pubkey {
-        if is_long {
-            self.long_token_mint
-        } else {
-            self.short_token_mint
-        }
-    }
-
-    /// Check if the given token is long token or short token, and return it's side.
-    pub fn to_token_side(&self, token: &Pubkey) -> Result<bool> {
-        if *token == self.long_token_mint {
-            Ok(true)
-        } else if *token == self.short_token_mint {
-            Ok(false)
-        } else {
-            err!(CoreError::InvalidArgument)
-        }
-    }
-
-    /// Get opposite token.
-    pub fn opposite_token(&self, token: &Pubkey) -> Result<&Pubkey> {
-        if *token == self.long_token_mint {
-            Ok(&self.short_token_mint)
-        } else if *token == self.short_token_mint {
-            Ok(&self.long_token_mint)
-        } else {
-            err!(CoreError::InvalidArgument)
-        }
-    }
-
-    /// Get ordered token set.
-    pub fn ordered_tokens(&self) -> BTreeSet<Pubkey> {
-        BTreeSet::from([
-            self.index_token_mint,
-            self.long_token_mint,
-            self.short_token_mint,
-        ])
-    }
-}
-
-/// Type that has market meta.
-pub trait HasMarketMeta {
-    fn market_meta(&self) -> &MarketMeta;
-
-    fn is_pure(&self) -> bool {
-        let meta = self.market_meta();
-        meta.long_token_mint == meta.short_token_mint
-    }
-}
-
 impl HasMarketMeta for Market {
     fn is_pure(&self) -> bool {
         self.is_pure()
@@ -562,12 +490,6 @@ impl HasMarketMeta for Market {
 
     fn market_meta(&self) -> &MarketMeta {
         &self.meta
-    }
-}
-
-impl HasMarketMeta for MarketMeta {
-    fn market_meta(&self) -> &MarketMeta {
-        self
     }
 }
 
@@ -736,6 +658,15 @@ impl Indexer {
             .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
         self.glv_withdrawal_count = next_id;
         Ok(next_id)
+    }
+}
+
+impl From<MarketError> for CoreError {
+    fn from(err: MarketError) -> Self {
+        msg!("Market Error: {}", err);
+        match err {
+            MarketError::NotACollateralToken => Self::InvalidArgument,
+        }
     }
 }
 

@@ -28,14 +28,15 @@ idl-build = [
     "gmsol-store/idl-build",
     "gmsol-utils/idl-build",
 ]
-debug = ["gmsol-store/debug", "derive_more"]
+debug = ["gmsol-store/debug", "derive_more", "gmsol-utils/debug"]
 mock = []
 multi-store = ["gmsol-store/multi-store"]
 enum-iter = []
 utils = []
-devnet = ["gmsol-store/devnet"]
+devnet = ["gmsol-store/devnet", "gmsol-utils/devnet"]
 test-only = ["gmsol-store/test-only"]
 migration = ["gmsol-store/migration"]
+serde = ["dep:serde", "gmsol-store/serde", "gmsol-utils/serde"]
 
 [dependencies]
 anchor-lang = { workspace = true, features = ["init-if-needed"] }

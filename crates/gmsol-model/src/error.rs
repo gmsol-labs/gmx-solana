@@ -6,6 +6,14 @@ use crate::{
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Anchor error.
+    #[cfg(feature = "solana")]
+    #[error(transparent)]
+    Solana(#[from] anchor_lang::prelude::Error),
+    /// Market errors from [`gmsol-utils`].
+    #[cfg(feature = "gmsol-utils")]
+    #[error(transparent)]
+    Market(#[from] gmsol_utils::market::MarketError),
     /// Unimplemented.
     #[error("unimplemented")]
     Unimplemented,
@@ -45,10 +53,6 @@ pub enum Error {
     /// Convert error.
     #[error("convert value error")]
     Convert,
-    /// Anchor error.
-    #[cfg(feature = "solana")]
-    #[error(transparent)]
-    Solana(#[from] anchor_lang::prelude::Error),
     /// Build params error.
     #[error("build params: {0}")]
     BuildParams(&'static str),

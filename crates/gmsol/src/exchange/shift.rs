@@ -11,13 +11,13 @@ use gmsol_solana_utils::{
 };
 use gmsol_store::{
     accounts, instruction,
-    instructions::ordered_tokens,
     ops::shift::CreateShiftParams,
     states::{
         common::{action::Action, TokensWithFeed},
         HasMarketMeta, NonceBytes, PriceProviderKind, Shift, Store, TokenMapAccess,
     },
 };
+use gmsol_utils::market::ordered_tokens;
 
 use crate::{
     exchange::generate_nonce,

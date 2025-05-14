@@ -124,10 +124,14 @@ impl GtBank {
                     .get(token)
                     .ok_or_else(|| error!(CoreError::UnknownToken))?;
                 TokenRecord::from_config(*token, config)
+                    .map_err(CoreError::from)
+                    .map_err(|err| error!(err))
             })
             .collect::<Result<Vec<_>>>()?;
 
         TokensWithFeed::try_from_records(records)
+            .map_err(CoreError::from)
+            .map_err(|err| error!(err))
     }
 
     pub(crate) fn record_transferred_in(&mut self, token: &Pubkey, amount: u64) -> Result<()> {

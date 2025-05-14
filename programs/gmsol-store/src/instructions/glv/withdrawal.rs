@@ -18,7 +18,10 @@ use crate::{
         market::MarketTransferOutOperation,
     },
     states::{
-        common::action::{Action, ActionExt},
+        common::{
+            action::{Action, ActionExt},
+            swap::SwapActionParamsExt,
+        },
         feature::{ActionDisabledFlag, DomainDisabledFlag},
         glv::{GlvWithdrawal, SplitAccountsForGlv},
         Chainlink, Glv, Market, NonceBytes, Oracle, RoleKey, Seed, Store, StoreWalletSigner,

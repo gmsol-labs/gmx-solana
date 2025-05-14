@@ -3,8 +3,8 @@ use anchor_spl::token::Mint;
 
 use crate::{
     states::{
-        FeedConfig, PriceProviderKind, Store, TokenMapAccess, TokenMapAccessMut, TokenMapHeader,
-        TokenMapLoader, UpdateTokenConfigParams,
+        FeedConfig, PriceProviderKind, Store, TokenConfigExt, TokenMapAccess, TokenMapAccessMut,
+        TokenMapHeader, TokenMapLoader, UpdateTokenConfigParams,
     },
     utils::internal,
     CoreError,
@@ -224,7 +224,7 @@ pub(crate) fn unchecked_set_expected_provider(
         .ok_or_else(|| error!(CoreError::NotFound))?;
 
     require_neq!(
-        config.expected_provider()?,
+        config.expected_provider().map_err(CoreError::from)?,
         provider,
         CoreError::PreconditionsAreNotMet
     );
@@ -277,6 +277,8 @@ pub(crate) fn unchecked_set_feed_config(
             provider,
             FeedConfig::new(feed).with_timestamp_adjustment(timestamp_adjustment),
         )
+        .map_err(CoreError::from)
+        .map_err(|err| error!(err))
 }
 
 impl<'info> internal::Authentication<'info> for SetFeedConfig<'info> {
@@ -317,6 +319,8 @@ pub(crate) fn token_expected_provider(
         .get(token)
         .ok_or_else(|| error!(CoreError::NotFound))?
         .expected_provider()
+        .map_err(CoreError::from)
+        .map_err(|err| error!(err))
 }
 
 /// Get feed address of the price provider of the given token.
@@ -331,6 +335,8 @@ pub(crate) fn token_feed(
         .get(token)
         .ok_or_else(|| error!(CoreError::NotFound))?
         .get_feed(provider)
+        .map_err(CoreError::from)
+        .map_err(|err| error!(err))
 }
 
 /// Get timestamp adjustemnt of the given token.
@@ -345,6 +351,8 @@ pub(crate) fn token_timestamp_adjustment(
         .get(token)
         .ok_or_else(|| error!(CoreError::NotFound))?
         .timestamp_adjustment(provider)
+        .map_err(CoreError::from)
+        .map_err(|err| error!(err))
 }
 
 /// Get the name of the given token.
@@ -356,6 +364,8 @@ pub(crate) fn token_name(ctx: Context<ReadTokenMap>, token: &Pubkey) -> Result<S
         .ok_or_else(|| error!(CoreError::NotFound))?
         .name()
         .map(|s| s.to_owned())
+        .map_err(CoreError::from)
+        .map_err(|err| error!(err))
 }
 
 /// Get the decimals of the given token.

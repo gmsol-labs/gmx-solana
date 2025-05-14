@@ -27,15 +27,15 @@ idl-build = [
     "anchor-spl/idl-build",
     "gmsol-utils/idl-build",
 ]
-debug = ["derive_more/debug"]
-display = ["utils"]
+debug = ["derive_more/debug", "gmsol-utils/debug"]
+display = ["utils", "gmsol-utils/display"]
 utils = ["bytes", "bs58"]
-serde = ["dep:serde", "serde_with", "serde_bytes"]
-enum-iter = []
+serde = ["dep:serde", "serde_with", "serde_bytes", "gmsol-utils/serde"]
+enum-iter = ["gmsol-utils/enum-iter"]
 migration = []
 mock = ["gmsol-chainlink-datastreams/mock"]
 multi-store = []
-devnet = []
+devnet = ["gmsol-utils/devnet"]
 test-only = []
 
 [dependencies]

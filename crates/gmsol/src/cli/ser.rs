@@ -253,12 +253,17 @@ impl<'a> TryFrom<&'a TokenConfig> for SerializeTokenConfig {
             })
             .collect();
         Ok(Self {
-            name: config.name()?.to_string(),
+            name: config
+                .name()
+                .map_err(gmsol::Error::invalid_argument)?
+                .to_string(),
             enabled: config.is_enabled(),
             synthetic: config.is_synthetic(),
             token_decimals: config.token_decimals(),
             price_precision: config.precision(),
-            expected_provider: config.expected_provider()?,
+            expected_provider: config
+                .expected_provider()
+                .map_err(gmsol::Error::invalid_argument)?,
             feeds,
             heartbeat_duration: config.heartbeat_duration(),
         })

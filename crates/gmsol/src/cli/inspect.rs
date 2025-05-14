@@ -455,7 +455,9 @@ impl InspectArgs {
                         .get(token)
                         .ok_or(gmsol::Error::invalid_argument("token not found"))?;
                     if let Some(kind) = feed {
-                        let config = config.get_feed_config(kind)?;
+                        let config = config
+                            .get_feed_config(kind)
+                            .map_err(gmsol::Error::invalid_argument)?;
                         let serialized = ser::SerializeFeedConfig::with_hint(kind, config);
                         output.print(&serialized, |serialized| {
                             if *debug {

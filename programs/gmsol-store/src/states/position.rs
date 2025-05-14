@@ -5,6 +5,8 @@ use num_enum::TryFromPrimitive;
 
 use super::{Market, Seed};
 
+pub use gmsol_utils::order::PositionKind;
+
 /// Position.
 #[account(zero_copy)]
 #[cfg_attr(feature = "debug", derive(derive_more::Debug))]
@@ -57,8 +59,8 @@ impl Position {
     /// Note that `Uninitialized` kind will also be returned without error.
     #[inline]
     pub fn kind_unchecked(&self) -> Result<PositionKind> {
-        let kind = PositionKind::try_from_primitive(self.kind)?;
-        Ok(kind)
+        PositionKind::try_from_primitive(self.kind)
+            .map_err(|_| error!(CoreError::InvalidPositionKind))
     }
 
     /// Get **initialized** position kind.
@@ -271,33 +273,6 @@ impl gmsol_model::PositionStateMut<{ constants::MARKET_DECIMALS }> for PositionS
     }
 }
 
-/// Position Kind.
-#[non_exhaustive]
-#[repr(u8)]
-#[derive(
-    Clone,
-    Copy,
-    num_enum::IntoPrimitive,
-    num_enum::TryFromPrimitive,
-    PartialEq,
-    Eq,
-    strum::EnumString,
-    strum::Display,
-)]
-#[strum(serialize_all = "snake_case")]
-#[num_enum(error_type(name = CoreError, constructor = CoreError::invalid_position_kind))]
-#[cfg_attr(feature = "debug", derive(Debug))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
-pub enum PositionKind {
-    /// Uninitialized.
-    Uninitialized,
-    /// Long position.
-    Long,
-    /// Short position.
-    Short,
-}
-
 /// A helper type that implements the [`Position`](gmsol_model::Position) trait.
 pub struct AsPosition<'a> {
     is_long: bool,
@@ -311,7 +286,10 @@ impl<'a> AsPosition<'a> {
     pub fn try_new(position: &'a Position, market: &'a Market) -> Result<Self> {
         Ok(Self {
             is_long: position.try_is_long()?,
-            is_collateral_long: market.meta().to_token_side(&position.collateral_token)?,
+            is_collateral_long: market
+                .meta()
+                .to_token_side(&position.collateral_token)
+                .map_err(CoreError::from)?,
             market,
             position,
         })

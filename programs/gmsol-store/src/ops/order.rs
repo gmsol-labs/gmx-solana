@@ -13,7 +13,10 @@ use typed_builder::TypedBuilder;
 use crate::{
     events::{EventEmitter, MarketFeesUpdated, PositionDecreased, PositionIncreased, TradeData},
     states::{
-        common::action::{Action, ActionExt, ActionParams},
+        common::{
+            action::{Action, ActionExt, ActionParams},
+            swap::SwapActionParamsExt,
+        },
         market::{
             revertible::{
                 market::RevertibleMarket,
@@ -32,6 +35,8 @@ use crate::{
 };
 
 use super::{execution_fee::TransferExecutionFeeOperation, market::MarketTransferOutOperation};
+
+pub use gmsol_utils::order::PositionCutKind;
 
 /// Create Order Arguments.
 // #[cfg_attr(feature = "debug", derive(Debug))]
@@ -958,7 +963,8 @@ impl ExecuteOrderOperation<'_, '_> {
                     let mut event = event_loader.load_mut()?;
                     let is_collateral_long = market
                         .market_meta()
-                        .to_token_side(&position.collateral_token)?;
+                        .to_token_side(&position.collateral_token)
+                        .map_err(CoreError::from)?;
                     event.init(
                         kind.is_increase_position(),
                         is_collateral_long,
@@ -1052,6 +1058,7 @@ impl ExecuteOrderOperation<'_, '_> {
                 );
                 should_remove_position
             }
+            _ => return err!(CoreError::UnknownOrderKind),
         };
         swap_markets.commit();
         Ok((
@@ -1231,6 +1238,7 @@ impl ValidateOracleTime for ExecuteOrderOperation<'_, '_> {
             }
             // Ignore the check of oracle ts for ADL orders.
             OrderKind::AutoDeleveraging => Ok(None),
+            _ => Err(CoreError::UnknownOrderKind),
         }
     }
 
@@ -1600,7 +1608,8 @@ fn execute_decrease_position(
                     .token()
                     .as_ref()
                     .ok_or(error!(CoreError::MissingFinalOutputToken))?,
-            )?,
+            )
+            .map_err(CoreError::from)?,
             transfer_out.final_output_token,
         )?;
     }
@@ -1663,37 +1672,15 @@ pub struct PositionCutOperation<'a, 'info> {
     event_emitter: EventEmitter<'a, 'info>,
 }
 
-/// Position Cut Kind.
-#[derive(Clone)]
-pub enum PositionCutKind {
-    /// Liquidate.
-    Liquidate,
-    /// AutoDeleverage.
-    AutoDeleverage(u128),
-}
-
-impl PositionCutKind {
-    fn size_delta_usd(&self, size_in_usd: u128) -> u128 {
-        match self {
-            Self::Liquidate => size_in_usd,
-            Self::AutoDeleverage(delta) => size_in_usd.min(*delta),
-        }
-    }
-
-    fn to_order_kind(&self) -> OrderKind {
-        match self {
-            Self::Liquidate => OrderKind::Liquidation,
-            Self::AutoDeleverage(_) => OrderKind::AutoDeleveraging,
-        }
-    }
-}
-
 impl PositionCutOperation<'_, '_> {
     pub(crate) fn execute(self) -> Result<ShouldSendTradeEvent> {
         let (size_in_usd, is_long, is_collateral_long) = {
             let position = self.position.load()?;
             let market = self.market.load()?;
-            let is_collateral_token_long = market.meta.to_token_side(&position.collateral_token)?;
+            let is_collateral_token_long = market
+                .meta
+                .to_token_side(&position.collateral_token)
+                .map_err(CoreError::from)?;
             (
                 position.state.size_in_usd,
                 position.try_is_long()?,

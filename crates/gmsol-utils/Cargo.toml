@@ -10,9 +10,12 @@ readme.workspace = true
 keywords.workspace = true
 
 [features]
-debug = []
-serde = ["dep:serde"]
+debug = ["derive_more/debug"]
+display = []
+serde = ["dep:serde", "serde_with", "serde_bytes"]
 idl-build = ["anchor-lang/idl-build"]
+devnet = []
+enum-iter = []
 
 [dependencies]
 anchor-lang = { workspace = true }
@@ -22,7 +25,13 @@ bytemuck = { workspace = true }
 static_assertions = { workspace = true }
 ruint = { workspace = true, default-features = false }
 bitmaps = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+num_enum = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
+serde_with = { workspace = true, optional = true }
+serde_bytes = { workspace = true, optional = true }
+clap = { workspace = true, optional = true, features = ["derive"] }
+derive_more = { workspace = true, optional = true }
 
 [dev-dependencies]
 num_enum = { workspace = true }
