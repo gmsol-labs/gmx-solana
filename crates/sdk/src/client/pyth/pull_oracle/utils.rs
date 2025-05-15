@@ -80,9 +80,8 @@ pub fn parse_price_feed_message(update: &MerklePriceUpdate) -> crate::Result<Pri
     if data[0] != PRICE_FEED_MESSAGE_VARIANT {
         return Err(crate::Error::custom("it is not a price feed message"));
     }
-    from_slice::<byteorder::BE, _>(&data[1..]).map_err(|err| {
-        crate::Error::custom(format!("deserialize price feed message error: {err}"))
-    })
+    from_slice::<byteorder::BE, _>(&data[1..])
+        .map_err(|err| crate::Error::custom(format!("deserialize price feed message error: {err}")))
 }
 
 /// Parse feed id from [`MerklePriceUpdate`].

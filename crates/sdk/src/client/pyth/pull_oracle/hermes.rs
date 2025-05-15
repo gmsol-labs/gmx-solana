@@ -50,11 +50,7 @@ impl Hermes {
         let params = get_query(feed_ids, encoding);
         let stream = self
             .client
-            .get(
-                self.base
-                    .join(PRICE_STREAM)
-                    .map_err(crate::Error::custom)?,
-            )
+            .get(self.base.join(PRICE_STREAM).map_err(crate::Error::custom)?)
             .query(&params)
             .send()
             .await?
@@ -81,11 +77,7 @@ impl Hermes {
         let params = get_query(feed_ids, encoding);
         let update = self
             .client
-            .get(
-                self.base
-                    .join(PRICE_LATEST)
-                    .map_err(crate::Error::custom)?,
-            )
+            .get(self.base.join(PRICE_LATEST).map_err(crate::Error::custom)?)
             .query(&params)
             .send()
             .await?

@@ -82,8 +82,8 @@ impl Credential {
             self.user_id
         );
 
-        let mut mac = Hmac::<Sha256>::new_from_slice(self.secret.as_bytes())
-            .map_err(crate::Error::custom)?;
+        let mut mac =
+            Hmac::<Sha256>::new_from_slice(self.secret.as_bytes()).map_err(crate::Error::custom)?;
         mac.update(message.as_bytes());
 
         let signature = hex::encode(mac.finalize().into_bytes());

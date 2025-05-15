@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Refactored `SwapActionParams` into `gmsol-utils`.
   - Refactored `OrderKind`, `OrderSide`, `PositionKind` and `PositionCutKind` into `gmsol-utils`.
   - Refactored `GlvMarketFlag` into `gmsol-utils`.
+  - Refactored definitions related to `InstructionAccount` into `gmsol-utils`.
+  - Refactored `TokenFlag` for treasury program into `gmsol-utils`.
 - sdk: Added `compute_unit_min_priority_lamports` to `SendBundleOptions`.
 - sdk: Boxed `ClientError` in the `Error` definition.
 - sdk: Added a new feature flag to `gmsol-solana-utils` crate to consolidate all implementations that rely on the `solana_client` crate.
