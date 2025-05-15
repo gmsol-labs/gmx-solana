@@ -326,7 +326,7 @@ impl MarketGraph {
         let source = self
             .collateral_tokens
             .get(source)
-            .ok_or_else(|| crate::Error::unknown("the source is not a known collateral token"))?
+            .ok_or_else(|| crate::Error::custom("the source is not a known collateral token"))?
             .ix;
 
         let g = &self.graph;
@@ -400,7 +400,7 @@ impl MarketGraph {
         let source = self
             .collateral_tokens
             .get(source)
-            .ok_or_else(|| crate::Error::unknown("the source is not a known collateral token"))?
+            .ok_or_else(|| crate::Error::custom("the source is not a known collateral token"))?
             .ix;
 
         let g = &self.graph;

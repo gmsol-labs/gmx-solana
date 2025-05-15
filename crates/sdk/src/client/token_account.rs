@@ -65,7 +65,7 @@ impl TokenAccountParams {
             }
             (Some(token), None) => {
                 let Some(account) = self.get_or_find_associated_token_account(owner) else {
-                    return Err(crate::Error::unknown(
+                    return Err(crate::Error::custom(
                         "cannot find associated token account: `owner` is not provided",
                     ));
                 };

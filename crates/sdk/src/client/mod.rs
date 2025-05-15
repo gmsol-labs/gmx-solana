@@ -578,7 +578,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             .rpc()
             .get_slot_with_commitment(commitment.unwrap_or(self.commitment()))
             .await
-            .map_err(crate::Error::unknown)?;
+            .map_err(crate::Error::custom)?;
         Ok(slot)
     }
 
@@ -693,7 +693,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         let address = self
             .authorized_token_map_address(store)
             .await?
-            .ok_or(crate::Error::unknown("token map is not set"))?;
+            .ok_or(crate::Error::custom("token map is not set"))?;
         self.token_map(&address).await
     }
 

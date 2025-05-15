@@ -248,7 +248,7 @@ pub fn current_time_window_index(time_window: u32) -> crate::Result<i64> {
     use std::time::SystemTime;
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(crate::Error::unknown)?;
+        .map_err(crate::Error::custom)?;
 
     let ts = now.as_secs() as i64;
     Ok(get_time_window_index(ts, time_window as i64))

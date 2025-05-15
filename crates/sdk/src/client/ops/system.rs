@@ -14,7 +14,7 @@ impl<C: Clone + Deref<Target = impl Signer>> SystemProgramOps<C> for crate::Clie
         use solana_sdk::system_instruction::transfer;
 
         if lamports == 0 {
-            return Err(crate::Error::unknown("transferring amount is zero"));
+            return Err(crate::Error::custom("transferring amount is zero"));
         }
         Ok(self
             .store_transaction()

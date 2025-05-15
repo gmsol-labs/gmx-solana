@@ -22,9 +22,9 @@ pub enum Error {
     #[cfg(feature = "bincode")]
     #[error("bincode: {0}")]
     Bincode(#[from] bincode::Error),
-    /// Unknown error.
-    #[error("unknown: {0}")]
-    Unknown(String),
+    /// Custom error.
+    #[error("custom: {0}")]
+    Custom(String),
     /// Transport error.
     #[error("transport: {0}")]
     Transport(String),
@@ -60,9 +60,9 @@ pub enum Error {
 }
 
 impl Error {
-    /// Create an unknown error.
-    pub fn unknown(msg: impl ToString) -> Self {
-        Self::Unknown(msg.to_string())
+    /// Create a custom error.
+    pub fn custom(msg: impl ToString) -> Self {
+        Self::Custom(msg.to_string())
     }
 
     /// Create a transport error.

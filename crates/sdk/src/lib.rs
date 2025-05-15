@@ -45,7 +45,7 @@ pub use gmsol_utils as core;
 pub(crate) mod test;
 
 #[cfg(feature = "client")]
-pub use client::Client;
+pub use client::{ops, Client};
 
 pub use error::Error;
 

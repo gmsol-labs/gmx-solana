@@ -380,12 +380,12 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvDepositBuilder<'a, C> 
                         .long_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::unknown("swap path too long"))?,
+                        .map_err(|_| crate::Error::custom("swap path too long"))?,
                     short_token_swap_length: self
                         .short_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::unknown("swap path too long"))?,
+                        .map_err(|_| crate::Error::custom("swap path too long"))?,
                     initial_long_token_amount: self.initial_long_token_amount,
                     initial_short_token_amount: self.initial_short_token_amount,
                     market_token_amount: self.market_token_amount,
@@ -657,7 +657,7 @@ impl ExecuteGlvDepositHint {
             swap,
             feeds: collector
                 .to_feeds(token_map)
-                .map_err(crate::Error::unknown)?,
+                .map_err(crate::Error::custom)?,
             should_unwrap_native_token,
         })
     }

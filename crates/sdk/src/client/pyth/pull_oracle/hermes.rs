@@ -53,14 +53,14 @@ impl Hermes {
             .get(
                 self.base
                     .join(PRICE_STREAM)
-                    .map_err(crate::Error::unknown)?,
+                    .map_err(crate::Error::custom)?,
             )
             .query(&params)
             .send()
             .await?
             .bytes_stream()
             .eventsource()
-            .map_err(crate::Error::unknown)
+            .map_err(crate::Error::custom)
             .try_filter_map(|event| {
                 let update = deserialize_price_update_event(&event)
                     .inspect_err(
@@ -84,7 +84,7 @@ impl Hermes {
             .get(
                 self.base
                     .join(PRICE_LATEST)
-                    .map_err(crate::Error::unknown)?,
+                    .map_err(crate::Error::custom)?,
             )
             .query(&params)
             .send()
@@ -103,7 +103,7 @@ impl Hermes {
         let token_configs =
             token_map
                 .token_configs_for_market(market)
-                .ok_or(crate::Error::unknown(
+                .ok_or(crate::Error::custom(
                     "missing configs for the tokens of the market",
                 ))?;
         let feeds = token_configs
@@ -114,7 +114,7 @@ impl Hermes {
                     .map(|feed| pubkey_to_identifier(&feed))
             })
             .collect::<Result<Vec<_>, _>>()
-            .map_err(crate::Error::unknown)?;
+            .map_err(crate::Error::custom)?;
         let update = self
             .latest_price_updates(feeds.iter().collect::<HashSet<_>>(), None)
             .await?;
@@ -123,7 +123,7 @@ impl Hermes {
             .iter()
             .map(|price| {
                 Ok((
-                    Identifier::from_hex(price.id()).map_err(crate::Error::unknown)?,
+                    Identifier::from_hex(price.id()).map_err(crate::Error::custom)?,
                     &price.price,
                 ))
             })
@@ -135,14 +135,14 @@ impl Hermes {
                 let config = token_configs[idx];
                 let price = prices
                     .get(feed)
-                    .ok_or(crate::Error::unknown(format!("missing price for {}", feed)))?;
+                    .ok_or(crate::Error::custom(format!("missing price for {}", feed)))?;
                 let price = pyth_price_with_confidence_to_price(
                     price.price,
                     price.conf,
                     price.expo,
                     config,
                 )
-                .map_err(crate::Error::unknown)?;
+                .map_err(crate::Error::custom)?;
                 Ok(gmsol_model::price::Price {
                     min: price.min.to_unit_price(),
                     max: price.max.to_unit_price(),

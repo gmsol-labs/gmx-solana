@@ -168,7 +168,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateDepositBuilder<'a, C> {
         ) {
             (Some(long_token), _, Some(short_token), _) => (Some(long_token), Some(short_token)),
             (_, 0, _, 0) => {
-                return Err(crate::Error::unknown("empty deposit"));
+                return Err(crate::Error::custom("empty deposit"));
             }
             (None, 0, Some(short_token), _) => (None, Some(short_token)),
             (Some(long_token), _, None, 0) => (Some(long_token), None),
@@ -301,11 +301,11 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateDepositBuilder<'a, C> {
                     long_token_swap_length: long_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::unknown("number out of range"))?,
+                        .map_err(|_| crate::Error::custom("number out of range"))?,
                     short_token_swap_length: short_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::unknown("number out of range"))?,
+                        .map_err(|_| crate::Error::custom("number out of range"))?,
                     initial_long_token_amount: *initial_long_token_amount,
                     initial_short_token_amount: *initial_short_token_amount,
                     min_market_token_amount: *min_market_token,
@@ -534,7 +534,7 @@ impl ExecuteDepositHint {
             receiver,
             market_token_escrow: market_token_account,
             market_token_mint: market_token,
-            feeds: swap.to_feeds(map).map_err(crate::Error::unknown)?,
+            feeds: swap.to_feeds(map).map_err(crate::Error::custom)?,
             swap,
             initial_long_token,
             initial_short_token,

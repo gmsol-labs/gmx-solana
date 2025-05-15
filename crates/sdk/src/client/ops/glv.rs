@@ -103,7 +103,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GlvOps<C> for crate::Client<C> {
                 index,
                 length: length
                     .try_into()
-                    .map_err(|_| crate::Error::unknown("too many markets"))?,
+                    .map_err(|_| crate::Error::custom("too many markets"))?,
             })
             .accounts(accounts);
         Ok((rpc, glv_token))

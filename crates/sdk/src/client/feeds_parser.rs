@@ -70,7 +70,7 @@ impl FeedsParser {
             provider,
             Box::new(move |feed_id| {
                 let price_update = map.get(&feed_id).ok_or_else(|| {
-                    crate::Error::unknown(format!("feed account for {feed_id} not provided"))
+                    crate::Error::custom(format!("feed account for {feed_id} not provided"))
                 })?;
 
                 Ok(AccountMeta {
@@ -127,13 +127,13 @@ impl Iterator for Feeds<'_> {
             }
             let Ok(provider) = PriceProviderKind::try_from(**provider) else {
                 self.failed = true;
-                return Some(Err(crate::Error::unknown("invalid provider index")));
+                return Some(Err(crate::Error::custom("invalid provider index")));
             };
             let Some(feed) = self.feeds.next() else {
-                return Some(Err(crate::Error::unknown("not enough feeds")));
+                return Some(Err(crate::Error::custom("not enough feeds")));
             };
             let Some(token) = self.tokens.next() else {
-                return Some(Err(crate::Error::unknown("not enough tokens")));
+                return Some(Err(crate::Error::custom("not enough tokens")));
             };
             self.current += 1;
             return Some(Ok(FeedConfig {

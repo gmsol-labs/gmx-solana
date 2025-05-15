@@ -40,16 +40,16 @@ pub fn parse_accumulator_update_datas(
 
 #[inline]
 fn parse_accumulator_update_data(data: &[u8]) -> crate::Result<AccumulatorUpdateData> {
-    AccumulatorUpdateData::try_from_slice(data).map_err(crate::Error::unknown)
+    AccumulatorUpdateData::try_from_slice(data).map_err(crate::Error::custom)
 }
 
 /// Get guardian set index from [`Proof`].
 pub fn get_guardian_set_index(proof: &Proof) -> crate::Result<i32> {
     let vaa = get_vaa_buffer(proof);
     if vaa.len() < 5 {
-        return Err(crate::Error::unknown("invalid vaa"));
+        return Err(crate::Error::custom("invalid vaa"));
     }
-    let index: &[u8; 4] = (&vaa[1..5]).try_into().map_err(crate::Error::unknown)?;
+    let index: &[u8; 4] = (&vaa[1..5]).try_into().map_err(crate::Error::custom)?;
     Ok(i32::from_be_bytes(*index))
 }
 
@@ -75,13 +75,13 @@ pub fn parse_price_feed_message(update: &MerklePriceUpdate) -> crate::Result<Pri
     const PRICE_FEED_MESSAGE_VARIANT: u8 = 0;
     let data = update.message.as_ref().as_slice();
     if data.is_empty() {
-        return Err(crate::Error::unknown("empty message"));
+        return Err(crate::Error::custom("empty message"));
     }
     if data[0] != PRICE_FEED_MESSAGE_VARIANT {
-        return Err(crate::Error::unknown("it is not a price feed message"));
+        return Err(crate::Error::custom("it is not a price feed message"));
     }
     from_slice::<byteorder::BE, _>(&data[1..]).map_err(|err| {
-        crate::Error::unknown(format!("deserialize price feed message error: {err}"))
+        crate::Error::custom(format!("deserialize price feed message error: {err}"))
     })
 }
 

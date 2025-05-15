@@ -147,7 +147,7 @@ impl<C: Deref<Target = impl Signer> + Clone> UserOps<C> for crate::Client<C> {
                     .await?
                     .ok_or(crate::Error::NotFound)?;
                 *optional_address(&user.0.referral.code)
-                    .ok_or(crate::Error::unknown("referral code is not set"))?
+                    .ok_or(crate::Error::custom("referral code is not set"))?
             }
         };
 
@@ -181,7 +181,7 @@ impl<C: Deref<Target = impl Signer> + Clone> UserOps<C> for crate::Client<C> {
                     .await?
                     .ok_or(crate::Error::NotFound)?;
                 *optional_address(&user.0.referral.code)
-                    .ok_or(crate::Error::unknown("referral code is not set"))?
+                    .ok_or(crate::Error::custom("referral code is not set"))?
             }
         };
 

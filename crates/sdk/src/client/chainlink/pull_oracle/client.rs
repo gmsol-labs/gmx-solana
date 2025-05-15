@@ -55,8 +55,8 @@ impl Credential {
     pub fn from_default_envs() -> crate::Result<Self> {
         use std::env;
 
-        let user_id = env::var(ENV_USER_ID).map_err(crate::Error::unknown)?;
-        let secret = env::var(ENV_SECRET).map_err(crate::Error::unknown)?;
+        let user_id = env::var(ENV_USER_ID).map_err(crate::Error::custom)?;
+        let secret = env::var(ENV_SECRET).map_err(crate::Error::custom)?;
 
         Ok(Self { user_id, secret })
     }
@@ -83,7 +83,7 @@ impl Credential {
         );
 
         let mut mac = Hmac::<Sha256>::new_from_slice(self.secret.as_bytes())
-            .map_err(crate::Error::unknown)?;
+            .map_err(crate::Error::custom)?;
         mac.update(message.as_bytes());
 
         let signature = hex::encode(mac.finalize().into_bytes());
@@ -99,18 +99,18 @@ impl Credential {
         let header = request.headers_mut();
         header.insert(
             "Authorization",
-            self.user_id.parse().map_err(crate::Error::unknown)?,
+            self.user_id.parse().map_err(crate::Error::custom)?,
         );
         header.insert(
             "X-Authorization-Timestamp",
             timestamp
                 .to_string()
                 .parse()
-                .map_err(crate::Error::unknown)?,
+                .map_err(crate::Error::custom)?,
         );
         header.insert(
             "X-Authorization-Signature-SHA256",
-            signature.parse().map_err(crate::Error::unknown)?,
+            signature.parse().map_err(crate::Error::custom)?,
         );
         Ok(())
     }
@@ -183,7 +183,7 @@ impl Client {
         T: Serialize,
     {
         let base = if ws { &self.ws_base } else { &self.base };
-        let url = base.join(path.to_uri()).map_err(crate::Error::unknown)?;
+        let url = base.join(path.to_uri()).map_err(crate::Error::custom)?;
         let mut request = self.client.get(url).query(query).build()?;
         if sign {
             self.credential.sign(&mut request)?;
@@ -357,8 +357,8 @@ impl ApiReportData {
     /// Decode the report.
     pub fn decode(&self) -> crate::Result<Report> {
         let report = self.report_bytes()?;
-        let (_, blob) = decode_full_report(&report).map_err(crate::Error::unknown)?;
-        let report = decode(blob).map_err(crate::Error::unknown)?;
+        let (_, blob) = decode_full_report(&report).map_err(crate::Error::custom)?;
+        let report = decode(blob).map_err(crate::Error::custom)?;
         Ok(report)
     }
 
@@ -369,7 +369,7 @@ impl ApiReportData {
                 .strip_prefix("0x")
                 .unwrap_or(&self.full_report),
         )
-        .map_err(crate::Error::unknown)
+        .map_err(crate::Error::custom)
     }
 
     /// Feed ID.
@@ -379,7 +379,7 @@ impl ApiReportData {
             self.feed_id.strip_prefix("0x").unwrap_or(&self.feed_id),
             &mut data,
         )
-        .map_err(crate::Error::unknown)?;
+        .map_err(crate::Error::custom)?;
         Ok(data)
     }
 }

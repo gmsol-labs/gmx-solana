@@ -79,11 +79,11 @@ impl<C> PullOracle for PythPullOracleWithHermes<'_, C> {
         if let Some(after) = after {
             let min_ts = update
                 .min_timestamp()
-                .ok_or_else(|| crate::Error::unknown("empty price updates"))?;
+                .ok_or_else(|| crate::Error::custom("empty price updates"))?;
             let min_ts =
-                OffsetDateTime::from_unix_timestamp(min_ts).map_err(crate::Error::unknown)?;
+                OffsetDateTime::from_unix_timestamp(min_ts).map_err(crate::Error::custom)?;
             if min_ts < after {
-                return Err(crate::Error::unknown(format!(
+                return Err(crate::Error::custom(format!(
                     "price updates are too old, min_ts={min_ts}, required={after}"
                 )));
             }

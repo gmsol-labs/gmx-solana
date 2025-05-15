@@ -296,9 +296,9 @@ impl ExecuteGlvShiftHint {
         } = CloseGlvShiftHint::new(glv_shift)?;
 
         let ordered_tokens = ordered_tokens(from_market, to_market);
-        let token_records = token_records(map, &ordered_tokens).map_err(crate::Error::unknown)?;
+        let token_records = token_records(map, &ordered_tokens).map_err(crate::Error::custom)?;
         let feeds =
-            TokensWithFeed::try_from_records(token_records).map_err(crate::Error::unknown)?;
+            TokensWithFeed::try_from_records(token_records).map_err(crate::Error::custom)?;
 
         Ok(Self {
             store: store_address,
@@ -364,7 +364,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
                 let store_address = &shift.0.shift.header.store;
                 let store = self.client.store(store_address).await?;
                 let token_map_address = optional_address(&store.token_map)
-                    .ok_or(crate::Error::unknown("token map is not set"))?;
+                    .ok_or(crate::Error::custom("token map is not set"))?;
                 let token_map = self.client.token_map(token_map_address).await?;
                 let from_market_token = shift.0.shift.tokens.from_market_token.token;
                 let to_market_token = shift.0.shift.tokens.to_market_token.token;

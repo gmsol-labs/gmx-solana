@@ -321,12 +321,12 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> CreateGlvWithdrawalBuilder<'a, 
                         .long_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::unknown("swap path too long"))?,
+                        .map_err(|_| crate::Error::custom("swap path too long"))?,
                     short_token_swap_length: self
                         .short_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::unknown("swap path too long"))?,
+                        .map_err(|_| crate::Error::custom("swap path too long"))?,
                     glv_token_amount: self.glv_token_amount,
                     min_final_long_token_amount: self.min_final_long_token_amount,
                     min_final_short_token_amount: self.min_final_short_token_amount,
@@ -560,7 +560,7 @@ impl ExecuteGlvWithdrawalHint {
             swap,
             feeds: collector
                 .to_feeds(token_map)
-                .map_err(crate::Error::unknown)?,
+                .map_err(crate::Error::custom)?,
         })
     }
 }

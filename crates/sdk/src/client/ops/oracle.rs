@@ -58,7 +58,7 @@ impl<C: Deref<Target = impl Signer> + Clone> OracleOps<C> for crate::Client<C> {
             .rpc()
             .get_minimum_balance_for_rent_exemption(size)
             .await
-            .map_err(crate::Error::unknown)?;
+            .map_err(crate::Error::custom)?;
         let create = create_account(
             &payer,
             &oracle_address,
@@ -138,7 +138,7 @@ impl<C: Deref<Target = impl Signer> + Clone> OracleOps<C> for crate::Client<C> {
             })
             .anchor_args(args::UpdatePriceFeedWithChainlink {
                 compressed_report: Compressor::compress(signed_report)
-                    .map_err(crate::Error::unknown)?,
+                    .map_err(crate::Error::custom)?,
             }))
     }
 }

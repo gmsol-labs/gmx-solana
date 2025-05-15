@@ -60,7 +60,7 @@ impl PubsubClient {
             .read()
             .await
             .as_ref()
-            .ok_or_else(|| crate::Error::unknown("the pubsub client has been closed"))?
+            .ok_or_else(|| crate::Error::custom("the pubsub client has been closed"))?
             .logs_subscribe(mention, commitment, &self.config)
             .await;
         match res {
@@ -77,7 +77,7 @@ impl PubsubClient {
     pub async fn reset(&self) -> crate::Result<()> {
         let client = SolanaPubsubClient::new(self.cluster.ws_url())
             .await
-            .map_err(crate::Error::unknown)?;
+            .map_err(crate::Error::custom)?;
         let mut inner = self.inner.write().await;
         if let Some(previous) = inner.take() {
             _ = previous.shutdown().await;
@@ -130,18 +130,16 @@ impl Inner {
                 config,
             )
             .await?;
-        Ok(BroadcastStream::new(receiver).map_err(crate::Error::unknown))
+        Ok(BroadcastStream::new(receiver).map_err(crate::Error::custom))
     }
 
     async fn shutdown(self) -> crate::Result<()> {
         self.tasks.lock().await.shutdown().await;
         Arc::into_inner(self.client)
-            .ok_or_else(|| {
-                crate::Error::unknown("the client should be unique here, but it is not")
-            })?
+            .ok_or_else(|| crate::Error::custom("the client should be unique here, but it is not"))?
             .shutdown()
             .await
-            .map_err(crate::Error::unknown)?;
+            .map_err(crate::Error::custom)?;
         Ok(())
     }
 }
@@ -238,8 +236,8 @@ impl LogsSubscription {
             .in_current_span()
         });
         rx.await
-            .map_err(|_| crate::Error::unknown("worker is dead"))?
-            .map_err(crate::Error::unknown)?;
+            .map_err(|_| crate::Error::custom("worker is dead"))?
+            .map_err(crate::Error::custom)?;
         Ok(Self {
             commitment,
             abort,
@@ -268,7 +266,7 @@ impl LogsSubscriptions {
                         entry.remove();
                     } else {
                         if config.commitment != subscription.commitment {
-                            return Err(crate::Error::unknown(format!(
+                            return Err(crate::Error::custom(format!(
                                 "commitment mismatched, current: {}",
                                 subscription.commitment.commitment
                             )));

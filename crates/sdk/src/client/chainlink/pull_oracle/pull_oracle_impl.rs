@@ -83,7 +83,7 @@ impl ChainlinkPullOracleFactory {
             match gmsol.price_feed(&address).await? {
                 Some(feed) => {
                     if feed.feed_id != feed_id {
-                        return Err(crate::Error::unknown("feed_id mismatched"));
+                        return Err(crate::Error::custom("feed_id mismatched"));
                     }
                 }
                 None => {
@@ -227,9 +227,9 @@ impl<C: Deref<Target = impl Signer> + Clone> PullOracle for ChainlinkPullOracle<
 
                 if let Some(after) = after {
                     let ts =
-                        OffsetDateTime::from_unix_timestamp(ts).map_err(crate::Error::unknown)?;
+                        OffsetDateTime::from_unix_timestamp(ts).map_err(crate::Error::custom)?;
                     if after > ts {
-                        return Err(crate::Error::unknown(format!(
+                        return Err(crate::Error::custom(format!(
                             "price updates are too old, ts={ts}, required={after}"
                         )));
                     }
@@ -262,7 +262,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
             let feed_id = Pubkey::new_from_array(*feed_id);
             tracing::info!("adding ix to post price update for {feed_id}");
             let feed = feeds.get(&feed_id).ok_or_else(|| {
-                crate::Error::unknown(format!(
+                crate::Error::custom(format!(
                     "feed account for the given `feed_id` is not provided, feed_id = {feed_id}"
                 ))
             })?;

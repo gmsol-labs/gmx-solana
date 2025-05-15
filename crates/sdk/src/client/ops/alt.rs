@@ -71,7 +71,7 @@ impl<C: Deref<Target = impl Signer> + Clone> AddressLookupTableOps<C> for crate:
             .map(|a| {
                 a.map(|account| {
                     let table = AddressLookupTable::deserialize(account.data())
-                        .map_err(crate::Error::unknown)?;
+                        .map_err(crate::Error::custom)?;
                     Ok(AddressLookupTableAccount {
                         key: *address,
                         addresses: table.addresses.iter().copied().collect(),

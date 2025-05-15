@@ -79,7 +79,7 @@ where
             .rpc()
             .get_minimum_balance_for_rent_exemption(space as usize)
             .await
-            .map_err(crate::Error::unknown)?;
+            .map_err(crate::Error::custom)?;
         let request = self
             .transaction()
             .pre_instruction(system_instruction::create_account(

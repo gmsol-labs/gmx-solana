@@ -286,7 +286,7 @@ where
                 Ok(Some(position))
             }
             OrderKind::MarketSwap | OrderKind::LimitSwap => Ok(None),
-            kind => Err(crate::Error::unknown(format!(
+            kind => Err(crate::Error::custom(format!(
                 "unsupported order kind: {kind:?}"
             ))),
         }
@@ -310,7 +310,7 @@ where
                     .get_or_fetch_token_and_token_account(self.client, Some(&self.client.payer()))
                     .await?
                 else {
-                    return Err(crate::Error::unknown(
+                    return Err(crate::Error::custom(
                         "missing initial collateral token parameters",
                     ));
                 };
@@ -320,7 +320,7 @@ where
             | OrderKind::Liquidation
             | OrderKind::LimitDecrease
             | OrderKind::StopLossDecrease => Ok(None),
-            kind => Err(crate::Error::unknown(format!(
+            kind => Err(crate::Error::custom(format!(
                 "unsupported order kind: {kind:?}"
             ))),
         }
@@ -339,7 +339,7 @@ where
             | OrderKind::MarketSwap
             | OrderKind::LimitIncrease
             | OrderKind::LimitSwap => Ok(self.output_token().await?),
-            kind => Err(crate::Error::unknown(format!(
+            kind => Err(crate::Error::custom(format!(
                 "unsupported order kind: {kind:?}"
             ))),
         }
@@ -414,7 +414,7 @@ where
                 .swap_path
                 .len()
                 .try_into()
-                .map_err(|_| crate::Error::unknown("number out of range"))?,
+                .map_err(|_| crate::Error::custom("number out of range"))?,
             kind: kind.try_into()?,
             decrease_position_swap_type: self.params.decrease_position_swap_type,
             initial_collateral_delta_amount: self.params.initial_collateral_delta_amount,
@@ -431,7 +431,7 @@ where
         let prepare = match kind {
             OrderKind::MarketSwap | OrderKind::LimitSwap => {
                 let swap_in_token = initial_collateral_token
-                    .ok_or(crate::Error::unknown("swap in token is not provided"))?;
+                    .ok_or(crate::Error::custom("swap in token is not provided"))?;
                 let escrow = self
                     .client
                     .prepare_associated_token_account(
@@ -453,12 +453,12 @@ where
             }
             OrderKind::MarketIncrease | OrderKind::LimitIncrease => {
                 let initial_collateral_token = initial_collateral_token.ok_or(
-                    crate::Error::unknown("initial collateral token is not provided"),
+                    crate::Error::custom("initial collateral token is not provided"),
                 )?;
                 let long_token =
-                    long_token.ok_or(crate::Error::unknown("long token is not provided"))?;
+                    long_token.ok_or(crate::Error::custom("long token is not provided"))?;
                 let short_token =
-                    short_token.ok_or(crate::Error::unknown("short token is not provided"))?;
+                    short_token.ok_or(crate::Error::custom("short token is not provided"))?;
 
                 let escrow = self
                     .client
@@ -507,9 +507,9 @@ where
             }
             OrderKind::MarketDecrease | OrderKind::LimitDecrease | OrderKind::StopLossDecrease => {
                 let long_token =
-                    long_token.ok_or(crate::Error::unknown("long token is not provided"))?;
+                    long_token.ok_or(crate::Error::custom("long token is not provided"))?;
                 let short_token =
-                    short_token.ok_or(crate::Error::unknown("short token is not provided"))?;
+                    short_token.ok_or(crate::Error::custom("short token is not provided"))?;
 
                 let escrow = self
                     .client
@@ -551,7 +551,7 @@ where
                     .merge(final_output_token_ata)
             }
             _ => {
-                return Err(crate::Error::unknown("unsupported order kind"));
+                return Err(crate::Error::custom("unsupported order kind"));
             }
         };
 
@@ -794,7 +794,7 @@ where
             } else {
                 market.meta.short_token_mint
             },
-            feeds: swap.to_feeds(map).map_err(crate::Error::unknown)?,
+            feeds: swap.to_feeds(map).map_err(crate::Error::custom)?,
             swap,
             initial_collateral_token_and_account: tokens.initial_collateral.token_and_account(),
             final_output_token_and_account: tokens.final_output_token.token_and_account(),
@@ -862,7 +862,7 @@ where
                 .client
                 .authorized_token_map_address(&self.store)
                 .await?
-                .ok_or(crate::Error::unknown("token map is not set for this store"))?;
+                .ok_or(crate::Error::custom("token map is not set for this store"))?;
             self.token_map = Some(address);
             Ok(address)
         }
@@ -923,7 +923,7 @@ where
                             order: self.order,
                             position: hint
                                 .position
-                                .ok_or(crate::Error::unknown("missing position"))?,
+                                .ok_or(crate::Error::custom("missing position"))?,
                             event,
                             final_output_token_vault: hint
                                 .final_output_token_and_account
@@ -931,13 +931,13 @@ where
                                 .map(|(token, _)| {
                                     self.client.find_market_vault_address(&self.store, token)
                                 })
-                                .ok_or(crate::Error::unknown("missing final output token"))?,
+                                .ok_or(crate::Error::custom("missing final output token"))?,
                             long_token_vault: hint
                                 .long_token_vault(&self.store)
-                                .ok_or(crate::Error::unknown("missing long token"))?,
+                                .ok_or(crate::Error::custom("missing long token"))?,
                             short_token_vault: hint
                                 .short_token_vault(&self.store)
-                                .ok_or(crate::Error::unknown("missing short token"))?,
+                                .ok_or(crate::Error::custom("missing short token"))?,
                             claimable_long_token_account_for_user,
                             claimable_short_token_account_for_user,
                             claimable_pnl_token_account_for_holding,
@@ -947,27 +947,27 @@ where
                             long_token: hint
                                 .long_token_and_account
                                 .map(|(token, _)| token)
-                                .ok_or(crate::Error::unknown("missing long token"))?,
+                                .ok_or(crate::Error::custom("missing long token"))?,
                             short_token: hint
                                 .short_token_and_account
                                 .map(|(token, _)| token)
-                                .ok_or(crate::Error::unknown("missing short token"))?,
+                                .ok_or(crate::Error::custom("missing short token"))?,
                             final_output_token: hint
                                 .final_output_token_and_account
                                 .map(|(token, _)| token)
-                                .ok_or(crate::Error::unknown("missing final output token"))?,
+                                .ok_or(crate::Error::custom("missing final output token"))?,
                             final_output_token_escrow: hint
                                 .final_output_token_and_account
                                 .map(|(_, account)| account)
-                                .ok_or(crate::Error::unknown("missing final output token"))?,
+                                .ok_or(crate::Error::custom("missing final output token"))?,
                             long_token_escrow: hint
                                 .long_token_and_account
                                 .map(|(_, account)| account)
-                                .ok_or(crate::Error::unknown("missing long token"))?,
+                                .ok_or(crate::Error::custom("missing long token"))?,
                             short_token_escrow: hint
                                 .short_token_and_account
                                 .map(|(_, account)| account)
-                                .ok_or(crate::Error::unknown("missing short token"))?,
+                                .ok_or(crate::Error::custom("missing short token"))?,
                             program: *self.client.store_program_id(),
                             chainlink_program: None,
                         },
@@ -1261,7 +1261,7 @@ where
                     .account_with_config(&self.order, Default::default())
                     .await?
                     .into_value()
-                    .ok_or(crate::Error::unknown("order not found"))?;
+                    .ok_or(crate::Error::custom("order not found"))?;
                 let user = self
                     .client
                     .find_user_address(&order.0.header.store, &order.0.header.owner);
@@ -1350,10 +1350,10 @@ pub(super) fn recent_timestamp() -> crate::Result<i64> {
 
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(crate::Error::unknown)?
+        .map_err(crate::Error::custom)?
         .as_secs()
         .try_into()
-        .map_err(|_| crate::Error::unknown("failed to convert timestamp"))
+        .map_err(|_| crate::Error::custom("failed to convert timestamp"))
 }
 
 pub(super) struct ClaimableAccountsBuilder {
@@ -1525,7 +1525,7 @@ impl PositionCutHint {
         let token_map_address = client
             .authorized_token_map_address(&store_address)
             .await?
-            .ok_or(crate::Error::unknown(
+            .ok_or(crate::Error::custom(
                 "token map is not configurated for the store",
             ))?;
         let token_map = client.token_map(&token_map_address).await?;
@@ -1567,9 +1567,9 @@ impl PositionCutHint {
             ]
             .into(),
         )
-        .map_err(crate::Error::unknown)?;
+        .map_err(crate::Error::custom)?;
         let tokens_with_feed =
-            TokensWithFeed::try_from_records(records).map_err(crate::Error::unknown)?;
+            TokensWithFeed::try_from_records(records).map_err(crate::Error::custom)?;
         let user_address =
             crate::pda::find_user_address(&position.store, &position.owner, program_id).0;
         let referrer = user.and_then(|user| optional_address(&user.referral.referrer).copied());
@@ -1581,7 +1581,7 @@ impl PositionCutHint {
             referrer,
             token_map: optional_address(&store.token_map)
                 .copied()
-                .ok_or(crate::Error::unknown("missing token map for the store"))?,
+                .ok_or(crate::Error::custom("missing token map for the store"))?,
             market,
             store,
             tokens_with_feed,
@@ -2038,7 +2038,7 @@ impl UpdateAdlHint {
         let token_map_address = client
             .authorized_token_map_address(&store_address)
             .await?
-            .ok_or(crate::Error::unknown(
+            .ok_or(crate::Error::custom(
                 "token map is not configurated for the store",
             ))?;
         let token_map = client.token_map(&token_map_address).await?;
@@ -2053,9 +2053,9 @@ impl UpdateAdlHint {
             ]
             .into(),
         )
-        .map_err(crate::Error::unknown)?;
+        .map_err(crate::Error::custom)?;
         let tokens_with_feed =
-            TokensWithFeed::try_from_records(records).map_err(crate::Error::unknown)?;
+            TokensWithFeed::try_from_records(records).map_err(crate::Error::custom)?;
 
         Ok(Self {
             token_map: token_map_address,

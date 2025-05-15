@@ -51,7 +51,7 @@ pub async fn get_program_accounts_with_context(
             json!([program.to_string(), config]),
         )
         .await
-        .map_err(crate::Error::unknown)?;
+        .map_err(crate::Error::custom)?;
     WithSlot::new(res.context.slot, res.value)
         .map(|accounts| parse_keyed_accounts(accounts, RpcRequest::GetProgramAccounts))
         .transpose()
@@ -74,7 +74,7 @@ pub async fn get_account_with_context(
             json!([address.to_string(), config]),
         )
         .await
-        .map_err(crate::Error::unknown)?;
+        .map_err(crate::Error::custom)?;
     Ok(WithSlot::new(res.context.slot, res.value).map(|value| value.and_then(|a| a.decode())))
 }
 
@@ -158,7 +158,7 @@ fn parse_keyed_accounts(
                     request,
                 )
             })
-            .map_err(crate::Error::unknown)?;
+            .map_err(crate::Error::custom)?;
         pubkey_accounts.push((
             pubkey,
             account
@@ -169,7 +169,7 @@ fn parse_keyed_accounts(
                         request,
                     )
                 })
-                .map_err(crate::Error::unknown)?,
+                .map_err(crate::Error::custom)?,
         ));
     }
     Ok(pubkey_accounts)
@@ -199,7 +199,7 @@ pub async fn get_token_accounts_by_owner_with_context(
             json!([owner.to_string(), token_account_filter, config]),
         )
         .await
-        .map_err(crate::Error::unknown)?;
+        .map_err(crate::Error::custom)?;
 
     Ok(WithSlot::new(res.context.slot, res.value))
 }

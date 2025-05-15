@@ -547,7 +547,7 @@ impl<C: Deref<Target = impl Signer> + Clone> ExchangeOps<C> for Client<C> {
                 let position = order
                     .params
                     .position()
-                    .ok_or_else(|| crate::Error::unknown("this order does not have position"))?;
+                    .ok_or_else(|| crate::Error::custom("this order does not have position"))?;
 
                 *position
             }

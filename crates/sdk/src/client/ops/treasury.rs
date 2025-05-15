@@ -217,7 +217,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
 
     fn set_gt_factor(&self, store: &Pubkey, factor: u128) -> crate::Result<TransactionBuilder<C>> {
         if factor > crate::constants::MARKET_USD_UNIT {
-            return Err(crate::Error::unknown("cannot use a factor greater than 1"));
+            return Err(crate::Error::custom("cannot use a factor greater than 1"));
         }
         let config = self.find_treasury_config_address(store);
         Ok(self
@@ -237,7 +237,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
         factor: u128,
     ) -> crate::Result<TransactionBuilder<C>> {
         if factor > crate::constants::MARKET_USD_UNIT {
-            return Err(crate::Error::unknown("cannot use a factor greater than 1"));
+            return Err(crate::Error::custom("cannot use a factor greater than 1"));
         }
         let config = self.find_treasury_config_address(store);
         Ok(self
@@ -618,7 +618,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
                 let gt_bank = self
                     .account::<ZeroCopy<GtBank>>(&gt_bank)
                     .await?
-                    .ok_or_else(|| crate::Error::unknown("treasury vault config not exist"))?
+                    .ok_or_else(|| crate::Error::custom("treasury vault config not exist"))?
                     .0;
 
                 let tokens = gt_bank.tokens().collect::<Vec<_>>();
@@ -636,7 +636,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
                         },
                     )
                     .await
-                    .map_err(crate::Error::unknown)?
+                    .map_err(crate::Error::custom)?
                     .value
                     .into_iter()
                     .zip(&tokens)
@@ -759,7 +759,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
                 swap_path_length: swap_path
                     .len()
                     .try_into()
-                    .map_err(|_| crate::Error::unknown("swap path is too long"))?,
+                    .map_err(|_| crate::Error::custom("swap path is too long"))?,
                 swap_in_amount: swap_in_token_amount,
                 min_swap_out_amount: options.min_swap_out_amount,
             })
@@ -806,11 +806,11 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
             None => {
                 let order = self.order(order).await?;
                 let swap_in_token = order.tokens.initial_collateral.token().ok_or_else(|| {
-                    crate::Error::unknown("invalid swap order: missing swap in token")
+                    crate::Error::custom("invalid swap order: missing swap in token")
                 })?;
 
                 let swap_out_token = order.tokens.final_output_token.token().ok_or_else(|| {
-                    crate::Error::unknown("invalid swap order: missing swap out token")
+                    crate::Error::custom("invalid swap order: missing swap out token")
                 })?;
                 (swap_in_token, swap_out_token)
             }
@@ -934,7 +934,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ConfirmGtBuybackBuilder<'a, C> 
                     .client
                     .authorized_token_map_address(&self.store)
                     .await?
-                    .ok_or_else(|| crate::Error::unknown("token map is not set"))?;
+                    .ok_or_else(|| crate::Error::custom("token map is not set"))?;
                 let map = self.client.token_map(&map_address).await?;
                 let gt_bank = self
                     .client
@@ -1083,7 +1083,7 @@ async fn find_config_addresses<C: Deref<Target = impl Signer> + Clone>(
             Ok((
                 config,
                 *optional_address(&config_account.treasury_vault_config)
-                    .ok_or_else(|| crate::Error::unknown("treasury vault config is not set"))?,
+                    .ok_or_else(|| crate::Error::custom("treasury vault config is not set"))?,
             ))
         }
     }

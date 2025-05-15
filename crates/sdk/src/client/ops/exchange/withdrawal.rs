@@ -292,12 +292,12 @@ where
                         .long_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::unknown("number out of range"))?,
+                        .map_err(|_| crate::Error::custom("number out of range"))?,
                     short_token_swap_path_length: self
                         .short_token_swap_path
                         .len()
                         .try_into()
-                        .map_err(|_| crate::Error::unknown("number out of range"))?,
+                        .map_err(|_| crate::Error::custom("number out of range"))?,
                     should_unwrap_native_token: self.should_unwrap_native_token,
                 },
             })
@@ -507,7 +507,7 @@ impl ExecuteWithdrawalHint {
             final_short_token_escrow: final_short_token_account,
             final_long_token,
             final_short_token,
-            feeds: swap.to_feeds(map).map_err(crate::Error::unknown)?,
+            feeds: swap.to_feeds(map).map_err(crate::Error::custom)?,
             swap,
             should_unwrap_native_token,
         })
