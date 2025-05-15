@@ -57,6 +57,7 @@ client = [
     "time",
 ]
 decode = ["gmsol-decode"]
+chainlink = ["gmsol-chainlink-datastreams"]
 
 [dependencies]
 gmsol-programs = { workspace = true, features = ["model"] }
@@ -109,6 +110,9 @@ hex = { workspace = true, optional = true }
 async-stream = { workspace = true, optional = true }
 bytes = { workspace = true, optional = true }
 time = { workspace = true, optional = true }
+
+# Dependencies for `chainlink` feature
+gmsol-chainlink-datastreams = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases = { workspace = true }

@@ -15,3 +15,6 @@ pub mod config;
 
 /// Operations for GT.
 pub mod gt;
+
+/// Operations for oracle management.
+pub mod oracle;

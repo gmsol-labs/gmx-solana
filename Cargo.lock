@@ -2468,6 +2468,7 @@ dependencies = [
  "cfg_aliases",
  "either",
  "futures-util",
+ "gmsol-chainlink-datastreams",
  "gmsol-decode",
  "gmsol-model",
  "gmsol-programs",
