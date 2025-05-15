@@ -21,3 +21,6 @@ pub mod oracle;
 
 /// Operations for role management.
 pub mod role;
+
+/// Operations for store account.
+pub mod store;
