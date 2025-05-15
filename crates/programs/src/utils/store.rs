@@ -70,7 +70,7 @@ mod utils {
         order::{self, PositionKind},
         pubkey::{self, optional_address},
         swap::{self, HasSwapParams},
-        token_config::TokensCollector,
+        token_config::{self, TokensCollector},
     };
 
     use crate::gmsol_store::{
@@ -78,6 +78,7 @@ mod utils {
         types::{
             ActionFlagContainer, GlvMarketConfig, GlvMarkets, GlvMarketsEntry, MarketMeta,
             OrderActionParams, OrderKind, SwapActionParams, TokenAndAccount, Tokens, TokensEntry,
+            UpdateTokenConfigParams,
         },
     };
 
@@ -236,6 +237,25 @@ mod utils {
         /// Create a new [`TokensCollector`].
         pub fn tokens_collector(&self, action: Option<&impl HasSwapParams>) -> TokensCollector {
             TokensCollector::new(action, self.num_markets())
+        }
+    }
+
+    impl From<token_config::UpdateTokenConfigParams> for UpdateTokenConfigParams {
+        fn from(params: token_config::UpdateTokenConfigParams) -> Self {
+            let token_config::UpdateTokenConfigParams {
+                heartbeat_duration,
+                precision,
+                feeds,
+                timestamp_adjustments,
+                expected_provider,
+            } = params;
+            Self {
+                heartbeat_duration,
+                precision,
+                feeds,
+                timestamp_adjustments,
+                expected_provider,
+            }
         }
     }
 }

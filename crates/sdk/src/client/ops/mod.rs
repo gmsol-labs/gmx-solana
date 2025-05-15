@@ -24,3 +24,6 @@ pub mod role;
 
 /// Operations for store account.
 pub mod store;
+
+/// Operations for token config.
+pub mod token_config;
