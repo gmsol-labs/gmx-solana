@@ -18,3 +18,6 @@ pub mod gt;
 
 /// Operations for oracle management.
 pub mod oracle;
+
+/// Operations for role management.
+pub mod role;
