@@ -22,6 +22,9 @@ pub mod pull_oracle;
 /// Token account utils.
 pub mod token_account;
 
+/// Simulate a transaction and view its output.
+pub mod view;
+
 use std::{
     collections::BTreeMap,
     ops::Deref,
@@ -29,10 +32,14 @@ use std::{
 };
 
 use accounts::{account_with_context, accounts_lazy_with_context, ProgramAccountsConfig};
+use gmsol_model::{price::Prices, PnlFactorKind};
 use gmsol_programs::{
     anchor_lang::{AccountDeserialize, AnchorSerialize, Discriminator},
     bytemuck,
-    gmsol_store::{accounts as store_accounts, events as store_events, types as store_types},
+    gmsol_store::{
+        accounts as store_accounts, events as store_events,
+        types::{self as store_types, MarketStatus},
+    },
 };
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions, CreateBundleOptions},
@@ -42,6 +49,7 @@ use gmsol_solana_utils::{
     utils::WithSlot,
 };
 use gmsol_utils::oracle::PriceProviderKind;
+use ops::market::MarketOps;
 use pubsub::{PubsubClient, SubscriptionConfig};
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
@@ -750,47 +758,47 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         Ok(glvs)
     }
 
-    // /// Fetch [`MarketStatus`] with the market token address.
-    // pub async fn market_status(
-    //     &self,
-    //     store: &Pubkey,
-    //     market_token: &Pubkey,
-    //     prices: Prices<u128>,
-    //     maximize_pnl: bool,
-    //     maximize_pool_value: bool,
-    // ) -> crate::Result<MarketStatus> {
-    //     let req = self.get_market_status(
-    //         store,
-    //         market_token,
-    //         prices,
-    //         maximize_pnl,
-    //         maximize_pool_value,
-    //     );
-    //     let status = crate::utils::view::<MarketStatus>(
-    //         &self.store_program().rpc(),
-    //         &req.signed_transaction_with_options(true, None).await?,
-    //     )
-    //     .await?;
-    //     Ok(status)
-    // }
+    /// Fetch [`MarketStatus`] with the market token address.
+    pub async fn market_status(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        prices: Prices<u128>,
+        maximize_pnl: bool,
+        maximize_pool_value: bool,
+    ) -> crate::Result<MarketStatus> {
+        let req = self.get_market_status(
+            store,
+            market_token,
+            prices,
+            maximize_pnl,
+            maximize_pool_value,
+        );
+        let status = view::view::<MarketStatus>(
+            &self.store_program().rpc(),
+            &req.signed_transaction_with_options(true, None).await?,
+        )
+        .await?;
+        Ok(status)
+    }
 
-    // /// Fetch current market token price with the market token address.
-    // pub async fn market_token_price(
-    //     &self,
-    //     store: &Pubkey,
-    //     market_token: &Pubkey,
-    //     prices: Prices<u128>,
-    //     pnl_factor: PnlFactorKind,
-    //     maximize: bool,
-    // ) -> crate::Result<u128> {
-    //     let req = self.get_market_token_price(store, market_token, prices, pnl_factor, maximize);
-    //     let price = crate::utils::view::<u128>(
-    //         &self.store_program().rpc(),
-    //         &req.signed_transaction_with_options(true, None).await?,
-    //     )
-    //     .await?;
-    //     Ok(price)
-    // }
+    /// Fetch current market token price with the market token address.
+    pub async fn market_token_price(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        prices: Prices<u128>,
+        pnl_factor: PnlFactorKind,
+        maximize: bool,
+    ) -> crate::Result<u128> {
+        let req = self.get_market_token_price(store, market_token, prices, pnl_factor, maximize);
+        let price = view::view::<u128>(
+            &self.store_program().rpc(),
+            &req.signed_transaction_with_options(true, None).await?,
+        )
+        .await?;
+        Ok(price)
+    }
 
     /// Fetch all [`Position`](types::Position) accounts of the given owner of the given store.
     pub async fn positions(

@@ -5,6 +5,9 @@ use anchor_lang::prelude::{
     *,
 };
 
+/// Max number of config flags.
+pub const MAX_MARKET_CONFIG_FLAGS: usize = 128;
+
 /// Market error.
 #[derive(Debug, thiserror::Error)]
 pub enum MarketError {
@@ -116,4 +119,185 @@ pub fn ordered_tokens(from: &impl HasMarketMeta, to: &impl HasMarketMeta) -> BTr
         tokens.insert(**mint);
     }
     tokens
+}
+
+/// Market Config Flags.
+#[derive(
+    strum::EnumString,
+    strum::Display,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    num_enum::TryFromPrimitive,
+    num_enum::IntoPrimitive,
+)]
+#[strum(serialize_all = "snake_case")]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "enum-iter", derive(strum::EnumIter))]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+#[cfg_attr(feature = "clap", clap(rename_all = "snake_case"))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+#[non_exhaustive]
+#[repr(u8)]
+pub enum MarketConfigFlag {
+    /// Skip borrowing fee for smaller side.
+    SkipBorrowingFeeForSmallerSide,
+    /// Ignore open interest for usage factor.
+    IgnoreOpenInterestForUsageFactor,
+    // CHECK: cannot have more than `MAX_CONFIG_FLAGS` flags.
+}
+
+/// Market config keys.
+#[derive(
+    strum::EnumString,
+    strum::Display,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    num_enum::TryFromPrimitive,
+    num_enum::IntoPrimitive,
+)]
+#[strum(serialize_all = "snake_case")]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "enum-iter", derive(strum::EnumIter))]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+#[cfg_attr(feature = "clap", clap(rename_all = "snake_case"))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+#[non_exhaustive]
+#[repr(u16)]
+pub enum MarketConfigKey {
+    /// Swap impact exponent.
+    SwapImpactExponent,
+    /// Swap impact positive factor.
+    SwapImpactPositiveFactor,
+    /// Swap impact negative factor.
+    SwapImpactNegativeFactor,
+    /// Swap fee receiver factor.
+    SwapFeeReceiverFactor,
+    /// Swap fee factor for positive impact.
+    SwapFeeFactorForPositiveImpact,
+    /// Swap fee factor for negative impact.
+    SwapFeeFactorForNegativeImpact,
+    /// Min position size usd.
+    MinPositionSizeUsd,
+    /// Min collateral value.
+    MinCollateralValue,
+    /// Min collateral factor.
+    MinCollateralFactor,
+    /// Min collateral factor for open interest multiplier for long.
+    MinCollateralFactorForOpenInterestMultiplierForLong,
+    /// Min collateral factor for open interest multiplier for short.
+    MinCollateralFactorForOpenInterestMultiplierForShort,
+    /// Max positive position impact factor.
+    MaxPositivePositionImpactFactor,
+    /// Max negative position impact factor.
+    MaxNegativePositionImpactFactor,
+    /// Max position impact factor for liquidations.
+    MaxPositionImpactFactorForLiquidations,
+    /// Position impact exponent.
+    PositionImpactExponent,
+    /// Position impact positive factor.
+    PositionImpactPositiveFactor,
+    /// Position impact negative factor.
+    PositionImpactNegativeFactor,
+    /// Order fee receiver factor.
+    OrderFeeReceiverFactor,
+    /// Order fee factor for positive impact.
+    OrderFeeFactorForPositiveImpact,
+    /// Order fee factor for negative impact.
+    OrderFeeFactorForNegativeImpact,
+    /// Liquidation fee receiver factor.
+    LiquidationFeeReceiverFactor,
+    /// Liquidation fee factor.
+    LiquidationFeeFactor,
+    /// Position impact distribute factor.
+    PositionImpactDistributeFactor,
+    /// Min position impact pool amount.
+    MinPositionImpactPoolAmount,
+    /// Borrowing fee receiver factor.
+    BorrowingFeeReceiverFactor,
+    /// Borrowing fee factor for long.
+    BorrowingFeeFactorForLong,
+    /// Borrowing fee factor for short.
+    BorrowingFeeFactorForShort,
+    /// Borrowing fee exponent for long.
+    BorrowingFeeExponentForLong,
+    /// Borrowing fee exponent for short.
+    BorrowingFeeExponentForShort,
+    /// Borrowing fee optimal usage factor for long.
+    BorrowingFeeOptimalUsageFactorForLong,
+    /// Borrowing fee optimal usage factor for short.
+    BorrowingFeeOptimalUsageFactorForShort,
+    /// Borrowing fee base factor for long.
+    BorrowingFeeBaseFactorForLong,
+    /// Borrowing fee base factor for short.
+    BorrowingFeeBaseFactorForShort,
+    /// Borrowing fee above optimal usage factor for long.
+    BorrowingFeeAboveOptimalUsageFactorForLong,
+    /// Borrowing fee above optimal usage factor for short.
+    BorrowingFeeAboveOptimalUsageFactorForShort,
+    /// Funding fee exponent.
+    FundingFeeExponent,
+    /// Funding fee factor.
+    FundingFeeFactor,
+    /// Funding fee max factor per second.
+    FundingFeeMaxFactorPerSecond,
+    /// Funding fee min factor per second.
+    FundingFeeMinFactorPerSecond,
+    /// Funding fee increase factor per second.
+    FundingFeeIncreaseFactorPerSecond,
+    /// Funding fee decrease factor per second.
+    FundingFeeDecreaseFactorPerSecond,
+    /// Funding fee threshold for stable funding.
+    FundingFeeThresholdForStableFunding,
+    /// Funding fee threshold for decrease funding.
+    FundingFeeThresholdForDecreaseFunding,
+    /// Reserve factor.
+    ReserveFactor,
+    /// Open interest reserve factor.
+    OpenInterestReserveFactor,
+    /// Max PNL factor for long deposit.
+    MaxPnlFactorForLongDeposit,
+    /// Max PNL factor for short deposit.
+    MaxPnlFactorForShortDeposit,
+    /// Max PNL factor for long withdrawal.
+    MaxPnlFactorForLongWithdrawal,
+    /// Max PNL factor for short withdrawal.
+    MaxPnlFactorForShortWithdrawal,
+    /// Max PNL factor for long trader.
+    MaxPnlFactorForLongTrader,
+    /// Max PNL factor for short trader.
+    MaxPnlFactorForShortTrader,
+    /// Max PNL factor for long ADL.
+    MaxPnlFactorForLongAdl,
+    /// Max PNL factor for short ADL.
+    MaxPnlFactorForShortAdl,
+    /// Min PNL factor after long ADL.
+    MinPnlFactorAfterLongAdl,
+    /// Min PNL factor after short ADL.
+    MinPnlFactorAfterShortAdl,
+    /// Max pool amount for long token.
+    MaxPoolAmountForLongToken,
+    /// Max pool amount for short token.
+    MaxPoolAmountForShortToken,
+    /// Max pool value for deposit for long token.
+    MaxPoolValueForDepositForLongToken,
+    /// Max pool value for deposit for short token.
+    MaxPoolValueForDepositForShortToken,
+    /// Max open interest for long.
+    MaxOpenInterestForLong,
+    /// Max open interest for short.
+    MaxOpenInterestForShort,
+    /// Min tokens for first deposit.
+    MinTokensForFirstDeposit,
 }

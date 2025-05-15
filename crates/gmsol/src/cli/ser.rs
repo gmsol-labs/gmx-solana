@@ -191,9 +191,9 @@ impl<'a> TryFrom<&'a Market> for MarketConfigMap {
 
     fn try_from(market: &'a Market) -> Result<Self, Self::Error> {
         let map = MarketConfigKey::iter()
-            .map(|key| {
-                let factor = market.get_config_by_key(key);
-                (key, SerdeFactor(*factor))
+            .filter_map(|key| {
+                let factor = market.get_config_by_key(key)?;
+                Some((key, SerdeFactor(*factor)))
             })
             .collect();
         Ok(Self(map))

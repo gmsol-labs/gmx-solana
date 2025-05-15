@@ -578,7 +578,9 @@ impl InspectArgs {
                     let market = client.market(&address).await?;
                     let serialized = SerializeMarket::from_market(&address, &market)?;
                     if let Some(key) = get_config {
-                        let value = market.get_config_by_key(*key);
+                        let value = market
+                            .get_config_by_key(*key)
+                            .ok_or_eyre("unimplemented config key")?;
                         output.print(value, |value| Ok(value.to_string()))?;
                     } else if *debug {
                         println!("{market:#?}");

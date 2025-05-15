@@ -81,8 +81,9 @@ impl Deposit {
         min_amount: u64,
         market: &Market,
     ) -> Result<()> {
-        let min_tokens_for_first_deposit =
-            market.get_config_by_key(MarketConfigKey::MinTokensForFirstDeposit);
+        let min_tokens_for_first_deposit = market
+            .get_config_by_key(MarketConfigKey::MinTokensForFirstDeposit)
+            .ok_or_else(|| error!(CoreError::Unimplemented))?;
 
         // Skip first deposit check if the amount is zero.
         if *min_tokens_for_first_deposit == 0 {

@@ -1,6 +1,9 @@
 /// Exchange operations.
 pub mod exchange;
 
+/// Market operations.
+pub mod market;
+
 /// GLV operations.
 pub mod glv;
 

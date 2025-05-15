@@ -304,12 +304,13 @@ impl Market {
     pub fn get_config(&self, key: &str) -> Result<&Factor> {
         let key = MarketConfigKey::from_str(key)
             .map_err(|_| error!(CoreError::InvalidMarketConfigKey))?;
-        Ok(self.get_config_by_key(key))
+        self.get_config_by_key(key)
+            .ok_or_else(|| error!(CoreError::Unimplemented))
     }
 
     /// Get config by key.
     #[inline]
-    pub fn get_config_by_key(&self, key: MarketConfigKey) -> &Factor {
+    pub fn get_config_by_key(&self, key: MarketConfigKey) -> Option<&Factor> {
         self.config.get(key)
     }
 
@@ -317,7 +318,9 @@ impl Market {
     pub fn get_config_mut(&mut self, key: &str) -> Result<&mut Factor> {
         let key = MarketConfigKey::from_str(key)
             .map_err(|_| error!(CoreError::InvalidMarketConfigKey))?;
-        Ok(self.config.get_mut(key))
+        self.config
+            .get_mut(key)
+            .ok_or_else(|| error!(CoreError::Unimplemented))
     }
 
     /// Get config flag.
@@ -361,7 +364,10 @@ impl Market {
     pub fn update_config_with_buffer(&mut self, buffer: &MarketConfigBuffer) -> Result<()> {
         for entry in buffer.iter() {
             let key = entry.key()?;
-            let current_value = self.config.get_mut(key);
+            let current_value = self
+                .config
+                .get_mut(key)
+                .ok_or_else(|| error!(CoreError::Unimplemented))?;
             let new_value = entry.value();
             *current_value = new_value;
         }

@@ -1,4 +1,4 @@
-use gmsol_programs::anchor_lang::prelude::Error as AnchorLangError;
+pub(crate) use gmsol_programs::anchor_lang::prelude::Error as AnchorLangError;
 
 /// SDK Error.
 #[derive(Debug, thiserror::Error)]

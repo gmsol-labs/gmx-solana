@@ -8,13 +8,13 @@ anchor_lang::declare_program!(gmsol_timelock);
 /// Constants.
 pub mod constants;
 
-/// Utils.
+/// Utilities.
 pub mod utils;
 
 /// Error.
 pub mod error;
 
-/// Model support.
+/// Implementations of [`gmsol_model`] traits and utilities.
 #[cfg(feature = "model")]
 pub mod model;
 
