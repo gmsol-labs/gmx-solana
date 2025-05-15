@@ -27,3 +27,6 @@ pub mod store;
 
 /// Operations for token config.
 pub mod token_config;
+
+/// Operations for user account.
+pub mod user;
