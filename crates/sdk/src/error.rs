@@ -22,6 +22,9 @@ pub enum Error {
     /// Unknown error.
     #[error("unknown: {0}")]
     Unknown(String),
+    /// Transport error.
+    #[error("transport: {0}")]
+    Transport(String),
     /// Market Graph Errors
     #[cfg(feature = "market-graph")]
     #[error("market-graph: {0}")]
@@ -43,12 +46,25 @@ pub enum Error {
     /// Error from [`gmsol_programs`].
     #[error("programs: {0}")]
     Programs(#[from] gmsol_programs::Error),
+    /// Reqwest error.
+    #[cfg(feature = "reqwest")]
+    #[error("reqwest: {0}")]
+    Reqwest(#[from] reqwest::Error),
+    /// Json error.
+    #[cfg(feature = "serde_json")]
+    #[error("json: {0}")]
+    Json(#[from] serde_json::Error),
 }
 
 impl Error {
     /// Create an unknown error.
     pub fn unknown(msg: impl ToString) -> Self {
         Self::Unknown(msg.to_string())
+    }
+
+    /// Create a transport error.
+    pub fn transport(msg: impl ToString) -> Self {
+        Self::Transport(msg.to_string())
     }
 }
 

@@ -61,7 +61,14 @@ client = [
     "time",
 ]
 decode = ["gmsol-decode"]
-chainlink = ["gmsol-chainlink-datastreams"]
+chainlink = [
+    "gmsol-chainlink-datastreams",
+    "reqwest",
+    "reqwest-websocket",
+    "sha2",
+    "hmac",
+]
+devnet = ["gmsol-utils/devnet"]
 
 [dependencies]
 gmsol-programs = { workspace = true, features = ["model"] }
@@ -86,6 +93,8 @@ typed-builder = { workspace = true }
 rand = { workspace = true }
 
 tracing = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true, features = ["json"] }
+reqwest-websocket = { workspace = true, optional = true }
 
 # Dependencies for the `js` feature
 wasm-bindgen = { workspace = true, optional = true }
@@ -117,6 +126,8 @@ time = { workspace = true, optional = true }
 
 # Dependencies for `chainlink` feature
 gmsol-chainlink-datastreams = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+hmac = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases = { workspace = true }

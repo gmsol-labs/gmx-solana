@@ -31,6 +31,10 @@ pub mod instruction_buffer;
 /// Program IDs.
 pub mod program_ids;
 
+/// Chainlink support.
+#[cfg(feature = "chainlink")]
+pub mod chainlink;
+
 use std::{
     collections::BTreeMap,
     ops::Deref,
