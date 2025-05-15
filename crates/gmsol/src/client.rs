@@ -853,7 +853,10 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                 market.as_ref().to_owned(),
             )));
         }
-        let store_filter = StoreFilter::new(store, 1);
+        let store_filter = StoreFilter::new(
+            store,
+            bytemuck::offset_of!(types::common::ActionHeader, store),
+        );
 
         let orders = self
             .store_accounts::<ZeroCopy<types::Order>>(Some(store_filter), filters)
