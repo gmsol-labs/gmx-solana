@@ -4,7 +4,7 @@ pub mod price;
 /// Fixed-size zero copy map.
 pub mod fixed_map;
 
-/// Init space.
+/// Definition for [`InitSpace`].
 pub mod init_space;
 
 /// Zero-copy flags.
@@ -19,16 +19,16 @@ pub mod pubkey;
 /// Oracle utils.
 pub mod oracle;
 
-/// Market utils.
+/// Definitions related to market.
 pub mod market;
 
-/// Token config.
+/// Definitions related to token config.
 pub mod token_config;
 
 /// Utils for dynamic access to an array of zero copy types.
 pub mod dynamic_access;
 
-/// Action utils.
+/// Definitions related to action.
 pub mod action;
 
 /// A `slice::chunk_by` implementation, copied from `std`.
@@ -37,11 +37,14 @@ pub mod chunk_by;
 /// Swap parameters.
 pub mod swap;
 
-/// Order utils.
+/// Definitions related to order.
 pub mod order;
 
-/// GLV utils.
+/// Definitions related to GLV.
 pub mod glv;
+
+/// Definitions related to global configurations.
+pub mod config;
 
 /// Convert a string to a seed.
 pub fn to_seed(key: &str) -> [u8; 32] {

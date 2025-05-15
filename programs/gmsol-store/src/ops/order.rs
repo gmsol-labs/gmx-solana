@@ -1126,7 +1126,8 @@ impl ExecuteOrderOperation<'_, '_> {
                     .store
                     .load()
                     .map_err(|_| CoreError::LoadAccountError)?
-                    .get_amount_by_key(AmountKey::AdlPricesMaxStaleness);
+                    .get_amount_by_key(AmountKey::AdlPricesMaxStaleness)
+                    .ok_or(CoreError::Unimplemented)?;
                 self.market
                     .load()
                     .map_err(|_| CoreError::LoadAccountError)?

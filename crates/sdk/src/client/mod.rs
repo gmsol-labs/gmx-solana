@@ -37,7 +37,7 @@ use gmsol_programs::{
     anchor_lang::{AccountDeserialize, AnchorSerialize, Discriminator},
     bytemuck,
     gmsol_store::{
-        accounts as store_accounts, events as store_events,
+        accounts as store_accounts,
         types::{self as store_types, MarketStatus},
     },
 };
@@ -72,6 +72,9 @@ use crate::{
 
 #[cfg(feature = "decode")]
 use gmsol_decode::{gmsol::programs::GMSOLCPIEvent, Decode};
+
+#[cfg(feature = "decode")]
+use gmsol_programs::gmsol_store::events as store_events;
 
 const DISC_OFFSET: usize = 8;
 

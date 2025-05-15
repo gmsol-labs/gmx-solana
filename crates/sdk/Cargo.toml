@@ -36,8 +36,13 @@ market-graph = ["petgraph", "rust_decimal/maths"]
 client = [
     "gmsol-programs/gmsol-utils",
     "gmsol-solana-utils/make-bundle-builder",
+    "gmsol-solana-utils/anchor",
+    "gmsol-utils/debug",
+    "gmsol-utils/display",
+    "gmsol-model/strum",
     "treasury",
     "timelock",
+    "tracing",
     "serde",
     "serde_json",
     "futures-util",
@@ -60,6 +65,7 @@ gmsol-solana-utils = { workspace = true }
 gmsol-utils = { workspace = true }
 gmsol-decode = { workspace = true, optional = true, features = [
     "gmsol-programs",
+    "solana-decoder",
 ] }
 thiserror = { workspace = true }
 base64 = { workspace = true }
@@ -94,7 +100,7 @@ petgraph = { workspace = true, optional = true, default-features = false, featur
 # Dependencies for the `client` feature
 futures-util = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }
-tokio-stream = { workspace = true, optional = true }
+tokio-stream = { workspace = true, optional = true, features = ["sync"] }
 solana-client = { workspace = true, optional = true }
 solana-account-decoder = { workspace = true, optional = true }
 solana-transaction-status = { workspace = true, optional = true }

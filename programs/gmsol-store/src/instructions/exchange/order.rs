@@ -310,7 +310,14 @@ impl<'info> internal::Create<'info, Order> for CreateOrder<'info> {
         self.store
             .load()?
             .validate_not_restarted()?
-            .validate_feature_enabled(params.kind.try_into()?, ActionDisabledFlag::Create)?;
+            .validate_feature_enabled(
+                params
+                    .kind
+                    .try_into()
+                    .map_err(CoreError::from)
+                    .map_err(|err| error!(err))?,
+                ActionDisabledFlag::Create,
+            )?;
         Ok(())
     }
 
@@ -618,7 +625,12 @@ impl<'info> internal::Close<'info, Order> for CloseOrder<'info> {
                 .load()?
                 .validate_not_restarted()?
                 .validate_feature_enabled(
-                    order.params().kind()?.try_into()?,
+                    order
+                        .params()
+                        .kind()?
+                        .try_into()
+                        .map_err(CoreError::from)
+                        .map_err(|err| error!(err))?,
                     ActionDisabledFlag::Cancel,
                 )?;
         }
@@ -874,7 +886,12 @@ pub(crate) fn update_order(ctx: Context<UpdateOrder>, params: &UpdateOrderParams
             .load()?
             .validate_not_restarted()?
             .validate_feature_enabled(
-                order.params().kind()?.try_into()?,
+                order
+                    .params()
+                    .kind()?
+                    .try_into()
+                    .map_err(CoreError::from)
+                    .map_err(|err| error!(err))?,
                 ActionDisabledFlag::Update,
             )?;
     }

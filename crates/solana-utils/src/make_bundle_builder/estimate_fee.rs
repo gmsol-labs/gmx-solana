@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use crate::bundle_builder::{BundleBuilder, BundleOptions};
-use anchor_client::solana_sdk::signer::Signer;
+use solana_sdk::signer::Signer;
 
 use super::MakeBundleBuilder;
 

@@ -379,11 +379,26 @@ impl InspectArgs {
                 };
                 let store = client.store(&address).await?;
                 if let Some(key) = get_amount {
-                    println!("{}", store.get_amount_by_key(*key));
+                    println!(
+                        "{}",
+                        store
+                            .get_amount_by_key(*key)
+                            .ok_or_eyre("unsupported amount key")?
+                    );
                 } else if let Some(key) = get_factor {
-                    println!("{}", store.get_factor_by_key(*key));
+                    println!(
+                        "{}",
+                        store
+                            .get_factor_by_key(*key)
+                            .ok_or_eyre("unsupported factor key")?
+                    );
                 } else if let Some(key) = get_address {
-                    println!("{}", store.get_address_by_key(*key));
+                    println!(
+                        "{}",
+                        store
+                            .get_address_by_key(*key)
+                            .ok_or_eyre("unsupported address key")?
+                    );
                 } else if let Some(user) = get_roles {
                     let role_store = store.role();
                     for role in role_store.roles() {
