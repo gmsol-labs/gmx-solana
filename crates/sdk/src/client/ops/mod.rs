@@ -12,3 +12,6 @@ pub mod token_account;
 
 /// Operations for global configurations.
 pub mod config;
+
+/// Operations for GT.
+pub mod gt;
