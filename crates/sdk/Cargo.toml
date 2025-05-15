@@ -16,6 +16,7 @@ crate-type = ["cdylib"]
 default = ["market-graph"]
 treasury = ["gmsol-programs/treasury"]
 timelock = ["gmsol-programs/timelock"]
+devnet = ["gmsol-utils/devnet"]
 js = [
     "market-graph",
     "wasm-bindgen",
@@ -68,7 +69,14 @@ chainlink = [
     "sha2",
     "hmac",
 ]
-devnet = ["gmsol-utils/devnet"]
+pyth = [
+    "pyth-sdk",
+    "pyth-solana-receiver-sdk",
+    "pythnet-sdk",
+    "eventsource-stream",
+    "byteorder",
+    "reqwest/stream",
+]
 
 [dependencies]
 gmsol-programs = { workspace = true, features = ["model"] }
@@ -128,6 +136,13 @@ time = { workspace = true, optional = true }
 gmsol-chainlink-datastreams = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 hmac = { workspace = true, optional = true }
+
+# Dependencies for `pyth` feature
+pyth-sdk = { workspace = true, optional = true }
+pythnet-sdk = { workspace = true, optional = true }
+pyth-solana-receiver-sdk = { workspace = true, optional = true }
+eventsource-stream = { workspace = true, optional = true }
+byteorder = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases = { workspace = true }

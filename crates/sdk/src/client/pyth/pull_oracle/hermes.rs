@@ -5,14 +5,16 @@ use std::{
 
 use eventsource_stream::Eventsource;
 use futures_util::{Stream, TryStreamExt};
-use gmsol_store::states::{
-    pyth::pyth_price_with_confidence_to_price, HasMarketMeta, PriceProviderKind, TokenMapAccess,
+use gmsol_utils::{
+    market::HasMarketMeta,
+    oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
+    token_config::TokenMapAccess,
 };
 use reqwest::{Client, IntoUrl, Url};
 
 pub use pyth_sdk::Identifier;
 
-use crate::pyth::pubkey_to_identifier;
+use crate::client::pyth::pubkey_to_identifier;
 
 /// Default base URL for Hermes.
 pub const DEFAULT_HERMES_BASE: &str = "https://hermes.pyth.network";
@@ -48,13 +50,17 @@ impl Hermes {
         let params = get_query(feed_ids, encoding);
         let stream = self
             .client
-            .get(self.base.join(PRICE_STREAM)?)
+            .get(
+                self.base
+                    .join(PRICE_STREAM)
+                    .map_err(crate::Error::unknown)?,
+            )
             .query(&params)
             .send()
             .await?
             .bytes_stream()
             .eventsource()
-            .map_err(crate::Error::from)
+            .map_err(crate::Error::unknown)
             .try_filter_map(|event| {
                 let update = deserialize_price_update_event(&event)
                     .inspect_err(
@@ -75,7 +81,11 @@ impl Hermes {
         let params = get_query(feed_ids, encoding);
         let update = self
             .client
-            .get(self.base.join(PRICE_LATEST)?)
+            .get(
+                self.base
+                    .join(PRICE_LATEST)
+                    .map_err(crate::Error::unknown)?,
+            )
             .query(&params)
             .send()
             .await?
@@ -93,7 +103,7 @@ impl Hermes {
         let token_configs =
             token_map
                 .token_configs_for_market(market)
-                .ok_or(crate::Error::invalid_argument(
+                .ok_or(crate::Error::unknown(
                     "missing configs for the tokens of the market",
                 ))?;
         let feeds = token_configs
@@ -104,7 +114,7 @@ impl Hermes {
                     .map(|feed| pubkey_to_identifier(&feed))
             })
             .collect::<Result<Vec<_>, _>>()
-            .map_err(crate::Error::invalid_argument)?;
+            .map_err(crate::Error::unknown)?;
         let update = self
             .latest_price_updates(feeds.iter().collect::<HashSet<_>>(), None)
             .await?;

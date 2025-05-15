@@ -35,6 +35,10 @@ pub mod program_ids;
 #[cfg(feature = "chainlink")]
 pub mod chainlink;
 
+/// Pyth support.
+#[cfg(feature = "pyth")]
+pub mod pyth;
+
 use std::{
     collections::BTreeMap,
     ops::Deref,
