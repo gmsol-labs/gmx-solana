@@ -1,4 +1,3 @@
-use gmsol_programs::anchor_lang::solana_program::pubkey;
 use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction};
 
 use gmsol_solana_utils::{
@@ -6,11 +5,10 @@ use gmsol_solana_utils::{
 };
 use std::{future::Future, ops::Deref, sync::Arc};
 
+use crate::client::program_ids::WORMHOLE_PROGRAM_ID;
+
 mod accounts;
 mod instruction;
-
-/// Wormhole Core Bridge Program Address.
-pub const WORMHOLE_PROGRAM_ID: Pubkey = pubkey!("HDwcJBJXjL9FpJ7UBsYBtaDjsBUhuLCUYoz3zr8SWWaQ");
 
 /// The start offset of the VAA bytes.
 pub const VAA_START: u64 = 46;

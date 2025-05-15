@@ -32,6 +32,7 @@ pub mod token_config;
 pub mod user;
 
 /// Operations for timelock.
+#[cfg(feature = "timelock")]
 pub mod timelock;
 
 /// Operations for treasury program.
@@ -53,6 +54,7 @@ pub use oracle::OracleOps;
 pub use role::RoleOps;
 pub use store::StoreOps;
 pub use system::SystemProgramOps;
+#[cfg(feature = "timelock")]
 pub use timelock::TimelockOps;
 pub use token_account::TokenAccountOps;
 pub use token_config::TokenConfigOps;

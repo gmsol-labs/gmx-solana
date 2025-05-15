@@ -17,7 +17,7 @@ use std::ops::Deref;
 use gmsol_solana_utils::program::Program;
 use solana_sdk::signer::Signer;
 
-use self::wormhole::WORMHOLE_PROGRAM_ID;
+use crate::client::program_ids::WORMHOLE_PROGRAM_ID;
 
 pub use self::{
     pull_oracle_impl::{PriceUpdates, PythPullOracleWithHermes},

@@ -145,7 +145,7 @@ impl<T> Discriminator for SharedZeroCopy<T>
 where
     T: Discriminator,
 {
-    const DISCRIMINATOR: &'static [u8] = T::DISCRIMINATOR;
+    const DISCRIMINATOR: [u8; 8] = T::DISCRIMINATOR;
 }
 
 impl<T> AsRef<T> for SharedZeroCopy<T> {
