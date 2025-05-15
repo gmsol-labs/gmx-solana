@@ -1,17 +1,22 @@
 use std::{future::Future, ops::Deref, sync::Arc};
 
-use anchor_client::{
-    anchor_lang::{prelude::AccountMeta, system_program},
-    solana_sdk::{instruction::Instruction, pubkey::Pubkey, signer::Signer},
+use gmsol_programs::{
+    constants::roles,
+    gmsol_timelock::{
+        accounts::{Executor, InstructionHeader},
+        client::{accounts, args},
+    },
 };
 use gmsol_solana_utils::transaction_builder::TransactionBuilder;
-use gmsol_store::states::{PriceProviderKind, RoleKey};
-use gmsol_timelock::{
-    accounts, instruction, roles,
-    states::{Executor, InstructionAccess, InstructionHeader},
+use gmsol_utils::{instruction::InstructionAccess, oracle::PriceProviderKind, role::RoleKey};
+use solana_sdk::{
+    instruction::{AccountMeta, Instruction},
+    pubkey::Pubkey,
+    signer::Signer,
+    system_program,
 };
 
-use crate::utils::ZeroCopy;
+use crate::utils::zero_copy::ZeroCopy;
 
 /// Timelock instructions.
 pub trait TimelockOps<C> {
@@ -112,7 +117,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
             .find_executor_address(store, roles::ADMIN)
             .expect("must success");
         self.timelock_transaction()
-            .anchor_args(instruction::InitializeConfig {
+            .anchor_args(args::InitializeConfig {
                 delay: initial_delay,
             })
             .anchor_accounts(accounts::InitializeConfig {
@@ -129,7 +134,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
 
     fn increase_timelock_delay(&self, store: &Pubkey, delta: u32) -> TransactionBuilder<C> {
         self.timelock_transaction()
-            .anchor_args(instruction::IncreaseDelay { delta })
+            .anchor_args(args::IncreaseDelay { delta })
             .anchor_accounts(accounts::IncreaseDelay {
                 authority: self.payer(),
                 store: *store,
@@ -147,7 +152,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         let wallet = self.find_executor_wallet_address(&executor);
         Ok(self
             .timelock_transaction()
-            .anchor_args(instruction::InitializeExecutor {
+            .anchor_args(args::InitializeExecutor {
                 role: role.to_string(),
             })
             .anchor_accounts(accounts::InitializeExecutor {
@@ -187,17 +192,17 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
             .accounts
             .len()
             .try_into()
-            .map_err(|_| crate::Error::invalid_argument("too many accounts"))?;
+            .map_err(|_| crate::Error::unknown("too many accounts"))?;
 
         let data_len = instruction
             .data
             .len()
             .try_into()
-            .map_err(|_| crate::Error::invalid_argument("data too long"))?;
+            .map_err(|_| crate::Error::unknown("data too long"))?;
 
         let rpc = self
             .timelock_transaction()
-            .anchor_args(instruction::CreateInstructionBuffer {
+            .anchor_args(args::CreateInstructionBuffer {
                 num_accounts,
                 data_len,
                 data: instruction.data,
@@ -232,7 +237,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
                     .await?
                     .ok_or(crate::Error::NotFound)?
                     .0;
-                let executor = instruction_header.executor();
+                let executor = &instruction_header.executor;
                 let executor = self
                     .account::<ZeroCopy<Executor>>(executor)
                     .await?
@@ -244,7 +249,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         let executor = self.find_executor_address(store, &role)?;
         Ok(self
             .timelock_transaction()
-            .anchor_args(instruction::ApproveInstruction { role })
+            .anchor_args(args::ApproveInstruction { role })
             .anchor_accounts(accounts::ApproveInstruction {
                 authority: self.payer(),
                 store: *store,
@@ -263,7 +268,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         let mut buffers = buffers.into_iter().peekable();
         let buffer = buffers
             .peek()
-            .ok_or_else(|| crate::Error::invalid_argument("no instructions to appove"))?;
+            .ok_or_else(|| crate::Error::unknown("no instructions to appove"))?;
         let role = match role_hint {
             Some(role) => role.to_string(),
             None => {
@@ -272,7 +277,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
                     .await?
                     .ok_or(crate::Error::NotFound)?
                     .0;
-                let executor = instruction_header.executor();
+                let executor = &instruction_header.executor;
                 let executor = self
                     .account::<ZeroCopy<Executor>>(executor)
                     .await?
@@ -284,7 +289,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         let executor = self.find_executor_address(store, &role)?;
         Ok(self
             .timelock_transaction()
-            .anchor_args(instruction::ApproveInstructions { role })
+            .anchor_args(args::ApproveInstructions { role })
             .anchor_accounts(accounts::ApproveInstructions {
                 authority: self.payer(),
                 store: *store,
@@ -318,14 +323,14 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
                     .ok_or(crate::Error::NotFound)?
                     .0;
                 (
-                    *instruction_header.executor(),
-                    *instruction_header.rent_receiver(),
+                    instruction_header.executor,
+                    instruction_header.rent_receiver,
                 )
             }
         };
         Ok(self
             .timelock_transaction()
-            .anchor_args(instruction::CancelInstruction {})
+            .anchor_args(args::CancelInstruction {})
             .anchor_accounts(accounts::CancelInstruction {
                 authority: self.payer(),
                 store: *store,
@@ -346,7 +351,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
         let mut buffers = buffers.into_iter().peekable();
         let buffer = buffers
             .peek()
-            .ok_or_else(|| crate::Error::invalid_argument("no instructions to appove"))?;
+            .ok_or_else(|| crate::Error::unknown("no instructions to appove"))?;
         let (executor, rent_receiver) = match (executor_hint, rent_receiver_hint) {
             (Some(executor), Some(rent_receiver)) => (*executor, *rent_receiver),
             _ => {
@@ -356,14 +361,14 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
                     .ok_or(crate::Error::NotFound)?
                     .0;
                 (
-                    *instruction_header.executor(),
-                    *instruction_header.rent_receiver(),
+                    instruction_header.executor,
+                    instruction_header.rent_receiver,
                 )
             }
         };
         Ok(self
             .timelock_transaction()
-            .anchor_args(instruction::CancelInstructions {})
+            .anchor_args(args::CancelInstructions {})
             .anchor_accounts(accounts::CancelInstructions {
                 authority: self.payer(),
                 store: *store,
@@ -399,11 +404,11 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
                     .instruction_buffer(buffer)
                     .await?
                     .ok_or(crate::Error::NotFound)?;
-                let executor = buffer.header.executor();
-                let rent_receiver = buffer.header.rent_receiver();
+                let executor = buffer.header.executor;
+                let rent_receiver = buffer.header.rent_receiver;
                 (
-                    *executor,
-                    *rent_receiver,
+                    executor,
+                    rent_receiver,
                     buffer.accounts().map(AccountMeta::from).collect(),
                 )
             }
@@ -418,7 +423,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
 
         Ok(self
             .timelock_transaction()
-            .anchor_args(instruction::ExecuteInstruction {})
+            .anchor_args(args::ExecuteInstruction {})
             .anchor_accounts(accounts::ExecuteInstruction {
                 authority: self.payer(),
                 store: *store,
@@ -443,7 +448,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
             .expect("must success");
         let wallet = self.find_executor_wallet_address(&executor);
         self.timelock_transaction()
-            .anchor_args(instruction::RevokeRole {
+            .anchor_args(args::RevokeRole {
                 role: role.to_string(),
             })
             .anchor_accounts(accounts::RevokeRole {
@@ -468,7 +473,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
             .expect("must success");
         let wallet = self.find_executor_wallet_address(&executor);
         self.timelock_transaction()
-            .anchor_args(instruction::SetExpectedPriceProvider {
+            .anchor_args(args::SetExpectedPriceProvider {
                 new_expected_price_provider: new_expected_price_provider.into(),
             })
             .anchor_accounts(accounts::SetExpectedPriceProvider {

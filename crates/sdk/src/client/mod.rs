@@ -25,6 +25,9 @@ pub mod token_account;
 /// Simulate a transaction and view its output.
 pub mod view;
 
+/// Instruction buffer.
+pub mod instruction_buffer;
+
 use std::{
     collections::BTreeMap,
     ops::Deref,
@@ -49,6 +52,7 @@ use gmsol_solana_utils::{
     utils::WithSlot,
 };
 use gmsol_utils::oracle::PriceProviderKind;
+use instruction_buffer::InstructionBuffer;
 use ops::market::MarketOps;
 use pubsub::{PubsubClient, SubscriptionConfig};
 use solana_account_decoder::UiAccountEncoding;
@@ -1218,6 +1222,14 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             .into_iter()
             .map(|(address, exchange)| (address, exchange.0))
             .collect())
+    }
+
+    /// Fetch [`InstructionBuffer`] account with its address.
+    pub async fn instruction_buffer(
+        &self,
+        address: &Pubkey,
+    ) -> crate::Result<Option<InstructionBuffer>> {
+        self.account::<InstructionBuffer>(address).await
     }
 }
 

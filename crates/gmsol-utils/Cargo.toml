@@ -16,6 +16,7 @@ serde = ["dep:serde", "serde_with", "serde_bytes"]
 idl-build = ["anchor-lang/idl-build"]
 devnet = []
 enum-iter = []
+instruction = []
 
 [dependencies]
 anchor-lang = { workspace = true }

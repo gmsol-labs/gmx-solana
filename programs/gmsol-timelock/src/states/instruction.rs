@@ -1,16 +1,15 @@
 use std::cell::{Ref, RefMut};
 
-use anchor_lang::{
-    prelude::*,
-    solana_program::instruction::{AccountMeta, Instruction},
-};
+use anchor_lang::prelude::*;
 use gmsol_store::{
     utils::pubkey::{optional_address, DEFAULT_PUBKEY},
     CoreError,
 };
-use gmsol_utils::InitSpace;
+use gmsol_utils::{instruction::InstructionError, InitSpace};
 
 use crate::states::create_executor_wallet_pda;
+
+pub use gmsol_utils::instruction::{InstructionAccess, InstructionAccount, InstructionAccountFlag};
 
 const MAX_FLAGS: usize = 8;
 
@@ -123,47 +122,17 @@ pub enum InstructionFlag {
 
 gmsol_utils::flags!(InstructionFlag, MAX_FLAGS, u8);
 
-/// Instruction Account.
-#[zero_copy]
-pub struct InstructionAccount {
-    /// Flags.
-    flags: InstructionAccountFlagContainer,
-    /// Pubkey.
-    pubkey: Pubkey,
-}
-
-impl gmsol_utils::InitSpace for InstructionAccount {
-    const INIT_SPACE: usize = std::mem::size_of::<Self>();
-}
-
-/// Flags of Instruction Accounts.
-#[derive(num_enum::IntoPrimitive)]
-#[repr(u8)]
-pub enum InstructionAccountFlag {
-    /// Is signer.
-    Signer,
-    /// Is mutable.
-    Writable,
-    // CHECK: cannot have more than `MAX_FLAGS` flags.
-}
-
-gmsol_utils::flags!(InstructionAccountFlag, MAX_FLAGS, u8);
-
-impl<'a> From<&'a InstructionAccount> for AccountMeta {
-    fn from(a: &'a InstructionAccount) -> Self {
-        Self {
-            pubkey: a.pubkey,
-            is_signer: a.flags.get_flag(InstructionAccountFlag::Signer),
-            is_writable: a.flags.get_flag(InstructionAccountFlag::Writable),
-        }
-    }
-}
-
 /// Reference to the instruction.
 pub struct InstructionRef<'a> {
     header: Ref<'a, InstructionHeader>,
     data: Ref<'a, [u8]>,
     accounts: Ref<'a, [u8]>,
+}
+
+impl InstructionRef<'_> {
+    pub(crate) fn header(&self) -> &InstructionHeader {
+        &self.header
+    }
 }
 
 /// Instruction Loader.
@@ -287,54 +256,23 @@ impl<'info> InstructionLoader<'info> for AccountLoader<'info, InstructionHeader>
     }
 }
 
-/// Instruction Access.
-pub trait InstructionAccess {
-    /// Get header.
-    fn header(&self) -> &InstructionHeader;
-
-    /// Get data.
-    fn data(&self) -> &[u8];
-
-    /// Get the number of accounts.
-    fn num_accounts(&self) -> usize {
-        usize::from(self.header().num_accounts)
-    }
-
-    /// Get accounts.
-    fn accounts(&self) -> impl Iterator<Item = &InstructionAccount>;
-
-    /// Convert to instruction.
-    fn to_instruction(&self, mark_executor_wallet_as_signer: bool) -> Result<Instruction> {
-        let mut accounts = self
-            .accounts()
-            .map(From::from)
-            .collect::<Vec<AccountMeta>>();
-
-        // When performing a CPI, the PDA doesn't need to be explicitly marked as a signer,
-        // so we've made it optional to reduce computational overhead.
-        if mark_executor_wallet_as_signer {
-            let executor_wallet = self.header().wallet()?;
-            accounts
-                .iter_mut()
-                .filter(|a| a.pubkey == executor_wallet)
-                .for_each(|a| a.is_signer = true);
-        }
-
-        Ok(Instruction {
-            program_id: self.header().program_id,
-            accounts,
-            data: self.data().to_vec(),
-        })
-    }
-}
-
 impl InstructionAccess for InstructionRef<'_> {
-    fn header(&self) -> &InstructionHeader {
-        &self.header
+    fn wallet(&self) -> std::result::Result<Pubkey, InstructionError> {
+        self.header
+            .wallet()
+            .map_err(|_| InstructionError::FailedToGetWallet)
+    }
+
+    fn program_id(&self) -> &Pubkey {
+        &self.header.program_id
     }
 
     fn data(&self) -> &[u8] {
         &self.data
+    }
+
+    fn num_accounts(&self) -> usize {
+        usize::from(self.header.num_accounts)
     }
 
     fn accounts(&self) -> impl Iterator<Item = &InstructionAccount> {
@@ -350,26 +288,38 @@ impl InstructionAccess for InstructionRef<'_> {
 #[cfg(feature = "utils")]
 pub mod utils {
 
-    use anchor_lang::AccountDeserialize;
+    use anchor_lang::{prelude::Pubkey, AccountDeserialize};
     use bytes::Bytes;
     use gmsol_store::utils::de;
+    use gmsol_utils::instruction::InstructionError;
 
     use super::{InstructionAccess, InstructionHeader};
 
     /// Instruction Buffer.
     pub struct InstructionBuffer {
-        header: InstructionHeader,
+        /// Get header.
+        pub header: InstructionHeader,
         data: Bytes,
         accounts: Bytes,
     }
 
     impl InstructionAccess for InstructionBuffer {
-        fn header(&self) -> &InstructionHeader {
-            &self.header
+        fn wallet(&self) -> Result<Pubkey, InstructionError> {
+            self.header
+                .wallet()
+                .map_err(|_| InstructionError::FailedToGetWallet)
+        }
+
+        fn program_id(&self) -> &Pubkey {
+            &self.header.program_id
         }
 
         fn data(&self) -> &[u8] {
             &self.data
+        }
+
+        fn num_accounts(&self) -> usize {
+            usize::from(self.header.num_accounts)
         }
 
         fn accounts(&self) -> impl Iterator<Item = &super::InstructionAccount> {

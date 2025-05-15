@@ -30,3 +30,6 @@ pub mod token_config;
 
 /// Operations for user account.
 pub mod user;
+
+/// Operations for timelock.
+pub mod timelock;

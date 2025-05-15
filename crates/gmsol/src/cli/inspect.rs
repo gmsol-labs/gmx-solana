@@ -1339,7 +1339,7 @@ impl InspectArgs {
                         .await?
                         .ok_or(gmsol::Error::NotFound)?;
 
-                    let status = match buffer.header().approved_at() {
+                    let status = match buffer.header.approved_at() {
                         Some(approved_at) => {
                             let approved_at =
                                 time::OffsetDateTime::from_unix_timestamp(approved_at)
@@ -1357,7 +1357,7 @@ impl InspectArgs {
                     };
                     tracing::info!("[{idx}] {address}: {status}");
 
-                    instructions.push(buffer.to_instruction(true)?);
+                    instructions.push(buffer.to_instruction(true).map_err(gmsol::Error::unknown)?);
                 }
 
                 let message = Message::new(&instructions, Some(&client.payer()));

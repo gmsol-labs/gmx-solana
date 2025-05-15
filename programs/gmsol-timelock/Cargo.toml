@@ -35,7 +35,7 @@ serde = ["dep:serde", "gmsol-store/serde", "gmsol-utils/serde"]
 [dependencies]
 anchor-lang = { workspace = true }
 gmsol-store = { workspace = true, features = ["cpi"] }
-gmsol-utils = { workspace = true }
+gmsol-utils = { workspace = true, features = ["instruction"] }
 bytemuck = { workspace = true }
 num_enum = { workspace = true }
 
