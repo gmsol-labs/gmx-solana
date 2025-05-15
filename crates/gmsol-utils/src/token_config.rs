@@ -533,3 +533,23 @@ impl TokensCollector {
         TokensWithFeed::try_from_records(records)
     }
 }
+
+/// Max number of treasury token flags.
+#[cfg(feature = "treasury")]
+pub const MAX_TREASURY_TOKEN_FLAGS: usize = 8;
+
+/// Token Flags.
+#[cfg(feature = "treasury")]
+#[derive(
+    num_enum::IntoPrimitive, Clone, Copy, strum::EnumString, strum::Display, PartialEq, Eq,
+)]
+#[strum(serialize_all = "snake_case")]
+#[cfg_attr(feature = "enum-iter", derive(strum::EnumIter))]
+#[repr(u8)]
+pub enum TokenFlag {
+    /// Allow deposit.
+    AllowDeposit,
+    /// Allow withdrawal.
+    AllowWithdrawal,
+    // CHECK: cannot have more than `MAX_TREASURY_TOKEN_FLAGS` flags.
+}

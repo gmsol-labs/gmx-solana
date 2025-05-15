@@ -33,3 +33,6 @@ pub mod user;
 
 /// Operations for timelock.
 pub mod timelock;
+
+/// Operations for treasury program.
+pub mod treasury;

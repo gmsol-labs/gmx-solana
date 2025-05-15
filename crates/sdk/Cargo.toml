@@ -42,6 +42,7 @@ client = [
     "gmsol-utils/debug",
     "gmsol-utils/display",
     "gmsol-utils/instruction",
+    "gmsol-utils/treasury",
     "gmsol-model/strum",
     "treasury",
     "timelock",

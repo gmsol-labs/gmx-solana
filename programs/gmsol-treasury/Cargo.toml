@@ -47,7 +47,7 @@ anchor-spl = { workspace = true, default-features = false, features = [
     "associated_token",
 ] }
 bytemuck = { workspace = true }
-gmsol-utils = { workspace = true }
+gmsol-utils = { workspace = true, features = ["treasury"] }
 gmsol-store = { workspace = true, features = ["cpi"] }
 gmsol-model = { workspace = true, features = ["u128"] }
 num_enum = { workspace = true }

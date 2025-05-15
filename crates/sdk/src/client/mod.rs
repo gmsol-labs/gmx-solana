@@ -28,6 +28,9 @@ pub mod view;
 /// Instruction buffer.
 pub mod instruction_buffer;
 
+/// Program IDs.
+pub mod program_ids;
+
 use std::{
     collections::BTreeMap,
     ops::Deref,

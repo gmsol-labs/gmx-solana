@@ -2,6 +2,8 @@ use anchor_lang::prelude::*;
 use bytemuck::Zeroable;
 use gmsol_store::{states::Seed, utils::pubkey::to_bytes, CoreError};
 
+pub use gmsol_utils::token_config::{TokenFlag, MAX_TREASURY_TOKEN_FLAGS};
+
 pub(crate) const MAX_TOKENS: usize = 16;
 
 /// Treasury vault config account.
@@ -143,21 +145,4 @@ impl Default for TokenConfig {
 
 gmsol_utils::fixed_map!(TokenMap, Pubkey, to_bytes, TokenConfig, MAX_TOKENS, 0);
 
-const MAX_FLAGS: usize = 8;
-
-/// Token Flags.
-#[derive(
-    num_enum::IntoPrimitive, Clone, Copy, strum::EnumString, strum::Display, PartialEq, Eq,
-)]
-#[strum(serialize_all = "snake_case")]
-#[cfg_attr(feature = "enum-iter", derive(strum::EnumIter))]
-#[repr(u8)]
-pub enum TokenFlag {
-    /// Allow deposit.
-    AllowDeposit,
-    /// Allow withdrawal.
-    AllowWithdrawal,
-    // CHECK: cannot have more than `MAX_FLAGS` flags.
-}
-
-gmsol_utils::flags!(TokenFlag, MAX_FLAGS, u8);
+gmsol_utils::flags!(TokenFlag, MAX_TREASURY_TOKEN_FLAGS, u8);
