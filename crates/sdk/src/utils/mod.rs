@@ -19,3 +19,5 @@ pub mod fixed_str;
 /// Test utils.
 #[cfg(test)]
 pub mod test;
+
+pub use fixed::*;

@@ -152,7 +152,7 @@ impl PositionCutKind {
         }
     }
 
-    /// Convert into [`OrderKinde`].
+    /// Convert into [`OrderKind`].
     pub fn to_order_kind(&self) -> OrderKind {
         match self {
             Self::Liquidate => OrderKind::Liquidation,
