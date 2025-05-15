@@ -39,6 +39,10 @@ pub mod chainlink;
 #[cfg(feature = "pyth")]
 pub mod pyth;
 
+/// Switchboard support.
+#[cfg(feature = "switchboard")]
+pub mod switchboard;
+
 use std::{
     collections::BTreeMap,
     ops::Deref,
