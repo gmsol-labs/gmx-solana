@@ -32,5 +32,5 @@ time = { workspace = true, optional = true }
 bs58 = { workspace = true, optional = true }
 
 [package.metadata.docs.rs]
-all-features = true
+features = ["treasury", "model"]
 rustdoc-args = ["--cfg", "docsrs"]

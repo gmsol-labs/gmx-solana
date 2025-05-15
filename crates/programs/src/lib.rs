@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+
 #[cfg(feature = "store")]
 anchor_lang::declare_program!(gmsol_store);
 #[cfg(feature = "treasury")]

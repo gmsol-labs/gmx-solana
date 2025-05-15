@@ -23,7 +23,7 @@ treasury = []
 anchor-lang = { workspace = true }
 thiserror = { workspace = true }
 paste = { workspace = true }
-bytemuck = { workspace = true }
+bytemuck = { workspace = true, features = ["derive"] }
 static_assertions = { workspace = true }
 ruint = { workspace = true, default-features = false }
 bitmaps = { workspace = true }

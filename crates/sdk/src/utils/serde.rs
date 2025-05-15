@@ -27,7 +27,7 @@ impl Deref for StringPubkey {
     }
 }
 
-/// Serialize [`Pubkey`](solana_sdk::pubkey::Pubkey) as string.
+/// Serialize [`Pubkey`] as string.
 #[cfg(serde)]
 pub mod pubkey {
     use std::borrow::Cow;

@@ -6,7 +6,7 @@ use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
 
 /// Operations for store account.
 pub trait StoreOps<C> {
-    /// Initialize [`Store`](gmsol_store::states::Store) account.
+    /// Initialize [`Store`](gmsol_programs::gmsol_store::accounts::Store) account.
     fn initialize_store<S: Signer + 'static>(
         &self,
         key: &str,

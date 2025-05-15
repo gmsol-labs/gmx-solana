@@ -63,6 +63,7 @@ chainlink = [
     "reqwest-websocket",
     "sha2",
     "hmac",
+    "async-tungstenite",
 ]
 pyth = [
     "pyth-sdk",
@@ -102,6 +103,11 @@ cfg-if = { workspace = true }
 tracing = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true, features = ["json"] }
 reqwest-websocket = { workspace = true, optional = true }
+
+# Manually enable the `futures-03-sink` feature to prevent compile errors.
+async-tungstenite = { workspace = true, optional = true, features = [
+    "futures-03-sink",
+] }
 
 # Dependencies for the `js` feature
 wasm-bindgen = { workspace = true, optional = true }
@@ -163,5 +169,5 @@ shellexpand = { workspace = true }
 eyre = { workspace = true }
 
 [package.metadata.docs.rs]
-all-features = true
+features = ["client", "decode", "chainlink", "pyth"]
 rustdoc-args = ["--cfg", "docsrs"]
