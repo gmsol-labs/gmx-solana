@@ -10,7 +10,7 @@ readme.workspace = true
 keywords.workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["market-graph"]
@@ -78,6 +78,8 @@ pyth = [
     "reqwest/stream",
 ]
 switchboard = ["switchboard-on-demand-client"]
+
+anchor-test = ["client", "chainlink", "pyth"]
 
 [dependencies]
 gmsol-programs = { workspace = true, features = ["model"] }
@@ -153,11 +155,17 @@ switchboard-on-demand-client = { workspace = true, optional = true }
 cfg_aliases = { workspace = true }
 
 [dev-dependencies]
+gmsol-mock-chainlink-verifier = { workspace = true }
+gmsol-store = { workspace = true }
+
 rust_decimal_macros = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 wasm-bindgen-test = { workspace = true }
 serde_json = { workspace = true }
+event-listener = { workspace = true }
+shellexpand = { workspace = true }
+eyre = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

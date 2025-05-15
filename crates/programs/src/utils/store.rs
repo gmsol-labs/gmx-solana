@@ -3,9 +3,12 @@ use std::num::NonZeroU64;
 use bytemuck::Zeroable;
 
 use crate::gmsol_store::{
-    accounts::{Glv, GtExchange, Market, Position, Store},
+    accounts::{Glv, GtExchange, Market, Position, ReferralCodeV2, Store},
     types::ActionHeader,
 };
+
+/// Referral Code Bytes.
+pub type ReferralCodeBytes = [u8; 8];
 
 impl Default for Market {
     fn default() -> Self {
@@ -58,6 +61,39 @@ impl Store {
     pub fn claimable_time_key(&self, timestamp: i64) -> crate::Result<[u8; 8]> {
         let index = self.claimable_time_window_index(timestamp)?;
         Ok(index.to_le_bytes())
+    }
+}
+
+impl ReferralCodeV2 {
+    /// The length of referral code.
+    pub const LEN: usize = std::mem::size_of::<ReferralCodeBytes>();
+
+    /// Decode the given code string to code bytes.
+    pub fn decode(code: &str) -> crate::Result<ReferralCodeBytes> {
+        if code.is_empty() {
+            return Err(crate::Error::custom("empty code is not supported"));
+        }
+        let code = bs58::decode(code)
+            .into_vec()
+            .map_err(crate::Error::custom)?;
+        if code.len() > Self::LEN {
+            return Err(crate::Error::custom("the code is too long"));
+        }
+        let padding = Self::LEN - code.len();
+        let mut code_bytes = ReferralCodeBytes::default();
+        code_bytes[padding..].copy_from_slice(&code);
+
+        Ok(code_bytes)
+    }
+
+    /// Encode the given code to code string.
+    pub fn encode(code: &ReferralCodeBytes, skip_leading_ones: bool) -> String {
+        let code = bs58::encode(code).into_string();
+        if skip_leading_ones {
+            code.trim_start_matches('1').to_owned()
+        } else {
+            code
+        }
     }
 }
 

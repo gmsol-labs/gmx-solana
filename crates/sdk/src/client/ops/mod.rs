@@ -36,3 +36,25 @@ pub mod timelock;
 
 /// Operations for treasury program.
 pub mod treasury;
+
+/// Operations for Address Lookup Tables.
+pub mod alt;
+
+/// Operations for system program.
+pub mod system;
+
+pub use alt::AddressLookupTableOps;
+pub use config::ConfigOps;
+pub use exchange::ExchangeOps;
+pub use glv::GlvOps;
+pub use gt::GtOps;
+pub use market::MarketOps;
+pub use oracle::OracleOps;
+pub use role::RoleOps;
+pub use store::StoreOps;
+pub use system::SystemProgramOps;
+pub use timelock::TimelockOps;
+pub use token_account::TokenAccountOps;
+pub use token_config::TokenConfigOps;
+pub use treasury::TreasuryOps;
+pub use user::UserOps;

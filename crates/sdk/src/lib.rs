@@ -37,6 +37,8 @@ pub mod model {
     pub use gmsol_programs::model::*;
 }
 
+pub use gmsol_utils as core;
+
 #[cfg(test)]
 pub(crate) mod test;
 

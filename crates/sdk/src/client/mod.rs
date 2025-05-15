@@ -1248,25 +1248,6 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     }
 }
 
-/// System Program Ops.
-pub trait SystemProgramOps<C> {
-    /// Transfer to.
-    fn transfer(&self, to: &Pubkey, lamports: u64) -> crate::Result<TransactionBuilder<C>>;
-}
-
-impl<C: Clone + Deref<Target = impl Signer>> SystemProgramOps<C> for Client<C> {
-    fn transfer(&self, to: &Pubkey, lamports: u64) -> crate::Result<TransactionBuilder<C>> {
-        use solana_sdk::system_instruction::transfer;
-
-        if lamports == 0 {
-            return Err(crate::Error::unknown("transferring amount is zero"));
-        }
-        Ok(self
-            .store_transaction()
-            .pre_instruction(transfer(&self.payer(), to, lamports)))
-    }
-}
-
 /// Store Filter.
 #[derive(Debug)]
 pub struct StoreFilter {

@@ -32,7 +32,7 @@ use gmsol_programs::gmsol_store::{
     types::UpdateOrderParams,
 };
 use gmsol_solana_utils::transaction_builder::TransactionBuilder;
-use gmsol_utils::order::PositionCutKind;
+use gmsol_utils::order::{OrderKind, PositionCutKind};
 use order::{
     CloseOrderBuilder, CreateOrderBuilder, ExecuteOrderBuilder, OrderParams, PositionCutBuilder,
     UpdateAdlBuilder,
@@ -47,6 +47,13 @@ use crate::client::Client;
 pub trait ExchangeOps<C> {
     /// Create a deposit.
     fn create_deposit(&self, store: &Pubkey, market_token: &Pubkey) -> CreateDepositBuilder<C>;
+
+    /// Create first deposit.
+    fn create_first_deposit(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+    ) -> CreateDepositBuilder<C>;
 
     /// Cancel a deposit.
     fn close_deposit(&self, store: &Pubkey, deposit: &Pubkey) -> CloseDepositBuilder<C>;
@@ -108,6 +115,198 @@ pub trait ExchangeOps<C> {
         is_output_token_long: bool,
         params: OrderParams,
     ) -> CreateOrderBuilder<C>;
+
+    /// Create a market increase position order.
+    fn market_increase(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        is_collateral_token_long: bool,
+        initial_collateral_amount: u64,
+        is_long: bool,
+        increment_size_in_usd: u128,
+    ) -> CreateOrderBuilder<C> {
+        let params = OrderParams {
+            kind: OrderKind::MarketIncrease,
+            decrease_position_swap_type: None,
+            min_output_amount: 0,
+            size_delta_usd: increment_size_in_usd,
+            initial_collateral_delta_amount: initial_collateral_amount,
+            acceptable_price: None,
+            trigger_price: None,
+            is_long,
+            valid_from_ts: None,
+        };
+        self.create_order(store, market_token, is_collateral_token_long, params)
+    }
+
+    /// Create a market decrease position order.
+    fn market_decrease(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        is_collateral_token_long: bool,
+        collateral_withdrawal_amount: u64,
+        is_long: bool,
+        decrement_size_in_usd: u128,
+    ) -> CreateOrderBuilder<C> {
+        let params = OrderParams {
+            kind: OrderKind::MarketDecrease,
+            decrease_position_swap_type: None,
+            min_output_amount: 0,
+            size_delta_usd: decrement_size_in_usd,
+            initial_collateral_delta_amount: collateral_withdrawal_amount,
+            acceptable_price: None,
+            trigger_price: None,
+            is_long,
+            valid_from_ts: None,
+        };
+        self.create_order(store, market_token, is_collateral_token_long, params)
+    }
+
+    /// Create a market swap order.
+    fn market_swap<'a, S>(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        is_output_token_long: bool,
+        initial_swap_in_token: &Pubkey,
+        initial_swap_in_token_amount: u64,
+        swap_path: impl IntoIterator<Item = &'a Pubkey>,
+    ) -> CreateOrderBuilder<C>
+    where
+        C: Deref<Target = S> + Clone,
+        S: Signer,
+    {
+        let params = OrderParams {
+            kind: OrderKind::MarketSwap,
+            decrease_position_swap_type: None,
+            min_output_amount: 0,
+            size_delta_usd: 0,
+            initial_collateral_delta_amount: initial_swap_in_token_amount,
+            acceptable_price: None,
+            trigger_price: None,
+            is_long: true,
+            valid_from_ts: None,
+        };
+        let mut builder = self.create_order(store, market_token, is_output_token_long, params);
+        builder
+            .initial_collateral_token(initial_swap_in_token, None)
+            .swap_path(swap_path.into_iter().copied().collect());
+        builder
+    }
+
+    /// Create a limit increase order.
+    #[allow(clippy::too_many_arguments)]
+    fn limit_increase(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        is_long: bool,
+        increment_size_in_usd: u128,
+        price: u128,
+        is_collateral_token_long: bool,
+        initial_collateral_amount: u64,
+    ) -> CreateOrderBuilder<C> {
+        let params = OrderParams {
+            kind: OrderKind::LimitIncrease,
+            decrease_position_swap_type: None,
+            min_output_amount: 0,
+            size_delta_usd: increment_size_in_usd,
+            initial_collateral_delta_amount: initial_collateral_amount,
+            acceptable_price: None,
+            trigger_price: Some(price),
+            is_long,
+            valid_from_ts: None,
+        };
+        self.create_order(store, market_token, is_collateral_token_long, params)
+    }
+
+    /// Create a limit decrease order.
+    #[allow(clippy::too_many_arguments)]
+    fn limit_decrease(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        is_long: bool,
+        decrement_size_in_usd: u128,
+        price: u128,
+        is_collateral_token_long: bool,
+        collateral_withdrawal_amount: u64,
+    ) -> CreateOrderBuilder<C> {
+        let params = OrderParams {
+            kind: OrderKind::LimitDecrease,
+            decrease_position_swap_type: None,
+            min_output_amount: 0,
+            size_delta_usd: decrement_size_in_usd,
+            initial_collateral_delta_amount: collateral_withdrawal_amount,
+            acceptable_price: None,
+            trigger_price: Some(price),
+            is_long,
+            valid_from_ts: None,
+        };
+        self.create_order(store, market_token, is_collateral_token_long, params)
+    }
+
+    /// Create a stop-loss decrease order.
+    #[allow(clippy::too_many_arguments)]
+    fn stop_loss(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        is_long: bool,
+        decrement_size_in_usd: u128,
+        price: u128,
+        is_collateral_token_long: bool,
+        collateral_withdrawal_amount: u64,
+    ) -> CreateOrderBuilder<C> {
+        let params = OrderParams {
+            kind: OrderKind::StopLossDecrease,
+            decrease_position_swap_type: None,
+            min_output_amount: 0,
+            size_delta_usd: decrement_size_in_usd,
+            initial_collateral_delta_amount: collateral_withdrawal_amount,
+            acceptable_price: None,
+            trigger_price: Some(price),
+            is_long,
+            valid_from_ts: None,
+        };
+        self.create_order(store, market_token, is_collateral_token_long, params)
+    }
+
+    /// Create a limit swap order.
+    #[allow(clippy::too_many_arguments)]
+    fn limit_swap<'a, S>(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+        is_output_token_long: bool,
+        min_output_amount: u64,
+        initial_swap_in_token: &Pubkey,
+        initial_swap_in_token_amount: u64,
+        swap_path: impl IntoIterator<Item = &'a Pubkey>,
+    ) -> CreateOrderBuilder<C>
+    where
+        C: Deref<Target = S> + Clone,
+        S: Signer,
+    {
+        let params = OrderParams {
+            kind: OrderKind::LimitSwap,
+            decrease_position_swap_type: None,
+            min_output_amount: u128::from(min_output_amount),
+            size_delta_usd: 0,
+            initial_collateral_delta_amount: initial_swap_in_token_amount,
+            acceptable_price: None,
+            trigger_price: None,
+            is_long: true,
+            valid_from_ts: None,
+        };
+        let mut builder = self.create_order(store, market_token, is_output_token_long, params);
+        builder
+            .initial_collateral_token(initial_swap_in_token, None)
+            .swap_path(swap_path.into_iter().copied().collect());
+        builder
+    }
 
     /// Update an order.
     fn update_order(
@@ -220,6 +419,16 @@ pub trait ExchangeOps<C> {
 impl<C: Deref<Target = impl Signer> + Clone> ExchangeOps<C> for Client<C> {
     fn create_deposit(&self, store: &Pubkey, market_token: &Pubkey) -> CreateDepositBuilder<C> {
         CreateDepositBuilder::new(self, *store, *market_token)
+    }
+
+    fn create_first_deposit(
+        &self,
+        store: &Pubkey,
+        market_token: &Pubkey,
+    ) -> CreateDepositBuilder<C> {
+        let mut builder = self.create_deposit(store, market_token);
+        builder.receiver(Some(self.find_first_deposit_owner_address()));
+        builder
     }
 
     fn close_deposit(&self, store: &Pubkey, deposit: &Pubkey) -> CloseDepositBuilder<C> {
