@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["impl_decode_for_account_deserialize","impl_decode_for_cpi_event","impl_decode_for_zero_copy"],"struct":["Account","AccountDeserializeVisitor","AnchorCPIEvents","CPIEventVisitor","OwnedData","OwnedDataDecoder","UnknownOwnedData","ZeroCopyVisitor"]};

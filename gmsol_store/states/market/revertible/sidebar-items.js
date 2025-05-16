@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["liquidity_market","market","revertible_position","swap_market"],"trait":["Revertible","Revision"]};

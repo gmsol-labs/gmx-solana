@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EXECUTE_DEPOSIT_COMPUTE_BUDGET"],"struct":["CloseDepositBuilder","CloseDepositHint","CreateDepositBuilder","ExecuteDepositBuilder","ExecuteDepositHint"]};

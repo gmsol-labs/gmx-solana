@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["InitializeConfig","InitializeConfigBumps","SetTreasuryVaultConfig","SetTreasuryVaultConfigBumps","UpdateConfig","UpdateConfigBumps"]};

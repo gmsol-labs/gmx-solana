@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["approve_instruction","approve_instructions","cancel_instruction","cancel_instructions","create_instruction_buffer","execute_instruction","increase_delay","initialize_config","initialize_executor","revoke_role","set_expected_price_provider"]};

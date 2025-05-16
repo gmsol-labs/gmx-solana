@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_associated_token_account","is_associated_token_account_or_owner","is_associated_token_account_with_program_id","must_be_uninitialized","validate_associated_token_account","validate_token_account"],"struct":["TransferAllFromEscrowToATA"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["unchecked_execute_shift"],"struct":["ExecuteShift","ExecuteShiftBumps"]};

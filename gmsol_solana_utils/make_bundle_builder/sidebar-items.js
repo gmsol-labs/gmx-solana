@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["once_make_bundle"],"mod":["estimate_fee","surround"],"struct":["OnceMakeBundleBuilder"],"trait":["MakeBundleBuilder","MakeBundleBuilderExt"]};

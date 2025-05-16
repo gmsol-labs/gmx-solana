@@ -1,0 +1,2 @@
+window.ALL_CRATES = ["gmsol","gmsol_chainlink_datastreams","gmsol_decode","gmsol_mock_chainlink_verifier","gmsol_model","gmsol_programs","gmsol_sdk","gmsol_solana_utils","gmsol_store","gmsol_timelock","gmsol_treasury","gmsol_utils"];
+//{"start":21,"fragment_lengths":[7,30,15,32,14,17,12,21,14,17,17,14]}

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["fee","position","price_impact"]};

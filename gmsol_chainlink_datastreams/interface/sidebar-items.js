@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["VERIFIER_ACCOUNT_SEEDS"],"fn":["verify"],"struct":["ChainlinkDataStreamsInterface","VerifyContext"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ApproveInstruction","ApproveInstructionBumps","ApproveInstructions","ApproveInstructionsBumps","CancelInstruction","CancelInstructionBumps","CancelInstructions","CancelInstructionsBumps","CreateInstructionBuffer","CreateInstructionBufferBumps","ExecuteInstruction","ExecuteInstructionBumps"]};

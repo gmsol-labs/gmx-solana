@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AcceptReceiver","AcceptReceiverBumps","AcceptStoreAuthority","AcceptStoreAuthorityBumps","Initialize","InitializeBumps","ReadStore","ReadStoreBumps","SetTokenMap","SetTokenMapBumps","TransferReceiver","TransferReceiverBumps","TransferStoreAuthority","TransferStoreAuthorityBumps","UpdateLastRestartedSlot","UpdateLastRestartedSlotBumps"]};

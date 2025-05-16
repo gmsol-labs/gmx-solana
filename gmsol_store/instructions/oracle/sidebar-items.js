@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["custom"],"struct":["ClearAllPrices","ClearAllPricesBumps","InitializeOracle","InitializeOracleBumps","SetPricesFromPriceFeed","SetPricesFromPriceFeedBumps"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ID_CONST"],"fn":["check_id","id","id_const"],"static":["ID"]};

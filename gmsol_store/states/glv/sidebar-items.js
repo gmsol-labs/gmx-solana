@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GlvMarketFlag"],"struct":["Glv","GlvDeposit","GlvDepositActionParams","GlvDepositTokenAccounts","GlvMarketConfig","GlvMarketFlagContainer","GlvMarkets","GlvShift","GlvWithdrawal","GlvWithdrawalActionParams","GlvWithdrawalTokenAccounts","UpdateGlvParams"]};

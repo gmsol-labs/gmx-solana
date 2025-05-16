@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["decrease_position","deposit","distribute_position_impact","increase_position","swap","update_borrowing_state","update_funding_state","withdraw"],"trait":["MarketAction"]};

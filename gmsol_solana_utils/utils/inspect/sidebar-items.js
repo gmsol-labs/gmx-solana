@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["inspect_transaction"]};

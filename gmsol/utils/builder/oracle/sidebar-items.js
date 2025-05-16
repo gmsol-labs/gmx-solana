@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["FeedIds","PriceUpdateInstructions","WithPullOracle"],"trait":["PostPullOraclePrices","PullOracle","PullOraclePriceConsumer"],"type":["FeedAddressMap"]};

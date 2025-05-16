@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PoolKind"],"mod":["balance","delta"],"struct":["PoolKindIter"],"trait":["Pool","PoolExt"]};

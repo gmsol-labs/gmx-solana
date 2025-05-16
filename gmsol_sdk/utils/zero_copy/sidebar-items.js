@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["check_discriminator","try_deserialize","try_deserialize_unchecked","try_deserialize_zero_copy","try_deserialize_zero_copy_from_base64"],"struct":["SharedZeroCopy","ZeroCopy"]};

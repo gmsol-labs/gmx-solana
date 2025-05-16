@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["InsolventCloseStep","LiquidatableReason","WillCollateralBeSufficient"],"struct":["CollateralDelta"],"trait":["Position","PositionExt","PositionMut","PositionMutExt","PositionState","PositionStateExt","PositionStateMut"]};

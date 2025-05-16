@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["PerpMarket","PerpMarketExt","PerpMarketMut","PerpMarketMutExt"]};

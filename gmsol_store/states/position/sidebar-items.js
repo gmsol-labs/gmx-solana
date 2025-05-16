@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PositionKind"],"struct":["AsPosition","Position","PositionState"]};

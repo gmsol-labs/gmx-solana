@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SwapActionParamsError"],"struct":["SwapActionParams"],"trait":["HasSwapParams"]};

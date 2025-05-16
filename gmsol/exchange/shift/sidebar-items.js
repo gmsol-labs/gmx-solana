@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CloseShiftBuilder","CloseShiftHint","CreateShiftBuilder","CreateShiftHint","ExecuteShiftBuilder","ExecuteShiftHint"]};

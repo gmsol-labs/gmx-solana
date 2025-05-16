@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["shared_signer"],"struct":["BoxClonableSigner","BoxSigner","TransactionSigners"],"trait":["CloneableSigner"],"type":["LocalBoxSigner","SignerRef"]};

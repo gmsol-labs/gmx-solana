@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["extract_cpi_events","fetch_transaction_history_with_config"]};

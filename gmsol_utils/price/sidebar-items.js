@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["TEN"],"fn":["convert_to_u128_storage","find_divisor_decimals"],"mod":["decimal"],"struct":["Price"],"type":["U192"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FixedStrError"],"fn":["bytes_to_fixed_str","fixed_str_to_bytes"]};

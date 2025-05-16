@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_GLV_MARKET_FLAGS"],"enum":["GlvMarketFlag"],"struct":["GlvMarketFlagIter"]};

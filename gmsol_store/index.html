@@ -1,0 +1,236 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The GMX-Solana Store Program"><title>gmsol_store - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="gmsol_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../gmsol_store/index.html">gmsol_<wbr>store</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#the-gmx-solana-store-program" title="The GMX-Solana Store Program">The GMX-Solana Store Program</a><ul><li><a href="#store" title="Store">Store</a></li><li><a href="#role-based-permission-management" title="Role-based Permission Management">Role-based Permission Management</a></li><li><a href="#token-config-and-oracle-management" title="Token Config and Oracle Management">Token Config and Oracle Management</a></li><li><a href="#market-management" title="Market Management">Market Management</a></li><li><a href="#exchange" title="Exchange">Exchange</a></li><li><a href="#glv-gmx-liquidity-vault-pools" title="GLV (GMX Liquidity Vault) Pools">GLV (GMX Liquidity Vault) Pools</a></li><li><a href="#user-accounts-and-referrals" title="User Accounts and Referrals">User Accounts and Referrals</a></li><li><a href="#gt-model" title="GT Model">GT Model</a></li></ul></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#constants" title="Constants">Constants</a></li><li><a href="#statics" title="Statics">Statics</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>gmsol_store</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/gmsol_store/lib.rs.html#1-3882">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="the-gmx-solana-store-program"><a class="doc-anchor" href="#the-gmx-solana-store-program">§</a>The GMX-Solana Store Program</h2>
+<p>The Store Program defines several fundamental accounts that form the core of its functionality:</p>
+<ul>
+<li><a href="states/store/struct.Store.html" title="struct gmsol_store::states::store::Store"><code>Store</code></a>: A central account that serves as a global configuration store and
+permission manager. It acts as the authority (“owner”) for other program accounts and manages
+role-based access control. The global <a href="#gt-model">GT</a> state is also stored in this account.</li>
+<li><a href="states/token_config/utils/struct.TokenMap.html" title="struct gmsol_store::states::token_config::utils::TokenMap"><code>TokenMap</code></a>: A mapping of token configurations and price feed configurations
+that defines supported tokens and their associated price oracle feeds.</li>
+<li><a href="states/market/struct.Market.html" title="struct gmsol_store::states::market::Market"><code>Market</code></a>: A market account that stores market-specific configurations and
+maintains the global market state.</li>
+<li><a href="states/position/struct.Position.html" title="struct gmsol_store::states::position::Position"><code>Position</code></a>: Tracks a user’s active position in a market.</li>
+<li>Basic Market Action accounts: Accounts that track user actions and positions in markets
+<ul>
+<li><a href="states/deposit/struct.Deposit.html" title="struct gmsol_store::states::deposit::Deposit"><code>Deposit</code></a>: Tracks a user’s pending deposit request into a market.</li>
+<li><a href="states/withdrawal/struct.Withdrawal.html" title="struct gmsol_store::states::withdrawal::Withdrawal"><code>Withdrawal</code></a>: Tracks a user’s pending withdrawal request from a market.</li>
+<li><a href="states/shift/struct.Shift.html" title="struct gmsol_store::states::shift::Shift"><code>Shift</code></a>: Tracks a user’s pending request to shift from one kind of market token to another.</li>
+<li><a href="states/order/struct.Order.html" title="struct gmsol_store::states::order::Order"><code>Order</code></a>: Tracks a user’s pending order request in a market, including swap orders and increase/decrease position orders.</li>
+</ul>
+</li>
+<li>GLV (GMX Liquidity Vault) Action accounts: Accounts that track user interactions with GLV tokens.
+<ul>
+<li><a href="states/glv/struct.GlvDeposit.html" title="struct gmsol_store::states::glv::GlvDeposit"><code>GlvDeposit</code></a>: Tracks a user’s pending deposit of tokens into a GLV pool to mint GLV tokens.</li>
+<li><a href="states/glv/struct.GlvWithdrawal.html" title="struct gmsol_store::states::glv::GlvWithdrawal"><code>GlvWithdrawal</code></a>: Tracks a user’s pending withdrawal of tokens from a GLV pool to burn GLV tokens and withdraw the underlying tokens.</li>
+<li><a href="states/glv/struct.GlvShift.html" title="struct gmsol_store::states::glv::GlvShift"><code>GlvShift</code></a>: Tracks a keeper’s pending request to rebalance tokens between different market pools within the GLV pool.</li>
+</ul>
+</li>
+<li>User accounts (see <a href="states/user/struct.UserHeader.html" title="struct gmsol_store::states::user::UserHeader"><code>UserHeader</code></a> for details): Tracks user information including the GT and esGT balances of the user, referral code, and referral relationships.</li>
+</ul>
+<p>The instructions for the store program are categorized into the following sections:</p>
+<h3 id="store"><a class="doc-anchor" href="#store">§</a>Store</h3>
+<p>A <a href="states/store/struct.Store.html" title="struct gmsol_store::states::store::Store"><code>Store</code></a> Account serves as both an authority and a global configuration
+storage.</p>
+<p>A store and its associated accounts form a <em>deployment</em>. Each deployment operates independently,
+allowing multiple instances of the protocol to coexist on-chain (only available when the
+<code>multi-store</code> feature is enabled).</p>
+<h5 id="instructions-for-store-accounts"><a class="doc-anchor" href="#instructions-for-store-accounts">§</a>Instructions for Store Accounts</h5>
+<ul>
+<li><a href="gmsol_store/fn.initialize.html" title="fn gmsol_store::gmsol_store::initialize"><code>initialize</code></a>: Create a new <a href="states/store/struct.Store.html" title="struct gmsol_store::states::store::Store"><code>Store</code></a> account.</li>
+<li><a href="gmsol_store/fn.transfer_store_authority.html" title="fn gmsol_store::gmsol_store::transfer_store_authority"><code>transfer_store_authority</code></a>: Transfer the authority of the given store to a new authority.</li>
+<li><a href="gmsol_store/fn.transfer_receiver.html" title="fn gmsol_store::gmsol_store::transfer_receiver"><code>transfer_receiver</code></a>: Set the claimable fee receiver address.</li>
+<li><a href="gmsol_store/fn.set_token_map.html" title="fn gmsol_store::gmsol_store::set_token_map"><code>set_token_map</code></a>: Set the token map account to use.</li>
+</ul>
+<h5 id="instructions-for-config-management"><a class="doc-anchor" href="#instructions-for-config-management">§</a>Instructions for Config Management</h5>
+<ul>
+<li><a href="gmsol_store/fn.insert_amount.html" title="fn gmsol_store::gmsol_store::insert_amount"><code>insert_amount</code></a>: Insert an amount to the global config.</li>
+<li><a href="gmsol_store/fn.insert_factor.html" title="fn gmsol_store::gmsol_store::insert_factor"><code>insert_factor</code></a>: Insert a factor to the global config.</li>
+<li><a href="gmsol_store/fn.insert_address.html" title="fn gmsol_store::gmsol_store::insert_address"><code>insert_address</code></a>: Insert an address to the global config.</li>
+<li><a href="gmsol_store/fn.insert_order_fee_discount_for_referred_user.html" title="fn gmsol_store::gmsol_store::insert_order_fee_discount_for_referred_user"><code>insert_order_fee_discount_for_referred_user</code></a>:
+Insert order fee discount for referred user factor to the global config.</li>
+</ul>
+<h5 id="instructions-for-feature-management"><a class="doc-anchor" href="#instructions-for-feature-management">§</a>Instructions for Feature Management</h5>
+<ul>
+<li><a href="gmsol_store/fn.toggle_feature.html" title="fn gmsol_store::gmsol_store::toggle_feature"><code>toggle_feature</code></a>: Enable or disable the given feature.</li>
+</ul>
+<h3 id="role-based-permission-management"><a class="doc-anchor" href="#role-based-permission-management">§</a>Role-based Permission Management</h3>
+<p>The role-based permission system for each GMSOL deployment is managed through its
+<a href="states/store/struct.Store.html" title="struct gmsol_store::states::store::Store"><code>Store</code></a> Account. The permission structure consists of:</p>
+<ul>
+<li>
+<p><strong>Administrator Role</strong>: A single administrator address stored in the <code>authority</code> field of the
+<a href="states/store/struct.Store.html" title="struct gmsol_store::states::store::Store"><code>Store</code></a> Account. This address has exclusive rights to modify the permission table
+and use other administrative instructions.</p>
+</li>
+<li>
+<p><strong>Custom Roles</strong>: A flexible role system stored in the <code>role</code> field as a <a href="states/roles/struct.RoleStore.html" title="struct gmsol_store::states::roles::RoleStore"><code>RoleStore</code></a>
+structure. This allows for granular permission management through custom roles and role assignments.
+Each role can be assigned to multiple addresses.</p>
+</li>
+</ul>
+<h5 id="instructions-for-permission-management"><a class="doc-anchor" href="#instructions-for-permission-management">§</a>Instructions for Permission Management</h5>
+<ul>
+<li><a href="gmsol_store/fn.check_admin.html" title="fn gmsol_store::gmsol_store::check_admin"><code>check_admin</code></a>: Check whether <em>the signer</em> is the admin of the given store.</li>
+<li><a href="gmsol_store/fn.check_role.html" title="fn gmsol_store::gmsol_store::check_role"><code>check_role</code></a>: Check whether <em>the signer</em> has the given role in the given store.</li>
+<li><a href="gmsol_store/fn.has_admin.html" title="fn gmsol_store::gmsol_store::has_admin"><code>has_admin</code></a>: Return whether the given address is the admin of the given store.</li>
+<li><a href="gmsol_store/fn.has_role.html" title="fn gmsol_store::gmsol_store::has_role"><code>has_role</code></a>: Return whether the given address has the given role in the given store.</li>
+<li><a href="gmsol_store/fn.enable_role.html" title="fn gmsol_store::gmsol_store::enable_role"><code>enable_role</code></a>: Insert or enable a role for the given store.</li>
+<li><a href="gmsol_store/fn.disable_role.html" title="fn gmsol_store::gmsol_store::disable_role"><code>disable_role</code></a>: Disable an existing role for the given store.</li>
+<li><a href="gmsol_store/fn.grant_role.html" title="fn gmsol_store::gmsol_store::grant_role"><code>grant_role</code></a>: Grant a role to the given user in the given store.</li>
+<li><a href="gmsol_store/fn.revoke_role.html" title="fn gmsol_store::gmsol_store::revoke_role"><code>revoke_role</code></a>: Revoke a role from the given user in the given store.</li>
+</ul>
+<h3 id="token-config-and-oracle-management"><a class="doc-anchor" href="#token-config-and-oracle-management">§</a>Token Config and Oracle Management</h3><h5 id="instructions-for-managing-tokenconfig-and-token-maps"><a class="doc-anchor" href="#instructions-for-managing-tokenconfig-and-token-maps">§</a>Instructions for managing <a href="states/token_config/struct.TokenConfig.html" title="struct gmsol_store::states::token_config::TokenConfig"><code>TokenConfig</code></a> and token maps.</h5>
+<ul>
+<li><a href="gmsol_store/fn.initialize_token_map.html" title="fn gmsol_store::gmsol_store::initialize_token_map"><code>initialize_token_map</code></a>: Initialize a new token map account.
+This is a permissionless instruction.</li>
+<li><a href="gmsol_store/fn.push_to_token_map.html" title="fn gmsol_store::gmsol_store::push_to_token_map"><code>push_to_token_map</code></a>: Push a new token config for an existing token to the given token map.</li>
+<li><a href="gmsol_store/fn.push_to_token_map_synthetic.html" title="fn gmsol_store::gmsol_store::push_to_token_map_synthetic"><code>push_to_token_map_synthetic</code></a>: Push a new token config for a “synthetic”
+token to the given token map.</li>
+<li><a href="gmsol_store/fn.toggle_token_config.html" title="fn gmsol_store::gmsol_store::toggle_token_config"><code>toggle_token_config</code></a>: Enable or disable a token config of the given token map.</li>
+<li><a href="gmsol_store/fn.set_expected_provider.html" title="fn gmsol_store::gmsol_store::set_expected_provider"><code>set_expected_provider</code></a>: Set the expected provider for the given token.</li>
+<li><a href="gmsol_store/fn.set_feed_config.html" title="fn gmsol_store::gmsol_store::set_feed_config"><code>set_feed_config</code></a>: Set the feed config of the given provider for the given token.</li>
+<li><a href="gmsol_store/fn.is_token_config_enabled.html" title="fn gmsol_store::gmsol_store::is_token_config_enabled"><code>is_token_config_enabled</code></a>: Check if the config for the given token is enabled.</li>
+<li><a href="gmsol_store/fn.token_expected_provider.html" title="fn gmsol_store::gmsol_store::token_expected_provider"><code>token_expected_provider</code></a>: Get the expected provider set for the given token.</li>
+<li><a href="gmsol_store/fn.token_feed.html" title="fn gmsol_store::gmsol_store::token_feed"><code>token_feed</code></a>: Get the feed address of the given provider set for the given token.</li>
+<li><a href="gmsol_store/fn.token_timestamp_adjustment.html" title="fn gmsol_store::gmsol_store::token_timestamp_adjustment"><code>token_timestamp_adjustment</code></a>: Get the timestamp adjustment of the given
+provider for the give token.</li>
+<li><a href="gmsol_store/fn.token_name.html" title="fn gmsol_store::gmsol_store::token_name"><code>token_name</code></a>: Get the name of the given token.</li>
+<li><a href="gmsol_store/fn.token_decimals.html" title="fn gmsol_store::gmsol_store::token_decimals"><code>token_decimals</code></a>: Get the token decimals of the given token.</li>
+<li><a href="gmsol_store/fn.token_precision.html" title="fn gmsol_store::gmsol_store::token_precision"><code>token_precision</code></a>: Get the price precision of the given token.</li>
+</ul>
+<h5 id="instructions-for-oracle-accounts"><a class="doc-anchor" href="#instructions-for-oracle-accounts">§</a>Instructions for <a href="states/oracle/struct.Oracle.html" title="struct gmsol_store::states::oracle::Oracle"><code>Oracle</code></a> accounts</h5>
+<ul>
+<li><a href="gmsol_store/fn.initialize_oracle.html" title="fn gmsol_store::gmsol_store::initialize_oracle"><code>initialize_oracle</code></a>: Initialize a new <a href="states/oracle/struct.Oracle.html" title="struct gmsol_store::states::oracle::Oracle"><code>Oracle</code></a> account.</li>
+<li><a href="gmsol_store/fn.clear_all_prices.html" title="fn gmsol_store::gmsol_store::clear_all_prices"><code>clear_all_prices</code></a>: Clear the prices of the given oracle account.</li>
+<li><a href="gmsol_store/fn.set_prices_from_price_feed.html" title="fn gmsol_store::gmsol_store::set_prices_from_price_feed"><code>set_prices_from_price_feed</code></a>: Validate and set prices parsed from the
+provided price feed accounts.</li>
+<li><a href="gmsol_store/fn.initialize_price_feed.html" title="fn gmsol_store::gmsol_store::initialize_price_feed"><code>initialize_price_feed</code></a>: Initialize a custom price feed.</li>
+<li><a href="gmsol_store/fn.update_price_feed_with_chainlink.html" title="fn gmsol_store::gmsol_store::update_price_feed_with_chainlink"><code>update_price_feed_with_chainlink</code></a>: Update a custom Chainlink price feed with Chainlink Data Streams report.</li>
+</ul>
+<h3 id="market-management"><a class="doc-anchor" href="#market-management">§</a>Market Management</h3>
+<p><em><a href="states/market/index.html" title="mod gmsol_store::states::market">See also the module level documentation for Market for details.</a></em></p>
+<h5 id="instructions-for-market-management"><a class="doc-anchor" href="#instructions-for-market-management">§</a>Instructions for <a href="states/market/struct.Market.html" title="struct gmsol_store::states::market::Market"><code>Market</code></a> management</h5>
+<ul>
+<li><a href="gmsol_store/fn.initialize_market.html" title="fn gmsol_store::gmsol_store::initialize_market"><code>initialize_market</code></a>: Initialize a <a href="states/market/struct.Market.html" title="struct gmsol_store::states::market::Market"><code>Market</code></a> account.</li>
+<li><a href="gmsol_store/fn.toggle_market.html" title="fn gmsol_store::gmsol_store::toggle_market"><code>toggle_market</code></a>: Enable or disable the given market.</li>
+<li><a href="gmsol_store/fn.market_transfer_in.html" title="fn gmsol_store::gmsol_store::market_transfer_in"><code>market_transfer_in</code></a>: Transfer tokens into the market and record the amount in its balance.</li>
+<li><a href="gmsol_store/fn.update_market_config.html" title="fn gmsol_store::gmsol_store::update_market_config"><code>update_market_config</code></a>: Update an item in the market config.</li>
+<li><a href="gmsol_store/fn.update_market_config_with_buffer.html" title="fn gmsol_store::gmsol_store::update_market_config_with_buffer"><code>update_market_config_with_buffer</code></a>: Update the market config with the given
+<a href="states/market/config/struct.MarketConfigBuffer.html" title="struct gmsol_store::states::market::config::MarketConfigBuffer"><code>MarketConfigBuffer</code></a> account.</li>
+<li><a href="gmsol_store/fn.get_market_status.html" title="fn gmsol_store::gmsol_store::get_market_status"><code>get_market_status</code></a>: Calculate the market status with the given prices.</li>
+<li><a href="gmsol_store/fn.get_market_token_price.html" title="fn gmsol_store::gmsol_store::get_market_token_price"><code>get_market_token_price</code></a>: Calculate the market token price the given prices.</li>
+<li><a href="gmsol_store/fn.toggle_gt_minting.html" title="fn gmsol_store::gmsol_store::toggle_gt_minting"><code>toggle_gt_minting</code></a>: Enable or disable GT minting for the given market.</li>
+</ul>
+<h5 id="instructions-for-marketconfigbuffer-accounts"><a class="doc-anchor" href="#instructions-for-marketconfigbuffer-accounts">§</a>Instructions for <a href="states/market/config/struct.MarketConfigBuffer.html" title="struct gmsol_store::states::market::config::MarketConfigBuffer"><code>MarketConfigBuffer</code></a> accounts</h5>
+<ul>
+<li><a href="gmsol_store/fn.initialize_market_config_buffer.html" title="fn gmsol_store::gmsol_store::initialize_market_config_buffer"><code>initialize_market_config_buffer</code></a>: Initialize a market config buffer account.</li>
+<li><a href="gmsol_store/fn.set_market_config_buffer_authority.html" title="fn gmsol_store::gmsol_store::set_market_config_buffer_authority"><code>set_market_config_buffer_authority</code></a>: Replace the authority of the market
+config buffer account with the new one.</li>
+<li><a href="gmsol_store/fn.close_market_config_buffer.html" title="fn gmsol_store::gmsol_store::close_market_config_buffer"><code>close_market_config_buffer</code></a>: Close the given market config buffer account.</li>
+<li><a href="gmsol_store/fn.push_to_market_config_buffer.html" title="fn gmsol_store::gmsol_store::push_to_market_config_buffer"><code>push_to_market_config_buffer</code></a>: Push config items to the given market config
+buffer account.</li>
+</ul>
+<h5 id="instructions-for-token-accounts"><a class="doc-anchor" href="#instructions-for-token-accounts">§</a>Instructions for token accounts</h5>
+<ul>
+<li><a href="gmsol_store/fn.initialize_market_vault.html" title="fn gmsol_store::gmsol_store::initialize_market_vault"><code>initialize_market_vault</code></a>: Initialize the market vault for the given token.</li>
+<li><a href="gmsol_store/fn.use_claimable_account.html" title="fn gmsol_store::gmsol_store::use_claimable_account"><code>use_claimable_account</code></a>: Prepare a claimable account to receive tokens during the order execution.</li>
+<li><a href="gmsol_store/fn.close_empty_claimable_account.html" title="fn gmsol_store::gmsol_store::close_empty_claimable_account"><code>close_empty_claimable_account</code></a>: Close a empty claimble account.</li>
+<li><a href="gmsol_store/fn.prepare_associated_token_account.html" title="fn gmsol_store::gmsol_store::prepare_associated_token_account"><code>prepare_associated_token_account</code></a>: Prepare an ATA.</li>
+</ul>
+<h3 id="exchange"><a class="doc-anchor" href="#exchange">§</a>Exchange</h3>
+<p>The instructions for providing functionalities as an exchange are as follows:</p>
+<h5 id="instructions-for-deposit"><a class="doc-anchor" href="#instructions-for-deposit">§</a>Instructions for <a href="states/deposit/struct.Deposit.html" title="struct gmsol_store::states::deposit::Deposit"><code>Deposit</code></a></h5>
+<ul>
+<li><a href="gmsol_store/fn.create_deposit.html" title="fn gmsol_store::gmsol_store::create_deposit"><code>create_deposit</code></a>: Create a deposit by the owner.</li>
+<li><a href="gmsol_store/fn.execute_deposit.html" title="fn gmsol_store::gmsol_store::execute_deposit"><code>execute_deposit</code></a>: Execute a deposit by keepers.</li>
+<li><a href="gmsol_store/fn.close_deposit.html" title="fn gmsol_store::gmsol_store::close_deposit"><code>close_deposit</code></a>: Close a deposit, either by the owner or by keepers.</li>
+</ul>
+<h5 id="instructions-for-withdrawal"><a class="doc-anchor" href="#instructions-for-withdrawal">§</a>Instructions for <a href="states/withdrawal/struct.Withdrawal.html" title="struct gmsol_store::states::withdrawal::Withdrawal"><code>Withdrawal</code></a></h5>
+<ul>
+<li><a href="gmsol_store/fn.create_withdrawal.html" title="fn gmsol_store::gmsol_store::create_withdrawal"><code>create_withdrawal</code></a>: Create a withdrawal by the owner.</li>
+<li><a href="gmsol_store/fn.execute_withdrawal.html" title="fn gmsol_store::gmsol_store::execute_withdrawal"><code>execute_withdrawal</code></a>: Execute a withdrawal by keepers.</li>
+<li><a href="gmsol_store/fn.close_withdrawal.html" title="fn gmsol_store::gmsol_store::close_withdrawal"><code>close_withdrawal</code></a>: Close a withdrawal, either by the owner or by keepers.</li>
+</ul>
+<h5 id="instructions-for-shift"><a class="doc-anchor" href="#instructions-for-shift">§</a>Instructions for <a href="states/shift/struct.Shift.html" title="struct gmsol_store::states::shift::Shift"><code>Shift</code></a></h5>
+<ul>
+<li><a href="gmsol_store/fn.create_shift.html" title="fn gmsol_store::gmsol_store::create_shift"><code>create_shift</code></a>: Create a shift by the owner.</li>
+<li><a href="gmsol_store/fn.execute_shift.html" title="fn gmsol_store::gmsol_store::execute_shift"><code>execute_shift</code></a>: Execute a shift by keepers.</li>
+<li><a href="gmsol_store/fn.close_shift.html" title="fn gmsol_store::gmsol_store::close_shift"><code>close_shift</code></a>: Close a shift, either by the owner or by keepers.</li>
+</ul>
+<h5 id="instructions-for-order-and-position"><a class="doc-anchor" href="#instructions-for-order-and-position">§</a>Instructions for <a href="states/order/struct.Order.html" title="struct gmsol_store::states::order::Order"><code>Order</code></a> and <a href="states/position/struct.Position.html" title="struct gmsol_store::states::position::Position"><code>Position</code></a></h5>
+<ul>
+<li><a href="gmsol_store/fn.prepare_position.html" title="fn gmsol_store::gmsol_store::prepare_position"><code>prepare_position</code></a>: Prepare the position account for orders.</li>
+<li><a href="gmsol_store/fn.prepare_trade_event_buffer.html" title="fn gmsol_store::gmsol_store::prepare_trade_event_buffer"><code>prepare_trade_event_buffer</code></a>: Prepare trade event buffer.</li>
+<li><a href="gmsol_store/fn.create_order.html" title="fn gmsol_store::gmsol_store::create_order"><code>create_order</code></a>: Create an order by the owner.</li>
+<li><a href="gmsol_store/fn.update_order.html" title="fn gmsol_store::gmsol_store::update_order"><code>update_order</code></a>: Update an order by the owner.</li>
+<li><a href="gmsol_store/fn.execute_increase_or_swap_order.html" title="fn gmsol_store::gmsol_store::execute_increase_or_swap_order"><code>execute_increase_or_swap_order</code></a>: Execute an order by keepers.</li>
+<li><a href="gmsol_store/fn.execute_decrease_order.html" title="fn gmsol_store::gmsol_store::execute_decrease_order"><code>execute_decrease_order</code></a>: Execute a decrease order by keepers.</li>
+<li><a href="gmsol_store/fn.close_order.html" title="fn gmsol_store::gmsol_store::close_order"><code>close_order</code></a>: Close an order, either by the owner or by keepers.</li>
+<li><a href="gmsol_store/fn.cancel_order_if_no_position.html" title="fn gmsol_store::gmsol_store::cancel_order_if_no_position"><code>cancel_order_if_no_position</code></a>: Cancel an order if the position does not exist.</li>
+<li><a href="gmsol_store/fn.liquidate.html" title="fn gmsol_store::gmsol_store::liquidate"><code>liquidate</code></a>: Perform a liquidation by keepers.</li>
+<li><a href="gmsol_store/fn.auto_deleverage.html" title="fn gmsol_store::gmsol_store::auto_deleverage"><code>auto_deleverage</code></a>: Perform an ADL by keepers.</li>
+<li><a href="gmsol_store/fn.update_adl_state.html" title="fn gmsol_store::gmsol_store::update_adl_state"><code>update_adl_state</code></a>: Update the ADL state of the market.</li>
+</ul>
+<h3 id="glv-gmx-liquidity-vault-pools"><a class="doc-anchor" href="#glv-gmx-liquidity-vault-pools">§</a>GLV (GMX Liquidity Vault) Pools</h3>
+<p>The instructions for providing functionalities for GLV are as follows:</p>
+<h5 id="instructions-for-glv"><a class="doc-anchor" href="#instructions-for-glv">§</a>Instructions for <a href="states/glv/struct.Glv.html" title="struct gmsol_store::states::glv::Glv"><code>Glv</code></a>.</h5>
+<ul>
+<li><a href="gmsol_store/fn.initialize_glv.html" title="fn gmsol_store::gmsol_store::initialize_glv"><code>initialize_glv</code></a>: Initialize a GLV.</li>
+<li><a href="gmsol_store/fn.update_glv_market_config.html" title="fn gmsol_store::gmsol_store::update_glv_market_config"><code>update_glv_market_config</code></a>: Update GLV market config.</li>
+<li><a href="gmsol_store/fn.toggle_glv_market_flag.html" title="fn gmsol_store::gmsol_store::toggle_glv_market_flag"><code>toggle_glv_market_flag</code></a>: Toggle flags of GLV market.</li>
+<li><a href="gmsol_store/fn.update_glv_config.html" title="fn gmsol_store::gmsol_store::update_glv_config"><code>update_glv_config</code></a>: Update GLV global config.</li>
+<li><a href="gmsol_store/fn.insert_glv_market.html" title="fn gmsol_store::gmsol_store::insert_glv_market"><code>insert_glv_market</code></a>: Insert a new market to the GLV.</li>
+<li><a href="gmsol_store/fn.remove_glv_market.html" title="fn gmsol_store::gmsol_store::remove_glv_market"><code>remove_glv_market</code></a>: Remove a market from the GLV.</li>
+</ul>
+<h5 id="instructions-for-glvdeposit"><a class="doc-anchor" href="#instructions-for-glvdeposit">§</a>Instructions for <a href="states/glv/struct.GlvDeposit.html" title="struct gmsol_store::states::glv::GlvDeposit"><code>GlvDeposit</code></a></h5>
+<ul>
+<li><a href="gmsol_store/fn.create_glv_deposit.html" title="fn gmsol_store::gmsol_store::create_glv_deposit"><code>create_glv_deposit</code></a>: Create a GLV deposit by the owner.</li>
+<li><a href="gmsol_store/fn.execute_glv_deposit.html" title="fn gmsol_store::gmsol_store::execute_glv_deposit"><code>execute_glv_deposit</code></a>: Execute a GLV deposit by keepers.</li>
+<li><a href="gmsol_store/fn.close_glv_deposit.html" title="fn gmsol_store::gmsol_store::close_glv_deposit"><code>close_glv_deposit</code></a>: Close a GLV deposit, either by the owner or by keepers.</li>
+</ul>
+<h5 id="instructions-for-glvwithdrawal"><a class="doc-anchor" href="#instructions-for-glvwithdrawal">§</a>Instructions for <a href="states/glv/struct.GlvWithdrawal.html" title="struct gmsol_store::states::glv::GlvWithdrawal"><code>GlvWithdrawal</code></a></h5>
+<ul>
+<li><a href="gmsol_store/fn.create_glv_withdrawal.html" title="fn gmsol_store::gmsol_store::create_glv_withdrawal"><code>create_glv_withdrawal</code></a>: Create a GLV withdrawal by the owner.</li>
+<li><a href="gmsol_store/fn.execute_glv_withdrawal.html" title="fn gmsol_store::gmsol_store::execute_glv_withdrawal"><code>execute_glv_withdrawal</code></a>: Execute a GLV withdrawal by keepers.</li>
+<li><a href="gmsol_store/fn.close_glv_withdrawal.html" title="fn gmsol_store::gmsol_store::close_glv_withdrawal"><code>close_glv_withdrawal</code></a>: Close a GLV withdrawal, either by the owner or by keepers.</li>
+</ul>
+<h5 id="instructions-for-glvshift"><a class="doc-anchor" href="#instructions-for-glvshift">§</a>Instructions for <a href="states/glv/struct.GlvShift.html" title="struct gmsol_store::states::glv::GlvShift"><code>GlvShift</code></a></h5>
+<ul>
+<li><a href="gmsol_store/fn.create_glv_shift.html" title="fn gmsol_store::gmsol_store::create_glv_shift"><code>create_glv_shift</code></a>: Create a GLV shift by keepers.</li>
+<li><a href="gmsol_store/fn.execute_glv_shift.html" title="fn gmsol_store::gmsol_store::execute_glv_shift"><code>execute_glv_shift</code></a>: Execute a GLV shift by keepers.</li>
+<li><a href="gmsol_store/fn.close_glv_shift.html" title="fn gmsol_store::gmsol_store::close_glv_shift"><code>close_glv_shift</code></a>: Close a shift by keepers.</li>
+</ul>
+<h3 id="user-accounts-and-referrals"><a class="doc-anchor" href="#user-accounts-and-referrals">§</a>User Accounts and Referrals</h3>
+<p>The instructions for user accounts and referrals are as follows:</p>
+<ul>
+<li><a href="gmsol_store/fn.prepare_user.html" title="fn gmsol_store::gmsol_store::prepare_user"><code>prepare_user</code></a>: Prepare a user account.</li>
+<li><a href="gmsol_store/fn.initialize_referral_code.html" title="fn gmsol_store::gmsol_store::initialize_referral_code"><code>initialize_referral_code</code></a>: Initialize and set a referral code.</li>
+<li><a href="gmsol_store/fn.set_referrer.html" title="fn gmsol_store::gmsol_store::set_referrer"><code>set_referrer</code></a>: Set the referrer.</li>
+<li><a href="gmsol_store/fn.transfer_referral_code.html" title="fn gmsol_store::gmsol_store::transfer_referral_code"><code>transfer_referral_code</code></a>: Transfer the referral code to others.</li>
+<li><a href="gmsol_store/fn.cancel_referral_code_transfer.html" title="fn gmsol_store::gmsol_store::cancel_referral_code_transfer"><code>cancel_referral_code_transfer</code></a>: Cancel the referral code transfer.</li>
+<li><a href="gmsol_store/fn.accept_referral_code.html" title="fn gmsol_store::gmsol_store::accept_referral_code"><code>accept_referral_code</code></a>: Complete the referral code transfer.</li>
+</ul>
+<h3 id="gt-model"><a class="doc-anchor" href="#gt-model">§</a>GT Model</h3>
+<p><em><a href="states/gt/index.html" title="mod gmsol_store::states::gt">See also the module level documentation for GT for details.</a></em></p>
+<p>The instructions for GT Model are as follows:</p>
+<ul>
+<li><a href="gmsol_store/fn.initialize_gt.html" title="fn gmsol_store::gmsol_store::initialize_gt"><code>initialize_gt</code></a>: Initialize the GT state.</li>
+<li><a href="gmsol_store/fn.gt_set_order_fee_discount_factors.html" title="fn gmsol_store::gmsol_store::gt_set_order_fee_discount_factors"><code>gt_set_order_fee_discount_factors</code></a>: Set order fee discount factors.</li>
+<li><a href="gmsol_store/fn.gt_set_referral_reward_factors.html" title="fn gmsol_store::gmsol_store::gt_set_referral_reward_factors"><code>gt_set_referral_reward_factors</code></a>: Set referral reward factors.</li>
+<li><a href="gmsol_store/fn.gt_set_exchange_time_window.html" title="fn gmsol_store::gmsol_store::gt_set_exchange_time_window"><code>gt_set_exchange_time_window</code></a>: Set GT exchange time window.</li>
+<li><a href="gmsol_store/fn.prepare_gt_exchange_vault.html" title="fn gmsol_store::gmsol_store::prepare_gt_exchange_vault"><code>prepare_gt_exchange_vault</code></a>: Prepare current GT exchange vault.</li>
+<li><a href="gmsol_store/fn.confirm_gt_exchange_vault.html" title="fn gmsol_store::gmsol_store::confirm_gt_exchange_vault"><code>confirm_gt_exchange_vault</code></a>: Confirm GT exchange vault.</li>
+<li><a href="gmsol_store/fn.request_gt_exchange.html" title="fn gmsol_store::gmsol_store::request_gt_exchange"><code>request_gt_exchange</code></a>: Request a GT exchange.</li>
+<li><a href="gmsol_store/fn.close_gt_exchange.html" title="fn gmsol_store::gmsol_store::close_gt_exchange"><code>close_gt_exchange</code></a>: Close a confirmed GT exchange.</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="accounts/index.html" title="mod gmsol_store::accounts">accounts</a></dt><dd>An Anchor generated module, providing a set of structs
+mirroring the structs deriving <code>Accounts</code>, where each field is
+a <code>Pubkey</code>. This is useful for specifying accounts for a client.</dd><dt><a class="mod" href="constants/index.html" title="mod gmsol_store::constants">constants</a></dt><dd>Constants.</dd><dt><a class="mod" href="cpi/index.html" title="mod gmsol_store::cpi">cpi</a></dt><dt><a class="mod" href="events/index.html" title="mod gmsol_store::events">events</a></dt><dd>Events.</dd><dt><a class="mod" href="gmsol_store/index.html" title="mod gmsol_store::gmsol_store">gmsol_<wbr>store</a></dt><dd>Instructions definitions of the GMSOL Store Program.</dd><dt><a class="mod" href="instruction/index.html" title="mod gmsol_store::instruction">instruction</a></dt><dd>An Anchor generated module containing the program’s set of
+instructions, where each method handler in the <code>#[program]</code> mod is
+associated with a struct defining the input arguments to the
+method. These should be used directly, when one wants to serialize
+Anchor instruction data, for example, when speciying
+instructions on a client.</dd><dt><a class="mod" href="instructions/index.html" title="mod gmsol_store::instructions">instructions</a></dt><dd>Instructions.</dd><dt><a class="mod" href="ops/index.html" title="mod gmsol_store::ops">ops</a></dt><dd>Operations.</dd><dt><a class="mod" href="program/index.html" title="mod gmsol_store::program">program</a></dt><dd>Module representing the program.</dd><dt><a class="mod" href="states/index.html" title="mod gmsol_store::states">states</a></dt><dd>States.</dd><dt><a class="mod" href="utils/index.html" title="mod gmsol_store::utils">utils</a></dt><dd>Utils.</dd></dl><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.debug_msg.html" title="macro gmsol_store::debug_msg">debug_<wbr>msg</a></dt></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.CoreError.html" title="enum gmsol_store::CoreError">Core<wbr>Error</a></dt></dl><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="constant.ID_CONST.html" title="constant gmsol_store::ID_CONST">ID_<wbr>CONST</a></dt><dd>Const version of <code>ID</code></dd></dl><h2 id="statics" class="section-header">Statics<a href="#statics" class="anchor">§</a></h2><dl class="item-table"><dt><a class="static" href="static.ID.html" title="static gmsol_store::ID">ID</a></dt><dd>The static program ID</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.check_id.html" title="fn gmsol_store::check_id">check_<wbr>id</a></dt><dd>Confirms that a given pubkey is equivalent to the program ID</dd><dt><a class="fn" href="fn.entry.html" title="fn gmsol_store::entry">entry</a></dt><dd>The Anchor codegen exposes a programming model where a user defines
+a set of methods inside of a <code>#[program]</code> module in a way similar
+to writing RPC request handlers. The macro then generates a bunch of
+code wrapping these user defined methods into something that can be
+executed on Solana.</dd><dt><a class="fn" href="fn.id.html" title="fn gmsol_store::id">id</a></dt><dd>Returns the program ID</dd><dt><a class="fn" href="fn.id_const.html" title="fn gmsol_store::id_const">id_<wbr>const</a></dt><dd>Const version of <code>ID</code></dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.CoreResult.html" title="type gmsol_store::CoreResult">Core<wbr>Result</a></dt><dd>Result type with <a href="enum.CoreError.html" title="enum gmsol_store::CoreError"><code>CoreError</code></a> as error type.</dd></dl><script type="text/json" id="notable-traits-data">{"&[u8]":"<h3>Notable traits for <code>&amp;[<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>]</code></h3><pre><code><div class=\"where\">impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/std/io/trait.Read.html\" title=\"trait std::io::Read\">Read</a> for &amp;[<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>]</div>","&mut [u8]":"<h3>Notable traits for <code>&amp;mut [<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>]</code></h3><pre><code><div class=\"where\">impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/std/io/trait.Write.html\" title=\"trait std::io::Write\">Write</a> for &amp;mut [<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>]</div>"}</script></section></div></main></body></html>

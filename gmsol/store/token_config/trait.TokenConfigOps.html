@@ -1,0 +1,170 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Token config management for GMSOL."><title>TokenConfigOps in gmsol::store::token_config - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="gmsol" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../gmsol/index.html">gmsol</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Token<wbr>Config<wbr>Ops</a></h2><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.initialize_token_map" title="initialize_token_map">initialize_token_map</a></li><li><a href="#tymethod.insert_synthetic_token_config" title="insert_synthetic_token_config">insert_synthetic_token_config</a></li><li><a href="#tymethod.insert_token_config" title="insert_token_config">insert_token_config</a></li><li><a href="#tymethod.is_token_config_enabled" title="is_token_config_enabled">is_token_config_enabled</a></li><li><a href="#tymethod.set_expected_provider" title="set_expected_provider">set_expected_provider</a></li><li><a href="#tymethod.toggle_token_config" title="toggle_token_config">toggle_token_config</a></li><li><a href="#tymethod.token_config" title="token_config">token_config</a></li><li><a href="#tymethod.token_decimals" title="token_decimals">token_decimals</a></li><li><a href="#tymethod.token_expected_provider" title="token_expected_provider">token_expected_provider</a></li><li><a href="#tymethod.token_feed" title="token_feed">token_feed</a></li><li><a href="#tymethod.token_name" title="token_name">token_name</a></li><li><a href="#tymethod.token_precision" title="token_precision">token_precision</a></li><li><a href="#tymethod.token_timestamp_adjustment" title="token_timestamp_adjustment">token_timestamp_adjustment</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In gmsol::<wbr>store::<wbr>token_<wbr>config</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">gmsol</a>::<wbr><a href="../index.html">store</a>::<wbr><a href="index.html">token_config</a></div><h1>Trait <span class="trait">TokenConfigOps</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/gmsol/store/token_config.rs.html#53-144">Source</a> </span></div><pre class="rust item-decl"><code>pub trait TokenConfigOps&lt;C&gt; {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 13 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.initialize_token_map" class="fn">initialize_token_map</a>&lt;'a&gt;(
+        &amp;'a self,
+        store: &amp;Pubkey,
+        token_map: &amp;'a dyn Signer,
+    ) -&gt; (<a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'a, C&gt;, Pubkey);
+<span class="item-spacer"></span>    fn <a href="#tymethod.insert_token_config" class="fn">insert_token_config</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        token_map: &amp;Pubkey,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+        token: &amp;Pubkey,
+        builder: <a class="struct" href="../../types/struct.UpdateTokenConfigParams.html" title="struct gmsol::types::UpdateTokenConfigParams">UpdateTokenConfigParams</a>,
+        enable: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        new: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.insert_synthetic_token_config" class="fn">insert_synthetic_token_config</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        token_map: &amp;Pubkey,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+        token: &amp;Pubkey,
+        decimals: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        builder: <a class="struct" href="../../types/struct.UpdateTokenConfigParams.html" title="struct gmsol::types::UpdateTokenConfigParams">UpdateTokenConfigParams</a>,
+        enable: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        new: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.toggle_token_config" class="fn">toggle_token_config</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        token_map: &amp;Pubkey,
+        token: &amp;Pubkey,
+        enable: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.set_expected_provider" class="fn">set_expected_provider</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        token_map: &amp;Pubkey,
+        token: &amp;Pubkey,
+        provider: <a class="enum" href="../../types/enum.PriceProviderKind.html" title="enum gmsol::types::PriceProviderKind">PriceProviderKind</a>,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.token_name" class="fn">token_name</a>(
+        &amp;self,
+        token_map: &amp;Pubkey,
+        token: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.token_decimals" class="fn">token_decimals</a>(
+        &amp;self,
+        token_map: &amp;Pubkey,
+        token: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.token_precision" class="fn">token_precision</a>(
+        &amp;self,
+        token_map: &amp;Pubkey,
+        token: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.is_token_config_enabled" class="fn">is_token_config_enabled</a>(
+        &amp;self,
+        token_map: &amp;Pubkey,
+        token: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.token_expected_provider" class="fn">token_expected_provider</a>(
+        &amp;self,
+        token_map: &amp;Pubkey,
+        token: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.token_feed" class="fn">token_feed</a>(
+        &amp;self,
+        token_map: &amp;Pubkey,
+        token: &amp;Pubkey,
+        provider: <a class="enum" href="../../types/enum.PriceProviderKind.html" title="enum gmsol::types::PriceProviderKind">PriceProviderKind</a>,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.token_timestamp_adjustment" class="fn">token_timestamp_adjustment</a>(
+        &amp;self,
+        token_map: &amp;Pubkey,
+        token: &amp;Pubkey,
+        provider: <a class="enum" href="../../types/enum.PriceProviderKind.html" title="enum gmsol::types::PriceProviderKind">PriceProviderKind</a>,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.token_config" class="fn">token_config</a>(
+        &amp;self,
+        token_map: &amp;Pubkey,
+        token: &amp;Pubkey,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="struct.TokenConfig.html" title="struct gmsol::store::token_config::TokenConfig">TokenConfig</a>&gt;&gt;;
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Token config management for GMSOL.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.initialize_token_map" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#55-59">Source</a><h4 class="code-header">fn <a href="#tymethod.initialize_token_map" class="fn">initialize_token_map</a>&lt;'a&gt;(
+    &amp;'a self,
+    store: &amp;Pubkey,
+    token_map: &amp;'a dyn Signer,
+) -&gt; (<a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'a, C&gt;, Pubkey)</h4></section></summary><div class="docblock"><p>Initialize a  <code>TokenMap</code> account.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.insert_token_config" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#63-72">Source</a><h4 class="code-header">fn <a href="#tymethod.insert_token_config" class="fn">insert_token_config</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    token_map: &amp;Pubkey,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+    token: &amp;Pubkey,
+    builder: <a class="struct" href="../../types/struct.UpdateTokenConfigParams.html" title="struct gmsol::types::UpdateTokenConfigParams">UpdateTokenConfigParams</a>,
+    enable: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    new: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Insert or update config for the given token.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.insert_synthetic_token_config" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#77-87">Source</a><h4 class="code-header">fn <a href="#tymethod.insert_synthetic_token_config" class="fn">insert_synthetic_token_config</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    token_map: &amp;Pubkey,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+    token: &amp;Pubkey,
+    decimals: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    builder: <a class="struct" href="../../types/struct.UpdateTokenConfigParams.html" title="struct gmsol::types::UpdateTokenConfigParams">UpdateTokenConfigParams</a>,
+    enable: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    new: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Insert or update config the given synthetic token.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.toggle_token_config" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#90-96">Source</a><h4 class="code-header">fn <a href="#tymethod.toggle_token_config" class="fn">toggle_token_config</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    token_map: &amp;Pubkey,
+    token: &amp;Pubkey,
+    enable: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Toggle token config.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.set_expected_provider" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#99-105">Source</a><h4 class="code-header">fn <a href="#tymethod.set_expected_provider" class="fn">set_expected_provider</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    token_map: &amp;Pubkey,
+    token: &amp;Pubkey,
+    provider: <a class="enum" href="../../types/enum.PriceProviderKind.html" title="enum gmsol::types::PriceProviderKind">PriceProviderKind</a>,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Set expected provider.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.token_name" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#108">Source</a><h4 class="code-header">fn <a href="#tymethod.token_name" class="fn">token_name</a>(
+    &amp;self,
+    token_map: &amp;Pubkey,
+    token: &amp;Pubkey,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Get the name for the given token.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.token_decimals" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#111">Source</a><h4 class="code-header">fn <a href="#tymethod.token_decimals" class="fn">token_decimals</a>(
+    &amp;self,
+    token_map: &amp;Pubkey,
+    token: &amp;Pubkey,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Get the token decimals for the given token.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.token_precision" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#114">Source</a><h4 class="code-header">fn <a href="#tymethod.token_precision" class="fn">token_precision</a>(
+    &amp;self,
+    token_map: &amp;Pubkey,
+    token: &amp;Pubkey,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Get the price precision for the given token.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.is_token_config_enabled" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#117">Source</a><h4 class="code-header">fn <a href="#tymethod.is_token_config_enabled" class="fn">is_token_config_enabled</a>(
+    &amp;self,
+    token_map: &amp;Pubkey,
+    token: &amp;Pubkey,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Check if the config of the given token is enbaled.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.token_expected_provider" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#120">Source</a><h4 class="code-header">fn <a href="#tymethod.token_expected_provider" class="fn">token_expected_provider</a>(
+    &amp;self,
+    token_map: &amp;Pubkey,
+    token: &amp;Pubkey,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Get expected provider for the given token.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.token_feed" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#123-128">Source</a><h4 class="code-header">fn <a href="#tymethod.token_feed" class="fn">token_feed</a>(
+    &amp;self,
+    token_map: &amp;Pubkey,
+    token: &amp;Pubkey,
+    provider: <a class="enum" href="../../types/enum.PriceProviderKind.html" title="enum gmsol::types::PriceProviderKind">PriceProviderKind</a>,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Get feed address of the provider of the given token.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.token_timestamp_adjustment" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#131-136">Source</a><h4 class="code-header">fn <a href="#tymethod.token_timestamp_adjustment" class="fn">token_timestamp_adjustment</a>(
+    &amp;self,
+    token_map: &amp;Pubkey,
+    token: &amp;Pubkey,
+    provider: <a class="enum" href="../../types/enum.PriceProviderKind.html" title="enum gmsol::types::PriceProviderKind">PriceProviderKind</a>,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Get timestamp adjustment of the given token and provider.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.token_config" class="method"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#139-143">Source</a><h4 class="code-header">fn <a href="#tymethod.token_config" class="fn">token_config</a>(
+    &amp;self,
+    token_map: &amp;Pubkey,
+    token: &amp;Pubkey,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="struct.TokenConfig.html" title="struct gmsol::store::token_config::TokenConfig">TokenConfig</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Get basic token config.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-TokenConfigOps%3CC%3E-for-Client%3CC%3E" class="impl"><a class="src rightside" href="../../../src/gmsol/store/token_config.rs.html#146-371">Source</a><a href="#impl-TokenConfigOps%3CC%3E-for-Client%3CC%3E" class="anchor">§</a><h3 class="code-header">impl&lt;C, S&gt; <a class="trait" href="trait.TokenConfigOps.html" title="trait gmsol::store::token_config::TokenConfigOps">TokenConfigOps</a>&lt;C&gt; for <a class="struct" href="../../client/struct.Client.html" title="struct gmsol::client::Client">Client</a>&lt;C&gt;<div class="where">where
+    C: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = S&gt; + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,
+    S: Signer,</div></h3></section></div><script src="../../../trait.impl/gmsol/store/token_config/trait.TokenConfigOps.js" async></script></section></div></main></body></html>

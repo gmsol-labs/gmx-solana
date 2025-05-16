@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EXECUTE_WITHDRAWAL_COMPUTE_BUDGET"],"struct":["CloseWithdrawalBuilder","CloseWithdrawalHint","CreateWithdrawalBuilder","ExecuteWithdrawalBuilder","ExecuteWithdrawalHint"]};

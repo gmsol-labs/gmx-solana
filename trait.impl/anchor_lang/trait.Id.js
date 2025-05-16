@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["gmsol_mock_chainlink_verifier",[["impl Id for <a class=\"struct\" href=\"gmsol_mock_chainlink_verifier/program/struct.GmsolMockChainlinkVerifier.html\" title=\"struct gmsol_mock_chainlink_verifier::program::GmsolMockChainlinkVerifier\">GmsolMockChainlinkVerifier</a>"]]],["gmsol_programs",[["impl Id for <a class=\"struct\" href=\"gmsol_programs/gmsol_store/program/struct.GmsolStore.html\" title=\"struct gmsol_programs::gmsol_store::program::GmsolStore\">GmsolStore</a>"]]],["gmsol_store",[["impl Id for <a class=\"struct\" href=\"gmsol_store/program/struct.GmsolStore.html\" title=\"struct gmsol_store::program::GmsolStore\">GmsolStore</a>"],["impl Id for <a class=\"struct\" href=\"gmsol_store/states/oracle/chainlink/struct.Chainlink.html\" title=\"struct gmsol_store::states::oracle::chainlink::Chainlink\">Chainlink</a>"],["impl Id for <a class=\"struct\" href=\"gmsol_store/states/oracle/pyth/struct.Pyth.html\" title=\"struct gmsol_store::states::oracle::pyth::Pyth\">Pyth</a>"],["impl Id for <a class=\"struct\" href=\"gmsol_store/states/oracle/switchboard/struct.Switchboard.html\" title=\"struct gmsol_store::states::oracle::switchboard::Switchboard\">Switchboard</a>"]]],["gmsol_timelock",[["impl Id for <a class=\"struct\" href=\"gmsol_timelock/program/struct.GmsolTimelock.html\" title=\"struct gmsol_timelock::program::GmsolTimelock\">GmsolTimelock</a>"]]],["gmsol_treasury",[["impl Id for <a class=\"struct\" href=\"gmsol_treasury/program/struct.GmsolTreasury.html\" title=\"struct gmsol_treasury::program::GmsolTreasury\">GmsolTreasury</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[272,205,708,189,189]}

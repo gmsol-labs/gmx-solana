@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ADL_COMPUTE_BUDGET"],"struct":["UpdateAdlBuilder","UpdateAdlHint"]};

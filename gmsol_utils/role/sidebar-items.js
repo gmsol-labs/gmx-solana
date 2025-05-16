@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_ROLE_NAME_LEN"],"struct":["RoleKey"]};

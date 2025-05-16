@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["InstructionAccountFlag","InstructionFlag"],"mod":["utils"],"struct":["InstructionAccount","InstructionFlagContainer","InstructionHeader","InstructionRef"],"trait":["InstructionAccess","InstructionLoader"]};

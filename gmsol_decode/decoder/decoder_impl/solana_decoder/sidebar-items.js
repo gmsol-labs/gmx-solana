@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AccessCPIEvents","CPIEvent","CPIEventFilter","CPIEvents","TransactionDecoder"],"type":["SlotAndIndex"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ClaimFees","ClaimFeesBumps","SetReferralReward","SetReferralRewardBumps","TransferReceiver","TransferReceiverBumps"]};

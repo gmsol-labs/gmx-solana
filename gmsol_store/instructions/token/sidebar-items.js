@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CloseEmptyClaimableAccount","CloseEmptyClaimableAccountBumps","InitializeMarketVault","InitializeMarketVaultBumps","PrepareAssociatedTokenAccount","PrepareAssociatedTokenAccountBumps","UseClaimableAccount","UseClaimableAccountBumps"]};

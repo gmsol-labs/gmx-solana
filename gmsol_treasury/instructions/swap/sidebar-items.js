@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CancelSwap","CancelSwapBumps","CreateSwap","CreateSwapBumps"]};

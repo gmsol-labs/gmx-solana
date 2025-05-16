@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["price_to_min_output_amount"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DecreasePositionSwapType"],"struct":["ClaimableCollateral","DecreasePosition","DecreasePositionFlags","DecreasePositionParams","DecreasePositionReport","DecreasePositionSwapTypeIter","OutputAmounts","Pnl"]};

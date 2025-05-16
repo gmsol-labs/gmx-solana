@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["has_admin","has_role","unchecked_disable_role"],"struct":["CheckRole","CheckRoleBumps","DisableRole","DisableRoleBumps","EnableRole","EnableRoleBumps","GrantRole","GrantRoleBumps","HasRole","HasRoleBumps","RevokeRole","RevokeRoleBumps"]};

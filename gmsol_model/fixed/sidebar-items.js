@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Fixed"],"trait":["FixedPointOps"],"type":["U128D20","U64D9"]};

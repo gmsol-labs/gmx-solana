@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CancelOrderIfNoPosition","CancelOrderIfNoPositionBumps","CloseOrder","CloseOrderBumps","CreateOrder","CreateOrderBumps","PreparePosition","PreparePositionBumps","UpdateOrder","UpdateOrderBumps"]};

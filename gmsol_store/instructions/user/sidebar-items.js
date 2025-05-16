@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AcceptReferralCode","AcceptReferralCodeBumps","CancelReferralCodeTransfer","CancelReferralCodeTransferBumps","InitializeReferralCode","InitializeReferralCodeBumps","PrepareUser","PrepareUserBumps","SetReferrer","SetReferrerBumps","TransferReferralCode","TransferReferralCodeBumps"]};

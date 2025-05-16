@@ -1,0 +1,126 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="GT Operations."><title>GtOps in gmsol::store::gt - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="gmsol" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../gmsol/index.html">gmsol</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">GtOps</a></h2><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.close_gt_exchange" title="close_gt_exchange">close_gt_exchange</a></li><li><a href="#tymethod.confirm_gt_exchange_vault" title="confirm_gt_exchange_vault">confirm_gt_exchange_vault</a></li><li><a href="#tymethod.gt_set_exchange_time_window" title="gt_set_exchange_time_window">gt_set_exchange_time_window</a></li><li><a href="#tymethod.gt_set_order_fee_discount_factors" title="gt_set_order_fee_discount_factors">gt_set_order_fee_discount_factors</a></li><li><a href="#tymethod.gt_set_referral_reward_factors" title="gt_set_referral_reward_factors">gt_set_referral_reward_factors</a></li><li><a href="#tymethod.initialize_gt" title="initialize_gt">initialize_gt</a></li><li><a href="#tymethod.prepare_gt_exchange_vault_with_time_window_index" title="prepare_gt_exchange_vault_with_time_window_index">prepare_gt_exchange_vault_with_time_window_index</a></li><li><a href="#tymethod.request_gt_exchange_with_time_window_index" title="request_gt_exchange_with_time_window_index">request_gt_exchange_with_time_window_index</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.prepare_gt_exchange_vault_with_time_window" title="prepare_gt_exchange_vault_with_time_window">prepare_gt_exchange_vault_with_time_window</a></li><li><a href="#method.request_gt_exchange_with_time_window" title="request_gt_exchange_with_time_window">request_gt_exchange_with_time_window</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In gmsol::<wbr>store::<wbr>gt</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">gmsol</a>::<wbr><a href="../index.html">store</a>::<wbr><a href="index.html">gt</a></div><h1>Trait <span class="trait">GtOps</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/gmsol/store/gt.rs.html#15-100">Source</a> </span></div><pre class="rust item-decl"><code>pub trait GtOps&lt;C&gt; {
+    // Required methods
+    fn <a href="#tymethod.initialize_gt" class="fn">initialize_gt</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        decimals: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        initial_minting_cost: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+        grow_factor: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+        grow_step: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+        ranks: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>&gt;,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.gt_set_order_fee_discount_factors" class="fn">gt_set_order_fee_discount_factors</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        factors: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>&gt;,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.gt_set_referral_reward_factors" class="fn">gt_set_referral_reward_factors</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        factors: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>&gt;,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.gt_set_exchange_time_window" class="fn">gt_set_exchange_time_window</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        window: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.prepare_gt_exchange_vault_with_time_window_index" class="fn">prepare_gt_exchange_vault_with_time_window_index</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        time_window_index: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.i64.html">i64</a>,
+        time_window: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.confirm_gt_exchange_vault" class="fn">confirm_gt_exchange_vault</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        vault: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.request_gt_exchange_with_time_window_index" class="fn">request_gt_exchange_with_time_window_index</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        time_window_index: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.i64.html">i64</a>,
+        time_window: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>,
+        amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    ) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.close_gt_exchange" class="fn">close_gt_exchange</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        exchange: &amp;Pubkey,
+        hint_owner: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+        hint_vault: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;;
+
+    // Provided methods
+    fn <a href="#method.prepare_gt_exchange_vault_with_time_window" class="fn">prepare_gt_exchange_vault_with_time_window</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        time_window: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>,
+    ) -&gt; <a class="type" href="../../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.request_gt_exchange_with_time_window" class="fn">request_gt_exchange_with_time_window</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        time_window: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>,
+        amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    ) -&gt; <a class="type" href="../../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt; { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>GT Operations.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.initialize_gt" class="method"><a class="src rightside" href="../../../src/gmsol/store/gt.rs.html#17-25">Source</a><h4 class="code-header">fn <a href="#tymethod.initialize_gt" class="fn">initialize_gt</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    decimals: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    initial_minting_cost: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    grow_factor: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    grow_step: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    ranks: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>&gt;,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Initialize GT Mint.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.gt_set_order_fee_discount_factors" class="method"><a class="src rightside" href="../../../src/gmsol/store/gt.rs.html#28-32">Source</a><h4 class="code-header">fn <a href="#tymethod.gt_set_order_fee_discount_factors" class="fn">gt_set_order_fee_discount_factors</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    factors: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>&gt;,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Configurate GT order fee dicounts.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.gt_set_referral_reward_factors" class="method"><a class="src rightside" href="../../../src/gmsol/store/gt.rs.html#35-39">Source</a><h4 class="code-header">fn <a href="#tymethod.gt_set_referral_reward_factors" class="fn">gt_set_referral_reward_factors</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    factors: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>&gt;,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Configurate GT referral rewards</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.gt_set_exchange_time_window" class="method"><a class="src rightside" href="../../../src/gmsol/store/gt.rs.html#42">Source</a><h4 class="code-header">fn <a href="#tymethod.gt_set_exchange_time_window" class="fn">gt_set_exchange_time_window</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    window: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Configurate the time window size for GT exchange.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.prepare_gt_exchange_vault_with_time_window_index" class="method"><a class="src rightside" href="../../../src/gmsol/store/gt.rs.html#45-50">Source</a><h4 class="code-header">fn <a href="#tymethod.prepare_gt_exchange_vault_with_time_window_index" class="fn">prepare_gt_exchange_vault_with_time_window_index</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    time_window_index: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.i64.html">i64</a>,
+    time_window: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;</h4></section></summary><div class="docblock"><p>Initialize GT exchange vault with the given time window index.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.confirm_gt_exchange_vault" class="method"><a class="src rightside" href="../../../src/gmsol/store/gt.rs.html#66">Source</a><h4 class="code-header">fn <a href="#tymethod.confirm_gt_exchange_vault" class="fn">confirm_gt_exchange_vault</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    vault: &amp;Pubkey,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Confirm the given GT exchange vault.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.request_gt_exchange_with_time_window_index" class="method"><a class="src rightside" href="../../../src/gmsol/store/gt.rs.html#69-75">Source</a><h4 class="code-header">fn <a href="#tymethod.request_gt_exchange_with_time_window_index" class="fn">request_gt_exchange_with_time_window_index</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    time_window_index: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.i64.html">i64</a>,
+    time_window: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>,
+    amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Request GT exchange with the given time window index.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.close_gt_exchange" class="method"><a class="src rightside" href="../../../src/gmsol/store/gt.rs.html#93-99">Source</a><h4 class="code-header">fn <a href="#tymethod.close_gt_exchange" class="fn">close_gt_exchange</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    exchange: &amp;Pubkey,
+    hint_owner: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    hint_vault: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Close a confirmed GT exchange.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.prepare_gt_exchange_vault_with_time_window" class="method"><a class="src rightside" href="../../../src/gmsol/store/gt.rs.html#53-63">Source</a><h4 class="code-header">fn <a href="#method.prepare_gt_exchange_vault_with_time_window" class="fn">prepare_gt_exchange_vault_with_time_window</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    time_window: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>,
+) -&gt; <a class="type" href="../../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;&gt;</h4></section></summary><div class="docblock"><p>Prepare GT exchange vault with the given time window.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.request_gt_exchange_with_time_window" class="method"><a class="src rightside" href="../../../src/gmsol/store/gt.rs.html#78-90">Source</a><h4 class="code-header">fn <a href="#method.request_gt_exchange_with_time_window" class="fn">request_gt_exchange_with_time_window</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    time_window: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>,
+    amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="type" href="../../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Request GT exchange with the given time window.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-GtOps%3CC%3E-for-Client%3CC%3E" class="impl"><a class="src rightside" href="../../../src/gmsol/store/gt.rs.html#102-245">Source</a><a href="#impl-GtOps%3CC%3E-for-Client%3CC%3E" class="anchor">§</a><h3 class="code-header">impl&lt;C: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = impl Signer&gt; + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>&gt; <a class="trait" href="trait.GtOps.html" title="trait gmsol::store::gt::GtOps">GtOps</a>&lt;C&gt; for <a class="struct" href="../../client/struct.Client.html" title="struct gmsol::client::Client">Client</a>&lt;C&gt;</h3></section></div><script src="../../../trait.impl/gmsol/store/gt/trait.GtOps.js" async></script></section></div></main></body></html>

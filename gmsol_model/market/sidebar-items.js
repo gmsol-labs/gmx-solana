@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["base","borrowing","liquidity","perp","position_impact","swap"]};

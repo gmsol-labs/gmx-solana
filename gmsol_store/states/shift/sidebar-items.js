@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Shift","ShiftActionParams","ShiftTokenAccounts"]};

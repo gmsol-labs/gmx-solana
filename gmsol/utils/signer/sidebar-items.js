@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["local_signer","shared_signer"],"struct":["DynSigner","LocalDynSigner"],"type":["LocalSignerRef","SignerRef"]};

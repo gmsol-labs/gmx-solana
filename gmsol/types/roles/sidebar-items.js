@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_MEMBERS","MAX_ROLES","MAX_ROLE_NAME_LEN"],"struct":["Members","RoleKey","RoleMap","RoleMetadata","RoleStore"]};

@@ -1,0 +1,247 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Treasury instructions."><title>TreasuryOps in gmsol::treasury - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="gmsol" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../gmsol/index.html">gmsol</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Treasury<wbr>Ops</a></h2><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.cancel_treasury_swap" title="cancel_treasury_swap">cancel_treasury_swap</a></li><li><a href="#tymethod.claim_fees_to_receiver_vault" title="claim_fees_to_receiver_vault">claim_fees_to_receiver_vault</a></li><li><a href="#tymethod.complete_gt_exchange" title="complete_gt_exchange">complete_gt_exchange</a></li><li><a href="#tymethod.confirm_gt_buyback" title="confirm_gt_buyback">confirm_gt_buyback</a></li><li><a href="#tymethod.create_treasury_swap" title="create_treasury_swap">create_treasury_swap</a></li><li><a href="#tymethod.deposit_to_treasury_valut" title="deposit_to_treasury_valut">deposit_to_treasury_valut</a></li><li><a href="#tymethod.initialize_config" title="initialize_config">initialize_config</a></li><li><a href="#tymethod.initialize_treasury_vault_config" title="initialize_treasury_vault_config">initialize_treasury_vault_config</a></li><li><a href="#tymethod.insert_token_to_treasury" title="insert_token_to_treasury">insert_token_to_treasury</a></li><li><a href="#tymethod.prepare_gt_bank" title="prepare_gt_bank">prepare_gt_bank</a></li><li><a href="#tymethod.remove_token_from_treasury" title="remove_token_from_treasury">remove_token_from_treasury</a></li><li><a href="#tymethod.set_buyback_factor" title="set_buyback_factor">set_buyback_factor</a></li><li><a href="#tymethod.set_gt_factor" title="set_gt_factor">set_gt_factor</a></li><li><a href="#tymethod.set_referral_reward" title="set_referral_reward">set_referral_reward</a></li><li><a href="#tymethod.set_treasury_vault_config" title="set_treasury_vault_config">set_treasury_vault_config</a></li><li><a href="#tymethod.sync_gt_bank" title="sync_gt_bank">sync_gt_bank</a></li><li><a href="#tymethod.toggle_token_flag" title="toggle_token_flag">toggle_token_flag</a></li><li><a href="#tymethod.transfer_receiver" title="transfer_receiver">transfer_receiver</a></li><li><a href="#tymethod.withdraw_from_treasury_vault" title="withdraw_from_treasury_vault">withdraw_from_treasury_vault</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In gmsol::<wbr>treasury</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">gmsol</a>::<wbr><a href="index.html">treasury</a></div><h1>Trait <span class="trait">TreasuryOps</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/gmsol/treasury.rs.html#34-180">Source</a> </span></div><pre class="rust item-decl"><code>pub trait TreasuryOps&lt;C&gt; {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 19 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.initialize_config" class="fn">initialize_config</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.set_treasury_vault_config" class="fn">set_treasury_vault_config</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        treasury_vault_config: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.set_gt_factor" class="fn">set_gt_factor</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        factor: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    ) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.set_buyback_factor" class="fn">set_buyback_factor</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        factor: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    ) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.initialize_treasury_vault_config" class="fn">initialize_treasury_vault_config</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        index: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u16.html">u16</a>,
+    ) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.insert_token_to_treasury" class="fn">insert_token_to_treasury</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        treasury_vault_config: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+        token_mint: &amp;Pubkey,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.remove_token_from_treasury" class="fn">remove_token_from_treasury</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        treasury_vault_config: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+        token_mint: &amp;Pubkey,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.toggle_token_flag" class="fn">toggle_token_flag</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        treasury_vault_config: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+        token_mint: &amp;Pubkey,
+        flag: <a class="enum" href="../types/treasury/treasury/enum.TokenFlag.html" title="enum gmsol::types::treasury::treasury::TokenFlag">TokenFlag</a>,
+        value: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.deposit_to_treasury_valut" class="fn">deposit_to_treasury_valut</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        treasury_vault_config_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+        token_mint: &amp;Pubkey,
+        token_program_id: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+        time_window: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.withdraw_from_treasury_vault" class="fn">withdraw_from_treasury_vault</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        treasury_vault_config_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+        token_mint: &amp;Pubkey,
+        token_program_id: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+        amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+        decimals: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+        target: &amp;Pubkey,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.confirm_gt_buyback" class="fn">confirm_gt_buyback</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        gt_exchange_vault: &amp;Pubkey,
+        oracle: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="struct.ConfirmGtBuybackBuilder.html" title="struct gmsol::treasury::ConfirmGtBuybackBuilder">ConfirmGtBuybackBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.transfer_receiver" class="fn">transfer_receiver</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        new_receiver: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.set_referral_reward" class="fn">set_referral_reward</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        factors: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>&gt;,
+    ) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.claim_fees_to_receiver_vault" class="fn">claim_fees_to_receiver_vault</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        token_mint: &amp;Pubkey,
+        min_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    ) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.prepare_gt_bank" class="fn">prepare_gt_bank</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        treasury_vault_config_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+        gt_exchange_vault: &amp;Pubkey,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.sync_gt_bank" class="fn">sync_gt_bank</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        treasury_vault_config_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+        gt_exchange_vault: &amp;Pubkey,
+        token_mint: &amp;Pubkey,
+        token_program_id: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.complete_gt_exchange" class="fn">complete_gt_exchange</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        exchange: &amp;Pubkey,
+        treasury_vault_config_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+        tokens_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;(Pubkey, Pubkey)&gt;&gt;,
+        gt_exchange_vault_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.create_treasury_swap" class="fn">create_treasury_swap</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        swap_in_token: &amp;Pubkey,
+        swap_out_token: &amp;Pubkey,
+        swap_in_token_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+        options: <a class="struct" href="struct.CreateTreasurySwapOptions.html" title="struct gmsol::treasury::CreateTreasurySwapOptions">CreateTreasurySwapOptions</a>,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.cancel_treasury_swap" class="fn">cancel_treasury_swap</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        order: &amp;Pubkey,
+        hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(&amp;Pubkey, &amp;Pubkey)&gt;,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;;
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Treasury instructions.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.initialize_config" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#36">Source</a><h4 class="code-header">fn <a href="#tymethod.initialize_config" class="fn">initialize_config</a>(&amp;self, store: &amp;Pubkey) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;</h4></section></summary><div class="docblock"><p>Initialize <a href="../types/treasury/struct.Config.html" title="struct gmsol::types::treasury::Config"><code>Config</code></a> account.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.set_treasury_vault_config" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#39-43">Source</a><h4 class="code-header">fn <a href="#tymethod.set_treasury_vault_config" class="fn">set_treasury_vault_config</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    treasury_vault_config: &amp;Pubkey,
+) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Set treasury vault config.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.set_gt_factor" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#46">Source</a><h4 class="code-header">fn <a href="#tymethod.set_gt_factor" class="fn">set_gt_factor</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    factor: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Set GT factor.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.set_buyback_factor" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#49-53">Source</a><h4 class="code-header">fn <a href="#tymethod.set_buyback_factor" class="fn">set_buyback_factor</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    factor: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Set buyback factor.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.initialize_treasury_vault_config" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#56-60">Source</a><h4 class="code-header">fn <a href="#tymethod.initialize_treasury_vault_config" class="fn">initialize_treasury_vault_config</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    index: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u16.html">u16</a>,
+) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;</h4></section></summary><div class="docblock"><p>Initialize <a href="../types/treasury/struct.TreasuryVaultConfig.html" title="struct gmsol::types::treasury::TreasuryVaultConfig"><code>TreasuryVaultConfig</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.insert_token_to_treasury" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#63-68">Source</a><h4 class="code-header">fn <a href="#tymethod.insert_token_to_treasury" class="fn">insert_token_to_treasury</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    treasury_vault_config: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    token_mint: &amp;Pubkey,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Insert token to treasury.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.remove_token_from_treasury" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#71-76">Source</a><h4 class="code-header">fn <a href="#tymethod.remove_token_from_treasury" class="fn">remove_token_from_treasury</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    treasury_vault_config: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    token_mint: &amp;Pubkey,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Remove token from treasury.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.toggle_token_flag" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#79-86">Source</a><h4 class="code-header">fn <a href="#tymethod.toggle_token_flag" class="fn">toggle_token_flag</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    treasury_vault_config: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    token_mint: &amp;Pubkey,
+    flag: <a class="enum" href="../types/treasury/treasury/enum.TokenFlag.html" title="enum gmsol::types::treasury::treasury::TokenFlag">TokenFlag</a>,
+    value: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Toggle token flag.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.deposit_to_treasury_valut" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#89-96">Source</a><h4 class="code-header">fn <a href="#tymethod.deposit_to_treasury_valut" class="fn">deposit_to_treasury_valut</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    treasury_vault_config_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    token_mint: &amp;Pubkey,
+    token_program_id: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    time_window: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Deposit to treasury vault.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.withdraw_from_treasury_vault" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#100-109">Source</a><h4 class="code-header">fn <a href="#tymethod.withdraw_from_treasury_vault" class="fn">withdraw_from_treasury_vault</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    treasury_vault_config_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    token_mint: &amp;Pubkey,
+    token_program_id: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    decimals: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>,
+    target: &amp;Pubkey,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Withdraw from treasury vault.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.confirm_gt_buyback" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#112-117">Source</a><h4 class="code-header">fn <a href="#tymethod.confirm_gt_buyback" class="fn">confirm_gt_buyback</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    gt_exchange_vault: &amp;Pubkey,
+    oracle: &amp;Pubkey,
+) -&gt; <a class="struct" href="struct.ConfirmGtBuybackBuilder.html" title="struct gmsol::treasury::ConfirmGtBuybackBuilder">ConfirmGtBuybackBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Confirm GT buyback.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.transfer_receiver" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#120">Source</a><h4 class="code-header">fn <a href="#tymethod.transfer_receiver" class="fn">transfer_receiver</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    new_receiver: &amp;Pubkey,
+) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Transfer receiver.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.set_referral_reward" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#123">Source</a><h4 class="code-header">fn <a href="#tymethod.set_referral_reward" class="fn">set_referral_reward</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    factors: <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>&gt;,
+) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Set referral reward factors.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.claim_fees_to_receiver_vault" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#126-132">Source</a><h4 class="code-header">fn <a href="#tymethod.claim_fees_to_receiver_vault" class="fn">claim_fees_to_receiver_vault</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    token_mint: &amp;Pubkey,
+    min_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Claim fees to receiver vault.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.prepare_gt_bank" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#135-140">Source</a><h4 class="code-header">fn <a href="#tymethod.prepare_gt_bank" class="fn">prepare_gt_bank</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    treasury_vault_config_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    gt_exchange_vault: &amp;Pubkey,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Prepare GT bank.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.sync_gt_bank" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#143-150">Source</a><h4 class="code-header">fn <a href="#tymethod.sync_gt_bank" class="fn">sync_gt_bank</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    treasury_vault_config_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    gt_exchange_vault: &amp;Pubkey,
+    token_mint: &amp;Pubkey,
+    token_program_id: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Sync GT bank.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.complete_gt_exchange" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#153-160">Source</a><h4 class="code-header">fn <a href="#tymethod.complete_gt_exchange" class="fn">complete_gt_exchange</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    exchange: &amp;Pubkey,
+    treasury_vault_config_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    tokens_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;(Pubkey, Pubkey)&gt;&gt;,
+    gt_exchange_vault_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Complete GT exchange.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.create_treasury_swap" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#163-171">Source</a><h4 class="code-header">fn <a href="#tymethod.create_treasury_swap" class="fn">create_treasury_swap</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    swap_in_token: &amp;Pubkey,
+    swap_out_token: &amp;Pubkey,
+    swap_in_token_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    options: <a class="struct" href="struct.CreateTreasurySwapOptions.html" title="struct gmsol::treasury::CreateTreasurySwapOptions">CreateTreasurySwapOptions</a>,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C, Pubkey&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Create a swap.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.cancel_treasury_swap" class="method"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#174-179">Source</a><h4 class="code-header">fn <a href="#tymethod.cancel_treasury_swap" class="fn">cancel_treasury_swap</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    order: &amp;Pubkey,
+    hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(&amp;Pubkey, &amp;Pubkey)&gt;,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Cancel a swap.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-TreasuryOps%3CC%3E-for-Client%3CC%3E" class="impl"><a class="src rightside" href="../../src/gmsol/treasury.rs.html#195-891">Source</a><a href="#impl-TreasuryOps%3CC%3E-for-Client%3CC%3E" class="anchor">§</a><h3 class="code-header">impl&lt;S, C&gt; <a class="trait" href="trait.TreasuryOps.html" title="trait gmsol::treasury::TreasuryOps">TreasuryOps</a>&lt;C&gt; for <a class="struct" href="../client/struct.Client.html" title="struct gmsol::client::Client">Client</a>&lt;C&gt;<div class="where">where
+    C: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = S&gt; + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,
+    S: Signer,</div></h3></section></div><script src="../../trait.impl/gmsol/treasury/trait.TreasuryOps.js" async></script></section></div></main></body></html>

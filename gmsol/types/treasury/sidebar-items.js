@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["config","gt_bank","instruction","treasury"],"struct":["Config","GtBank","TreasuryVaultConfig"]};

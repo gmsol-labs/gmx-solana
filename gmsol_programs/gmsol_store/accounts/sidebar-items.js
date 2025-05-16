@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Deposit","Glv","GlvDeposit","GlvShift","GlvWithdrawal","GtExchange","GtExchangeVault","Market","MarketConfigBuffer","Oracle","Order","Position","PriceFeed","ReferralCodeV2","Shift","Store","TokenMapHeader","TradeData","UserHeader","Withdrawal"]};

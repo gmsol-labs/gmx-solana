@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AtomicGroup","GetInstructionsOptions","ParallelGroup"],"trait":["IntoAtomicGroup"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["UserFlag"],"struct":["Referral","ReferralCodeV2","UserFlagContainer","UserGtState","UserHeader"],"type":["ReferralCodeBytes"]};

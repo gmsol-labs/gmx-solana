@@ -1,0 +1,404 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Exchange instructions."><title>ExchangeOps in gmsol::exchange - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="gmsol" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../gmsol/index.html">gmsol</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Exchange<wbr>Ops</a></h2><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.auto_deleverage" title="auto_deleverage">auto_deleverage</a></li><li><a href="#tymethod.cancel_order_if_no_position" title="cancel_order_if_no_position">cancel_order_if_no_position</a></li><li><a href="#tymethod.claim_fees" title="claim_fees">claim_fees</a></li><li><a href="#tymethod.close_deposit" title="close_deposit">close_deposit</a></li><li><a href="#tymethod.close_order" title="close_order">close_order</a></li><li><a href="#tymethod.close_shift" title="close_shift">close_shift</a></li><li><a href="#tymethod.close_withdrawal" title="close_withdrawal">close_withdrawal</a></li><li><a href="#tymethod.create_deposit" title="create_deposit">create_deposit</a></li><li><a href="#tymethod.create_market" title="create_market">create_market</a></li><li><a href="#tymethod.create_order" title="create_order">create_order</a></li><li><a href="#tymethod.create_shift" title="create_shift">create_shift</a></li><li><a href="#tymethod.create_withdrawal" title="create_withdrawal">create_withdrawal</a></li><li><a href="#tymethod.execute_deposit" title="execute_deposit">execute_deposit</a></li><li><a href="#tymethod.execute_order" title="execute_order">execute_order</a></li><li><a href="#tymethod.execute_shift" title="execute_shift">execute_shift</a></li><li><a href="#tymethod.execute_withdrawal" title="execute_withdrawal">execute_withdrawal</a></li><li><a href="#tymethod.fund_market" title="fund_market">fund_market</a></li><li><a href="#tymethod.liquidate" title="liquidate">liquidate</a></li><li><a href="#tymethod.toggle_feature" title="toggle_feature">toggle_feature</a></li><li><a href="#tymethod.update_adl" title="update_adl">update_adl</a></li><li><a href="#tymethod.update_order" title="update_order">update_order</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.limit_decrease" title="limit_decrease">limit_decrease</a></li><li><a href="#method.limit_increase" title="limit_increase">limit_increase</a></li><li><a href="#method.limit_swap" title="limit_swap">limit_swap</a></li><li><a href="#method.market_decrease" title="market_decrease">market_decrease</a></li><li><a href="#method.market_increase" title="market_increase">market_increase</a></li><li><a href="#method.market_swap" title="market_swap">market_swap</a></li><li><a href="#method.stop_loss" title="stop_loss">stop_loss</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In gmsol::<wbr>exchange</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">gmsol</a>::<wbr><a href="index.html">exchange</a></div><h1>Trait <span class="trait">ExchangeOps</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/gmsol/exchange/mod.rs.html#54-401">Source</a> </span></div><pre class="rust item-decl"><code>pub trait ExchangeOps&lt;C&gt; {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 28 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.toggle_feature" class="fn">toggle_feature</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        domian: <a class="enum" href="../types/feature/enum.DomainDisabledFlag.html" title="enum gmsol::types::feature::DomainDisabledFlag">DomainDisabledFlag</a>,
+        action: <a class="enum" href="../types/feature/enum.ActionDisabledFlag.html" title="enum gmsol::types::feature::ActionDisabledFlag">ActionDisabledFlag</a>,
+        enable: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.claim_fees" class="fn">claim_fees</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        is_long_token: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; <a class="struct" href="treasury/struct.ClaimFeesBuilder.html" title="struct gmsol::exchange::treasury::ClaimFeesBuilder">ClaimFeesBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.create_market" class="fn">create_market</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+        index_token: &amp;Pubkey,
+        long_token: &amp;Pubkey,
+        short_token: &amp;Pubkey,
+        enable: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        token_map: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;(<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;, Pubkey)&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.fund_market" class="fn">fund_market</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        source_account: &amp;Pubkey,
+        amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+        token: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.create_deposit" class="fn">create_deposit</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="deposit/struct.CreateDepositBuilder.html" title="struct gmsol::exchange::deposit::CreateDepositBuilder">CreateDepositBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.close_deposit" class="fn">close_deposit</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        deposit: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="deposit/struct.CloseDepositBuilder.html" title="struct gmsol::exchange::deposit::CloseDepositBuilder">CloseDepositBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.execute_deposit" class="fn">execute_deposit</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        oracle: &amp;Pubkey,
+        deposit: &amp;Pubkey,
+        cancel_on_execution_error: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; <a class="struct" href="deposit/struct.ExecuteDepositBuilder.html" title="struct gmsol::exchange::deposit::ExecuteDepositBuilder">ExecuteDepositBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.create_withdrawal" class="fn">create_withdrawal</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    ) -&gt; <a class="struct" href="withdrawal/struct.CreateWithdrawalBuilder.html" title="struct gmsol::exchange::withdrawal::CreateWithdrawalBuilder">CreateWithdrawalBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.close_withdrawal" class="fn">close_withdrawal</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        withdrawal: &amp;Pubkey,
+    ) -&gt; <a class="struct" href="withdrawal/struct.CloseWithdrawalBuilder.html" title="struct gmsol::exchange::withdrawal::CloseWithdrawalBuilder">CloseWithdrawalBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.execute_withdrawal" class="fn">execute_withdrawal</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        oracle: &amp;Pubkey,
+        withdrawal: &amp;Pubkey,
+        cancel_on_execution_error: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; <a class="struct" href="withdrawal/struct.ExecuteWithdrawalBuilder.html" title="struct gmsol::exchange::withdrawal::ExecuteWithdrawalBuilder">ExecuteWithdrawalBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.create_order" class="fn">create_order</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        is_output_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        params: <a class="struct" href="order/struct.OrderParams.html" title="struct gmsol::exchange::order::OrderParams">OrderParams</a>,
+    ) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.update_order" class="fn">update_order</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        order: &amp;Pubkey,
+        params: <a class="struct" href="../types/struct.UpdateOrderParams.html" title="struct gmsol::types::UpdateOrderParams">UpdateOrderParams</a>,
+    ) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.execute_order" class="fn">execute_order</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        oracle: &amp;Pubkey,
+        order: &amp;Pubkey,
+        cancel_on_execution_error: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="order/struct.ExecuteOrderBuilder.html" title="struct gmsol::exchange::order::ExecuteOrderBuilder">ExecuteOrderBuilder</a>&lt;'_, C&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.close_order" class="fn">close_order</a>(&amp;self, order: &amp;Pubkey) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="order/struct.CloseOrderBuilder.html" title="struct gmsol::exchange::order::CloseOrderBuilder">CloseOrderBuilder</a>&lt;'_, C&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.cancel_order_if_no_position" class="fn">cancel_order_if_no_position</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        order: &amp;Pubkey,
+        position_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+    ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.liquidate" class="fn">liquidate</a>(
+        &amp;self,
+        oracle: &amp;Pubkey,
+        position: &amp;Pubkey,
+    ) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="position_cut/struct.PositionCutBuilder.html" title="struct gmsol::exchange::position_cut::PositionCutBuilder">PositionCutBuilder</a>&lt;'_, C&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.auto_deleverage" class="fn">auto_deleverage</a>(
+        &amp;self,
+        oracle: &amp;Pubkey,
+        position: &amp;Pubkey,
+        size_delta_usd: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    ) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="position_cut/struct.PositionCutBuilder.html" title="struct gmsol::exchange::position_cut::PositionCutBuilder">PositionCutBuilder</a>&lt;'_, C&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.update_adl" class="fn">update_adl</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        oracle: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        for_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        for_short: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="auto_deleveraging/struct.UpdateAdlBuilder.html" title="struct gmsol::exchange::auto_deleveraging::UpdateAdlBuilder">UpdateAdlBuilder</a>&lt;'_, C&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.create_shift" class="fn">create_shift</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        from_market_token: &amp;Pubkey,
+        to_market_token: &amp;Pubkey,
+        amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    ) -&gt; <a class="struct" href="shift/struct.CreateShiftBuilder.html" title="struct gmsol::exchange::shift::CreateShiftBuilder">CreateShiftBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.close_shift" class="fn">close_shift</a>(&amp;self, shift: &amp;Pubkey) -&gt; <a class="struct" href="shift/struct.CloseShiftBuilder.html" title="struct gmsol::exchange::shift::CloseShiftBuilder">CloseShiftBuilder</a>&lt;'_, C&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.execute_shift" class="fn">execute_shift</a>(
+        &amp;self,
+        oracle: &amp;Pubkey,
+        shift: &amp;Pubkey,
+        cancel_on_execution_error: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; <a class="struct" href="shift/struct.ExecuteShiftBuilder.html" title="struct gmsol::exchange::shift::ExecuteShiftBuilder">ExecuteShiftBuilder</a>&lt;'_, C&gt;;
+
+    // Provided methods
+    fn <a href="#method.market_increase" class="fn">market_increase</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        is_collateral_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        initial_collateral_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+        is_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        increment_size_in_usd: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    ) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.market_decrease" class="fn">market_decrease</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        is_collateral_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        collateral_withdrawal_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+        is_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        decrement_size_in_usd: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    ) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.market_swap" class="fn">market_swap</a>&lt;'a, S&gt;(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        is_output_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        initial_swap_in_token: &amp;Pubkey,
+        initial_swap_in_token_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+        swap_path: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = &amp;'a Pubkey&gt;,
+    ) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt;
+       <span class="where">where C: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = S&gt; + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,
+             S: Signer</span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.limit_increase" class="fn">limit_increase</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        is_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        increment_size_in_usd: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+        price: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+        is_collateral_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        initial_collateral_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    ) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.limit_decrease" class="fn">limit_decrease</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        is_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        decrement_size_in_usd: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+        price: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+        is_collateral_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        collateral_withdrawal_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    ) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.stop_loss" class="fn">stop_loss</a>(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        is_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        decrement_size_in_usd: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+        price: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+        is_collateral_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        collateral_withdrawal_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    ) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.limit_swap" class="fn">limit_swap</a>&lt;'a, S&gt;(
+        &amp;self,
+        store: &amp;Pubkey,
+        market_token: &amp;Pubkey,
+        is_output_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+        min_output_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+        initial_swap_in_token: &amp;Pubkey,
+        initial_swap_in_token_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+        swap_path: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = &amp;'a Pubkey&gt;,
+    ) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt;
+       <span class="where">where C: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = S&gt; + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,
+             S: Signer</span> { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Exchange instructions.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.toggle_feature" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#56-62">Source</a><h4 class="code-header">fn <a href="#tymethod.toggle_feature" class="fn">toggle_feature</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    domian: <a class="enum" href="../types/feature/enum.DomainDisabledFlag.html" title="enum gmsol::types::feature::DomainDisabledFlag">DomainDisabledFlag</a>,
+    action: <a class="enum" href="../types/feature/enum.ActionDisabledFlag.html" title="enum gmsol::types::feature::ActionDisabledFlag">ActionDisabledFlag</a>,
+    enable: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+) -&gt; <a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Toggle feature.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.claim_fees" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#65-70">Source</a><h4 class="code-header">fn <a href="#tymethod.claim_fees" class="fn">claim_fees</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    is_long_token: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+) -&gt; <a class="struct" href="treasury/struct.ClaimFeesBuilder.html" title="struct gmsol::exchange::treasury::ClaimFeesBuilder">ClaimFeesBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Claim fees.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.create_market" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#74-83">Source</a><h4 class="code-header">fn <a href="#tymethod.create_market" class="fn">create_market</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.str.html">str</a>,
+    index_token: &amp;Pubkey,
+    long_token: &amp;Pubkey,
+    short_token: &amp;Pubkey,
+    enable: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    token_map: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;(<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;, Pubkey)&gt;&gt;</h4></section></summary><div class="docblock"><p>Create a new market and return its token mint address.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.fund_market" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#86-93">Source</a><h4 class="code-header">fn <a href="#tymethod.fund_market" class="fn">fund_market</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    source_account: &amp;Pubkey,
+    amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    token: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Fund the given market.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.create_deposit" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#96">Source</a><h4 class="code-header">fn <a href="#tymethod.create_deposit" class="fn">create_deposit</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+) -&gt; <a class="struct" href="deposit/struct.CreateDepositBuilder.html" title="struct gmsol::exchange::deposit::CreateDepositBuilder">CreateDepositBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Create a deposit.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.close_deposit" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#99">Source</a><h4 class="code-header">fn <a href="#tymethod.close_deposit" class="fn">close_deposit</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    deposit: &amp;Pubkey,
+) -&gt; <a class="struct" href="deposit/struct.CloseDepositBuilder.html" title="struct gmsol::exchange::deposit::CloseDepositBuilder">CloseDepositBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Cancel a deposit.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.execute_deposit" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#102-108">Source</a><h4 class="code-header">fn <a href="#tymethod.execute_deposit" class="fn">execute_deposit</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    oracle: &amp;Pubkey,
+    deposit: &amp;Pubkey,
+    cancel_on_execution_error: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+) -&gt; <a class="struct" href="deposit/struct.ExecuteDepositBuilder.html" title="struct gmsol::exchange::deposit::ExecuteDepositBuilder">ExecuteDepositBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Execute a deposit.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.create_withdrawal" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#111-116">Source</a><h4 class="code-header">fn <a href="#tymethod.create_withdrawal" class="fn">create_withdrawal</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="struct" href="withdrawal/struct.CreateWithdrawalBuilder.html" title="struct gmsol::exchange::withdrawal::CreateWithdrawalBuilder">CreateWithdrawalBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Create a withdrawal.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.close_withdrawal" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#119">Source</a><h4 class="code-header">fn <a href="#tymethod.close_withdrawal" class="fn">close_withdrawal</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    withdrawal: &amp;Pubkey,
+) -&gt; <a class="struct" href="withdrawal/struct.CloseWithdrawalBuilder.html" title="struct gmsol::exchange::withdrawal::CloseWithdrawalBuilder">CloseWithdrawalBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Close a withdrawal.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.execute_withdrawal" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#122-128">Source</a><h4 class="code-header">fn <a href="#tymethod.execute_withdrawal" class="fn">execute_withdrawal</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    oracle: &amp;Pubkey,
+    withdrawal: &amp;Pubkey,
+    cancel_on_execution_error: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+) -&gt; <a class="struct" href="withdrawal/struct.ExecuteWithdrawalBuilder.html" title="struct gmsol::exchange::withdrawal::ExecuteWithdrawalBuilder">ExecuteWithdrawalBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Execute a withdrawal.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.create_order" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#131-137">Source</a><h4 class="code-header">fn <a href="#tymethod.create_order" class="fn">create_order</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    is_output_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    params: <a class="struct" href="order/struct.OrderParams.html" title="struct gmsol::exchange::order::OrderParams">OrderParams</a>,
+) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Create an order.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.update_order" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#140-146">Source</a><h4 class="code-header">fn <a href="#tymethod.update_order" class="fn">update_order</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    order: &amp;Pubkey,
+    params: <a class="struct" href="../types/struct.UpdateOrderParams.html" title="struct gmsol::types::UpdateOrderParams">UpdateOrderParams</a>,
+) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Update an order.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.execute_order" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#149-155">Source</a><h4 class="code-header">fn <a href="#tymethod.execute_order" class="fn">execute_order</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    oracle: &amp;Pubkey,
+    order: &amp;Pubkey,
+    cancel_on_execution_error: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="order/struct.ExecuteOrderBuilder.html" title="struct gmsol::exchange::order::ExecuteOrderBuilder">ExecuteOrderBuilder</a>&lt;'_, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Execute an order.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.close_order" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#158">Source</a><h4 class="code-header">fn <a href="#tymethod.close_order" class="fn">close_order</a>(&amp;self, order: &amp;Pubkey) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="order/struct.CloseOrderBuilder.html" title="struct gmsol::exchange::order::CloseOrderBuilder">CloseOrderBuilder</a>&lt;'_, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Close an order.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.cancel_order_if_no_position" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#161-166">Source</a><h4 class="code-header">fn <a href="#tymethod.cancel_order_if_no_position" class="fn">cancel_order_if_no_position</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    order: &amp;Pubkey,
+    position_hint: <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;Pubkey&gt;,
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="../../gmsol_solana_utils/transaction_builder/struct.TransactionBuilder.html" title="struct gmsol_solana_utils::transaction_builder::TransactionBuilder">TransactionBuilder</a>&lt;'_, C&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Cancel order if the position does not exist.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.liquidate" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#169-170">Source</a><h4 class="code-header">fn <a href="#tymethod.liquidate" class="fn">liquidate</a>(
+    &amp;self,
+    oracle: &amp;Pubkey,
+    position: &amp;Pubkey,
+) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="position_cut/struct.PositionCutBuilder.html" title="struct gmsol::exchange::position_cut::PositionCutBuilder">PositionCutBuilder</a>&lt;'_, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Liquidate a position.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.auto_deleverage" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#173-178">Source</a><h4 class="code-header">fn <a href="#tymethod.auto_deleverage" class="fn">auto_deleverage</a>(
+    &amp;self,
+    oracle: &amp;Pubkey,
+    position: &amp;Pubkey,
+    size_delta_usd: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="position_cut/struct.PositionCutBuilder.html" title="struct gmsol::exchange::position_cut::PositionCutBuilder">PositionCutBuilder</a>&lt;'_, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Auto-deleverage a position.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.update_adl" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#181-188">Source</a><h4 class="code-header">fn <a href="#tymethod.update_adl" class="fn">update_adl</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    oracle: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    for_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    for_short: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+) -&gt; <a class="type" href="../type.Result.html" title="type gmsol::Result">Result</a>&lt;<a class="struct" href="auto_deleveraging/struct.UpdateAdlBuilder.html" title="struct gmsol::exchange::auto_deleveraging::UpdateAdlBuilder">UpdateAdlBuilder</a>&lt;'_, C&gt;&gt;</h4></section></summary><div class="docblock"><p>Update ADL state.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.create_shift" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#383-389">Source</a><h4 class="code-header">fn <a href="#tymethod.create_shift" class="fn">create_shift</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    from_market_token: &amp;Pubkey,
+    to_market_token: &amp;Pubkey,
+    amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="struct" href="shift/struct.CreateShiftBuilder.html" title="struct gmsol::exchange::shift::CreateShiftBuilder">CreateShiftBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Create shift.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.close_shift" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#392">Source</a><h4 class="code-header">fn <a href="#tymethod.close_shift" class="fn">close_shift</a>(&amp;self, shift: &amp;Pubkey) -&gt; <a class="struct" href="shift/struct.CloseShiftBuilder.html" title="struct gmsol::exchange::shift::CloseShiftBuilder">CloseShiftBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Close shift.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.execute_shift" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#395-400">Source</a><h4 class="code-header">fn <a href="#tymethod.execute_shift" class="fn">execute_shift</a>(
+    &amp;self,
+    oracle: &amp;Pubkey,
+    shift: &amp;Pubkey,
+    cancel_on_execution_error: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+) -&gt; <a class="struct" href="shift/struct.ExecuteShiftBuilder.html" title="struct gmsol::exchange::shift::ExecuteShiftBuilder">ExecuteShiftBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Execute shift.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.market_increase" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#191-212">Source</a><h4 class="code-header">fn <a href="#method.market_increase" class="fn">market_increase</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    is_collateral_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    initial_collateral_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    is_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    increment_size_in_usd: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Create a market increase position order.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.market_decrease" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#215-236">Source</a><h4 class="code-header">fn <a href="#method.market_decrease" class="fn">market_decrease</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    is_collateral_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    collateral_withdrawal_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    is_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    decrement_size_in_usd: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Create a market decrease position order.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.market_swap" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#239-268">Source</a><h4 class="code-header">fn <a href="#method.market_swap" class="fn">market_swap</a>&lt;'a, S&gt;(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    is_output_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    initial_swap_in_token: &amp;Pubkey,
+    initial_swap_in_token_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    swap_path: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = &amp;'a Pubkey&gt;,
+) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt;<div class="where">where
+    C: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = S&gt; + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,
+    S: Signer,</div></h4></section></summary><div class="docblock"><p>Create a market swap order.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.limit_increase" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#272-294">Source</a><h4 class="code-header">fn <a href="#method.limit_increase" class="fn">limit_increase</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    is_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    increment_size_in_usd: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    price: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    is_collateral_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    initial_collateral_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Create a limit increase order.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.limit_decrease" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#298-320">Source</a><h4 class="code-header">fn <a href="#method.limit_decrease" class="fn">limit_decrease</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    is_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    decrement_size_in_usd: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    price: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    is_collateral_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    collateral_withdrawal_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Create a limit decrease order.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.stop_loss" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#324-346">Source</a><h4 class="code-header">fn <a href="#method.stop_loss" class="fn">stop_loss</a>(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    is_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    decrement_size_in_usd: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    price: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u128.html">u128</a>,
+    is_collateral_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    collateral_withdrawal_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt;</h4></section></summary><div class="docblock"><p>Create a stop-loss decrease order.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.limit_swap" class="method"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#350-380">Source</a><h4 class="code-header">fn <a href="#method.limit_swap" class="fn">limit_swap</a>&lt;'a, S&gt;(
+    &amp;self,
+    store: &amp;Pubkey,
+    market_token: &amp;Pubkey,
+    is_output_token_long: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>,
+    min_output_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    initial_swap_in_token: &amp;Pubkey,
+    initial_swap_in_token_amount: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+    swap_path: impl <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/iter/traits/collect/trait.IntoIterator.html" title="trait core::iter::traits::collect::IntoIterator">IntoIterator</a>&lt;Item = &amp;'a Pubkey&gt;,
+) -&gt; <a class="struct" href="order/struct.CreateOrderBuilder.html" title="struct gmsol::exchange::order::CreateOrderBuilder">CreateOrderBuilder</a>&lt;'_, C&gt;<div class="where">where
+    C: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = S&gt; + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,
+    S: Signer,</div></h4></section></summary><div class="docblock"><p>Create a limit swap order.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-ExchangeOps%3CC%3E-for-Client%3CC%3E" class="impl"><a class="src rightside" href="../../src/gmsol/exchange/mod.rs.html#403-694">Source</a><a href="#impl-ExchangeOps%3CC%3E-for-Client%3CC%3E" class="anchor">§</a><h3 class="code-header">impl&lt;S, C&gt; <a class="trait" href="trait.ExchangeOps.html" title="trait gmsol::exchange::ExchangeOps">ExchangeOps</a>&lt;C&gt; for <a class="struct" href="../client/struct.Client.html" title="struct gmsol::client::Client">Client</a>&lt;C&gt;<div class="where">where
+    C: <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = S&gt; + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,
+    S: Signer,</div></h3></section></div><script src="../../trait.impl/gmsol/exchange/trait.ExchangeOps.js" async></script></section></div></main></body></html>

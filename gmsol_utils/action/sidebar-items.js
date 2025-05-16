@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_ACTION_FLAGS"],"enum":["ActionError","ActionFlag","ActionState"]};

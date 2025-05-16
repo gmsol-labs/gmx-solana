@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Perform a liquidation by keepers."><title>liquidate in gmsol_store::gmsol_store - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="gmsol_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../gmsol_store/index.html">gmsol_<wbr>store</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">liquidate</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#accounts" title="Accounts">Accounts</a></li><li><a href="#arguments" title="Arguments">Arguments</a></li><li><a href="#errors" title="Errors">Errors</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In gmsol_<wbr>store::<wbr>gmsol_<wbr>store</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">gmsol_store</a>::<wbr><a href="index.html">gmsol_store</a></div><h1>Function <span class="fn">liquidate</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/gmsol_store/lib.rs.html#2255">Source</a> </span></div><pre class="rust item-decl"><code>pub fn liquidate&lt;'info&gt;(
+    ctx: Context&lt;'_, '_, 'info, 'info, <a class="struct" href="../instructions/exchange/position_cut/struct.PositionCut.html" title="struct gmsol_store::instructions::exchange::position_cut::PositionCut">PositionCut</a>&lt;'info&gt;&gt;,
+    nonce: [<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.array.html">32</a>],
+    recent_timestamp: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.i64.html">i64</a>,
+    execution_fee: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>,
+) -&gt; Result&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.unit.html">()</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Perform a liquidation by keepers.</p>
+<h2 id="accounts"><a class="doc-anchor" href="#accounts">§</a>Accounts</h2>
+<p><em><a href="../instructions/exchange/position_cut/struct.PositionCut.html" title="struct gmsol_store::instructions::exchange::position_cut::PositionCut">See the documentation for the accounts.</a></em></p>
+<h2 id="arguments"><a class="doc-anchor" href="#arguments">§</a>Arguments</h2>
+<ul>
+<li><code>nonce</code>: The nonce used to derive the <code>order</code> PDA address.</li>
+<li><code>recent_timestamp</code>: A recent timestamp that must be within the valid time window.</li>
+<li><code>execution_fee</code>: The execution fee claimed to be used by the keeper.</li>
+</ul>
+<h2 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h2>
+<ul>
+<li>The <a href="../instructions/exchange/position_cut/struct.PositionCut.html#structfield.authority" title="field gmsol_store::instructions::exchange::position_cut::PositionCut::authority"><code>authority</code></a> must be a signer with the ORDER_KEEPER
+role in the <code>store</code>.</li>
+<li>The <a href="../instructions/exchange/position_cut/struct.PositionCut.html#structfield.owner" title="field gmsol_store::instructions::exchange::position_cut::PositionCut::owner"><code>owner</code></a> must be the owner of the position being liquidated.</li>
+<li>The <a href="../instructions/exchange/position_cut/struct.PositionCut.html#structfield.user" title="field gmsol_store::instructions::exchange::position_cut::PositionCut::user"><code>user</code></a> must be an initialized user account corresponding to the
+<code>owner</code>.</li>
+<li>The <a href="../instructions/exchange/position_cut/struct.PositionCut.html#structfield.store" title="field gmsol_store::instructions::exchange::position_cut::PositionCut::store"><code>store</code></a> must be initialized.</li>
+<li>The <a href="../instructions/exchange/position_cut/struct.PositionCut.html#structfield.token_map" title="field gmsol_store::instructions::exchange::position_cut::PositionCut::token_map"><code>token_map</code></a> must be initialized and authorized by the
+<code>store</code>.</li>
+<li>The <a href="../instructions/exchange/position_cut/struct.PositionCut.html#structfield.oracle" title="field gmsol_store::instructions::exchange::position_cut::PositionCut::oracle"><code>oracle</code></a> must be initialized, cleared and owned by the <code>store</code>.</li>
+<li>The <a href="../instructions/exchange/position_cut/struct.PositionCut.html#structfield.market" title="field gmsol_store::instructions::exchange::position_cut::PositionCut::market"><code>market</code></a> must be:
+<ul>
+<li>Initialized and enabled</li>
+<li>Owned by the <code>store</code></li>
+<li>Associated with the position being liquidated</li>
+</ul>
+</li>
+<li>The <a href="../instructions/exchange/position_cut/struct.PositionCut.html#structfield.order" title="field gmsol_store::instructions::exchange::position_cut::PositionCut::order"><code>order</code></a> must be:
+<ul>
+<li>Uninitialized</li>
+<li>Have an address matching the PDA derived from the <code>store</code>, <code>owner</code>, provided
+<code>nonce</code> and other expected seeds</li>
+</ul>
+</li>
+<li>The <a href="../instructions/exchange/position_cut/struct.PositionCut.html#structfield.position" title="field gmsol_store::instructions::exchange::position_cut::PositionCut::position"><code>position</code></a> must be:
+<ul>
+<li>Validly initialized</li>
+<li>Owned by both the <code>owner</code> and <code>store</code></li>
+<li>In a liquidatable state</li>
+</ul>
+</li>
+<li>The <a href="../instructions/exchange/position_cut/struct.PositionCut.html#structfield.event" title="field gmsol_store::instructions::exchange::position_cut::PositionCut::event"><code>event</code></a> must be a valid trade event buffer owned by both the
+<code>store</code> and <code>authority</code>.</li>
+<li>The <a href="../instructions/exchange/position_cut/struct.PositionCut.html#structfield.long_token" title="field gmsol_store::instructions::exchange::position_cut::PositionCut::long_token"><code>long_token</code></a> and <a href="../instructions/exchange/position_cut/struct.PositionCut.html#structfield.short_token" title="field gmsol_store::instructions::exchange::position_cut::PositionCut::short_token"><code>short_token</code></a>
+must match those defined in the <code>market</code>.</li>
+<li>Token escrow accounts must be:
+<ul>
+<li>Valid for their respective tokens</li>
+<li>Owned by the <code>order</code></li>
+</ul>
+</li>
+<li>Market vault accounts must be:
+<ul>
+<li>Valid market vault accounts for their respective tokens</li>
+<li>Owned by the <code>store</code></li>
+</ul>
+</li>
+<li>Claimable token accounts must be:
+<ul>
+<li>Valid for their respective tokens</li>
+<li>Owned by the <code>store</code></li>
+<li>Properly delegated to their owners</li>
+</ul>
+</li>
+<li>Price feed accounts must be:
+<ul>
+<li>Valid and complete</li>
+<li>Provided in order matching the market’s sorted token list</li>
+</ul>
+</li>
+<li>The liquidation feature must be enabled in the <code>store</code>.</li>
+<li>Oracle prices must be valid and complete.</li>
+</ul>
+</div></details></section></div></main></body></html>

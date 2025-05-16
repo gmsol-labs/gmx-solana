@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_TIMESTAMP_ADJUSTMENT"],"struct":["PriceValidator"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["initialize","verify"],"mod":["accounts"],"struct":["Return"]};
