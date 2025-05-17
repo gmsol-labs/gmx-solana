@@ -43,6 +43,9 @@ pub mod glv;
 /// GT.
 pub mod gt;
 
+/// Definitions related to callback.
+pub mod callback;
+
 pub use deposit::Deposit;
 pub use glv::{Glv, GlvDeposit, GlvShift, GlvWithdrawal};
 pub use market::{

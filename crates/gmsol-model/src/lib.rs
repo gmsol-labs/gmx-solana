@@ -1,6 +1,7 @@
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
 #![warn(clippy::arithmetic_side_effects)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 //! A Rust implementation of GMX V2 Model.
 

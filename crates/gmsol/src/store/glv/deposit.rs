@@ -782,8 +782,11 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     async fn build_with_options(
         &mut self,
         options: BundleOptions,
-    ) -> crate::Result<BundleBuilder<'a, C>> {
-        let hint = self.prepare_hint().await?;
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
+        let hint = self
+            .prepare_hint()
+            .await
+            .map_err(gmsol_solana_utils::Error::custom)?;
 
         let token_program_id = anchor_spl::token::ID;
         let glv_token_program_id = anchor_spl::token_2022::ID;
@@ -811,7 +814,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
         let feeds = self
             .feeds_parser
             .parse(&hint.feeds)
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(gmsol_solana_utils::Error::custom)?;
         let markets = hint
             .swap
             .unique_market_tokens_excluding_current(&hint.market_token)
@@ -893,7 +897,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
                     should_unwrap_native_token: hint.should_unwrap_native_token,
                 })
                 .build()
-                .await?;
+                .await
+                .map_err(gmsol_solana_utils::Error::custom)?;
             execute.merge(close)
         } else {
             execute

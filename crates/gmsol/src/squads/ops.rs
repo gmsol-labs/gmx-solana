@@ -415,14 +415,14 @@ where
     async fn build_with_options(
         &mut self,
         options: BundleOptions,
-    ) -> crate::Result<BundleBuilder<'a, C>> {
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
         let inner = self.builder.build_with_options(options).await?;
 
         let mut luts_cache = HashMap::<_, _>::default();
 
         let multisig_data = get_multisig(&self.client.store_program().rpc(), &self.multisig)
             .await
-            .map_err(crate::Error::unknown)?;
+            .map_err(gmsol_solana_utils::Error::custom)?;
         let mut txn_idx = multisig_data.transaction_index;
 
         let mut bundle = inner.try_clone_empty()?;
@@ -450,7 +450,8 @@ where
                     &message,
                     None,
                     false,
-                )?
+                )
+                .map_err(gmsol_solana_utils::Error::custom)?
                 .swap_output(());
             bundle.push(rpc)?;
             transactions.push(transaction);
@@ -469,11 +470,11 @@ where
             if self.approve {
                 for idx in transaction_indexes.iter() {
                     let proposal = get_proposal_pda(&self.multisig, *idx, None).0;
-                    bundle.push(self.client.squads_approve_proposal(
-                        &self.multisig,
-                        &proposal,
-                        None,
-                    )?)?;
+                    bundle.push(
+                        self.client
+                            .squads_approve_proposal(&self.multisig, &proposal, None)
+                            .map_err(gmsol_solana_utils::Error::custom)?,
+                    )?;
                 }
             }
 
@@ -483,7 +484,8 @@ where
                     let mut txn = self
                         .client
                         .squads_execute_vault_transaction(&self.multisig, data, Some(&luts_cache))
-                        .await?;
+                        .await
+                        .map_err(gmsol_solana_utils::Error::custom)?;
                     *txn.compute_budget_mut() += compute_budget;
                     bundle.push(txn)?;
                 }

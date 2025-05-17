@@ -37,6 +37,10 @@ pub mod glv;
 /// Instructions for migrations.
 pub mod migration;
 
+/// Instructions for callback.
+pub mod callback;
+
+pub use callback::*;
 pub use config::*;
 pub use exchange::*;
 pub use feature::*;

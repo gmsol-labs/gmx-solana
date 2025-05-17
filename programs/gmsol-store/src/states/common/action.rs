@@ -1,14 +1,18 @@
 use anchor_lang::{prelude::*, ZeroCopy};
-use gmsol_utils::InitSpace;
+use gmsol_callback::interface::ActionKind;
+use gmsol_utils::{
+    action::{ActionCallbackKind, ActionError, MAX_ACTION_FLAGS},
+    InitSpace,
+};
 
 use crate::{
     events::Event,
-    states::{NonceBytes, Seed},
+    states::{callback::CallbackAuthority, NonceBytes, Seed},
     utils::pubkey::optional_address,
     CoreError,
 };
 
-const MAX_FLAGS: usize = 8;
+pub use gmsol_utils::action::{ActionFlag, ActionState};
 
 /// Action Header.
 #[zero_copy]
@@ -21,7 +25,8 @@ pub struct ActionHeader {
     /// The bump seed.
     pub(crate) bump: u8,
     flags: ActionFlagContainer,
-    padding_0: [u8; 4],
+    callback_kind: u8,
+    padding_0: [u8; 3],
     /// Action id.
     pub id: u64,
     /// Store.
@@ -44,8 +49,14 @@ pub struct ActionHeader {
     rent_receiver: Pubkey,
     /// The output funds receiver.
     receiver: Pubkey,
+    /// Callback program ID.
+    pub callback_program_id: Pubkey,
+    /// Callback config account.
+    pub callback_config: Pubkey,
+    /// Callback action stats account.
+    pub callback_action_stats: Pubkey,
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 256],
+    reserved: [u8; 160],
 }
 
 impl Default for ActionHeader {
@@ -54,105 +65,87 @@ impl Default for ActionHeader {
     }
 }
 
-/// Action State.
-#[non_exhaustive]
-#[repr(u8)]
-#[derive(
-    Clone,
-    Copy,
-    num_enum::IntoPrimitive,
-    num_enum::TryFromPrimitive,
-    PartialEq,
-    Eq,
-    strum::EnumString,
-    strum::Display,
-    AnchorSerialize,
-    AnchorDeserialize,
-    InitSpace,
-)]
-#[strum(serialize_all = "snake_case")]
-#[num_enum(error_type(name = CoreError, constructor = CoreError::unknown_action_state))]
-#[cfg_attr(feature = "debug", derive(Debug))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
-pub enum ActionState {
-    /// Pending.
-    Pending,
-    /// Completed.
-    Completed,
-    /// Cancelled.
-    Cancelled,
-}
-
-impl ActionState {
-    /// Transition to Completed State.
-    pub fn completed(self) -> Result<Self> {
-        let Self::Pending = self else {
-            return err!(CoreError::PreconditionsAreNotMet);
-        };
-        Ok(Self::Completed)
-    }
-
-    /// Transition to Cancelled State.
-    pub fn cancelled(self) -> Result<Self> {
-        let Self::Pending = self else {
-            return err!(CoreError::PreconditionsAreNotMet);
-        };
-        Ok(Self::Cancelled)
-    }
-
-    /// Check if the state is completed or cancelled.
-    pub fn is_completed_or_cancelled(&self) -> bool {
-        matches!(self, Self::Completed | Self::Cancelled)
-    }
-
-    /// Check if the state is pending.
-    pub fn is_pending(&self) -> bool {
-        matches!(self, Self::Pending)
-    }
-
-    /// Check if the state is cancelled.
-    pub fn is_cancelled(&self) -> bool {
-        matches!(self, Self::Cancelled)
-    }
-
-    /// Check if the state is completed.
-    pub fn is_completed(&self) -> bool {
-        matches!(self, Self::Completed)
-    }
-}
-
-/// Action Flags.
-#[repr(u8)]
-#[non_exhaustive]
-#[derive(num_enum::IntoPrimitive, num_enum::TryFromPrimitive)]
-pub enum ActionFlag {
-    /// Should unwrap native token.
-    ShouldUnwrapNativeToken,
-    // CHECK: should have no more than `MAX_FLAGS` of flags.
-}
-
-gmsol_utils::flags!(ActionFlag, MAX_FLAGS, u8);
+gmsol_utils::flags!(ActionFlag, MAX_ACTION_FLAGS, u8);
 
 impl ActionHeader {
     /// Get action state.
     pub fn action_state(&self) -> Result<ActionState> {
-        ActionState::try_from(self.action_state).map_err(|err| error!(err))
+        ActionState::try_from(self.action_state).map_err(|_| error!(CoreError::UnknownActionState))
     }
 
     fn set_action_state(&mut self, new_state: ActionState) {
         self.action_state = new_state.into();
     }
 
+    /// Get callback kind.
+    pub fn callback_kind(&self) -> Result<ActionCallbackKind> {
+        ActionCallbackKind::try_from(self.callback_kind).map_err(|_| error!(CoreError::Internal))
+    }
+
+    /// Set general callback.
+    pub(crate) fn set_general_callback(
+        &mut self,
+        program_id: &Pubkey,
+        config: &Pubkey,
+        action_stats: &Pubkey,
+    ) -> Result<()> {
+        require_eq!(
+            self.callback_kind()?,
+            ActionCallbackKind::Disabled,
+            CoreError::PreconditionsAreNotMet
+        );
+        self.callback_kind = ActionCallbackKind::General.into();
+        self.callback_program_id = *program_id;
+        self.callback_config = *config;
+        self.callback_action_stats = *action_stats;
+        Ok(())
+    }
+
+    /// Validate callback.
+    pub(crate) fn validate_general_callback(
+        &self,
+        program_id: &Pubkey,
+        config: &Pubkey,
+        action_stats: &Pubkey,
+    ) -> Result<()> {
+        require_eq!(
+            self.callback_kind()?,
+            ActionCallbackKind::General,
+            CoreError::InvalidArgument
+        );
+        require_keys_eq!(
+            *program_id,
+            self.callback_program_id,
+            CoreError::InvalidArgument
+        );
+        require_keys_eq!(*config, self.callback_config, CoreError::InvalidArgument);
+        require_keys_eq!(
+            *action_stats,
+            self.callback_action_stats,
+            CoreError::InvalidArgument
+        );
+        Ok(())
+    }
+
     /// Transition to Completed state.
     pub(crate) fn completed(&mut self) -> Result<()> {
-        self.set_action_state(self.action_state()?.completed()?);
+        self.set_action_state(
+            self.action_state()?
+                .completed()
+                .map_err(CoreError::from)
+                .map_err(|err| error!(err))?,
+        );
         Ok(())
     }
 
     /// Transition to Cancelled state.
     pub(crate) fn cancelled(&mut self) -> Result<()> {
-        self.set_action_state(self.action_state()?.cancelled()?);
+        self.set_action_state(
+            self.action_state()?
+                .cancelled()
+                .map_err(CoreError::from)
+                .map_err(|err| error!(err))?,
+        );
         Ok(())
     }
 
@@ -397,4 +390,74 @@ pub trait Closable {
 
     /// To closed event.
     fn to_closed_event(&self, address: &Pubkey, reason: &str) -> Result<Self::ClosedEvent>;
+}
+
+impl From<ActionError> for CoreError {
+    fn from(err: ActionError) -> Self {
+        msg!("Action error: {}", err);
+        match err {
+            ActionError::PreconditionsAreNotMet(_) => Self::PreconditionsAreNotMet,
+        }
+    }
+}
+
+pub(crate) enum On {
+    Created(ActionKind),
+    #[allow(dead_code)]
+    Executed(ActionKind, bool),
+    Closed(ActionKind),
+}
+
+pub(crate) fn invoke_callback<'info>(
+    kind: On,
+    authority: &Account<'info, CallbackAuthority>,
+    program: &AccountInfo<'info>,
+    config: &AccountInfo<'info>,
+    action_stats: &AccountInfo<'info>,
+    owner: &AccountInfo<'info>,
+    action: &AccountInfo<'info>,
+    remaining_accounts: &[AccountInfo<'info>],
+) -> Result<()> {
+    use gmsol_callback::interface::{on_closed, on_created, on_executed, Callback};
+
+    let ctx = CpiContext::new(
+        program.clone(),
+        Callback {
+            authority: authority.to_account_info(),
+            config: config.clone(),
+            action_stats: action_stats.clone(),
+            owner: owner.clone(),
+            action: action.clone(),
+        },
+    )
+    .with_remaining_accounts(remaining_accounts.to_vec());
+
+    let authority_bump = authority.bump();
+    let extra_account_count = remaining_accounts
+        .len()
+        .try_into()
+        .map_err(|_| error!(CoreError::Internal))?;
+
+    let signer_seeds = authority.signer_seeds();
+    match kind {
+        On::Created(kind) => on_created(
+            ctx.with_signer(&[&signer_seeds]),
+            authority_bump,
+            kind.into(),
+            extra_account_count,
+        ),
+        On::Executed(kind, success) => on_executed(
+            ctx.with_signer(&[&signer_seeds]),
+            authority_bump,
+            kind.into(),
+            success,
+            extra_account_count,
+        ),
+        On::Closed(kind) => on_closed(
+            ctx.with_signer(&[&signer_seeds]),
+            authority_bump,
+            kind.into(),
+            extra_account_count,
+        ),
+    }
 }

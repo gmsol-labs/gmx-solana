@@ -9,7 +9,7 @@ const TARGET_SCALE: u32 = MAX_REPR.ilog10() - 1;
 /// # Examples
 ///
 /// ```
-/// use gmsol::utils::signed_value_to_decimal;
+/// use gmsol_sdk::utils::signed_value_to_decimal;
 /// use rust_decimal_macros::dec;
 ///
 /// assert_eq!(
@@ -26,7 +26,7 @@ pub fn signed_value_to_decimal(num: i128) -> Decimal {
 /// # Examples
 ///
 /// ```
-/// use gmsol::utils::unsigned_value_to_decimal;
+/// use gmsol_sdk::utils::unsigned_value_to_decimal;
 /// use rust_decimal_macros::dec;
 ///
 /// assert_eq!(
@@ -43,7 +43,7 @@ pub fn unsigned_value_to_decimal(num: u128) -> Decimal {
 /// # Examples
 ///
 /// ```
-/// use gmsol::utils::unsigned_amount_to_decimal;
+/// use gmsol_sdk::utils::unsigned_amount_to_decimal;
 /// use rust_decimal_macros::dec;
 ///
 /// assert_eq!(
@@ -72,7 +72,7 @@ pub fn unsigned_amount_to_decimal(mut num: u64, mut decimals: u8) -> Decimal {
 /// # Examples
 ///
 /// ```
-/// use gmsol::utils::signed_amount_to_decimal;
+/// use gmsol_sdk::utils::signed_amount_to_decimal;
 /// use rust_decimal_macros::dec;
 ///
 /// assert_eq!(
@@ -97,7 +97,7 @@ pub fn signed_amount_to_decimal(num: i64, decimals: u8) -> Decimal {
 /// # Examples
 ///
 /// ```
-/// use gmsol::utils::unsigned_fixed_to_decimal;
+/// use gmsol_sdk::utils::unsigned_fixed_to_decimal;
 /// use rust_decimal_macros::dec;
 ///
 /// assert_eq!(
@@ -140,7 +140,7 @@ pub fn unsigned_fixed_to_decimal(num: u128, decimals: u8) -> Option<Decimal> {
 /// # Examples
 ///
 /// ```
-/// use gmsol::utils::signed_fixed_to_decimal;
+/// use gmsol_sdk::utils::signed_fixed_to_decimal;
 /// use rust_decimal_macros::dec;
 ///
 /// assert_eq!(

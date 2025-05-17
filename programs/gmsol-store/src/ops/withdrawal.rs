@@ -5,7 +5,10 @@ use typed_builder::TypedBuilder;
 use crate::{
     events::EventEmitter,
     states::{
-        common::action::{Action, ActionParams},
+        common::{
+            action::{Action, ActionParams},
+            swap::SwapActionParamsExt,
+        },
         market::revertible::Revertible,
         withdrawal::Withdrawal,
         Market, NonceBytes, Oracle, Store, ValidateOracleTime,

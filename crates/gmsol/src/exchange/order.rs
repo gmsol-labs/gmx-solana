@@ -877,15 +877,8 @@ where
         self.token_map = Some(address);
         self
     }
-}
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
-    for ExecuteOrderBuilder<'a, C>
-{
-    async fn build_with_options(
-        &mut self,
-        options: BundleOptions,
-    ) -> crate::Result<BundleBuilder<'a, C>> {
+    async fn build_txns(&mut self, options: BundleOptions) -> crate::Result<BundleBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
         let [claimable_long_token_account_for_user, claimable_short_token_account_for_user, claimable_pnl_token_account_for_holding] =
             self.claimable_accounts().await?;
@@ -1131,6 +1124,19 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             .try_push(execute_order)?
             .try_push(post_builder)?;
         Ok(bundle)
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
+    for ExecuteOrderBuilder<'a, C>
+{
+    async fn build_with_options(
+        &mut self,
+        options: BundleOptions,
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
+        self.build_txns(options)
+            .await
+            .map_err(gmsol_solana_utils::Error::custom)
     }
 }
 

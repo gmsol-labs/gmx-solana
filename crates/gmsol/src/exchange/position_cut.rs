@@ -221,15 +221,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PositionCutBuilder<'a, C> {
         self.alts.insert(account.key, account.addresses);
         self
     }
-}
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
-    for PositionCutBuilder<'a, C>
-{
-    async fn build_with_options(
-        &mut self,
-        options: BundleOptions,
-    ) -> crate::Result<BundleBuilder<'a, C>> {
+    async fn build_txns(&mut self, options: BundleOptions) -> crate::Result<BundleBuilder<'a, C>> {
         let token_program_id = anchor_spl::token::ID;
 
         let payer = self.client.payer();
@@ -415,6 +408,19 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             .try_push(prepare.merge(exec_builder))?
             .try_push(post_builder)?;
         Ok(bundle)
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
+    for PositionCutBuilder<'a, C>
+{
+    async fn build_with_options(
+        &mut self,
+        options: BundleOptions,
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
+        self.build_txns(options)
+            .await
+            .map_err(gmsol_solana_utils::Error::custom)
     }
 }
 

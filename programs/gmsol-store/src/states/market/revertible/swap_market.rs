@@ -78,7 +78,9 @@ impl<'a, 'info> SwapMarkets<'a, 'info> {
             + gmsol_model::SwapMarketMut<{ constants::MARKET_DECIMALS }, Num = u128>
             + gmsol_model::BorrowingFeeMarketMut<{ constants::MARKET_DECIMALS }>,
     {
-        let long_path = params.validated_primary_swap_path()?;
+        let long_path = params
+            .validated_primary_swap_path()
+            .map_err(CoreError::from)?;
         let long_output_amount = token_ins
             .0
             .and_then(|token| (token_in_amounts.0 != 0).then_some(token))
@@ -94,7 +96,9 @@ impl<'a, 'info> SwapMarkets<'a, 'info> {
             })
             .transpose()?
             .unwrap_or_default();
-        let short_path = params.validated_secondary_swap_path()?;
+        let short_path = params
+            .validated_secondary_swap_path()
+            .map_err(CoreError::from)?;
         let short_output_amount = token_ins
             .1
             .and_then(|token| (token_in_amounts.1 != 0).then_some(token))
@@ -209,7 +213,10 @@ impl<'a, 'info> SwapMarkets<'a, 'info> {
                     .record_transferred_in_by_token(token_in, token_in_amount)
                     .map_err(ModelError::from)?;
             }
-            let side = market.market_meta().to_token_side(token_in)?;
+            let side = market
+                .market_meta()
+                .to_token_side(token_in)
+                .map_err(CoreError::from)?;
             let prices = oracle.market_prices(market)?;
             // Update borrowing state.
             {
@@ -231,7 +238,10 @@ impl<'a, 'info> SwapMarkets<'a, 'info> {
                 .map_err(ModelError::from)?
                 .execute()
                 .map_err(ModelError::from)?;
-            *token_in = *market.market_meta().opposite_token(token_in)?;
+            *token_in = *market
+                .market_meta()
+                .opposite_token(token_in)
+                .map_err(CoreError::from)?;
             *token_in_amount = (*report.token_out_amount())
                 .try_into()
                 .map_err(|_| error!(CoreError::TokenAmountOverflow))?;
@@ -462,7 +472,10 @@ where
         let current = match self {
             Self::From(m) | Self::Into(m) => m,
         };
-        let side = current.market_meta().to_token_side(token_in)?;
+        let side = current
+            .market_meta()
+            .to_token_side(token_in)
+            .map_err(CoreError::from)?;
         let prices = oracle.market_prices(*current)?;
         let report = current
             .swap(side, (*token_in_amount).into(), prices)
@@ -472,7 +485,10 @@ where
         *token_in_amount = (*report.token_out_amount())
             .try_into()
             .map_err(|_| error!(CoreError::TokenAmountOverflow))?;
-        *token_in = *current.market_meta().opposite_token(token_in)?;
+        *token_in = *current
+            .market_meta()
+            .opposite_token(token_in)
+            .map_err(CoreError::from)?;
         msg!("[Swap] swapped in current market");
         event_emitter.emit_cpi(&SwapExecuted::new(self.rev(), self.current(), report, None))?;
         Ok(())

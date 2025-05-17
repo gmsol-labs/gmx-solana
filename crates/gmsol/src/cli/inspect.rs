@@ -379,11 +379,26 @@ impl InspectArgs {
                 };
                 let store = client.store(&address).await?;
                 if let Some(key) = get_amount {
-                    println!("{}", store.get_amount_by_key(*key));
+                    println!(
+                        "{}",
+                        store
+                            .get_amount_by_key(*key)
+                            .ok_or_eyre("unsupported amount key")?
+                    );
                 } else if let Some(key) = get_factor {
-                    println!("{}", store.get_factor_by_key(*key));
+                    println!(
+                        "{}",
+                        store
+                            .get_factor_by_key(*key)
+                            .ok_or_eyre("unsupported factor key")?
+                    );
                 } else if let Some(key) = get_address {
-                    println!("{}", store.get_address_by_key(*key));
+                    println!(
+                        "{}",
+                        store
+                            .get_address_by_key(*key)
+                            .ok_or_eyre("unsupported address key")?
+                    );
                 } else if let Some(user) = get_roles {
                     let role_store = store.role();
                     for role in role_store.roles() {
@@ -455,7 +470,9 @@ impl InspectArgs {
                         .get(token)
                         .ok_or(gmsol::Error::invalid_argument("token not found"))?;
                     if let Some(kind) = feed {
-                        let config = config.get_feed_config(kind)?;
+                        let config = config
+                            .get_feed_config(kind)
+                            .map_err(gmsol::Error::invalid_argument)?;
                         let serialized = ser::SerializeFeedConfig::with_hint(kind, config);
                         output.print(&serialized, |serialized| {
                             if *debug {
@@ -576,7 +593,9 @@ impl InspectArgs {
                     let market = client.market(&address).await?;
                     let serialized = SerializeMarket::from_market(&address, &market)?;
                     if let Some(key) = get_config {
-                        let value = market.get_config_by_key(*key);
+                        let value = market
+                            .get_config_by_key(*key)
+                            .ok_or_eyre("unimplemented config key")?;
                         output.print(value, |value| Ok(value.to_string()))?;
                     } else if *debug {
                         println!("{market:#?}");
@@ -1053,7 +1072,7 @@ impl InspectArgs {
                 }
             }
             Command::IxData { data, program } => {
-                use gmsol::decode::{value::OwnedDataDecoder, Decode, GMSOLCPIEvent};
+                use gmsol::decode::{gmsol::store::GMSOLCPIEvent, value::OwnedDataDecoder, Decode};
 
                 let data = data.strip_prefix("0x").unwrap_or(data);
                 let data = hex::decode(data).map_err(gmsol::Error::invalid_argument)?;
@@ -1320,7 +1339,7 @@ impl InspectArgs {
                         .await?
                         .ok_or(gmsol::Error::NotFound)?;
 
-                    let status = match buffer.header().approved_at() {
+                    let status = match buffer.header.approved_at() {
                         Some(approved_at) => {
                             let approved_at =
                                 time::OffsetDateTime::from_unix_timestamp(approved_at)
@@ -1338,7 +1357,7 @@ impl InspectArgs {
                     };
                     tracing::info!("[{idx}] {address}: {status}");
 
-                    instructions.push(buffer.to_instruction(true)?);
+                    instructions.push(buffer.to_instruction(true).map_err(gmsol::Error::unknown)?);
                 }
 
                 let message = Message::new(&instructions, Some(&client.payer()));

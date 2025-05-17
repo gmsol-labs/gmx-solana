@@ -483,7 +483,7 @@ impl Args {
                             feed_id,
                             Some(feeds.switchboard_feed_timestamp_adjustment),
                         )
-                        .map_err(anchor_client::ClientError::from)?;
+                        .map_err(gmsol::Error::invalid_argument)?;
                 }
                 if let Some(feed_id) = feeds.pyth_feed_id()? {
                     builder = builder
@@ -492,7 +492,7 @@ impl Args {
                             feed_id,
                             Some(feeds.pyth_feed_timestamp_adjustment),
                         )
-                        .map_err(anchor_client::ClientError::from)?;
+                        .map_err(gmsol::Error::invalid_argument)?;
                 }
                 if let Some(feed) = feeds.chainlink_feed {
                     builder = builder
@@ -501,7 +501,7 @@ impl Args {
                             feed,
                             Some(feeds.chainlink_feed_timestamp_adjustment),
                         )
-                        .map_err(anchor_client::ClientError::from)?;
+                        .map_err(gmsol::Error::invalid_argument)?;
                 }
                 if let Some(feed_id) = feeds.chainlink_data_streams_feed_id()? {
                     builder = builder
@@ -510,7 +510,7 @@ impl Args {
                             feed_id,
                             Some(feeds.chainlink_data_streams_feed_timestamp_adjustment),
                         )
-                        .map_err(anchor_client::ClientError::from)?;
+                        .map_err(gmsol::Error::invalid_argument)?;
                 }
                 let token_map = self.token_map(client, store).await?;
                 let req = if let Some(decimals) = fake_decimals {
@@ -1028,36 +1028,44 @@ impl<'a> TryFrom<&'a TokenConfig> for UpdateTokenConfigParams {
             .with_heartbeat_duration(config.heartbeat_duration)
             .with_precision(config.precision);
         if let Some(feed_id) = config.feeds.switchboard_feed_id()? {
-            builder = builder.update_price_feed(
-                &PriceProviderKind::Switchboard,
-                feed_id,
-                Some(config.feeds.switchboard_feed_timestamp_adjustment),
-            )?;
+            builder = builder
+                .update_price_feed(
+                    &PriceProviderKind::Switchboard,
+                    feed_id,
+                    Some(config.feeds.switchboard_feed_timestamp_adjustment),
+                )
+                .map_err(gmsol::Error::invalid_argument)?;
         }
         if let Some(pyth_feed_id) = config.feeds.pyth_feed_id()? {
-            builder = builder.update_price_feed(
-                &PriceProviderKind::Pyth,
-                pyth_feed_id,
-                Some(config.feeds.pyth_feed_timestamp_adjustment),
-            )?;
+            builder = builder
+                .update_price_feed(
+                    &PriceProviderKind::Pyth,
+                    pyth_feed_id,
+                    Some(config.feeds.pyth_feed_timestamp_adjustment),
+                )
+                .map_err(gmsol::Error::invalid_argument)?;
         }
         if let Some(chainlink_feed) = config.feeds.chainlink_feed {
-            builder = builder.update_price_feed(
-                &PriceProviderKind::Chainlink,
-                chainlink_feed,
-                Some(config.feeds.chainlink_feed_timestamp_adjustment),
-            )?;
+            builder = builder
+                .update_price_feed(
+                    &PriceProviderKind::Chainlink,
+                    chainlink_feed,
+                    Some(config.feeds.chainlink_feed_timestamp_adjustment),
+                )
+                .map_err(gmsol::Error::invalid_argument)?;
         }
         if let Some(feed_id) = config.feeds.chainlink_data_streams_feed_id()? {
-            builder = builder.update_price_feed(
-                &PriceProviderKind::ChainlinkDataStreams,
-                feed_id,
-                Some(
-                    config
-                        .feeds
-                        .chainlink_data_streams_feed_timestamp_adjustment,
-                ),
-            )?;
+            builder = builder
+                .update_price_feed(
+                    &PriceProviderKind::ChainlinkDataStreams,
+                    feed_id,
+                    Some(
+                        config
+                            .feeds
+                            .chainlink_data_streams_feed_timestamp_adjustment,
+                    ),
+                )
+                .map_err(gmsol::Error::invalid_argument)?;
         }
         Ok(builder)
     }

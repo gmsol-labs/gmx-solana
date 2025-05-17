@@ -1,5 +1,9 @@
 # GMX-Solana
 
+[![Crates.io](https://img.shields.io/crates/v/gmsol-sdk.svg)](https://crates.io/crates/gmsol-sdk)
+[![Docs.rs](https://docs.rs/gmsol-sdk/badge.svg)](https://docs.rs/gmsol-sdk)
+[![npm](https://img.shields.io/npm/v/@gmsol-labs/gmsol-sdk.svg)](https://www.npmjs.com/package/@gmsol-labs/gmsol-sdk)
+
 ## Audits
 
 | Program          | Last Audit Date | Version   |
@@ -16,7 +20,50 @@
 
 ## Integration
 
-### Method 1: Using `declare_program!`
+### Method 1: Using the Rust SDK
+
+Add the following to your `Cargo.toml`:
+
+```toml
+[dependencies]
+gmsol-sdk = { version = "0.5.0", features = ["client"] }
+```
+
+Create a `Client` and start using the core APIs:
+
+```rust
+use gmsol_sdk::{
+    Client,
+    ops::ExchangeOps,
+    solana_utils::{
+        cluster::Cluster,
+        solana_sdk::{pubkey::Pubkey, signature::read_keypair_file},
+    },
+};
+
+let keypair =
+    read_keypair_file(std::env::var("KEYPAIR")?)?;
+let market_token: Pubkey = std::env::var("MARKET_TOKEN")?.parse()?;
+
+let client = Client::new(Cluster::Mainnet, &keypair)?;
+let store = client.find_store_address("");
+
+let (txn, order) = client
+    .market_increase(
+        &store,
+        &market_token,
+        true,
+        5_000_000,
+        true,
+        500_000_000_000_000_000_000,
+    )
+    .build_with_address()
+    .await?;
+
+let signature = txn.send().await?;
+```
+
+### Method 2: Using `declare_program!`
 
 #### 1. Initialize a new Rust project and add dependencies
 
@@ -24,7 +71,7 @@ Create a new Rust project and include `anchor_lang` and `bytemuck` as dependenci
 
 ```toml
 [dependencies]
-anchor-lang = "0.31.1"
+anchor-lang = "0.30.1"
 bytemuck = { version = "1.19.0", features = ["min_const_generics"] }
 ```
 

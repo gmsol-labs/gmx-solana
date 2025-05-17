@@ -35,7 +35,10 @@ impl PriceValidator {
         oracle_slot: u64,
         _price: &Price,
     ) -> Result<()> {
-        let timestamp_adjustment = token_config.timestamp_adjustment(provider)?.into();
+        let timestamp_adjustment = token_config
+            .timestamp_adjustment(provider)
+            .map_err(CoreError::from)?
+            .into();
         let ts = oracle_ts
             .checked_sub_unsigned(timestamp_adjustment)
             .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;

@@ -27,22 +27,24 @@ idl-build = [
     "anchor-spl/idl-build",
     "gmsol-utils/idl-build",
 ]
-debug = ["derive_more/debug"]
-display = ["utils"]
+debug = ["derive_more/debug", "gmsol-utils/debug"]
+display = ["utils", "gmsol-utils/display"]
 utils = ["bytes", "bs58"]
-serde = ["dep:serde", "serde_with", "serde_bytes"]
-enum-iter = []
+serde = ["dep:serde", "serde_with", "serde_bytes", "gmsol-utils/serde"]
+enum-iter = ["gmsol-utils/enum-iter"]
 migration = []
 mock = ["gmsol-chainlink-datastreams/mock"]
 multi-store = []
-devnet = []
+devnet = ["gmsol-utils/devnet"]
 test-only = []
 
 [dependencies]
-bytemuck = { workspace = true, features = ["min_const_generics"] }
-anchor-lang = { workspace = true, features = ["init-if-needed", "event-cpi"] }
 gmsol-model = { workspace = true, features = ["u128", "solana", "strum"] }
 gmsol-utils = { workspace = true }
+gmsol-callback = { workspace = true, features = ["interface"] }
+
+bytemuck = { workspace = true, features = ["min_const_generics"] }
+anchor-lang = { workspace = true, features = ["init-if-needed", "event-cpi"] }
 anchor-spl = { workspace = true, default-features = false, features = [
     "token",
     "token_2022",
@@ -54,6 +56,7 @@ num_enum = { workspace = true }
 static_assertions = { workspace = true }
 clap = { workspace = true, optional = true }
 # pyth-sdk-solana = { workspace = true }
+switchboard-on-demand = { workspace = true, default-features = false }
 pyth-solana-receiver-sdk = { workspace = true }
 paste = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
@@ -67,9 +70,6 @@ bs58 = { workspace = true, optional = true }
 derive_more = { workspace = true, optional = true }
 gmsol-chainlink-datastreams = { workspace = true }
 rust_decimal = { workspace = true }
-switchboard-on-demand = { workspace = true, default-features = false, features = [
-    "no-entrypoint",
-] }
 cfg-if = { workspace = true }
 
 [package.metadata.docs.rs]

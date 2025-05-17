@@ -12,6 +12,8 @@ use super::{
     Amount, Factor, InitSpace, RoleKey, RoleStore, Seed,
 };
 
+pub use gmsol_utils::config::{AddressKey, AmountKey, FactorKey};
+
 const MAX_LEN: usize = 32;
 
 /// Data Store.
@@ -219,49 +221,56 @@ impl Store {
     /// Get amount.
     pub fn get_amount(&self, key: &str) -> Result<&Amount> {
         let key = AmountKey::from_str(key).map_err(|_| error!(CoreError::InvalidStoreConfigKey))?;
-        Ok(self.get_amount_by_key(key))
+        self.get_amount_by_key(key)
+            .ok_or_else(|| error!(CoreError::Unimplemented))
     }
 
     /// Get amount by key.
     #[inline]
-    pub fn get_amount_by_key(&self, key: AmountKey) -> &Amount {
+    pub fn get_amount_by_key(&self, key: AmountKey) -> Option<&Amount> {
         self.amount.get(&key)
     }
 
     /// Get amount mutably
     pub fn get_amount_mut(&mut self, key: &str) -> Result<&mut Amount> {
         let key = AmountKey::from_str(key).map_err(|_| error!(CoreError::InvalidStoreConfigKey))?;
-        Ok(self.amount.get_mut(&key))
+        self.amount
+            .get_mut(&key)
+            .ok_or_else(|| error!(CoreError::Unimplemented))
     }
 
     /// Get factor.
     pub fn get_factor(&self, key: &str) -> Result<&Factor> {
         let key = FactorKey::from_str(key).map_err(|_| error!(CoreError::InvalidStoreConfigKey))?;
-        Ok(self.get_factor_by_key(key))
+        self.get_factor_by_key(key)
+            .ok_or_else(|| error!(CoreError::Unimplemented))
     }
 
     /// Get factor by key.
     #[inline]
-    pub fn get_factor_by_key(&self, key: FactorKey) -> &Factor {
+    pub fn get_factor_by_key(&self, key: FactorKey) -> Option<&Factor> {
         self.factor.get(&key)
     }
 
     /// Get factor mutably
     pub fn get_factor_mut(&mut self, key: &str) -> Result<&mut Factor> {
         let key = FactorKey::from_str(key).map_err(|_| error!(CoreError::InvalidStoreConfigKey))?;
-        Ok(self.factor.get_mut(&key))
+        self.factor
+            .get_mut(&key)
+            .ok_or_else(|| error!(CoreError::Unimplemented))
     }
 
     /// Get address.
     pub fn get_address(&self, key: &str) -> Result<&Pubkey> {
         let key =
             AddressKey::from_str(key).map_err(|_| error!(CoreError::InvalidStoreConfigKey))?;
-        Ok(self.get_address_by_key(key))
+        self.get_address_by_key(key)
+            .ok_or_else(|| error!(CoreError::Unimplemented))
     }
 
     /// Get address by key.
     #[inline]
-    pub fn get_address_by_key(&self, key: AddressKey) -> &Pubkey {
+    pub fn get_address_by_key(&self, key: AddressKey) -> Option<&Pubkey> {
         self.address.get(&key)
     }
 
@@ -269,7 +278,9 @@ impl Store {
     pub fn get_address_mut(&mut self, key: &str) -> Result<&mut Pubkey> {
         let key =
             AddressKey::from_str(key).map_err(|_| error!(CoreError::InvalidStoreConfigKey))?;
-        Ok(self.address.get_mut(&key))
+        self.address
+            .get_mut(&key)
+            .ok_or_else(|| error!(CoreError::Unimplemented))
     }
 
     /// Calculate the request expiration time.
@@ -429,8 +440,9 @@ impl Store {
 
         let discount_factor_for_rank = self.gt().order_fee_discount_factor(rank)?;
         if is_referred {
-            let discount_factor_for_referred =
-                self.get_factor_by_key(FactorKey::OrderFeeDiscountForReferredUser);
+            let discount_factor_for_referred = self
+                .get_factor_by_key(FactorKey::OrderFeeDiscountForReferredUser)
+                .ok_or_else(|| error!(CoreError::Unimplemented))?;
             let complement_discount_factor_for_referred = constants::MARKET_USD_UNIT
                 .checked_sub(*discount_factor_for_referred)
                 .ok_or_else(|| error!(CoreError::Internal))?;
@@ -536,31 +548,6 @@ pub struct Amounts {
     reserved: [Amount; 126],
 }
 
-/// Amount keys.
-#[derive(strum::EnumString, strum::Display, Clone, Copy)]
-#[strum(serialize_all = "snake_case")]
-#[non_exhaustive]
-#[cfg_attr(feature = "debug", derive(Debug))]
-#[cfg_attr(feature = "enum-iter", derive(strum::EnumIter))]
-#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
-#[cfg_attr(feature = "clap", clap(rename_all = "snake_case"))]
-pub enum AmountKey {
-    /// Claimable time window (seconds).
-    ClaimableTimeWindow,
-    /// Recent time window (seconds).
-    RecentTimeWindow,
-    /// Request expiration (seconds).
-    RequestExpiration,
-    /// Oracle max age (seconds).
-    OracleMaxAge,
-    /// Oracle max timestamp range (seconds).
-    OracleMaxTimestampRange,
-    /// Max timestamp excess for oracle timestamp (seconds).
-    OracleMaxFutureTimestampExcess,
-    /// Max ADL prices staleness (seconds).
-    AdlPricesMaxStaleness,
-}
-
 impl Amounts {
     fn init(&mut self) {
         self.claimable_time_window = constants::DEFAULT_CLAIMABLE_TIME_WINDOW;
@@ -574,8 +561,8 @@ impl Amounts {
     }
 
     /// Get.
-    fn get(&self, key: &AmountKey) -> &Amount {
-        match key {
+    fn get(&self, key: &AmountKey) -> Option<&Amount> {
+        let value = match key {
             AmountKey::ClaimableTimeWindow => &self.claimable_time_window,
             AmountKey::RecentTimeWindow => &self.recent_time_window,
             AmountKey::RequestExpiration => &self.request_expiration,
@@ -583,12 +570,14 @@ impl Amounts {
             AmountKey::OracleMaxTimestampRange => &self.oracle_max_timestamp_range,
             AmountKey::OracleMaxFutureTimestampExcess => &self.oracle_max_future_timestamp_excess,
             AmountKey::AdlPricesMaxStaleness => &self.adl_prices_max_staleness,
-        }
+            _ => return None,
+        };
+        Some(value)
     }
 
     /// Get mutably.
-    fn get_mut(&mut self, key: &AmountKey) -> &mut Amount {
-        match key {
+    fn get_mut(&mut self, key: &AmountKey) -> Option<&mut Amount> {
+        let value = match key {
             AmountKey::ClaimableTimeWindow => &mut self.claimable_time_window,
             AmountKey::RecentTimeWindow => &mut self.recent_time_window,
             AmountKey::RequestExpiration => &mut self.request_expiration,
@@ -598,7 +587,9 @@ impl Amounts {
                 &mut self.oracle_max_future_timestamp_excess
             }
             AmountKey::AdlPricesMaxStaleness => &mut self.adl_prices_max_staleness,
-        }
+            _ => return None,
+        };
+        Some(value)
     }
 }
 
@@ -612,44 +603,33 @@ pub struct Factors {
     reserved: [Factor; 64],
 }
 
-/// Factor keys.
-#[derive(strum::EnumString, strum::Display, Clone, Copy)]
-#[strum(serialize_all = "snake_case")]
-#[non_exhaustive]
-#[cfg_attr(feature = "debug", derive(Debug))]
-#[cfg_attr(feature = "enum-iter", derive(strum::EnumIter))]
-#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
-#[cfg_attr(feature = "clap", clap(rename_all = "snake_case"))]
-pub enum FactorKey {
-    /// Oracle Ref Price Deviation.
-    OracleRefPriceDeviation,
-    /// Order fee discount for referred user.
-    OrderFeeDiscountForReferredUser,
-}
-
 impl Factors {
     fn init(&mut self) {
         self.oracle_ref_price_deviation = constants::DEFAULT_ORACLE_REF_PRICE_DEVIATION;
     }
 
     /// Get.
-    fn get(&self, key: &FactorKey) -> &Factor {
-        match key {
+    fn get(&self, key: &FactorKey) -> Option<&Factor> {
+        let value = match key {
             FactorKey::OracleRefPriceDeviation => &self.oracle_ref_price_deviation,
             FactorKey::OrderFeeDiscountForReferredUser => {
                 &self.order_fee_discount_for_referred_user
             }
-        }
+            _ => return None,
+        };
+        Some(value)
     }
 
     /// Get mutably.
-    fn get_mut(&mut self, key: &FactorKey) -> &mut Factor {
-        match key {
+    fn get_mut(&mut self, key: &FactorKey) -> Option<&mut Factor> {
+        let value = match key {
             FactorKey::OracleRefPriceDeviation => &mut self.oracle_ref_price_deviation,
             FactorKey::OrderFeeDiscountForReferredUser => {
                 &mut self.order_fee_discount_for_referred_user
             }
-        }
+            _ => return None,
+        };
+        Some(value)
     }
 }
 
@@ -662,35 +642,26 @@ pub struct Addresses {
     reserved: [Pubkey; 30],
 }
 
-/// Address keys.
-#[derive(strum::EnumString, strum::Display, Clone, Copy)]
-#[strum(serialize_all = "snake_case")]
-#[non_exhaustive]
-#[cfg_attr(feature = "debug", derive(Debug))]
-#[cfg_attr(feature = "enum-iter", derive(strum::EnumIter))]
-#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
-#[cfg_attr(feature = "clap", clap(rename_all = "snake_case"))]
-pub enum AddressKey {
-    /// Holding.
-    Holding,
-}
-
 impl Addresses {
     fn init(&mut self, holding: Pubkey) {
         self.holding = holding;
     }
 
     /// Get.
-    fn get(&self, key: &AddressKey) -> &Pubkey {
-        match key {
+    fn get(&self, key: &AddressKey) -> Option<&Pubkey> {
+        let value = match key {
             AddressKey::Holding => &self.holding,
-        }
+            _ => return None,
+        };
+        Some(value)
     }
 
     /// Get mutably.
-    fn get_mut(&mut self, key: &AddressKey) -> &mut Pubkey {
-        match key {
+    fn get_mut(&mut self, key: &AddressKey) -> Option<&mut Pubkey> {
+        let value = match key {
             AddressKey::Holding => &mut self.holding,
-        }
+            _ => return None,
+        };
+        Some(value)
     }
 }

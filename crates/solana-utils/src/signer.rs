@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, ops::Deref};
+use std::{collections::HashMap, fmt, ops::Deref, sync::Arc};
 
 use dyn_clone::{clone_trait_object, DynClone};
 use solana_sdk::{
@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// Boxed Signer.
-pub type BoxSigner = Box<dyn Signer>;
+pub type LocalBoxSigner = Box<dyn Signer>;
 
 /// Boxed Clonable Signer.
 #[derive(Clone)]
@@ -63,6 +63,42 @@ impl Signer for BoxClonableSigner<'_> {
     fn is_interactive(&self) -> bool {
         self.0.is_interactive()
     }
+}
+
+/// Boxed signer.
+pub struct BoxSigner(Box<dyn Signer + Send + Sync>);
+
+impl Signer for BoxSigner {
+    fn pubkey(&self) -> Pubkey {
+        self.0.pubkey()
+    }
+
+    fn try_pubkey(&self) -> Result<Pubkey, solana_sdk::signer::SignerError> {
+        self.0.try_pubkey()
+    }
+
+    fn sign_message(&self, message: &[u8]) -> solana_sdk::signature::Signature {
+        self.0.sign_message(message)
+    }
+
+    fn try_sign_message(
+        &self,
+        message: &[u8],
+    ) -> Result<solana_sdk::signature::Signature, solana_sdk::signer::SignerError> {
+        self.0.try_sign_message(message)
+    }
+
+    fn is_interactive(&self) -> bool {
+        self.0.is_interactive()
+    }
+}
+
+/// Shared Signer.
+pub type SignerRef = Arc<BoxSigner>;
+
+/// Create a new shared signer.
+pub fn shared_signer(signer: impl Signer + Send + Sync + 'static) -> SignerRef {
+    SignerRef::new(BoxSigner(Box::new(signer)))
 }
 
 /// Transaction Signers.

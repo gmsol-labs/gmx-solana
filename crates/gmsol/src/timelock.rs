@@ -399,8 +399,8 @@ impl<C: Deref<Target = impl Signer> + Clone> TimelockOps<C> for crate::Client<C>
                     .instruction_buffer(buffer)
                     .await?
                     .ok_or(crate::Error::NotFound)?;
-                let executor = buffer.header().executor();
-                let rent_receiver = buffer.header().rent_receiver();
+                let executor = buffer.header.executor();
+                let rent_receiver = buffer.header.rent_receiver();
                 (
                     *executor,
                     *rent_receiver,

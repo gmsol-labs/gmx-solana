@@ -22,6 +22,8 @@ use super::{
     Oracle, Seed, Store,
 };
 
+pub use gmsol_utils::order::{OrderKind, OrderSide};
+
 /// Update Order Params.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace, Copy)]
 #[cfg_attr(feature = "debug", derive(Debug))]
@@ -46,87 +48,6 @@ impl UpdateOrderParams {
             && self.trigger_price.is_none()
             && self.min_output.is_none()
             && self.valid_from_ts.is_none()
-    }
-}
-
-/// Order Kind.
-#[derive(
-    AnchorSerialize,
-    AnchorDeserialize,
-    Clone,
-    InitSpace,
-    Copy,
-    strum::EnumString,
-    strum::Display,
-    num_enum::IntoPrimitive,
-    num_enum::TryFromPrimitive,
-    Debug,
-)]
-#[num_enum(error_type(name = CoreError, constructor = CoreError::unknown_order_kind))]
-#[strum(serialize_all = "snake_case")]
-#[non_exhaustive]
-#[repr(u8)]
-pub enum OrderKind {
-    /// Liquidation: allows liquidation of positions if the criteria for liquidation are met.
-    Liquidation,
-    /// Auto-deleveraging Order.
-    AutoDeleveraging,
-    /// Swap token A to token B at the current market price.
-    ///
-    /// The order will be cancelled if the `min_output_amount` cannot be fulfilled.
-    MarketSwap,
-    /// Increase position at the current market price.
-    ///
-    /// The order will be cancelled if the position cannot be increased at the acceptable price.
-    MarketIncrease,
-    /// Decrease position at the current market price.
-    ///
-    /// The order will be cancelled if the position cannot be decreased at the acceptable price.
-    MarketDecrease,
-    /// Limit Swap.
-    LimitSwap,
-    /// Limit Increase.
-    LimitIncrease,
-    /// Limit Decrease.
-    LimitDecrease,
-    /// Stop-Loss Decrease.
-    StopLossDecrease,
-}
-
-impl OrderKind {
-    /// Is market order.
-    pub fn is_market(&self) -> bool {
-        matches!(
-            self,
-            Self::MarketSwap | Self::MarketIncrease | Self::MarketDecrease
-        )
-    }
-
-    /// Is swap order.
-    pub fn is_swap(&self) -> bool {
-        matches!(self, Self::MarketSwap | Self::LimitSwap)
-    }
-
-    /// Is increase position order.
-    pub fn is_increase_position(&self) -> bool {
-        matches!(self, Self::LimitIncrease | Self::MarketIncrease)
-    }
-
-    /// Is decrease position order.
-    pub fn is_decrease_position(&self) -> bool {
-        matches!(
-            self,
-            Self::LimitDecrease
-                | Self::MarketDecrease
-                | Self::Liquidation
-                | Self::AutoDeleveraging
-                | Self::StopLossDecrease
-        )
-    }
-
-    /// Is market decrease.
-    pub fn is_market_decrease(&self) -> bool {
-        matches!(self, Self::MarketDecrease)
     }
 }
 
@@ -526,12 +447,12 @@ impl Order {
                 // so validatoin is not required. In fact, we should prohibit the creation of limit swap orders
                 // with a trigger price.
             }
-
             OrderKind::MarketSwap
             | OrderKind::MarketIncrease
             | OrderKind::MarketDecrease
             | OrderKind::Liquidation
             | OrderKind::AutoDeleveraging => {}
+            _ => return err!(CoreError::UnknownOrderKind),
         }
 
         Ok(())
@@ -929,7 +850,9 @@ impl OrderActionParams {
 
     /// Get order kind.
     pub fn kind(&self) -> Result<OrderKind> {
-        Ok(self.kind.try_into()?)
+        self.kind
+            .try_into()
+            .map_err(|_| error!(CoreError::UnknownOrderKind))
     }
 
     /// Get decrease position swap type.
@@ -955,8 +878,9 @@ impl OrderActionParams {
 
     /// Get order side.
     pub fn side(&self) -> Result<OrderSide> {
-        let side = self.side.try_into()?;
-        Ok(side)
+        self.side
+            .try_into()
+            .map_err(|_| error!(CoreError::UnknownOrderSide))
     }
 
     /// Get position address.
@@ -992,33 +916,5 @@ impl OrderActionParams {
     /// Get valid from ts.
     pub fn valid_from_ts(&self) -> i64 {
         self.valid_from_ts
-    }
-}
-
-/// Order side.
-#[derive(
-    Clone,
-    Copy,
-    strum::EnumString,
-    strum::Display,
-    num_enum::IntoPrimitive,
-    num_enum::TryFromPrimitive,
-)]
-#[num_enum(error_type(name = CoreError, constructor = CoreError::unknown_order_side))]
-#[strum(serialize_all = "snake_case")]
-#[cfg_attr(feature = "debug", derive(Debug))]
-#[non_exhaustive]
-#[repr(u8)]
-pub enum OrderSide {
-    /// Long.
-    Long,
-    /// Short.
-    Short,
-}
-
-impl OrderSide {
-    /// Return whether the side is long.
-    pub fn is_long(&self) -> bool {
-        matches!(self, Self::Long)
     }
 }

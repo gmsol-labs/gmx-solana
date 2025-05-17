@@ -676,7 +676,10 @@ pub(crate) fn claim_fees_from_market(ctx: Context<ClaimFeesFromMarket>) -> Resul
         let token = ctx.accounts.token_mint.key();
 
         let mut market = RevertibleMarket::new(&ctx.accounts.market, event_emitter)?;
-        let is_long_token = market.market_meta().to_token_side(&token)?;
+        let is_long_token = market
+            .market_meta()
+            .to_token_side(&token)
+            .map_err(CoreError::from)?;
         let the_opposite_side = !is_long_token;
         let is_pure = market.market_meta().is_pure();
         let pool = market.claimable_fee_pool_mut().map_err(ModelError::from)?;

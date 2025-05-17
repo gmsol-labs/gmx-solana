@@ -18,6 +18,8 @@ serde = ["dep:serde"]
 js = ["tsify-next", "serde", "wasm-bindgen"]
 
 [dependencies]
+gmsol-utils = { workspace = true, optional = true }
+
 num-traits = { workspace = true }
 thiserror = { workspace = true }
 ruint = { workspace = true, optional = true, default-features = false }
@@ -30,8 +32,6 @@ typed-builder = { workspace = true }
 strum = { workspace = true, optional = true, features = ["derive"] }
 serde = { workspace = true, optional = true, features = ["derive"] }
 borsh = { workspace = true, optional = true }
-
-gmsol-utils = { workspace = true, optional = true }
 
 tsify-next = { workspace = true, optional = true, features = ["js"] }
 wasm-bindgen = { workspace = true, optional = true }

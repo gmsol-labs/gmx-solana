@@ -33,6 +33,8 @@ use crate::{constants, CoreError};
 
 use super::{user::UserHeader, Seed};
 
+pub use gmsol_utils::gt::get_time_window_index;
+
 const MAX_RANK: usize = 15;
 const MAX_FLAGS: usize = 8;
 
@@ -670,10 +672,4 @@ impl gmsol_utils::InitSpace for GtExchange {
 
 impl Seed for GtExchange {
     const SEED: &'static [u8] = b"gt_exchange";
-}
-
-/// Get time window index.
-pub fn get_time_window_index(ts: i64, time_window: i64) -> i64 {
-    debug_assert!(time_window > 0);
-    ts / time_window
 }

@@ -6,7 +6,10 @@ use crate::{
     events::EventEmitter,
     ops::market::RevertibleLiquidityMarketOperation,
     states::{
-        common::action::{Action, ActionExt, ActionParams},
+        common::{
+            action::{Action, ActionExt, ActionParams},
+            swap::SwapActionParamsExt,
+        },
         market::revertible::Revertible,
         Deposit, Market, NonceBytes, Oracle, Store, ValidateOracleTime,
     },

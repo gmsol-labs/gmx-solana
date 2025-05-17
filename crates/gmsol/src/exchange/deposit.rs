@@ -608,9 +608,15 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
     async fn build_with_options(
         &mut self,
         options: BundleOptions,
-    ) -> crate::Result<BundleBuilder<'a, C>> {
-        let token_map = self.get_token_map().await?;
-        let hint = self.prepare_hint().await?;
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
+        let token_map = self
+            .get_token_map()
+            .await
+            .map_err(gmsol_solana_utils::Error::custom)?;
+        let hint = self
+            .prepare_hint()
+            .await
+            .map_err(gmsol_solana_utils::Error::custom)?;
         let Self {
             client,
             store,
@@ -624,7 +630,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
         let feeds = self
             .feeds_parser
             .parse(&hint.feeds)
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(gmsol_solana_utils::Error::custom)?;
         let markets = hint
             .swap
             .unique_market_tokens_excluding_current(&hint.market_token_mint)
@@ -692,7 +699,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
                 })
                 .reason("executed")
                 .build()
-                .await?;
+                .await
+                .map_err(gmsol_solana_utils::Error::custom)?;
             execute.merge(close)
         } else {
             execute

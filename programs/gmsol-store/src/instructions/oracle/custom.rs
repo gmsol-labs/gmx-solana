@@ -116,7 +116,8 @@ pub(crate) fn unchecked_update_price_feed_with_chainlink(
         *accounts
             .store
             .load()?
-            .get_amount_by_key(AmountKey::OracleMaxFutureTimestampExcess),
+            .get_amount_by_key(AmountKey::OracleMaxFutureTimestampExcess)
+            .ok_or_else(|| error!(CoreError::Unimplemented))?,
     )?;
 
     Ok(())

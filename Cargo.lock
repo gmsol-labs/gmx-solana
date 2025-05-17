@@ -682,6 +682,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-tungstenite"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef0f7efedeac57d9b26170f72965ecfd31473ca52ca7a64e925b0b6f5f079886"
+dependencies = [
+ "atomic-waker",
+ "futures-core",
+ "futures-io",
+ "futures-task",
+ "futures-util",
+ "log",
+ "pin-project-lite",
+ "tungstenite 0.26.2",
+]
+
+[[package]]
 name = "atomic"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1544,18 +1560,18 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-version = "1.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
+checksum = "093242cf7570c207c83073cf82f79706fe7b8317e98620a47d5be7c3d8497678"
 dependencies = [
  "derive_more-impl",
 ]
 
 [[package]]
 name = "derive_more-impl"
-version = "1.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
+checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2155,7 +2171,7 @@ dependencies = [
  "anchor-spl",
  "anchor-syn",
  "async-stream",
- "async-tungstenite",
+ "async-tungstenite 0.29.1",
  "base64 0.22.1",
  "borsh 0.10.4",
  "bs58 0.5.1",
@@ -2224,6 +2240,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gmsol-callback"
+version = "0.6.0"
+dependencies = [
+ "anchor-lang",
+ "num_enum",
+ "serde",
+ "strum",
+]
+
+[[package]]
 name = "gmsol-chainlink-datastreams"
 version = "0.6.0"
 dependencies = [
@@ -2252,6 +2278,8 @@ dependencies = [
  "base64 0.22.1",
  "bs58 0.5.1",
  "bytemuck",
+ "cfg-if",
+ "gmsol-programs",
  "gmsol-store",
  "paste",
  "solana-sdk",
@@ -2296,8 +2324,11 @@ version = "0.6.0"
 dependencies = [
  "anchor-lang",
  "bitmaps",
+ "bs58 0.5.1",
  "bytemuck",
  "gmsol-model",
+ "gmsol-utils",
+ "thiserror 1.0.69",
  "time",
 ]
 
@@ -2306,23 +2337,53 @@ name = "gmsol-sdk"
 version = "0.6.0"
 dependencies = [
  "anchor-spl",
+ "async-stream",
  "base64 0.22.1",
  "bincode",
+ "byteorder",
+ "bytes",
+ "cfg-if",
  "cfg_aliases",
  "either",
+ "event-listener 5.4.0",
+ "eventsource-stream",
+ "eyre",
+ "futures-util",
+ "gmsol-callback",
+ "gmsol-chainlink-datastreams",
+ "gmsol-decode",
+ "gmsol-mock-chainlink-verifier",
  "gmsol-model",
  "gmsol-programs",
  "gmsol-solana-utils",
+ "gmsol-store",
+ "gmsol-utils",
+ "hex",
+ "hmac 0.12.1",
  "petgraph",
+ "pyth-sdk",
+ "pyth-solana-receiver-sdk",
+ "pythnet-sdk",
  "rand 0.7.3",
+ "reqwest 0.12.15",
+ "reqwest-websocket",
  "rust_decimal",
  "rust_decimal_macros",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
  "serde_with",
+ "sha2 0.10.9",
+ "shellexpand",
+ "solana-account-decoder",
+ "solana-client",
  "solana-sdk",
+ "solana-transaction-status",
+ "switchboard-on-demand-client",
  "thiserror 1.0.69",
+ "time",
+ "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
  "tsify-next",
@@ -2367,6 +2428,7 @@ dependencies = [
  "cfg-if",
  "clap",
  "derive_more",
+ "gmsol-callback",
  "gmsol-chainlink-datastreams",
  "gmsol-model",
  "gmsol-utils",
@@ -2420,11 +2482,16 @@ dependencies = [
  "anchor-lang",
  "bitmaps",
  "bytemuck",
+ "clap",
+ "derive_more",
  "num_enum",
  "paste",
  "ruint",
  "serde",
+ "serde_bytes",
+ "serde_with",
  "static_assertions",
+ "strum",
  "thiserror 1.0.69",
 ]
 
@@ -3244,14 +3311,11 @@ dependencies = [
  "arrayref",
  "base64 0.22.1",
  "digest 0.9.0",
- "hmac-drbg",
  "libsecp256k1-core 0.3.0",
  "libsecp256k1-gen-ecmult 0.3.0",
  "libsecp256k1-gen-genmult 0.3.0",
  "rand 0.8.5",
  "serde",
- "sha2 0.9.9",
- "typenum",
 ]
 
 [[package]]
@@ -4656,7 +4720,7 @@ version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f477f800f86d8f5c320e19d8b2b1ef0b1e773ea7c75eec6c7f442e7ec3f06d7e"
 dependencies = [
- "async-tungstenite",
+ "async-tungstenite 0.28.2",
  "futures-util",
  "reqwest 0.12.15",
  "thiserror 2.0.12",
@@ -4736,9 +4800,9 @@ checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
 
 [[package]]
 name = "rust-embed"
-version = "8.7.1"
+version = "8.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60e425e204264b144d4c929d126d0de524b40a961686414bab5040f7465c71be"
+checksum = "025908b8682a26ba8d12f6f2d66b987584a4a87bc024abc5bbc12553a8cd178a"
 dependencies = [
  "rust-embed-impl",
  "rust-embed-utils",
@@ -4747,9 +4811,9 @@ dependencies = [
 
 [[package]]
 name = "rust-embed-impl"
-version = "8.7.0"
+version = "8.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bf418c9a2e3f6663ca38b8a7134cc2c2167c9d69688860e8961e3faa731702e"
+checksum = "6065f1a4392b71819ec1ea1df1120673418bf386f50de1d6f54204d836d4349c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4760,9 +4824,9 @@ dependencies = [
 
 [[package]]
 name = "rust-embed-utils"
-version = "8.7.0"
+version = "8.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d55b95147fe01265d06b3955db798bdaed52e60e2211c41137701b3aba8e21"
+checksum = "f6cc0c81648b20b70c491ff8cce00c1c3b223bb8ed2b5d41f0e54c6c4c0a3594"
 dependencies = [
  "sha2 0.10.9",
  "walkdir",
@@ -7222,18 +7286,18 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "strum"
-version = "0.26.3"
+version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
+checksum = "f64def088c51c9510a8579e3c5d67c65349dcf755e5479ad3d010aa6454e2c32"
 dependencies = [
  "strum_macros",
 ]
 
 [[package]]
 name = "strum_macros"
-version = "0.26.4"
+version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
+checksum = "c77a8c5abcaf0f9ce05d62342b7d298c346515365c36b673df4ebe3ced01fde8"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -7270,9 +7334,9 @@ dependencies = [
 
 [[package]]
 name = "switchboard-on-demand"
-version = "0.3.7"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fa2055fc964f744d92db5594644181f068a4b2abcc3f1b8125b46195779c486"
+checksum = "adb35a30ddf795fff8f5cec0a3143103df4d194b498236f52877f0e82da50ebc"
 dependencies = [
  "base64 0.21.7",
  "bincode",
@@ -7285,7 +7349,6 @@ dependencies = [
  "solana-program",
  "spl-associated-token-account 6.0.0",
  "spl-token 7.0.0",
- "switchboard-common",
 ]
 
 [[package]]
@@ -7897,19 +7960,32 @@ dependencies = [
 ]
 
 [[package]]
-name = "typed-builder"
-version = "0.20.1"
+name = "tungstenite"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd9d30e3a08026c78f246b173243cf07b3696d274debd26680773b6773c2afc7"
+checksum = "4793cb5e56680ecbb1d843515b23b6de9a75eb04b66643e256a396d43be33c13"
+dependencies = [
+ "bytes",
+ "log",
+ "rand 0.9.1",
+ "thiserror 2.0.12",
+ "utf-8",
+]
+
+[[package]]
+name = "typed-builder"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce63bcaf7e9806c206f7d7b9c1f38e0dce8bb165a80af0898161058b19248534"
 dependencies = [
  "typed-builder-macro",
 ]
 
 [[package]]
 name = "typed-builder-macro"
-version = "0.20.1"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c36781cc0e46a83726d9879608e4cf6c2505237e263a8eb8c24502989cfdb28"
+checksum = "60d8d828da2a3d759d3519cdf29a5bac49c77d039ad36d0782edadbf9cd5415b"
 dependencies = [
  "proc-macro2",
  "quote",

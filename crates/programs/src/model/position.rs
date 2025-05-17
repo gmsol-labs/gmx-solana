@@ -24,7 +24,8 @@ enum PositionKind {
 }
 
 impl Position {
-    fn try_is_long(&self) -> gmsol_model::Result<bool> {
+    /// Return whether the side of the position is long.
+    pub fn try_is_long(&self) -> gmsol_model::Result<bool> {
         if self.kind == PositionKind::Long as u8 {
             Ok(true)
         } else if self.kind == PositionKind::Short as u8 {

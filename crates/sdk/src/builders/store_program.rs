@@ -76,7 +76,7 @@ impl StoreProgram {
 
     /// Find order address.
     pub fn find_order_address(&self, owner: &Pubkey, nonce: &NonceBytes) -> Pubkey {
-        pda::find_order_address(&self.store, owner, nonce, &self.id).0
+        pda::find_order_address(&self.store, owner, &nonce.0.to_bytes(), &self.id).0
     }
 
     /// Find market address.

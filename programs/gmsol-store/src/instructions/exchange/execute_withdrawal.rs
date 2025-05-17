@@ -9,7 +9,10 @@ use crate::{
         withdrawal::ExecuteWithdrawalOperation,
     },
     states::{
-        common::action::{ActionExt, ActionSigner},
+        common::{
+            action::{ActionExt, ActionSigner},
+            swap::SwapActionParamsExt,
+        },
         feature::{ActionDisabledFlag, DomainDisabledFlag},
         withdrawal::Withdrawal,
         Chainlink, Market, Oracle, Store, TokenMapHeader, TokenMapLoader,
@@ -202,7 +205,8 @@ impl<'info> ExecuteWithdrawal<'info> {
             .withdrawal
             .load()?
             .swap()
-            .to_feeds(&self.token_map.load_token_map()?)?;
+            .to_feeds(&self.token_map.load_token_map()?)
+            .map_err(CoreError::from)?;
 
         let op = ExecuteWithdrawalOperation::builder()
             .store(&self.store)

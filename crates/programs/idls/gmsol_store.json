@@ -2,7 +2,7 @@
   "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo",
   "metadata": {
     "name": "gmsol_store",
-    "version": "0.4.0",
+    "version": "0.6.0",
     "spec": "0.1.0",
     "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
     "repository": "https://github.com/gmsol-labs/gmx-solana"
@@ -3894,6 +3894,728 @@
       ]
     },
     {
+      "name": "close_order_v2",
+      "docs": [
+        "Close an order, either by the owner or by keepers.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](CloseOrderV2)*",
+        "",
+        "# Arguments",
+        "- `reason`: The reason for the close.",
+        "",
+        "# Errors",
+        "- The [`executor`](CloseOrderV2::executor) must be a signer and either the owner",
+        "of the `order` or a ORDER_KEEPER in the store.",
+        "- The [`store`](CloseOrderV2::store) must be initialized.",
+        "- The [`owner`](CloseOrderV2::owner) must be the owner of the `order`.",
+        "- The [`user`](CloseOrderV2::user) must be initialized and correspond to the `owner`.",
+        "- The [`referrer_user`](CloseOrderV2::referrer_user) must be present if the `owner` has a",
+        "referrer, and it must be initialized and correspond to the referrer of the `owner`.",
+        "- The [`order`](CloseOrderV2::order) must be initialized and owned by the `store` and the",
+        "`owner`.",
+        "- The tokens must be those recorded in the `order`.",
+        "- The escrow accounts must be owned and recorded in the `order`.",
+        "- The addresses of the ATAs must be valid.",
+        "- The `order` must be cancelled or completed if the `executor` is not the owner.",
+        "- The feature must be enabled for closing the given kind of `order`.",
+        "- The accounts related to callback must be provided if",
+        "[`callback_authority`](CloseOrderV2::callback_authority) is provided."
+      ],
+      "discriminator": [
+        213,
+        217,
+        98,
+        100,
+        225,
+        205,
+        76,
+        184
+      ],
+      "accounts": [
+        {
+          "name": "executor",
+          "docs": [
+            "The executor of this instruction."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "The store."
+          ],
+          "writable": true,
+          "relations": [
+            "user",
+            "referrer_user"
+          ]
+        },
+        {
+          "name": "store_wallet",
+          "docs": [
+            "The store wallet."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  111,
+                  114,
+                  101,
+                  95,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "docs": [
+            "The owner of the order."
+          ],
+          "writable": true,
+          "relations": [
+            "user"
+          ]
+        },
+        {
+          "name": "receiver",
+          "docs": [
+            "The receiver of the order."
+          ],
+          "writable": true
+        },
+        {
+          "name": "rent_receiver",
+          "docs": [
+            "The rent receiver of the order."
+          ],
+          "writable": true
+        },
+        {
+          "name": "user",
+          "docs": [
+            "User Account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "referrer_user",
+          "docs": [
+            "Referrer User Account."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "order",
+          "docs": [
+            "Order to close."
+          ],
+          "writable": true
+        },
+        {
+          "name": "initial_collateral_token",
+          "docs": [
+            "Initial collateral token."
+          ],
+          "optional": true
+        },
+        {
+          "name": "final_output_token",
+          "docs": [
+            "Final output token."
+          ],
+          "optional": true
+        },
+        {
+          "name": "long_token",
+          "docs": [
+            "Long token."
+          ],
+          "optional": true
+        },
+        {
+          "name": "short_token",
+          "docs": [
+            "Short token."
+          ],
+          "optional": true
+        },
+        {
+          "name": "initial_collateral_token_escrow",
+          "docs": [
+            "The escrow account for initial collateral tokens."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "order"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "initial_collateral_token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "final_output_token_escrow",
+          "docs": [
+            "The escrow account for final output tokens."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "order"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "final_output_token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "long_token_escrow",
+          "docs": [
+            "The escrow account for long tokens."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "order"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "long_token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "short_token_escrow",
+          "docs": [
+            "The escrow account for short tokens."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "order"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "short_token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "initial_collateral_token_ata",
+          "docs": [
+            "The ATA for initial collateral token of the owner."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "final_output_token_ata",
+          "docs": [
+            "The ATA for final output token of the receiver."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "long_token_ata",
+          "docs": [
+            "The ATA for long token of the receiver."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "short_token_ata",
+          "docs": [
+            "The ATA for initial collateral token of the receiver."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "The system program."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "The token program."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "docs": [
+            "The associated token program."
+          ],
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "callback_authority",
+          "docs": [
+            "Callback authority."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  98,
+                  97,
+                  99,
+                  107
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "callback_program",
+          "docs": [
+            "Callback program."
+          ],
+          "optional": true
+        },
+        {
+          "name": "callback_config_account",
+          "docs": [
+            "Config account for callback."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "callback_action_stats_account",
+          "docs": [
+            "Action stats account for callback."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "close_shift",
       "docs": [
         "Close a shift, either by the owner or by keepers.",
@@ -7539,6 +8261,682 @@
             "The associated token program."
           ],
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "CreateOrderParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_order_v2",
+      "docs": [
+        "Create an order by the owner.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](CreateOrderV2)*",
+        "",
+        "# Arguments",
+        "- `nonce`: Nonce bytes used to derive the address for the order.",
+        "- `params`: Order Parameters specifying the market, order kind, and other details.",
+        "",
+        "# Errors",
+        "This instruction will fail if:",
+        "- The [`owner`](CreateOrderV2::owner) is not a signer or has insufficient balance for the",
+        "execution fee and rent.",
+        "- The [`store`](CreateOrderV2::store) is not properly initialized.",
+        "- The [`market`](CreateOrderV2::market) is not initialized, is disabled, or not owned by",
+        "the `store`.",
+        "- The [`user`](CreateOrderV2::user) is not initialized or does not correspond to the owner.",
+        "The address must be a valid PDA derived from the `owner` and expected seeds.",
+        "- The [`order`](CreateOrderV2::order) is not uninitialized or the address is not a valid",
+        "PDA derived from the `owner`, `nonce` and expected seeds.",
+        "- For increase/decrease orders:",
+        "- The [`position`](CreateOrderV2::position) is missing, not validly initialized, or not",
+        "owned by both the `owner` and `store`.",
+        "- The [`long_token`](CreateOrderV2::long_token) or [`short_token`](CreateOrderV2::short_token)",
+        "are missing, or do not match the those defined in the [`market`](CreateOrderV2::market).",
+        "- The [`long_token_escrow`](CreateOrderV2::long_token_escrow) or",
+        "[`short_token_escrow`](CreateOrderV2::short_token_escrow) are missing, not valid",
+        "escrow accounts for `long_token` or `short_token` respectively, or not owned by the `order`.",
+        "- For increase/swap orders:",
+        "- The [`initial_collateral_token`](CreateOrderV2::initial_collateral_token) is missing",
+        "or invalid.",
+        "- The [`initial_collateral_token_escrow`](CreateOrderV2::initial_collateral_token_escrow)",
+        "is missing, not a valid escrow account for `initial_collateral_token`, or not owned by",
+        "the `order`.",
+        "- The [`initial_collateral_token_source`](CreateOrderV2::initial_collateral_token_source)",
+        "is missing or not a valid source account with `owner` as the authority.",
+        "- For decrease/swap orders:",
+        "- The [`final_output_token`](CreateOrderV2::final_output_token) is invalid.",
+        "- The [`final_output_token_escrow`](CreateOrderV2::final_output_token_escrow) is missing,",
+        "not a valid escrow account for `final_output_token`, or not owned by the `order`.",
+        "- The feature for creating this kind of order is not enabled.",
+        "- The remaining market accounts do not match the swap parameters, not all enabled or owned",
+        "by the `store`.",
+        "- The accounts related to callback must be provided if",
+        "[`callback_authority`](CreateOrderV2::callback_authority) is provided."
+      ],
+      "discriminator": [
+        200,
+        157,
+        3,
+        182,
+        3,
+        164,
+        162,
+        240
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "The owner of the order to be created."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "user",
+            "position"
+          ]
+        },
+        {
+          "name": "receiver",
+          "docs": [
+            "The receiver of the output funds."
+          ]
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "market",
+            "user",
+            "position"
+          ]
+        },
+        {
+          "name": "market",
+          "docs": [
+            "Market."
+          ],
+          "writable": true
+        },
+        {
+          "name": "user",
+          "docs": [
+            "User Account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "order",
+          "docs": [
+            "The order to be created."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "docs": [
+            "The related position."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "initial_collateral_token",
+          "docs": [
+            "Initial collateral token / swap in token.",
+            "Only required by increase and swap orders."
+          ],
+          "optional": true
+        },
+        {
+          "name": "final_output_token",
+          "docs": [
+            "Final output token.",
+            "Used as collateral token / swap out token for increase and swap orders;",
+            "and used as final output token for decrease orders.",
+            "",
+            "For the case of increase or swap orders, it will be checked to be a valid",
+            "collateral / swap out token."
+          ]
+        },
+        {
+          "name": "long_token",
+          "docs": [
+            "Long token of the market."
+          ],
+          "optional": true
+        },
+        {
+          "name": "short_token",
+          "docs": [
+            "Short token of the market."
+          ],
+          "optional": true
+        },
+        {
+          "name": "initial_collateral_token_escrow",
+          "docs": [
+            "Initial collateral token escrow account.",
+            "Only requried by increase and swap orders."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "order"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "initial_collateral_token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "final_output_token_escrow",
+          "docs": [
+            "Final output token escrow account.",
+            "Only required by decrease and swap orders."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "order"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "final_output_token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "long_token_escrow",
+          "docs": [
+            "Long token escrow.",
+            "Only required by increase and decrease orders."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "order"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "long_token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "short_token_escrow",
+          "docs": [
+            "Short token escrow.",
+            "Only required by increase and decrease orders."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "order"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "short_token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "initial_collateral_token_source",
+          "docs": [
+            "The source initial token account.",
+            "Only requried by increase and swap orders."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "The system program."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "The token program."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "docs": [
+            "The associated token program."
+          ],
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "callback_authority",
+          "docs": [
+            "Callback authority."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  98,
+                  97,
+                  99,
+                  107
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "callback_program",
+          "docs": [
+            "Callback program."
+          ],
+          "optional": true
+        },
+        {
+          "name": "callback_config_account",
+          "docs": [
+            "Config account for callback."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "callback_action_stats_account",
+          "docs": [
+            "Action stats account for callback."
+          ],
+          "writable": true,
+          "optional": true
         }
       ],
       "args": [
@@ -14018,6 +15416,64 @@
       ]
     },
     {
+      "name": "initialize_callback_authority",
+      "docs": [
+        "Initialize the [`CallbackAuthority`](crate::states::callback::CallbackAuthority) account."
+      ],
+      "discriminator": [
+        110,
+        241,
+        211,
+        153,
+        40,
+        189,
+        45,
+        180
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Payer."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "callback_authority",
+          "docs": [
+            "The callback authority account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  98,
+                  97,
+                  99,
+                  107
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System program."
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initialize_glv",
       "docs": [
         "Initialize a GLV token and the corresponding GLV account.",
@@ -19701,6 +21157,19 @@
   ],
   "accounts": [
     {
+      "name": "CallbackAuthority",
+      "discriminator": [
+        21,
+        221,
+        199,
+        241,
+        143,
+        109,
+        216,
+        15
+      ]
+    },
+    {
       "name": "Deposit",
       "discriminator": [
         148,
@@ -20906,11 +22375,15 @@
             }
           },
           {
+            "name": "callback_kind",
+            "type": "u8"
+          },
+          {
             "name": "padding_0",
             "type": {
               "array": [
                 "u8",
-                4
+                3
               ]
             }
           },
@@ -20997,11 +22470,32 @@
             "type": "pubkey"
           },
           {
+            "name": "callback_program_id",
+            "docs": [
+              "Callback program ID."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "callback_config",
+            "docs": [
+              "Callback config account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "callback_action_stats",
+            "docs": [
+              "Callback action stats account."
+            ],
+            "type": "pubkey"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                256
+                160
               ]
             }
           }
@@ -21178,6 +22672,24 @@
                 ]
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "CallbackAuthority",
+      "docs": [
+        "Callback authority."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "Bump."
+            ],
+            "type": "u8"
           }
         ]
       }
@@ -23259,6 +24771,9 @@
           },
           {
             "name": "store",
+            "docs": [
+              "Store."
+            ],
             "type": "pubkey"
           },
           {
@@ -27206,6 +28721,9 @@
           },
           {
             "name": "authority",
+            "docs": [
+              "Authority."
+            ],
             "type": "pubkey"
           },
           {
@@ -28259,6 +29777,9 @@
           },
           {
             "name": "padding_0",
+            "docs": [
+              "Padding."
+            ],
             "type": {
               "array": [
                 "u8",
@@ -29606,26 +31127,41 @@
         "fields": [
           {
             "name": "heartbeat_duration",
+            "docs": [
+              "Heartbeat duration."
+            ],
             "type": "u32"
           },
           {
             "name": "precision",
+            "docs": [
+              "Price precision."
+            ],
             "type": "u8"
           },
           {
             "name": "feeds",
+            "docs": [
+              "Feeds."
+            ],
             "type": {
               "vec": "pubkey"
             }
           },
           {
             "name": "timestamp_adjustments",
+            "docs": [
+              "Timestamp adjustments."
+            ],
             "type": {
               "vec": "u32"
             }
           },
           {
             "name": "expected_provider",
+            "docs": [
+              "Expected price provider."
+            ],
             "type": {
               "option": "u8"
             }

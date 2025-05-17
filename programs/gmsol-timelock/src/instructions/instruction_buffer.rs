@@ -430,7 +430,10 @@ pub(crate) fn unchecked_execute_instruction(ctx: Context<ExecuteInstruction>) ->
     );
 
     invoke_signed(
-        &instruction.to_instruction(false)?,
+        &instruction.to_instruction(false).map_err(|err| {
+            msg!("Instruction error: {}", err);
+            error!(CoreError::InvalidArgument)
+        })?,
         remaining_accounts,
         &[&signer.as_seeds()],
     )?;

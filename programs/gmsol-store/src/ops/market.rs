@@ -9,7 +9,7 @@ use typed_builder::TypedBuilder;
 use crate::{
     events::{DepositExecuted, EventEmitter, MarketFeesUpdated, WithdrawalExecuted},
     states::{
-        common::swap::SwapActionParams,
+        common::swap::{SwapActionParams, SwapActionParamsExt},
         deposit::DepositActionParams,
         market::{
             revertible::{

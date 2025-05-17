@@ -1,7 +1,6 @@
-use std::collections::BTreeSet;
-
 use anchor_lang::prelude::*;
 use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
+use gmsol_utils::market::ordered_tokens;
 
 use crate::{
     constants,
@@ -9,7 +8,7 @@ use crate::{
     states::{
         common::action::{ActionExt, ActionSigner},
         feature::{ActionDisabledFlag, DomainDisabledFlag},
-        Chainlink, HasMarketMeta, Market, Oracle, Shift, Store, TokenMapHeader,
+        Chainlink, Market, Oracle, Shift, Store, TokenMapHeader,
     },
     utils::internal,
     CoreError,
@@ -247,27 +246,4 @@ impl<'info> ExecuteShift<'info> {
             .execute()?;
         Ok(())
     }
-}
-
-/// Get related tokens from markets in order.
-pub fn ordered_tokens(from: &impl HasMarketMeta, to: &impl HasMarketMeta) -> BTreeSet<Pubkey> {
-    let mut tokens = BTreeSet::default();
-
-    let from = from.market_meta();
-    let to = to.market_meta();
-
-    for mint in [
-        &from.index_token_mint,
-        &from.long_token_mint,
-        &from.short_token_mint,
-    ]
-    .iter()
-    .chain(&[
-        &to.index_token_mint,
-        &to.long_token_mint,
-        &to.short_token_mint,
-    ]) {
-        tokens.insert(**mint);
-    }
-    tokens
 }

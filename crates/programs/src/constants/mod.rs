@@ -1,3 +1,6 @@
+/// Roles.
+pub mod roles;
+
 /// Default decimals for calculation.
 pub const MARKET_DECIMALS: u8 = 20;
 
@@ -19,3 +22,6 @@ pub const NUM_MARKET_CONFIG_FLAGS: usize = 128;
 
 /// Number of market flags.
 pub const NUM_MARKET_FLAGS: usize = 8;
+
+/// Max length of the role anme.
+pub const MAX_ROLE_NAME_LEN: usize = 32;

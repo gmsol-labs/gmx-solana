@@ -12,7 +12,10 @@ use crate::{
     constants,
     events::{EventEmitter, GlvPricing, GlvPricingKind},
     states::{
-        common::action::{Action, ActionExt, ActionParams, ActionSigner},
+        common::{
+            action::{Action, ActionExt, ActionParams, ActionSigner},
+            swap::SwapActionParamsExt,
+        },
         glv::{GlvShift, GlvWithdrawal},
         market::revertible::Revertible,
         withdrawal::WithdrawalActionParams,

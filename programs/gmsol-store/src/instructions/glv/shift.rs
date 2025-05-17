@@ -3,7 +3,7 @@ use anchor_spl::{
     associated_token::AssociatedToken,
     token::{Mint, Token, TokenAccount},
 };
-use gmsol_utils::InitSpace;
+use gmsol_utils::{market::ordered_tokens, InitSpace};
 
 use crate::{
     constants,
@@ -13,7 +13,6 @@ use crate::{
         glv::ExecuteGlvShiftOperation,
         shift::{CreateShiftOperation, CreateShiftParams},
     },
-    ordered_tokens,
     states::{
         common::action::{Action, ActionExt},
         feature::{ActionDisabledFlag, DomainDisabledFlag},

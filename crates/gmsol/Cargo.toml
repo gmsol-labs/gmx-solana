@@ -112,6 +112,7 @@ gmsol-solana-utils = { workspace = true, features = [
     "anchor",
     "serde",
     "client",
+    "make-bundle-builder",
 ] }
 gmsol-utils = { workspace = true }
 gmsol-store = { workspace = true, features = [

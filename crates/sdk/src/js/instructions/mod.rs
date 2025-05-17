@@ -100,7 +100,7 @@ impl TransactionGroup {
         let transactions = group
             .to_transactions(
                 &signers,
-                recent_blockhash.parse().map_err(crate::Error::unknown)?,
+                recent_blockhash.parse().map_err(crate::Error::custom)?,
                 true,
             )
             .map(|res| res.map_err(crate::Error::from))

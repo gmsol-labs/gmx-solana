@@ -78,7 +78,7 @@ pub fn create_orders(
         .map(|params| {
             let market_token = &params.market_token;
             let hint = hints.get(market_token).ok_or_else(|| {
-                crate::Error::unknown(format!("hint for {} is not provided", market_token.0))
+                crate::Error::custom(format!("hint for {} is not provided", market_token.0))
             })?;
 
             if !kind.is_swap() {
@@ -105,7 +105,7 @@ pub fn create_orders(
             let ag = if wrap_native {
                 let mut wrap = WrapNative::builder()
                     .owner(options.payer)
-                    .lamports(amount.try_into().map_err(crate::Error::unknown)?)
+                    .lamports(amount.try_into().map_err(crate::Error::custom)?)
                     .build()
                     .into_atomic_group(&true)?;
                 wrap.merge(create);

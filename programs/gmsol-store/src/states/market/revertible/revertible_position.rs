@@ -36,7 +36,9 @@ impl<'a, 'info> RevertiblePosition<'a, 'info> {
         );
 
         let is_long = storage.try_is_long()?;
-        let is_collateral_token_long = meta.to_token_side(&storage.collateral_token)?;
+        let is_collateral_token_long = meta
+            .to_token_side(&storage.collateral_token)
+            .map_err(CoreError::from)?;
 
         Ok(Self {
             is_long,

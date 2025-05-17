@@ -13,12 +13,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs: Removed support for Chainlink data feeds.
 - sdk: Removed support for `spl-governance`.
 
+### Added
+
+- programs: Defined the callback interface and added an example `gmsol-callback` program.
+- programs: Added callback-enabled instructions for order.
+  - Added the `create_order_v2` instruction.
+  - Added the `close_order_v2` instrcution.
+
+### Changed
+
+- programs: Deprecated `create_order` and `close_order` instructions.
+
 ## [0.5.0] - 2025-05-16
 
 ### Breaking Changes
 
 - programs: Renamed `mock_chainlink_verifier` to `gmsol_mock_chainlink_verifier`.
 - programs: Replaced `data-streams-report` with the crates.io version of `chainlink-data-streams-report`.
+- programs: Refactored some common definitions into the `gmsol-utils` crate:
+  - Refactored pubkey utilities into `gmsol-utils`.
+  - Refactored fixed string utilities into `gmsol-utils`.
+  - Refactored market meta utilities into `gmsol-utils`.
+  - Refactored `PriceProviderKind` into `gmsol-utils`.
+  - Refactored `TokenConfig` and related definitions into `gmsol-utils`.
+  - Refactored dynamic access utilities into `gmsol-utils`.
+  - Refactored `ActionFlag` and `ActionState` into `gmsol-utils`.
+  - Refactored `SwapActionParams` into `gmsol-utils`.
+  - Refactored `OrderKind`, `OrderSide`, `PositionKind` and `PositionCutKind` into `gmsol-utils`.
+  - Refactored `GlvMarketFlag` into `gmsol-utils`.
+  - Refactored definitions related to `InstructionAccount` into `gmsol-utils`.
+  - Refactored `TokenFlag` for treasury program into `gmsol-utils`.
 - sdk: Added `compute_unit_min_priority_lamports` to `SendBundleOptions`.
 - sdk: Boxed `ClientError` in the `Error` definition.
 - sdk: Added a new feature flag to `gmsol-solana-utils` crate to consolidate all implementations that rely on the `solana_client` crate.
@@ -27,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - programs: Implemented `Default` for `Glv` and made the `store` field public.
 - programs: Added the `gmsol-competition` program.
+- programs: Introduced a separate `impl_fixed_map!` macro that implements fixed map functionality without defining the corresponding struct.
+- programs: Introduced a separated `impl_flags!` macro that implements flag map functionality without defining the container.
 - model: Re-exported `num_traits`.
 - sdk: Added more functions to `SquadsOps`:
   - `SquadsOps::squads_create_vault_transaction_and_return_data`: Creates a vault transaction and return the data.

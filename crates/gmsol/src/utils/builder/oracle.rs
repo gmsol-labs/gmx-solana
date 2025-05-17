@@ -73,14 +73,17 @@ where
     async fn build_with_options(
         &mut self,
         options: BundleOptions,
-    ) -> crate::Result<BundleBuilder<'a, C>> {
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
         let (instructions, map) = self
             .pull_oracle
             .fetch_price_update_instructions(&self.price_updates, options.clone())
-            .await?;
+            .await
+            .map_err(gmsol_solana_utils::Error::custom)?;
 
         for (kind, map) in map {
-            self.builder.process_feeds(kind, map)?;
+            self.builder
+                .process_feeds(kind, map)
+                .map_err(gmsol_solana_utils::Error::custom)?;
         }
 
         let consume = self.builder.build_with_options(options).await?;

@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 //! # The GMX-Solana Store Program
 //!
 //! The Store Program defines several fundamental accounts that form the core of its functionality:
@@ -255,7 +257,6 @@ declare_id!("Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo");
 #[program]
 /// Instructions definitions of the GMSOL Store Program.
 pub mod gmsol_store {
-
     use super::*;
 
     // ===========================================
@@ -1973,8 +1974,62 @@ pub mod gmsol_store {
     /// - The feature for creating this kind of order is not enabled.
     /// - The remaining market accounts do not match the swap parameters, not all enabled or owned
     ///   by the `store`.
+    #[deprecated(since = "0.6.0", note = "Use `create_order_v2` instead.")]
     pub fn create_order<'info>(
         mut ctx: Context<'_, '_, 'info, 'info, CreateOrder<'info>>,
+        nonce: [u8; 32],
+        params: CreateOrderParams,
+    ) -> Result<()> {
+        internal::Create::create(&mut ctx, &nonce, &params)
+    }
+
+    /// Create an order by the owner.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](CreateOrderV2)*
+    ///
+    /// # Arguments
+    /// - `nonce`: Nonce bytes used to derive the address for the order.
+    /// - `params`: Order Parameters specifying the market, order kind, and other details.
+    ///
+    /// # Errors
+    /// This instruction will fail if:
+    /// - The [`owner`](CreateOrderV2::owner) is not a signer or has insufficient balance for the
+    ///   execution fee and rent.
+    /// - The [`store`](CreateOrderV2::store) is not properly initialized.
+    /// - The [`market`](CreateOrderV2::market) is not initialized, is disabled, or not owned by
+    ///   the `store`.
+    /// - The [`user`](CreateOrderV2::user) is not initialized or does not correspond to the owner.
+    ///   The address must be a valid PDA derived from the `owner` and expected seeds.
+    /// - The [`order`](CreateOrderV2::order) is not uninitialized or the address is not a valid
+    ///   PDA derived from the `owner`, `nonce` and expected seeds.
+    /// - For increase/decrease orders:
+    ///   - The [`position`](CreateOrderV2::position) is missing, not validly initialized, or not
+    ///     owned by both the `owner` and `store`.
+    ///   - The [`long_token`](CreateOrderV2::long_token) or [`short_token`](CreateOrderV2::short_token)
+    ///     are missing, or do not match the those defined in the [`market`](CreateOrderV2::market).
+    ///   - The [`long_token_escrow`](CreateOrderV2::long_token_escrow) or
+    ///     [`short_token_escrow`](CreateOrderV2::short_token_escrow) are missing, not valid
+    ///     escrow accounts for `long_token` or `short_token` respectively, or not owned by the `order`.
+    /// - For increase/swap orders:
+    ///   - The [`initial_collateral_token`](CreateOrderV2::initial_collateral_token) is missing
+    ///     or invalid.
+    ///   - The [`initial_collateral_token_escrow`](CreateOrderV2::initial_collateral_token_escrow)
+    ///     is missing, not a valid escrow account for `initial_collateral_token`, or not owned by
+    ///     the `order`.
+    ///   - The [`initial_collateral_token_source`](CreateOrderV2::initial_collateral_token_source)
+    ///     is missing or not a valid source account with `owner` as the authority.
+    /// - For decrease/swap orders:
+    ///   - The [`final_output_token`](CreateOrderV2::final_output_token) is invalid.
+    ///   - The [`final_output_token_escrow`](CreateOrderV2::final_output_token_escrow) is missing,
+    ///     not a valid escrow account for `final_output_token`, or not owned by the `order`.
+    /// - The feature for creating this kind of order is not enabled.
+    /// - The remaining market accounts do not match the swap parameters, not all enabled or owned
+    ///   by the `store`.
+    /// - The accounts related to callback must be provided if
+    ///   [`callback_authority`](CreateOrderV2::callback_authority) is provided.
+    pub fn create_order_v2<'info>(
+        mut ctx: Context<'_, '_, 'info, 'info, CreateOrderV2<'info>>,
         nonce: [u8; 32],
         params: CreateOrderParams,
     ) -> Result<()> {
@@ -2004,8 +2059,41 @@ pub mod gmsol_store {
     /// - The addresses of the ATAs must be valid.
     /// - The `order` must be cancelled or completed if the `executor` is not the owner.
     /// - The feature must be enabled for closing the given kind of `order`.
+    #[deprecated(since = "0.6.0", note = "Use `close_order_v2` instead.")]
     pub fn close_order<'info>(
         ctx: Context<'_, '_, 'info, 'info, CloseOrder<'info>>,
+        reason: String,
+    ) -> Result<()> {
+        internal::Close::close(&ctx, &reason)
+    }
+
+    /// Close an order, either by the owner or by keepers.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](CloseOrderV2)*
+    ///
+    /// # Arguments
+    /// - `reason`: The reason for the close.
+    ///
+    /// # Errors
+    /// - The [`executor`](CloseOrderV2::executor) must be a signer and either the owner
+    ///   of the `order` or a ORDER_KEEPER in the store.
+    /// - The [`store`](CloseOrderV2::store) must be initialized.
+    /// - The [`owner`](CloseOrderV2::owner) must be the owner of the `order`.
+    /// - The [`user`](CloseOrderV2::user) must be initialized and correspond to the `owner`.
+    /// - The [`referrer_user`](CloseOrderV2::referrer_user) must be present if the `owner` has a
+    ///   referrer, and it must be initialized and correspond to the referrer of the `owner`.
+    /// - The [`order`](CloseOrderV2::order) must be initialized and owned by the `store` and the
+    ///   `owner`.
+    /// - The tokens must be those recorded in the `order`.
+    /// - The escrow accounts must be owned and recorded in the `order`.
+    /// - The addresses of the ATAs must be valid.
+    /// - The `order` must be cancelled or completed if the `executor` is not the owner.
+    /// - The feature must be enabled for closing the given kind of `order`.
+    /// - The accounts related to callback must be provided if
+    ///   [`callback_authority`](CloseOrderV2::callback_authority) is provided.
+    pub fn close_order_v2<'info>(
+        ctx: Context<'_, '_, 'info, 'info, CloseOrderV2<'info>>,
         reason: String,
     ) -> Result<()> {
         internal::Close::close(&ctx, &reason)
@@ -3463,6 +3551,11 @@ pub mod gmsol_store {
             }
         }
     }
+
+    /// Initialize the [`CallbackAuthority`](crate::states::callback::CallbackAuthority) account.
+    pub fn initialize_callback_authority(ctx: Context<InitializeCallbackAuthority>) -> Result<()> {
+        InitializeCallbackAuthority::invoke(ctx)
+    }
 }
 
 /// Result type with [`CoreError`] as error type.
@@ -3879,22 +3972,4 @@ pub enum CoreError {
     /// Price is stale.
     #[msg("Price is stale")]
     PriceIsStale,
-}
-
-impl CoreError {
-    pub(crate) const fn unknown_action_state(_kind: u8) -> Self {
-        Self::UnknownActionState
-    }
-
-    pub(crate) const fn unknown_order_kind(_kind: u8) -> Self {
-        Self::UnknownOrderKind
-    }
-
-    pub(crate) const fn unknown_order_side(_kind: u8) -> Self {
-        Self::UnknownOrderSide
-    }
-
-    pub(crate) const fn invalid_position_kind(_kind: u8) -> Self {
-        Self::InvalidPositionKind
-    }
 }

@@ -52,14 +52,14 @@ impl MarketCalculations for MarketModel {
                     funding_factor_per_second
                         .checked_mul_div_ceil(&size_for_larger_side, &open_interest_for_long)
                         .ok_or_else(|| {
-                            crate::Error::unknown("failed to calculate funding rate for long")
+                            crate::Error::custom("failed to calculate funding rate for long")
                         })?
                         .to_signed()?
                 } else {
                     funding_factor_per_second
                         .checked_mul_div(&size_for_larger_side, &open_interest_for_long)
                         .ok_or_else(|| {
-                            crate::Error::unknown("failed to calculate funding rate for long")
+                            crate::Error::custom("failed to calculate funding rate for long")
                         })?
                         .to_opposite_signed()?
                 };
@@ -67,14 +67,14 @@ impl MarketCalculations for MarketModel {
                     funding_factor_per_second
                         .checked_mul_div_ceil(&size_for_larger_side, &open_interest_for_short)
                         .ok_or_else(|| {
-                            crate::Error::unknown("failed to calculate funding rate for short")
+                            crate::Error::custom("failed to calculate funding rate for short")
                         })?
                         .to_signed()?
                 } else {
                     funding_factor_per_second
                         .checked_mul_div(&size_for_larger_side, &open_interest_for_short)
                         .ok_or_else(|| {
-                            crate::Error::unknown("failed to calculate funding rate for short")
+                            crate::Error::custom("failed to calculate funding rate for short")
                         })?
                         .to_opposite_signed()?
                 };
@@ -106,14 +106,14 @@ impl MarketCalculations for MarketModel {
         >(
             &pool_value_without_pnl_for_long.min, &reserve_factor
         )
-        .ok_or_else(|| crate::Error::unknown("failed to calculate max reserved value for long"))?;
+        .ok_or_else(|| crate::Error::custom("failed to calculate max reserved value for long"))?;
         let max_reserve_value_for_short = gmsol_model::utils::apply_factor::<
             _,
             { constants::MARKET_DECIMALS },
         >(
             &pool_value_without_pnl_for_short.min, &reserve_factor
         )
-        .ok_or_else(|| crate::Error::unknown("failed to calculate max reserved value for short"))?;
+        .ok_or_else(|| crate::Error::custom("failed to calculate max reserved value for short"))?;
         let max_liquidity_for_long = max_reserve_value_for_long.min(self.max_open_interest(true)?);
         let max_liquidity_for_short =
             max_reserve_value_for_short.min(self.max_open_interest(false)?);

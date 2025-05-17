@@ -1,3 +1,4 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
 //! This crate provides utils for decoding GMSOL types.
@@ -14,17 +15,15 @@ pub mod value;
 /// Errors.
 pub mod error;
 
-#[cfg(feature = "gmsol")]
-pub(crate) mod gmsol;
+/// Implement [`Decode`] for GMSOL types.
+#[cfg(any(feature = "gmsol", feature = "gmsol-programs"))]
+pub mod gmsol;
 
 pub use self::{
     decode::{visitor::Visitor, Decode},
     decoder::{account_access::AccountAccess, cpi_event_access::AnchorCPIEventsAccess, Decoder},
     error::DecodeError,
 };
-
-#[cfg(feature = "gmsol")]
-pub use self::gmsol::{GMSOLAccountData, GMSOLCPIEvent, GMSOLData};
 
 pub use paste;
 

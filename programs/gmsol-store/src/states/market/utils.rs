@@ -145,7 +145,10 @@ pub trait ValidateMarketBalances:
             if amount == 0 {
                 continue;
             }
-            let is_long = self.market_meta().to_token_side(token)?;
+            let is_long = self
+                .market_meta()
+                .to_token_side(token)
+                .map_err(CoreError::from)?;
             if is_long {
                 long_excluding_amount = long_excluding_amount
                     .checked_add(amount)

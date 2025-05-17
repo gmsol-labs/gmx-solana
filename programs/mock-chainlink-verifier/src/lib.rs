@@ -38,7 +38,7 @@ pub mod gmsol_mock_chainlink_verifier {
 pub const DEFAULT_VERIFIER_ACCOUNT_SEEDS: &[u8; 8] = b"verifier";
 pub const DEFAULT_ACCESS_CONTROLLER_ACCOUNT_SEEDS: &[u8] = b"access_controller";
 
-/// Verifyer Account.
+/// Verifier Account.
 #[account]
 #[derive(InitSpace)]
 pub struct VerifierAccount {

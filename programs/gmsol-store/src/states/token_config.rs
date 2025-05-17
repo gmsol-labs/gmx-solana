@@ -4,16 +4,15 @@ use std::{
 };
 
 use anchor_lang::prelude::*;
+use gmsol_utils::token_config::{TokenConfigError, TokenConfigFlag};
 
-use crate::{
-    utils::{
-        fixed_str::{bytes_to_fixed_str, fixed_str_to_bytes},
-        pubkey::DEFAULT_PUBKEY,
-    },
-    CoreError,
+use crate::{utils::fixed_str::fixed_str_to_bytes, CoreError};
+
+use super::{InitSpace, PriceProviderKind};
+
+pub use gmsol_utils::token_config::{
+    FeedConfig, TokenConfig, TokenMapAccess, UpdateTokenConfigParams,
 };
-
-use super::{HasMarketMeta, InitSpace, PriceProviderKind};
 
 /// Default heartbeat duration for price updates.
 pub const DEFAULT_HEARTBEAT_DURATION: u32 = 30;
@@ -27,159 +26,34 @@ pub const DEFAULT_TIMESTAMP_ADJUSTMENT: u32 = 0;
 #[cfg(feature = "utils")]
 pub use self::utils::TokenMap;
 
-const MAX_FEEDS: usize = 4;
-const MAX_FLAGS: usize = 8;
 const MAX_TOKENS: usize = 256;
-const MAX_NAME_LEN: usize = 32;
 
-/// Token Flags.
-#[derive(num_enum::IntoPrimitive)]
-#[repr(u8)]
-#[non_exhaustive]
-pub enum Flag {
-    /// Is initialized.
-    Initialized,
-    /// Enabled.
-    Enabled,
-    /// Is a synthetic asset.
-    Synthetic,
-    // CHECK: Cannot have more than `MAX_FLAGS` flags.
-}
-
-gmsol_utils::flags!(Flag, MAX_FLAGS, u8);
-
-#[zero_copy]
-#[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TokenConfig {
-    /// Name.
-    name: [u8; MAX_NAME_LEN],
-    /// Flags.
-    flags: FlagContainer,
-    /// Token decimals.
-    token_decimals: u8,
-    /// Precision.
-    precision: u8,
-    /// Expected provider.
-    expected_provider: u8,
-    /// Price Feeds.
-    feeds: [FeedConfig; MAX_FEEDS],
-    /// Heartbeat duration.
-    heartbeat_duration: u32,
-    #[cfg_attr(feature = "debug", debug(skip))]
-    reserved: [u8; 32],
-}
-
-#[cfg(feature = "display")]
-impl std::fmt::Display for TokenConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Name: {}", self.name().unwrap_or("*unknown*"))?;
-        writeln!(f, "Enabled: {}", self.is_enabled())?;
-        writeln!(f, "Synthetic: {}", self.is_synthetic())?;
-        writeln!(f, "Decimals: {}", self.token_decimals)?;
-        writeln!(f, "Precision: {}", self.precision)?;
-        writeln!(f, "Heartbeat: {}", self.heartbeat_duration)?;
-        writeln!(
-            f,
-            "Expected Provider: {}",
-            self.expected_provider()
-                .map(|kind| kind.to_string())
-                .unwrap_or("*unknown*".to_string())
-        )?;
-        Ok(())
-    }
-}
-
-impl TokenConfig {
-    /// Get the corresponding price feed config.
-    pub fn get_feed_config(&self, kind: &PriceProviderKind) -> Result<&FeedConfig> {
-        let index = *kind as usize;
-        let config = self
-            .feeds
-            .get(index)
-            .ok_or_else(|| error!(CoreError::NotFound))?;
-        if config.feed == DEFAULT_PUBKEY {
-            err!(CoreError::NotFound)
-        } else {
-            Ok(config)
+impl From<TokenConfigError> for CoreError {
+    fn from(err: TokenConfigError) -> Self {
+        msg!("Token Config Error: {}", err);
+        match err {
+            TokenConfigError::NotFound => Self::NotFound,
+            TokenConfigError::InvalidProviderIndex => Self::InvalidProviderKindIndex,
+            TokenConfigError::FixedStr(err) => err.into(),
+            TokenConfigError::ExceedMaxLengthLimit => Self::ExceedMaxLengthLimit,
         }
     }
+}
 
-    /// Set feed config.
-    pub fn set_feed_config(
+pub(crate) trait TokenConfigExt {
+    fn update(
         &mut self,
-        kind: &PriceProviderKind,
-        new_config: FeedConfig,
-    ) -> Result<()> {
-        let index = *kind as usize;
-        let config = self
-            .feeds
-            .get_mut(index)
-            .ok_or_else(|| error!(CoreError::InvalidProviderKindIndex))?;
-        *config = new_config;
-        Ok(())
-    }
+        name: &str,
+        synthetic: bool,
+        token_decimals: u8,
+        builder: UpdateTokenConfigParams,
+        enable: bool,
+        init: bool,
+    ) -> Result<()>;
+}
 
-    /// Get the corresponding price feed address.
-    pub fn get_feed(&self, kind: &PriceProviderKind) -> Result<Pubkey> {
-        Ok(self.get_feed_config(kind)?.feed)
-    }
-
-    /// Set expected provider.
-    pub fn set_expected_provider(&mut self, provider: PriceProviderKind) {
-        self.expected_provider = provider as u8;
-    }
-
-    /// Get expected price provider kind.
-    pub fn expected_provider(&self) -> Result<PriceProviderKind> {
-        let kind = PriceProviderKind::try_from(self.expected_provider)
-            .map_err(|_| CoreError::InvalidProviderKindIndex)?;
-        Ok(kind)
-    }
-
-    /// Get price feed address for the expected provider.
-    pub fn get_expected_feed(&self) -> Result<Pubkey> {
-        self.get_feed(&self.expected_provider()?)
-    }
-
-    /// Set enabled.
-    pub fn set_enabled(&mut self, enable: bool) {
-        self.set_flag(Flag::Enabled, enable)
-    }
-
-    /// Set synthetic.
-    pub fn set_synthetic(&mut self, is_synthetic: bool) {
-        self.set_flag(Flag::Synthetic, is_synthetic)
-    }
-
-    /// Is enabled.
-    pub fn is_enabled(&self) -> bool {
-        self.flag(Flag::Enabled)
-    }
-
-    /// Is synthetic.
-    pub fn is_synthetic(&self) -> bool {
-        self.flag(Flag::Synthetic)
-    }
-
-    /// Returns whether the config is a valid pool token config.
-    pub fn is_valid_pool_token_config(&self) -> bool {
-        !self.is_synthetic()
-    }
-
-    /// Set flag
-    pub fn set_flag(&mut self, flag: Flag, value: bool) {
-        self.flags.set_flag(flag, value);
-    }
-
-    /// Get flag.
-    pub fn flag(&self, flag: Flag) -> bool {
-        self.flags.get_flag(flag)
-    }
-
-    /// Create a new token config from builder.
-    pub fn update(
+impl TokenConfigExt for TokenConfig {
+    fn update(
         &mut self,
         name: &str,
         synthetic: bool,
@@ -189,10 +63,16 @@ impl TokenConfig {
         init: bool,
     ) -> Result<()> {
         if init {
-            require!(!self.flag(Flag::Initialized), CoreError::InvalidArgument);
-            self.set_flag(Flag::Initialized, true);
+            require!(
+                !self.flag(TokenConfigFlag::Initialized),
+                CoreError::InvalidArgument
+            );
+            self.set_flag(TokenConfigFlag::Initialized, true);
         } else {
-            require!(self.flag(Flag::Initialized), CoreError::InvalidArgument);
+            require!(
+                self.flag(TokenConfigFlag::Initialized),
+                CoreError::InvalidArgument
+            );
             require_eq!(
                 self.token_decimals,
                 token_decimals,
@@ -230,174 +110,6 @@ impl TokenConfig {
         self.expected_provider = expected_provider.unwrap_or(PriceProviderKind::default() as u8);
         self.heartbeat_duration = heartbeat_duration;
         Ok(())
-    }
-
-    /// Token decimals.
-    pub fn token_decimals(&self) -> u8 {
-        self.token_decimals
-    }
-
-    /// Price Precision.
-    pub fn precision(&self) -> u8 {
-        self.precision
-    }
-
-    /// Get timestamp adjustment.
-    pub fn timestamp_adjustment(&self, price_provider: &PriceProviderKind) -> Result<u32> {
-        Ok(self.get_feed_config(price_provider)?.timestamp_adjustment)
-    }
-
-    /// Heartbeat duration.
-    pub fn heartbeat_duration(&self) -> u32 {
-        self.heartbeat_duration
-    }
-
-    /// Get token name.
-    pub fn name(&self) -> Result<&str> {
-        bytes_to_fixed_str(&self.name)
-    }
-}
-
-impl InitSpace for TokenConfig {
-    const INIT_SPACE: usize = std::mem::size_of::<Self>();
-}
-
-/// Price Feed Config.
-#[zero_copy]
-#[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FeedConfig {
-    #[cfg_attr(
-        feature = "serde",
-        serde(with = "serde_with::As::<serde_with::DisplayFromStr>")
-    )]
-    feed: Pubkey,
-    timestamp_adjustment: u32,
-    #[cfg_attr(feature = "debug", debug(skip))]
-    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 28],
-}
-
-#[cfg(feature = "display")]
-impl std::fmt::Display for FeedConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "feed = {}, timestamp_adjustment = {}",
-            self.feed, self.timestamp_adjustment
-        )
-    }
-}
-
-impl FeedConfig {
-    /// Create a new feed config.
-    pub fn new(feed: Pubkey) -> Self {
-        Self {
-            feed,
-            timestamp_adjustment: DEFAULT_TIMESTAMP_ADJUSTMENT,
-            reserved: Default::default(),
-        }
-    }
-
-    /// Change the timestamp adjustment.
-    pub fn with_timestamp_adjustment(mut self, timestamp_adjustment: u32) -> Self {
-        self.timestamp_adjustment = timestamp_adjustment;
-        self
-    }
-
-    /// Get feed.
-    pub fn feed(&self) -> &Pubkey {
-        &self.feed
-    }
-
-    /// Get timestamp adjustment.
-    pub fn timestamp_adjustment(&self) -> u32 {
-        self.timestamp_adjustment
-    }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-#[cfg_attr(feature = "debug", derive(Debug))]
-pub struct UpdateTokenConfigParams {
-    heartbeat_duration: u32,
-    precision: u8,
-    feeds: Vec<Pubkey>,
-    timestamp_adjustments: Vec<u32>,
-    expected_provider: Option<u8>,
-}
-
-impl Default for UpdateTokenConfigParams {
-    fn default() -> Self {
-        Self {
-            heartbeat_duration: DEFAULT_HEARTBEAT_DURATION,
-            precision: DEFAULT_PRECISION,
-            feeds: vec![DEFAULT_PUBKEY; MAX_FEEDS],
-            timestamp_adjustments: vec![DEFAULT_TIMESTAMP_ADJUSTMENT; MAX_FEEDS],
-            expected_provider: None,
-        }
-    }
-}
-
-impl<'a> From<&'a TokenConfig> for UpdateTokenConfigParams {
-    fn from(config: &'a TokenConfig) -> Self {
-        let (feeds, timestamp_adjustments) = config
-            .feeds
-            .iter()
-            .map(|config| (config.feed, config.timestamp_adjustment))
-            .unzip();
-
-        Self {
-            heartbeat_duration: config.heartbeat_duration(),
-            precision: config.precision(),
-            feeds,
-            timestamp_adjustments,
-            expected_provider: Some(config.expected_provider),
-        }
-    }
-}
-
-impl UpdateTokenConfigParams {
-    /// Update the feed address for the given price provider.
-    /// Return error when the feed was not set before.
-    pub fn update_price_feed(
-        mut self,
-        kind: &PriceProviderKind,
-        new_feed: Pubkey,
-        new_timestamp_adjustment: Option<u32>,
-    ) -> Result<Self> {
-        let index = *kind as usize;
-        let feed = self
-            .feeds
-            .get_mut(index)
-            .ok_or_else(|| error!(CoreError::NotFound))?;
-        let timestamp_adjustment = self
-            .timestamp_adjustments
-            .get_mut(index)
-            .ok_or_else(|| error!(CoreError::NotFound))?;
-        *feed = new_feed;
-        if let Some(new_timestamp_adjustment) = new_timestamp_adjustment {
-            *timestamp_adjustment = new_timestamp_adjustment;
-        }
-        Ok(self)
-    }
-
-    /// Set heartbeat duration.
-    pub fn with_heartbeat_duration(mut self, duration: u32) -> Self {
-        self.heartbeat_duration = duration;
-        self
-    }
-
-    /// Set precision.
-    pub fn with_precision(mut self, precision: u8) -> Self {
-        self.precision = precision;
-        self
-    }
-
-    /// Set expected provider.
-    pub fn with_expected_provider(mut self, provider: PriceProviderKind) -> Self {
-        self.expected_provider = Some(provider as u8);
-        self
     }
 }
 
@@ -542,33 +254,6 @@ impl<'info> TokenMapLoader<'info> for AccountLoader<'info, TokenMapHeader> {
             header: RefMut::map(header, bytemuck::from_bytes_mut),
             configs,
         })
-    }
-}
-
-/// Read Token Map.
-pub trait TokenMapAccess {
-    /// Get the config of the given token.
-    fn get(&self, token: &Pubkey) -> Option<&TokenConfig>;
-
-    /// Get token configs for the given market.
-    ///
-    /// Returns the token configs for `index_token`, `long_token` and `short_token`.
-    fn token_configs_for_market(&self, market: &impl HasMarketMeta) -> Option<[&TokenConfig; 3]> {
-        let meta = market.market_meta();
-        let index_token = self.get(&meta.index_token_mint)?;
-        let long_token = self.get(&meta.long_token_mint)?;
-        let short_token = self.get(&meta.short_token_mint)?;
-        Some([index_token, long_token, short_token])
-    }
-
-    /// Sort tokens by provider. This sort is stable.
-    fn sort_tokens_by_provider(&self, tokens: &mut [Pubkey]) -> Result<()> {
-        // Check the existence of token configs.
-        for token in tokens.iter() {
-            require!(self.get(token).is_some(), CoreError::UnknownToken);
-        }
-        tokens.sort_by_cached_key(|token| self.get(token).unwrap().expected_provider);
-        Ok(())
     }
 }
 

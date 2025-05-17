@@ -591,15 +591,8 @@ where
         self.token_map = Some(address);
         self
     }
-}
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
-    for ExecuteWithdrawalBuilder<'a, C>
-{
-    async fn build_with_options(
-        &mut self,
-        options: BundleOptions,
-    ) -> crate::Result<BundleBuilder<'a, C>> {
+    async fn build_txn(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let authority = self.client.payer();
         let hint = self.prepare_hint().await?;
         let feeds = self
@@ -685,9 +678,24 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             execute
         };
 
+        Ok(rpc)
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
+    for ExecuteWithdrawalBuilder<'a, C>
+{
+    async fn build_with_options(
+        &mut self,
+        options: BundleOptions,
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
         let mut tx = self.client.bundle_with_options(options);
 
-        tx.try_push(rpc)?;
+        tx.try_push(
+            self.build_txn()
+                .await
+                .map_err(gmsol_solana_utils::Error::custom)?,
+        )?;
 
         Ok(tx)
     }

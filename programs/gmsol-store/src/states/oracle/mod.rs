@@ -26,7 +26,6 @@ use crate::{
     CoreError, CoreResult,
 };
 use anchor_lang::prelude::*;
-use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use self::price_map::PriceMap;
 use super::{HasMarketMeta, Seed, Store, TokenConfig, TokenMapHeader, TokenMapRef};
@@ -39,6 +38,8 @@ pub use self::{
     time::{ValidateOracleTime, ValidateOracleTimeExt},
     validator::PriceValidator,
 };
+
+pub use gmsol_utils::oracle::PriceProviderKind;
 
 const MAX_FLAGS: usize = 8;
 
@@ -282,52 +283,16 @@ impl Oracle {
     }
 }
 
-/// Supported Price Provider Kind.
-#[repr(u8)]
-#[derive(
-    Clone,
-    Copy,
-    Default,
-    TryFromPrimitive,
-    IntoPrimitive,
-    PartialEq,
-    Eq,
-    Hash,
-    strum::EnumString,
-    strum::Display,
-)]
-#[strum(serialize_all = "snake_case")]
-#[cfg_attr(feature = "enum-iter", derive(strum::EnumIter))]
-#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
-#[cfg_attr(feature = "clap", clap(rename_all = "snake_case"))]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
-#[cfg_attr(feature = "debug", derive(Debug))]
-#[non_exhaustive]
-pub enum PriceProviderKind {
-    /// Chainlink Data Streams.
-    #[default]
-    ChainlinkDataStreams = 0,
-    /// Pyth Oracle V2.
-    Pyth = 1,
-    /// Chainlink Data Feed.
-    Chainlink = 2,
-    /// Switchboard On-Demand (V3) Data Feed.
-    Switchboard = 3,
-}
-
-impl PriceProviderKind {
-    /// Create from program id.
-    pub fn from_program_id(program_id: &Pubkey) -> Option<Self> {
-        if *program_id == Chainlink::id() {
-            Some(Self::Chainlink)
-        } else if *program_id == Pyth::id() {
-            Some(Self::Pyth)
-        } else if *program_id == Switchboard::id() {
-            Some(Self::Switchboard)
-        } else {
-            None
-        }
+/// Create from program id.
+fn from_program_id(program_id: &Pubkey) -> Option<PriceProviderKind> {
+    if *program_id == Chainlink::id() {
+        Some(PriceProviderKind::Chainlink)
+    } else if *program_id == Pyth::id() {
+        Some(PriceProviderKind::Pyth)
+    } else if *program_id == Switchboard::id() {
+        Some(PriceProviderKind::Switchboard)
+    } else {
+        None
     }
 }
 
@@ -345,7 +310,7 @@ impl OraclePrice {
         chainlink: Option<&Program<'info, Chainlink>>,
         account: &'info AccountInfo<'info>,
     ) -> Result<Self> {
-        let (provider, parsed) = match PriceProviderKind::from_program_id(account.owner) {
+        let (provider, parsed) = match from_program_id(account.owner) {
             Some(provider) => (provider, None),
             None if *account.owner == crate::ID => {
                 let loader = AccountLoader::<'info, PriceFeed>::try_from(account)?;
@@ -356,9 +321,12 @@ impl OraclePrice {
             None => return Err(error!(CoreError::InvalidPriceFeedAccount)),
         };
 
-        require_eq!(token_config.expected_provider()?, provider);
+        require_eq!(
+            token_config.expected_provider().map_err(CoreError::from)?,
+            provider
+        );
 
-        let feed_id = token_config.get_feed(&provider)?;
+        let feed_id = token_config.get_feed(&provider).map_err(CoreError::from)?;
 
         let (oracle_slot, oracle_ts, price) = match provider {
             PriceProviderKind::ChainlinkDataStreams => {
@@ -384,6 +352,10 @@ impl OraclePrice {
             PriceProviderKind::Switchboard => {
                 require_keys_eq!(feed_id, account.key(), CoreError::InvalidPriceFeedAccount);
                 Switchboard::check_and_get_price(clock, token_config, account)?
+            }
+            kind => {
+                msg!("Unsupported price provider: {}", kind);
+                return err!(CoreError::Unimplemented);
             }
         };
 

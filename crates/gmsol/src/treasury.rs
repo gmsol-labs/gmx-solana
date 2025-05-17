@@ -993,15 +993,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ConfirmGtBuybackBuilder<'a, C> 
             }
         }
     }
-}
 
-impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
-    for ConfirmGtBuybackBuilder<'a, C>
-{
-    async fn build_with_options(
-        &mut self,
-        options: BundleOptions,
-    ) -> crate::Result<BundleBuilder<'a, C>> {
+    async fn build_txn(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
 
         let gt_bank = self
@@ -1059,8 +1052,23 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
             .accounts(feeds)
             .accounts(tokens.chain(vaults).collect::<Vec<_>>());
 
+        Ok(rpc)
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
+    for ConfirmGtBuybackBuilder<'a, C>
+{
+    async fn build_with_options(
+        &mut self,
+        options: BundleOptions,
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
         let mut tx = self.client.bundle_with_options(options);
-        tx.try_push(rpc)?;
+        tx.try_push(
+            self.build_txn()
+                .await
+                .map_err(gmsol_solana_utils::Error::custom)?,
+        )?;
 
         Ok(tx)
     }

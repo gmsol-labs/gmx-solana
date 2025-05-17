@@ -15,7 +15,10 @@ use crate::{
         },
     },
     states::{
-        common::action::{ActionExt, ActionSigner},
+        common::{
+            action::{ActionExt, ActionSigner},
+            swap::SwapActionParamsExt,
+        },
         feature::ActionDisabledFlag,
         order::{Order, TransferOut},
         position::Position,
@@ -304,10 +307,12 @@ pub(crate) fn unchecked_execute_increase_or_swap_order<'info>(
     );
 
     // Validate feature enabled.
-    accounts
-        .store
-        .load()?
-        .validate_feature_enabled(kind.try_into()?, ActionDisabledFlag::Execute)?;
+    accounts.store.load()?.validate_feature_enabled(
+        kind.try_into()
+            .map_err(CoreError::from)
+            .map_err(|err| error!(err))?,
+        ActionDisabledFlag::Execute,
+    )?;
 
     let remaining_accounts = ctx.remaining_accounts;
     let signer = accounts.order.load()?.signer();
@@ -446,7 +451,8 @@ impl<'info> ExecuteIncreaseOrSwapOrder<'info> {
             .order
             .load()?
             .swap
-            .to_feeds(&self.token_map.load_token_map()?)?;
+            .to_feeds(&self.token_map.load_token_map()?)
+            .map_err(CoreError::from)?;
         let ops = ExecuteOrderOperation::builder()
             .store(&self.store)
             .market(&self.market)
@@ -738,10 +744,12 @@ pub(crate) fn unchecked_execute_decrease_order<'info>(
     require!(kind.is_decrease_position(), CoreError::InvalidArgument);
 
     // Validate feature enabled.
-    accounts
-        .store
-        .load()?
-        .validate_feature_enabled(kind.try_into()?, ActionDisabledFlag::Execute)?;
+    accounts.store.load()?.validate_feature_enabled(
+        kind.try_into()
+            .map_err(CoreError::from)
+            .map_err(|err| error!(err))?,
+        ActionDisabledFlag::Execute,
+    )?;
 
     let event_authority = accounts.event_authority.clone();
     let event_emitter = EventEmitter::new(&event_authority, ctx.bumps.event_authority);
@@ -795,7 +803,8 @@ impl<'info> ExecuteDecreaseOrder<'info> {
             .order
             .load()?
             .swap
-            .to_feeds(&self.token_map.load_token_map()?)?;
+            .to_feeds(&self.token_map.load_token_map()?)
+            .map_err(CoreError::from)?;
         let ops = ExecuteOrderOperation::builder()
             .store(&self.store)
             .market(&self.market)

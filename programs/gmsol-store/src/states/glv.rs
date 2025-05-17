@@ -5,7 +5,7 @@ use std::{
 
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface;
-use gmsol_utils::InitSpace;
+use gmsol_utils::{glv::MAX_GLV_MARKET_FLAGS, InitSpace};
 
 use crate::{
     constants,
@@ -24,9 +24,9 @@ use super::{
     shift, Seed, Shift, TokenMapAccess,
 };
 
+pub use gmsol_utils::glv::GlvMarketFlag;
+
 const MAX_ALLOWED_NUMBER_OF_MARKETS: usize = 96;
-/// Max number of flags.
-pub const MAX_FLAGS: usize = 8;
 
 /// Glv.
 #[account(zero_copy)]
@@ -448,7 +448,9 @@ impl Glv {
             markets,
             market_tokens,
             remaining_accounts,
-            tokens: tokens_collector.into_vec(token_map)?,
+            tokens: tokens_collector
+                .into_vec(token_map)
+                .map_err(CoreError::from)?,
         })
     }
 
@@ -594,21 +596,7 @@ impl UpdateGlvParams {
     }
 }
 
-/// GLV Market Config Flag.
-#[derive(
-    num_enum::IntoPrimitive, Clone, Copy, strum::EnumString, strum::Display, PartialEq, Eq, Hash,
-)]
-#[strum(serialize_all = "snake_case")]
-#[cfg_attr(feature = "enum-iter", derive(strum::EnumIter))]
-#[cfg_attr(feature = "debug", derive(Debug))]
-#[repr(u8)]
-pub enum GlvMarketFlag {
-    /// Is deposit allowed.
-    IsDepositAllowed,
-    // CHECK: cannot have more than `MAX_FLAGS` flags.
-}
-
-gmsol_utils::flags!(GlvMarketFlag, MAX_FLAGS, u8);
+gmsol_utils::flags!(GlvMarketFlag, MAX_GLV_MARKET_FLAGS, u8);
 
 /// Market Config for GLV.
 #[zero_copy]
