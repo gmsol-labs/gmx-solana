@@ -26,6 +26,7 @@ thiserror = { workspace = true }
 bytemuck = { workspace = true, features = [
     "min_const_generics",
     "align_offset",
+    "derive",
 ] }
 bitmaps = { workspace = true, optional = true }
 time = { workspace = true, optional = true }

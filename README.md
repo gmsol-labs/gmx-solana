@@ -72,7 +72,7 @@ Create a new Rust project and include `anchor_lang` and `bytemuck` as dependenci
 ```toml
 [dependencies]
 anchor-lang = "0.30.1"
-bytemuck = { version = "1.19.0", features = ["min_const_generics"] }
+bytemuck = { version = "1.19.0", features = ["min_const_generics", "derive"] }
 ```
 
 #### 2. Download and Store IDLs in `{PROJECT_ROOT}/idls/`

@@ -7,6 +7,10 @@ pub mod states;
 /// Definition of the instructions.
 pub mod instructions;
 
+/// Definitions of common types.
+#[cfg(feature = "types")]
+pub mod types;
+
 /// Definition of the callback interface.
 #[cfg(feature = "interface")]
 pub mod interface;

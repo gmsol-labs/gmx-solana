@@ -15,7 +15,8 @@ name = "gmsol_callback"
 
 [features]
 doc = ["interface"]
-interface = ["cpi", "num_enum"]
+interface = ["cpi", "types"]
+types = ["num_enum", "no-entrypoint"]
 
 default = []
 cpi = ["no-entrypoint"]
