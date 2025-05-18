@@ -4,13 +4,12 @@ use anchor_lang::prelude::*;
 pub enum CompetitionError {
     #[msg("Competition is not active")]
     CompetitionNotActive,
-
-    #[msg("Outside competition time window")]
+    #[msg("Outside competition time")]
     OutsideCompetitionTime,
-
+    #[msg("Invalid trade event")]
+    InvalidTradeEvent,
+    #[msg("Invalid action kind")]
+    InvalidActionKind,
     #[msg("Invalid time range")]
     InvalidTimeRange,
-
-    #[msg("Invalid caller")]
-    InvalidCaller,
-}
+} 

@@ -30,3 +30,5 @@ migration = []
 
 [dependencies]
 anchor-lang = { workspace = true, features = ["init-if-needed"] }
+gmsol-callback = { workspace = true }
+gmsol-programs = { workspace = true }
