@@ -19,11 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs: Added callback-enabled instructions for order.
   - Added the `create_order_v2` instruction.
   - Added the `close_order_v2` instrcution.
+  - Added the `execute_increase_or_swap_order_v2` instruction.
+  - Added the `execute_decrease_order_v2` instruction.
 - programs: Added the `gmsol-competition` program.
 
 ### Changed
 
-- programs: Deprecated `create_order` and `close_order` instructions.
+- programs: Deprecated `create_order`, `close_order`, `execute_increase_or_swap_order` and `execute_decrease_order` instructions.
 
 ## [0.5.0] - 2025-05-16
 

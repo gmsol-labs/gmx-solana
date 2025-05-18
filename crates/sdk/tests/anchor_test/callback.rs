@@ -13,8 +13,11 @@ async fn callback() -> eyre::Result<()> {
     let span = tracing::info_span!("callback");
     let _enter = span.enter();
 
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let client = deployment.user_client(Deployment::DEFAULT_USER)?;
     let store = &deployment.store;
+    let oracle = &deployment.oracle();
+    let fbtc = deployment.token("fBTC").expect("must exist");
     // let usdg = deployment.token("USDG").expect("must exist");
 
     let long_token_amount = 1_000_007;
@@ -30,10 +33,15 @@ async fn callback() -> eyre::Result<()> {
         .await?;
 
     let long_collateral_amount = 100_005;
+    let swap_in_amount = 100_007;
     // let short_collateral_amount = 103 * 100_000_000;
 
     deployment
-        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, long_collateral_amount)
+        .mint_or_transfer_to_user(
+            "fBTC",
+            Deployment::DEFAULT_USER,
+            long_collateral_amount + swap_in_amount,
+        )
         .await?;
     // deployment
     //     .mint_or_transfer_to_user("USDG", Deployment::DEFAULT_USER, short_collateral_amount)
@@ -91,6 +99,257 @@ async fn callback() -> eyre::Result<()> {
         .await?
         .expect("must exist");
     tracing::info!(%order, %signature, ?stats, "cancelled increase position order");
+
+    // Create order.
+    let (mut rpc, order) = client
+        .market_increase(
+            store,
+            market_token,
+            true,
+            long_collateral_amount,
+            true,
+            size,
+        )
+        .callback(Some(Callback {
+            program: deployment.callback_program,
+            config: deployment.callback_config,
+            action_stats,
+        }))
+        .build_with_address()
+        .await?;
+    let prepare_action_stats = client
+        .store_transaction()
+        .program(deployment.callback_program)
+        .anchor_args(instruction::CreateActionStatsIdempotent { action_kind })
+        .anchor_accounts(accounts::CreateActionStatsIdempotent {
+            payer: client.payer(),
+            action_stats,
+            owner,
+            system_program: system_program::ID,
+        });
+    rpc = prepare_action_stats.merge(rpc);
+    let signature = rpc.send().await?;
+    let stats = client
+        .account::<gmsol_callback::states::ActionStats>(&action_stats)
+        .await?
+        .expect("must exist");
+    tracing::info!(%order, %signature, ?stats, "created an increase position order");
+
+    // Cancel order without callback.
+    let signature = client
+        .close_order(&order)?
+        .skip_callback(true)
+        .build()
+        .await?
+        .send()
+        .await?;
+    let stats = client
+        .account::<gmsol_callback::states::ActionStats>(&action_stats)
+        .await?
+        .expect("must exist");
+    tracing::info!(%order, %signature, ?stats, "cancelled increase position order");
+
+    // Create market increase order.
+    let (mut rpc, order) = client
+        .market_increase(
+            store,
+            market_token,
+            true,
+            long_collateral_amount,
+            true,
+            size,
+        )
+        .callback(Some(Callback {
+            program: deployment.callback_program,
+            config: deployment.callback_config,
+            action_stats,
+        }))
+        .build_with_address()
+        .await?;
+    let prepare_action_stats = client
+        .store_transaction()
+        .program(deployment.callback_program)
+        .anchor_args(instruction::CreateActionStatsIdempotent { action_kind })
+        .anchor_accounts(accounts::CreateActionStatsIdempotent {
+            payer: client.payer(),
+            action_stats,
+            owner,
+            system_program: system_program::ID,
+        });
+    rpc = prepare_action_stats.merge(rpc);
+    let signature = rpc.send().await?;
+    let stats = client
+        .account::<gmsol_callback::states::ActionStats>(&action_stats)
+        .await?
+        .expect("must exist");
+    tracing::info!(%order, %signature, ?stats, "created an increase position order");
+
+    // Execute market increase order.
+    let mut builder = keeper.execute_order(store, oracle, &order, false)?;
+    deployment
+        .execute_with_pyth(
+            builder
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone()),
+            None,
+            true,
+            true,
+        )
+        .await?;
+
+    let stats = client
+        .account::<gmsol_callback::states::ActionStats>(&action_stats)
+        .await?
+        .expect("must exist");
+    tracing::info!(%order, %signature, ?stats, "executed order");
+
+    // Create swap order.
+    let (mut rpc, order) = client
+        .market_swap(
+            store,
+            market_token,
+            false,
+            &fbtc.address,
+            swap_in_amount,
+            [market_token],
+        )
+        .callback(Some(Callback {
+            program: deployment.callback_program,
+            config: deployment.callback_config,
+            action_stats,
+        }))
+        .build_with_address()
+        .await?;
+    let prepare_action_stats = client
+        .store_transaction()
+        .program(deployment.callback_program)
+        .anchor_args(instruction::CreateActionStatsIdempotent { action_kind })
+        .anchor_accounts(accounts::CreateActionStatsIdempotent {
+            payer: client.payer(),
+            action_stats,
+            owner,
+            system_program: system_program::ID,
+        });
+    rpc = prepare_action_stats.merge(rpc);
+    let signature = rpc.send().await?;
+    let stats = client
+        .account::<gmsol_callback::states::ActionStats>(&action_stats)
+        .await?
+        .expect("must exist");
+    tracing::info!(%order, %signature, ?stats, "created a swap order");
+
+    // Execute swap order.
+    let mut builder = keeper.execute_order(store, oracle, &order, false)?;
+    deployment
+        .execute_with_pyth(
+            builder
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone()),
+            None,
+            true,
+            true,
+        )
+        .await?;
+
+    let stats = client
+        .account::<gmsol_callback::states::ActionStats>(&action_stats)
+        .await?
+        .expect("must exist");
+    tracing::info!(%order, %signature, ?stats, "executed order");
+
+    // Create market decrease order 1.
+    let (mut rpc, order) = client
+        .market_decrease(store, market_token, true, 0, true, size / 2)
+        .callback(Some(Callback {
+            program: deployment.callback_program,
+            config: deployment.callback_config,
+            action_stats,
+        }))
+        .build_with_address()
+        .await?;
+    let prepare_action_stats = client
+        .store_transaction()
+        .program(deployment.callback_program)
+        .anchor_args(instruction::CreateActionStatsIdempotent { action_kind })
+        .anchor_accounts(accounts::CreateActionStatsIdempotent {
+            payer: client.payer(),
+            action_stats,
+            owner,
+            system_program: system_program::ID,
+        });
+    rpc = prepare_action_stats.merge(rpc);
+    let signature = rpc.send().await?;
+    let stats = client
+        .account::<gmsol_callback::states::ActionStats>(&action_stats)
+        .await?
+        .expect("must exist");
+    tracing::info!(%order, %signature, ?stats, "created a decrease position order");
+
+    // Execute market decrease order 1.
+    let mut builder = keeper.execute_order(store, oracle, &order, false)?;
+    deployment
+        .execute_with_pyth(
+            builder
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone()),
+            None,
+            true,
+            true,
+        )
+        .await?;
+
+    let stats = client
+        .account::<gmsol_callback::states::ActionStats>(&action_stats)
+        .await?
+        .expect("must exist");
+    tracing::info!(%order, %signature, ?stats, "executed order");
+
+    // Create market decrease order 2.
+    let (mut rpc, order) = client
+        .market_decrease(store, market_token, true, 0, true, size / 2)
+        .callback(Some(Callback {
+            program: deployment.callback_program,
+            config: deployment.callback_config,
+            action_stats,
+        }))
+        .build_with_address()
+        .await?;
+    let prepare_action_stats = client
+        .store_transaction()
+        .program(deployment.callback_program)
+        .anchor_args(instruction::CreateActionStatsIdempotent { action_kind })
+        .anchor_accounts(accounts::CreateActionStatsIdempotent {
+            payer: client.payer(),
+            action_stats,
+            owner,
+            system_program: system_program::ID,
+        });
+    rpc = prepare_action_stats.merge(rpc);
+    let signature = rpc.send().await?;
+    let stats = client
+        .account::<gmsol_callback::states::ActionStats>(&action_stats)
+        .await?
+        .expect("must exist");
+    tracing::info!(%order, %signature, ?stats, "created a decrease position order");
+
+    // Execute market decrease order 2.
+    let mut builder = keeper.execute_order(store, oracle, &order, false)?;
+    deployment
+        .execute_with_pyth(
+            builder
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone()),
+            None,
+            true,
+            true,
+        )
+        .await?;
+
+    let stats = client
+        .account::<gmsol_callback::states::ActionStats>(&action_stats)
+        .await?
+        .expect("must exist");
+    tracing::info!(%order, %signature, ?stats, "executed order");
 
     Ok(())
 }

@@ -757,6 +757,7 @@ impl Deployment {
 
         // Init common ALT.
         let event_authority = self.client.store_event_authority();
+        let callback_authority = self.client.find_callback_authority_address();
         let mut addresses = vec![
             self.store,
             self.client.find_store_wallet_address(&self.store),
@@ -767,6 +768,7 @@ impl Deployment {
             anchor_spl::token_2022::ID,
             anchor_spl::associated_token::ID,
             system_program::ID,
+            callback_authority,
         ];
 
         for token in self.tokens.values() {

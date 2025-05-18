@@ -22,7 +22,7 @@ use crate::{
     order::internal::Close,
     states::{
         callback::CallbackAuthority,
-        common::action::{invoke_callback, Action, On},
+        common::action::{Action, On},
         feature::ActionDisabledFlag,
         order::{Order, OrderKind},
         position::PositionKind,
@@ -364,6 +364,10 @@ impl<'info> internal::Create<'info, Order> for CreateOrderV2<'info> {
             .bump(bumps.order)
             .params(params)
             .swap_path(remaining_accounts)
+            .callback_authority(self.callback_authority.as_ref())
+            .callback_program(self.callback_program.as_deref())
+            .callback_config_account(self.callback_config_account.as_deref())
+            .callback_action_stats_account(self.callback_action_stats_account.as_deref())
             .build();
 
         let kind = params.kind;
@@ -442,7 +446,7 @@ impl<'info> internal::Create<'info, Order> for CreateOrderV2<'info> {
             self.order.key(),
             self.position.as_ref().map(|a| a.key()),
         )?);
-        self.handle_created()?;
+
         Ok(())
     }
 }
@@ -489,47 +493,6 @@ impl CreateOrderV2<'_> {
             )?;
 
             to.reload()?;
-        }
-        Ok(())
-    }
-
-    #[inline(never)]
-    fn handle_created(&self) -> Result<()> {
-        if let Some(authority) = self.callback_authority.as_ref() {
-            let program = self
-                .callback_program
-                .as_ref()
-                .ok_or_else(|| error!(CoreError::InvalidArgument))?;
-            let config = self
-                .callback_config_account
-                .as_ref()
-                .ok_or_else(|| error!(CoreError::InvalidArgument))?;
-            let action_stats = self
-                .callback_action_stats_account
-                .as_ref()
-                .ok_or_else(|| error!(CoreError::InvalidArgument))?;
-            let position = self
-                .position
-                .as_ref()
-                .map(|p| p.as_ref())
-                .unwrap_or_else(|| program.as_ref());
-            // Ensure that the discriminator is written to the account data.
-            self.order.exit(&crate::ID)?;
-            self.order.load_mut()?.header.set_general_callback(
-                program.key,
-                config.key,
-                action_stats.key,
-            )?;
-            invoke_callback(
-                On::Created(ActionKind::Order),
-                authority,
-                program,
-                config,
-                action_stats,
-                &self.owner,
-                self.order.as_ref(),
-                &[position.clone()],
-            )?;
         }
         Ok(())
     }
@@ -727,16 +690,16 @@ impl<'info> internal::Close<'info, Order> for CloseOrderV2<'info> {
     #[inline(never)]
     fn process(
         &self,
-        init_if_needed: bool,
+        is_caller_owner: bool,
         store_wallet_signer: &StoreWalletSigner,
         event_emitter: &EventEmitter<'_, 'info>,
     ) -> Result<internal::Success> {
-        let transfer_success = self.transfer_to_atas(init_if_needed, store_wallet_signer)?;
+        let transfer_success = self.transfer_to_atas(is_caller_owner, store_wallet_signer)?;
         let process_success = self.process_gt_reward(event_emitter)?;
         let success = transfer_success && process_success;
 
         if success {
-            self.handle_closed()?;
+            self.handle_closed(is_caller_owner)?;
         }
 
         Ok(success)
@@ -949,11 +912,11 @@ impl<'info> CloseOrderV2<'info> {
     }
 
     #[inline(never)]
-    fn handle_closed(&self) -> Result<()> {
-        if let Some(authority) = self.callback_authority.as_ref() {
-            match self.order.load()?.header.callback_kind()? {
-                ActionCallbackKind::Disabled => {}
-                ActionCallbackKind::General => {
+    fn handle_closed(&self, is_caller_owner: bool) -> Result<()> {
+        match self.order.load()?.header.callback_kind()? {
+            ActionCallbackKind::Disabled => {}
+            ActionCallbackKind::General => {
+                if let Some(authority) = self.callback_authority.as_ref() {
                     let program = self
                         .callback_program
                         .as_ref()
@@ -967,13 +930,7 @@ impl<'info> CloseOrderV2<'info> {
                         .as_ref()
                         .ok_or_else(|| error!(CoreError::InvalidArgument))?;
 
-                    self.order.load()?.header.validate_general_callback(
-                        program.key,
-                        config.key,
-                        action_stats.key,
-                    )?;
-
-                    invoke_callback(
+                    self.order.load()?.header.invoke_general_callback(
                         On::Closed(ActionKind::Order),
                         authority,
                         program,
@@ -983,10 +940,13 @@ impl<'info> CloseOrderV2<'info> {
                         self.order.as_ref(),
                         &[],
                     )?;
+                } else if !is_caller_owner {
+                    msg!("[Callback] callback is specified, but required accounts are missing");
+                    return err!(CoreError::InvalidArgument);
                 }
-                kind => {
-                    msg!("[Callback] unsupported callback kind: {}", kind);
-                }
+            }
+            kind => {
+                msg!("[Callback] unsupported callback kind: {}", kind);
             }
         }
         Ok(())
@@ -1255,6 +1215,10 @@ mod deprecated {
                 .bump(bumps.order)
                 .params(params)
                 .swap_path(remaining_accounts)
+                .callback_authority(None)
+                .callback_program(None)
+                .callback_config_account(None)
+                .callback_action_stats_account(None)
                 .build();
 
             let kind = params.kind;
@@ -1552,6 +1516,14 @@ mod deprecated {
                         ActionDisabledFlag::Cancel,
                     )?;
             }
+            require_eq!(
+                order.header().callback_kind()?,
+                ActionCallbackKind::Disabled,
+                {
+                    msg!("[Deprecated] use `close_order_v2` instead");
+                    CoreError::Deprecated
+                },
+            );
             Ok(())
         }
 

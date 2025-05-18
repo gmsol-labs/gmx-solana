@@ -14,7 +14,7 @@ crate-type = ["cdylib", "lib"]
 name = "gmsol_callback"
 
 [features]
-doc = ["cpi"]
+doc = ["interface"]
 interface = ["cpi", "num_enum"]
 
 default = []

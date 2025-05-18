@@ -2215,6 +2215,10 @@ pub mod gmsol_store {
     /// - If `throw_on_execution_error` is true, any execution failure will throw an error
     // Note: There is a false positive lint for the doc link of `event`.
     #[allow(rustdoc::broken_intra_doc_links)]
+    #[deprecated(
+        since = "0.6.0",
+        note = "Use `execute_increase_or_swap_order_v2` instead."
+    )]
     #[access_control(internal::Authenticate::only_order_keeper(&ctx))]
     pub fn execute_increase_or_swap_order<'info>(
         ctx: Context<'_, '_, 'info, 'info, ExecuteIncreaseOrSwapOrder<'info>>,
@@ -2223,6 +2227,72 @@ pub mod gmsol_store {
         throw_on_execution_error: bool,
     ) -> Result<()> {
         instructions::unchecked_execute_increase_or_swap_order(
+            ctx,
+            recent_timestamp,
+            execution_fee,
+            throw_on_execution_error,
+        )
+    }
+
+    /// Execute an increase/swap order by keepers.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](ExecuteIncreaseOrSwapOrderV2)*
+    ///
+    /// # Arguments
+    /// - `recent_timestamp`: A recent timestamp used for deriving the claimable accounts.
+    /// - `execution_fee`: The execution fee claimed to be used the keeper.
+    /// - `throw_on_execution_error`: If true, throws an error if order execution fails. If false,
+    ///   silently cancels the order on execution failure.
+    ///
+    /// # Errors
+    /// - The [`authority`](ExecuteIncreaseOrSwapOrderV2::authority) must be a signer and have the
+    ///   ORDER_KEEPER role in the `store`.
+    /// - The [`store`](ExecuteIncreaseOrSwapOrderV2::store) must be initialized.
+    /// - The [`token_map`](ExecuteIncreaseOrSwapOrderV2::token_map) must be initialized and authorized
+    ///   by the `store`.
+    /// - The [`oracle`](ExecuteIncreaseOrSwapOrderV2::oracle) must be initialized, cleared and owned
+    ///   by the `store`.
+    /// - The [`market`](ExecuteIncreaseOrSwapOrderV2::market) must be initialized, enabled and owned
+    ///   by the `store`. It must also be associated with the `order`.
+    /// - The [`owner`](ExecuteIncreaseOrSwapOrderV2::owner) must be the owner of the `order`.
+    /// - The [`user`](ExecuteIncreaseOrSwapOrderV2::user) must be initialized and associated with
+    ///   the `owner`.
+    /// - The [`order`](ExecuteIncreaseOrSwapOrderV2::order) must be:
+    ///   - Initialized and owned by both the `store` and `owner`
+    ///   - Associated with the provided `market`
+    ///   - In a pending state
+    /// - For increase orders:
+    ///   - The [`initial_collateral_token`](ExecuteIncreaseOrSwapOrderV2::initial_collateral_token)
+    ///     must be valid.
+    ///   - The [`position`](ExecuteIncreaseOrSwapOrderV2::position) must exist and be owned by the
+    ///     `owner` and `store`. It must match the `order`.
+    ///   - The [`event`](ExecuteIncreaseOrSwapOrderV2::event) must be a valid trade event buffer owned
+    ///     by both the `store` and `authority`.
+    ///   - The [`long_token`](ExecuteIncreaseOrSwapOrderV2::long_token) and [`short_token`](ExecuteIncreaseOrSwapOrderV2::short_token)
+    ///     must match those defined in the `market`.
+    ///   - The corresponding token escrow and vault accounts must be valid, recorded in the `order`
+    ///     and owned by the `order`.
+    /// - For swap orders:
+    ///   - The [`initial_collateral_token`](ExecuteIncreaseOrSwapOrderV2::initial_collateral_token)
+    ///     must be valid.
+    ///   - The [`final_output_token`](ExecuteIncreaseOrSwapOrderV2::final_output_token) must be valid.
+    ///   - The corresponding escrow and vault accounts must be valid, recorded in the `order` and
+    ///     owned by the `order`.
+    /// - The remaining accounts must be valid. See the documentation for the accounts for more
+    ///   details.
+    /// - The feature for executing this order type must be enabled in the `store`.
+    /// - If `throw_on_execution_error` is true, any execution failure will throw an error
+    // Note: There is a false positive lint for the doc link of `event`.
+    #[allow(rustdoc::broken_intra_doc_links)]
+    #[access_control(internal::Authenticate::only_order_keeper(&ctx))]
+    pub fn execute_increase_or_swap_order_v2<'info>(
+        ctx: Context<'_, '_, 'info, 'info, ExecuteIncreaseOrSwapOrderV2<'info>>,
+        recent_timestamp: i64,
+        execution_fee: u64,
+        throw_on_execution_error: bool,
+    ) -> Result<()> {
+        ExecuteIncreaseOrSwapOrderV2::invoke(
             ctx,
             recent_timestamp,
             execution_fee,
@@ -2272,6 +2342,7 @@ pub mod gmsol_store {
     /// - If `throw_on_execution_error` is true, any execution failure will throw an error.
     // Note: There is a false positive lint for the doc link of `event`.
     #[allow(rustdoc::broken_intra_doc_links)]
+    #[deprecated(since = "0.6.0", note = "Use `execute_decrease_order_v2` instead.")]
     #[access_control(internal::Authenticate::only_order_keeper(&ctx))]
     pub fn execute_decrease_order<'info>(
         ctx: Context<'_, '_, 'info, 'info, ExecuteDecreaseOrder<'info>>,
@@ -2280,6 +2351,63 @@ pub mod gmsol_store {
         throw_on_execution_error: bool,
     ) -> Result<()> {
         instructions::unchecked_execute_decrease_order(
+            ctx,
+            recent_timestamp,
+            execution_fee,
+            throw_on_execution_error,
+        )
+    }
+
+    /// Execute a decrease order by keepers.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](ExecuteDecreaseOrderV2)*
+    ///
+    /// # Arguments
+    /// - `recent_timestamp`: A timestamp that must be within a recent time window.
+    /// - `execution_fee`: The execution fee claimed to be used by the keeper.
+    /// - `throw_on_execution_error`: If true, throws an error if order execution fails. If false,
+    ///   silently cancels the order on execution failure.
+    ///
+    /// # Errors
+    /// - The [`authority`](ExecuteDecreaseOrderV2::authority) must be a signer with the ORDER_KEEPER
+    ///   role in the `store`.
+    /// - The [`store`](ExecuteDecreaseOrderV2::store) must be initialized.
+    /// - The [`token_map`](ExecuteDecreaseOrderV2::token_map) must be initialized and authorized
+    ///   by the `store`.
+    /// - The [`oracle`](ExecuteDecreaseOrderV2::oracle) must be initialized, cleared and owned
+    ///   by the `store`.
+    /// - The [`market`](ExecuteDecreaseOrderV2::market) must be initialized, enabled and owned
+    ///   by the `store`.
+    /// - The [`owner`](ExecuteDecreaseOrderV2::owner) must be the owner of the `order`.
+    /// - The [`user`](ExecuteDecreaseOrderV2::user) must be initialized and associated with
+    ///   the `owner`.
+    /// - The [`order`](ExecuteDecreaseOrderV2::order) must be:
+    ///   - Initialized and owned by both the `store` and `owner`
+    ///   - Associated with the provided `market`
+    ///   - In the pending state
+    /// - The [`position`](ExecuteDecreaseOrderV2::position) must exist and be validly owned
+    ///   by the `owner` and `store`. It must match the `order`.
+    /// - The [`event`](ExecuteDecreaseOrderV2::event) must be a valid trade event buffer
+    ///   owned by both the `store` and `authority`.
+    /// - The tokens must match those recorded in the `order`.
+    /// - All escrow accounts must be valid, recorded in the `order` and owned by the `order`.
+    /// - All vault accounts must be valid market vault accounts and owned by the `store`.
+    /// - All claimable token accounts must be valid and properly delegated to their owners.
+    /// - The remaining accounts must be valid. See the documentation for the accounts for more
+    ///   details.
+    /// - The feature for executing decrease orders must be enabled in the `store`.
+    /// - If `throw_on_execution_error` is true, any execution failure will throw an error.
+    // Note: There is a false positive lint for the doc link of `event`.
+    #[allow(rustdoc::broken_intra_doc_links)]
+    #[access_control(internal::Authenticate::only_order_keeper(&ctx))]
+    pub fn execute_decrease_order_v2<'info>(
+        ctx: Context<'_, '_, 'info, 'info, ExecuteDecreaseOrderV2<'info>>,
+        recent_timestamp: i64,
+        execution_fee: u64,
+        throw_on_execution_error: bool,
+    ) -> Result<()> {
+        ExecuteDecreaseOrderV2::invoke(
             ctx,
             recent_timestamp,
             execution_fee,
@@ -3573,6 +3701,7 @@ pub enum CoreError {
     #[msg("internal error")]
     Internal,
     /// Unimplemented.
+    #[msg("unimplemented")]
     Unimplemented,
     /// Not an Admin.
     #[msg("not an admin")]
@@ -3725,6 +3854,7 @@ pub enum CoreError {
     #[msg("max price age exceeded")]
     MaxPriceAgeExceeded,
     /// Max prcie's timestamp exceeded.
+    #[msg("max price timestamp exceeded")]
     MaxPriceTimestampExceeded,
     /// Negative price.
     #[msg("negative price is not supported")]
@@ -3972,4 +4102,7 @@ pub enum CoreError {
     /// Price is stale.
     #[msg("Price is stale")]
     PriceIsStale,
+    /// Deprecated.
+    #[msg("deprecated")]
+    Deprecated,
 }

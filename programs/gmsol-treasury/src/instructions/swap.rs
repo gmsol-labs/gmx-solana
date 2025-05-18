@@ -5,8 +5,8 @@ use anchor_spl::{
 };
 use gmsol_store::{
     cpi::{
-        accounts::{CloseOrder, CreateOrder, PrepareUser},
-        close_order, create_order, prepare_user,
+        accounts::{CloseOrderV2, CreateOrderV2, PrepareUser},
+        close_order_v2, create_order_v2, prepare_user,
     },
     ops::order::CreateOrderParams,
     program::GmsolStore,
@@ -125,7 +125,7 @@ pub(crate) fn unchecked_create_swap<'info>(
         should_unwrap_native_token: false,
         valid_from_ts: None,
     };
-    create_order(
+    create_order_v2(
         cpi_ctx
             .with_signer(&[&signer.as_seeds()])
             .with_remaining_accounts(ctx.remaining_accounts.to_vec()),
@@ -168,10 +168,10 @@ impl<'info> CreateSwap<'info> {
         )
     }
 
-    fn create_order_ctx(&self) -> CpiContext<'_, '_, '_, 'info, CreateOrder<'info>> {
+    fn create_order_ctx(&self) -> CpiContext<'_, '_, '_, 'info, CreateOrderV2<'info>> {
         CpiContext::new(
             self.store_program.to_account_info(),
-            CreateOrder {
+            CreateOrderV2 {
                 owner: self.receiver.to_account_info(),
                 receiver: self.receiver.to_account_info(),
                 store: self.store.to_account_info(),
@@ -193,6 +193,10 @@ impl<'info> CreateSwap<'info> {
                 system_program: self.system_program.to_account_info(),
                 token_program: self.token_program.to_account_info(),
                 associated_token_program: self.associated_token_program.to_account_info(),
+                callback_authority: None,
+                callback_program: None,
+                callback_config_account: None,
+                callback_action_stats_account: None,
             },
         )
     }
@@ -272,7 +276,7 @@ pub struct CancelSwap<'info> {
 pub(crate) fn unchecked_cancel_swap(ctx: Context<CancelSwap>) -> Result<()> {
     let signer = ReceiverSigner::new(ctx.accounts.config.key(), ctx.bumps.receiver);
     let cpi_ctx = ctx.accounts.close_order_ctx();
-    close_order(
+    close_order_v2(
         cpi_ctx.with_signer(&[&signer.as_seeds()]),
         "cancel".to_string(),
     )?;
@@ -300,10 +304,10 @@ impl<'info> CpiAuthentication<'info> for CancelSwap<'info> {
 }
 
 impl<'info> CancelSwap<'info> {
-    fn close_order_ctx(&self) -> CpiContext<'_, '_, '_, 'info, CloseOrder<'info>> {
+    fn close_order_ctx(&self) -> CpiContext<'_, '_, '_, 'info, CloseOrderV2<'info>> {
         CpiContext::new(
             self.store_program.to_account_info(),
-            CloseOrder {
+            CloseOrderV2 {
                 executor: self.receiver.to_account_info(),
                 store: self.store.to_account_info(),
                 store_wallet: self.store_wallet.to_account_info(),
@@ -332,6 +336,10 @@ impl<'info> CancelSwap<'info> {
                 associated_token_program: self.associated_token_program.to_account_info(),
                 event_authority: self.event_authority.to_account_info(),
                 program: self.store_program.to_account_info(),
+                callback_authority: None,
+                callback_program: None,
+                callback_config_account: None,
+                callback_action_stats_account: None,
             },
         )
     }

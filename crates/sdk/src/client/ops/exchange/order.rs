@@ -927,6 +927,13 @@ where
         let is_swap = matches!(kind, OrderKind::LimitSwap | OrderKind::MarketSwap);
         let mut require_claimable_accounts = false;
 
+        let CallbackAddresses {
+            callback_authority,
+            callback_program,
+            callback_config_account,
+            callback_action_stats_account,
+        } = self.client.get_callback_addresses(hint.callback.as_ref());
+
         let mut execute_order = match kind {
             OrderKind::MarketDecrease | OrderKind::LimitDecrease | OrderKind::StopLossDecrease => {
                 require_claimable_accounts = true;
@@ -934,7 +941,7 @@ where
                 self.client
                     .store_transaction()
                     .accounts(fix_optional_account_metas(
-                        accounts::ExecuteDecreaseOrder {
+                        accounts::ExecuteDecreaseOrderV2 {
                             authority,
                             owner: hint.owner,
                             user: hint.user,
@@ -993,12 +1000,15 @@ where
                                 .map(|(_, account)| account)
                                 .ok_or(crate::Error::custom("missing short token"))?,
                             program: *self.client.store_program_id(),
-                            chainlink_program: None,
+                            callback_authority,
+                            callback_program,
+                            callback_config_account,
+                            callback_action_stats_account,
                         },
                         &ID,
                         self.client.store_program_id(),
                     ))
-                    .anchor_args(args::ExecuteDecreaseOrder {
+                    .anchor_args(args::ExecuteDecreaseOrderV2 {
                         recent_timestamp: self.recent_timestamp,
                         execution_fee: self.execution_fee,
                         throw_on_execution_error: !self.cancel_on_execution_error,
@@ -1008,7 +1018,7 @@ where
                 .client
                 .store_transaction()
                 .accounts(fix_optional_account_metas(
-                    accounts::ExecuteIncreaseOrSwapOrder {
+                    accounts::ExecuteIncreaseOrSwapOrderV2 {
                         authority,
                         owner: hint.owner,
                         user: hint.user,
@@ -1053,12 +1063,15 @@ where
                             .short_token_and_account
                             .map(|(_, account)| account),
                         program: *self.client.store_program_id(),
-                        chainlink_program: None,
+                        callback_authority,
+                        callback_program,
+                        callback_config_account,
+                        callback_action_stats_account,
                     },
                     &ID,
                     self.client.store_program_id(),
                 ))
-                .anchor_args(args::ExecuteIncreaseOrSwapOrder {
+                .anchor_args(args::ExecuteIncreaseOrSwapOrderV2 {
                     recent_timestamp: self.recent_timestamp,
                     execution_fee: self.execution_fee,
                     throw_on_execution_error: !self.cancel_on_execution_error,
@@ -1191,6 +1204,7 @@ pub struct CloseOrderBuilder<'a, C> {
     order: Pubkey,
     hint: Option<CloseOrderHint>,
     reason: String,
+    skip_callback: bool,
 }
 
 /// Close Order Hint.
@@ -1254,6 +1268,7 @@ where
             order: *order,
             hint: None,
             reason: "cancelled".into(),
+            skip_callback: false,
         }
     }
 
@@ -1276,6 +1291,12 @@ where
     /// Set reason.
     pub fn reason(&mut self, reason: impl ToString) -> &mut Self {
         self.reason = reason.to_string();
+        self
+    }
+
+    /// Set whether to skip callback.
+    pub fn skip_callback(&mut self, skip: bool) -> &mut Self {
+        self.skip_callback = skip;
         self
     }
 
@@ -1317,7 +1338,11 @@ where
             callback_program,
             callback_config_account,
             callback_action_stats_account,
-        } = self.client.get_callback_addresses(hint.callback.as_ref());
+        } = self.client.get_callback_addresses(
+            (!self.skip_callback)
+                .then_some(hint.callback.as_ref())
+                .flatten(),
+        );
         Ok(self
             .client
             .store_transaction()

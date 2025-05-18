@@ -75,7 +75,7 @@ pub(crate) trait Create<'info, A>: Sized + anchor_lang::Bumps {
     }
 }
 
-type ShouldContinueWhenATAsAreMissing = bool;
+type IsCallerOwner = bool;
 pub(crate) type Success = bool;
 
 /// Close Action.
@@ -106,7 +106,7 @@ where
     /// Process before the close.
     fn process(
         &self,
-        init_if_needed: bool,
+        is_caller_owner: bool,
         store_wallet_signer: &StoreWalletSigner,
         event_emitter: &EventEmitter<'_, 'info>,
     ) -> Result<Success>;
@@ -115,7 +115,7 @@ where
     fn close(ctx: &Context<'_, '_, '_, 'info, Self>, reason: &str) -> Result<()> {
         let accounts = &ctx.accounts;
         accounts.validate()?;
-        let should_continue_when_atas_are_missing = accounts.preprocess()?;
+        let is_caller_owner = accounts.preprocess()?;
 
         let store_wallet_signer = StoreWalletSigner::new(
             accounts.store().key(),
@@ -125,11 +125,7 @@ where
         let (authority, bump) = accounts.event_authority(&ctx.bumps);
         let event_emitter = EventEmitter::new(&authority, bump);
 
-        if accounts.process(
-            should_continue_when_atas_are_missing,
-            &store_wallet_signer,
-            &event_emitter,
-        )? {
+        if accounts.process(is_caller_owner, &store_wallet_signer, &event_emitter)? {
             {
                 let action_address = accounts.action().key();
                 let action = accounts.action().load()?;
@@ -147,7 +143,7 @@ where
     fn action(&self) -> &AccountLoader<'info, A>;
 
     /// Preprocess.
-    fn preprocess(&self) -> Result<ShouldContinueWhenATAsAreMissing> {
+    fn preprocess(&self) -> Result<IsCallerOwner> {
         if *self.authority().key == self.action().load()?.header().owner {
             Ok(true)
         } else {

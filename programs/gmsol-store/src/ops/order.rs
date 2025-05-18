@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, TokenAccount};
+use gmsol_callback::interface::ActionKind;
 use gmsol_model::{
     action::decrease_position::{DecreasePositionFlags, DecreasePositionSwapType},
     num::Unsigned,
@@ -8,13 +9,15 @@ use gmsol_model::{
     PnlFactorKind, Position as _, PositionImpactMarketMutExt, PositionMut, PositionMutExt,
     PositionState, PositionStateExt,
 };
+use gmsol_utils::action::ActionCallbackKind;
 use typed_builder::TypedBuilder;
 
 use crate::{
     events::{EventEmitter, MarketFeesUpdated, PositionDecreased, PositionIncreased, TradeData},
     states::{
+        callback::CallbackAuthority,
         common::{
-            action::{Action, ActionExt, ActionParams},
+            action::{Action, ActionExt, ActionParams, On},
             swap::SwapActionParamsExt,
         },
         market::{
@@ -120,6 +123,10 @@ pub(crate) struct CreateOrderOperation<'a, 'info> {
     bump: u8,
     params: &'a CreateOrderParams,
     swap_path: &'info [AccountInfo<'info>],
+    callback_authority: Option<&'a Account<'info, CallbackAuthority>>,
+    callback_program: Option<&'a AccountInfo<'info>>,
+    callback_config_account: Option<&'a AccountInfo<'info>>,
+    callback_action_stats_account: Option<&'a AccountInfo<'info>>,
 }
 
 impl<'a, 'info> CreateOrderOperation<'a, 'info> {
@@ -156,6 +163,7 @@ impl<'a, 'info> CreateOrderOperation<'a, 'info> {
         Ok(())
     }
 
+    #[inline(never)]
     fn init_with(
         &self,
         f: impl FnOnce(
@@ -163,6 +171,7 @@ impl<'a, 'info> CreateOrderOperation<'a, 'info> {
             &mut OrderTokenAccounts,
             &mut OrderActionParams,
         ) -> Result<(Pubkey, Pubkey)>,
+        position: Option<&AccountInfo<'info>>,
     ) -> Result<()> {
         let id = self.market.load_mut()?.indexer_mut().next_order_id()?;
         {
@@ -210,6 +219,45 @@ impl<'a, 'info> CreateOrderOperation<'a, 'info> {
                 (&to, &from),
             )?;
         }
+        self.handle_created(position)
+    }
+
+    #[inline(never)]
+    fn handle_created(&self, position: Option<&AccountInfo<'info>>) -> Result<()> {
+        if let Some(authority) = self.callback_authority.as_ref() {
+            let program = self
+                .callback_program
+                .as_ref()
+                .ok_or_else(|| error!(CoreError::InvalidArgument))?;
+            let config = self
+                .callback_config_account
+                .as_ref()
+                .ok_or_else(|| error!(CoreError::InvalidArgument))?;
+            let action_stats = self
+                .callback_action_stats_account
+                .as_ref()
+                .ok_or_else(|| error!(CoreError::InvalidArgument))?;
+            let position = position.unwrap_or(program);
+
+            // Ensure that the discriminator is written to the account data.
+            self.order.exit(&crate::ID)?;
+            self.order.load_mut()?.header.set_general_callback(
+                program.key,
+                config.key,
+                action_stats.key,
+            )?;
+
+            self.order.load()?.header.invoke_general_callback(
+                On::Created(ActionKind::Order),
+                authority,
+                program,
+                config,
+                action_stats,
+                &self.owner,
+                self.order.as_ref(),
+                &[position.clone()],
+            )?;
+        }
         Ok(())
     }
 }
@@ -227,18 +275,21 @@ impl CreateSwapOrderOperation<'_, '_> {
         self.common.validate()?;
         self.validate_params_excluding_swap()?;
 
-        self.common.init_with(|create, tokens, params| {
-            tokens.initial_collateral.init(self.swap_in_token);
-            tokens.final_output_token.init(self.swap_out_token);
-            params.init_swap(
-                create.kind,
-                self.swap_out_token.mint,
-                create.initial_collateral_delta_amount,
-                create.min_output,
-                create.valid_from_ts,
-            )?;
-            Ok((self.swap_in_token.mint, self.swap_out_token.mint))
-        })?;
+        self.common.init_with(
+            |create, tokens, params| {
+                tokens.initial_collateral.init(self.swap_in_token);
+                tokens.final_output_token.init(self.swap_out_token);
+                params.init_swap(
+                    create.kind,
+                    self.swap_out_token.mint,
+                    create.initial_collateral_delta_amount,
+                    create.min_output,
+                    create.valid_from_ts,
+                )?;
+                Ok((self.swap_in_token.mint, self.swap_out_token.mint))
+            },
+            None,
+        )?;
         Ok(())
     }
 
@@ -286,26 +337,29 @@ impl CreateIncreaseOrderOperation<'_, '_> {
             self.common.market.load()?.meta().short_token_mint
         };
 
-        self.common.init_with(|create, tokens, params| {
-            tokens
-                .initial_collateral
-                .init(self.initial_collateral_token);
-            tokens.long_token.init(self.long_token);
-            tokens.short_token.init(self.short_token);
-            params.init_increase(
-                create.is_long,
-                create.kind,
-                self.position.key(),
-                collateral_token,
-                create.initial_collateral_delta_amount,
-                create.size_delta_value,
-                create.trigger_price,
-                create.acceptable_price,
-                create.min_output,
-                create.valid_from_ts,
-            )?;
-            Ok((self.initial_collateral_token.mint, collateral_token))
-        })?;
+        self.common.init_with(
+            |create, tokens, params| {
+                tokens
+                    .initial_collateral
+                    .init(self.initial_collateral_token);
+                tokens.long_token.init(self.long_token);
+                tokens.short_token.init(self.short_token);
+                params.init_increase(
+                    create.is_long,
+                    create.kind,
+                    self.position.key(),
+                    collateral_token,
+                    create.initial_collateral_delta_amount,
+                    create.size_delta_value,
+                    create.trigger_price,
+                    create.acceptable_price,
+                    create.min_output,
+                    create.valid_from_ts,
+                )?;
+                Ok((self.initial_collateral_token.mint, collateral_token))
+            },
+            Some(self.position.as_ref()),
+        )?;
 
         Ok(())
     }
@@ -369,25 +423,28 @@ impl CreateDecreaseOrderOperation<'_, '_> {
             self.common.market.load()?.meta().short_token_mint
         };
 
-        self.common.init_with(|create, tokens, params| {
-            tokens.final_output_token.init(self.final_output_token);
-            tokens.long_token.init(self.long_token);
-            tokens.short_token.init(self.short_token);
-            params.init_decrease(
-                create.is_long,
-                create.kind,
-                self.position.key(),
-                collateral_token,
-                create.initial_collateral_delta_amount,
-                create.size_delta_value,
-                create.trigger_price,
-                create.acceptable_price,
-                create.min_output,
-                create.decrease_position_swap_type.unwrap_or_default(),
-                create.valid_from_ts,
-            )?;
-            Ok((collateral_token, self.final_output_token.mint))
-        })?;
+        self.common.init_with(
+            |create, tokens, params| {
+                tokens.final_output_token.init(self.final_output_token);
+                tokens.long_token.init(self.long_token);
+                tokens.short_token.init(self.short_token);
+                params.init_decrease(
+                    create.is_long,
+                    create.kind,
+                    self.position.key(),
+                    collateral_token,
+                    create.initial_collateral_delta_amount,
+                    create.size_delta_value,
+                    create.trigger_price,
+                    create.acceptable_price,
+                    create.min_output,
+                    create.decrease_position_swap_type.unwrap_or_default(),
+                    create.valid_from_ts,
+                )?;
+                Ok((collateral_token, self.final_output_token.mint))
+            },
+            Some(self.position.as_ref()),
+        )?;
         Ok(())
     }
 
@@ -768,6 +825,10 @@ pub(crate) struct ExecuteOrderOperation<'a, 'info> {
     refund: u64,
     #[builder(setter(into))]
     event_emitter: EventEmitter<'a, 'info>,
+    callback_authority: Option<&'a Account<'info, CallbackAuthority>>,
+    callback_program: Option<&'a AccountInfo<'info>>,
+    callback_config_account: Option<&'a AccountInfo<'info>>,
+    callback_action_stats_account: Option<&'a AccountInfo<'info>>,
 }
 
 pub(crate) type RemovePosition = bool;
@@ -829,6 +890,12 @@ impl ExecuteOrderOperation<'_, '_> {
         };
 
         let (transfer_out, should_send_trade_event) = res?;
+
+        self.handle_executed(
+            transfer_out.executed(),
+            !remove_position,
+            should_send_trade_event,
+        )?;
 
         if remove_position {
             self.close_position()?;
@@ -1185,6 +1252,56 @@ impl ExecuteOrderOperation<'_, '_> {
         self.order
             .load()?
             .validate_trigger_price(&prices.index_token_price)
+    }
+
+    #[inline(never)]
+    fn handle_executed(
+        &self,
+        success: bool,
+        may_have_position: bool,
+        has_trade_event: bool,
+    ) -> Result<()> {
+        match self.order.load()?.header.callback_kind()? {
+            ActionCallbackKind::Disabled => {}
+            ActionCallbackKind::General => {
+                let authority = self.callback_authority.as_ref().ok_or_else(|| {
+                    msg!("[Callback] callback is specified, but required accounts are missing");
+                    error!(CoreError::InvalidArgument)
+                })?;
+                let program = self
+                    .callback_program
+                    .ok_or_else(|| error!(CoreError::InvalidArgument))?;
+                let config = self
+                    .callback_config_account
+                    .ok_or_else(|| error!(CoreError::InvalidArgument))?;
+                let action_stats = self
+                    .callback_action_stats_account
+                    .ok_or_else(|| error!(CoreError::InvalidArgument))?;
+                let position = (may_have_position)
+                    .then_some(())
+                    .and_then(|_| self.position.as_ref().map(|p| p.as_ref()))
+                    .unwrap_or(program);
+                let trade_event = (has_trade_event)
+                    .then_some(())
+                    .and_then(|_| self.event.as_ref().map(|a| a.as_ref()))
+                    .unwrap_or(program);
+
+                self.order.load()?.header.invoke_general_callback(
+                    On::Executed(ActionKind::Order, success),
+                    authority,
+                    program,
+                    config,
+                    action_stats,
+                    &self.owner,
+                    self.order.as_ref(),
+                    &[position.clone(), trade_event.clone()],
+                )?;
+            }
+            kind => {
+                msg!("[Callback] unsupported callback kind: {}", kind);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -1752,6 +1869,10 @@ impl PositionCutOperation<'_, '_> {
             .bump(self.order_bump)
             .params(&params)
             .swap_path(&[])
+            .callback_authority(None)
+            .callback_program(None)
+            .callback_config_account(None)
+            .callback_action_stats_account(None)
             .build()
             .decrease()
             .position(self.position)
@@ -1781,6 +1902,10 @@ impl PositionCutOperation<'_, '_> {
             .refund(self.refund)
             .executor(self.executor.clone())
             .event_emitter(self.event_emitter)
+            .callback_authority(None)
+            .callback_program(None)
+            .callback_config_account(None)
+            .callback_action_stats_account(None)
             .build()
             .execute()
     }

@@ -124,7 +124,68 @@ impl ActionHeader {
             self.callback_action_stats,
             CoreError::InvalidArgument
         );
+
+        // Recursion into this program is prohibited.
+        require_keys_neq!(*program_id, crate::ID, CoreError::InvalidArgument);
         Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn invoke_general_callback<'info>(
+        &self,
+        kind: On,
+        authority: &Account<'info, CallbackAuthority>,
+        program: &AccountInfo<'info>,
+        config: &AccountInfo<'info>,
+        action_stats: &AccountInfo<'info>,
+        owner: &AccountInfo<'info>,
+        action: &AccountInfo<'info>,
+        remaining_accounts: &[AccountInfo<'info>],
+    ) -> Result<()> {
+        use gmsol_callback::interface::{on_closed, on_created, on_executed, Callback};
+
+        self.validate_general_callback(program.key, config.key, action_stats.key)?;
+
+        let ctx = CpiContext::new(
+            program.clone(),
+            Callback {
+                authority: authority.to_account_info(),
+                config: config.clone(),
+                action_stats: action_stats.clone(),
+                owner: owner.clone(),
+                action: action.clone(),
+            },
+        )
+        .with_remaining_accounts(remaining_accounts.to_vec());
+
+        let authority_bump = authority.bump();
+        let extra_account_count = remaining_accounts
+            .len()
+            .try_into()
+            .map_err(|_| error!(CoreError::Internal))?;
+
+        let signer_seeds = authority.signer_seeds();
+        match kind {
+            On::Created(kind) => on_created(
+                ctx.with_signer(&[&signer_seeds]),
+                authority_bump,
+                kind.into(),
+                extra_account_count,
+            ),
+            On::Executed(kind, success) => on_executed(
+                ctx.with_signer(&[&signer_seeds]),
+                authority_bump,
+                kind.into(),
+                success,
+                extra_account_count,
+            ),
+            On::Closed(kind) => on_closed(
+                ctx.with_signer(&[&signer_seeds]),
+                authority_bump,
+                kind.into(),
+                extra_account_count,
+            ),
+        }
     }
 
     /// Transition to Completed state.
@@ -406,58 +467,4 @@ pub(crate) enum On {
     #[allow(dead_code)]
     Executed(ActionKind, bool),
     Closed(ActionKind),
-}
-
-pub(crate) fn invoke_callback<'info>(
-    kind: On,
-    authority: &Account<'info, CallbackAuthority>,
-    program: &AccountInfo<'info>,
-    config: &AccountInfo<'info>,
-    action_stats: &AccountInfo<'info>,
-    owner: &AccountInfo<'info>,
-    action: &AccountInfo<'info>,
-    remaining_accounts: &[AccountInfo<'info>],
-) -> Result<()> {
-    use gmsol_callback::interface::{on_closed, on_created, on_executed, Callback};
-
-    let ctx = CpiContext::new(
-        program.clone(),
-        Callback {
-            authority: authority.to_account_info(),
-            config: config.clone(),
-            action_stats: action_stats.clone(),
-            owner: owner.clone(),
-            action: action.clone(),
-        },
-    )
-    .with_remaining_accounts(remaining_accounts.to_vec());
-
-    let authority_bump = authority.bump();
-    let extra_account_count = remaining_accounts
-        .len()
-        .try_into()
-        .map_err(|_| error!(CoreError::Internal))?;
-
-    let signer_seeds = authority.signer_seeds();
-    match kind {
-        On::Created(kind) => on_created(
-            ctx.with_signer(&[&signer_seeds]),
-            authority_bump,
-            kind.into(),
-            extra_account_count,
-        ),
-        On::Executed(kind, success) => on_executed(
-            ctx.with_signer(&[&signer_seeds]),
-            authority_bump,
-            kind.into(),
-            success,
-            extra_account_count,
-        ),
-        On::Closed(kind) => on_closed(
-            ctx.with_signer(&[&signer_seeds]),
-            authority_bump,
-            kind.into(),
-            extra_account_count,
-        ),
-    }
 }
