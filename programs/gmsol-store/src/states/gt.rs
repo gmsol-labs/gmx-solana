@@ -403,14 +403,14 @@ impl GtState {
     pub(crate) fn unchecked_confirm_exchange_vault(
         &mut self,
         vault: &mut GtExchangeVault,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         require!(vault.is_initialized(), CoreError::InvalidArgument);
 
         let amount = vault.confirm()?;
 
         self.process_gt_vault(amount)?;
 
-        Ok(())
+        Ok(amount)
     }
 
     fn process_gt_vault(&mut self, amount: u64) -> Result<()> {

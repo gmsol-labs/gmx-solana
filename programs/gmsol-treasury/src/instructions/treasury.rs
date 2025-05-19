@@ -9,7 +9,7 @@ use anchor_spl::{
 use gmsol_store::{
     cpi::{
         accounts::{ClearAllPrices, ConfirmGtExchangeVault, SetPricesFromPriceFeed},
-        clear_all_prices, confirm_gt_exchange_vault, set_prices_from_price_feed,
+        clear_all_prices, confirm_gt_exchange_vault_v2, set_prices_from_price_feed,
     },
     program::GmsolStore,
     states::{gt::GtExchangeVault, Chainlink, Oracle, Seed, Store},
@@ -705,10 +705,7 @@ impl<'info> ConfirmGtBuyback<'info> {
     fn execute(&mut self, remaining_accounts: &'info [AccountInfo<'info>]) -> Result<()> {
         let signer = self.config.load()?.signer();
 
-        // Confirm GT exchange vault first to make sure all preconditions are satified.
         let total_gt_amount = self.gt_exchange_vault.load()?.amount();
-        let ctx = self.confirm_gt_exchange_vault_ctx();
-        confirm_gt_exchange_vault(ctx.with_signer(&[&signer.as_seeds()]))?;
         self.gt_bank.load_mut()?.unchecked_confirm(total_gt_amount);
 
         let tokens = self
@@ -729,11 +726,18 @@ impl<'info> ConfirmGtBuyback<'info> {
             tokens.iter().copied().collect(),
         )?;
 
-        self.update_balances(vaults)?;
+        let (buyback_value, buyback_price) = self.update_balances(vaults, total_gt_amount)?;
 
         // Clear prices.
         let ctx = self.clear_all_prices_ctx();
         clear_all_prices(ctx.with_signer(&[&signer.as_seeds()]))?;
+
+        let ctx = self.confirm_gt_exchange_vault_ctx();
+        confirm_gt_exchange_vault_v2(
+            ctx.with_signer(&[&signer.as_seeds()]),
+            buyback_value,
+            buyback_price,
+        )?;
 
         Ok(())
     }
@@ -819,12 +823,14 @@ impl<'info> ConfirmGtBuyback<'info> {
     /// We do not actually execute token transfers; instead, we only update
     /// the token balances recorded in the GT bank. This is because tokens exceeding
     /// the recorded amount can be transferred to the treasury bank at any time.
-    fn update_balances(&self, vaults: &[AccountInfo<'info>]) -> Result<()> {
-        let buyback_amount = self.gt_exchange_vault.load()?.amount();
-
+    fn update_balances(
+        &self,
+        vaults: &[AccountInfo<'info>],
+        buyback_amount: u64,
+    ) -> Result<(u128, Option<u128>)> {
         if buyback_amount == 0 {
             self.gt_bank.load_mut()?.record_all_transferred_out()?;
-            return Ok(());
+            return Ok((0, None));
         }
 
         let BuybackValue {
@@ -832,7 +838,7 @@ impl<'info> ConfirmGtBuyback<'info> {
             gt_bank_value,
         } = self.get_max_buyback_value(vaults)?;
 
-        let buyback_amount = u128::from(self.gt_exchange_vault.load()?.amount());
+        let buyback_amount = u128::from(buyback_amount);
 
         let estimated_buyback_price = max_buyback_value
             .checked_div(buyback_amount)
@@ -847,7 +853,7 @@ impl<'info> ConfirmGtBuyback<'info> {
 
         if buyback_value == 0 {
             self.gt_bank.load_mut()?.record_all_transferred_out()?;
-            return Ok(());
+            return Ok((0, None));
         }
 
         msg!(
@@ -862,7 +868,7 @@ impl<'info> ConfirmGtBuyback<'info> {
             .load_mut()?
             .reserve_balances(&buyback_value, &gt_bank_value)?;
 
-        Ok(())
+        Ok((buyback_value, Some(buyback_price)))
     }
 }
 

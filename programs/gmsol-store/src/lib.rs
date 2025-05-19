@@ -2851,9 +2851,31 @@ pub mod gmsol_store {
     /// - The [`vault`](ConfirmGtExchangeVault::vault) must be validly initialized and owned by
     ///   the `store`.
     /// - The `vault` must be in a confirmable state (deposit window has passed but not yet confirmed).
+    #[deprecated(since = "0.6.0", note = "use `confirm_gt_exchange_vault_v2` instead")]
     #[access_control(internal::Authenticate::only_gt_controller(&ctx))]
     pub fn confirm_gt_exchange_vault(ctx: Context<ConfirmGtExchangeVault>) -> Result<()> {
-        instructions::unchecked_confirm_gt_exchange_vault(ctx)
+        instructions::unchecked_confirm_gt_exchange_vault(ctx, None, None)
+    }
+
+    /// Confirm GT exchange vault.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](ConfirmGtExchangeVault)*
+    ///
+    /// # Errors
+    /// - The [`authority`](ConfirmGtExchangeVault::authority) must be a signer and have the GT_CONTROLLER role in the `store`.
+    /// - The [`store`](ConfirmGtExchangeVault::store) must be properly initialized.
+    /// - The GT state of the `store` must be initialized.
+    /// - The [`vault`](ConfirmGtExchangeVault::vault) must be validly initialized and owned by
+    ///   the `store`.
+    /// - The `vault` must be in a confirmable state (deposit window has passed but not yet confirmed).
+    #[access_control(internal::Authenticate::only_gt_controller(&ctx))]
+    pub fn confirm_gt_exchange_vault_v2(
+        ctx: Context<ConfirmGtExchangeVault>,
+        buyback_value: u128,
+        buyback_price: Option<u128>,
+    ) -> Result<()> {
+        instructions::unchecked_confirm_gt_exchange_vault(ctx, Some(buyback_value), buyback_price)
     }
 
     /// Request a GT exchange.

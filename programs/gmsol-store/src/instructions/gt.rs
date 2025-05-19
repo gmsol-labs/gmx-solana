@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use gmsol_utils::InitSpace;
 
 use crate::{
-    events::{EventEmitter, GtUpdated},
+    events::{EventEmitter, GtBuyback, GtUpdated},
     states::{
         gt::{GtExchange, GtExchangeVault},
         user::UserHeader,
@@ -310,7 +310,7 @@ impl RequestGtExchange<'_> {
     }
 }
 
-/// The accounts definition for [`confirm_gt_exchange_vault`](crate::confirm_gt_exchange_vault) instruction.
+/// The accounts definition for [`confirm_gt_exchange_vault_v2`](crate::confirm_gt_exchange_vault_v2) instruction.
 #[event_cpi]
 #[derive(Accounts)]
 pub struct ConfirmGtExchangeVault<'info> {
@@ -340,16 +340,26 @@ pub struct ConfirmGtExchangeVault<'info> {
 /// CHECK: only GT_CONTROLLER is authorized to use this instruction.
 pub(crate) fn unchecked_confirm_gt_exchange_vault(
     ctx: Context<ConfirmGtExchangeVault>,
+    buyback_value: Option<u128>,
+    buyback_price: Option<u128>,
 ) -> Result<()> {
     let mut store = ctx.accounts.store.load_mut()?;
     let mut vault = ctx.accounts.vault.load_mut()?;
-    store
+    let buyback_amount = store
         .gt_mut()
         .unchecked_confirm_exchange_vault(&mut vault)?;
 
     let event_emitter = EventEmitter::new(&ctx.accounts.event_authority, ctx.bumps.event_authority);
     // Since no GT is minted, the rewarded amount is zero.
     event_emitter.emit_cpi(&GtUpdated::rewarded(0, store.gt(), None))?;
+    event_emitter.emit_cpi(&GtBuyback::new(
+        &vault.store,
+        &ctx.accounts.vault.key(),
+        ctx.accounts.authority.key,
+        buyback_amount,
+        buyback_value,
+        buyback_price,
+    )?)?;
     Ok(())
 }
 

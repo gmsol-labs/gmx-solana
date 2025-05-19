@@ -98,3 +98,55 @@ impl GtUpdated {
         Self::new(GtUpdateKind::Burn, None, amount, state, receiver)
     }
 }
+
+/// Event indicating that a GT buyback has occurred.
+#[event]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[derive(Clone, InitSpace)]
+pub struct GtBuyback {
+    /// Timestamp.
+    pub ts: i64,
+    /// Slot.
+    pub slot: u64,
+    /// Store.
+    pub store: Pubkey,
+    /// GT exchange vault.
+    pub gt_exchange_vault: Pubkey,
+    /// Authority.
+    pub authority: Pubkey,
+    /// Total buyback amount.
+    pub buyback_amount: u64,
+    /// Buyback value.
+    pub buyback_value: Option<u128>,
+    /// Buyback price.
+    pub buyback_price: Option<u128>,
+}
+
+impl GtBuyback {
+    pub(crate) fn new(
+        store: &Pubkey,
+        gt_exchange_vault: &Pubkey,
+        authority: &Pubkey,
+        buyback_amount: u64,
+        buyback_value: Option<u128>,
+        buyback_price: Option<u128>,
+    ) -> Result<Self> {
+        let clock = Clock::get()?;
+        Ok(Self {
+            ts: clock.unix_timestamp,
+            slot: clock.slot,
+            store: *store,
+            gt_exchange_vault: *gt_exchange_vault,
+            authority: *authority,
+            buyback_amount,
+            buyback_value,
+            buyback_price,
+        })
+    }
+}
+
+impl gmsol_utils::InitSpace for GtBuyback {
+    const INIT_SPACE: usize = <Self as Space>::INIT_SPACE;
+}
+
+impl Event for GtBuyback {}
