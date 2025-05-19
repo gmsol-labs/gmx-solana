@@ -12,4 +12,4 @@ pub enum CompetitionError {
     InvalidActionKind,
     #[msg("Invalid time range")]
     InvalidTimeRange,
-} 
+}

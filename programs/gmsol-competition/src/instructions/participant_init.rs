@@ -44,10 +44,10 @@ impl CreateParticipantIdempotent<'_> {
         let p = &mut ctx.accounts.participant;
         if p.owner == Pubkey::default() {
             // First‑time initialisation.
-            p.competition      = ctx.accounts.competition.key();
-            p.owner            = ctx.accounts.trader.key();
-            p.volume           = 0;
-            p.last_updated_at  = Clock::get()?.unix_timestamp;
+            p.competition = ctx.accounts.competition.key();
+            p.owner = ctx.accounts.trader.key();
+            p.volume = 0;
+            p.last_updated_at = Clock::get()?.unix_timestamp;
         }
         Ok(())
     }

@@ -32,21 +32,12 @@ pub const CALLBACK_AUTHORITY_SEED: &[u8] = b"competition_callback";
 pub const MAX_LEADERBOARD_LEN: u8 = 5;
 
 /// A single leaderboard record.
-#[derive(
-    AnchorSerialize,
-    AnchorDeserialize,
-    Clone,
-    Copy,
-    Default,
-    PartialEq,
-    Eq,
-    InitSpace,
-)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, PartialEq, Eq, InitSpace)]
 pub struct LeaderEntry {
     /// The trader address.
     pub address: Pubkey,
     /// The cumulative traded volume.
-    pub volume:  u64,
+    pub volume: u64,
 }
 
 /// The global competition data.
@@ -58,7 +49,7 @@ pub struct Competition {
     /// The competition start timestamp.
     pub start_time: i64,
     /// The competition end timestamp.
-    pub end_time:   i64,
+    pub end_time: i64,
     /// The store program allowed to push trades.
     pub store_program: Pubkey,
     /// Whether the competition is active.
@@ -73,11 +64,11 @@ pub struct Competition {
 #[derive(InitSpace)]
 pub struct Participant {
     /// The competition account this entry belongs to.
-    pub competition:     Pubkey,
+    pub competition: Pubkey,
     /// The trader address.
-    pub owner:           Pubkey,
+    pub owner: Pubkey,
     /// The cumulative traded volume.
-    pub volume:          u64,
+    pub volume: u64,
     /// The last update timestamp.
     pub last_updated_at: i64,
 }
