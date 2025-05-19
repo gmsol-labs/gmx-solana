@@ -159,3 +159,55 @@ impl InitSpace for OrderRemoved {
 }
 
 impl Event for OrderRemoved {}
+
+/// Event indicating that insufficient funding fee payment has occurred.
+#[event]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[derive(Clone, InitSpace)]
+pub struct InsufficientFundingFeePayment {
+    /// Timestamp.
+    pub ts: i64,
+    /// Slot.
+    pub slot: u64,
+    /// Store.
+    pub store: Pubkey,
+    /// Market token.
+    pub market_token: Pubkey,
+    /// Funding fee amount to pay.
+    pub cost_amount: u128,
+    /// Paid collateral token amount.
+    pub paid_in_collateral_amount: u128,
+    /// Paid secondary token amount.
+    pub paid_in_secondary_output_amount: u128,
+    /// Whether the collateral token is long token.
+    pub is_collateral_token_long: bool,
+}
+
+impl InsufficientFundingFeePayment {
+    pub(crate) fn new(
+        store: &Pubkey,
+        market_token: &Pubkey,
+        cost_amount: u128,
+        paid_in_collateral_amount: u128,
+        paid_in_secondary_output_amount: u128,
+        is_collateral_token_long: bool,
+    ) -> Result<Self> {
+        let clock = Clock::get()?;
+        Ok(Self {
+            ts: clock.unix_timestamp,
+            slot: clock.slot,
+            store: *store,
+            market_token: *market_token,
+            cost_amount,
+            paid_in_collateral_amount,
+            paid_in_secondary_output_amount,
+            is_collateral_token_long,
+        })
+    }
+}
+
+impl InitSpace for InsufficientFundingFeePayment {
+    const INIT_SPACE: usize = <Self as Space>::INIT_SPACE;
+}
+
+impl Event for InsufficientFundingFeePayment {}

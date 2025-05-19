@@ -503,8 +503,10 @@ where
                     }
                     if paid_in_collateral_amount < cost_amount {
                         processor.market.on_insufficient_funding_fee_payment(
-                            paid_in_collateral_amount,
                             cost_amount,
+                            paid_in_collateral_amount,
+                            paid_in_secondary_output_amount,
+                            processor.state.is_output_token_long,
                         )?;
                     }
                     Ok(())

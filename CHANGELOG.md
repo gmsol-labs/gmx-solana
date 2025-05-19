@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - programs: Upgrade to `anchor v0.31.1` and `solana v2.1.21`.
 - programs: Removed support for Chainlink data feeds.
+- model: Added `paid_in_secondary_output_amount` and `is_collateral_token_long` parameters to the `on_insufficient_funding_fee_payment` function.
 - sdk: Removed support for `spl-governance`.
 
 ### Added
@@ -21,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added the `close_order_v2` instrcution.
   - Added the `execute_increase_or_swap_order_v2` instruction.
   - Added the `execute_decrease_order_v2` instruction.
+- programs(store): Added `InsufficientFundingFeePayment` CPI event to be emitted on insufficient funding fee payment.
 
 ### Changed
 

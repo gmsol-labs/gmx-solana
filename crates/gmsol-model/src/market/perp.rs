@@ -98,8 +98,10 @@ pub trait PerpMarketMut<const DECIMALS: u8>:
     /// Insufficient funding fee payment callback.
     fn on_insufficient_funding_fee_payment(
         &mut self,
-        _paid_in_collateral_amount: &Self::Num,
         _cost_amount: &Self::Num,
+        _paid_in_collateral_amount: &Self::Num,
+        _paid_in_secondary_output_amount: &Self::Num,
+        _is_collateral_token_long: bool,
     ) -> crate::Result<()> {
         Ok(())
     }
@@ -190,10 +192,17 @@ impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> PerpMarketMut<DECIMALS> for
 
     fn on_insufficient_funding_fee_payment(
         &mut self,
-        paid_in_collateral_amount: &Self::Num,
         cost_amount: &Self::Num,
+        paid_in_collateral_amount: &Self::Num,
+        paid_in_secondary_output_amount: &Self::Num,
+        is_collateral_token_long: bool,
     ) -> crate::Result<()> {
-        (**self).on_insufficient_funding_fee_payment(paid_in_collateral_amount, cost_amount)
+        (**self).on_insufficient_funding_fee_payment(
+            cost_amount,
+            paid_in_collateral_amount,
+            paid_in_secondary_output_amount,
+            is_collateral_token_long,
+        )
     }
 }
 

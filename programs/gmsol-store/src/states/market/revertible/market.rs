@@ -12,7 +12,7 @@ use gmsol_model::{
 
 use crate::{
     constants, debug_msg,
-    events::EventEmitter,
+    events::{EventEmitter, InsufficientFundingFeePayment},
     states::{
         market::{
             clock::{AsClock, AsClockMut},
@@ -585,5 +585,25 @@ impl gmsol_model::PerpMarketMut<{ constants::MARKET_DECIMALS }> for RevertibleMa
 
     fn total_borrowing_pool_mut(&mut self) -> gmsol_model::Result<&mut Self::Pool> {
         self.pool_mut(PoolKind::TotalBorrowing)
+    }
+
+    fn on_insufficient_funding_fee_payment(
+        &mut self,
+        cost_amount: &Self::Num,
+        paid_in_collateral_amount: &Self::Num,
+        paid_in_secondary_output_amount: &Self::Num,
+        is_collateral_token_long: bool,
+    ) -> gmsol_model::Result<()> {
+        let event = InsufficientFundingFeePayment::new(
+            &self.market.store,
+            &self.market_meta().market_token_mint,
+            *cost_amount,
+            *paid_in_collateral_amount,
+            *paid_in_secondary_output_amount,
+            is_collateral_token_long,
+        )?;
+        self.event_emitter().emit_cpi(&event).map_err(|_err| {
+            gmsol_model::Error::InvalidArgument("emitting insufficient funding fee payment event")
+        })
     }
 }
