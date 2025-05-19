@@ -1,7 +1,6 @@
-use gmsol_callback::{accounts, instruction, interface::ActionKind, states::ACTION_STATS_SEED};
 use gmsol_competition::{
     instruction::InitializeCompetition,
-    states::{Competition, Participant},
+    states::{Competition, Participant, PARTICIPANT_SEED},
     ID as COMPETITION_PROGRAM_ID,
 };
 use gmsol_programs::anchor_lang::Key;
@@ -83,17 +82,17 @@ async fn competition() -> eyre::Result<()> {
     // Create and execute order
     let size = 5_000 * MARKET_USD_UNIT;
 
-    let action_kind = ActionKind::Order.into();
+    // let action_kind = ActionKind::Order.into();
     let owner = client.payer();
-    let action_stats = Pubkey::find_program_address(
-        &[ACTION_STATS_SEED, owner.as_ref(), &[action_kind]],
-        &deployment.callback_program,
-    )
-    .0;
+    // let action_stats = Pubkey::find_program_address(
+    //     &[ACTION_STATS_SEED, owner.as_ref(), &[action_kind]],
+    //     &deployment.callback_program,
+    // )
+    // .0;
 
     // Create participant account first
     let participant = Pubkey::find_program_address(
-        &[b"participant", competition.as_ref(), owner.as_ref()],
+        &[PARTICIPANT_SEED, competition.as_ref(), owner.as_ref()],
         &COMPETITION_PROGRAM_ID,
     )
     .0;
@@ -110,8 +109,8 @@ async fn competition() -> eyre::Result<()> {
             system_program: system_program::ID,
         });
 
-    let signature = create_participant.send().await?;
-    tracing::info!(%signature, "created participant account");
+    // let signature = create_participant.send().await?;
+    // tracing::info!(%signature, "created participant account");
 
     // Create order
     let (mut rpc, order) = client
@@ -131,6 +130,7 @@ async fn competition() -> eyre::Result<()> {
         .build_with_address()
         .await?;
 
+    rpc = create_participant.merge(rpc);
     let signature = rpc.send().await?;
     tracing::info!(%order, %signature, "created an increase position order");
 
@@ -167,9 +167,9 @@ async fn competition() -> eyre::Result<()> {
     assert_eq!(leader_entry.address, owner);
     assert!(leader_entry.volume > 0);
 
-    // Cancel order
-    let signature = client.close_order(&order)?.build().await?.send().await?;
-    tracing::info!(%order, %signature, "cancelled increase position order");
+    // // Cancel order
+    // let signature = client.close_order(&order)?.build().await?.send().await?;
+    // tracing::info!(%order, %signature, "cancelled increase position order");
 
     Ok(())
 }

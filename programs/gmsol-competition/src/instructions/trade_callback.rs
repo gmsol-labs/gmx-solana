@@ -1,23 +1,19 @@
 use crate::states::{
-    Competition, CompetitionError, LeaderEntry, Participant, CALLBACK_AUTHORITY_SEED,
-    EXPECTED_STORE_PROGRAM_ID, MAX_LEADERBOARD_LEN, PARTICIPANT_SEED,
+    Competition, CompetitionError, LeaderEntry, Participant, EXPECTED_STORE_PROGRAM_ID,
+    MAX_LEADERBOARD_LEN, PARTICIPANT_SEED,
 };
 use anchor_lang::prelude::*;
-use gmsol_callback::interface::ActionKind;
+use gmsol_callback::{interface::ActionKind, CALLBACK_AUTHORITY_SEED};
 use gmsol_programs::gmsol_store::accounts::TradeData;
 
-/// Callback invoked by the GMX‑Solana store program each time a trade is
-/// executed.
-///
-/// The store program **must** sign with the callback‑authority PDA derived with
-/// `seed = [CALLBACK_AUTHORITY_SEED]` and `program = EXPECTED_STORE_PROGRAM_ID`.
+/// Generic callback accounts.
 #[derive(Accounts)]
 #[instruction(authority_bump: u8)]
-pub struct TradeCallback<'info> {
+pub struct OnCallback<'info> {
     /// The callback‑authority PDA (must be a signer).
     #[account(
-        seeds         = [CALLBACK_AUTHORITY_SEED],
-        bump          = authority_bump,
+        seeds = [CALLBACK_AUTHORITY_SEED],
+        bump = authority_bump,
         seeds::program = EXPECTED_STORE_PROGRAM_ID,
     )]
     pub authority: Signer<'info>,
@@ -28,9 +24,7 @@ pub struct TradeCallback<'info> {
 
     /// The participant PDA (created on demand).
     #[account(
-        init_if_needed,
-        payer  = payer,
-        space  = 8 + Participant::INIT_SPACE,
+        mut,
         seeds  = [
             PARTICIPANT_SEED,
             competition.key().as_ref(),
@@ -44,24 +38,57 @@ pub struct TradeCallback<'info> {
     /// CHECK: Only the address is required.
     pub trader: UncheckedAccount<'info>,
 
-    /// Payer that covers rent when `participant` is created.
+    /// The action account.
+    /// CHECK: this is just a placeholder.
+    pub action: UncheckedAccount<'info>,
+    // /// CHECK: this is just a placeholder
+    // pub position: UncheckedAccount<'info>,
+
+    // /// Trade event data
+    // pub trade_event: Option<AccountLoader<'info, TradeData>>,
+}
+
+/// Accounts for `on_executed`.
+#[derive(Accounts)]
+#[instruction(authority_bump: u8)]
+pub struct OnExecuted<'info> {
+    /// The callback‑authority PDA (must be a signer).
+    #[account(
+        seeds = [CALLBACK_AUTHORITY_SEED],
+        bump = authority_bump,
+        seeds::program = EXPECTED_STORE_PROGRAM_ID,
+    )]
+    pub authority: Signer<'info>,
+    /// The global competition account.
     #[account(mut)]
-    pub payer: Signer<'info>,
-
-    /// System program.
-    pub system_program: Program<'info, System>,
-
-    /// CHECK: it is just a placeholder
+    pub competition: Account<'info, Competition>,
+    /// The participant PDA (created on demand).
+    #[account(
+        mut,
+        seeds  = [
+            PARTICIPANT_SEED,
+            competition.key().as_ref(),
+            trader.key().as_ref(),
+        ],
+        bump
+    )]
+    pub participant: Account<'info, Participant>,
+    /// The trader public key.
+    /// CHECK: Only the address is required.
+    pub trader: UncheckedAccount<'info>,
+    /// The action account.
+    /// CHECK: this is just a placeholder.
+    pub action: UncheckedAccount<'info>,
+    /// CHECK: this is just a placeholder
     pub position: UncheckedAccount<'info>,
-
     /// Trade event data
     pub trade_event: Option<AccountLoader<'info, TradeData>>,
 }
 
-impl<'info> TradeCallback<'info> {
+impl OnExecuted<'_> {
     /// Core entry point called by the store program.
     pub(crate) fn invoke(
-        ctx: Context<'_, '_, 'info, 'info, Self>,
+        ctx: Context<Self>,
         _authority_bump: u8,
         action_kind: u8,
         success: bool,
@@ -130,24 +157,22 @@ impl<'info> TradeCallback<'info> {
             .find(|e| e.address == part.owner)
         {
             entry.volume = part.volume;
-        } else {
-            if comp.leaderboard.len() < MAX_LEADERBOARD_LEN.into() {
-                comp.leaderboard.push(LeaderEntry {
+        } else if comp.leaderboard.len() < MAX_LEADERBOARD_LEN.into() {
+            comp.leaderboard.push(LeaderEntry {
+                address: part.owner,
+                volume: part.volume,
+            });
+        } else if let Some((idx, weakest)) = comp
+            .leaderboard
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, e)| e.volume)
+        {
+            if part.volume > weakest.volume {
+                comp.leaderboard[idx] = LeaderEntry {
                     address: part.owner,
                     volume: part.volume,
-                });
-            } else if let Some((idx, weakest)) = comp
-                .leaderboard
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, e)| e.volume)
-            {
-                if part.volume > weakest.volume {
-                    comp.leaderboard[idx] = LeaderEntry {
-                        address: part.owner,
-                        volume: part.volume,
-                    };
-                }
+                };
             }
         }
 

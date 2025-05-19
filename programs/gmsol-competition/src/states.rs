@@ -12,8 +12,7 @@ pub enum CompetitionError {
 }
 
 /// The expected program ID of the caller.
-pub const EXPECTED_STORE_PROGRAM_ID: Pubkey =
-    pubkey!("Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo");
+pub const EXPECTED_STORE_PROGRAM_ID: Pubkey = gmsol_programs::gmsol_store::ID_CONST;
 
 /// The seed for [`Competition`] account.
 #[constant]
@@ -22,10 +21,6 @@ pub const COMPETITION_SEED: &[u8] = b"competition";
 /// The seed for [`Participant`] account.
 #[constant]
 pub const PARTICIPANT_SEED: &[u8] = b"participant";
-
-/// The seed for callback-authority PDA.
-#[constant]
-pub const CALLBACK_AUTHORITY_SEED: &[u8] = b"competition_callback";
 
 /// The maximum number of leaderboard entries kept on chain.
 #[constant]
