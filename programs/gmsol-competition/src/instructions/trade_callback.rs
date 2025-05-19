@@ -17,15 +17,13 @@ pub struct OnCallback<'info> {
         seeds::program = EXPECTED_STORE_PROGRAM_ID,
     )]
     pub authority: Signer<'info>,
-
     /// The global competition account.
     #[account(mut)]
     pub competition: Account<'info, Competition>,
-
     /// The participant PDA (created on demand).
     #[account(
         mut,
-        seeds  = [
+        seeds = [
             PARTICIPANT_SEED,
             competition.key().as_ref(),
             trader.key().as_ref(),
@@ -33,19 +31,12 @@ pub struct OnCallback<'info> {
         bump
     )]
     pub participant: Account<'info, Participant>,
-
     /// The trader public key.
     /// CHECK: Only the address is required.
     pub trader: UncheckedAccount<'info>,
-
     /// The action account.
     /// CHECK: this is just a placeholder.
     pub action: UncheckedAccount<'info>,
-    // /// CHECK: this is just a placeholder
-    // pub position: UncheckedAccount<'info>,
-
-    // /// Trade event data
-    // pub trade_event: Option<AccountLoader<'info, TradeData>>,
 }
 
 /// Accounts for `on_executed`.
@@ -65,7 +56,7 @@ pub struct OnExecuted<'info> {
     /// The participant PDA (created on demand).
     #[account(
         mut,
-        seeds  = [
+        seeds = [
             PARTICIPANT_SEED,
             competition.key().as_ref(),
             trader.key().as_ref(),
