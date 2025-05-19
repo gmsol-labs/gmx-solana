@@ -2354,6 +2354,7 @@ dependencies = [
  "futures-util",
  "gmsol-callback",
  "gmsol-chainlink-datastreams",
+ "gmsol-competition",
  "gmsol-decode",
  "gmsol-mock-chainlink-verifier",
  "gmsol-model",

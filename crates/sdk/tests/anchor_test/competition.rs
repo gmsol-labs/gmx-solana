@@ -1,12 +1,15 @@
 use gmsol_callback::{accounts, instruction, interface::ActionKind, states::ACTION_STATS_SEED};
 use gmsol_competition::{
-    accounts::InitializeCompetition,
-    states::{Competition, LeaderEntry, Participant},
+    instruction::InitializeCompetition,
+    states::{Competition, Participant},
+    ID as COMPETITION_PROGRAM_ID,
 };
+use gmsol_programs::anchor_lang::Key;
 use gmsol_sdk::{
     client::ops::ExchangeOps, constants::MARKET_USD_UNIT, ops::exchange::callback::Callback,
 };
 use solana_sdk::{pubkey::Pubkey, system_program};
+use time::OffsetDateTime;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
 
@@ -40,24 +43,25 @@ async fn competition() -> eyre::Result<()> {
         .await?;
 
     // Initialize competition
-    let competition = Pubkey::find_program_address(
-        &[b"competition"],
-        &deployment.competition_program,
-    )
-    .0;
+    let competition = Pubkey::find_program_address(&[b"competition"], &COMPETITION_PROGRAM_ID).0;
 
-    let start_time = Clock::get()?.unix_timestamp;
+    let slot = client.rpc().get_slot().await?;
+    let start_time = client
+        .rpc()
+        .get_block_time(slot)
+        .await
+        .unwrap_or_else(|_| OffsetDateTime::now_utc().unix_timestamp());
     let end_time = start_time + 3600; // 1 hour competition
 
     let init_competition = client
-        .competition_transaction()
-        .program(deployment.competition_program)
+        .store_transaction()
+        .program(COMPETITION_PROGRAM_ID)
         .anchor_args(InitializeCompetition {
             start_time,
             end_time,
-            store_program: store.program_id(),
+            store_program: store.key(),
         })
-        .anchor_accounts(accounts::InitializeCompetition {
+        .anchor_accounts(gmsol_competition::accounts::InitializeCompetition {
             payer: client.payer(),
             competition,
             system_program: system_program::ID,
@@ -74,7 +78,7 @@ async fn competition() -> eyre::Result<()> {
     assert!(competition_account.is_active);
     assert_eq!(competition_account.start_time, start_time);
     assert_eq!(competition_account.end_time, end_time);
-    assert_eq!(competition_account.store_program, store.program_id());
+    assert_eq!(competition_account.store_program, store.key());
 
     // Create and execute order
     let size = 5_000 * MARKET_USD_UNIT;
@@ -87,6 +91,28 @@ async fn competition() -> eyre::Result<()> {
     )
     .0;
 
+    // Create participant account first
+    let participant = Pubkey::find_program_address(
+        &[b"participant", competition.as_ref(), owner.as_ref()],
+        &COMPETITION_PROGRAM_ID,
+    )
+    .0;
+
+    let create_participant = client
+        .store_transaction()
+        .program(COMPETITION_PROGRAM_ID)
+        .anchor_args(gmsol_competition::instruction::CreateParticipantIdempotent {})
+        .anchor_accounts(gmsol_competition::accounts::CreateParticipantIdempotent {
+            payer: client.payer(),
+            competition,
+            participant,
+            trader: owner,
+            system_program: system_program::ID,
+        });
+
+    let signature = create_participant.send().await?;
+    tracing::info!(%signature, "created participant account");
+
     // Create order
     let (mut rpc, order) = client
         .market_increase(
@@ -98,35 +124,32 @@ async fn competition() -> eyre::Result<()> {
             size,
         )
         .callback(Some(Callback {
-            program: deployment.competition_program,
-            config: deployment.competition_config,
-            action_stats,
+            program: COMPETITION_PROGRAM_ID,
+            config: competition,
+            action_stats: participant,
         }))
         .build_with_address()
         .await?;
 
-    // Prepare action stats
-    let prepare_action_stats = client
-        .store_transaction()
-        .program(deployment.callback_program)
-        .anchor_args(instruction::CreateActionStatsIdempotent { action_kind })
-        .anchor_accounts(accounts::CreateActionStatsIdempotent {
-            payer: client.payer(),
-            action_stats,
-            owner,
-            system_program: system_program::ID,
-        });
-    rpc = prepare_action_stats.merge(rpc);
     let signature = rpc.send().await?;
     tracing::info!(%order, %signature, "created an increase position order");
 
-    // Verify participant account creation
-    let participant = Pubkey::find_program_address(
-        &[b"participant", competition.as_ref(), owner.as_ref()],
-        &deployment.competition_program,
-    )
-    .0;
+    // Execute order
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let oracle = &deployment.oracle();
+    let mut builder = keeper.execute_order(store, oracle, &order, false)?;
+    deployment
+        .execute_with_pyth(
+            builder
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone()),
+            None,
+            true,
+            true,
+        )
+        .await?;
 
+    // Verify participant account creation
     let participant_account = client
         .account::<Participant>(&participant)
         .await?

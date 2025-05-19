@@ -156,6 +156,9 @@ gmsol-mock-chainlink-verifier = { workspace = true, features = [
 ] }
 gmsol-store = { workspace = true }
 gmsol-callback = { workspace = true, features = ["no-entrypoint", "debug"] }
+gmsol-competition = { workspace = true, features = [
+    "no-entrypoint",
+] }
 
 rust_decimal_macros = { workspace = true }
 tracing = { workspace = true }

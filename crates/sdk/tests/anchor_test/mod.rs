@@ -24,3 +24,5 @@ mod oracle;
 mod token;
 
 mod callback;
+
+mod competition;

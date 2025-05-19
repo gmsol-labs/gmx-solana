@@ -29,6 +29,6 @@ test-only = []
 migration = []
 
 [dependencies]
-anchor-lang = { workspace = true, features = ["init-if-needed"] }
-gmsol-callback = { workspace = true }
+anchor-lang = { workspace = true }
+gmsol-callback = { workspace = true, features = ["interface", "display"] }
 gmsol-programs = { workspace = true }

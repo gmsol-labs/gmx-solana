@@ -73,11 +73,11 @@ impl<'info> TradeCallback<'info> {
         }
 
         let clock = Clock::get()?;
-        let now   = clock.unix_timestamp;
+        let now = clock.unix_timestamp;
 
         let comp = &mut ctx.accounts.competition;
 
-        require!(comp.is_active,  CompetitionError::CompetitionNotActive);
+        require!(comp.is_active, CompetitionError::CompetitionNotActive);
         require!(
             now >= comp.start_time && now <= comp.end_time,
             CompetitionError::OutsideCompetitionTime
@@ -88,16 +88,19 @@ impl<'info> TradeCallback<'info> {
         // First‑time init fields.
         if part.volume == 0 {
             part.competition = comp.key();
-            part.owner       = ctx.accounts.trader.key();
+            part.owner = ctx.accounts.trader.key();
         }
 
         // Get volume from the trade event
         let volume = if let Some(trade_event) = &ctx.accounts.trade_event {
             let trade_event = trade_event.load()?;
-            
+
             // Calculate volume as the absolute difference between after and before size_in_usd
-            let volume = trade_event.after.size_in_usd.abs_diff(trade_event.before.size_in_usd);
-            
+            let volume = trade_event
+                .after
+                .size_in_usd
+                .abs_diff(trade_event.before.size_in_usd);
+
             // Convert to u64, saturating if the value is too large
             volume.min(u64::MAX as u128) as u64
         } else {
@@ -105,8 +108,8 @@ impl<'info> TradeCallback<'info> {
             return Ok(());
         };
 
-        part.volume           = part.volume.saturating_add(volume);
-        part.last_updated_at  = now;
+        part.volume = part.volume.saturating_add(volume);
+        part.last_updated_at = now;
 
         Self::update_leaderboard(comp, part);
 
@@ -131,7 +134,7 @@ impl<'info> TradeCallback<'info> {
             if comp.leaderboard.len() < MAX_LEADERBOARD_LEN.into() {
                 comp.leaderboard.push(LeaderEntry {
                     address: part.owner,
-                    volume:  part.volume,
+                    volume: part.volume,
                 });
             } else if let Some((idx, weakest)) = comp
                 .leaderboard
@@ -142,14 +145,13 @@ impl<'info> TradeCallback<'info> {
                 if part.volume > weakest.volume {
                     comp.leaderboard[idx] = LeaderEntry {
                         address: part.owner,
-                        volume:  part.volume,
+                        volume: part.volume,
                     };
                 }
             }
         }
 
         // Re‑sort in descending order.
-        comp.leaderboard
-            .sort_by(|a, b| b.volume.cmp(&a.volume));
+        comp.leaderboard.sort_by(|a, b| b.volume.cmp(&a.volume));
     }
 }

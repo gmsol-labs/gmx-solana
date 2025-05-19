@@ -13,9 +13,7 @@ declare_id!("2AxuNr6euZPKQbTwNsLBjzFTZFAevA85F4PW9m9Dv8pc");
 #[program]
 pub mod gmsol_competition {
     use super::*;
-    use instructions::{
-        CreateParticipantIdempotent, InitializeCompetition, TradeCallback,
-    };
+    use instructions::{CreateParticipantIdempotent, InitializeCompetition, TradeCallback};
 
     /// Initialize the global [`Competition`](crate::states::Competition) PDA.
     pub fn initialize_competition(
@@ -28,9 +26,7 @@ pub mod gmsol_competition {
     }
 
     /// Lazily create a [`Participant`](crate::states::Participant) PDA.
-    pub fn create_participant_idempotent(
-        ctx: Context<CreateParticipantIdempotent>,
-    ) -> Result<()> {
+    pub fn create_participant_idempotent(ctx: Context<CreateParticipantIdempotent>) -> Result<()> {
         CreateParticipantIdempotent::invoke(ctx)
     }
 
@@ -47,7 +43,10 @@ pub mod gmsol_competition {
         action_kind: u8,
         _extra_account_count: u8,
     ) -> Result<()> {
-        require!(action_kind == ActionKind::Order as u8, CompetitionError::InvalidActionKind);
+        require!(
+            action_kind == ActionKind::Order as u8,
+            CompetitionError::InvalidActionKind
+        );
         Ok(())
     }
 
@@ -60,7 +59,13 @@ pub mod gmsol_competition {
         success: bool,
         extra_account_count: u8,
     ) -> Result<()> {
-        TradeCallback::invoke(ctx, authority_bump, action_kind, success, extra_account_count)
+        TradeCallback::invoke(
+            ctx,
+            authority_bump,
+            action_kind,
+            success,
+            extra_account_count,
+        )
     }
 
     /// Triggered when an order is **closed / cancelled**.  

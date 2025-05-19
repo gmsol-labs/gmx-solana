@@ -1,8 +1,6 @@
 use crate::{
     error::CompetitionError,
-    states::{
-        Competition, COMPETITION_SEED, MAX_LEADERBOARD_LEN,
-    },
+    states::{Competition, COMPETITION_SEED, MAX_LEADERBOARD_LEN},
 };
 use anchor_lang::prelude::*;
 
@@ -35,12 +33,12 @@ impl InitializeCompetition<'_> {
     ) -> Result<()> {
         require!(start_time < end_time, CompetitionError::InvalidTimeRange);
         let comp = &mut ctx.accounts.competition;
-        comp.authority     = ctx.accounts.payer.key();
-        comp.start_time    = start_time;
-        comp.end_time      = end_time;
-        comp.is_active     = true;
+        comp.authority = ctx.accounts.payer.key();
+        comp.start_time = start_time;
+        comp.end_time = end_time;
+        comp.is_active = true;
         comp.store_program = store_program;
-        comp.leaderboard   = Vec::with_capacity(MAX_LEADERBOARD_LEN.into());
+        comp.leaderboard = Vec::with_capacity(MAX_LEADERBOARD_LEN.into());
         Ok(())
     }
 }
