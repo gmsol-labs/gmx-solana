@@ -22,5 +22,3 @@ mod glv;
 mod oracle;
 
 mod token;
-
-mod competition;
