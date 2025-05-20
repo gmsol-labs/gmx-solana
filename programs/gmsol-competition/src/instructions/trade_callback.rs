@@ -172,6 +172,22 @@ impl OnExecuted<'_> {
         part.volume = part.volume.saturating_add(volume);
         part.last_updated_at = now;
 
+        // Check if volume exceeds threshold and extend competition time if needed
+        if volume >= comp.volume_threshold {
+            // Extend competition time
+            comp.end_time = comp.end_time.saturating_add(comp.time_extension);
+            
+            // Record the trigger address
+            comp.extension_trigger = Some(part.trader);
+            
+            msg!(
+                "competition: extended time by {} seconds due to large trade volume={} from trader={}",
+                comp.time_extension,
+                volume,
+                part.trader
+            );
+        }
+
         Self::update_leaderboard(comp, part);
 
         msg!(
@@ -184,33 +200,32 @@ impl OnExecuted<'_> {
     }
 
     fn update_leaderboard(comp: &mut Account<Competition>, part: &Participant) {
-        // Try find existing entry.
-        if let Some(entry) = comp
-            .leaderboard
-            .iter_mut()
-            .find(|e| e.address == part.trader)
-        {
-            entry.volume = part.volume;
-        } else if comp.leaderboard.len() < MAX_LEADERBOARD_LEN.into() {
-            comp.leaderboard.push(LeaderEntry {
-                address: part.trader,
-                volume: part.volume,
-            });
-        } else if let Some((idx, weakest)) = comp
+        let entry = if let Some(pos) = comp
             .leaderboard
             .iter()
-            .enumerate()
-            .min_by_key(|(_, e)| e.volume)
+            .position(|e| e.address == part.trader)
         {
-            if part.volume > weakest.volume {
-                comp.leaderboard[idx] = LeaderEntry {
-                    address: part.trader,
-                    volume: part.volume,
-                };
+            let mut old = comp.leaderboard.remove(pos);
+            old.volume = part.volume;
+            old
+        } else {
+            LeaderEntry {
+                address: part.trader,
+                volume: part.volume,
             }
-        }
+        };
 
-        // Re‑sort in descending order.
-        comp.leaderboard.sort_by(|a, b| b.volume.cmp(&a.volume));
+        let insert_pos = comp
+            .leaderboard
+            .iter()
+            .rposition(|e| e.volume >= entry.volume)
+            .map(|pos| pos + 1)
+            .unwrap_or(0);
+
+        comp.leaderboard.insert(insert_pos, entry);
+
+        if comp.leaderboard.len() > MAX_LEADERBOARD_LEN as usize {
+            comp.leaderboard.truncate(MAX_LEADERBOARD_LEN as usize);
+        }
     }
 }

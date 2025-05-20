@@ -43,6 +43,12 @@ pub struct Competition {
     /// The fixed-length leaderboard.
     #[max_len(MAX_LEADERBOARD_LEN)]
     pub leaderboard: Vec<LeaderEntry>,
+    /// Volume threshold in USD
+    pub volume_threshold: u128,
+    /// Time extension in seconds
+    pub time_extension: i64,
+    /// Address that triggered time extension
+    pub extension_trigger: Option<Pubkey>,
 }
 
 /// The per-trader statistics.

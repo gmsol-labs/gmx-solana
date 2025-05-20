@@ -51,7 +51,9 @@ async fn competition() -> eyre::Result<()> {
         .get_block_time(slot)
         .await
         .unwrap_or_else(|_| OffsetDateTime::now_utc().unix_timestamp());
-    let end_time = start_time + 3600; // 1 hour competition
+    let end_time = start_time + 3600 * 24; // 24 hour competition
+    let volume_threshold = 10_000 * MARKET_USD_UNIT; // 10,000 USD threshold
+    let time_extension = 10; // 10 seconds extension
 
     let init_competition = client
         .store_transaction()
@@ -60,6 +62,8 @@ async fn competition() -> eyre::Result<()> {
             start_time,
             end_time,
             store_program: store.key(),
+            volume_threshold,
+            time_extension,
         })
         .anchor_accounts(gmsol_competition::accounts::InitializeCompetition {
             payer: client.payer(),
@@ -79,9 +83,12 @@ async fn competition() -> eyre::Result<()> {
     assert_eq!(competition_account.start_time, start_time);
     assert_eq!(competition_account.end_time, end_time);
     assert_eq!(competition_account.store_program, store.key());
+    assert_eq!(competition_account.volume_threshold, volume_threshold);
+    assert_eq!(competition_account.time_extension, time_extension);
+    assert!(competition_account.extension_trigger.is_none());
 
-    // Create and execute order
-    let size = 50 * MARKET_USD_UNIT;
+    // Create and execute order with volume exceeding threshold
+    let size = 15_000 * MARKET_USD_UNIT; // 15,000 USD > 10,000 USD threshold
 
     let owner = client.payer();
 
@@ -141,6 +148,14 @@ async fn competition() -> eyre::Result<()> {
             true,
         )
         .await?;
+
+    // Verify time extension
+    let competition_account = client
+        .account::<Competition>(&competition)
+        .await?
+        .expect("must exist");
+    assert_eq!(competition_account.end_time, end_time + time_extension);
+    assert_eq!(competition_account.extension_trigger, Some(owner));
 
     // Verify participant account creation
     let participant_account = client

@@ -12,4 +12,8 @@ pub enum CompetitionError {
     InvalidActionKind,
     #[msg("Invalid time range")]
     InvalidTimeRange,
+    #[msg("Invalid time extension")]
+    InvalidTimeExtension,
+    #[msg("Invalid volume threshold")]
+    InvalidVolumeThreshold,
 }

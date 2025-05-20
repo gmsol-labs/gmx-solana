@@ -19,8 +19,17 @@ pub mod gmsol_competition {
         start_time: i64,
         end_time: i64,
         store_program: Pubkey,
+        volume_threshold: u128,
+        time_extension: i64,
     ) -> Result<()> {
-        InitializeCompetition::invoke(ctx, start_time, end_time, store_program)
+        InitializeCompetition::invoke(
+            ctx, 
+            start_time, 
+            end_time, 
+            store_program,
+            volume_threshold,
+            time_extension,
+        )
     }
 
     /// Create [`Participant`](crate::states::Participant) PDA idempotently.
