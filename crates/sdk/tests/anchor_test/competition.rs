@@ -54,6 +54,7 @@ async fn competition() -> eyre::Result<()> {
     let end_time = start_time + 3600 * 24; // 24 hour competition
     let volume_threshold = 10_000 * MARKET_USD_UNIT; // 10,000 USD threshold
     let time_extension = 10; // 10 seconds extension
+    let max_extension = 3600 * 24; // 24 hour maximum extension
 
     let init_competition = client
         .store_transaction()
@@ -64,6 +65,7 @@ async fn competition() -> eyre::Result<()> {
             store_program: store.key(),
             volume_threshold,
             time_extension,
+            max_extension,
         })
         .anchor_accounts(gmsol_competition::accounts::InitializeCompetition {
             payer: client.payer(),
@@ -85,10 +87,11 @@ async fn competition() -> eyre::Result<()> {
     assert_eq!(competition_account.store_program, store.key());
     assert_eq!(competition_account.volume_threshold, volume_threshold);
     assert_eq!(competition_account.time_extension, time_extension);
+    assert_eq!(competition_account.max_extension, max_extension);
     assert!(competition_account.extension_trigger.is_none());
 
     // Create and execute order with volume exceeding threshold
-    let size = 15_000 * MARKET_USD_UNIT; // 15,000 USD > 10,000 USD threshold
+    let size = 12_000 * MARKET_USD_UNIT; // 12,000 USD > 10,000 USD threshold
 
     let owner = client.payer();
 
@@ -154,7 +157,13 @@ async fn competition() -> eyre::Result<()> {
         .account::<Competition>(&competition)
         .await?
         .expect("must exist");
-    assert_eq!(competition_account.end_time, end_time + time_extension);
+    let participant_account = client
+        .account::<Participant>(&participant)
+        .await?
+        .expect("must exist");
+    let proposed_end_time = end_time + time_extension;
+    let max_end_time = participant_account.last_updated_at + max_extension;
+    assert_eq!(competition_account.end_time, proposed_end_time.min(max_end_time));
     assert_eq!(competition_account.extension_trigger, Some(owner));
 
     // Verify participant account creation

@@ -16,4 +16,6 @@ pub enum CompetitionError {
     InvalidTimeExtension,
     #[msg("Invalid volume threshold")]
     InvalidVolumeThreshold,
+    #[msg("Invalid max extension")]
+    InvalidMaxExtension,
 }

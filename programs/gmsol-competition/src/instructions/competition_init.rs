@@ -32,14 +32,14 @@ impl InitializeCompetition<'_> {
         store_program: Pubkey,
         volume_threshold: u128,
         time_extension: i64,
+        max_extension: i64,
     ) -> Result<()> {
         require!(start_time < end_time, CompetitionError::InvalidTimeRange);
         require!(time_extension > 0, CompetitionError::InvalidTimeExtension);
-        require!(
-            volume_threshold > 0,
-            CompetitionError::InvalidVolumeThreshold
-        );
-
+        require!(volume_threshold > 0, CompetitionError::InvalidVolumeThreshold);
+        require!(max_extension > 0, CompetitionError::InvalidMaxExtension);
+        require!(max_extension >= time_extension, CompetitionError::InvalidMaxExtension);
+        
         let comp = &mut ctx.accounts.competition;
         comp.authority = ctx.accounts.payer.key();
         comp.start_time = start_time;
@@ -49,6 +49,7 @@ impl InitializeCompetition<'_> {
         comp.leaderboard = Vec::with_capacity(MAX_LEADERBOARD_LEN.into());
         comp.volume_threshold = volume_threshold;
         comp.time_extension = time_extension;
+        comp.max_extension = max_extension;
         comp.extension_trigger = None;
         Ok(())
     }

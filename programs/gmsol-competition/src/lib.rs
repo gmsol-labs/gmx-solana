@@ -21,6 +21,7 @@ pub mod gmsol_competition {
         store_program: Pubkey,
         volume_threshold: u128,
         time_extension: i64,
+        max_extension: i64,
     ) -> Result<()> {
         InitializeCompetition::invoke(
             ctx,
@@ -29,6 +30,7 @@ pub mod gmsol_competition {
             store_program,
             volume_threshold,
             time_extension,
+            max_extension,
         )
     }
 

@@ -47,6 +47,8 @@ pub struct Competition {
     pub volume_threshold: u128,
     /// Time extension in seconds
     pub time_extension: i64,
+    /// Maximum time extension in seconds
+    pub max_extension: i64,
     /// Address that triggered time extension
     pub extension_trigger: Option<Pubkey>,
 }
