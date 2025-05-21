@@ -780,14 +780,14 @@ impl Deployment {
                 store,
                 &market_token,
                 MarketConfigKey::MaxPoolValueForDepositForLongToken,
-                &(1_000_000 * MARKET_USD_UNIT),
+                &(10_000_000 * MARKET_USD_UNIT),
             )?;
             builder.push(rpc)?;
             let rpc = client.update_market_config_by_key(
                 store,
                 &market_token,
                 MarketConfigKey::MaxPoolValueForDepositForShortToken,
-                &(1_000_000 * MARKET_USD_UNIT),
+                &(10_000_000 * MARKET_USD_UNIT),
             )?;
             builder.push(rpc)?;
             let rpc = client.update_market_config_by_key(

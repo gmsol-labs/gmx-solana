@@ -163,7 +163,10 @@ async fn competition() -> eyre::Result<()> {
         .expect("must exist");
     let proposed_end_time = end_time + time_extension;
     let max_end_time = participant_account.last_updated_at + max_extension;
-    assert_eq!(competition_account.end_time, proposed_end_time.min(max_end_time));
+    assert_eq!(
+        competition_account.end_time,
+        proposed_end_time.min(max_end_time)
+    );
     assert_eq!(competition_account.extension_trigger, Some(owner));
 
     // Verify participant account creation

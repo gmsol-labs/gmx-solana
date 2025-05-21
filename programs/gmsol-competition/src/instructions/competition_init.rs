@@ -36,10 +36,16 @@ impl InitializeCompetition<'_> {
     ) -> Result<()> {
         require!(start_time < end_time, CompetitionError::InvalidTimeRange);
         require!(time_extension > 0, CompetitionError::InvalidTimeExtension);
-        require!(volume_threshold > 0, CompetitionError::InvalidVolumeThreshold);
+        require!(
+            volume_threshold > 0,
+            CompetitionError::InvalidVolumeThreshold
+        );
         require!(max_extension > 0, CompetitionError::InvalidMaxExtension);
-        require!(max_extension >= time_extension, CompetitionError::InvalidMaxExtension);
-        
+        require!(
+            max_extension >= time_extension,
+            CompetitionError::InvalidMaxExtension
+        );
+
         let comp = &mut ctx.accounts.competition;
         comp.authority = ctx.accounts.payer.key();
         comp.start_time = start_time;
