@@ -135,7 +135,7 @@ path = "programs/callback"
 
 [workspace.dependencies.gmsol-competition]
 version = "0.6.0"
-path = "programs/gmsol-competition"
+path = "programs/competition"
 
 [workspace.dependencies.gmsol-decode]
 version = "0.6.0"
