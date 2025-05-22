@@ -1,5 +1,5 @@
 //!
-//! To avoid dependency conflicts, we reimplemented some parts of the `squads_multisig` SDK
+//! To avoid dependency conflicts, some parts of the `squads_multisig` SDK are reimplemented
 //! with the help of [`declare_program!`](anchor_lang::declare_program!).
 //! The implementation is based on: https://crates.io/crates/squads-multisig/2.1.0
 

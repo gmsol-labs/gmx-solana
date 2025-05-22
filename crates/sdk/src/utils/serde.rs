@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{ops::Deref, str::FromStr};
 
 use solana_sdk::pubkey::Pubkey;
 
@@ -24,6 +24,14 @@ impl Deref for StringPubkey {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl FromStr for StringPubkey {
+    type Err = <Pubkey as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Pubkey::from_str(s)?))
     }
 }
 

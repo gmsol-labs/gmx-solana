@@ -101,6 +101,9 @@ wasm-bindgen-test = "0.3.50"
 humantime = "2.1.0"
 num-format = "0.4.4"
 time = "0.3.36"
+color-eyre = "0.6.4"
+etcetera = "0.10.0"
+enum_dispatch = "0.3.13"
 
 [workspace.dependencies.chainlink-data-streams-report]
 version = "1.0.0"

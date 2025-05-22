@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, ops::Deref, sync::Arc};
+use std::{collections::HashMap, fmt, ops::Deref, rc::Rc, sync::Arc};
 
 use dyn_clone::{clone_trait_object, DynClone};
 use solana_sdk::{
@@ -183,4 +183,12 @@ impl<C: Deref<Target = impl Signer>> Extend<C> for TransactionSigners<C> {
             self.insert(signer);
         }
     }
+}
+
+/// Local Signer.
+pub type LocalSignerRef = Rc<LocalBoxSigner>;
+
+/// Create a new local signer.
+pub fn local_signer(signer: impl Signer + 'static) -> LocalSignerRef {
+    LocalSignerRef::new(Box::new(signer))
 }

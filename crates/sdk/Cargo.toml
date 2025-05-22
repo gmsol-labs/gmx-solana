@@ -99,10 +99,12 @@ rust_decimal = { workspace = true, default_features = false }
 typed-builder = { workspace = true }
 rand = { workspace = true }
 cfg-if = { workspace = true }
+bs58 = { workspace = true }
 
 tracing = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true, features = ["json"] }
 reqwest-websocket = { workspace = true, optional = true }
+clap = { workspace = true, optional = true, features = ["derive"] }
 
 # Dependencies for the `js` feature
 wasm-bindgen = { workspace = true, optional = true }

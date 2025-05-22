@@ -14,6 +14,7 @@ use solana_sdk::commitment_config::CommitmentConfig;
 /// Cluster.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum Cluster {
     /// Testnet.
     Testnet,

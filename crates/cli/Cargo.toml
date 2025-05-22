@@ -1,0 +1,44 @@
+[package]
+name = "gmsol-cli"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+documentation = "https://docs.rs/gmsol-cli"
+
+[[bin]]
+name = "gmsol"
+path = "src/main.rs"
+required-features = ["bin"]
+
+[features]
+default = ["bin"]
+remote-wallet = ["solana-remote-wallet"]
+bin = ["color-eyre", "tracing-subscriber", "remote-wallet"]
+devnet = ["gmsol-sdk/devnet"]
+squads = []
+
+[dependencies]
+gmsol-sdk = { workspace = true, features = ["client", "serde", "clap"] }
+
+eyre = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+figment = { workspace = true, features = ["env", 'toml'] }
+tracing = { workspace = true }
+cfg-if = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+url = { workspace = true }
+shellexpand = { workspace = true }
+etcetera = { workspace = true }
+enum_dispatch = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+toml = { workspace = true }
+
+color-eyre = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true, features = [
+    "env-filter",
+] }
+solana-remote-wallet = { workspace = true, optional = true }

@@ -16,6 +16,9 @@ pub mod optional;
 /// Fixed str.
 pub mod fixed_str;
 
+/// Instruction serialization.
+pub mod instruction_serialization;
+
 /// Test utils.
 #[cfg(test)]
 pub mod test;
