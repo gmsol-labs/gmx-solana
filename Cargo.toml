@@ -139,7 +139,7 @@ path = "programs/competition"
 
 [workspace.dependencies.gmsol-decode]
 version = "0.6.0"
-path = "crates/gmsol-decode"
+path = "crates/decode"
 
 [workspace.dependencies.gmsol-chainlink-datastreams]
 version = "0.6.0"
