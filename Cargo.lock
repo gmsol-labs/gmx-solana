@@ -2409,10 +2409,12 @@ dependencies = [
 name = "gmsol-sdk"
 version = "0.6.0"
 dependencies = [
+ "anchor-lang",
  "anchor-spl",
  "async-stream",
  "base64 0.22.1",
  "bincode",
+ "borsh 0.10.4",
  "bs58 0.5.1",
  "byteorder",
  "bytes",

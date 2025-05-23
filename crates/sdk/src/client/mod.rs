@@ -43,6 +43,10 @@ pub mod pyth;
 #[cfg(feature = "switchboard")]
 pub mod switchboard;
 
+/// Squads operations.
+#[cfg(feature = "squads")]
+pub mod squads;
+
 use std::{
     collections::BTreeMap,
     ops::Deref,

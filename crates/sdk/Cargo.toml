@@ -74,6 +74,7 @@ pyth = [
     "reqwest/stream",
 ]
 switchboard = ["switchboard-on-demand-client"]
+squads = []
 
 anchor-test = ["client", "chainlink", "pyth", "decode"]
 
@@ -94,6 +95,8 @@ anchor-spl = { workspace = true, default-features = false, features = [
     "token_2022",
     "associated_token",
 ] }
+anchor-lang = { workspace = true, features = ["derive"] }
+borsh = { workspace = true }
 either = { workspace = true }
 rust_decimal = { workspace = true, default_features = false }
 typed-builder = { workspace = true }

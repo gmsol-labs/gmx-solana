@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(treasury): Added `sync_gt_bank_v2` instruction, which returns the synced amount.
 - sdk(sdk): Added `callback` option to `ops::CreateOrderBuilder`.
 - sdk(sdk): Added `callback` field to `ExecuteOrderHint` and `CloseOrderHint`.
+- sdk(sdk): Migrated the implementation of squads support to `gmsol-sdk`.
 
 ### Changed
 

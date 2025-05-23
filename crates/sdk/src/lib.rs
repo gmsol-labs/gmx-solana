@@ -33,6 +33,10 @@ pub mod market_graph;
 #[cfg(feature = "client")]
 pub mod client;
 
+/// Squads support.
+#[cfg(feature = "squads")]
+pub mod squads;
+
 /// Model support.
 pub mod model {
     pub use gmsol_model::*;

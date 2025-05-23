@@ -19,7 +19,7 @@ default = ["bin"]
 remote-wallet = ["solana-remote-wallet"]
 bin = ["color-eyre", "tracing-subscriber", "remote-wallet"]
 devnet = ["gmsol-sdk/devnet"]
-squads = []
+squads = ["gmsol-sdk/squads"]
 
 [dependencies]
 gmsol-sdk = { workspace = true, features = ["client", "serde", "clap"] }
