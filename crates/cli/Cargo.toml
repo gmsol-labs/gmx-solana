@@ -15,9 +15,9 @@ path = "src/main.rs"
 required-features = ["bin"]
 
 [features]
-default = ["bin"]
+default = ["bin", "remote-wallet"]
 remote-wallet = ["solana-remote-wallet"]
-bin = ["color-eyre", "tracing-subscriber", "remote-wallet"]
+bin = ["color-eyre", "tracing-subscriber"]
 devnet = ["gmsol-sdk/devnet"]
 squads = ["gmsol-sdk/squads"]
 

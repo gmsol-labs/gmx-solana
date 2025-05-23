@@ -1,10 +1,8 @@
-use std::path::Path;
-
 use tokio::{fs, io::AsyncWriteExt};
 
 use crate::config::Config;
 
-use super::Command;
+use super::{Command, Context};
 
 /// Initialize config.
 #[derive(Debug, clap::Args)]
@@ -15,12 +13,14 @@ pub struct InitConfig {
 }
 
 impl Command for InitConfig {
-    async fn execute(&self, config_path: impl AsRef<Path>) -> eyre::Result<()> {
+    async fn execute(&self, ctx: Context<'_>) -> eyre::Result<()> {
+        let config_path = ctx.config_path;
+
         if fs::try_exists(&config_path).await? && !self.force {
             eyre::bail!("Config file already exists. Use `--force` to overwrite it.");
         }
 
-        if let Some(parent) = config_path.as_ref().parent() {
+        if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent).await?;
         }
 

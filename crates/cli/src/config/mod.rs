@@ -1,12 +1,16 @@
 mod store_address;
 
 use gmsol_sdk::{
+    client::ClientOptions,
     pda,
     programs::anchor_lang::prelude::Pubkey,
     solana_utils::{
         cluster::Cluster,
         signer::{local_signer, LocalSignerRef},
-        solana_sdk::{commitment_config::CommitmentLevel, signature::NullSigner},
+        solana_sdk::{
+            commitment_config::{CommitmentConfig, CommitmentLevel},
+            signature::NullSigner,
+        },
     },
     utils::{instruction_serialization::InstructionSerialization, serde::StringPubkey},
 };
@@ -87,12 +91,12 @@ impl Default for Config {
 
 impl Config {
     /// Creates a wallet based on the config.
-    pub fn wallet(&self) -> eyre::Result<LocalSignerRef> {
+    pub fn wallet(&self) -> eyre::Result<Payer> {
         cfg_if::cfg_if! {
             if #[cfg(feature = "remote-wallet")] {
-                Ok(self.create_wallet(None)?.0)
+                self.create_wallet(None)
             } else {
-                Ok(self.create_wallet()?.0)
+                self.create_wallet()
             }
         }
     }
@@ -105,20 +109,20 @@ impl Config {
         wallet_manager: &mut Option<
             std::rc::Rc<solana_remote_wallet::remote_wallet::RemoteWalletManager>,
         >,
-    ) -> eyre::Result<(LocalSignerRef, Option<LocalSignerRef>)> {
+    ) -> eyre::Result<Payer> {
         self.create_wallet(Some(wallet_manager))
     }
 
-    fn create_wallet(
+    pub(crate) fn create_wallet(
         &self,
         #[cfg(feature = "remote-wallet")] wallet_manager: Option<
             &mut Option<std::rc::Rc<solana_remote_wallet::remote_wallet::RemoteWalletManager>>,
         >,
-    ) -> eyre::Result<(LocalSignerRef, Option<LocalSignerRef>)> {
+    ) -> eyre::Result<Payer> {
         if let Some(payer) = self.payer {
             if self.serialize_only.is_some() {
                 let payer = NullSigner::new(&payer);
-                Ok((local_signer(payer), None))
+                Ok(Payer::new(local_signer(payer)))
             } else {
                 eyre::bail!("Setting payer is only allowed in `serialize-only` mode");
             }
@@ -149,7 +153,7 @@ impl Config {
 
                 let payer = NullSigner::new(&executor_wallet);
 
-                return Ok((local_signer(payer), Some(wallet)));
+                return Ok(Payer::with_proposer(local_signer(payer), Some(wallet)));
             }
 
             #[cfg(feature = "squads")]
@@ -159,11 +163,28 @@ impl Config {
 
                 let payer = NullSigner::new(&vault_pda);
 
-                return Ok((local_signer(payer), Some(wallet)));
+                return Ok(Payer::with_proposer(local_signer(payer), Some(wallet)));
             }
 
-            Ok((wallet, None))
+            Ok(Payer::new(wallet))
         }
+    }
+
+    /// Returns the cluster.
+    pub fn cluster(&self) -> &Cluster {
+        &self.cluster
+    }
+
+    /// Returns the client options.
+    pub fn options(&self) -> ClientOptions {
+        ClientOptions::builder()
+            .commitment(CommitmentConfig {
+                commitment: self.commitment,
+            })
+            .store_program_id(Some(*self.store_program_id()))
+            .treasury_program_id(Some(*self.treasury_program_id()))
+            .timelock_program_id(Some(*self.timelock_program_id()))
+            .build()
     }
 
     /// Returns the program ID of store program.
@@ -200,4 +221,24 @@ fn parse_squads(data: &str) -> eyre::Result<(Pubkey, u8)> {
         None => (data, 0),
     };
     Ok((multisig.parse()?, vault_index))
+}
+
+/// Represents the entities involved in signing a transaction,
+/// including the primary payer and an optional proposer.
+#[derive(Debug, Clone)]
+pub struct Payer {
+    /// Payer.
+    pub payer: LocalSignerRef,
+    /// Proposer.
+    pub proposer: Option<LocalSignerRef>,
+}
+
+impl Payer {
+    fn with_proposer(payer: LocalSignerRef, proposer: Option<LocalSignerRef>) -> Self {
+        Self { payer, proposer }
+    }
+
+    fn new(payer: LocalSignerRef) -> Self {
+        Self::with_proposer(payer, None)
+    }
 }

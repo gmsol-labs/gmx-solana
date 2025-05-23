@@ -15,6 +15,7 @@ async fn main() -> eyre::Result<()> {
         .init();
 
     let cli = Cli::init()?;
+
     tracing::debug!("{cli:?}");
 
     cli.execute().await
