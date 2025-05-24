@@ -110,23 +110,23 @@ version = "1.0.0"
 
 [workspace.dependencies.gmsol-model]
 version = "0.6.0"
-path = "crates/gmsol-model"
+path = "crates/model"
 
 [workspace.dependencies.gmsol-utils]
 version = "0.6.0"
-path = "crates/gmsol-utils"
+path = "crates/utils"
 
 [workspace.dependencies.gmsol-store]
 version = "0.6.0"
-path = "programs/gmsol-store"
+path = "programs/store"
 
 [workspace.dependencies.gmsol-treasury]
 version = "0.6.0"
-path = "programs/gmsol-treasury"
+path = "programs/treasury"
 
 [workspace.dependencies.gmsol-timelock]
 version = "0.6.0"
-path = "programs/gmsol-timelock"
+path = "programs/timelock"
 
 [workspace.dependencies.gmsol-mock-chainlink-verifier]
 version = "0.6.0"
