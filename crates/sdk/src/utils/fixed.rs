@@ -163,6 +163,13 @@ pub fn signed_fixed_to_decimal(num: i128, decimals: u8) -> Option<Decimal> {
     }
 }
 
+/// Convert a [`Decimal`] to `u64` amount.
+pub fn decimal_to_amount(mut amount: rust_decimal::Decimal, decimals: u8) -> crate::Result<u64> {
+    amount.rescale(decimals as u32);
+    let amount = amount.mantissa().try_into().map_err(crate::Error::custom)?;
+    Ok(amount)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

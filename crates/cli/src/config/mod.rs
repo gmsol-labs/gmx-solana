@@ -212,6 +212,29 @@ impl Config {
     pub fn store_address(&self) -> Pubkey {
         self.store_address.address(self.store_program_id())
     }
+
+    /// Returns serialize-only option.
+    pub fn serialize_only(&self) -> Option<InstructionSerialization> {
+        self.serialize_only
+    }
+
+    /// Returns instruction buffer.
+    pub fn ix_buffer(&self) -> eyre::Result<Option<InstructionBuffer>> {
+        if let Some(role) = self.timelock.as_ref() {
+            return Ok(Some(InstructionBuffer::Timelock { role: role.clone() }));
+        }
+
+        #[cfg(feature = "squads")]
+        if let Some(squads) = self.squads.as_ref() {
+            let (multisig, vault_index) = parse_squads(squads)?;
+            return Ok(Some(InstructionBuffer::Squads {
+                multisig,
+                vault_index,
+            }));
+        }
+
+        Ok(None)
+    }
 }
 
 #[cfg(feature = "squads")]
@@ -241,4 +264,13 @@ impl Payer {
     fn new(payer: LocalSignerRef) -> Self {
         Self::with_proposer(payer, None)
     }
+}
+
+/// Instruction Buffer.
+pub enum InstructionBuffer {
+    /// Timelock instruction buffer.
+    Timelock { role: String },
+    /// Squads instruction buffer.
+    #[cfg(feature = "squads")]
+    Squads { multisig: Pubkey, vault_index: u8 },
 }

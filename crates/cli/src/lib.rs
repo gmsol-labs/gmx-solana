@@ -10,7 +10,7 @@ pub mod commands;
 use std::{ops::Deref, path::PathBuf};
 
 use clap::Parser;
-use commands::{CliClient, Command, Commands, Context};
+use commands::{Command, CommandClient, Commands, Context};
 use config::Config;
 use eyre::OptionExt;
 use figment::{
@@ -100,16 +100,17 @@ impl Inner {
         let client = if self.command.is_client_required() {
             cfg_if::cfg_if! {
                 if #[cfg(feature = "remote-wallet")] {
-                    Some(CliClient::new(&self.config, &mut wallet_manager)?)
+                    Some(CommandClient::new(&self.config, &mut wallet_manager)?)
                 } else {
-                    Some(CliClient::new(&self.config)?)
+                    Some(CommandClient::new(&self.config)?)
                 }
             }
         } else {
             None
         };
+        let store = self.config.store_address();
         self.command
-            .execute(Context::new(config_path, client.as_ref()))
+            .execute(Context::new(store, config_path, client.as_ref()))
             .await
     }
 }

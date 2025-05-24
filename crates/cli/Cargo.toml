@@ -36,6 +36,8 @@ etcetera = { workspace = true }
 enum_dispatch = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 toml = { workspace = true }
+rust_decimal = { workspace = true, features = ["std"] }
+dialoguer = { workspace = true }
 
 color-eyre = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true, features = [
