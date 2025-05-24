@@ -6,6 +6,8 @@ anchor_lang::declare_program!(gmsol_store);
 anchor_lang::declare_program!(gmsol_treasury);
 #[cfg(feature = "timelock")]
 anchor_lang::declare_program!(gmsol_timelock);
+#[cfg(feature = "competition")]
+anchor_lang::declare_program!(gmsol_competition);
 
 /// Constants.
 pub mod constants;

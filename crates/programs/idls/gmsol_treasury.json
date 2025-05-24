@@ -3655,7 +3655,7 @@
             "type": "u64"
           },
           {
-            "name": "receiver_amount",
+            "name": "receiver_vault_out",
             "type": "u64"
           },
           {

@@ -14,6 +14,7 @@ default = ["store"]
 store = ["bs58"]
 treasury = []
 timelock = []
+competition = []
 model = ["gmsol-model", "bitmaps", "time"]
 wasm-bindgen = ["time?/wasm-bindgen"]
 

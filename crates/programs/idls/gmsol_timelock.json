@@ -2,7 +2,7 @@
   "address": "TimeBQ7gQyWyQMD3bTteAdy7hTVDNWSwELdSVZHfSXL",
   "metadata": {
     "name": "gmsol_timelock",
-    "version": "0.4.0",
+    "version": "0.6.0",
     "spec": "0.1.0",
     "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
     "repository": "https://github.com/gmsol-labs/gmx-solana"
@@ -10,32 +10,57 @@
   "instructions": [
     {
       "name": "approve_instruction",
-      "docs": ["Approve instruction."],
-      "discriminator": [165, 74, 223, 204, 102, 65, 199, 112],
+      "docs": [
+        "Approve instruction."
+      ],
+      "discriminator": [
+        165,
+        74,
+        223,
+        204,
+        102,
+        65,
+        199,
+        112
+      ],
       "accounts": [
         {
           "name": "authority",
-          "docs": ["Authority."],
+          "docs": [
+            "Authority."
+          ],
           "signer": true
         },
         {
           "name": "store",
-          "docs": ["Store."],
-          "relations": ["executor"]
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "executor"
+          ]
         },
         {
           "name": "executor",
-          "docs": ["Executor."],
-          "relations": ["instruction"]
+          "docs": [
+            "Executor."
+          ],
+          "relations": [
+            "instruction"
+          ]
         },
         {
           "name": "instruction",
-          "docs": ["Instruction to approve."],
+          "docs": [
+            "Instruction to approve."
+          ],
           "writable": true
         },
         {
           "name": "store_program",
-          "docs": ["Store program."],
+          "docs": [
+            "Store program."
+          ],
           "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
         }
       ],
@@ -48,26 +73,47 @@
     },
     {
       "name": "approve_instructions",
-      "docs": ["Approve multiple instructions."],
-      "discriminator": [106, 131, 218, 58, 251, 191, 49, 87],
+      "docs": [
+        "Approve multiple instructions."
+      ],
+      "discriminator": [
+        106,
+        131,
+        218,
+        58,
+        251,
+        191,
+        49,
+        87
+      ],
       "accounts": [
         {
           "name": "authority",
-          "docs": ["Authority."],
+          "docs": [
+            "Authority."
+          ],
           "signer": true
         },
         {
           "name": "store",
-          "docs": ["Store."],
-          "relations": ["executor"]
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "executor"
+          ]
         },
         {
           "name": "executor",
-          "docs": ["Executor."]
+          "docs": [
+            "Executor."
+          ]
         },
         {
           "name": "store_program",
-          "docs": ["Store program."],
+          "docs": [
+            "Store program."
+          ],
           "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
         }
       ],
@@ -80,38 +126,67 @@
     },
     {
       "name": "cancel_instruction",
-      "docs": ["Cancel instruction."],
-      "discriminator": [189, 67, 87, 101, 160, 77, 91, 23],
+      "docs": [
+        "Cancel instruction."
+      ],
+      "discriminator": [
+        189,
+        67,
+        87,
+        101,
+        160,
+        77,
+        91,
+        23
+      ],
       "accounts": [
         {
           "name": "authority",
-          "docs": ["Authority."],
+          "docs": [
+            "Authority."
+          ],
           "signer": true
         },
         {
           "name": "store",
-          "docs": ["Store."],
-          "relations": ["executor"]
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "executor"
+          ]
         },
         {
           "name": "executor",
-          "docs": ["Executor."],
-          "relations": ["instruction"]
+          "docs": [
+            "Executor."
+          ],
+          "relations": [
+            "instruction"
+          ]
         },
         {
           "name": "rent_receiver",
-          "docs": ["Rent receiver."],
+          "docs": [
+            "Rent receiver."
+          ],
           "writable": true,
-          "relations": ["instruction"]
+          "relations": [
+            "instruction"
+          ]
         },
         {
           "name": "instruction",
-          "docs": ["Instruction to cancel."],
+          "docs": [
+            "Instruction to cancel."
+          ],
           "writable": true
         },
         {
           "name": "store_program",
-          "docs": ["Store program."],
+          "docs": [
+            "Store program."
+          ],
           "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
         }
       ],
@@ -122,30 +197,51 @@
       "docs": [
         "Cancel multiple instructions that sharing the same `executor` and `rent_receiver`."
       ],
-      "discriminator": [255, 161, 134, 99, 236, 50, 174, 218],
+      "discriminator": [
+        255,
+        161,
+        134,
+        99,
+        236,
+        50,
+        174,
+        218
+      ],
       "accounts": [
         {
           "name": "authority",
-          "docs": ["Authority."],
+          "docs": [
+            "Authority."
+          ],
           "signer": true
         },
         {
           "name": "store",
-          "docs": ["Store."],
-          "relations": ["executor"]
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "executor"
+          ]
         },
         {
           "name": "executor",
-          "docs": ["Executor."]
+          "docs": [
+            "Executor."
+          ]
         },
         {
           "name": "rent_receiver",
-          "docs": ["Rent receiver."],
+          "docs": [
+            "Rent receiver."
+          ],
           "writable": true
         },
         {
           "name": "store_program",
-          "docs": ["Store program."],
+          "docs": [
+            "Store program."
+          ],
           "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
         }
       ],
@@ -153,42 +249,69 @@
     },
     {
       "name": "create_instruction_buffer",
-      "docs": ["Create instruction buffer."],
-      "discriminator": [114, 27, 38, 228, 192, 186, 50, 67],
+      "docs": [
+        "Create instruction buffer."
+      ],
+      "discriminator": [
+        114,
+        27,
+        38,
+        228,
+        192,
+        186,
+        50,
+        67
+      ],
       "accounts": [
         {
           "name": "authority",
-          "docs": ["Authority."],
+          "docs": [
+            "Authority."
+          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "store",
-          "docs": ["Store."],
-          "relations": ["executor"]
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "executor"
+          ]
         },
         {
           "name": "executor",
-          "docs": ["Expected executor."]
+          "docs": [
+            "Expected executor."
+          ]
         },
         {
           "name": "instruction_buffer",
-          "docs": ["Instruction buffer to create."],
+          "docs": [
+            "Instruction buffer to create."
+          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "instruction_program",
-          "docs": ["Instruction Program."]
+          "docs": [
+            "Instruction Program."
+          ]
         },
         {
           "name": "store_program",
-          "docs": ["Store program."],
+          "docs": [
+            "Store program."
+          ],
           "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
         },
         {
           "name": "system_program",
-          "docs": ["The system program."],
+          "docs": [
+            "The system program."
+          ],
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -215,37 +338,71 @@
     },
     {
       "name": "execute_instruction",
-      "docs": ["Execute instruction."],
-      "discriminator": [48, 18, 40, 40, 75, 74, 147, 110],
+      "docs": [
+        "Execute instruction."
+      ],
+      "discriminator": [
+        48,
+        18,
+        40,
+        40,
+        75,
+        74,
+        147,
+        110
+      ],
       "accounts": [
         {
           "name": "authority",
-          "docs": ["Authority."],
+          "docs": [
+            "Authority."
+          ],
           "signer": true
         },
         {
           "name": "store",
-          "docs": ["Store."],
-          "relations": ["timelock_config", "executor"]
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "timelock_config",
+            "executor"
+          ]
         },
         {
           "name": "timelock_config",
-          "docs": ["Timelock config."]
+          "docs": [
+            "Timelock config."
+          ]
         },
         {
           "name": "executor",
-          "docs": ["Executor."],
-          "relations": ["instruction"]
+          "docs": [
+            "Executor."
+          ],
+          "relations": [
+            "instruction"
+          ]
         },
         {
           "name": "wallet",
-          "docs": ["Executor Wallet.", "the instruction to close it."],
+          "docs": [
+            "Executor Wallet.",
+            "the instruction to close it."
+          ],
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
-                "value": [119, 97, 108, 108, 101, 116]
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116
+                ]
               },
               {
                 "kind": "account",
@@ -256,18 +413,26 @@
         },
         {
           "name": "rent_receiver",
-          "docs": ["Rent receiver."],
+          "docs": [
+            "Rent receiver."
+          ],
           "writable": true,
-          "relations": ["instruction"]
+          "relations": [
+            "instruction"
+          ]
         },
         {
           "name": "instruction",
-          "docs": ["Instruction to execute."],
+          "docs": [
+            "Instruction to execute."
+          ],
           "writable": true
         },
         {
           "name": "store_program",
-          "docs": ["Store program."],
+          "docs": [
+            "Store program."
+          ],
           "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
         }
       ],
@@ -275,19 +440,36 @@
     },
     {
       "name": "increase_delay",
-      "docs": ["Increase timelock delay."],
-      "discriminator": [91, 163, 172, 194, 193, 133, 174, 25],
+      "docs": [
+        "Increase timelock delay."
+      ],
+      "discriminator": [
+        91,
+        163,
+        172,
+        194,
+        193,
+        133,
+        174,
+        25
+      ],
       "accounts": [
         {
           "name": "authority",
-          "docs": ["Authority."],
+          "docs": [
+            "Authority."
+          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "store",
-          "docs": ["Store."],
-          "relations": ["timelock_config"]
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "timelock_config"
+          ]
         },
         {
           "name": "timelock_config",
@@ -295,7 +477,9 @@
         },
         {
           "name": "store_program",
-          "docs": ["Store program."],
+          "docs": [
+            "Store program."
+          ],
           "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
         }
       ],
@@ -308,32 +492,64 @@
     },
     {
       "name": "initialize_config",
-      "docs": ["Initialize timelock config."],
-      "discriminator": [208, 127, 21, 1, 194, 190, 196, 70],
+      "docs": [
+        "Initialize timelock config."
+      ],
+      "discriminator": [
+        208,
+        127,
+        21,
+        1,
+        194,
+        190,
+        196,
+        70
+      ],
       "accounts": [
         {
           "name": "authority",
-          "docs": ["Authority."],
+          "docs": [
+            "Authority."
+          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "store",
-          "docs": ["Store."],
+          "docs": [
+            "Store."
+          ],
           "writable": true,
-          "relations": ["executor"]
+          "relations": [
+            "executor"
+          ]
         },
         {
           "name": "timelock_config",
-          "docs": ["Config."],
+          "docs": [
+            "Config."
+          ],
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  116, 105, 109, 101, 108, 111, 99, 107, 95, 99, 111, 110, 102,
-                  105, 103
+                  116,
+                  105,
+                  109,
+                  101,
+                  108,
+                  111,
+                  99,
+                  107,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
                 ]
               },
               {
@@ -345,16 +561,27 @@
         },
         {
           "name": "executor",
-          "docs": ["Admin executor."]
+          "docs": [
+            "Admin executor."
+          ]
         },
         {
           "name": "wallet",
-          "docs": ["Admin executor wallet."],
+          "docs": [
+            "Admin executor wallet."
+          ],
           "pda": {
             "seeds": [
               {
                 "kind": "const",
-                "value": [119, 97, 108, 108, 101, 116]
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116
+                ]
               },
               {
                 "kind": "account",
@@ -365,12 +592,16 @@
         },
         {
           "name": "store_program",
-          "docs": ["Store program."],
+          "docs": [
+            "Store program."
+          ],
           "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
         },
         {
           "name": "system_program",
-          "docs": ["System program."],
+          "docs": [
+            "System program."
+          ],
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -383,32 +614,58 @@
     },
     {
       "name": "initialize_executor",
-      "docs": ["Initialize executor."],
-      "discriminator": [176, 40, 133, 151, 198, 251, 10, 91],
+      "docs": [
+        "Initialize executor."
+      ],
+      "discriminator": [
+        176,
+        40,
+        133,
+        151,
+        198,
+        251,
+        10,
+        91
+      ],
       "accounts": [
         {
           "name": "payer",
-          "docs": ["Payer."],
+          "docs": [
+            "Payer."
+          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "store",
-          "docs": ["Store."]
+          "docs": [
+            "Store."
+          ]
         },
         {
           "name": "executor",
-          "docs": ["Executor to initialize."],
+          "docs": [
+            "Executor to initialize."
+          ],
           "writable": true
         },
         {
           "name": "wallet",
-          "docs": ["Executor wallet."],
+          "docs": [
+            "Executor wallet."
+          ],
           "pda": {
             "seeds": [
               {
                 "kind": "const",
-                "value": [119, 97, 108, 108, 101, 116]
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116
+                ]
               },
               {
                 "kind": "account",
@@ -419,7 +676,9 @@
         },
         {
           "name": "system_program",
-          "docs": ["The system program."],
+          "docs": [
+            "The system program."
+          ],
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -432,33 +691,61 @@
     },
     {
       "name": "revoke_role",
-      "docs": ["Revoke role."],
-      "discriminator": [179, 232, 2, 180, 48, 227, 82, 7],
+      "docs": [
+        "Revoke role."
+      ],
+      "discriminator": [
+        179,
+        232,
+        2,
+        180,
+        48,
+        227,
+        82,
+        7
+      ],
       "accounts": [
         {
           "name": "authority",
-          "docs": ["Authority."],
+          "docs": [
+            "Authority."
+          ],
           "signer": true
         },
         {
           "name": "store",
-          "docs": ["Store."],
+          "docs": [
+            "Store."
+          ],
           "writable": true,
-          "relations": ["executor"]
+          "relations": [
+            "executor"
+          ]
         },
         {
           "name": "executor",
-          "docs": ["Executor."]
+          "docs": [
+            "Executor."
+          ]
         },
         {
           "name": "wallet",
-          "docs": ["Executor Wallet."],
+          "docs": [
+            "Executor Wallet."
+          ],
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
-                "value": [119, 97, 108, 108, 101, 116]
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116
+                ]
               },
               {
                 "kind": "account",
@@ -469,11 +756,15 @@
         },
         {
           "name": "user",
-          "docs": ["User."]
+          "docs": [
+            "User."
+          ]
         },
         {
           "name": "store_program",
-          "docs": ["Store program."],
+          "docs": [
+            "Store program."
+          ],
           "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
         }
       ],
@@ -486,38 +777,68 @@
     },
     {
       "name": "set_expected_price_provider",
-      "docs": ["Set expected price provider."],
-      "discriminator": [182, 103, 5, 161, 72, 6, 5, 154],
+      "docs": [
+        "Set expected price provider."
+      ],
+      "discriminator": [
+        182,
+        103,
+        5,
+        161,
+        72,
+        6,
+        5,
+        154
+      ],
       "accounts": [
         {
           "name": "authority",
-          "docs": ["Authority."],
+          "docs": [
+            "Authority."
+          ],
           "signer": true
         },
         {
           "name": "store",
-          "docs": ["Store."],
+          "docs": [
+            "Store."
+          ],
           "writable": true,
-          "relations": ["executor"]
+          "relations": [
+            "executor"
+          ]
         },
         {
           "name": "token_map",
-          "docs": ["Token map."],
+          "docs": [
+            "Token map."
+          ],
           "writable": true
         },
         {
           "name": "executor",
-          "docs": ["Executor."]
+          "docs": [
+            "Executor."
+          ]
         },
         {
           "name": "wallet",
-          "docs": ["Executor Wallet."],
+          "docs": [
+            "Executor Wallet."
+          ],
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
-                "value": [119, 97, 108, 108, 101, 116]
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116
+                ]
               },
               {
                 "kind": "account",
@@ -528,16 +849,22 @@
         },
         {
           "name": "token",
-          "docs": ["Token to update."]
+          "docs": [
+            "Token to update."
+          ]
         },
         {
           "name": "store_program",
-          "docs": ["Store program."],
+          "docs": [
+            "Store program."
+          ],
           "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
         },
         {
           "name": "system_program",
-          "docs": ["System program."],
+          "docs": [
+            "System program."
+          ],
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -552,25 +879,63 @@
   "accounts": [
     {
       "name": "Executor",
-      "discriminator": [81, 168, 99, 99, 156, 134, 16, 166]
+      "discriminator": [
+        81,
+        168,
+        99,
+        99,
+        156,
+        134,
+        16,
+        166
+      ]
     },
     {
       "name": "InstructionHeader",
-      "discriminator": [23, 218, 71, 2, 252, 204, 29, 245]
+      "discriminator": [
+        23,
+        218,
+        71,
+        2,
+        252,
+        204,
+        29,
+        245
+      ]
     },
     {
       "name": "Store",
-      "discriminator": [130, 48, 247, 244, 182, 191, 30, 26]
+      "discriminator": [
+        130,
+        48,
+        247,
+        244,
+        182,
+        191,
+        30,
+        26
+      ]
     },
     {
       "name": "TimelockConfig",
-      "discriminator": [189, 87, 27, 18, 189, 173, 47, 197]
+      "discriminator": [
+        189,
+        87,
+        27,
+        18,
+        189,
+        173,
+        47,
+        197
+      ]
     }
   ],
   "types": [
     {
       "name": "Addresses",
-      "docs": ["Addresses."],
+      "docs": [
+        "Addresses."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -585,7 +950,10 @@
           {
             "name": "reserved",
             "type": {
-              "array": ["pubkey", 30]
+              "array": [
+                "pubkey",
+                30
+              ]
             }
           }
         ]
@@ -593,7 +961,9 @@
     },
     {
       "name": "Amounts",
-      "docs": ["Amounts."],
+      "docs": [
+        "Amounts."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -632,7 +1002,10 @@
           {
             "name": "reserved",
             "type": {
-              "array": ["u64", 126]
+              "array": [
+                "u64",
+                126
+              ]
             }
           }
         ]
@@ -640,7 +1013,9 @@
     },
     {
       "name": "DisabledFeatures",
-      "docs": ["Disabled Features State."],
+      "docs": [
+        "Disabled Features State."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -661,7 +1036,9 @@
     },
     {
       "name": "DisabledMap",
-      "docs": ["Fixed size map generated by the macro."],
+      "docs": [
+        "Fixed size map generated by the macro."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -685,7 +1062,10 @@
           {
             "name": "padding",
             "type": {
-              "array": ["u8", 0]
+              "array": [
+                "u8",
+                0
+              ]
             }
           },
           {
@@ -697,7 +1077,9 @@
     },
     {
       "name": "DisabledMapEntry",
-      "docs": ["Entry."],
+      "docs": [
+        "Entry."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -708,7 +1090,10 @@
           {
             "name": "key",
             "type": {
-              "array": ["u8", 2]
+              "array": [
+                "u8",
+                2
+              ]
             }
           },
           {
@@ -720,7 +1105,9 @@
     },
     {
       "name": "Executor",
-      "docs": ["Executor."],
+      "docs": [
+        "Executor."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -743,7 +1130,10 @@
           {
             "name": "padding",
             "type": {
-              "array": ["u8", 13]
+              "array": [
+                "u8",
+                13
+              ]
             }
           },
           {
@@ -753,13 +1143,19 @@
           {
             "name": "role_name",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
             "name": "reserved",
             "type": {
-              "array": ["u8", 256]
+              "array": [
+                "u8",
+                256
+              ]
             }
           }
         ]
@@ -767,7 +1163,9 @@
     },
     {
       "name": "Factors",
-      "docs": ["Factors."],
+      "docs": [
+        "Factors."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -786,7 +1184,10 @@
           {
             "name": "reserved",
             "type": {
-              "array": ["u128", 64]
+              "array": [
+                "u128",
+                64
+              ]
             }
           }
         ]
@@ -808,7 +1209,10 @@
           {
             "name": "padding_0",
             "type": {
-              "array": ["u8", 7]
+              "array": [
+                "u8",
+                7
+              ]
             }
           },
           {
@@ -821,7 +1225,9 @@
           },
           {
             "name": "grow_step_amount",
-            "docs": ["Grow step amount. It must be immutable."],
+            "docs": [
+              "Grow step amount. It must be immutable."
+            ],
             "type": "u64"
           },
           {
@@ -830,24 +1236,34 @@
           },
           {
             "name": "supply",
-            "docs": ["Supply of buybackable GT."],
+            "docs": [
+              "Supply of buybackable GT."
+            ],
             "type": "u64"
           },
           {
             "name": "padding_1",
             "type": {
-              "array": ["u8", 8]
+              "array": [
+                "u8",
+                8
+              ]
             }
           },
           {
             "name": "gt_vault",
-            "docs": ["Vault for non-buybackable GT."],
+            "docs": [
+              "Vault for non-buybackable GT."
+            ],
             "type": "u64"
           },
           {
             "name": "padding_2",
             "type": {
-              "array": ["u8", 16]
+              "array": [
+                "u8",
+                16
+              ]
             }
           },
           {
@@ -861,7 +1277,10 @@
           {
             "name": "padding_3",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
@@ -871,7 +1290,10 @@
           {
             "name": "padding_4",
             "type": {
-              "array": ["u8", 12]
+              "array": [
+                "u8",
+                12
+              ]
             }
           },
           {
@@ -881,31 +1303,46 @@
           {
             "name": "ranks",
             "type": {
-              "array": ["u64", 15]
+              "array": [
+                "u64",
+                15
+              ]
             }
           },
           {
             "name": "order_fee_discount_factors",
             "type": {
-              "array": ["u128", 16]
+              "array": [
+                "u128",
+                16
+              ]
             }
           },
           {
             "name": "referral_reward_factors",
             "type": {
-              "array": ["u128", 16]
+              "array": [
+                "u128",
+                16
+              ]
             }
           },
           {
             "name": "padding_5",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
             "name": "reserved",
             "type": {
-              "array": ["u8", 256]
+              "array": [
+                "u8",
+                256
+              ]
             }
           }
         ]
@@ -913,7 +1350,9 @@
     },
     {
       "name": "InstructionFlagContainer",
-      "docs": ["Flags container generated by the macro."],
+      "docs": [
+        "Flags container generated by the macro."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -930,7 +1369,9 @@
     },
     {
       "name": "InstructionHeader",
-      "docs": ["Instruction Header."],
+      "docs": [
+        "Instruction Header."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -957,38 +1398,54 @@
           {
             "name": "padding_0",
             "type": {
-              "array": ["u8", 5]
+              "array": [
+                "u8",
+                5
+              ]
             }
           },
           {
             "name": "approved_at",
-            "docs": ["Approved ts."],
+            "docs": [
+              "Approved ts."
+            ],
             "type": "i64"
           },
           {
             "name": "executor",
-            "docs": ["Executor."],
+            "docs": [
+              "Executor."
+            ],
             "type": "pubkey"
           },
           {
             "name": "program_id",
-            "docs": ["Program ID."],
+            "docs": [
+              "Program ID."
+            ],
             "type": "pubkey"
           },
           {
             "name": "num_accounts",
-            "docs": ["Number of accounts."],
+            "docs": [
+              "Number of accounts."
+            ],
             "type": "u16"
           },
           {
             "name": "data_len",
-            "docs": ["Data length."],
+            "docs": [
+              "Data length."
+            ],
             "type": "u16"
           },
           {
             "name": "padding_1",
             "type": {
-              "array": ["u8", 12]
+              "array": [
+                "u8",
+                12
+              ]
             }
           },
           {
@@ -1002,7 +1459,10 @@
           {
             "name": "reserved",
             "type": {
-              "array": ["u8", 64]
+              "array": [
+                "u8",
+                64
+              ]
             }
           }
         ]
@@ -1010,7 +1470,9 @@
     },
     {
       "name": "Members",
-      "docs": ["Fixed size map generated by the macro."],
+      "docs": [
+        "Fixed size map generated by the macro."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -1034,7 +1496,10 @@
           {
             "name": "padding",
             "type": {
-              "array": ["u8", 0]
+              "array": [
+                "u8",
+                0
+              ]
             }
           },
           {
@@ -1046,7 +1511,9 @@
     },
     {
       "name": "MembersEntry",
-      "docs": ["Entry."],
+      "docs": [
+        "Entry."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -1057,7 +1524,10 @@
           {
             "name": "key",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
@@ -1069,7 +1539,9 @@
     },
     {
       "name": "RoleMap",
-      "docs": ["Fixed size map generated by the macro."],
+      "docs": [
+        "Fixed size map generated by the macro."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -1093,7 +1565,10 @@
           {
             "name": "padding",
             "type": {
-              "array": ["u8", 0]
+              "array": [
+                "u8",
+                0
+              ]
             }
           },
           {
@@ -1105,7 +1580,9 @@
     },
     {
       "name": "RoleMapEntry",
-      "docs": ["Entry."],
+      "docs": [
+        "Entry."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -1116,7 +1593,10 @@
           {
             "name": "key",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
@@ -1132,7 +1612,9 @@
     },
     {
       "name": "RoleMetadata",
-      "docs": ["Role Metadata."],
+      "docs": [
+        "Role Metadata."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -1143,7 +1625,10 @@
           {
             "name": "name",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
@@ -1159,7 +1644,9 @@
     },
     {
       "name": "RoleStore",
-      "docs": ["Roles Store."],
+      "docs": [
+        "Roles Store."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -1188,7 +1675,9 @@
     },
     {
       "name": "Store",
-      "docs": ["Data Store."],
+      "docs": [
+        "Data Store."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -1203,25 +1692,37 @@
           {
             "name": "bump",
             "type": {
-              "array": ["u8", 1]
+              "array": [
+                "u8",
+                1
+              ]
             }
           },
           {
             "name": "key_seed",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
             "name": "key",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
             "name": "padding_0",
             "type": {
-              "array": ["u8", 6]
+              "array": [
+                "u8",
+                6
+              ]
             }
           },
           {
@@ -1234,22 +1735,30 @@
           },
           {
             "name": "authority",
-            "docs": ["Store authority."],
+            "docs": [
+              "Store authority."
+            ],
             "type": "pubkey"
           },
           {
             "name": "next_authority",
-            "docs": ["Next authority."],
+            "docs": [
+              "Next authority."
+            ],
             "type": "pubkey"
           },
           {
             "name": "token_map",
-            "docs": ["The token map to used."],
+            "docs": [
+              "The token map to used."
+            ],
             "type": "pubkey"
           },
           {
             "name": "disabled_features",
-            "docs": ["Disabled features."],
+            "docs": [
+              "Disabled features."
+            ],
             "type": {
               "defined": {
                 "name": "DisabledFeatures"
@@ -1259,17 +1768,24 @@
           {
             "name": "padding_1",
             "type": {
-              "array": ["u8", 4]
+              "array": [
+                "u8",
+                4
+              ]
             }
           },
           {
             "name": "last_restarted_slot",
-            "docs": ["Cached last cluster restart slot."],
+            "docs": [
+              "Cached last cluster restart slot."
+            ],
             "type": "u64"
           },
           {
             "name": "treasury",
-            "docs": ["Treasury Config."],
+            "docs": [
+              "Treasury Config."
+            ],
             "type": {
               "defined": {
                 "name": "Treasury"
@@ -1278,7 +1794,9 @@
           },
           {
             "name": "amount",
-            "docs": ["Amounts."],
+            "docs": [
+              "Amounts."
+            ],
             "type": {
               "defined": {
                 "name": "Amounts"
@@ -1288,12 +1806,17 @@
           {
             "name": "padding_2",
             "type": {
-              "array": ["u8", 8]
+              "array": [
+                "u8",
+                8
+              ]
             }
           },
           {
             "name": "factor",
-            "docs": ["Factors."],
+            "docs": [
+              "Factors."
+            ],
             "type": {
               "defined": {
                 "name": "Factors"
@@ -1302,7 +1825,9 @@
           },
           {
             "name": "address",
-            "docs": ["Addresses."],
+            "docs": [
+              "Addresses."
+            ],
             "type": {
               "defined": {
                 "name": "Addresses"
@@ -1311,7 +1836,9 @@
           },
           {
             "name": "gt",
-            "docs": ["GT State."],
+            "docs": [
+              "GT State."
+            ],
             "type": {
               "defined": {
                 "name": "GtState"
@@ -1321,7 +1848,10 @@
           {
             "name": "reserved",
             "type": {
-              "array": ["u8", 1024]
+              "array": [
+                "u8",
+                1024
+              ]
             }
           }
         ]
@@ -1329,7 +1859,9 @@
     },
     {
       "name": "TimelockConfig",
-      "docs": ["Timelock Config."],
+      "docs": [
+        "Timelock Config."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -1348,7 +1880,10 @@
           {
             "name": "padding_0",
             "type": {
-              "array": ["u8", 6]
+              "array": [
+                "u8",
+                6
+              ]
             }
           },
           {
@@ -1358,7 +1893,10 @@
           {
             "name": "padding_1",
             "type": {
-              "array": ["u8", 4]
+              "array": [
+                "u8",
+                4
+              ]
             }
           },
           {
@@ -1368,7 +1906,10 @@
           {
             "name": "reserved",
             "type": {
-              "array": ["u8", 256]
+              "array": [
+                "u8",
+                256
+              ]
             }
           }
         ]
@@ -1376,7 +1917,9 @@
     },
     {
       "name": "Treasury",
-      "docs": ["Treasury."],
+      "docs": [
+        "Treasury."
+      ],
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -1386,18 +1929,25 @@
         "fields": [
           {
             "name": "receiver",
-            "docs": ["Receiver."],
+            "docs": [
+              "Receiver."
+            ],
             "type": "pubkey"
           },
           {
             "name": "next_receiver",
-            "docs": ["Next receiver."],
+            "docs": [
+              "Next receiver."
+            ],
             "type": "pubkey"
           },
           {
             "name": "reserved",
             "type": {
-              "array": ["u8", 128]
+              "array": [
+                "u8",
+                128
+              ]
             }
           }
         ]

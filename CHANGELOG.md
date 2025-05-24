@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added `callback` option to `ops::CreateOrderBuilder`.
 - sdk(sdk): Added `callback` field to `ExecuteOrderHint` and `CloseOrderHint`.
 - sdk(sdk): Migrated the implementation of squads support to `gmsol-sdk`.
+- sdk(programs): Added `gmsol-competition` support under `competition` feature.
 
 ### Changed
 
@@ -53,6 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - programs(treasury): Corrected data error in GT buyback message.
 - sdk(solana-utils): Fixed missing payer signer in transaction size calculation.
+
+### Removed
+
+- just: Removed the `build-idls-no-docs` recipe.
 
 ## [0.5.0] - 2025-05-16
 
