@@ -43,17 +43,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Migrated the implementation of squads support to `gmsol-sdk`.
 - sdk(programs): Added `gmsol-competition` support under `competition` feature.
 
-### Changed
+### Fixed
+
+- programs(treasury): Corrected data error in GT buyback message.
+- sdk(solana-utils): Fixed missing payer signer in transaction size calculation.
+
+### Deprecated
 
 - programs(store): Deprecated `create_order`, `update_order`, `close_order`, `execute_increase_or_swap_order` and `execute_decrease_order` instructions.
 - programs(store): Deprecated `confirm_gt_exchange_vault` instruction.
 - programs(store): Deprecated `set_feed_config` instruction.
 - programs(treasury): Deprecated `sync_gt_bank` instruction.
-
-### Fixed
-
-- programs(treasury): Corrected data error in GT buyback message.
-- sdk(solana-utils): Fixed missing payer signer in transaction size calculation.
 
 ### Removed
 
