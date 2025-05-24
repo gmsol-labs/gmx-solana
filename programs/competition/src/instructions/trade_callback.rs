@@ -1,8 +1,5 @@
 use crate::{
-    states::{
-        Competition, LeaderEntry, Participant, EXPECTED_STORE_PROGRAM_ID, MAX_LEADERBOARD_LEN,
-        PARTICIPANT_SEED,
-    },
+    states::{Competition, LeaderEntry, Participant, MAX_LEADERBOARD_LEN, PARTICIPANT_SEED},
     CompetitionError,
 };
 use anchor_lang::prelude::*;
@@ -17,7 +14,7 @@ pub struct OnCallback<'info> {
     #[account(
         seeds = [CALLBACK_AUTHORITY_SEED],
         bump = authority_bump,
-        seeds::program = EXPECTED_STORE_PROGRAM_ID,
+        seeds::program = competition.store_program,
     )]
     pub authority: Signer<'info>,
     /// The global competition account.
@@ -32,8 +29,8 @@ pub struct OnCallback<'info> {
             trader.key().as_ref(),
         ],
         bump = participant.bump,
-        has_one = trader,
         has_one = competition,
+        has_one = trader,
     )]
     pub participant: Account<'info, Participant>,
     /// The trader public key.
@@ -85,7 +82,7 @@ pub struct OnExecuted<'info> {
     #[account(
         seeds = [CALLBACK_AUTHORITY_SEED],
         bump = authority_bump,
-        seeds::program = EXPECTED_STORE_PROGRAM_ID,
+        seeds::program = competition.store_program,
     )]
     pub authority: Signer<'info>,
     /// The global competition account.
@@ -100,8 +97,8 @@ pub struct OnExecuted<'info> {
             trader.key().as_ref(),
         ],
         bump = participant.bump,
-        has_one = trader,
         has_one = competition,
+        has_one = trader,
     )]
     pub participant: Account<'info, Participant>,
     /// The trader public key.

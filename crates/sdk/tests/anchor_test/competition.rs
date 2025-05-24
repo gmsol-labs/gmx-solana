@@ -3,7 +3,6 @@ use gmsol_competition::{
     states::{Competition, Participant, COMPETITION_SEED, PARTICIPANT_SEED},
     ID as COMPETITION_PROGRAM_ID,
 };
-use gmsol_programs::anchor_lang::Key;
 use gmsol_sdk::{
     client::ops::ExchangeOps, constants::MARKET_USD_UNIT, ops::exchange::callback::Callback,
 };
@@ -43,14 +42,18 @@ async fn competition() -> eyre::Result<()> {
         .await?;
 
     // Initialize competition
-    let competition = Pubkey::find_program_address(&[COMPETITION_SEED], &COMPETITION_PROGRAM_ID).0;
-
+    let payer = client.payer();
     let slot = client.rpc().get_slot().await?;
     let start_time = client
         .rpc()
         .get_block_time(slot)
         .await
         .unwrap_or_else(|_| OffsetDateTime::now_utc().unix_timestamp());
+    let competition = Pubkey::find_program_address(
+        &[COMPETITION_SEED, payer.as_ref(), &start_time.to_le_bytes()],
+        &COMPETITION_PROGRAM_ID,
+    )
+    .0;
     let end_time = start_time + 3600 * 24; // 24 hour competition
     let volume_threshold = 10_000 * MARKET_USD_UNIT; // 10,000 USD threshold
     let time_extension = 10; // 10 seconds extension
@@ -62,7 +65,6 @@ async fn competition() -> eyre::Result<()> {
         .anchor_args(InitializeCompetition {
             start_time,
             end_time,
-            store_program: store.key(),
             volume_threshold,
             time_extension,
             max_extension,
@@ -71,6 +73,7 @@ async fn competition() -> eyre::Result<()> {
             payer: client.payer(),
             competition,
             system_program: system_program::ID,
+            store_program: gmsol_programs::gmsol_store::ID,
         });
 
     let signature = init_competition.send().await?;
@@ -84,7 +87,10 @@ async fn competition() -> eyre::Result<()> {
     assert!(competition_account.is_active);
     assert_eq!(competition_account.start_time, start_time);
     assert_eq!(competition_account.end_time, end_time);
-    assert_eq!(competition_account.store_program, store.key());
+    assert_eq!(
+        competition_account.store_program,
+        gmsol_programs::gmsol_store::ID
+    );
     assert_eq!(competition_account.volume_threshold, volume_threshold);
     assert_eq!(competition_account.time_extension, time_extension);
     assert_eq!(competition_account.max_extension, max_extension);

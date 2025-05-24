@@ -1,4 +1,4 @@
-use crate::states::{Participant, PARTICIPANT_SEED};
+use crate::states::{Competition, Participant, PARTICIPANT_SEED};
 use anchor_lang::prelude::*;
 
 /// Create [`Participant`] account idempotently.
@@ -12,8 +12,7 @@ pub struct CreateParticipantIdempotent<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     /// The competition account this participant belongs to.
-    /// CHECK: Only the address is required.
-    pub competition: UncheckedAccount<'info>,
+    pub competition: Account<'info, Competition>,
     /// The participant PDA.
     #[account(
         init_if_needed,
