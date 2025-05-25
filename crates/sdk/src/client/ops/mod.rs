@@ -37,6 +37,10 @@ pub mod timelock;
 /// Operations for treasury program.
 pub mod treasury;
 
+/// Operations for competition program.
+#[cfg(competition)]
+pub mod competition;
+
 /// Operations for Address Lookup Tables.
 pub mod alt;
 

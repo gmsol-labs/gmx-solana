@@ -7,5 +7,6 @@ fn main() {
         js: { feature = "js" },
         treasury: { feature = "treasury" },
         timelock: { feature = "timelock" },
+        competition: { feature = "competition" },
     }
 }

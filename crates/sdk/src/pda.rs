@@ -118,6 +118,14 @@ pub const TIMELOCK_EXECUTOR_WALLET_SEED: &[u8] = b"wallet";
 /// Seed for callback authority.
 pub const CALLBACK_AUTHORITY_SEED: &[u8] = b"callback";
 
+/// Seed for competition account.
+#[cfg(competition)]
+pub use gmsol_programs::gmsol_competition::constants::COMPETITION_SEED;
+
+/// Seed for participant account.
+#[cfg(competition)]
+pub use gmsol_programs::gmsol_competition::constants::PARTICIPANT_SEED;
+
 fn to_seed(key: &str) -> [u8; 32] {
     use solana_sdk::hash::hash;
     hash(key.as_bytes()).to_bytes()
@@ -508,4 +516,34 @@ pub fn find_executor_wallet_address(
 /// Find PDA for callback authority.
 pub fn find_callback_authority(store_program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[CALLBACK_AUTHORITY_SEED], store_program_id)
+}
+
+/// Find PDA for competition account.
+#[cfg(competition)]
+pub fn find_competition_address(
+    authority: &Pubkey,
+    start_time: i64,
+    competition_program_id: &Pubkey,
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[
+            COMPETITION_SEED,
+            authority.as_ref(),
+            &start_time.to_le_bytes(),
+        ],
+        competition_program_id,
+    )
+}
+
+/// Find PDA for participant account.
+#[cfg(competition)]
+pub fn find_participant_address(
+    competition: &Pubkey,
+    trader: &Pubkey,
+    competition_program_id: &Pubkey,
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[PARTICIPANT_SEED, competition.as_ref(), trader.as_ref()],
+        competition_program_id,
+    )
 }

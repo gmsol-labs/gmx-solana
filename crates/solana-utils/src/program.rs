@@ -33,7 +33,7 @@ impl<C> Program<C> {
 
 impl<C: Deref<Target = impl Signer> + Clone> Program<C> {
     /// Create a [`TransactionBuilder`].
-    pub fn transaction(&self) -> TransactionBuilder<C> {
+    pub fn transaction<'a>(&self) -> TransactionBuilder<'a, C> {
         TransactionBuilder::new(self.program_id, &self.cfg)
     }
 }

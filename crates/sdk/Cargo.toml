@@ -16,6 +16,7 @@ crate-type = ["cdylib", "rlib"]
 default = ["market-graph"]
 treasury = ["gmsol-programs/treasury", "gmsol-utils/treasury"]
 timelock = ["gmsol-programs/timelock", "gmsol-utils/instruction"]
+competition = ["gmsol-programs/competition"]
 devnet = ["gmsol-utils/devnet", "switchboard-on-demand-client?/devnet"]
 js = [
     "market-graph",

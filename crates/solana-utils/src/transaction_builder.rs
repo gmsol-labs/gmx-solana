@@ -113,7 +113,7 @@ pub struct TransactionBuilder<'a, C, T = ()> {
 
 impl<'a, C: Deref<Target = impl Signer> + Clone> TransactionBuilder<'a, C> {
     /// Create a new transaction builder.
-    pub fn new(program_id: Pubkey, cfg: &'a Config<C>) -> Self {
+    pub fn new(program_id: Pubkey, cfg: &Config<C>) -> Self {
         Self {
             output: (),
             program_id,
