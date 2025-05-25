@@ -42,8 +42,8 @@ impl Cli {
 
         let config = Figment::new()
             .merge(Serialized::defaults(config))
-            .adjoin(Toml::file(config_path.clone()))
-            .adjoin(Env::prefixed(ENV_PREFIX).split(DOT_ALIAS))
+            .join(Env::prefixed(ENV_PREFIX).split(DOT_ALIAS))
+            .join(Toml::file(config_path.clone()))
             .extract()?;
 
         Ok(Self(Inner {

@@ -83,7 +83,8 @@ pub struct Config {
     squads: Option<String>,
     /// ALTs.
     #[arg(long, short = 'a')]
-    alts: Vec<StringPubkey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    alts: Option<Vec<StringPubkey>>,
     /// Oracle buffer address.
     #[arg(long)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -246,7 +247,7 @@ impl Config {
 
     /// Get address lookup tables.
     pub fn alts(&self) -> impl Iterator<Item = &Pubkey> {
-        self.alts.iter().map(|p| &p.0)
+        self.alts.iter().flat_map(|alts| alts.iter().map(|p| &p.0))
     }
 }
 
