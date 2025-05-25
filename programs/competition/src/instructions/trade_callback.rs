@@ -161,13 +161,20 @@ impl OnExecuted<'_> {
             return Ok(());
         };
         let trade_event = trade_event.load()?;
-        let part = &mut ctx.accounts.participant;
 
         // Calculate volume as the absolute difference between after and before size_in_usd
         let volume = trade_event
             .after
             .size_in_usd
             .abs_diff(trade_event.before.size_in_usd);
+
+        // Skip trades with zero volume.
+        if volume == 0 {
+            msg!("competition: skipped trade with zero volume");
+            return Ok(());
+        }
+
+        let part = &mut ctx.accounts.participant;
 
         part.volume = part.volume.saturating_add(volume);
         part.last_updated_at = now;
