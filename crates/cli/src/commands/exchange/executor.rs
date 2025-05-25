@@ -7,7 +7,6 @@ use gmsol_sdk::{
         pyth::{pull_oracle::PythPullOracleWithHermes, Hermes, PythPullOracle},
         switchboard::pull_oracle::SwitchcboardPullOracleFactory,
     },
-    programs::anchor_lang::prelude::Pubkey,
     solana_utils::{
         bundle_builder::BundleOptions,
         make_bundle_builder::{EstimateFee, MakeBundleBuilder, SetExecutionFee},
@@ -20,9 +19,6 @@ use crate::CommandClient;
 /// Arguments for executor.
 #[derive(clap::Args, Clone, Debug)]
 pub struct ExecutorArgs {
-    /// The oracle buffer to use.
-    #[arg(long, env)]
-    oracle: Pubkey,
     #[cfg_attr(feature = "devnet", arg(long, default_value_t = true))]
     #[cfg_attr(not(feature = "devnet"), arg(long, default_value_t = false))]
     oracle_testnet: bool,
@@ -32,20 +28,9 @@ pub struct ExecutorArgs {
     /// Feed index.
     #[arg(long, default_value_t = 0)]
     feed_index: u16,
-    /// ALTs.
-    #[arg(long, short = 'a')]
-    alts: Vec<Pubkey>,
 }
 
 impl ExecutorArgs {
-    pub(super) fn oracle(&self) -> &Pubkey {
-        &self.oracle
-    }
-
-    pub(super) fn alts(&self) -> impl Iterator<Item = &Pubkey> {
-        self.alts.iter()
-    }
-
     pub(super) async fn build<'a>(
         &self,
         client: &'a CommandClient,

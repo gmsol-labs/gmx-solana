@@ -257,8 +257,8 @@ impl super::Command for Exchange {
                 match decoded {
                     GMSOLAccountData::Order(_) => {
                         let mut builder =
-                            client.execute_order(store, args.oracle(), address, true)?;
-                        for alt in args.alts() {
+                            client.execute_order(store, ctx.config().oracle()?, address, true)?;
+                        for alt in ctx.config().alts() {
                             let alt = client.alt(alt).await?.ok_or(gmsol_sdk::Error::NotFound)?;
                             builder.add_alt(alt);
                         }

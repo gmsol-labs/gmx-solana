@@ -71,6 +71,7 @@ impl<T: Command> Command for Box<T> {
 pub(crate) struct Context<'a> {
     store: Pubkey,
     config_path: &'a Path,
+    config: &'a Config,
     client: Option<&'a CommandClient>,
 }
 
@@ -78,13 +79,19 @@ impl<'a> Context<'a> {
     pub(super) fn new(
         store: Pubkey,
         config_path: &'a Path,
+        config: &'a Config,
         client: Option<&'a CommandClient>,
     ) -> Self {
         Self {
             store,
             config_path,
+            config,
             client,
         }
+    }
+
+    pub(crate) fn config(&self) -> &Config {
+        self.config
     }
 
     pub(crate) fn client(&self) -> eyre::Result<&CommandClient> {

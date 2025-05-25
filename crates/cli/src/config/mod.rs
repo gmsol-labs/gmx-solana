@@ -1,5 +1,6 @@
 mod store_address;
 
+use eyre::OptionExt;
 use gmsol_sdk::{
     client::ClientOptions,
     pda,
@@ -20,73 +21,73 @@ use crate::wallet::signer_from_source;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "devnet")] {
-        const DEFAULT_CLUSTER: &str = "devnet";
+        const DEFAULT_CLUSTER: Cluster = Cluster::Devnet;
     } else {
-        const DEFAULT_CLUSTER: &str = "mainnet";
+        const DEFAULT_CLUSTER: Cluster = Cluster::Mainnet;
     }
 }
 
 const DEFAULT_WALLET: &str = "~/.config/solana/id.json";
 
+const DEFAULT_COMMITMENT: CommitmentLevel = CommitmentLevel::Confirmed;
+
 /// Configuration.
-#[derive(Debug, clap::Args, serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, clap::Args, serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct Config {
     /// Path to the wallet.
-    #[arg(long, short, env, default_value = DEFAULT_WALLET)]
-    wallet: String,
+    #[arg(long, short, env)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    wallet: Option<String>,
     /// Cluster to connect to.
-    #[arg(long = "url", short = 'u', env, default_value = DEFAULT_CLUSTER)]
-    cluster: Cluster,
+    #[arg(long = "url", short = 'u', env)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cluster: Option<Cluster>,
     /// Commitment level.
-    #[arg(long, env, default_value_t = CommitmentLevel::Confirmed)]
-    commitment: CommitmentLevel,
+    #[arg(long, env)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    commitment: Option<CommitmentLevel>,
     /// Store address.
     #[command(flatten)]
     #[serde(flatten)]
     store_address: StoreAddress,
     /// Store Program ID.
     #[arg(long, env)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     store_program: Option<StringPubkey>,
     /// Treasury Program ID.
     #[arg(long, env)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     treasury_program: Option<StringPubkey>,
     /// Timelock Program ID.
     #[arg(long, env)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     timelock_program: Option<StringPubkey>,
     /// Print the serialized instructions,
     /// instead of sending the transaction.
     #[arg(long)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     serialize_only: Option<InstructionSerialization>,
     /// Use this address as payer.
     ///
     /// Only available in `serialize-only` mode.
     #[arg(long, requires = "serialize_only")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     payer: Option<StringPubkey>,
     /// Whether to create a timelocked buffer for this instruction.
     #[arg(long, group = "ix-buffer")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     timelock: Option<String>,
     #[cfg(feature = "squads")]
     #[cfg_attr(feature = "squads", arg(long, group = "ix-buffer"))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     squads: Option<String>,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            wallet: DEFAULT_WALLET.to_string(),
-            cluster: Cluster::Mainnet,
-            commitment: CommitmentLevel::Confirmed,
-            store_address: Default::default(),
-            store_program: None,
-            treasury_program: None,
-            timelock_program: None,
-            serialize_only: None,
-            payer: None,
-            timelock: None,
-            #[cfg(feature = "squads")]
-            squads: None,
-        }
-    }
+    /// ALTs.
+    #[arg(long, short = 'a')]
+    alts: Vec<StringPubkey>,
+    /// Oracle buffer address.
+    #[arg(long)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    oracle: Option<StringPubkey>,
 }
 
 impl Config {
@@ -128,7 +129,7 @@ impl Config {
             }
         } else {
             let wallet = signer_from_source(
-                &self.wallet,
+                self.wallet.as_deref().unwrap_or(DEFAULT_WALLET),
                 #[cfg(feature = "remote-wallet")]
                 false,
                 #[cfg(feature = "remote-wallet")]
@@ -172,14 +173,14 @@ impl Config {
 
     /// Returns the cluster.
     pub fn cluster(&self) -> &Cluster {
-        &self.cluster
+        self.cluster.as_ref().unwrap_or(&DEFAULT_CLUSTER)
     }
 
     /// Returns the client options.
     pub fn options(&self) -> ClientOptions {
         ClientOptions::builder()
             .commitment(CommitmentConfig {
-                commitment: self.commitment,
+                commitment: self.commitment.unwrap_or(DEFAULT_COMMITMENT),
             })
             .store_program_id(Some(*self.store_program_id()))
             .treasury_program_id(Some(*self.treasury_program_id()))
@@ -234,6 +235,18 @@ impl Config {
         }
 
         Ok(None)
+    }
+
+    /// Get oracle buffer address.
+    pub fn oracle(&self) -> eyre::Result<&Pubkey> {
+        self.oracle
+            .as_deref()
+            .ok_or_eyre("oracle buffer address is not provided")
+    }
+
+    /// Get address lookup tables.
+    pub fn alts(&self) -> impl Iterator<Item = &Pubkey> {
+        self.alts.iter().map(|p| &p.0)
     }
 }
 

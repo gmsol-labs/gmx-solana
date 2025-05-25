@@ -41,9 +41,9 @@ impl Cli {
         } = cli;
 
         let config = Figment::new()
-            .merge(Toml::file(config_path.clone()))
-            .merge(Env::prefixed(ENV_PREFIX).split(DOT_ALIAS))
             .merge(Serialized::defaults(config))
+            .adjoin(Toml::file(config_path.clone()))
+            .adjoin(Env::prefixed(ENV_PREFIX).split(DOT_ALIAS))
             .extract()?;
 
         Ok(Self(Inner {
@@ -110,7 +110,12 @@ impl Inner {
         };
         let store = self.config.store_address();
         self.command
-            .execute(Context::new(store, config_path, client.as_ref()))
+            .execute(Context::new(
+                store,
+                config_path,
+                &self.config,
+                client.as_ref(),
+            ))
             .await
     }
 }
