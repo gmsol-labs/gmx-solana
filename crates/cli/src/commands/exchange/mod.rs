@@ -1,3 +1,6 @@
+#[cfg(feature = "execute")]
+mod executor;
+
 use std::ops::Deref;
 
 use eyre::OptionExt;
@@ -38,6 +41,13 @@ pub struct Exchange {
 enum Command {
     /// Fetch action account.
     Get { address: Pubkey },
+    /// Execute the given action.
+    #[cfg(feature = "execute")]
+    Execute {
+        #[command(flatten)]
+        args: executor::ExecutorArgs,
+        address: Pubkey,
+    },
     /// Create a deposit.
     CreateDeposit {
         /// The address of the market token of the Market to deposit into.
@@ -230,6 +240,34 @@ impl super::Command for Exchange {
                     .into_value()
                     .ok_or_eyre("account not found")?;
                 println!("{decoded:#?}");
+                return Ok(());
+            }
+            #[cfg(feature = "execute")]
+            Command::Execute { args, address } => {
+                use gmsol_sdk::{
+                    decode::gmsol::programs::GMSOLAccountData, ops::AddressLookupTableOps,
+                };
+
+                let decoded = client
+                    .decode_account_with_config(address, Default::default())
+                    .await?
+                    .into_value()
+                    .ok_or_eyre("account not found")?;
+                let executor = args.build(client).await?;
+                match decoded {
+                    GMSOLAccountData::Order(_) => {
+                        let mut builder =
+                            client.execute_order(store, args.oracle(), address, true)?;
+                        for alt in args.alts() {
+                            let alt = client.alt(alt).await?.ok_or(gmsol_sdk::Error::NotFound)?;
+                            builder.add_alt(alt);
+                        }
+                        executor.execute(builder, options).await?;
+                    }
+                    _ => {
+                        eyre::bail!("unsupported");
+                    }
+                }
                 return Ok(());
             }
             Command::CreateDeposit {

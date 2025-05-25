@@ -62,3 +62,6 @@ pub use gmsol_solana_utils as solana_utils;
 pub use gmsol_solana_utils::{
     AtomicGroup, Error as SolanaUtilsError, IntoAtomicGroup, ParallelGroup, TransactionGroup,
 };
+
+#[cfg(feature = "decode")]
+pub use gmsol_decode as decode;
