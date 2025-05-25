@@ -1,5 +1,8 @@
 use crate::{
-    states::{Competition, LeaderEntry, Participant, MAX_LEADERBOARD_LEN, PARTICIPANT_SEED},
+    states::{
+        Competition, LeaderEntry, Participant, EXPECTED_STORE_PROGRAM_ID, MAX_LEADERBOARD_LEN,
+        PARTICIPANT_SEED,
+    },
     CompetitionError,
 };
 use anchor_lang::prelude::*;
@@ -14,7 +17,7 @@ pub struct OnCallback<'info> {
     #[account(
         seeds = [CALLBACK_AUTHORITY_SEED],
         bump = authority_bump,
-        seeds::program = competition.store_program,
+        seeds::program = EXPECTED_STORE_PROGRAM_ID,
     )]
     pub authority: Signer<'info>,
     /// The global competition account.
@@ -82,7 +85,7 @@ pub struct OnExecuted<'info> {
     #[account(
         seeds = [CALLBACK_AUTHORITY_SEED],
         bump = authority_bump,
-        seeds::program = competition.store_program,
+        seeds::program = EXPECTED_STORE_PROGRAM_ID,
     )]
     pub authority: Signer<'info>,
     /// The global competition account.

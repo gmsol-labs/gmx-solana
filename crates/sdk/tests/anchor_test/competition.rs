@@ -73,7 +73,6 @@ async fn competition() -> eyre::Result<()> {
             payer: client.payer(),
             competition,
             system_program: system_program::ID,
-            store_program: gmsol_programs::gmsol_store::ID,
         });
 
     let signature = init_competition.send().await?;
@@ -87,10 +86,6 @@ async fn competition() -> eyre::Result<()> {
     assert!(competition_account.is_active);
     assert_eq!(competition_account.start_time, start_time);
     assert_eq!(competition_account.end_time, end_time);
-    assert_eq!(
-        competition_account.store_program,
-        gmsol_programs::gmsol_store::ID
-    );
     assert_eq!(competition_account.volume_threshold, volume_threshold);
     assert_eq!(competition_account.time_extension, time_extension);
     assert_eq!(competition_account.max_extension, max_extension);

@@ -151,13 +151,6 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "store_program",
-          "docs": [
-            "The store program id.",
-            "# CHECK: only the address is used."
-          ]
         }
       ],
       "args": [
@@ -205,7 +198,61 @@
           "docs": [
             "The callback‑authority PDA (must be a signer)."
           ],
-          "signer": true
+          "signer": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  98,
+                  97,
+                  99,
+                  107
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                234,
+                94,
+                74,
+                175,
+                228,
+                208,
+                167,
+                114,
+                85,
+                24,
+                18,
+                149,
+                120,
+                219,
+                76,
+                130,
+                12,
+                54,
+                252,
+                80,
+                147,
+                170,
+                106,
+                18,
+                19,
+                192,
+                130,
+                125,
+                110,
+                213,
+                68,
+                8
+              ]
+            }
+          }
         },
         {
           "name": "competition",
@@ -310,7 +357,61 @@
           "docs": [
             "The callback‑authority PDA (must be a signer)."
           ],
-          "signer": true
+          "signer": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  98,
+                  97,
+                  99,
+                  107
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                234,
+                94,
+                74,
+                175,
+                228,
+                208,
+                167,
+                114,
+                85,
+                24,
+                18,
+                149,
+                120,
+                219,
+                76,
+                130,
+                12,
+                54,
+                252,
+                80,
+                147,
+                170,
+                106,
+                18,
+                19,
+                192,
+                130,
+                125,
+                110,
+                213,
+                68,
+                8
+              ]
+            }
+          }
         },
         {
           "name": "competition",
@@ -414,7 +515,61 @@
           "docs": [
             "The callback‑authority PDA (must be a signer)."
           ],
-          "signer": true
+          "signer": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  98,
+                  97,
+                  99,
+                  107
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                234,
+                94,
+                74,
+                175,
+                228,
+                208,
+                167,
+                114,
+                85,
+                24,
+                18,
+                149,
+                120,
+                219,
+                76,
+                130,
+                12,
+                54,
+                252,
+                80,
+                147,
+                170,
+                106,
+                18,
+                19,
+                192,
+                130,
+                125,
+                110,
+                213,
+                68,
+                8
+              ]
+            }
+          }
         },
         {
           "name": "competition",
@@ -532,7 +687,61 @@
           "docs": [
             "The callback‑authority PDA (must be a signer)."
           ],
-          "signer": true
+          "signer": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  108,
+                  108,
+                  98,
+                  97,
+                  99,
+                  107
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                234,
+                94,
+                74,
+                175,
+                228,
+                208,
+                167,
+                114,
+                85,
+                24,
+                18,
+                149,
+                120,
+                219,
+                76,
+                130,
+                12,
+                54,
+                252,
+                80,
+                147,
+                170,
+                106,
+                18,
+                19,
+                192,
+                130,
+                125,
+                110,
+                213,
+                68,
+                8
+              ]
+            }
+          }
         },
         {
           "name": "competition",
@@ -734,13 +943,6 @@
               "The competition end timestamp."
             ],
             "type": "i64"
-          },
-          {
-            "name": "store_program",
-            "docs": [
-              "The store program allowed to push trades."
-            ],
-            "type": "pubkey"
           },
           {
             "name": "is_active",

@@ -27,9 +27,6 @@ pub struct InitializeCompetition<'info> {
     )]
     pub competition: Account<'info, Competition>,
     pub system_program: Program<'info, System>,
-    /// The store program id.
-    /// # CHECK: only the address is used.
-    pub store_program: UncheckedAccount<'info>,
 }
 
 impl InitializeCompetition<'_> {
@@ -59,7 +56,6 @@ impl InitializeCompetition<'_> {
         comp.start_time = start_time;
         comp.end_time = end_time;
         comp.is_active = true;
-        comp.store_program = ctx.accounts.store_program.key();
         comp.leaderboard = Vec::default();
         comp.volume_threshold = volume_threshold;
         comp.time_extension = time_extension;

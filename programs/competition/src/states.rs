@@ -1,5 +1,8 @@
 use anchor_lang::prelude::*;
 
+/// The expected program ID of the caller.
+pub const EXPECTED_STORE_PROGRAM_ID: Pubkey = gmsol_programs::gmsol_store::ID_CONST;
+
 /// The seed for [`Competition`] account.
 #[constant]
 pub const COMPETITION_SEED: &[u8] = b"competition";
@@ -35,8 +38,6 @@ pub struct Competition {
     pub start_time: i64,
     /// The competition end timestamp.
     pub end_time: i64,
-    /// The store program allowed to push trades.
-    pub store_program: Pubkey,
     /// Whether the competition is active.
     pub is_active: bool,
     /// The fixed-length leaderboard.
