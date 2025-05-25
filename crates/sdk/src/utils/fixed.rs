@@ -170,6 +170,19 @@ pub fn decimal_to_amount(mut amount: rust_decimal::Decimal, decimals: u8) -> cra
     Ok(amount)
 }
 
+/// Convert a [`Decimal`] to `i128` value.
+pub fn decimal_to_signed_value(mut amount: rust_decimal::Decimal, decimals: u8) -> i128 {
+    amount.rescale(decimals as u32);
+    amount.mantissa()
+}
+
+/// Convert a [`Decimal`] to `u128` value.
+pub fn decimal_to_value(amount: rust_decimal::Decimal, decimals: u8) -> crate::Result<u128> {
+    decimal_to_signed_value(amount, decimals)
+        .try_into()
+        .map_err(crate::Error::custom)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

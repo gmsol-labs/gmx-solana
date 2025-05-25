@@ -2316,6 +2316,7 @@ dependencies = [
 name = "gmsol-cli"
 version = "0.6.0"
 dependencies = [
+ "anchor-spl",
  "cfg-if",
  "clap",
  "color-eyre",

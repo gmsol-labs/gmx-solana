@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - model: Updated the fee factor logic to depend on `BalanceChange` rather than the sign of price impact; the `FeeParams::factor` function (along with other related functions) now takes `BalanceChange` instead of the `is_positive_impact` flag.
 - sdk: Removed support for `spl-governance`.
 - sdk(sdk): Updated the `ExchangeOps::update_order` function to include a `hint` parameter and return a future.
+- sdk(solana-utils): Added `append` argument to `TransactionBuilder::pre_instruction` and `TransactionBuilder::pre_instructions`.
 
 ### Added
 

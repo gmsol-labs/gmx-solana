@@ -22,7 +22,13 @@ devnet = ["gmsol-sdk/devnet"]
 squads = ["gmsol-sdk/squads"]
 
 [dependencies]
-gmsol-sdk = { workspace = true, features = ["client", "serde", "clap"] }
+gmsol-sdk = { workspace = true, features = [
+    "client",
+    "serde",
+    "clap",
+    "competition",
+    "decode",
+] }
 
 eyre = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
@@ -38,6 +44,7 @@ tokio = { workspace = true, features = ["full"] }
 toml = { workspace = true }
 rust_decimal = { workspace = true, features = ["std"] }
 dialoguer = { workspace = true }
+anchor-spl = { workspace = true, features = ["token", "associated_token"] }
 
 color-eyre = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true, features = [

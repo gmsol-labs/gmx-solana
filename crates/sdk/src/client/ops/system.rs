@@ -18,6 +18,6 @@ impl<C: Clone + Deref<Target = impl Signer>> SystemProgramOps<C> for crate::Clie
         }
         Ok(self
             .store_transaction()
-            .pre_instruction(transfer(&self.payer(), to, lamports)))
+            .pre_instruction(transfer(&self.payer(), to, lamports), false))
     }
 }

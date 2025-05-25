@@ -253,6 +253,21 @@ where
         self
     }
 
+    /// Participant in a competition.
+    #[cfg(competition)]
+    pub fn competition(&mut self, competition: &Pubkey) -> &mut Self {
+        use crate::programs::gmsol_competition::ID;
+
+        let participant =
+            crate::pda::find_participant_address(competition, &self.client.payer(), &ID).0;
+        self.callback(Some(Callback {
+            version: 0,
+            program: ID,
+            config: *competition,
+            action_stats: participant,
+        }))
+    }
+
     fn market(&self) -> Pubkey {
         self.client
             .find_market_address(&self.store, &self.market_token)
@@ -439,7 +454,7 @@ where
             valid_from_ts: self.params.valid_from_ts,
         };
 
-        let prepare = match kind {
+        let mut prepare = match kind {
             OrderKind::MarketSwap | OrderKind::LimitSwap => {
                 let swap_in_token = initial_collateral_token
                     .ok_or(crate::Error::custom("swap in token is not provided"))?;
@@ -576,6 +591,7 @@ where
                 system_program: system_program::ID,
             })
             .anchor_args(args::PrepareUser {});
+        prepare = prepare.merge(prepare_user);
 
         let CallbackAddresses {
             callback_authority,
@@ -583,6 +599,21 @@ where
             callback_config_account,
             callback_action_stats_account,
         } = self.client.get_callback_params(self.callback.as_ref());
+
+        #[cfg(competition)]
+        if let Some(callback) = self.callback.as_ref() {
+            use crate::ops::competition::CompetitionOps;
+            if callback.program == crate::programs::gmsol_competition::ID {
+                let (prepare_participant, participant) = self
+                    .client
+                    .create_participant_idempotent(&callback.config, None)
+                    .swap_output(());
+                if participant != callback.action_stats {
+                    return Err(crate::Error::custom("invalid participant account"));
+                }
+                prepare = prepare.merge(prepare_participant);
+            }
+        }
 
         let create = self
             .client
@@ -635,7 +666,7 @@ where
                     .collect::<Vec<_>>(),
             );
 
-        Ok((prepare.merge(prepare_user).merge(create), order, position))
+        Ok((prepare.merge(create), order, position))
     }
 }
 

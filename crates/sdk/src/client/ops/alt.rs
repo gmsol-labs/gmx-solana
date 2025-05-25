@@ -90,7 +90,7 @@ impl<C: Deref<Target = impl Signer> + Clone> AddressLookupTableOps<C> for crate:
         let rpc = self
             .store_transaction()
             .program(address_lookup_table::program::ID)
-            .pre_instruction(ix);
+            .pre_instruction(ix, false);
 
         Ok((rpc, address))
     }
@@ -115,7 +115,7 @@ impl<C: Deref<Target = impl Signer> + Clone> AddressLookupTableOps<C> for crate:
             let rpc = self
                 .store_transaction()
                 .program(address_lookup_table::program::ID)
-                .pre_instruction(ix);
+                .pre_instruction(ix, false);
             tx.try_push(rpc).map_err(|(_, err)| err)?;
         }
         Ok(tx)
@@ -126,7 +126,7 @@ impl<C: Deref<Target = impl Signer> + Clone> AddressLookupTableOps<C> for crate:
         let ix = address_lookup_table::instruction::deactivate_lookup_table(*alt, payer);
         self.store_transaction()
             .program(address_lookup_table::program::ID)
-            .pre_instruction(ix)
+            .pre_instruction(ix, false)
     }
 
     fn close_alt(&self, alt: &Pubkey) -> TransactionBuilder<C> {
@@ -134,6 +134,6 @@ impl<C: Deref<Target = impl Signer> + Clone> AddressLookupTableOps<C> for crate:
         let ix = address_lookup_table::instruction::close_lookup_table(*alt, payer, payer);
         self.store_transaction()
             .program(address_lookup_table::program::ID)
-            .pre_instruction(ix)
+            .pre_instruction(ix, false)
     }
 }

@@ -89,6 +89,24 @@ impl<'a> Context<'a> {
     pub(crate) fn bundle_options(&self) -> BundleOptions {
         BundleOptions::default()
     }
+
+    pub(crate) fn require_not_serialize_only_mode(&self) -> eyre::Result<()> {
+        let client = self.client()?;
+        if client.serialize_only.is_some() {
+            eyre::bail!("serialize-only mode is not supported");
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn require_not_ix_buffer_mode(&self) -> eyre::Result<()> {
+        let client = self.client()?;
+        if client.ix_buffer_ctx.is_some() {
+            eyre::bail!("instruction buffer is not supported");
+        } else {
+            Ok(())
+        }
+    }
 }
 
 struct IxBufferCtx<C> {

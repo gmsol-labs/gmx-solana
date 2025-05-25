@@ -388,14 +388,25 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
     }
 
     /// Insert an instruction before the "main" instruction.
-    pub fn pre_instruction(mut self, ix: Instruction) -> Self {
-        self.pre_instructions.push(ix);
+    pub fn pre_instruction(mut self, ix: Instruction, append: bool) -> Self {
+        if append {
+            self.pre_instructions.push(ix);
+        } else {
+            self.pre_instructions.insert(0, ix);
+        }
+
         self
     }
 
     /// Insert instructions before the "main" instruction.
-    pub fn pre_instructions(mut self, mut ixs: Vec<Instruction>) -> Self {
-        self.pre_instructions.append(&mut ixs);
+    pub fn pre_instructions(mut self, mut ixs: Vec<Instruction>, append: bool) -> Self {
+        if append {
+            self.pre_instructions.append(&mut ixs);
+        } else {
+            ixs.append(&mut self.pre_instructions);
+            self.pre_instructions = ixs;
+        }
+
         self
     }
 

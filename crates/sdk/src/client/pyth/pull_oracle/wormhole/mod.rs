@@ -84,13 +84,16 @@ where
             .map_err(crate::Error::custom)?;
         let request = self
             .transaction()
-            .pre_instruction(system_instruction::create_account(
-                &self.payer(),
-                &encoded_vaa.pubkey(),
-                lamports,
-                space,
-                self.id(),
-            ))
+            .pre_instruction(
+                system_instruction::create_account(
+                    &self.payer(),
+                    &encoded_vaa.pubkey(),
+                    lamports,
+                    space,
+                    self.id(),
+                ),
+                false,
+            )
             .anchor_args(instruction::InitEncodedVaa {})
             .anchor_accounts(accounts::InitEncodedVaa {
                 write_authority: self.payer(),

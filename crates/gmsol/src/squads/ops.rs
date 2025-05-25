@@ -194,46 +194,49 @@ impl<C: Deref<Target = impl Signer> + Clone> SquadsOps<C> for crate::Client<C> {
         let vault_pda = get_vault_pda(multisig, vault_index, Some(&ID));
 
         let transaction_message = versioned_message_to_transaction_message(message);
-        let rpc = self.store_transaction().pre_instructions(vec![
-            Instruction {
-                program_id: ID,
-                accounts: accounts::VaultTransactionCreate {
-                    creator: payer,
-                    rent_payer: payer,
-                    transaction: transaction_pda.0,
-                    multisig: *multisig,
-                    system_program: solana_sdk::system_program::id(),
-                }
-                .to_account_metas(Some(false)),
-                data: args::VaultTransactionCreate {
-                    args: VaultTransactionCreateArgs {
-                        ephemeral_signers: 0,
-                        vault_index,
-                        memo,
-                        transaction_message: transaction_message.try_to_vec()?,
-                    },
-                }
-                .data(),
-            },
-            Instruction {
-                program_id: ID,
-                accounts: accounts::ProposalCreate {
-                    creator: payer,
-                    rent_payer: payer,
-                    proposal: proposal_pda,
-                    multisig: *multisig,
-                    system_program: solana_sdk::system_program::id(),
-                }
-                .to_account_metas(Some(false)),
-                data: args::ProposalCreate {
-                    args: ProposalCreateArgs {
-                        draft,
-                        transaction_index,
-                    },
-                }
-                .data(),
-            },
-        ]);
+        let rpc = self.store_transaction().pre_instructions(
+            vec![
+                Instruction {
+                    program_id: ID,
+                    accounts: accounts::VaultTransactionCreate {
+                        creator: payer,
+                        rent_payer: payer,
+                        transaction: transaction_pda.0,
+                        multisig: *multisig,
+                        system_program: solana_sdk::system_program::id(),
+                    }
+                    .to_account_metas(Some(false)),
+                    data: args::VaultTransactionCreate {
+                        args: VaultTransactionCreateArgs {
+                            ephemeral_signers: 0,
+                            vault_index,
+                            memo,
+                            transaction_message: transaction_message.try_to_vec()?,
+                        },
+                    }
+                    .data(),
+                },
+                Instruction {
+                    program_id: ID,
+                    accounts: accounts::ProposalCreate {
+                        creator: payer,
+                        rent_payer: payer,
+                        proposal: proposal_pda,
+                        multisig: *multisig,
+                        system_program: solana_sdk::system_program::id(),
+                    }
+                    .to_account_metas(Some(false)),
+                    data: args::ProposalCreate {
+                        args: ProposalCreateArgs {
+                            draft,
+                            transaction_index,
+                        },
+                    }
+                    .data(),
+                },
+            ],
+            false,
+        );
 
         let data = VaultTransaction {
             multisig: *multisig,

@@ -1,6 +1,9 @@
 use std::{fmt, str::FromStr};
 
-use gmsol_sdk::{constants::MARKET_TOKEN_DECIMALS, utils::decimal_to_amount};
+use gmsol_sdk::{
+    constants::{MARKET_DECIMALS, MARKET_TOKEN_DECIMALS},
+    utils::{decimal_to_amount, decimal_to_value},
+};
 use rust_decimal::Decimal;
 
 const LAMPORT_DECIMALS: u8 = 9;
@@ -31,6 +34,11 @@ impl Lamport {
     pub fn to_u64(&self) -> gmsol_sdk::Result<u64> {
         decimal_to_amount(self.0, LAMPORT_DECIMALS)
     }
+
+    /// Returns whether the amount is zero.
+    pub const fn is_zero(&self) -> bool {
+        self.0.is_zero()
+    }
 }
 
 /// Market token amount.
@@ -59,6 +67,11 @@ impl GmAmount {
     pub fn to_u64(&self) -> gmsol_sdk::Result<u64> {
         decimal_to_amount(self.0, MARKET_TOKEN_DECIMALS)
     }
+
+    /// Returns whether the amount is zero.
+    pub const fn is_zero(&self) -> bool {
+        self.0.is_zero()
+    }
 }
 
 /// A general-purpose token amount.
@@ -86,5 +99,43 @@ impl Amount {
     /// Convert to `u64`.
     pub fn to_u64(&self, decimals: u8) -> gmsol_sdk::Result<u64> {
         decimal_to_amount(self.0, decimals)
+    }
+
+    /// Returns whether the amount is zero.
+    pub const fn is_zero(&self) -> bool {
+        self.0.is_zero()
+    }
+}
+
+/// A USD value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct UsdValue(pub Decimal);
+
+impl fmt::Display for UsdValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl FromStr for UsdValue {
+    type Err = <Decimal as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.parse()?))
+    }
+}
+
+impl UsdValue {
+    /// Zero.
+    pub const ZERO: Self = Self(Decimal::ZERO);
+
+    /// Convert to `u128`.
+    pub fn to_u128(&self) -> gmsol_sdk::Result<u128> {
+        decimal_to_value(self.0, MARKET_DECIMALS)
+    }
+
+    /// Returns whether the amount is zero.
+    pub const fn is_zero(&self) -> bool {
+        self.0.is_zero()
     }
 }

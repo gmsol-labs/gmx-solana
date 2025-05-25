@@ -76,7 +76,7 @@ where
 
         let builder = self
             .store_transaction()
-            .pre_instruction(create)
+            .pre_instruction(create, false)
             .anchor_accounts(accounts::InitializeOracle {
                 payer,
                 authority: authority.copied().unwrap_or(payer),

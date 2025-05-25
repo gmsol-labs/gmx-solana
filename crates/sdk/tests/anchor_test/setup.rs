@@ -514,20 +514,26 @@ impl Deployment {
                 .client
                 .store_transaction()
                 .signer(token)
-                .pre_instruction(system_instruction::create_account(
-                    &payer,
-                    &pubkey,
-                    rent,
-                    Mint::LEN as u64,
-                    &ID,
-                ))
-                .pre_instruction(instruction::initialize_mint2(
-                    &ID,
-                    &token.pubkey(),
-                    &payer,
-                    None,
-                    config.decimals,
-                )?);
+                .pre_instruction(
+                    system_instruction::create_account(
+                        &payer,
+                        &pubkey,
+                        rent,
+                        Mint::LEN as u64,
+                        &ID,
+                    ),
+                    true,
+                )
+                .pre_instruction(
+                    instruction::initialize_mint2(
+                        &ID,
+                        &token.pubkey(),
+                        &payer,
+                        None,
+                        config.decimals,
+                    )?,
+                    true,
+                );
             builder.try_push(rpc).map_err(|(_, err)| err)?;
         }
 
@@ -573,6 +579,7 @@ impl Deployment {
                         &token.address,
                         &ID,
                     ),
+                    true,
                 );
                 builder.try_push(rpc).map_err(|(_, err)| err)?;
             }
@@ -1113,13 +1120,10 @@ impl Deployment {
                     self.client
                         .store_transaction()
                         .signer(user)
-                        .pre_instruction(instruction::close_account(
-                            &ID,
-                            &address,
-                            &payer,
-                            &pubkey,
-                            &[&pubkey],
-                        )?),
+                        .pre_instruction(
+                            instruction::close_account(&ID, &address, &payer, &pubkey, &[&pubkey])?,
+                            true,
+                        ),
                 )
                 .map_err(|(_, err)| err)?;
         }
@@ -1155,7 +1159,7 @@ impl Deployment {
                     self.client
                         .store_transaction()
                         .signer(user)
-                        .pre_instruction(ix),
+                        .pre_instruction(ix, true),
                 )
                 .map_err(|(_, err)| err)?;
         }
@@ -1310,24 +1314,27 @@ impl Deployment {
         let signature = if token.address == native_mint::ID {
             self.client
                 .store_transaction()
-                .pre_instruction(prepare)
-                .pre_instruction(system_instruction::transfer(&payer, &account, amount))
-                .pre_instruction(instruction::sync_native(&ID, &account)?)
+                .pre_instruction(prepare, true)
+                .pre_instruction(system_instruction::transfer(&payer, &account, amount), true)
+                .pre_instruction(instruction::sync_native(&ID, &account)?, true)
                 .send()
                 .await?
         } else {
             self.client
                 .store_transaction()
-                .pre_instruction(prepare)
-                .pre_instruction(instruction::mint_to_checked(
-                    &ID,
-                    &token.address,
-                    &account,
-                    &payer,
-                    &[],
-                    amount,
-                    token.config.decimals,
-                )?)
+                .pre_instruction(prepare, true)
+                .pre_instruction(
+                    instruction::mint_to_checked(
+                        &ID,
+                        &token.address,
+                        &account,
+                        &payer,
+                        &[],
+                        amount,
+                        token.config.decimals,
+                    )?,
+                    true,
+                )
                 .send()
                 .await?
         };
