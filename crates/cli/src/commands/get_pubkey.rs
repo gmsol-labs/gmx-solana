@@ -1,10 +1,8 @@
-use super::Command;
-
 /// Get pubkey.
 #[derive(Debug, clap::Args)]
 pub struct GetPubkey {}
 
-impl Command for GetPubkey {
+impl super::Command for GetPubkey {
     fn is_client_required(&self) -> bool {
         true
     }

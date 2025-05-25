@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Migrated the implementation of squads support to `gmsol-sdk`.
 - sdk(programs): Added `gmsol-competition` support under `competition` feature.
 - sdk(sdk): Added support for `gmsol-competition` via `CompetitionOps`, under `competition` feature.
+- sdk(sdk): Added `StoreOps::initialize_callback_authority` function.
 
 ### Fixed
 

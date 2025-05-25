@@ -30,6 +30,9 @@ pub trait StoreOps<C> {
 
     /// Set new token map.
     fn set_token_map(&self, store: &Pubkey, token_map: &Pubkey) -> TransactionBuilder<C>;
+
+    /// Initialize callback authority.
+    fn initialize_callback_authority(&self) -> TransactionBuilder<C>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> StoreOps<C> for crate::Client<C> {
@@ -105,6 +108,16 @@ impl<C: Deref<Target = impl Signer> + Clone> StoreOps<C> for crate::Client<C> {
                 authority: self.payer(),
                 store: *store,
                 token_map: *token_map,
+            })
+    }
+
+    fn initialize_callback_authority(&self) -> TransactionBuilder<C> {
+        self.store_transaction()
+            .anchor_args(args::InitializeCallbackAuthority {})
+            .anchor_accounts(accounts::InitializeCallbackAuthority {
+                payer: self.payer(),
+                callback_authority: self.find_callback_authority_address(),
+                system_program: system_program::ID,
             })
     }
 }

@@ -1,5 +1,7 @@
 use std::{ops::Deref, path::Path};
 
+use admin::Admin;
+use competition::Competition;
 use enum_dispatch::enum_dispatch;
 use exchange::Exchange;
 use eyre::OptionExt;
@@ -22,9 +24,12 @@ use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 
 use crate::config::{Config, InstructionBuffer, Payer};
 
+mod admin;
+mod competition;
 mod exchange;
 mod get_pubkey;
 mod init_config;
+
 /// Utils for command implementations.
 pub mod utils;
 
@@ -32,12 +37,16 @@ pub mod utils;
 #[enum_dispatch]
 #[derive(Debug, clap::Subcommand)]
 pub enum Commands {
+    /// Administrative commands.
+    Admin(Admin),
     /// Initialize config file.
     InitConfig(InitConfig),
     /// Get pubkey of the payer.
     Pubkey(GetPubkey),
     /// Commands for exchange functionalities.
     Exchange(Box<Exchange>),
+    /// Commands for competition management.
+    Competition(Competition),
 }
 
 #[enum_dispatch(Commands)]
