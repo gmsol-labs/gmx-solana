@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added support for `gmsol-competition` via `CompetitionOps`, under `competition` feature.
 - sdk(sdk): Added `StoreOps::initialize_callback_authority` function.
 - sdk(sdk): Added `KeyedAccount`, implementing `gmsol_decode::AccountAccess`.
+- sdk(sdk): Added ALT support for `CreateOrderBuilder`.
 - just: Added the `cli` recipe for running the `gmsol` commands.
 
 ### Fixed

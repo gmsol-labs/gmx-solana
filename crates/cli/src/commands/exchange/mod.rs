@@ -10,7 +10,7 @@ use gmsol_sdk::{
     core::token_config::TokenMapAccess,
     ops::{
         exchange::{deposit, withdrawal},
-        ExchangeOps,
+        AddressLookupTableOps, ExchangeOps,
     },
     programs::{anchor_lang::prelude::Pubkey, gmsol_store::accounts::Market},
     solana_utils::{
@@ -244,9 +244,7 @@ impl super::Command for Exchange {
             }
             #[cfg(feature = "execute")]
             Command::Execute { args, address } => {
-                use gmsol_sdk::{
-                    decode::gmsol::programs::GMSOLAccountData, ops::AddressLookupTableOps,
-                };
+                use gmsol_sdk::decode::gmsol::programs::GMSOLAccountData;
 
                 let decoded = client
                     .decode_account_with_config(address, Default::default())
@@ -495,6 +493,11 @@ impl super::Command for Exchange {
 
                 if let Some(competition) = competition {
                     builder.competition(competition);
+                }
+
+                for alt in ctx.config().alts() {
+                    let alt = client.alt(alt).await?.ok_or(gmsol_sdk::Error::NotFound)?;
+                    builder.add_alt(alt);
                 }
 
                 let (rpc, order) = builder.build_with_address().await?;

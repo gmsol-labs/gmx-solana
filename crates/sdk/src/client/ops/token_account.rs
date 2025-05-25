@@ -1,6 +1,5 @@
 use std::ops::Deref;
 
-use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use gmsol_programs::gmsol_store::client::{accounts, args};
 use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
@@ -91,19 +90,19 @@ impl<C: Deref<Target = impl Signer> + Clone> TokenAccountOps<C> for Client<C> {
         token_program_id: &Pubkey,
         owner: Option<&Pubkey>,
     ) -> TransactionBuilder<C> {
+        use anchor_spl::associated_token::spl_associated_token_account;
+
         let payer = self.payer();
         let owner = owner.copied().unwrap_or(payer);
-        let account = get_associated_token_address_with_program_id(&owner, mint, token_program_id);
+        let ix =
+            spl_associated_token_account::instruction::create_associated_token_account_idempotent(
+                &payer,
+                &owner,
+                mint,
+                token_program_id,
+            );
         self.store_transaction()
-            .anchor_accounts(accounts::PrepareAssociatedTokenAccount {
-                payer,
-                owner,
-                mint: *mint,
-                account,
-                system_program: system_program::ID,
-                token_program: *token_program_id,
-                associated_token_program: anchor_spl::associated_token::ID,
-            })
-            .anchor_args(args::PrepareAssociatedTokenAccount {})
+            .program(spl_associated_token_account::ID)
+            .pre_instruction(ix, true)
     }
 }

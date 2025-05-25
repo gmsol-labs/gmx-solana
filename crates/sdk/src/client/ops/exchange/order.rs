@@ -105,6 +105,7 @@ pub struct CreateOrderBuilder<'a, C> {
     should_unwrap_native_token: bool,
     receiver: Pubkey,
     callback: Option<Callback>,
+    alts: HashMap<Pubkey, Vec<Pubkey>>,
 }
 
 /// Create Order Hint.
@@ -143,6 +144,7 @@ where
             should_unwrap_native_token: true,
             receiver: client.payer(),
             callback: None,
+            alts: Default::default(),
         }
     }
 
@@ -266,6 +268,12 @@ where
             config: *competition,
             action_stats: participant,
         }))
+    }
+
+    /// Insert an Address Lookup Table.
+    pub fn add_alt(&mut self, account: AddressLookupTableAccount) -> &mut Self {
+        self.alts.insert(account.key, account.addresses);
+        self
     }
 
     fn market(&self) -> Pubkey {
@@ -666,7 +674,11 @@ where
                     .collect::<Vec<_>>(),
             );
 
-        Ok((prepare.merge(create), order, position))
+        Ok((
+            prepare.merge(create).lookup_tables(self.alts.clone()),
+            order,
+            position,
+        ))
     }
 }
 
