@@ -90,3 +90,6 @@ setup-localnet keeper oracle="42" time_window="600":
   LOCALNET_BTC_KEYPAIR={{absolute_path(LOCALNET_BTC_KEYPAIR)}} \
   GMSOL_TIME_WINDOW={{time_window}} \
   sh {{SETUP_LOCALNET_SCRIPT}}
+
+cli *ARGS:
+  cargo run -p gmsol-cli --features devnet,execute -- {{ARGS}}
