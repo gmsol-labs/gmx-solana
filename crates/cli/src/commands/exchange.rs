@@ -36,6 +36,8 @@ pub struct Exchange {
 
 #[derive(Debug, clap::Subcommand)]
 enum Command {
+    /// Fetch action account.
+    Get { address: Pubkey },
     /// Create a deposit.
     CreateDeposit {
         /// The address of the market token of the Market to deposit into.
@@ -204,7 +206,8 @@ impl super::Command for Exchange {
         let token_map = match &self.command {
             Command::CloseOrder { .. }
             | Command::CloseDeposit { .. }
-            | Command::CloseWithdrawal { .. } => None,
+            | Command::CloseWithdrawal { .. }
+            | Command::Get { .. } => None,
             Command::CreateWithdrawal {
                 min_long_token_amount,
                 min_short_token_amount,
@@ -220,6 +223,15 @@ impl super::Command for Exchange {
         let mut collector = (!self.skip_native_wrap).then(NativeCollector::default);
         let owner = &client.payer();
         let bundle = match &self.command {
+            Command::Get { address } => {
+                let decoded = client
+                    .decode_account_with_config(address, Default::default())
+                    .await?
+                    .into_value()
+                    .ok_or_eyre("account not found")?;
+                println!("{decoded:#?}");
+                return Ok(());
+            }
             Command::CreateDeposit {
                 market_token,
                 extra_execution_fee,

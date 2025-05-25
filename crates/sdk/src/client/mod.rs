@@ -53,7 +53,10 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use accounts::{account_with_context, accounts_lazy_with_context, ProgramAccountsConfig};
+use accounts::{
+    account_with_context, accounts_lazy_with_context, get_account_with_context,
+    ProgramAccountsConfig,
+};
 use gmsol_model::{price::Prices, PnlFactorKind};
 use gmsol_programs::{
     anchor_lang::{AccountDeserialize, AnchorSerialize, Discriminator},
@@ -83,7 +86,9 @@ use solana_client::{
     rpc_config::RpcAccountInfoConfig,
     rpc_filter::{Memcmp, RpcFilterType},
 };
-use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signer::Signer};
+use solana_sdk::{
+    account::Account, commitment_config::CommitmentConfig, pubkey::Pubkey, signer::Signer,
+};
 use token_map::TokenMap;
 use tokio::sync::OnceCell;
 use typed_builder::TypedBuilder;
@@ -616,6 +621,43 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             .await?
             .map(|iter| iter.collect())
             .transpose()
+    }
+
+    /// Fetch account without deserialization.
+    pub async fn raw_account_with_config(
+        &self,
+        address: &Pubkey,
+        config: RpcAccountInfoConfig,
+    ) -> crate::Result<WithSlot<Option<Account>>> {
+        let client = self.store_program().rpc();
+        get_account_with_context(&client, address, config).await
+    }
+
+    /// Fetch account and decode.
+    #[cfg(feature = "decode")]
+    pub async fn decode_account_with_config(
+        &self,
+        address: &Pubkey,
+        mut config: RpcAccountInfoConfig,
+    ) -> crate::Result<WithSlot<Option<gmsol_decode::gmsol::programs::GMSOLAccountData>>> {
+        use crate::utils::decode::KeyedAccount;
+        use gmsol_decode::{decoder::AccountAccessDecoder, gmsol::programs::GMSOLAccountData};
+
+        config.encoding = Some(config.encoding.unwrap_or(UiAccountEncoding::Base64));
+        let account = self.raw_account_with_config(address, config).await?;
+        let slot = account.slot();
+        match account.into_value() {
+            Some(account) => {
+                let account = KeyedAccount {
+                    pubkey: *address,
+                    account: WithSlot::new(slot, account),
+                };
+                let decoder = AccountAccessDecoder::new(account);
+                let decoded = GMSOLAccountData::decode(decoder)?;
+                Ok(WithSlot::new(slot, Some(decoded)))
+            }
+            None => Ok(WithSlot::new(slot, None)),
+        }
     }
 
     /// Fetch account with the given address with config.

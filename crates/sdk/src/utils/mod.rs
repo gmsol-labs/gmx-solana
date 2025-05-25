@@ -19,6 +19,10 @@ pub mod fixed_str;
 /// Instruction serialization.
 pub mod instruction_serialization;
 
+/// Utils for `gmsol-decode`.
+#[cfg(feature = "decode")]
+pub mod decode;
+
 /// Test utils.
 #[cfg(test)]
 pub mod test;
