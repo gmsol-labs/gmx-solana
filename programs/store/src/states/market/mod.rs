@@ -32,7 +32,7 @@ use anchor_spl::token::Mint;
 use borsh::{BorshDeserialize, BorshSerialize};
 use config::MarketConfigFlag;
 use gmsol_model::{price::Prices, ClockKind, PoolKind};
-use gmsol_utils::market::MarketError;
+use gmsol_utils::market::{MarketError, MarketFlag, MAX_MARKET_FLAGS};
 use revertible::RevertibleBuffer;
 
 use crate::{
@@ -69,9 +69,6 @@ pub mod pool;
 pub mod status;
 
 mod model;
-
-/// Max number of flags.
-pub const MAX_FLAGS: usize = 8;
 
 const MAX_NAME_LEN: usize = 64;
 
@@ -420,24 +417,7 @@ impl Market {
     }
 }
 
-/// Market Flags.
-#[derive(num_enum::IntoPrimitive)]
-#[repr(u8)]
-pub enum MarketFlag {
-    /// Is enabled.
-    Enabled,
-    /// Is Pure.
-    Pure,
-    /// Is auto-deleveraging enabled for long.
-    AutoDeleveragingEnabledForLong,
-    /// Is auto-deleveraging enabled for short.
-    AutoDeleveragingEnabledForShort,
-    /// Is GT minting enabled.
-    GTEnabled,
-    // CHECK: cannot have more than `MAX_FLAGS` flags.
-}
-
-gmsol_utils::flags!(MarketFlag, MAX_FLAGS, u8);
+gmsol_utils::flags!(MarketFlag, MAX_MARKET_FLAGS, u8);
 
 /// Market State.
 #[zero_copy]

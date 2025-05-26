@@ -8,6 +8,9 @@ use anchor_lang::prelude::{
 /// Max number of config flags.
 pub const MAX_MARKET_CONFIG_FLAGS: usize = 128;
 
+/// Max number of market flags.
+pub const MAX_MARKET_FLAGS: usize = 8;
+
 /// Market error.
 #[derive(Debug, thiserror::Error)]
 pub enum MarketError {
@@ -300,4 +303,21 @@ pub enum MarketConfigKey {
     MaxOpenInterestForShort,
     /// Min tokens for first deposit.
     MinTokensForFirstDeposit,
+}
+
+/// Market Flags.
+#[derive(num_enum::IntoPrimitive)]
+#[repr(u8)]
+pub enum MarketFlag {
+    /// Is enabled.
+    Enabled,
+    /// Is Pure.
+    Pure,
+    /// Is auto-deleveraging enabled for long.
+    AutoDeleveragingEnabledForLong,
+    /// Is auto-deleveraging enabled for short.
+    AutoDeleveragingEnabledForShort,
+    /// Is GT minting enabled.
+    GTEnabled,
+    // CHECK: cannot have more than `MAX_MARKET_FLAGS` flags.
 }
