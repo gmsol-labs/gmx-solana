@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
-- programs: Upgrade to `anchor v0.31.1` and `solana v2.1.21`.
-- programs: Removed support for Chainlink data feeds.
+- programs: Upgraded to `anchor v0.31.1` and `solana v2.1.21`.
+- programs(store): Removed support for Chainlink data feeds.
 - model: Added `paid_in_secondary_output_amount` and `is_collateral_token_long` parameters to the `on_insufficient_funding_fee_payment` function.
 - model: The `PoolDelta::price_impact` function now returns a `PriceImpact` structure that includes a `BalanceChange`, instead of just the price impact value.
 - model: Updated the fee factor logic to depend on `BalanceChange` rather than the sign of price impact; the `FeeParams::factor` function (along with other related functions) now takes `BalanceChange` instead of the `is_positive_impact` flag.
