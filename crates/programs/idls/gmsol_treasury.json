@@ -4960,5 +4960,15 @@
         ]
       }
     }
+  ],
+  "constants": [
+    {
+      "name": "RECEIVER_SEED",
+      "docs": [
+        "Receiver Seed."
+      ],
+      "type": "bytes",
+      "value": "[114, 101, 99, 101, 105, 118, 101, 114]"
+    }
   ]
 }

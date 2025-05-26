@@ -34172,5 +34172,87 @@
         ]
       }
     }
+  ],
+  "constants": [
+    {
+      "name": "CLAIMABLE_ACCOUNT_SEED",
+      "docs": [
+        "Claimable Account Seed."
+      ],
+      "type": "bytes",
+      "value": "[99, 108, 97, 105, 109, 97, 98, 108, 101, 95, 97, 99, 99, 111, 117, 110, 116]"
+    },
+    {
+      "name": "EVENT_AUTHORITY_SEED",
+      "docs": [
+        "Event authority SEED."
+      ],
+      "type": "bytes",
+      "value": "[95, 95, 101, 118, 101, 110, 116, 95, 97, 117, 116, 104, 111, 114, 105, 116, 121]"
+    },
+    {
+      "name": "FUNDING_AMOUNT_PER_SIZE_ADJUSTMENT",
+      "docs": [
+        "Adjustment factor for saving funding amount per size."
+      ],
+      "type": "u128",
+      "value": "10000000000"
+    },
+    {
+      "name": "GT_MINT_SEED",
+      "docs": [
+        "GT Mint Seed."
+      ],
+      "type": "bytes",
+      "value": "[103, 116]"
+    },
+    {
+      "name": "MAREKT_TOKEN_MINT_SEED",
+      "docs": [
+        "Market Token Mint Address Seed."
+      ],
+      "type": "bytes",
+      "value": "[109, 97, 114, 107, 101, 116, 95, 116, 111, 107, 101, 110, 95, 109, 105, 110, 116]"
+    },
+    {
+      "name": "MARKET_DECIMALS",
+      "docs": [
+        "Decimals of usd values of factors."
+      ],
+      "type": "u8",
+      "value": "20"
+    },
+    {
+      "name": "MARKET_TOKEN_DECIMALS",
+      "docs": [
+        "Decimals of a market token."
+      ],
+      "type": "u8",
+      "value": "9"
+    },
+    {
+      "name": "MARKET_USD_TO_AMOUNT_DIVISOR",
+      "docs": [
+        "USD value to amount divisor."
+      ],
+      "type": "u128",
+      "value": "100000000000"
+    },
+    {
+      "name": "MARKET_USD_UNIT",
+      "docs": [
+        "Unit USD value i.e. `one`."
+      ],
+      "type": "u128",
+      "value": "100000000000000000000"
+    },
+    {
+      "name": "MARKET_VAULT_SEED",
+      "docs": [
+        "Market Vault Seed."
+      ],
+      "type": "bytes",
+      "value": "[109, 97, 114, 107, 101, 116, 95, 118, 97, 117, 108, 116]"
+    }
   ]
 }

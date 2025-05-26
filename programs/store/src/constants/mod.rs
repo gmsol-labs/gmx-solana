@@ -6,42 +6,50 @@ pub mod glv;
 
 pub use self::{glv::*, market::*};
 
+use anchor_lang::constant;
 use gmsol_utils::price::Decimal;
 
 use crate::states::{Amount, Factor};
 
 /// Event authority SEED.
+#[constant]
 pub const EVENT_AUTHORITY_SEED: &[u8] = b"__event_authority";
 
 /// Market Token Mint Address Seed.
+#[constant]
 pub const MAREKT_TOKEN_MINT_SEED: &[u8] = b"market_token_mint";
 
 /// Market Vault Seed.
+#[constant]
 pub const MARKET_VAULT_SEED: &[u8] = b"market_vault";
 
 /// GT Mint Seed.
+#[constant]
 pub const GT_MINT_SEED: &[u8] = b"gt";
 
 /// Claimable Account Seed.
+#[constant]
 pub const CLAIMABLE_ACCOUNT_SEED: &[u8] = b"claimable_account";
 
-/// Escrow Account Seed.
-pub const ESCROW_ACCOUNT_SEED: &[u8] = b"escrow_account";
-
 /// Decimals of a market token.
+#[constant]
 pub const MARKET_TOKEN_DECIMALS: u8 = 9;
 
 /// Unit USD value i.e. `one`.
+#[constant]
 pub const MARKET_USD_UNIT: u128 = 10u128.pow(MARKET_DECIMALS as u32);
 
 /// Adjustment factor for saving funding amount per size.
+#[constant]
 pub const FUNDING_AMOUNT_PER_SIZE_ADJUSTMENT: u128 = 10u128.pow((MARKET_DECIMALS >> 1) as u32);
 
 /// USD value to amount divisor.
+#[constant]
 pub const MARKET_USD_TO_AMOUNT_DIVISOR: u128 =
     10u128.pow((MARKET_DECIMALS - MARKET_TOKEN_DECIMALS) as u32);
 
 /// Decimals of usd values of factors.
+#[constant]
 pub const MARKET_DECIMALS: u8 = Decimal::MAX_DECIMALS;
 
 /// Default claimable time window.
