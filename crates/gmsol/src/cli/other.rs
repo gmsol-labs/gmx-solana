@@ -178,12 +178,15 @@ impl Args {
                 let rpc = client
                     .store_transaction()
                     .program(system_program::ID)
-                    .pre_instruction(solana_sdk::bpf_loader_upgradeable::upgrade(
-                        program_id,
-                        buffer,
-                        &authority.unwrap_or(client.payer()),
-                        &spill.unwrap_or(client.payer()),
-                    ));
+                    .pre_instruction(
+                        solana_sdk::bpf_loader_upgradeable::upgrade(
+                            program_id,
+                            buffer,
+                            &authority.unwrap_or(client.payer()),
+                            &spill.unwrap_or(client.payer()),
+                        ),
+                        true,
+                    );
 
                 crate::utils::send_or_serialize_transaction(
                     store,
@@ -207,11 +210,14 @@ impl Args {
                 let rpc = client
                     .store_transaction()
                     .program(system_program::ID)
-                    .pre_instruction(solana_sdk::bpf_loader_upgradeable::close(
-                        address,
-                        &spill.unwrap_or(client.payer()),
-                        &authority.unwrap_or(client.payer()),
-                    ));
+                    .pre_instruction(
+                        solana_sdk::bpf_loader_upgradeable::close(
+                            address,
+                            &spill.unwrap_or(client.payer()),
+                            &authority.unwrap_or(client.payer()),
+                        ),
+                        true,
+                    );
 
                 crate::utils::send_or_serialize_transaction(
                     store,
