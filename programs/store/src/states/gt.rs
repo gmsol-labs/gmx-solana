@@ -28,6 +28,9 @@
 //! referred discount).
 
 use anchor_lang::prelude::*;
+use gmsol_utils::gt::{
+    GtExchangeFlag, GtExchangeVaultFlag, MAX_GT_EXCHANGE_FLAGS, MAX_GT_EXCHANGE_VAULT_FLAGS,
+};
 
 use crate::{constants, CoreError};
 
@@ -36,7 +39,6 @@ use super::{user::UserHeader, Seed};
 pub use gmsol_utils::gt::get_time_window_index;
 
 const MAX_RANK: usize = 15;
-const MAX_FLAGS: usize = 8;
 
 #[zero_copy]
 #[cfg_attr(feature = "debug", derive(derive_more::Debug))]
@@ -428,19 +430,7 @@ impl GtState {
     }
 }
 
-/// GT Exchange Vault Flags.
-#[repr(u8)]
-#[non_exhaustive]
-#[derive(num_enum::IntoPrimitive, num_enum::TryFromPrimitive)]
-pub enum GtExchangeVaultFlag {
-    /// Initialized.
-    Intiailized,
-    /// Confirmed.
-    Comfirmed,
-    // CHECK: should have no more than `MAX_FLAGS` of flags.
-}
-
-gmsol_utils::flags!(GtExchangeVaultFlag, MAX_FLAGS, u8);
+gmsol_utils::flags!(GtExchangeVaultFlag, MAX_GT_EXCHANGE_VAULT_FLAGS, u8);
 
 /// GT Exchange Vault.
 #[account(zero_copy)]
@@ -570,17 +560,7 @@ impl gmsol_utils::InitSpace for GtExchangeVault {
     const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
-/// GT Exchange Vault Flags.
-#[repr(u8)]
-#[non_exhaustive]
-#[derive(num_enum::IntoPrimitive, num_enum::TryFromPrimitive)]
-pub enum GtExchangeFlag {
-    /// Initialized.
-    Intiailized,
-    // CHECK: should have no more than `MAX_FLAGS` of flags.
-}
-
-gmsol_utils::flags!(GtExchangeFlag, MAX_FLAGS, u8);
+gmsol_utils::flags!(GtExchangeFlag, MAX_GT_EXCHANGE_FLAGS, u8);
 
 /// GT Exchange Account.
 #[account(zero_copy)]

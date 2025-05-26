@@ -1,5 +1,8 @@
 use anchor_lang::prelude::*;
-use gmsol_utils::InitSpace;
+use gmsol_utils::{
+    user::{UserFlag, MAX_USER_FLAGS},
+    InitSpace,
+};
 
 use crate::{
     utils::pubkey::{optional_address, DEFAULT_PUBKEY},
@@ -33,21 +36,7 @@ pub struct UserHeader {
     reserved: [u8; 128],
 }
 
-/// User flags.
-#[derive(num_enum::IntoPrimitive)]
-#[repr(u8)]
-#[non_exhaustive]
-pub enum UserFlag {
-    /// Is initialized.
-    Initialized,
-}
-
-impl UserFlag {
-    /// Max flags.
-    pub const MAX_FLAGS: usize = 8;
-}
-
-gmsol_utils::flags!(UserFlag, { UserFlag::MAX_FLAGS }, u8);
+gmsol_utils::flags!(UserFlag, MAX_USER_FLAGS, u8);
 
 impl UserHeader {
     /// Return whether the user account is initialized.

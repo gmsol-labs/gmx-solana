@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Removed support for Chainlink data feeds.
 - programs(store): Refactored `TradeFlag` into the `gmsol-utils` crate.
 - programs(store): Refactored `MarketFlag` into the `gmsol-utils` crate.
+- programs(store): Refactored GT related `Flag`s into the `gmsol-utils` crate.
+- programs(store): Refactored `PriceFlag` into the `gmsol-utils` crate.
+- programs(store): Refactored `OracleFlag` into the `gmsol-utils` crate.
+- programs(store): Refactored `UserFlag` into the `gmsol-utils` crate.
+- programs(timelock): Refactored `InstructionFlag` into the `gmsol-utils` crate.
 - model: Added `paid_in_secondary_output_amount` and `is_collateral_token_long` parameters to the `on_insufficient_funding_fee_payment` function.
 - model: The `PoolDelta::price_impact` function now returns a `PriceImpact` structure that includes a `BalanceChange`, instead of just the price impact value.
 - model: Updated the fee factor logic to depend on `BalanceChange` rather than the sign of price impact; the `FeeParams::factor` function (along with other related functions) now takes `BalanceChange` instead of the `is_positive_impact` flag.

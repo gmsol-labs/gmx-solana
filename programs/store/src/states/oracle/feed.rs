@@ -1,6 +1,9 @@
 use anchor_lang::prelude::*;
 use bytemuck::Zeroable;
-use gmsol_utils::InitSpace;
+use gmsol_utils::{
+    price::{PriceFlag, MAX_PRICE_FLAG},
+    InitSpace,
+};
 
 use crate::{
     states::{Seed, TokenConfig},
@@ -8,8 +11,6 @@ use crate::{
 };
 
 use super::PriceProviderKind;
-
-const MAX_FLAGS: usize = 8;
 
 /// Custom Price Feed.
 #[account(zero_copy)]
@@ -151,17 +152,7 @@ impl PriceFeed {
     }
 }
 
-/// Price Feed Flags.
-#[repr(u8)]
-#[non_exhaustive]
-#[derive(num_enum::IntoPrimitive, num_enum::TryFromPrimitive)]
-pub enum PriceFlag {
-    /// Is Market Opened.
-    Open,
-    // CHECK: should have no more than `MAX_FLAGS` of flags.
-}
-
-gmsol_utils::flags!(PriceFlag, MAX_FLAGS, u8);
+gmsol_utils::flags!(PriceFlag, MAX_PRICE_FLAG, u8);
 
 /// Price structure for Price Feed.
 #[zero_copy]

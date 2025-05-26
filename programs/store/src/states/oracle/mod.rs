@@ -27,7 +27,10 @@ use crate::{
     CoreError, CoreResult,
 };
 use anchor_lang::prelude::*;
-use gmsol_utils::token_config::FeedConfig;
+use gmsol_utils::{
+    oracle::{OracleFlag, MAX_ORACLE_FLAGS},
+    token_config::FeedConfig,
+};
 
 use self::price_map::PriceMap;
 use super::{HasMarketMeta, Seed, Store, TokenConfig, TokenMapHeader, TokenMapRef};
@@ -43,18 +46,7 @@ pub use self::{
 
 pub use gmsol_utils::oracle::PriceProviderKind;
 
-const MAX_FLAGS: usize = 8;
-
-#[repr(u8)]
-#[non_exhaustive]
-#[derive(num_enum::IntoPrimitive, num_enum::TryFromPrimitive)]
-enum OracleFlag {
-    /// Cleared.
-    Cleared,
-    // CHECK: should have no more than `MAX_FLAGS` of flags.
-}
-
-gmsol_utils::flags!(OracleFlag, MAX_FLAGS, u8);
+gmsol_utils::flags!(OracleFlag, MAX_ORACLE_FLAGS, u8);
 
 /// Oracle Account.
 #[account(zero_copy)]

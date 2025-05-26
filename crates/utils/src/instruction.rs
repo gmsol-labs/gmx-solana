@@ -3,7 +3,10 @@ use anchor_lang::{
     solana_program::instruction::Instruction,
 };
 
-const MAX_FLAGS: usize = 8;
+const MAX_IX_ACCOUNT_FLAGS: usize = 8;
+
+/// Max number of instruction flags.
+pub const MAX_IX_FLAGS: usize = 8;
 
 /// Instruction error.
 #[derive(Debug, thiserror::Error)]
@@ -34,10 +37,10 @@ pub enum InstructionAccountFlag {
     Signer,
     /// Is mutable.
     Writable,
-    // CHECK: cannot have more than `MAX_FLAGS` flags.
+    // CHECK: cannot have more than `MAX_IX_ACCOUNT_FLAGS` flags.
 }
 
-crate::flags!(InstructionAccountFlag, MAX_FLAGS, u8);
+crate::flags!(InstructionAccountFlag, MAX_IX_ACCOUNT_FLAGS, u8);
 
 impl<'a> From<&'a InstructionAccount> for AccountMeta {
     fn from(a: &'a InstructionAccount) -> Self {
@@ -92,4 +95,13 @@ pub trait InstructionAccess {
             data: self.data().to_vec(),
         })
     }
+}
+
+/// Flags of Instruction.
+#[derive(num_enum::IntoPrimitive)]
+#[repr(u8)]
+pub enum InstructionFlag {
+    /// Approved.
+    Approved,
+    // CHECK: cannot have more than `MAX_IX_FLAGS` flags.
 }

@@ -5,6 +5,7 @@ use gmsol_store::{
     utils::pubkey::to_bytes,
     CoreError,
 };
+use gmsol_utils::gt::{GtBankFlags, MAX_GT_BANK_FLAGS};
 
 use super::treasury::MAX_TOKENS;
 
@@ -322,19 +323,4 @@ impl Default for TokenBalance {
 
 gmsol_utils::fixed_map!(TokenBalances, Pubkey, to_bytes, TokenBalance, MAX_TOKENS, 4);
 
-const MAX_FLAGS: usize = 8;
-
-/// Flags of GT Bank.
-#[derive(num_enum::IntoPrimitive)]
-#[repr(u8)]
-pub enum GtBankFlags {
-    /// Initialized.
-    Initialized,
-    /// Confirmed.
-    Confirmed,
-    /// Synced after confirmation.
-    SyncedAfterConfirmation,
-    // CHECK: cannot have more than `MAX_FLAGS` flags.
-}
-
-gmsol_utils::flags!(GtBankFlags, MAX_FLAGS, u8);
+gmsol_utils::flags!(GtBankFlags, MAX_GT_BANK_FLAGS, u8);

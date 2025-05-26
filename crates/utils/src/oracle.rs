@@ -2,6 +2,9 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::{price::Decimal, token_config::TokenConfig, Price};
 
+/// Max number of oracle flags.
+pub const MAX_ORACLE_FLAGS: usize = 8;
+
 /// Oracle error.
 #[derive(Debug, thiserror::Error)]
 pub enum OracleError {
@@ -100,4 +103,14 @@ pub fn pyth_price_value_to_decimal(
     )
     .map_err(|_| OracleError::InvalidPriceFeedPrice("converting to Decimal"))?;
     Ok(price)
+}
+
+/// Oracle flag.
+#[repr(u8)]
+#[non_exhaustive]
+#[derive(num_enum::IntoPrimitive, num_enum::TryFromPrimitive)]
+pub enum OracleFlag {
+    /// Cleared.
+    Cleared,
+    // CHECK: should have no more than `MAX_ORACLE_FLAGS` of flags.
 }

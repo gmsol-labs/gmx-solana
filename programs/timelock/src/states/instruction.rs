@@ -5,13 +5,14 @@ use gmsol_store::{
     utils::pubkey::{optional_address, DEFAULT_PUBKEY},
     CoreError,
 };
-use gmsol_utils::{instruction::InstructionError, InitSpace};
+use gmsol_utils::{
+    instruction::{InstructionError, InstructionFlag, MAX_IX_FLAGS},
+    InitSpace,
+};
 
 use crate::states::create_executor_wallet_pda;
 
 pub use gmsol_utils::instruction::{InstructionAccess, InstructionAccount, InstructionAccountFlag};
-
-const MAX_FLAGS: usize = 8;
 
 /// Instruction Header.
 #[account(zero_copy)]
@@ -111,16 +112,7 @@ impl InstructionHeader {
     }
 }
 
-/// Flags of Instruction.
-#[derive(num_enum::IntoPrimitive)]
-#[repr(u8)]
-pub enum InstructionFlag {
-    /// Approved.
-    Approved,
-    // CHECK: cannot have more than `MAX_FLAGS` flags.
-}
-
-gmsol_utils::flags!(InstructionFlag, MAX_FLAGS, u8);
+gmsol_utils::flags!(InstructionFlag, MAX_IX_FLAGS, u8);
 
 /// Reference to the instruction.
 pub struct InstructionRef<'a> {

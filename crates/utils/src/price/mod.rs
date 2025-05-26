@@ -9,6 +9,9 @@ pub use ruint::aliases::U192;
 /// [`U192`] number 10.
 pub const TEN: U192 = U192::from_limbs([10, 0, 0]);
 
+/// Max number of price flags.
+pub const MAX_PRICE_FLAG: usize = 8;
+
 /// Price type.
 #[derive(Debug, AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace)]
 pub struct Price {
@@ -78,6 +81,16 @@ pub fn convert_to_u128_storage(mut num: U192, decimals: u8) -> Option<(u128, u8)
     num /= TEN.pow(U192::from(divisor_decimals));
 
     Some((num.try_into().unwrap(), decimals - divisor_decimals))
+}
+
+/// Price Feed Flags.
+#[repr(u8)]
+#[non_exhaustive]
+#[derive(num_enum::IntoPrimitive, num_enum::TryFromPrimitive)]
+pub enum PriceFlag {
+    /// Is Market Opened.
+    Open,
+    // CHECK: should have no more than `MAX_PRICE_FLAG` of flags.
 }
 
 #[cfg(test)]

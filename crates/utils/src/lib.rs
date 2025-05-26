@@ -54,6 +54,9 @@ pub mod gt;
 /// Definitions related to roles.
 pub mod role;
 
+/// Definitions related to users.
+pub mod user;
+
 /// Definitions related to instructions.
 #[cfg(feature = "instruction")]
 pub mod instruction;
