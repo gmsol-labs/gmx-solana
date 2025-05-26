@@ -8,29 +8,16 @@ use gmsol_model::{
     params::fee::PositionFees,
     price::Prices,
 };
-use gmsol_utils::InitSpace;
+use gmsol_utils::{
+    order::{TradeFlag, TradeFlagContainer},
+    InitSpace,
+};
 
 use crate::{
     states::{order::TransferOut, position::PositionState, Position, Seed},
     utils::pubkey::DEFAULT_PUBKEY,
     CoreError,
 };
-
-/// Trade Data Flags.
-#[allow(clippy::enum_variant_names)]
-#[derive(num_enum::IntoPrimitive)]
-#[repr(u8)]
-pub enum TradeFlag {
-    /// Is long.
-    IsLong,
-    /// Is collateral long.
-    IsCollateralLong,
-    /// Is increase.
-    IsIncrease,
-    // CHECK: cannot have more than `8` flags.
-}
-
-gmsol_utils::flags!(TradeFlag, 8, u8);
 
 /// Trade event data.
 #[account(zero_copy)]

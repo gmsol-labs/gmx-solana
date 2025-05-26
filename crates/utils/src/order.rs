@@ -160,3 +160,19 @@ impl PositionCutKind {
         }
     }
 }
+
+/// Trade Data Flags.
+#[allow(clippy::enum_variant_names)]
+#[derive(num_enum::IntoPrimitive)]
+#[repr(u8)]
+pub enum TradeFlag {
+    /// Is long.
+    IsLong,
+    /// Is collateral long.
+    IsCollateralLong,
+    /// Is increase.
+    IsIncrease,
+    // CHECK: cannot have more than `8` flags.
+}
+
+crate::flags!(TradeFlag, 8, u8);

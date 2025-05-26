@@ -4,7 +4,7 @@ use bytemuck::Zeroable;
 
 use crate::gmsol_store::{
     accounts::{Glv, GtExchange, Market, Position, ReferralCodeV2, Store},
-    types::ActionHeader,
+    types::{ActionHeader, EventPositionState, PositionState},
 };
 
 /// Referral Code Bytes.
@@ -97,13 +97,48 @@ impl ReferralCodeV2 {
     }
 }
 
+impl From<EventPositionState> for PositionState {
+    fn from(event: EventPositionState) -> Self {
+        let EventPositionState {
+            trade_id,
+            increased_at,
+            updated_at_slot,
+            decreased_at,
+            size_in_tokens,
+            collateral_amount,
+            size_in_usd,
+            borrowing_factor,
+            funding_fee_amount_per_size,
+            long_token_claimable_funding_amount_per_size,
+            short_token_claimable_funding_amount_per_size,
+            reserved,
+        } = event;
+
+        Self {
+            trade_id,
+            increased_at,
+            updated_at_slot,
+            decreased_at,
+            size_in_tokens,
+            collateral_amount,
+            size_in_usd,
+            borrowing_factor,
+            funding_fee_amount_per_size,
+            long_token_claimable_funding_amount_per_size,
+            short_token_claimable_funding_amount_per_size,
+            reserved,
+        }
+    }
+}
+
 #[cfg(feature = "gmsol-utils")]
 mod utils {
     use anchor_lang::prelude::Pubkey;
     use gmsol_utils::{
         action::{ActionCallbackKind, ActionFlag, MAX_ACTION_FLAGS},
-        impl_fixed_map, impl_flags, market,
-        order::{self, PositionKind},
+        impl_fixed_map, impl_flags,
+        market::{self, HasMarketMeta},
+        order::{self, PositionKind, TradeFlag, TradeFlagContainer},
         pubkey::{self, optional_address},
         swap::{self, HasSwapParams},
         token_config::{self, TokensCollector},
@@ -111,6 +146,7 @@ mod utils {
 
     use crate::gmsol_store::{
         accounts::{Glv, Position},
+        events::TradeEvent,
         types::{
             ActionFlagContainer, ActionHeader, GlvMarketConfig, GlvMarkets, GlvMarketsEntry,
             MarketMeta, OrderActionParams, OrderKind, SwapActionParams, TokenAndAccount, Tokens,
@@ -300,6 +336,51 @@ mod utils {
         pub fn callback_kind(&self) -> crate::Result<ActionCallbackKind> {
             ActionCallbackKind::try_from(self.callback_kind)
                 .map_err(|_| crate::Error::custom("unknown callback kind"))
+        }
+    }
+
+    impl TradeEvent {
+        /// Get trade data flag.
+        pub fn get_flag(&self, flag: TradeFlag) -> bool {
+            let map = TradeFlagContainer::from_value(self.flags);
+            map.get_flag(flag)
+        }
+
+        /// Return whether the position side is long.
+        pub fn is_long(&self) -> bool {
+            self.get_flag(TradeFlag::IsLong)
+        }
+
+        /// Return whether the collateral side is long.
+        pub fn is_collateral_long(&self) -> bool {
+            self.get_flag(TradeFlag::IsCollateralLong)
+        }
+
+        /// Create position from this event.
+        pub fn to_position(&self, meta: &impl HasMarketMeta) -> Position {
+            let mut position = Position::default();
+
+            let kind = if self.is_long() {
+                PositionKind::Long
+            } else {
+                PositionKind::Short
+            };
+
+            let collateral_token = if self.is_collateral_long() {
+                meta.market_meta().long_token_mint
+            } else {
+                meta.market_meta().short_token_mint
+            };
+
+            position.kind = kind as u8;
+            // Note: there's no need to provide a correct bump here for now.
+            position.bump = 0;
+            position.store = self.store;
+            position.owner = self.user;
+            position.market_token = self.market_token;
+            position.collateral_token = collateral_token;
+            position.state = self.after.into();
+            position
         }
     }
 }

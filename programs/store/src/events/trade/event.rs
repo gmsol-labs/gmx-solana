@@ -10,10 +10,10 @@ use crate::{
 use super::{TradeData, TradeFees, TradeOutputAmounts, TradePnl, TradePrice, TradePrices};
 
 #[cfg(feature = "utils")]
-use crate::{
-    events::{TradeFlag, TradeFlagContainer},
-    states::Position,
-};
+use crate::states::Position;
+
+#[cfg(feature = "utils")]
+use gmsol_utils::order::{TradeFlag, TradeFlagContainer};
 
 /// This is a cheaper variant of [`TradeEvent`], sharing the same format
 /// for serialization.
