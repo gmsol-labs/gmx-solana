@@ -13,6 +13,7 @@ anchor_lang::declare_program!(gmsol_competition);
 pub mod constants;
 
 /// Utilities.
+#[cfg(feature = "utils")]
 pub mod utils;
 
 /// Error.

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk: Removed support for `spl-governance`.
 - sdk(sdk): Updated the `ExchangeOps::update_order` function to include a `hint` parameter and return a future.
 - sdk(solana-utils): Added `append` argument to `TransactionBuilder::pre_instruction` and `TransactionBuilder::pre_instructions`.
+- sdk(programs): Added the `utils` feature and made the `utils` module available only when it's enabled.
 
 ### Added
 

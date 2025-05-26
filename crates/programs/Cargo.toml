@@ -17,6 +17,7 @@ timelock = []
 competition = []
 model = ["gmsol-model", "bitmaps", "time"]
 wasm-bindgen = ["time?/wasm-bindgen"]
+utils = []
 
 [dependencies]
 gmsol-model = { workspace = true, optional = true, features = ["u128"] }

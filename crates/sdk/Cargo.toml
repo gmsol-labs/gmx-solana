@@ -36,6 +36,7 @@ serde = [
 ]
 market-graph = ["petgraph", "rust_decimal/maths"]
 client = [
+    "gmsol-programs/utils",
     "gmsol-programs/gmsol-utils",
     "gmsol-solana-utils/make-bundle-builder",
     "gmsol-solana-utils/anchor",
