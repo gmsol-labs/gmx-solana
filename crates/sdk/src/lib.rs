@@ -37,6 +37,10 @@ pub mod client;
 #[cfg(feature = "squads")]
 pub mod squads;
 
+/// GMSOL resource discovery.
+#[cfg(feature = "discover")]
+pub mod discover;
+
 /// Model support.
 pub mod model {
     pub use gmsol_model::*;

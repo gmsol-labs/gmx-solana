@@ -93,7 +93,7 @@ impl From<Error> for wasm_bindgen::JsValue {
 }
 
 /// Anchor Error with owned source.
-#[derive(Debug)]
+#[derive(Debug, Clone, Default)]
 pub struct AnchorError {
     /// Error name.
     pub error_name: String,
@@ -108,7 +108,7 @@ pub struct AnchorError {
 }
 
 /// Error origin with owned source.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ErrorOrigin {
     /// Source.
     Source(String, u32),

@@ -77,6 +77,7 @@ pyth = [
 ]
 switchboard = ["switchboard-on-demand-client"]
 squads = []
+discover = ["client", "tower/discover", "tokio/time", "pin-project-lite"]
 
 anchor-test = ["client", "chainlink", "pyth", "decode"]
 
@@ -153,6 +154,10 @@ byteorder = { workspace = true, optional = true }
 
 # Dependencies for `switchboard` feature
 switchboard-on-demand-client = { workspace = true, optional = true }
+
+# Dependencies for `discover` feature
+tower = { workspace = true, optional = true }
+pin-project-lite = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases = { workspace = true }

@@ -141,6 +141,11 @@ pub fn find_store_address(key: &str, store_program_id: &Pubkey) -> (Pubkey, u8) 
     Pubkey::find_program_address(&[STORE_SEED, &to_seed(key)], store_program_id)
 }
 
+/// Find the default store address.
+pub fn find_default_store_address() -> (Pubkey, u8) {
+    find_store_address("", &gmsol_programs::gmsol_store::ID)
+}
+
 /// Find PDA for store wallet account.
 pub fn find_store_wallet_address(store: &Pubkey, store_program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[STORE_WALLET_SEED, store.as_ref()], store_program_id)

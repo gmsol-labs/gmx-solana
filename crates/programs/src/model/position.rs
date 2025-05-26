@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use gmsol_model::action::{decrease_position::DecreasePositionSwapType, swap::SwapReport};
 
-use crate::{constants, gmsol_store::accounts::Position};
+use crate::{
+    constants,
+    gmsol_store::{accounts::Position, types::PositionState},
+};
 
 use super::MarketModel;
 
@@ -61,43 +64,69 @@ impl PositionModel {
     }
 }
 
+impl gmsol_model::PositionState<{ constants::MARKET_DECIMALS }> for PositionState {
+    type Num = u128;
+
+    type Signed = i128;
+
+    fn collateral_amount(&self) -> &Self::Num {
+        &self.collateral_amount
+    }
+
+    fn size_in_usd(&self) -> &Self::Num {
+        &self.size_in_usd
+    }
+
+    fn size_in_tokens(&self) -> &Self::Num {
+        &self.size_in_tokens
+    }
+
+    fn borrowing_factor(&self) -> &Self::Num {
+        &self.borrowing_factor
+    }
+
+    fn funding_fee_amount_per_size(&self) -> &Self::Num {
+        &self.funding_fee_amount_per_size
+    }
+
+    fn claimable_funding_fee_amount_per_size(&self, is_long_collateral: bool) -> &Self::Num {
+        if is_long_collateral {
+            &self.long_token_claimable_funding_amount_per_size
+        } else {
+            &self.short_token_claimable_funding_amount_per_size
+        }
+    }
+}
+
 impl gmsol_model::PositionState<{ constants::MARKET_DECIMALS }> for PositionModel {
     type Num = u128;
 
     type Signed = i128;
 
     fn collateral_amount(&self) -> &Self::Num {
-        &self.position.state.collateral_amount
+        self.position.state.collateral_amount()
     }
 
     fn size_in_usd(&self) -> &Self::Num {
-        &self.position.state.size_in_usd
+        self.position.state.size_in_usd()
     }
 
     fn size_in_tokens(&self) -> &Self::Num {
-        &self.position.state.size_in_tokens
+        self.position.state.size_in_tokens()
     }
 
     fn borrowing_factor(&self) -> &Self::Num {
-        &self.position.state.borrowing_factor
+        self.position.state.borrowing_factor()
     }
 
     fn funding_fee_amount_per_size(&self) -> &Self::Num {
-        &self.position.state.funding_fee_amount_per_size
+        self.position.state.funding_fee_amount_per_size()
     }
 
     fn claimable_funding_fee_amount_per_size(&self, is_long_collateral: bool) -> &Self::Num {
-        if is_long_collateral {
-            &self
-                .position
-                .state
-                .long_token_claimable_funding_amount_per_size
-        } else {
-            &self
-                .position
-                .state
-                .short_token_claimable_funding_amount_per_size
-        }
+        self.position
+            .state
+            .claimable_funding_fee_amount_per_size(is_long_collateral)
     }
 }
 

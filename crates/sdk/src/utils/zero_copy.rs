@@ -153,3 +153,47 @@ impl<T> AsRef<T> for SharedZeroCopy<T> {
         &self.0
     }
 }
+
+/// Wrapper for deserializing account into arced type.
+pub struct Shared<T>(pub Arc<T>);
+
+impl<T> Clone for Shared<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T> Shared<T> {
+    /// Conver into inner value.
+    pub fn into_inner(self) -> Arc<T> {
+        self.0
+    }
+}
+
+impl<T> anchor_lang::AccountDeserialize for Shared<T>
+where
+    T: anchor_lang::AccountDeserialize,
+{
+    fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+        let account = T::try_deserialize(buf)?;
+        Ok(Self(Arc::new(account)))
+    }
+
+    fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+        let account = T::try_deserialize_unchecked(buf)?;
+        Ok(Self(Arc::new(account)))
+    }
+}
+
+impl<T> Discriminator for Shared<T>
+where
+    T: Discriminator,
+{
+    const DISCRIMINATOR: &'static [u8] = T::DISCRIMINATOR;
+}
+
+impl<T> AsRef<T> for Shared<T> {
+    fn as_ref(&self) -> &T {
+        &self.0
+    }
+}

@@ -28,6 +28,12 @@ impl Default for Position {
     }
 }
 
+impl AsRef<Position> for Position {
+    fn as_ref(&self) -> &Position {
+        self
+    }
+}
+
 impl Default for ActionHeader {
     fn default() -> Self {
         Zeroable::zeroed()
@@ -135,9 +141,10 @@ impl From<EventPositionState> for PositionState {
 mod utils {
     use anchor_lang::prelude::Pubkey;
     use gmsol_utils::{
-        action::{ActionCallbackKind, ActionFlag, MAX_ACTION_FLAGS},
+        action::{ActionCallbackKind, ActionFlag, ActionState, MAX_ACTION_FLAGS},
+        fixed_str::bytes_to_fixed_str,
         impl_fixed_map, impl_flags,
-        market::{self, HasMarketMeta},
+        market::{self, HasMarketMeta, MarketFlag, MAX_MARKET_FLAGS},
         order::{self, PositionKind, TradeFlag, TradeFlagContainer},
         pubkey::{self, optional_address},
         swap::{self, HasSwapParams},
@@ -145,12 +152,12 @@ mod utils {
     };
 
     use crate::gmsol_store::{
-        accounts::{Glv, Position},
+        accounts::{Glv, Market, Position},
         events::TradeEvent,
         types::{
             ActionFlagContainer, ActionHeader, GlvMarketConfig, GlvMarkets, GlvMarketsEntry,
-            MarketMeta, OrderActionParams, OrderKind, SwapActionParams, TokenAndAccount, Tokens,
-            TokensEntry, UpdateTokenConfigParams,
+            MarketFlagContainer, MarketMeta, OrderActionParams, OrderKind, SwapActionParams,
+            TokenAndAccount, Tokens, TokensEntry, UpdateTokenConfigParams,
         },
     };
 
@@ -167,6 +174,7 @@ mod utils {
     );
 
     impl_flags!(ActionFlag, MAX_ACTION_FLAGS, u8);
+    impl_flags!(MarketFlag, MAX_MARKET_FLAGS, u8);
 
     impl From<SwapActionParams> for swap::SwapActionParams {
         fn from(params: SwapActionParams) -> Self {
@@ -279,6 +287,19 @@ mod utils {
         pub fn position(&self) -> Option<&Pubkey> {
             optional_address(&self.position)
         }
+
+        /// Get decrease position swap type.
+        #[cfg(feature = "model")]
+        pub fn decrease_position_swap_type(
+            &self,
+        ) -> crate::Result<gmsol_model::action::decrease_position::DecreasePositionSwapType>
+        {
+            let ty = self
+                .decrease_position_swap_type
+                .try_into()
+                .map_err(|_| crate::Error::custom("unknown decrease position swap type"))?;
+            Ok(ty)
+        }
     }
 
     impl Position {
@@ -332,6 +353,12 @@ mod utils {
     }
 
     impl ActionHeader {
+        /// Get action state.
+        pub fn action_state(&self) -> crate::Result<ActionState> {
+            ActionState::try_from(self.action_state)
+                .map_err(|_| crate::Error::custom("unknown action state"))
+        }
+
         /// Get callback kind.
         pub fn callback_kind(&self) -> crate::Result<ActionCallbackKind> {
             ActionCallbackKind::try_from(self.callback_kind)
@@ -381,6 +408,13 @@ mod utils {
             position.collateral_token = collateral_token;
             position.state = self.after.into();
             position
+        }
+    }
+
+    impl Market {
+        /// Get name.
+        pub fn name(&self) -> crate::Result<&str> {
+            bytes_to_fixed_str(&self.name).map_err(crate::Error::custom)
         }
     }
 }
