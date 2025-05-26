@@ -901,16 +901,16 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                 if let Some(market_token) = market_token {
                     bytes.extend_from_slice(market_token.as_ref());
                 }
-                let filter = RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
+                let filter = RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
                     bytemuck::offset_of!(store_accounts::Position, owner) + DISC_OFFSET,
-                    bytes,
+                    &bytes,
                 ));
                 Some(filter)
             }
             None => market_token.and_then(|token| {
-                Some(RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
+                Some(RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
                     bytemuck::offset_of!(store_accounts::Position, market_token) + DISC_OFFSET,
-                    token.try_to_vec().ok()?,
+                    &token.try_to_vec().ok()?,
                 )))
             }),
         };
@@ -969,16 +969,16 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     ) -> crate::Result<BTreeMap<Pubkey, store_accounts::Order>> {
         let mut filters = Vec::default();
         if let Some(owner) = owner {
-            filters.push(RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
+            filters.push(RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
                 bytemuck::offset_of!(store_types::ActionHeader, owner) + DISC_OFFSET,
-                owner.as_ref().to_owned(),
+                owner.as_ref(),
             )));
         }
         if let Some(market_token) = market_token {
             let market = self.find_market_address(store, market_token);
-            filters.push(RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
+            filters.push(RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
                 bytemuck::offset_of!(store_types::ActionHeader, market) + DISC_OFFSET,
-                market.as_ref().to_owned(),
+                market.as_ref(),
             )));
         }
         let store_filter = StoreFilter::new(
@@ -1358,9 +1358,6 @@ impl From<StoreFilter> for RpcFilterType {
     fn from(filter: StoreFilter) -> Self {
         let store = filter.store;
         let store_offset = filter.store_offset();
-        RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
-            store_offset,
-            store.as_ref().to_owned(),
-        ))
+        RpcFilterType::Memcmp(Memcmp::new_base58_encoded(store_offset, store.as_ref()))
     }
 }

@@ -19,6 +19,7 @@ use gmsol_sdk::{
 };
 use init_config::InitConfig;
 
+use market::Market;
 #[cfg(feature = "remote-wallet")]
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 
@@ -29,6 +30,7 @@ mod competition;
 mod exchange;
 mod get_pubkey;
 mod init_config;
+mod market;
 
 /// Utils for command implementations.
 pub mod utils;
@@ -45,6 +47,8 @@ pub enum Commands {
     Pubkey(GetPubkey),
     /// Commands for exchange functionalities.
     Exchange(Box<Exchange>),
+    /// Commands for markets.
+    Market(Market),
     /// Commands for competition management.
     Competition(Competition),
 }
