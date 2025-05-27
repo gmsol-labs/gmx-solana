@@ -13,7 +13,9 @@ const LAMPORT_DECIMALS: u8 = 9;
 /// Amount in lamports.
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Lamport(#[cfg_attr(serde, serde(with = "rust_decimal::serde::str"))] pub Decimal);
+pub struct Lamport(
+    #[cfg_attr(serde, serde(with = "rust_decimal::serde::arbitrary_precision"))] pub Decimal,
+);
 
 impl fmt::Display for Lamport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -47,7 +49,9 @@ impl Lamport {
 /// Market token amount.
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct GmAmount(#[cfg_attr(serde, serde(with = "rust_decimal::serde::str"))] pub Decimal);
+pub struct GmAmount(
+    #[cfg_attr(serde, serde(with = "rust_decimal::serde::arbitrary_precision"))] pub Decimal,
+);
 
 impl fmt::Display for GmAmount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -81,7 +85,9 @@ impl GmAmount {
 /// A general-purpose token amount.
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Amount(#[cfg_attr(serde, serde(with = "rust_decimal::serde::str"))] pub Decimal);
+pub struct Amount(
+    #[cfg_attr(serde, serde(with = "rust_decimal::serde::arbitrary_precision"))] pub Decimal,
+);
 
 impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -120,7 +126,9 @@ impl Amount {
 /// A value with [`MARKET_DECIMALS`] decimals.
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Value(#[cfg_attr(serde, serde(with = "rust_decimal::serde::str"))] pub Decimal);
+pub struct Value(
+    #[cfg_attr(serde, serde(with = "rust_decimal::serde::arbitrary_precision"))] pub Decimal,
+);
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

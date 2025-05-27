@@ -37,7 +37,7 @@ figment = { workspace = true, features = ["env", 'toml'] }
 tracing = { workspace = true }
 cfg-if = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["preserve_order"] }
 url = { workspace = true }
 shellexpand = { workspace = true }
 etcetera = { workspace = true }
@@ -50,6 +50,8 @@ anchor-spl = { workspace = true, features = ["token", "associated_token"] }
 time = { workspace = true, features = ["parsing", "formatting"] }
 humantime = { workspace = true }
 either = { workspace = true }
+prettytable = { workspace = true }
+indexmap = { workspace = true }
 
 color-eyre = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true, features = [

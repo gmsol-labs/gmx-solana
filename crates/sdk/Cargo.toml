@@ -33,7 +33,7 @@ serde = [
     "gmsol-model/serde",
     "serde_with",
     "gmsol-solana-utils/serde",
-    "rust_decimal/serde-with-str",
+    "rust_decimal/serde-with-arbitrary-precision",
 ]
 market-graph = ["petgraph", "rust_decimal/maths"]
 client = [

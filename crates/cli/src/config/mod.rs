@@ -1,3 +1,4 @@
+mod output;
 mod store_address;
 
 use eyre::OptionExt;
@@ -20,6 +21,8 @@ use store_address::StoreAddress;
 
 use crate::wallet::signer_from_source;
 
+pub use output::{DisplayOptions, OutputFormat};
+
 cfg_if::cfg_if! {
     if #[cfg(feature = "devnet")] {
         const DEFAULT_CLUSTER: Cluster = Cluster::Devnet;
@@ -35,6 +38,9 @@ const DEFAULT_COMMITMENT: CommitmentLevel = CommitmentLevel::Confirmed;
 /// Configuration.
 #[derive(Debug, clap::Args, serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct Config {
+    /// Output format.
+    #[arg(long, global = true)]
+    output: Option<OutputFormat>,
     /// Path to the wallet.
     #[arg(long, short, env)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -249,6 +255,11 @@ impl Config {
     /// Get address lookup tables.
     pub fn alts(&self) -> impl Iterator<Item = &Pubkey> {
         self.alts.iter().flat_map(|alts| alts.iter().map(|p| &p.0))
+    }
+
+    /// Get output format.
+    pub fn output(&self) -> OutputFormat {
+        self.output.unwrap_or_default()
     }
 }
 
