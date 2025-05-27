@@ -4,7 +4,7 @@ use eyre::OptionExt;
 use gmsol_sdk::{
     ops::competition::{CompetitionOps, CompetitionParams},
     programs::anchor_lang::prelude::Pubkey,
-    utils::UsdValue,
+    utils::Value,
 };
 use time::OffsetDateTime;
 
@@ -24,7 +24,7 @@ enum Command {
         #[arg(long, value_parser = parse_datetime)]
         end: OffsetDateTime,
         #[arg(long)]
-        volume_threshold: UsdValue,
+        volume_threshold: Value,
         #[arg(long, value_parser = humantime::parse_duration)]
         time_extension: Duration,
         #[arg(long, value_parser = humantime::parse_duration)]

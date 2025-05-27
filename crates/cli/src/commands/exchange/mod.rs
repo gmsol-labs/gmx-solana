@@ -19,7 +19,7 @@ use gmsol_sdk::{
             commitment_config::CommitmentConfig, instruction::Instruction, signer::Signer,
         },
     },
-    utils::{Amount, GmAmount, Lamport, UsdValue},
+    utils::{Amount, GmAmount, Lamport, Value},
 };
 
 /// Commands for exchange functionalities.
@@ -161,7 +161,7 @@ enum Command {
         side: Side,
         /// Position increment size in usd.
         #[arg(long)]
-        size: UsdValue,
+        size: Value,
         /// Swap paths for collateral token.
         #[arg(long, short, action = clap::ArgAction::Append)]
         swap: Vec<Pubkey>,
@@ -186,8 +186,8 @@ enum Command {
         #[arg(long)]
         side: Side,
         /// Position decrement size in usd.
-        #[arg(long, default_value_t = UsdValue::ZERO)]
-        size: UsdValue,
+        #[arg(long, default_value_t = Value::ZERO)]
+        size: Value,
         /// Final output token.
         #[arg(long, short = 'o')]
         final_output_token: Option<Pubkey>,

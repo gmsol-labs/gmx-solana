@@ -19,6 +19,9 @@ pub mod instruction_serialization;
 /// Amount type definitions.
 pub mod amount;
 
+/// Utils for market.
+pub mod market;
+
 /// Utils for `gmsol-decode`.
 #[cfg(feature = "decode")]
 pub mod decode;

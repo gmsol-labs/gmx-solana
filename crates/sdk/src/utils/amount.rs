@@ -6,11 +6,14 @@ use crate::{
 };
 use rust_decimal::Decimal;
 
+use super::{signed_value_to_decimal, unsigned_amount_to_decimal};
+
 const LAMPORT_DECIMALS: u8 = 9;
 
 /// Amount in lamports.
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Lamport(pub Decimal);
+pub struct Lamport(#[cfg_attr(serde, serde(with = "rust_decimal::serde::str"))] pub Decimal);
 
 impl fmt::Display for Lamport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -42,8 +45,9 @@ impl Lamport {
 }
 
 /// Market token amount.
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct GmAmount(pub Decimal);
+pub struct GmAmount(#[cfg_attr(serde, serde(with = "rust_decimal::serde::str"))] pub Decimal);
 
 impl fmt::Display for GmAmount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -75,8 +79,9 @@ impl GmAmount {
 }
 
 /// A general-purpose token amount.
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Amount(pub Decimal);
+pub struct Amount(#[cfg_attr(serde, serde(with = "rust_decimal::serde::str"))] pub Decimal);
 
 impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -101,23 +106,29 @@ impl Amount {
         decimal_to_amount(self.0, decimals)
     }
 
+    /// Create from `u64`.
+    pub fn from_u64(amount: u64, decimals: u8) -> Self {
+        Self(unsigned_amount_to_decimal(amount, decimals).normalize())
+    }
+
     /// Returns whether the amount is zero.
     pub const fn is_zero(&self) -> bool {
         self.0.is_zero()
     }
 }
 
-/// A USD value.
+/// A value with [`MARKET_DECIMALS`] decimals.
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct UsdValue(pub Decimal);
+pub struct Value(#[cfg_attr(serde, serde(with = "rust_decimal::serde::str"))] pub Decimal);
 
-impl fmt::Display for UsdValue {
+impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl FromStr for UsdValue {
+impl FromStr for Value {
     type Err = <Decimal as FromStr>::Err;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -125,13 +136,18 @@ impl FromStr for UsdValue {
     }
 }
 
-impl UsdValue {
+impl Value {
     /// Zero.
     pub const ZERO: Self = Self(Decimal::ZERO);
 
     /// Convert to `u128`.
     pub fn to_u128(&self) -> crate::Result<u128> {
         decimal_to_value(self.0, MARKET_DECIMALS)
+    }
+
+    /// Create from `i128`.
+    pub fn from_i128(value: i128) -> Self {
+        Self(signed_value_to_decimal(value).normalize())
     }
 
     /// Returns whether the amount is zero.
