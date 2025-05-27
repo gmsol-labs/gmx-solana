@@ -5,7 +5,7 @@ use gmsol_programs::gmsol_store::{
 use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup};
 use typed_builder::TypedBuilder;
 
-use crate::{builders::StoreProgram, utils::serde::StringPubkey};
+use crate::{builders::StoreProgram, serde::StringPubkey};
 
 /// Builder for the `update_order` instruction.
 #[cfg_attr(js, derive(tsify_next::Tsify))]

@@ -8,7 +8,7 @@ use typed_builder::TypedBuilder;
 
 use crate::{
     builders::{utils::get_ata_or_owner, StoreProgram},
-    utils::serde::StringPubkey,
+    serde::StringPubkey,
 };
 
 /// Builder for the `close_order` instruction.

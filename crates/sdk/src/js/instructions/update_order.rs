@@ -5,7 +5,7 @@ use gmsol_solana_utils::{IntoAtomicGroup, ParallelGroup};
 
 use crate::{
     builders::{order, StoreProgram},
-    utils::serde::StringPubkey,
+    serde::StringPubkey,
 };
 
 use super::{TransactionGroup, TransactionGroupOptions};

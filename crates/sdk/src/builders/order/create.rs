@@ -10,7 +10,7 @@ use crate::builders::{
     utils::{generate_nonce, prepare_ata},
     NonceBytes, StoreProgram,
 };
-use crate::utils::serde::StringPubkey;
+use crate::serde::StringPubkey;
 use crate::{AtomicGroup, IntoAtomicGroup};
 
 use super::MIN_EXECUTION_LAMPORTS_FOR_ORDER;

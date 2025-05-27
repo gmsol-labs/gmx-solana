@@ -1,7 +1,7 @@
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
 
-use crate::utils::serde::StringPubkey;
+use crate::serde::StringPubkey;
 
 use super::NonceBytes;
 

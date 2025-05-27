@@ -5,7 +5,7 @@ use either::Either;
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
-use crate::{utils::serde::StringPubkey, AtomicGroup, IntoAtomicGroup};
+use crate::{serde::StringPubkey, AtomicGroup, IntoAtomicGroup};
 
 use super::utils::prepare_ata;
 

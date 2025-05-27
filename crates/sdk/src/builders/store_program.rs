@@ -5,10 +5,7 @@ use solana_sdk::{
 };
 use typed_builder::TypedBuilder;
 
-use crate::{
-    pda,
-    utils::{optional::fix_optional_account_metas, serde::StringPubkey},
-};
+use crate::{pda, serde::StringPubkey, utils::optional::fix_optional_account_metas};
 
 /// Nonce Bytes.
 pub type NonceBytes = StringPubkey;

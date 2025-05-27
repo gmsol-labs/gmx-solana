@@ -13,7 +13,7 @@ use crate::{
         user::PrepareUser,
         StoreProgram,
     },
-    utils::serde::StringPubkey,
+    serde::StringPubkey,
 };
 
 use super::{TransactionGroup, TransactionGroupOptions};

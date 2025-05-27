@@ -1,4 +1,4 @@
-use gmsol_sdk::{programs::anchor_lang::prelude::Pubkey, utils::serde::StringPubkey};
+use gmsol_sdk::{programs::anchor_lang::prelude::Pubkey, serde::StringPubkey};
 
 #[derive(Debug, clap::Args, serde::Serialize, serde::Deserialize, Default, Clone)]
 pub(crate) struct StoreAddress {

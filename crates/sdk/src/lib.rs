@@ -18,6 +18,9 @@ pub mod market;
 /// Position calculations.
 pub mod position;
 
+/// Utilities for serialization.
+pub mod serde;
+
 /// Utils.
 pub mod utils;
 

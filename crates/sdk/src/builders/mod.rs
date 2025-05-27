@@ -1,4 +1,4 @@
-use crate::utils::serde::StringPubkey;
+use crate::serde::StringPubkey;
 
 /// Store Program.
 pub mod store_program;

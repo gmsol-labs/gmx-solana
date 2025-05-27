@@ -6,7 +6,7 @@ use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup};
 use solana_sdk::{instruction::Instruction, system_program};
 use typed_builder::TypedBuilder;
 
-use crate::utils::serde::StringPubkey;
+use crate::serde::StringPubkey;
 
 use super::StoreProgram;
 

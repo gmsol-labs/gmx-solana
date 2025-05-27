@@ -5,6 +5,7 @@ use gmsol_sdk::{
     client::ClientOptions,
     pda,
     programs::anchor_lang::prelude::Pubkey,
+    serde::StringPubkey,
     solana_utils::{
         cluster::Cluster,
         signer::{local_signer, LocalSignerRef},
@@ -13,7 +14,7 @@ use gmsol_sdk::{
             signature::NullSigner,
         },
     },
-    utils::{instruction_serialization::InstructionSerialization, serde::StringPubkey},
+    utils::instruction_serialization::InstructionSerialization,
 };
 use store_address::StoreAddress;
 
