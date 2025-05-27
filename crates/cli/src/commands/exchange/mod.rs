@@ -19,9 +19,8 @@ use gmsol_sdk::{
             commitment_config::CommitmentConfig, instruction::Instruction, signer::Signer,
         },
     },
+    utils::{Amount, GmAmount, Lamport, UsdValue},
 };
-
-use super::utils::{Amount, GmAmount, Lamport, UsdValue};
 
 /// Commands for exchange functionalities.
 #[derive(Debug, clap::Args)]

@@ -4,10 +4,9 @@ use eyre::OptionExt;
 use gmsol_sdk::{
     ops::competition::{CompetitionOps, CompetitionParams},
     programs::anchor_lang::prelude::Pubkey,
+    utils::UsdValue,
 };
 use time::OffsetDateTime;
-
-use super::utils::UsdValue;
 
 /// Commands for competition management.
 #[derive(Debug, clap::Args)]

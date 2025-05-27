@@ -16,6 +16,9 @@ pub mod fixed_str;
 /// Instruction serialization.
 pub mod instruction_serialization;
 
+/// Amount type definitions.
+pub mod amount;
+
 /// Utils for `gmsol-decode`.
 #[cfg(feature = "decode")]
 pub mod decode;
@@ -24,4 +27,5 @@ pub mod decode;
 #[cfg(test)]
 pub mod test;
 
+pub use amount::*;
 pub use fixed::*;

@@ -101,7 +101,9 @@ anchor-spl = { workspace = true, default-features = false, features = [
 anchor-lang = { workspace = true, features = ["derive"] }
 borsh = { workspace = true }
 either = { workspace = true }
-rust_decimal = { workspace = true, default_features = false }
+rust_decimal = { workspace = true, default_features = false, features = [
+    "std",
+] }
 typed-builder = { workspace = true }
 rand = { workspace = true }
 cfg-if = { workspace = true }

@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(solana-utils): Added `append` argument to `TransactionBuilder::pre_instruction` and `TransactionBuilder::pre_instructions`.
 - sdk(programs): Added the `utils` feature and made the `utils` module available only when it's enabled.
 - sdk(sdk): Moved the `serde` module to the crate root.
+- sdk(sdk): Added amount type definitions to `utils`.
 
 ### Added
 
