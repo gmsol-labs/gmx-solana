@@ -6,16 +6,17 @@ use crate::{
 };
 use rust_decimal::Decimal;
 
-use super::{signed_value_to_decimal, unsigned_amount_to_decimal};
+use super::{
+    signed_value_to_decimal, unsigned_amount_to_decimal, unsigned_fixed_to_decimal,
+    unsigned_value_to_decimal,
+};
 
 const LAMPORT_DECIMALS: u8 = 9;
 
 /// Amount in lamports.
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Lamport(
-    #[cfg_attr(serde, serde(with = "rust_decimal::serde::arbitrary_precision"))] pub Decimal,
-);
+pub struct Lamport(#[cfg_attr(serde, serde(with = "rust_decimal::serde::str"))] pub Decimal);
 
 impl fmt::Display for Lamport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -49,9 +50,7 @@ impl Lamport {
 /// Market token amount.
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct GmAmount(
-    #[cfg_attr(serde, serde(with = "rust_decimal::serde::arbitrary_precision"))] pub Decimal,
-);
+pub struct GmAmount(#[cfg_attr(serde, serde(with = "rust_decimal::serde::str"))] pub Decimal);
 
 impl fmt::Display for GmAmount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -85,9 +84,7 @@ impl GmAmount {
 /// A general-purpose token amount.
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Amount(
-    #[cfg_attr(serde, serde(with = "rust_decimal::serde::arbitrary_precision"))] pub Decimal,
-);
+pub struct Amount(#[cfg_attr(serde, serde(with = "rust_decimal::serde::str"))] pub Decimal);
 
 impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -117,6 +114,20 @@ impl Amount {
         Self(unsigned_amount_to_decimal(amount, decimals).normalize())
     }
 
+    /// Convert to `u128`.
+    pub fn to_u128(&self, decimals: u8) -> crate::Result<u128> {
+        decimal_to_value(self.0, decimals)
+    }
+
+    /// Create from `u128`.
+    pub fn from_u128(amount: u128, decimals: u8) -> crate::Result<Self> {
+        Ok(Self(
+            unsigned_fixed_to_decimal(amount, decimals)
+                .ok_or_else(|| crate::Error::custom("amount exceeds the maximum value"))?
+                .normalize(),
+        ))
+    }
+
     /// Returns whether the amount is zero.
     pub const fn is_zero(&self) -> bool {
         self.0.is_zero()
@@ -126,9 +137,7 @@ impl Amount {
 /// A value with [`MARKET_DECIMALS`] decimals.
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Value(
-    #[cfg_attr(serde, serde(with = "rust_decimal::serde::arbitrary_precision"))] pub Decimal,
-);
+pub struct Value(#[cfg_attr(serde, serde(with = "rust_decimal::serde::str"))] pub Decimal);
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -156,6 +165,11 @@ impl Value {
     /// Create from `i128`.
     pub fn from_i128(value: i128) -> Self {
         Self(signed_value_to_decimal(value).normalize())
+    }
+
+    /// Create from `u128`.
+    pub fn from_u128(value: u128) -> Self {
+        Self(unsigned_value_to_decimal(value).normalize())
     }
 
     /// Returns whether the amount is zero.

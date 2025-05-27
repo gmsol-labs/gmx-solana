@@ -31,9 +31,11 @@ js = [
 serde = [
     "dep:serde",
     "gmsol-model/serde",
-    "serde_with",
     "gmsol-solana-utils/serde",
-    "rust_decimal/serde-with-arbitrary-precision",
+    "gmsol-utils/serde",
+    "serde_with",
+    "rust_decimal/serde-with-str",
+    "indexmap/serde",
 ]
 market-graph = ["petgraph", "rust_decimal/maths"]
 client = [
@@ -83,10 +85,10 @@ discover = ["client", "tower/discover", "tokio/time", "pin-project-lite"]
 anchor-test = ["client", "chainlink", "pyth", "decode"]
 
 [dependencies]
+gmsol-utils = { workspace = true, features = ["enum-iter"] }
 gmsol-programs = { workspace = true, features = ["model"] }
 gmsol-model = { workspace = true, features = ["u128"] }
 gmsol-solana-utils = { workspace = true }
-gmsol-utils = { workspace = true }
 gmsol-decode = { workspace = true, optional = true, features = [
     "gmsol-programs",
     "solana-decoder",
@@ -109,6 +111,8 @@ typed-builder = { workspace = true }
 rand = { workspace = true }
 cfg-if = { workspace = true }
 bs58 = { workspace = true }
+indexmap = { workspace = true }
+strum = { workspace = true }
 
 tracing = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true, features = ["json"] }

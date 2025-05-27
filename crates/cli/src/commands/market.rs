@@ -50,10 +50,10 @@ impl super::Command for Market {
                             serde_markets,
                             DisplayOptions::table_projection([
                                 ("name", "Name"),
-                                ("market_token", "Market Token"),
+                                ("meta.market_token", "Market Token"),
                                 ("enabled", "Is Enabled"),
-                                ("long_token_balance", "◎ Long Token"),
-                                ("short_token_balance", "◎ Short Token")
+                                ("state.long_token_balance", "◎ Long Token"),
+                                ("state.short_token_balance", "◎ Short Token"),
                             ]),
                         )?
                     );
@@ -76,18 +76,34 @@ impl super::Command for Market {
                             DisplayOptions::table_projection([
                                 ("name", "Name"),
                                 ("pubkey", "Address"),
-                                ("market_token", "Market Token"),
-                                ("index_token", "Index Token"),
-                                ("long_token", "Long Token"),
-                                ("short_token", "Short Token"),
+                                ("meta.market_token", "Market Token"),
+                                ("meta.index_token", "Index Token"),
+                                ("meta.long_token", "Long Token"),
+                                ("meta.short_token", "Short Token"),
                                 ("enabled", "Is Enabled"),
                                 ("is_pure", "Is Pure"),
                                 ("is_adl_enabled_for_long", "Is ADL Enabled (Long)"),
                                 ("is_adl_enabled_for_short", "Is ADL Enabled (Short)"),
                                 ("is_gt_minting_enabled", "Is GT Minting Enabled"),
-                                ("long_token_balance", "◎ Long Token"),
-                                ("short_token_balance", "◎ Short Token"),
-                                ("funding_factor_per_second", "Funding Factor"),
+                                ("state.long_token_balance", "◎ Long Token"),
+                                ("state.short_token_balance", "◎ Short Token"),
+                                ("state.funding_factor_per_second", "Funding Factor"),
+                                (
+                                    "pools.open_interest_for_long.long_amount",
+                                    "Long OI (Long Token)"
+                                ),
+                                (
+                                    "pools.open_interest_for_long.short_amount",
+                                    "Long OI (Short Token)"
+                                ),
+                                (
+                                    "pools.open_interest_for_short.long_amount",
+                                    "Short OI (Long Token)"
+                                ),
+                                (
+                                    "pools.open_interest_for_short.short_amount",
+                                    "Short OI (Short Token)"
+                                )
                             ])
                         )?
                     );

@@ -4,7 +4,7 @@ use bytemuck::Zeroable;
 
 use crate::gmsol_store::{
     accounts::{Glv, GtExchange, Market, Position, ReferralCodeV2, Store},
-    types::{ActionHeader, EventPositionState, PositionState},
+    types::{ActionHeader, EventPositionState, Pool, PositionState},
 };
 
 /// Referral Code Bytes.
@@ -13,6 +13,13 @@ pub type ReferralCodeBytes = [u8; 8];
 impl Default for Market {
     fn default() -> Self {
         Zeroable::zeroed()
+    }
+}
+
+impl Pool {
+    /// Returns whether the pool is a pure pool.
+    pub fn is_pure(&self) -> bool {
+        !matches!(self.is_pure, 0)
     }
 }
 
@@ -137,6 +144,28 @@ impl From<EventPositionState> for PositionState {
     }
 }
 
+#[cfg(feature = "gmsol-model")]
+mod model {
+    use gmsol_model::ClockKind;
+
+    use crate::gmsol_store::types::Clocks;
+
+    impl Clocks {
+        /// Get clock value by [`ClockKind`].
+        pub fn get(&self, kind: ClockKind) -> Option<i64> {
+            let clock = match kind {
+                ClockKind::PriceImpactDistribution => self.price_impact_distribution,
+                ClockKind::Borrowing => self.borrowing,
+                ClockKind::Funding => self.funding,
+                ClockKind::AdlForLong => self.adl_for_long,
+                ClockKind::AdlForShort => self.adl_for_short,
+                _ => return None,
+            };
+            Some(clock)
+        }
+    }
+}
+
 #[cfg(feature = "gmsol-utils")]
 mod utils {
     use anchor_lang::prelude::Pubkey;
@@ -144,7 +173,7 @@ mod utils {
         action::{ActionCallbackKind, ActionFlag, ActionState, MAX_ACTION_FLAGS},
         fixed_str::bytes_to_fixed_str,
         impl_fixed_map, impl_flags,
-        market::{self, HasMarketMeta, MarketFlag, MAX_MARKET_FLAGS},
+        market::{self, HasMarketMeta, MarketConfigKey, MarketFlag, MAX_MARKET_FLAGS},
         order::{self, PositionKind, TradeFlag, TradeFlagContainer},
         pubkey::{self, optional_address},
         swap::{self, HasSwapParams},
@@ -156,8 +185,8 @@ mod utils {
         events::TradeEvent,
         types::{
             ActionFlagContainer, ActionHeader, GlvMarketConfig, GlvMarkets, GlvMarketsEntry,
-            MarketFlagContainer, MarketMeta, OrderActionParams, OrderKind, SwapActionParams,
-            TokenAndAccount, Tokens, TokensEntry, UpdateTokenConfigParams,
+            MarketConfig, MarketFlagContainer, MarketMeta, OrderActionParams, OrderKind,
+            SwapActionParams, TokenAndAccount, Tokens, TokensEntry, UpdateTokenConfigParams,
         },
     };
 
@@ -213,6 +242,150 @@ mod utils {
                 long_token_mint,
                 short_token_mint,
             }
+        }
+    }
+
+    impl MarketConfig {
+        /// Get config by [`MarketConfigKey`].
+        pub fn get(&self, key: MarketConfigKey) -> Option<&u128> {
+            let value = match key {
+                MarketConfigKey::SwapImpactExponent => &self.swap_impact_exponent,
+                MarketConfigKey::SwapImpactPositiveFactor => &self.swap_impact_positive_factor,
+                MarketConfigKey::SwapImpactNegativeFactor => &self.swap_impact_negative_factor,
+                MarketConfigKey::SwapFeeReceiverFactor => &self.swap_fee_receiver_factor,
+                MarketConfigKey::SwapFeeFactorForPositiveImpact => {
+                    &self.swap_fee_factor_for_positive_impact
+                }
+                MarketConfigKey::SwapFeeFactorForNegativeImpact => {
+                    &self.swap_fee_factor_for_negative_impact
+                }
+                MarketConfigKey::MinPositionSizeUsd => &self.min_position_size_usd,
+                MarketConfigKey::MinCollateralValue => &self.min_collateral_value,
+                MarketConfigKey::MinCollateralFactor => &self.min_collateral_factor,
+                MarketConfigKey::MinCollateralFactorForOpenInterestMultiplierForLong => {
+                    &self.min_collateral_factor_for_open_interest_multiplier_for_long
+                }
+                MarketConfigKey::MinCollateralFactorForOpenInterestMultiplierForShort => {
+                    &self.min_collateral_factor_for_open_interest_multiplier_for_short
+                }
+                MarketConfigKey::MaxPositivePositionImpactFactor => {
+                    &self.max_positive_position_impact_factor
+                }
+                MarketConfigKey::MaxNegativePositionImpactFactor => {
+                    &self.max_negative_position_impact_factor
+                }
+                MarketConfigKey::MaxPositionImpactFactorForLiquidations => {
+                    &self.max_position_impact_factor_for_liquidations
+                }
+                MarketConfigKey::PositionImpactExponent => &self.position_impact_exponent,
+                MarketConfigKey::PositionImpactPositiveFactor => {
+                    &self.position_impact_positive_factor
+                }
+                MarketConfigKey::PositionImpactNegativeFactor => {
+                    &self.position_impact_negative_factor
+                }
+                MarketConfigKey::OrderFeeReceiverFactor => &self.order_fee_receiver_factor,
+                MarketConfigKey::OrderFeeFactorForPositiveImpact => {
+                    &self.order_fee_factor_for_positive_impact
+                }
+                MarketConfigKey::OrderFeeFactorForNegativeImpact => {
+                    &self.order_fee_factor_for_negative_impact
+                }
+                MarketConfigKey::LiquidationFeeReceiverFactor => {
+                    &self.liquidation_fee_receiver_factor
+                }
+                MarketConfigKey::LiquidationFeeFactor => &self.liquidation_fee_factor,
+                MarketConfigKey::PositionImpactDistributeFactor => {
+                    &self.position_impact_distribute_factor
+                }
+                MarketConfigKey::MinPositionImpactPoolAmount => {
+                    &self.min_position_impact_pool_amount
+                }
+                MarketConfigKey::BorrowingFeeReceiverFactor => &self.borrowing_fee_receiver_factor,
+                MarketConfigKey::BorrowingFeeFactorForLong => &self.borrowing_fee_factor_for_long,
+                MarketConfigKey::BorrowingFeeFactorForShort => &self.borrowing_fee_factor_for_short,
+                MarketConfigKey::BorrowingFeeExponentForLong => {
+                    &self.borrowing_fee_exponent_for_long
+                }
+                MarketConfigKey::BorrowingFeeExponentForShort => {
+                    &self.borrowing_fee_exponent_for_short
+                }
+                MarketConfigKey::BorrowingFeeOptimalUsageFactorForLong => {
+                    &self.borrowing_fee_optimal_usage_factor_for_long
+                }
+                MarketConfigKey::BorrowingFeeOptimalUsageFactorForShort => {
+                    &self.borrowing_fee_optimal_usage_factor_for_short
+                }
+                MarketConfigKey::BorrowingFeeBaseFactorForLong => {
+                    &self.borrowing_fee_base_factor_for_long
+                }
+                MarketConfigKey::BorrowingFeeBaseFactorForShort => {
+                    &self.borrowing_fee_base_factor_for_short
+                }
+                MarketConfigKey::BorrowingFeeAboveOptimalUsageFactorForLong => {
+                    &self.borrowing_fee_above_optimal_usage_factor_for_long
+                }
+                MarketConfigKey::BorrowingFeeAboveOptimalUsageFactorForShort => {
+                    &self.borrowing_fee_above_optimal_usage_factor_for_short
+                }
+                MarketConfigKey::FundingFeeExponent => &self.funding_fee_exponent,
+                MarketConfigKey::FundingFeeFactor => &self.funding_fee_factor,
+                MarketConfigKey::FundingFeeMaxFactorPerSecond => {
+                    &self.funding_fee_max_factor_per_second
+                }
+                MarketConfigKey::FundingFeeMinFactorPerSecond => {
+                    &self.funding_fee_min_factor_per_second
+                }
+                MarketConfigKey::FundingFeeIncreaseFactorPerSecond => {
+                    &self.funding_fee_increase_factor_per_second
+                }
+                MarketConfigKey::FundingFeeDecreaseFactorPerSecond => {
+                    &self.funding_fee_decrease_factor_per_second
+                }
+                MarketConfigKey::FundingFeeThresholdForStableFunding => {
+                    &self.funding_fee_threshold_for_stable_funding
+                }
+                MarketConfigKey::FundingFeeThresholdForDecreaseFunding => {
+                    &self.funding_fee_threshold_for_decrease_funding
+                }
+                MarketConfigKey::ReserveFactor => &self.reserve_factor,
+                MarketConfigKey::OpenInterestReserveFactor => &self.open_interest_reserve_factor,
+                MarketConfigKey::MaxPnlFactorForLongDeposit => {
+                    &self.max_pnl_factor_for_long_deposit
+                }
+                MarketConfigKey::MaxPnlFactorForShortDeposit => {
+                    &self.max_pnl_factor_for_short_deposit
+                }
+                MarketConfigKey::MaxPnlFactorForLongWithdrawal => {
+                    &self.max_pnl_factor_for_long_withdrawal
+                }
+                MarketConfigKey::MaxPnlFactorForShortWithdrawal => {
+                    &self.max_pnl_factor_for_short_withdrawal
+                }
+                MarketConfigKey::MaxPnlFactorForLongTrader => &self.max_pnl_factor_for_long_trader,
+                MarketConfigKey::MaxPnlFactorForShortTrader => {
+                    &self.max_pnl_factor_for_short_trader
+                }
+                MarketConfigKey::MaxPnlFactorForLongAdl => &self.max_pnl_factor_for_long_adl,
+                MarketConfigKey::MaxPnlFactorForShortAdl => &self.max_pnl_factor_for_short_adl,
+                MarketConfigKey::MinPnlFactorAfterLongAdl => &self.min_pnl_factor_after_long_adl,
+                MarketConfigKey::MinPnlFactorAfterShortAdl => &self.min_pnl_factor_after_short_adl,
+                MarketConfigKey::MaxPoolAmountForLongToken => &self.max_pool_amount_for_long_token,
+                MarketConfigKey::MaxPoolAmountForShortToken => {
+                    &self.max_pool_amount_for_short_token
+                }
+                MarketConfigKey::MaxPoolValueForDepositForLongToken => {
+                    &self.max_pool_value_for_deposit_for_long_token
+                }
+                MarketConfigKey::MaxPoolValueForDepositForShortToken => {
+                    &self.max_pool_value_for_deposit_for_short_token
+                }
+                MarketConfigKey::MaxOpenInterestForLong => &self.max_open_interest_for_long,
+                MarketConfigKey::MaxOpenInterestForShort => &self.max_open_interest_for_short,
+                MarketConfigKey::MinTokensForFirstDeposit => &self.min_tokens_for_first_deposit,
+                _ => return None,
+            };
+            Some(value)
         }
     }
 

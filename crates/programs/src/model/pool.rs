@@ -1,11 +1,5 @@
 use crate::gmsol_store::types::Pool;
 
-impl Pool {
-    fn is_pure(&self) -> bool {
-        !matches!(self.is_pure, 0)
-    }
-}
-
 impl gmsol_model::Balance for Pool {
     type Num = u128;
 

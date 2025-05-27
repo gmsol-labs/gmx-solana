@@ -35,13 +35,7 @@ impl OutputFormat {
         let Value::Object(map) = serde_json::to_value(keyed_account)? else {
             eyre::bail!("internal: only map-like structures are supported");
         };
-        let map = if let Some(proj) = self.projection(&options) {
-            proj.iter()
-                .map(|(key, name)| (name.clone(), map.get(key).cloned().unwrap_or(Value::Null)))
-                .collect()
-        } else {
-            map
-        };
+        let map = self.project(map, &options);
         match self {
             Self::Json => Self::display_json_one(&map),
             Self::Table => Self::display_table_one(&map),
@@ -73,16 +67,7 @@ impl OutputFormat {
                 let Value::Object(map) = serde_json::to_value(item)? else {
                     eyre::bail!("internal: only map-like structures are supported");
                 };
-                let map = if let Some(proj) = self.projection(&options) {
-                    proj.iter()
-                        .map(|(key, name)| {
-                            (name.clone(), map.get(key).cloned().unwrap_or(Value::Null))
-                        })
-                        .collect()
-                } else {
-                    map
-                };
-                Ok(map)
+                Ok(self.project(map, &options))
             })
             .collect::<eyre::Result<Vec<_>>>()?;
         match self {
@@ -98,6 +83,19 @@ impl OutputFormat {
         } else {
             Some(proj)
         }
+    }
+
+    fn project(&self, map: Map<String, Value>, options: &DisplayOptions) -> Map<String, Value> {
+        let map = if let Some(proj) = self.projection(options) {
+            let mut flat = Map::new();
+            flatten_json(&map, None, &mut flat);
+            proj.iter()
+                .map(|(key, name)| (name.clone(), flat.get(key).cloned().unwrap_or(Value::Null)))
+                .collect()
+        } else {
+            map
+        };
+        map
     }
 
     fn display_json_many(items: &[Map<String, Value>]) -> eyre::Result<String> {
@@ -194,4 +192,23 @@ fn json_value_to_cell(value: &Value) -> Cell {
     };
 
     Cell::new(&content)
+}
+
+/// Flatten a nested JSON object into a flat map with `_`-joined keys.
+fn flatten_json(map: &Map<String, Value>, prefix: Option<String>, out: &mut Map<String, Value>) {
+    for (key, value) in map {
+        let full_key = match &prefix {
+            Some(p) => format!("{}.{}", p, key),
+            None => key.to_string(),
+        };
+
+        match value {
+            Value::Object(obj) => {
+                flatten_json(obj, Some(full_key), out);
+            }
+            _ => {
+                out.insert(full_key, value.clone());
+            }
+        }
+    }
 }
