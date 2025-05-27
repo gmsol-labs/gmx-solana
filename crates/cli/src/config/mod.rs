@@ -42,15 +42,15 @@ pub struct Config {
     #[arg(long, global = true)]
     output: Option<OutputFormat>,
     /// Path to the wallet.
-    #[arg(long, short, env)]
+    #[arg(long, short, global = true)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     wallet: Option<String>,
     /// Cluster to connect to.
-    #[arg(long = "url", short = 'u', env)]
+    #[arg(long = "url", short = 'u', global = true)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cluster: Option<Cluster>,
     /// Commitment level.
-    #[arg(long, env)]
+    #[arg(long, global = true)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     commitment: Option<CommitmentLevel>,
     /// Store address.
@@ -58,42 +58,42 @@ pub struct Config {
     #[serde(flatten)]
     store_address: StoreAddress,
     /// Store Program ID.
-    #[arg(long, env)]
+    #[arg(long)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     store_program: Option<StringPubkey>,
     /// Treasury Program ID.
-    #[arg(long, env)]
+    #[arg(long)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     treasury_program: Option<StringPubkey>,
     /// Timelock Program ID.
-    #[arg(long, env)]
+    #[arg(long)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     timelock_program: Option<StringPubkey>,
     /// Print the serialized instructions,
     /// instead of sending the transaction.
-    #[arg(long)]
+    #[arg(long, global = true)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     serialize_only: Option<InstructionSerialization>,
     /// Use this address as payer.
     ///
     /// Only available in `serialize-only` mode.
-    #[arg(long, requires = "serialize_only")]
+    #[arg(long, requires = "serialize_only", global = true)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     payer: Option<StringPubkey>,
     /// Whether to create a timelocked buffer for this instruction.
-    #[arg(long, group = "ix-buffer")]
+    #[arg(long, group = "ix-buffer", global = true)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     timelock: Option<String>,
     #[cfg(feature = "squads")]
-    #[cfg_attr(feature = "squads", arg(long, group = "ix-buffer"))]
+    #[arg(long, group = "ix-buffer", global = true)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     squads: Option<String>,
     /// ALTs.
-    #[arg(long, short = 'a')]
+    #[arg(long, short = 't', global = true)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     alts: Option<Vec<StringPubkey>>,
-    /// Oracle buffer address.
-    #[arg(long)]
+    /// Oracle buffer to use.
+    #[arg(long, global = true)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     oracle: Option<StringPubkey>,
 }

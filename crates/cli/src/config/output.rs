@@ -126,7 +126,7 @@ impl OutputFormat {
 
     fn display_table_one(item: &Map<String, Value>) -> eyre::Result<String> {
         let mut table = Table::new();
-        table.set_format(column_format());
+        table.set_format(table_format());
         table.set_titles(row!["Key", "Value"]);
 
         for (k, v) in item {
@@ -181,15 +181,6 @@ fn table_format() -> TableFormat {
     FormatBuilder::new()
         .padding(0, 2)
         .separator(LinePosition::Title, LineSeparator::new('-', '+', '+', '+'))
-        .build()
-}
-
-fn column_format() -> TableFormat {
-    FormatBuilder::new()
-        .padding(0, 1)
-        .column_separator(' ')
-        .borders(' ')
-        .separator(LinePosition::Title, LineSeparator::new('-', '-', '-', '-'))
         .build()
 }
 
