@@ -1,9 +1,4 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-    task::Poll,
-    time::Duration,
-};
+use std::{collections::BTreeMap, sync::Arc, task::Poll, time::Duration};
 
 use futures_util::Stream;
 use gmsol_programs::gmsol_store::accounts::Market;
@@ -27,7 +22,7 @@ use crate::{
 
 pub(crate) type MarketSvc = MarketMeta;
 type SharedMarket = Arc<Market>;
-type Cache = HashMap<Pubkey, SharedMarket>;
+type Cache = BTreeMap<Pubkey, SharedMarket>;
 
 pin_project_lite::pin_project! {
     /// Market Discovery.
@@ -51,7 +46,7 @@ impl Clone for MarketDiscovery {
         Self {
             stream: WatchStream::new(receiver),
             sender: self.sender.clone(),
-            cache: HashMap::default(),
+            cache: Default::default(),
             changes: changes.into_iter(),
         }
     }
@@ -163,17 +158,13 @@ impl Watcher {
                 continue;
             };
             let slot = markets.slot();
-            let cache: Cache = markets
-                .into_value()
-                .into_iter()
-                .map(|(pubkey, m)| (pubkey, Arc::new(m)))
-                .collect();
+            let cache = markets.into_value();
             tracing::debug!(%slot, len=%cache.len(), "fetched new market list");
             self.sender.send(cache).map_err(crate::Error::custom)?;
         }
     }
 
-    async fn fetch_once(&self) -> crate::Result<WithSlot<BTreeMap<Pubkey, Market>>> {
+    async fn fetch_once(&self) -> crate::Result<WithSlot<BTreeMap<Pubkey, Arc<Market>>>> {
         let mut markets = self
             .client
             .markets_with_config(

@@ -754,9 +754,9 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         &self,
         store: &Pubkey,
         config: ProgramAccountsConfig,
-    ) -> crate::Result<WithSlot<BTreeMap<Pubkey, store_accounts::Market>>> {
+    ) -> crate::Result<WithSlot<BTreeMap<Pubkey, Arc<store_accounts::Market>>>> {
         let markets = self
-            .store_accounts_with_config::<ZeroCopy<store_accounts::Market>>(
+            .store_accounts_with_config::<SharedZeroCopy<store_accounts::Market>>(
                 Some(StoreFilter::new(
                     store,
                     bytemuck::offset_of!(store_accounts::Market, store),
@@ -778,7 +778,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     pub async fn markets(
         &self,
         store: &Pubkey,
-    ) -> crate::Result<BTreeMap<Pubkey, store_accounts::Market>> {
+    ) -> crate::Result<BTreeMap<Pubkey, Arc<store_accounts::Market>>> {
         let markets = self
             .markets_with_config(store, ProgramAccountsConfig::default())
             .await?
@@ -793,9 +793,9 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         &self,
         address: &Pubkey,
         config: RpcAccountInfoConfig,
-    ) -> crate::Result<WithSlot<Option<store_accounts::Market>>> {
+    ) -> crate::Result<WithSlot<Option<Arc<store_accounts::Market>>>> {
         let market = self
-            .account_with_config::<ZeroCopy<store_accounts::Market>>(address, config)
+            .account_with_config::<SharedZeroCopy<store_accounts::Market>>(address, config)
             .await?;
         Ok(market.map(|m| m.map(|m| m.0)))
     }

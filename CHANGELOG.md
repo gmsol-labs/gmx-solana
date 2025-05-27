@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(programs): Added the `utils` feature and made the `utils` module available only when it's enabled.
 - sdk(sdk): Moved the `serde` module to the crate root.
 - sdk(sdk): Added amount type definitions to `utils`.
+- sdk(sdk): Modified all market fetching methods to return `Arc<Market>`.
 
 ### Added
 
