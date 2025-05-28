@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Moved the `serde` module to the crate root.
 - sdk(sdk): Added amount type definitions to `utils`.
 - sdk(sdk): Modified all market fetching methods to return `Arc<Market>`.
+- sdk(solana-utils): Removed incorrect options from `SendBundleOptions`.
 
 ### Added
 

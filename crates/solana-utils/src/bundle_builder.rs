@@ -59,8 +59,6 @@ pub struct SendBundleOptions {
     /// Set the min priority lamports.
     /// `None` means the value is left unchanged.
     pub compute_unit_min_priority_lamports: Option<u64>,
-    /// Whether to update recent block hash before send.
-    pub update_recent_block_hash_before_send: bool,
     /// Whether to continue on error.
     pub continue_on_error: bool,
     /// RPC config.
@@ -282,7 +280,6 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
             without_compute_budget,
             compute_unit_price_micro_lamports,
             compute_unit_min_priority_lamports,
-            update_recent_block_hash_before_send,
             continue_on_error,
             mut config,
             disable_error_tracing,
@@ -324,7 +321,6 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
             &self.client,
             txs,
             config,
-            update_recent_block_hash_before_send,
             continue_on_error,
             !disable_error_tracing,
             inspector_cluster,
@@ -364,7 +360,6 @@ async fn send_all_txs(
     client: &RpcClient,
     txs: impl IntoIterator<Item = VersionedTransaction>,
     config: RpcSendTransactionConfig,
-    update_recent_block_hash_before_send: bool,
     continue_on_error: bool,
     enable_tracing: bool,
     inspector_cluster: Option<Cluster>,
@@ -373,18 +368,7 @@ async fn send_all_txs(
     let (min, max) = txs.size_hint();
     let mut signatures = Vec::with_capacity(max.unwrap_or(min));
     let mut error = None;
-    for (idx, mut tx) in txs.into_iter().enumerate() {
-        if update_recent_block_hash_before_send {
-            match client.get_latest_blockhash().await {
-                Ok(latest_blockhash) => {
-                    tx.message.set_recent_blockhash(latest_blockhash);
-                }
-                Err(err) => {
-                    error = Some(Box::new(err).into());
-                    break;
-                }
-            }
-        }
+    for (idx, tx) in txs.into_iter().enumerate() {
         tracing::debug!(
             commitment = ?client.commitment(),
             ?config,

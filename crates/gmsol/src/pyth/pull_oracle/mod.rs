@@ -93,7 +93,6 @@ where
             .send_all_with_opts(SendBundleOptions {
                 without_compute_budget: false,
                 compute_unit_price_micro_lamports,
-                update_recent_block_hash_before_send: false,
                 config: RpcSendTransactionConfig {
                     skip_preflight,
                     ..Default::default()
@@ -116,7 +115,6 @@ where
                 .send_all_with_opts(SendBundleOptions {
                     without_compute_budget: false,
                     compute_unit_price_micro_lamports,
-                    update_recent_block_hash_before_send: false,
                     config: RpcSendTransactionConfig {
                         skip_preflight,
                         ..Default::default()
@@ -141,7 +139,6 @@ where
             .send_all_with_opts(SendBundleOptions {
                 without_compute_budget: false,
                 compute_unit_price_micro_lamports,
-                update_recent_block_hash_before_send: false,
                 config: RpcSendTransactionConfig {
                     skip_preflight,
                     ..Default::default()
