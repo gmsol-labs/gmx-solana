@@ -15,7 +15,9 @@ use gmsol::{
     utils::{builder::MakeBundleBuilder, local_signer, LocalSignerRef},
     ClientOptions,
 };
-use gmsol_solana_utils::bundle_builder::SendBundleOptions;
+use gmsol_solana_utils::{
+    bundle_builder::SendBundleOptions, transaction_builder::default_before_sign,
+};
 use serde_with::{serde_as, DisplayFromStr};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature::NullSigner};
@@ -133,14 +135,17 @@ impl Trader {
             .execute(self.execute)
             .build()
             .await?
-            .send_all_with_opts(SendBundleOptions {
-                compute_unit_price_micro_lamports: self.cu_price,
-                config: RpcSendTransactionConfig {
-                    skip_preflight: true,
+            .send_all_with_opts(
+                SendBundleOptions {
+                    compute_unit_price_micro_lamports: self.cu_price,
+                    config: RpcSendTransactionConfig {
+                        skip_preflight: true,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
-                ..Default::default()
-            })
+                default_before_sign,
+            )
             .map_err(|(signatures, err)| {
                 tracing::error!("partial success: {signatures:#?}");
                 err

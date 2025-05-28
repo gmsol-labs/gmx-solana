@@ -3,7 +3,10 @@ use gmsol::{
     store::{roles::RolesOps, store_ops::StoreOps},
     utils::instruction::InstructionSerialization,
 };
-use gmsol_solana_utils::bundle_builder::{BundleBuilder, BundleOptions};
+use gmsol_solana_utils::{
+    bundle_builder::{BundleBuilder, BundleOptions},
+    transaction_builder::default_before_sign,
+};
 use gmsol_store::states::RoleKey;
 use gmsol_timelock::roles as timelock_roles;
 use gmsol_treasury::roles as treasury_roles;
@@ -125,7 +128,9 @@ impl AdminArgs {
                     )
                     .await?;
                 } else {
-                    let transaction = rpc.signed_transaction_with_options(true, None).await?;
+                    let transaction = rpc
+                        .signed_transaction_with_options(true, None, default_before_sign)
+                        .await?;
                     let response = client
                         .store_program()
                         .rpc()
@@ -175,7 +180,9 @@ impl AdminArgs {
                     )
                     .await?;
                 } else {
-                    let transaction = rpc.signed_transaction_with_options(true, None).await?;
+                    let transaction = rpc
+                        .signed_transaction_with_options(true, None, default_before_sign)
+                        .await?;
                     let response = client
                         .store_program()
                         .rpc()

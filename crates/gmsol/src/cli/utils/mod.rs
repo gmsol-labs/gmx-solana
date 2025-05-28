@@ -12,7 +12,7 @@ use anchor_client::{
 use gmsol::{timelock::TimelockOps, utils::instruction::InstructionSerialization};
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions, SendBundleOptions},
-    transaction_builder::TransactionBuilder,
+    transaction_builder::{default_before_sign, TransactionBuilder},
 };
 use prettytable::format::{FormatBuilder, TableFormat};
 
@@ -273,7 +273,10 @@ where
             return Ok(());
         }
 
-        match bundle.send_all_with_opts(options).await {
+        match bundle
+            .send_all_with_opts(options, default_before_sign)
+            .await
+        {
             Ok(signatures) => {
                 tracing::info!("successful transactions: {signatures:#?}");
             }
@@ -282,7 +285,10 @@ where
             }
         }
     } else {
-        match builder.send_all_with_opts(options).await {
+        match builder
+            .send_all_with_opts(options, default_before_sign)
+            .await
+        {
             Ok(signatures) => (callback)(
                 signatures.into_iter().map(|w| w.into_value()).collect(),
                 None,

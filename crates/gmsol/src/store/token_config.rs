@@ -4,7 +4,7 @@ use anchor_client::{
     anchor_lang::system_program,
     solana_sdk::{pubkey::Pubkey, signer::Signer},
 };
-use gmsol_solana_utils::transaction_builder::TransactionBuilder;
+use gmsol_solana_utils::transaction_builder::{default_before_sign, TransactionBuilder};
 use gmsol_store::{
     accounts, instruction,
     states::{PriceProviderKind, UpdateTokenConfigParams},
@@ -338,23 +338,23 @@ where
         let client = self.store_program().rpc();
         let name = self
             .token_name(token_map, token)
-            .signed_transaction_with_options(true, None)
+            .signed_transaction_with_options(true, None, default_before_sign)
             .await?;
         let token_decimals = self
             .token_decimals(token_map, token)
-            .signed_transaction_with_options(true, None)
+            .signed_transaction_with_options(true, None, default_before_sign)
             .await?;
         let precision = self
             .token_precision(token_map, token)
-            .signed_transaction_with_options(true, None)
+            .signed_transaction_with_options(true, None, default_before_sign)
             .await?;
         let expected_provider = self
             .token_expected_provider(token_map, token)
-            .signed_transaction_with_options(true, None)
+            .signed_transaction_with_options(true, None, default_before_sign)
             .await?;
         let is_enabled = self
             .is_token_config_enabled(token_map, token)
-            .signed_transaction_with_options(true, None)
+            .signed_transaction_with_options(true, None, default_before_sign)
             .await?;
 
         Ok(TokenConfig {

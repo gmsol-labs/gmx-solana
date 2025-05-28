@@ -7,6 +7,7 @@ use gmsol::{
     alt::AddressLookupTableOps,
     client::StoreFilter,
     exchange::ExchangeOps,
+    solana_utils::transaction_builder::default_before_sign,
     store::glv::GlvOps,
     types::{
         common::ActionHeader, Deposit, DepositCreated, Order, OrderCreated, Withdrawal,
@@ -373,6 +374,7 @@ impl KeeperArgs {
                             skip_preflight: false,
                             ..Default::default()
                         },
+                        default_before_sign,
                     )
                     .await?
                     .into_value();

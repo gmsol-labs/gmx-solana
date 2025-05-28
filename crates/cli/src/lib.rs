@@ -37,7 +37,10 @@ impl Cli {
 
         let config_path = cli.find_config()?;
         let Inner {
-            config, command, ..
+            config,
+            command,
+            verbose,
+            ..
         } = cli;
 
         let config = Figment::new()
@@ -50,6 +53,7 @@ impl Cli {
             config_path: Some(config_path),
             config,
             command,
+            verbose,
         }))
     }
 }
@@ -68,6 +72,9 @@ pub struct Inner {
     /// Path to the config file.
     #[clap(long = "config", short)]
     config_path: Option<PathBuf>,
+    /// Enable detailed output.
+    #[clap(long, short, global = true)]
+    verbose: bool,
     /// Config.
     #[command(flatten)]
     config: Config,
@@ -100,9 +107,9 @@ impl Inner {
         let client = if self.command.is_client_required() {
             cfg_if::cfg_if! {
                 if #[cfg(feature = "remote-wallet")] {
-                    Some(CommandClient::new(&self.config, &mut wallet_manager)?)
+                    Some(CommandClient::new(&self.config, &mut wallet_manager, self.verbose)?)
                 } else {
-                    Some(CommandClient::new(&self.config)?)
+                    Some(CommandClient::new(&self.config, self.verbose)?)
                 }
             }
         } else {
@@ -115,6 +122,7 @@ impl Inner {
                 config_path,
                 &self.config,
                 client.as_ref(),
+                self.verbose,
             ))
             .await
     }

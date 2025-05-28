@@ -42,7 +42,7 @@ pub struct Config {
     #[arg(long, global = true)]
     output: Option<OutputFormat>,
     /// Path to the wallet.
-    #[arg(long, short, global = true)]
+    #[arg(long, short = 'k', global = true)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     wallet: Option<String>,
     /// Cluster to connect to.

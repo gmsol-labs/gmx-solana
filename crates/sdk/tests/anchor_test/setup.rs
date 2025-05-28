@@ -34,6 +34,7 @@ use gmsol_solana_utils::{
     cluster::Cluster,
     make_bundle_builder::MakeBundleBuilder,
     signer::{shared_signer, SignerRef},
+    transaction_builder::default_before_sign,
 };
 use gmsol_utils::{
     config::FactorKey, glv::GlvMarketFlag, market::MarketConfigKey, oracle::PriceProviderKind,
@@ -586,13 +587,16 @@ impl Deployment {
         }
 
         match builder
-            .send_all_with_opts(SendBundleOptions {
-                config: RpcSendTransactionConfig {
-                    skip_preflight: true,
+            .send_all_with_opts(
+                SendBundleOptions {
+                    config: RpcSendTransactionConfig {
+                        skip_preflight: true,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
-                ..Default::default()
-            })
+                default_before_sign,
+            )
             .await
         {
             Ok(signatures) => {
@@ -1379,15 +1383,18 @@ impl Deployment {
             .await?
             .build()
             .await?
-            .send_all_with_opts(SendBundleOptions {
-                compute_unit_price_micro_lamports,
-                disable_error_tracing: !enable_tracing,
-                config: RpcSendTransactionConfig {
-                    skip_preflight,
+            .send_all_with_opts(
+                SendBundleOptions {
+                    compute_unit_price_micro_lamports,
+                    disable_error_tracing: !enable_tracing,
+                    config: RpcSendTransactionConfig {
+                        skip_preflight,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
-                ..Default::default()
-            })
+                default_before_sign,
+            )
             .await;
         match res {
             Ok(signatures) => {
@@ -1444,6 +1451,7 @@ impl Deployment {
                     skip_preflight,
                     ..Default::default()
                 },
+                default_before_sign,
             )
             .await?;
         tracing::info!(%deposit, slot=%signature.slot(), signature=%signature.value(), "created a deposit");

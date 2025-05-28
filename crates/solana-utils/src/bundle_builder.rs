@@ -3,14 +3,14 @@ use std::{collections::HashSet, ops::Deref};
 use futures_util::TryStreamExt;
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig};
 use solana_sdk::{
-    commitment_config::CommitmentConfig, packet::PACKET_DATA_SIZE, signature::Signature,
-    signer::Signer, transaction::VersionedTransaction,
+    commitment_config::CommitmentConfig, message::VersionedMessage, packet::PACKET_DATA_SIZE,
+    signature::Signature, signer::Signer, transaction::VersionedTransaction,
 };
 
 use crate::{
     client::SendAndConfirm,
     cluster::Cluster,
-    transaction_builder::TransactionBuilder,
+    transaction_builder::{default_before_sign, TransactionBuilder},
     utils::{inspect_transaction, transaction_size, WithSlot},
 };
 
@@ -122,6 +122,11 @@ impl<C> BundleBuilder<'_, C> {
     /// Is empty.
     pub fn is_empty(&self) -> bool {
         self.builders.is_empty()
+    }
+
+    /// Get total number of transactions.
+    pub fn len(&self) -> usize {
+        self.builders.len()
     }
 
     /// Try clone empty.
@@ -248,13 +253,16 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
         skip_preflight: bool,
     ) -> Result<Vec<Signature>, (Vec<Signature>, crate::Error)> {
         match self
-            .send_all_with_opts(SendBundleOptions {
-                config: RpcSendTransactionConfig {
-                    skip_preflight,
+            .send_all_with_opts(
+                SendBundleOptions {
+                    config: RpcSendTransactionConfig {
+                        skip_preflight,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
-                ..Default::default()
-            })
+                default_before_sign,
+            )
             .await
         {
             Ok(signatures) => Ok(signatures
@@ -275,6 +283,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
     pub async fn send_all_with_opts(
         self,
         opts: SendBundleOptions,
+        mut before_sign: impl FnMut(&VersionedMessage) -> crate::Result<()>,
     ) -> Result<Vec<WithSlot<Signature>>, (Vec<WithSlot<Signature>>, crate::Error)> {
         let SendBundleOptions {
             without_compute_budget,
@@ -313,6 +322,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
                     latest_hash,
                     without_compute_budget,
                     compute_unit_price_micro_lamports,
+                    &mut before_sign,
                 )
             })
             .collect::<crate::Result<Vec<_>>>()

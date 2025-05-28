@@ -12,7 +12,11 @@ use gmsol_sdk::{
     solana_utils::{
         bundle_builder::{BundleBuilder, BundleOptions, SendBundleOptions},
         signer::LocalSignerRef,
-        solana_sdk::signature::{Keypair, Signature},
+        solana_sdk::{
+            message::VersionedMessage,
+            signature::{Keypair, Signature},
+        },
+        utils::inspect_transaction,
     },
     utils::instruction_serialization::InstructionSerialization,
     Client,
@@ -77,6 +81,7 @@ pub(crate) struct Context<'a> {
     config_path: &'a Path,
     config: &'a Config,
     client: Option<&'a CommandClient>,
+    _verbose: bool,
 }
 
 impl<'a> Context<'a> {
@@ -85,12 +90,14 @@ impl<'a> Context<'a> {
         config_path: &'a Path,
         config: &'a Config,
         client: Option<&'a CommandClient>,
+        verbose: bool,
     ) -> Self {
         Self {
             store,
             config_path,
             config,
             client,
+            _verbose: verbose,
         }
     }
 
@@ -127,6 +134,10 @@ impl<'a> Context<'a> {
             Ok(())
         }
     }
+
+    pub(crate) fn _verbose(&self) -> bool {
+        self._verbose
+    }
 }
 
 struct IxBufferCtx<C> {
@@ -140,6 +151,7 @@ pub(crate) struct CommandClient {
     client: Client<LocalSignerRef>,
     ix_buffer_ctx: Option<IxBufferCtx<LocalSignerRef>>,
     serialize_only: Option<InstructionSerialization>,
+    verbose: bool,
 }
 
 impl CommandClient {
@@ -148,6 +160,7 @@ impl CommandClient {
         #[cfg(feature = "remote-wallet")] wallet_manager: &mut Option<
             std::rc::Rc<RemoteWalletManager>,
         >,
+        verbose: bool,
     ) -> eyre::Result<Self> {
         let Payer { payer, proposer } = config.create_wallet(
             #[cfg(feature = "remote-wallet")]
@@ -174,6 +187,7 @@ impl CommandClient {
                 }
             }),
             serialize_only: config.serialize_only(),
+            verbose,
         })
     }
 
@@ -304,7 +318,12 @@ impl CommandClient {
                 return Ok(());
             }
 
-            match bundle.send_all_with_opts(options).await {
+            let mut idx = 0;
+            let steps = bundle.len();
+            match bundle
+                .send_all_with_opts(options, |m| before_sign(&mut idx, steps, self.verbose, m))
+                .await
+            {
                 Ok(signatures) => {
                     tracing::info!("successful transactions: {signatures:#?}");
                 }
@@ -313,7 +332,12 @@ impl CommandClient {
                 }
             }
         } else {
-            match bundle.send_all_with_opts(options).await {
+            let mut idx = 0;
+            let steps = bundle.len();
+            match bundle
+                .send_all_with_opts(options, |m| before_sign(&mut idx, steps, self.verbose, m))
+                .await
+            {
                 Ok(signatures) => (callback)(
                     signatures.into_iter().map(|w| w.into_value()).collect(),
                     None,
@@ -348,4 +372,25 @@ impl Deref for CommandClient {
     fn deref(&self) -> &Self::Target {
         &self.client
     }
+}
+
+fn before_sign(
+    idx: &mut usize,
+    steps: usize,
+    verbose: bool,
+    message: &VersionedMessage,
+) -> Result<(), gmsol_sdk::SolanaUtilsError> {
+    use gmsol_sdk::solana_utils::solana_sdk::hash::hash;
+    *idx += 1;
+    println!(
+        "[{idx}/{steps}] Signing transaction: hash = {}{}",
+        hash(&message.serialize()),
+        if verbose {
+            format!(", message = {}", inspect_transaction(message, None, true))
+        } else {
+            String::new()
+        }
+    );
+
+    Ok(())
 }

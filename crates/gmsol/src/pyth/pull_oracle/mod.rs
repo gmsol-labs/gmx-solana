@@ -26,7 +26,7 @@ use either::Either;
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, SendBundleOptions},
     program::Program,
-    transaction_builder::TransactionBuilder,
+    transaction_builder::{default_before_sign, TransactionBuilder},
 };
 use gmsol_store::states::common::TokensWithFeed;
 use hermes::BinaryPriceUpdate;
@@ -90,16 +90,19 @@ where
 
         let mut signatures = match self
             .post
-            .send_all_with_opts(SendBundleOptions {
-                without_compute_budget: false,
-                compute_unit_price_micro_lamports,
-                config: RpcSendTransactionConfig {
-                    skip_preflight,
+            .send_all_with_opts(
+                SendBundleOptions {
+                    without_compute_budget: false,
+                    compute_unit_price_micro_lamports,
+                    config: RpcSendTransactionConfig {
+                        skip_preflight,
+                        ..Default::default()
+                    },
+                    disable_error_tracing: !enable_tracing,
                     ..Default::default()
                 },
-                disable_error_tracing: !enable_tracing,
-                ..Default::default()
-            })
+                default_before_sign,
+            )
             .await
         {
             Ok(signatures) => signatures,
@@ -112,16 +115,19 @@ where
         if error.is_none() {
             let mut consume_signatures = match self
                 .consume
-                .send_all_with_opts(SendBundleOptions {
-                    without_compute_budget: false,
-                    compute_unit_price_micro_lamports,
-                    config: RpcSendTransactionConfig {
-                        skip_preflight,
+                .send_all_with_opts(
+                    SendBundleOptions {
+                        without_compute_budget: false,
+                        compute_unit_price_micro_lamports,
+                        config: RpcSendTransactionConfig {
+                            skip_preflight,
+                            ..Default::default()
+                        },
+                        disable_error_tracing: !enable_tracing,
                         ..Default::default()
                     },
-                    disable_error_tracing: !enable_tracing,
-                    ..Default::default()
-                })
+                    default_before_sign,
+                )
                 .await
             {
                 Ok(signatures) => signatures,
@@ -136,16 +142,19 @@ where
 
         let mut close_signatures = match self
             .close
-            .send_all_with_opts(SendBundleOptions {
-                without_compute_budget: false,
-                compute_unit_price_micro_lamports,
-                config: RpcSendTransactionConfig {
-                    skip_preflight,
+            .send_all_with_opts(
+                SendBundleOptions {
+                    without_compute_budget: false,
+                    compute_unit_price_micro_lamports,
+                    config: RpcSendTransactionConfig {
+                        skip_preflight,
+                        ..Default::default()
+                    },
+                    disable_error_tracing: !enable_tracing,
                     ..Default::default()
                 },
-                disable_error_tracing: !enable_tracing,
-                ..Default::default()
-            })
+                default_before_sign,
+            )
             .await
         {
             Ok(signatures) => signatures,

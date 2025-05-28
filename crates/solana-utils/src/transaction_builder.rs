@@ -491,13 +491,14 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         latest_hash: Hash,
         without_compute_budget: bool,
         compute_unit_price_micro_lamports: Option<u64>,
+        before_sign: impl FnOnce(&VersionedMessage) -> crate::Result<()>,
     ) -> crate::Result<VersionedTransaction> {
         let message = self.message_with_blockhash_and_options(
             latest_hash,
             without_compute_budget,
             compute_unit_price_micro_lamports,
         )?;
-
+        (before_sign)(&message)?;
         let mut signers = self.signers.clone();
         signers.push(&*self.cfg.payer);
         for signer in self.owned_signers.iter() {
@@ -515,6 +516,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         &self,
         without_compute_budget: bool,
         compute_unit_price_micro_lamports: Option<u64>,
+        before_sign: impl FnOnce(&VersionedMessage) -> crate::Result<()>,
     ) -> crate::Result<VersionedTransaction> {
         let client = self.cfg.rpc();
         let latest_hash = client.get_latest_blockhash().await.map_err(Box::new)?;
@@ -523,6 +525,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
             latest_hash,
             without_compute_budget,
             compute_unit_price_micro_lamports,
+            before_sign,
         )
     }
 
@@ -533,6 +536,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         without_compute_budget: bool,
         compute_unit_price_micro_lamports: Option<u64>,
         mut config: RpcSendTransactionConfig,
+        before_sign: impl FnOnce(&VersionedMessage) -> crate::Result<()>,
     ) -> crate::Result<WithSlot<Signature>> {
         let client = self.cfg.rpc();
         let latest_hash = client.get_latest_blockhash().await.map_err(Box::new)?;
@@ -541,6 +545,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
             latest_hash,
             without_compute_budget,
             compute_unit_price_micro_lamports,
+            before_sign,
         )?;
 
         config.preflight_commitment = config
@@ -566,6 +571,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
                     skip_preflight: true,
                     ..Default::default()
                 },
+                default_before_sign,
             )
             .await?
             .into_value())
@@ -575,7 +581,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
     #[cfg(client)]
     pub async fn send(self) -> crate::Result<Signature> {
         Ok(self
-            .send_with_options(false, None, Default::default())
+            .send_with_options(false, None, Default::default(), default_before_sign)
             .await?
             .into_value())
     }
@@ -627,4 +633,9 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         let fee = num_signers * 5_000 + self.compute_budget.fee(compute_unit_price_micro_lamports);
         Ok(fee)
     }
+}
+
+/// Default `before_sign` callback.
+pub fn default_before_sign(_message: &VersionedMessage) -> crate::Result<()> {
+    Ok(())
 }

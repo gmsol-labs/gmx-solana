@@ -19,7 +19,7 @@ use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions, CreateBundleOptions},
     cluster::Cluster,
     program::Program,
-    transaction_builder::{Config, TransactionBuilder},
+    transaction_builder::{default_before_sign, Config, TransactionBuilder},
 };
 use gmsol_store::{
     states::{
@@ -737,7 +737,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         );
         let status = crate::utils::view::<MarketStatus>(
             &self.store_program().rpc(),
-            &req.signed_transaction_with_options(true, None).await?,
+            &req.signed_transaction_with_options(true, None, default_before_sign)
+                .await?,
         )
         .await?;
         Ok(status)
@@ -755,7 +756,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         let req = self.get_market_token_price(store, market_token, prices, pnl_factor, maximize);
         let price = crate::utils::view::<u128>(
             &self.store_program().rpc(),
-            &req.signed_transaction_with_options(true, None).await?,
+            &req.signed_transaction_with_options(true, None, default_before_sign)
+                .await?,
         )
         .await?;
         Ok(price)

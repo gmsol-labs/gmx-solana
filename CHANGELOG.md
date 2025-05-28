@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added amount type definitions to `utils`.
 - sdk(sdk): Modified all market fetching methods to return `Arc<Market>`.
 - sdk(solana-utils): Removed incorrect options from `SendBundleOptions`.
+- sdk(solana-utils): Introduced a `before_sign` callback in transaction construction methods.
 
 ### Added
 
