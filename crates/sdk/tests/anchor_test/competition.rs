@@ -4,7 +4,7 @@ use gmsol_competition::{
     ID as COMPETITION_PROGRAM_ID,
 };
 use gmsol_sdk::{
-    client::ops::ExchangeOps, constants::MARKET_USD_UNIT, ops::exchange::callback::Callback,
+    builders::callback::Callback, client::ops::ExchangeOps, constants::MARKET_USD_UNIT,
 };
 use rand::Rng;
 use solana_sdk::{pubkey::Pubkey, system_program};
@@ -125,12 +125,14 @@ async fn competition() -> eyre::Result<()> {
             true,
             size,
         )
-        .callback(Some(Callback {
-            version: 0,
-            program: COMPETITION_PROGRAM_ID,
-            config: competition,
-            action_stats: participant,
-        }))
+        .callback(Some(
+            Callback::builder()
+                .version(0)
+                .program(COMPETITION_PROGRAM_ID)
+                .config(competition)
+                .action_stats(participant)
+                .build(),
+        ))
         .build_with_address()
         .await?;
 
@@ -228,12 +230,14 @@ async fn competition() -> eyre::Result<()> {
                 true,
                 random_size,
             )
-            .callback(Some(Callback {
-                version: 0,
-                program: COMPETITION_PROGRAM_ID,
-                config: competition,
-                action_stats: participant,
-            }))
+            .callback(Some(
+                Callback::builder()
+                    .version(0)
+                    .program(COMPETITION_PROGRAM_ID)
+                    .config(competition)
+                    .action_stats(participant)
+                    .build(),
+            ))
             .build_with_address()
             .await?;
 
@@ -257,12 +261,14 @@ async fn competition() -> eyre::Result<()> {
         // Decrease.
         let (rpc, order) = client
             .market_decrease(store, market_token, true, 0, true, random_size)
-            .callback(Some(Callback {
-                version: 0,
-                program: COMPETITION_PROGRAM_ID,
-                config: competition,
-                action_stats: participant,
-            }))
+            .callback(Some(
+                Callback::builder()
+                    .version(0)
+                    .program(COMPETITION_PROGRAM_ID)
+                    .config(competition)
+                    .action_stats(participant)
+                    .build(),
+            ))
             .build_with_address()
             .await?;
 

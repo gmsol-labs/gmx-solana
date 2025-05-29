@@ -19,12 +19,8 @@ pub mod glv_withdrawal;
 /// Builders for transactions related to GLV shifts.
 pub mod glv_shift;
 
-/// Utils for callback.
-pub mod callback;
-
 use std::{future::Future, ops::Deref};
 
-use callback::{Callback, CallbackAddresses};
 use deposit::{CloseDepositBuilder, CreateDepositBuilder, ExecuteDepositBuilder};
 use glv_deposit::{CloseGlvDepositBuilder, CreateGlvDepositBuilder, ExecuteGlvDepositBuilder};
 use glv_shift::{CloseGlvShiftBuilder, CreateGlvShiftBuilder, ExecuteGlvShiftBuilder};
@@ -45,7 +41,10 @@ use shift::{CloseShiftBuilder, CreateShiftBuilder, ExecuteShiftBuilder};
 use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use withdrawal::{CloseWithdrawalBuilder, CreateWithdrawalBuilder, ExecuteWithdrawalBuilder};
 
-use crate::client::Client;
+use crate::{
+    builders::callback::{Callback, CallbackParams},
+    client::Client,
+};
 
 /// Exchange operations.
 pub trait ExchangeOps<C> {
@@ -521,11 +520,12 @@ impl<C: Deref<Target = impl Signer> + Clone> ExchangeOps<C> for Client<C> {
                 Callback::from_header(&order.header)?
             }
         };
-        let CallbackAddresses {
+        let CallbackParams {
             callback_authority,
             callback_program,
             callback_config_account,
             callback_action_stats_account,
+            ..
         } = self.get_callback_params(callback.as_ref());
         Ok(self
             .store_transaction()

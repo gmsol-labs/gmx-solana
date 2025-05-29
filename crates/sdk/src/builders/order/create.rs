@@ -6,6 +6,7 @@ use solana_sdk::instruction::AccountMeta;
 use solana_sdk::system_program;
 use typed_builder::TypedBuilder;
 
+use crate::builders::callback::{Callback, CallbackParams};
 use crate::builders::{
     utils::{generate_nonce, prepare_ata},
     NonceBytes, StoreProgram,
@@ -194,6 +195,9 @@ pub struct CreateOrder {
     #[cfg_attr(serde, serde(default))]
     #[builder(default)]
     pub unwrap_native_on_receive: bool,
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub callback: Option<Callback>,
 }
 
 #[cfg(serde)]
@@ -379,14 +383,23 @@ impl IntoAtomicGroup for CreateOrder {
             );
         }
 
+        let CallbackParams {
+            callback_version,
+            callback_authority,
+            callback_program,
+            callback_config_account,
+            callback_action_stats_account,
+        } = self.program.get_callback_params(self.callback.as_ref());
+
         let create = self
             .program
-            .instruction(args::CreateOrder {
+            .instruction(args::CreateOrderV2 {
                 nonce: nonce.to_bytes(),
                 params,
+                callback_version,
             })
             .accounts(
-                accounts::CreateOrder {
+                accounts::CreateOrderV2 {
                     owner,
                     receiver,
                     store: self.program.store.0,
@@ -406,6 +419,12 @@ impl IntoAtomicGroup for CreateOrder {
                     system_program: system_program::ID,
                     token_program: token_program_id,
                     associated_token_program: associated_token::ID,
+                    event_authority: self.program.find_callback_authority_address(),
+                    program: self.program.id.0,
+                    callback_authority,
+                    callback_program,
+                    callback_config_account,
+                    callback_action_stats_account,
                 },
                 true,
             )

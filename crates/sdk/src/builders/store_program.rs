@@ -7,6 +7,8 @@ use typed_builder::TypedBuilder;
 
 use crate::{pda, serde::StringPubkey, utils::optional::fix_optional_account_metas};
 
+use super::callback::{Callback, CallbackParams};
+
 /// Nonce Bytes.
 pub type NonceBytes = StringPubkey;
 
@@ -61,6 +63,19 @@ impl StoreProgram {
         }
     }
 
+    pub(crate) fn get_callback_params(&self, callback: Option<&Callback>) -> CallbackParams {
+        match callback {
+            Some(callback) => CallbackParams {
+                callback_version: Some(callback.version),
+                callback_authority: Some(self.find_callback_authority_address()),
+                callback_program: Some(callback.program.0),
+                callback_config_account: Some(callback.config.0),
+                callback_action_stats_account: Some(callback.action_stats.0),
+            },
+            None => CallbackParams::default(),
+        }
+    }
+
     /// Find the event authority address.
     pub fn find_event_authority_address(&self) -> Pubkey {
         pda::find_event_authority_address(&self.id).0
@@ -103,6 +118,11 @@ impl StoreProgram {
             &self.id,
         )
         .0
+    }
+
+    /// Find the PDA for callback authority.
+    pub fn find_callback_authority_address(&self) -> Pubkey {
+        crate::pda::find_callback_authority(&self.id).0
     }
 }
 

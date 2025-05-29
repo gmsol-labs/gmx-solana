@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Modified all market fetching methods to return `Arc<Market>`.
 - sdk(solana-utils): Removed incorrect options from `SendBundleOptions`.
 - sdk(solana-utils): Introduced a `before_sign` callback in transaction construction methods.
+- sdk(sdk): Removed the `Copy` implementation from `CloseOrderHint`.
+- sdk(sdk): Added callback support for the new order instruction builders.
 
 ### Added
 

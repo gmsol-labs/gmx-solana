@@ -14,6 +14,9 @@ pub mod user;
 
 pub(crate) mod utils;
 
+/// Definitions for callback mechanism.
+pub mod callback;
+
 /// Nonce Bytes.
 pub type NonceBytes = StringPubkey;
 

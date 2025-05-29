@@ -5,7 +5,13 @@ use gmsol_programs::gmsol_store::{
 use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup};
 use typed_builder::TypedBuilder;
 
-use crate::{builders::StoreProgram, serde::StringPubkey};
+use crate::{
+    builders::{
+        callback::{Callback, CallbackParams},
+        StoreProgram,
+    },
+    serde::StringPubkey,
+};
 
 /// Builder for the `update_order` instruction.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
@@ -76,6 +82,8 @@ pub struct UpdateOrderHint {
     /// Market token.
     #[builder(setter(into))]
     pub market_token: StringPubkey,
+    /// Callback.
+    pub callback: Option<Callback>,
 }
 
 impl IntoAtomicGroup for UpdateOrder {
@@ -83,17 +91,32 @@ impl IntoAtomicGroup for UpdateOrder {
 
     fn into_atomic_group(self, hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
         let payer = self.payer.0;
+
+        let CallbackParams {
+            callback_authority,
+            callback_program,
+            callback_config_account,
+            callback_action_stats_account,
+            ..
+        } = self.program.get_callback_params(hint.callback.as_ref());
+
         let update = self
             .program
-            .instruction(args::UpdateOrder {
+            .instruction(args::UpdateOrderV2 {
                 params: self.params.into(),
             })
             .accounts(
-                accounts::UpdateOrder {
+                accounts::UpdateOrderV2 {
                     owner: payer,
                     store: self.program.store.0,
                     market: self.program.find_market_address(&hint.market_token),
                     order: self.order.0,
+                    event_authority: self.program.find_event_authority_address(),
+                    program: self.program.id.0,
+                    callback_authority,
+                    callback_program,
+                    callback_config_account,
+                    callback_action_stats_account,
                 },
                 true,
             )
@@ -126,6 +149,7 @@ mod tests {
             .into_atomic_group(
                 &UpdateOrderHint::builder()
                     .market_token(market_token)
+                    .callback(None)
                     .build(),
             )?
             .partially_signed_transaction_with_blockhash_and_options(

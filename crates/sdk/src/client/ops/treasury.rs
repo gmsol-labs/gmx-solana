@@ -21,7 +21,10 @@ use solana_client::rpc_config::RpcAccountInfoConfig;
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer, system_program};
 
 use crate::{
-    builders::utils::generate_nonce,
+    builders::{
+        callback::{Callback, CallbackParams},
+        utils::generate_nonce,
+    },
     client::{
         feeds_parser::{FeedAddressMap, FeedsParser},
         program_ids,
@@ -31,11 +34,7 @@ use crate::{
     utils::{optional::fix_optional_account_metas, zero_copy::ZeroCopy},
 };
 
-use super::{
-    exchange::callback::{Callback, CallbackAddresses},
-    gt::GtOps,
-    token_account::TokenAccountOps,
-};
+use super::{gt::GtOps, token_account::TokenAccountOps};
 
 /// Operations for treasury.
 pub trait TreasuryOps<C> {
@@ -756,7 +755,8 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
             Some(&receiver),
         );
 
-        let CallbackAddresses {
+        let CallbackParams {
+            callback_version,
             callback_authority,
             callback_program,
             callback_config_account,
@@ -773,7 +773,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
                     .map_err(|_| crate::Error::custom("swap path is too long"))?,
                 swap_in_amount: swap_in_token_amount,
                 min_swap_out_amount: options.min_swap_out_amount,
-                callback_version: options.callback.as_ref().map(|c| c.version),
+                callback_version,
             })
             .anchor_accounts(accounts::CreateSwapV2 {
                 authority: self.payer(),

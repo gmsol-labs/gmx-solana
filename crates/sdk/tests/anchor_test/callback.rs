@@ -1,7 +1,7 @@
 use gmsol_callback::{accounts, instruction, interface::ActionKind, states::ACTION_STATS_SEED};
 use gmsol_programs::gmsol_store::types::UpdateOrderParams;
 use gmsol_sdk::{
-    client::ops::ExchangeOps, constants::MARKET_USD_UNIT, ops::exchange::callback::Callback,
+    builders::callback::Callback, client::ops::ExchangeOps, constants::MARKET_USD_UNIT,
 };
 use solana_sdk::{pubkey::Pubkey, system_program};
 
@@ -69,12 +69,14 @@ async fn callback() -> eyre::Result<()> {
             true,
             size,
         )
-        .callback(Some(Callback {
-            version: 0,
-            program: deployment.callback_program,
-            config: deployment.callback_config,
-            action_stats,
-        }))
+        .callback(Some(
+            Callback::builder()
+                .version(0)
+                .action_stats(action_stats)
+                .config(deployment.callback_config)
+                .program(deployment.callback_program)
+                .build(),
+        ))
         .build_with_address()
         .await?;
     let prepare_action_stats = client
@@ -114,12 +116,14 @@ async fn callback() -> eyre::Result<()> {
             true,
             long_collateral_amount,
         )
-        .callback(Some(Callback {
-            version: 0,
-            program: deployment.callback_program,
-            config: deployment.callback_config,
-            action_stats,
-        }))
+        .callback(Some(
+            Callback::builder()
+                .version(0)
+                .action_stats(action_stats)
+                .config(deployment.callback_config)
+                .program(deployment.callback_program)
+                .build(),
+        ))
         .build_with_address()
         .await?;
     let prepare_action_stats = client
@@ -185,12 +189,14 @@ async fn callback() -> eyre::Result<()> {
             true,
             size,
         )
-        .callback(Some(Callback {
-            version: 0,
-            program: deployment.callback_program,
-            config: deployment.callback_config,
-            action_stats,
-        }))
+        .callback(Some(
+            Callback::builder()
+                .version(0)
+                .action_stats(action_stats)
+                .config(deployment.callback_config)
+                .program(deployment.callback_program)
+                .build(),
+        ))
         .build_with_address()
         .await?;
     let prepare_action_stats = client
@@ -240,12 +246,14 @@ async fn callback() -> eyre::Result<()> {
             swap_in_amount,
             [market_token],
         )
-        .callback(Some(Callback {
-            version: 0,
-            program: deployment.callback_program,
-            config: deployment.callback_config,
-            action_stats,
-        }))
+        .callback(Some(
+            Callback::builder()
+                .version(0)
+                .action_stats(action_stats)
+                .config(deployment.callback_config)
+                .program(deployment.callback_program)
+                .build(),
+        ))
         .build_with_address()
         .await?;
     let prepare_action_stats = client
@@ -288,12 +296,14 @@ async fn callback() -> eyre::Result<()> {
     // Create market decrease order 1.
     let (mut rpc, order) = client
         .market_decrease(store, market_token, true, 0, true, size / 2)
-        .callback(Some(Callback {
-            version: 0,
-            program: deployment.callback_program,
-            config: deployment.callback_config,
-            action_stats,
-        }))
+        .callback(Some(
+            Callback::builder()
+                .version(0)
+                .action_stats(action_stats)
+                .config(deployment.callback_config)
+                .program(deployment.callback_program)
+                .build(),
+        ))
         .build_with_address()
         .await?;
     let prepare_action_stats = client
@@ -336,12 +346,14 @@ async fn callback() -> eyre::Result<()> {
     // Create market decrease order 2.
     let (mut rpc, order) = client
         .market_decrease(store, market_token, true, 0, true, size / 2)
-        .callback(Some(Callback {
-            version: 0,
-            program: deployment.callback_program,
-            config: deployment.callback_config,
-            action_stats,
-        }))
+        .callback(Some(
+            Callback::builder()
+                .version(0)
+                .action_stats(action_stats)
+                .config(deployment.callback_config)
+                .program(deployment.callback_program)
+                .build(),
+        ))
         .build_with_address()
         .await?;
     let prepare_action_stats = client

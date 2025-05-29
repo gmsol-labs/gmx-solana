@@ -7,7 +7,11 @@ use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup};
 use typed_builder::TypedBuilder;
 
 use crate::{
-    builders::{utils::get_ata_or_owner, StoreProgram},
+    builders::{
+        callback::{Callback, CallbackParams},
+        utils::get_ata_or_owner,
+        StoreProgram,
+    },
     serde::StringPubkey,
 };
 
@@ -64,6 +68,8 @@ pub struct CloseOrderHint {
     pub short_token: Option<StringPubkey>,
     /// `should_unwrap_native_token` flag.
     pub should_unwrap_native_token: bool,
+    /// Callback.
+    pub callback: Option<Callback>,
 }
 
 impl IntoAtomicGroup for CloseOrder {
@@ -85,13 +91,21 @@ impl IntoAtomicGroup for CloseOrder {
         let long_token = hint.long_token.as_deref().copied();
         let short_token = hint.short_token.as_deref().copied();
 
+        let CallbackParams {
+            callback_authority,
+            callback_program,
+            callback_config_account,
+            callback_action_stats_account,
+            ..
+        } = self.program.get_callback_params(hint.callback.as_ref());
+
         let close = self
             .program
-            .instruction(args::CloseOrder {
+            .instruction(args::CloseOrderV2 {
                 reason: self.reason,
             })
             .accounts(
-                accounts::CloseOrder {
+                accounts::CloseOrderV2 {
                     executor: payer,
                     store: self.program.store.0,
                     store_wallet: self.program.find_store_wallet_address(),
@@ -152,6 +166,10 @@ impl IntoAtomicGroup for CloseOrder {
                     associated_token_program: associated_token::ID,
                     event_authority: self.program.find_event_authority_address(),
                     program: self.program.id.0,
+                    callback_authority,
+                    callback_program,
+                    callback_config_account,
+                    callback_action_stats_account,
                 },
                 true,
             )
@@ -195,6 +213,7 @@ mod tests {
                     .long_token(long_token)
                     .short_token(short_token)
                     .should_unwrap_native_token(true)
+                    .callback(None)
                     .build(),
             )?
             .partially_signed_transaction_with_blockhash_and_options(

@@ -75,10 +75,7 @@ use gmsol_solana_utils::{
 };
 use gmsol_utils::oracle::PriceProviderKind;
 use instruction_buffer::InstructionBuffer;
-use ops::{
-    exchange::callback::{Callback, CallbackAddresses},
-    market::MarketOps,
-};
+use ops::market::MarketOps;
 use pubsub::{PubsubClient, SubscriptionConfig};
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
@@ -94,6 +91,7 @@ use tokio::sync::OnceCell;
 use typed_builder::TypedBuilder;
 
 use crate::{
+    builders::callback::{Callback, CallbackParams},
     pda::{NonceBytes, ReferralCodeBytes},
     utils::{
         optional::optional_address,
@@ -574,15 +572,16 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         crate::pda::find_callback_authority(self.store_program_id()).0
     }
 
-    pub(crate) fn get_callback_params(&self, callback: Option<&Callback>) -> CallbackAddresses {
+    pub(crate) fn get_callback_params(&self, callback: Option<&Callback>) -> CallbackParams {
         match callback {
-            Some(callback) => CallbackAddresses {
+            Some(callback) => CallbackParams {
+                callback_version: Some(callback.version),
                 callback_authority: Some(self.find_callback_authority_address()),
-                callback_program: Some(callback.program),
-                callback_config_account: Some(callback.config),
-                callback_action_stats_account: Some(callback.action_stats),
+                callback_program: Some(callback.program.0),
+                callback_config_account: Some(callback.config.0),
+                callback_action_stats_account: Some(callback.action_stats.0),
             },
-            None => CallbackAddresses::default(),
+            None => CallbackParams::default(),
         }
     }
 

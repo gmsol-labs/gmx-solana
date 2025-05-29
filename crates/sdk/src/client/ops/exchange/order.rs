@@ -32,7 +32,10 @@ use solana_sdk::{
 };
 
 use crate::{
-    builders::utils::{generate_nonce, get_ata_or_owner},
+    builders::{
+        callback::{Callback, CallbackParams},
+        utils::{generate_nonce, get_ata_or_owner},
+    },
     client::{
         feeds_parser::{FeedAddressMap, FeedsParser},
         ops::token_account::TokenAccountOps,
@@ -44,10 +47,7 @@ use crate::{
     utils::{optional::fix_optional_account_metas, zero_copy::ZeroCopy},
 };
 
-use super::{
-    callback::{Callback, CallbackAddresses},
-    ExchangeOps,
-};
+use super::ExchangeOps;
 
 /// Compute unit limit for `execute_order`
 pub const EXECUTE_ORDER_COMPUTE_BUDGET: u32 = 400_000;
@@ -264,9 +264,9 @@ where
             crate::pda::find_participant_address(competition, &self.client.payer(), &ID).0;
         self.callback(Some(Callback {
             version: 0,
-            program: ID,
-            config: *competition,
-            action_stats: participant,
+            program: ID.into(),
+            config: (*competition).into(),
+            action_stats: participant.into(),
         }))
     }
 
@@ -601,7 +601,8 @@ where
             .anchor_args(args::PrepareUser {});
         prepare = prepare.merge(prepare_user);
 
-        let CallbackAddresses {
+        let CallbackParams {
+            callback_version,
             callback_authority,
             callback_program,
             callback_config_account,
@@ -611,12 +612,12 @@ where
         #[cfg(competition)]
         if let Some(callback) = self.callback.as_ref() {
             use crate::ops::competition::CompetitionOps;
-            if callback.program == crate::programs::gmsol_competition::ID {
+            if callback.program.0 == crate::programs::gmsol_competition::ID {
                 let (prepare_participant, participant) = self
                     .client
                     .create_participant_idempotent(&callback.config, None)
                     .swap_output(());
-                if participant != callback.action_stats {
+                if participant != callback.action_stats.0 {
                     return Err(crate::Error::custom("invalid participant account"));
                 }
                 prepare = prepare.merge(prepare_participant);
@@ -661,7 +662,7 @@ where
             .anchor_args(args::CreateOrderV2 {
                 nonce,
                 params,
-                callback_version: self.callback.as_ref().map(|c| c.version),
+                callback_version,
             })
             .accounts(
                 self.swap_path
@@ -976,11 +977,12 @@ where
         let is_swap = matches!(kind, OrderKind::LimitSwap | OrderKind::MarketSwap);
         let mut require_claimable_accounts = false;
 
-        let CallbackAddresses {
+        let CallbackParams {
             callback_authority,
             callback_program,
             callback_config_account,
             callback_action_stats_account,
+            ..
         } = self.client.get_callback_params(hint.callback.as_ref());
 
         let mut execute_order = match kind {
@@ -1257,7 +1259,7 @@ pub struct CloseOrderBuilder<'a, C> {
 }
 
 /// Close Order Hint.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct CloseOrderHint {
     pub(super) owner: Pubkey,
     pub(super) receiver: Pubkey,
@@ -1351,7 +1353,7 @@ where
 
     async fn prepare_hint(&mut self) -> crate::Result<CloseOrderHint> {
         match &self.hint {
-            Some(hint) => Ok(*hint),
+            Some(hint) => Ok(hint.clone()),
             None => {
                 let order: ZeroCopy<Order> = self
                     .client
@@ -1368,7 +1370,7 @@ where
                     user.as_ref().map(|user| &user.0),
                     self.client.store_program_id(),
                 )?;
-                self.hint = Some(hint);
+                self.hint = Some(hint.clone());
                 Ok(hint)
             }
         }
@@ -1382,11 +1384,12 @@ where
         let referrer_user = hint
             .referrer
             .map(|owner| self.client.find_user_address(&hint.store, &owner));
-        let CallbackAddresses {
+        let CallbackParams {
             callback_authority,
             callback_program,
             callback_config_account,
             callback_action_stats_account,
+            ..
         } = self.client.get_callback_params(
             (!self.skip_callback)
                 .then_some(hint.callback.as_ref())

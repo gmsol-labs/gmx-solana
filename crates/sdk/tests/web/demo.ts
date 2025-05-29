@@ -159,6 +159,7 @@ const closeOrders = close_orders({
         long_token: wsol,
         short_token: usdc,
         should_unwrap_native_token: true,
+        callback: undefined,
       },
     ],
     [
@@ -173,6 +174,7 @@ const closeOrders = close_orders({
         long_token: usdc,
         short_token: usdc,
         should_unwrap_native_token: false,
+        callback: undefined,
       },
     ],
   ]),
@@ -198,6 +200,7 @@ const updateOrders = update_orders({
         },
         hint: {
           market_token: market.market_token_address(),
+          callback: undefined,
         },
       },
     ],
@@ -209,6 +212,7 @@ const updateOrders = update_orders({
         },
         hint: {
           market_token: market.market_token_address(),
+          callback: undefined,
         },
       },
     ],
