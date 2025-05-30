@@ -21,7 +21,7 @@ use gmsol_sdk::{
         },
         utils::inspect_transaction,
     },
-    utils::instruction_serialization::InstructionSerialization,
+    utils::instruction_serialization::{serialize_message, InstructionSerialization},
     Client,
 };
 use gt::Gt;
@@ -232,25 +232,14 @@ impl CommandClient {
         bundle: BundleBuilder<'_, LocalSignerRef>,
         callback: impl FnOnce(Vec<Signature>, Option<gmsol_sdk::Error>) -> gmsol_sdk::Result<()>,
     ) -> gmsol_sdk::Result<()> {
-        use gmsol_sdk::utils::instruction_serialization::serialize_instruction;
-
         let options = self.send_bundle_options();
         let serialize_only = self.serialize_only;
         if let Some(format) = serialize_only {
+            println!("\n[Transactions]");
             for (idx, rpc) in bundle.into_builders().into_iter().enumerate() {
-                println!("Transaction {idx}:");
-                let payer_address = rpc.get_payer();
-                for (idx, ix) in rpc
-                    .instructions_with_options(true, None)
-                    .into_iter()
-                    .enumerate()
-                {
-                    println!(
-                        "ix[{idx}]: {}",
-                        serialize_instruction(&ix, format, Some(&payer_address))?
-                    );
-                }
-                println!();
+                let message =
+                    rpc.message_with_blockhash_and_options(Default::default(), true, None)?;
+                println!("TXN[{idx}]: {}", serialize_message(&message, format)?);
             }
         } else if let Some(IxBufferCtx {
             buffer,

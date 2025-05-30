@@ -35,3 +35,15 @@ pub fn serialize_instruction(
 
     Ok(message)
 }
+
+/// Serialize message.
+pub fn serialize_message(
+    message: &solana_sdk::message::VersionedMessage,
+    format: InstructionSerialization,
+) -> crate::Result<String> {
+    let message = match format {
+        InstructionSerialization::Base58 => bs58::encode(message.serialize()).into_string(),
+        InstructionSerialization::Base64 => STANDARD.encode(message.serialize()),
+    };
+    Ok(message)
+}
