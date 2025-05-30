@@ -1,8 +1,8 @@
-/// Market management commands.
+/// Treasury management commands.
 #[derive(Debug, clap::Args)]
-pub struct Market {}
+pub struct Treasury {}
 
-impl super::Command for Market {
+impl super::Command for Treasury {
     fn is_client_required(&self) -> bool {
         true
     }

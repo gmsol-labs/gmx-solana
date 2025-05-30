@@ -1,8 +1,8 @@
-/// Market management commands.
+/// Inspect protocol data.
 #[derive(Debug, clap::Args)]
-pub struct Market {}
+pub struct Inspect {}
 
-impl super::Command for Market {
+impl super::Command for Inspect {
     fn is_client_required(&self) -> bool {
         true
     }

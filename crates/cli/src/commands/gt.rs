@@ -1,8 +1,8 @@
-/// Market management commands.
+/// GT-related commands.
 #[derive(Debug, clap::Args)]
-pub struct Market {}
+pub struct Gt {}
 
-impl super::Command for Market {
+impl super::Command for Gt {
     fn is_client_required(&self) -> bool {
         true
     }

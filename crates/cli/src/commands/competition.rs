@@ -8,7 +8,7 @@ use gmsol_sdk::{
 };
 use time::OffsetDateTime;
 
-/// Commands for competition management.
+/// Competition management commands.
 #[derive(Debug, clap::Args)]
 pub struct Competition {
     #[command(subcommand)]

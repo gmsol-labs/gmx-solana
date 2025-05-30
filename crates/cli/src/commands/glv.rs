@@ -1,8 +1,8 @@
-/// Market management commands.
+/// GLV management commands.
 #[derive(Debug, clap::Args)]
-pub struct Market {}
+pub struct Glv {}
 
-impl super::Command for Market {
+impl super::Command for Glv {
     fn is_client_required(&self) -> bool {
         true
     }

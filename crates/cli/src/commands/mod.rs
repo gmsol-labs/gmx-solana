@@ -1,11 +1,14 @@
 use std::{ops::Deref, path::Path};
 
 use admin::Admin;
+use alt::Alt;
 use competition::Competition;
+use configuration::Configuration;
 use enum_dispatch::enum_dispatch;
 use exchange::Exchange;
 use eyre::OptionExt;
 use get_pubkey::GetPubkey;
+use glv::Glv;
 use gmsol_sdk::{
     ops::TimelockOps,
     programs::anchor_lang::prelude::Pubkey,
@@ -21,43 +24,72 @@ use gmsol_sdk::{
     utils::instruction_serialization::InstructionSerialization,
     Client,
 };
+use gt::Gt;
 use init_config::InitConfig;
 
+use inspect::Inspect;
 use market::Market;
+use other::Other;
 #[cfg(feature = "remote-wallet")]
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
+use treasury::Treasury;
+use user::User;
 
 use crate::config::{Config, InstructionBuffer, Payer};
 
 mod admin;
+mod alt;
 mod competition;
+mod configuration;
 mod exchange;
 mod get_pubkey;
+mod glv;
+mod gt;
 mod init_config;
+mod inspect;
 mod market;
+mod other;
+mod treasury;
+mod user;
 
 /// Utils for command implementations.
 pub mod utils;
 
 /// Commands.
-#[enum_dispatch]
+#[enum_dispatch(Command)]
 #[derive(Debug, clap::Subcommand)]
 pub enum Commands {
-    /// Administrative commands.
-    Admin(Admin),
     /// Initialize config file.
     InitConfig(InitConfig),
     /// Get pubkey of the payer.
     Pubkey(GetPubkey),
-    /// Commands for exchange functionalities.
+    /// Exchange-related commands.
     Exchange(Box<Exchange>),
-    /// Commands for markets.
+    /// User account commands.
+    User(User),
+    /// GT-related commands.
+    Gt(Gt),
+    /// Address Lookup Table commands.
+    Alt(Alt),
+    /// Administrative commands.
+    Admin(Admin),
+    /// Treasury management commands.
+    Treasury(Treasury),
+    /// Market management commands.
     Market(Market),
-    /// Commands for competition management.
+    /// GLV management commands.
+    Glv(Glv),
+    /// On-chain configuration and features management.
+    Configuration(Configuration),
+    /// Competition management commands.
     Competition(Competition),
+    /// Inspect protocol data.
+    Inspect(Inspect),
+    /// Miscellaneous useful commands.
+    Other(Other),
 }
 
-#[enum_dispatch(Commands)]
+#[enum_dispatch]
 pub(crate) trait Command {
     fn is_client_required(&self) -> bool {
         false

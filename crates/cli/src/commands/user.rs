@@ -1,8 +1,8 @@
-/// Market management commands.
+/// User account commands.
 #[derive(Debug, clap::Args)]
-pub struct Market {}
+pub struct User {}
 
-impl super::Command for Market {
+impl super::Command for User {
     fn is_client_required(&self) -> bool {
         true
     }

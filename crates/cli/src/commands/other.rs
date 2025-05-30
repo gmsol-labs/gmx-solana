@@ -1,8 +1,8 @@
-/// Market management commands.
+/// Miscellaneous useful commands.
 #[derive(Debug, clap::Args)]
-pub struct Market {}
+pub struct Other {}
 
-impl super::Command for Market {
+impl super::Command for Other {
     fn is_client_required(&self) -> bool {
         true
     }

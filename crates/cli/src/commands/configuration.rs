@@ -1,8 +1,8 @@
-/// Market management commands.
+/// On-chain configuration and features management.
 #[derive(Debug, clap::Args)]
-pub struct Market {}
+pub struct Configuration {}
 
-impl super::Command for Market {
+impl super::Command for Configuration {
     fn is_client_required(&self) -> bool {
         true
     }

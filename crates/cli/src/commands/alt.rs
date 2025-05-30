@@ -1,8 +1,8 @@
-/// Market management commands.
+/// Address Lookup Table commands.
 #[derive(Debug, clap::Args)]
-pub struct Market {}
+pub struct Alt {}
 
-impl super::Command for Market {
+impl super::Command for Alt {
     fn is_client_required(&self) -> bool {
         true
     }
