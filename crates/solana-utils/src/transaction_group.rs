@@ -1,13 +1,14 @@
 use std::{borrow::BorrowMut, ops::Deref};
 
 use solana_sdk::{
-    hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, signer::Signer,
-    transaction::VersionedTransaction,
+    hash::Hash, message::VersionedMessage, packet::PACKET_DATA_SIZE, pubkey::Pubkey,
+    signer::Signer, transaction::VersionedTransaction,
 };
 
 use crate::{
     address_lookup_table::AddressLookupTables, instruction_group::GetInstructionsOptions,
-    signer::TransactionSigners, AtomicGroup, ParallelGroup,
+    signer::TransactionSigners, transaction_builder::default_before_sign, AtomicGroup,
+    ParallelGroup,
 };
 
 /// Transaction Group Options.
@@ -19,8 +20,8 @@ pub struct TransactionGroupOptions {
     /// # Note
     /// - Compute budget instructions are ignored.
     pub max_instructions_per_tx: usize,
-    /// Compute unit price in micro lamports.
-    pub compute_unit_price_micro_lamports: Option<u64>,
+    // /// Compute unit price in micro lamports.
+    // pub compute_unit_price_micro_lamports: Option<u64>,
     /// Memo for each transaction in this group.
     pub memo: Option<String>,
 }
@@ -30,28 +31,38 @@ impl Default for TransactionGroupOptions {
         Self {
             max_transaction_size: PACKET_DATA_SIZE,
             max_instructions_per_tx: 14,
-            compute_unit_price_micro_lamports: None,
+            // compute_unit_price_micro_lamports: None,
             memo: None,
         }
     }
 }
 
 impl TransactionGroupOptions {
-    fn instruction_options(&self) -> GetInstructionsOptions {
+    fn instruction_options(
+        &self,
+        without_compute_budget: bool,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+    ) -> GetInstructionsOptions {
         GetInstructionsOptions {
-            without_compute_budget: false,
-            compute_unit_price_micro_lamports: self.compute_unit_price_micro_lamports,
+            without_compute_budget,
+            compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
             memo: self.memo.clone(),
         }
     }
 
-    fn build_transaction_batch<C: Deref<Target = impl Signer>>(
+    fn build_transaction_batch<C: Deref<Target = impl Signer + ?Sized>>(
         &self,
         recent_blockhash: Hash,
         luts: &AddressLookupTables,
+        without_compute_budget: bool,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
         group: &ParallelGroup,
         signers: &TransactionSigners<C>,
         allow_partial_sign: bool,
+        mut before_sign: impl FnMut(&VersionedMessage) -> crate::Result<()>,
     ) -> crate::Result<Vec<VersionedTransaction>> {
         group
             .iter()
@@ -59,9 +70,14 @@ impl TransactionGroupOptions {
                 signers.sign_atomic_instruction_group(
                     ag,
                     recent_blockhash,
-                    self.instruction_options(),
+                    self.instruction_options(
+                        without_compute_budget,
+                        compute_unit_price_micro_lamports,
+                        compute_unit_min_priority_lamports,
+                    ),
                     Some(luts),
                     allow_partial_sign,
+                    &mut before_sign,
                 )
             })
             .collect()
@@ -74,6 +90,10 @@ impl TransactionGroupOptions {
         luts: &AddressLookupTables,
         allow_payer_change: bool,
     ) -> bool {
+        if !x.is_mergeable() || !y.is_mergeable() {
+            return false;
+        }
+
         if !allow_payer_change && x.payer() != y.payer() {
             return false;
         }
@@ -196,7 +216,14 @@ impl TransactionGroup {
             let [i, j] = *pair else {
                 unreachable!();
             };
-            let (Some(group_i), Some(group_j)) = (groups[i].single(), groups[j].single()) else {
+            let pg_i = &groups[i];
+            let pg_j = &groups[j];
+
+            if !pg_i.is_mergeable() || !pg_j.is_mergeable() {
+                continue;
+            }
+
+            let (Some(group_i), Some(group_j)) = (pg_i.single(), pg_j.single()) else {
                 continue;
             };
             if !self
@@ -226,34 +253,112 @@ impl TransactionGroup {
     }
 
     /// Build transactions.
-    pub fn to_transactions<'a, C: Signer>(
+    pub fn to_transactions<'a, C: Deref<Target = impl Signer + ?Sized>>(
         &'a self,
         signers: &'a TransactionSigners<C>,
         recent_blockhash: Hash,
         allow_partial_sign: bool,
-    ) -> TransactionGroupIter<'a, C> {
+    ) -> TransactionGroupIter<'a, C, fn(&VersionedMessage) -> crate::Result<()>> {
+        self.to_transactions_with_options(
+            signers,
+            recent_blockhash,
+            allow_partial_sign,
+            false,
+            None,
+            None,
+            default_before_sign,
+        )
+    }
+
+    /// Build transactions.
+    pub fn to_transactions_with_options<'a, C: Deref<Target = impl Signer + ?Sized>, F>(
+        &'a self,
+        signers: &'a TransactionSigners<C>,
+        recent_blockhash: Hash,
+        allow_partial_sign: bool,
+        without_compute_budget: bool,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+        before_sign: F,
+    ) -> TransactionGroupIter<'a, C, F>
+    where
+        F: FnMut(&VersionedMessage) -> crate::Result<()>,
+    {
         TransactionGroupIter {
             signers,
             recent_blockhash,
+            without_compute_budget,
+            compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
             options: &self.options,
             luts: &self.luts,
             iter: self.groups.iter(),
             allow_partial_sign,
+            before_sign,
         }
+    }
+
+    /// Returns whether the transaction group is empty.
+    pub fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+
+    /// Returns the total number of transactions.
+    pub fn len(&self) -> usize {
+        self.groups.iter().map(|pg| pg.len()).sum()
+    }
+
+    /// Returns the options.
+    pub fn options(&self) -> &TransactionGroupOptions {
+        &self.options
+    }
+
+    /// Estimates the execution fee of the result transaction.
+    pub fn estimate_execution_fee(
+        &self,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+    ) -> u64 {
+        self.groups
+            .iter()
+            .map(|pg| {
+                pg.estimate_execution_fee(
+                    compute_unit_price_micro_lamports,
+                    compute_unit_min_priority_lamports,
+                )
+            })
+            .sum()
+    }
+
+    /// Returns [`ParallelGroup`]s.
+    pub fn groups(&self) -> &[ParallelGroup] {
+        &self.groups
+    }
+
+    /// Returns Address Lookup Tables.
+    pub fn luts(&self) -> &AddressLookupTables {
+        &self.luts
     }
 }
 
 /// Transaction Group Iter.
-pub struct TransactionGroupIter<'a, C> {
+pub struct TransactionGroupIter<'a, C, F> {
     signers: &'a TransactionSigners<C>,
     recent_blockhash: Hash,
+    without_compute_budget: bool,
+    compute_unit_price_micro_lamports: Option<u64>,
+    compute_unit_min_priority_lamports: Option<u64>,
     options: &'a TransactionGroupOptions,
     luts: &'a AddressLookupTables,
     iter: std::slice::Iter<'a, ParallelGroup>,
     allow_partial_sign: bool,
+    before_sign: F,
 }
 
-impl<C: Deref<Target = impl Signer>> Iterator for TransactionGroupIter<'_, C> {
+impl<C: Deref<Target = impl Signer + ?Sized>, F> Iterator for TransactionGroupIter<'_, C, F>
+where
+    F: FnMut(&VersionedMessage) -> crate::Result<()>,
+{
     type Item = crate::Result<Vec<VersionedTransaction>>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -261,9 +366,13 @@ impl<C: Deref<Target = impl Signer>> Iterator for TransactionGroupIter<'_, C> {
         Some(self.options.build_transaction_batch(
             self.recent_blockhash,
             self.luts,
+            self.without_compute_budget,
+            self.compute_unit_price_micro_lamports,
+            self.compute_unit_min_priority_lamports,
             group,
             self.signers,
             self.allow_partial_sign,
+            &mut self.before_sign,
         ))
     }
 }

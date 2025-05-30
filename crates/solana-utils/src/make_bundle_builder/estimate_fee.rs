@@ -9,14 +9,20 @@ use super::MakeBundleBuilder;
 pub struct EstimateFee<T> {
     builder: T,
     compute_unit_price_micro_lamports: Option<u64>,
+    compute_unit_min_priority_lamports: Option<u64>,
 }
 
 impl<T> EstimateFee<T> {
     /// Estiamte fee before building the transaction.
-    pub fn new(builder: T, compute_unit_price_micro_lamports: Option<u64>) -> Self {
+    pub fn new(
+        builder: T,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+    ) -> Self {
         Self {
             builder,
             compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
         }
     }
 }
@@ -44,9 +50,10 @@ where
         let mut tx = self.builder.build_with_options(options.clone()).await?;
 
         if self.builder.is_execution_fee_estimation_required() {
-            let lamports = tx
-                .estimate_execution_fee(self.compute_unit_price_micro_lamports)
-                .await?;
+            let lamports = tx.build()?.estimate_execution_fee(
+                self.compute_unit_price_micro_lamports,
+                self.compute_unit_min_priority_lamports,
+            );
             self.builder.set_execution_fee(lamports);
             tracing::info!(%lamports, "execution fee estimated");
             tx = self.builder.build_with_options(options).await?;

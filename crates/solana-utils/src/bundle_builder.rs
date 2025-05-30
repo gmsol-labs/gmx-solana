@@ -1,17 +1,22 @@
-use std::{collections::HashSet, ops::Deref};
+use std::{collections::HashMap, ops::Deref};
 
-use futures_util::TryStreamExt;
+use futures_util::{stream::FuturesOrdered, FutureExt, StreamExt};
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig};
 use solana_sdk::{
     commitment_config::CommitmentConfig, message::VersionedMessage, packet::PACKET_DATA_SIZE,
-    signature::Signature, signer::Signer, transaction::VersionedTransaction,
+    pubkey::Pubkey, signature::Signature, signer::Signer, transaction::VersionedTransaction,
 };
 
 use crate::{
+    address_lookup_table::AddressLookupTables,
     client::SendAndConfirm,
     cluster::Cluster,
+    instruction_group::{AtomicGroupOptions, ParallelGroupOptions},
+    signer::TransactionSigners,
     transaction_builder::{default_before_sign, TransactionBuilder},
-    utils::{inspect_transaction, transaction_size, WithSlot},
+    transaction_group::TransactionGroupOptions,
+    utils::{inspect_transaction, WithSlot},
+    ParallelGroup, TransactionGroup,
 };
 
 const TRANSACTION_SIZE_LIMIT: usize = PACKET_DATA_SIZE;
@@ -72,9 +77,10 @@ pub struct SendBundleOptions {
 
 /// Buidler for transaction bundle.
 pub struct BundleBuilder<'a, C> {
-    client: RpcClient,
-    builders: Vec<TransactionBuilder<'a, C>>,
+    ctx: Ctx<'a, C>,
     options: BundleOptions,
+    groups: Vec<ParallelGroup>,
+    luts: AddressLookupTables,
 }
 
 impl<C> BundleBuilder<'_, C> {
@@ -93,6 +99,12 @@ impl<C> BundleBuilder<'_, C> {
         Self::from_rpc_client_with_options(rpc, options.options)
     }
 
+    /// Replaces the bundle options with the given.
+    pub fn set_options(&mut self, options: BundleOptions) -> &mut Self {
+        self.options = options;
+        self
+    }
+
     /// Create a new [`BundleBuilder`] from [`RpcClient`].
     pub fn from_rpc_client(client: RpcClient) -> Self {
         Self::from_rpc_client_with_options(client, Default::default())
@@ -101,50 +113,48 @@ impl<C> BundleBuilder<'_, C> {
     /// Create a new [`BundleBuilder`] from [`RpcClient`] with the given options.
     pub fn from_rpc_client_with_options(client: RpcClient, options: BundleOptions) -> Self {
         Self {
-            client,
-            builders: Default::default(),
+            groups: Default::default(),
             options,
+            ctx: Ctx {
+                client,
+                cfg_signers: Default::default(),
+                signers: Default::default(),
+            },
+            luts: Default::default(),
         }
     }
 
     /// Get packet size.
     pub fn packet_size(&self) -> usize {
-        match self.options.max_packet_size {
-            Some(size) => size.min(TRANSACTION_SIZE_LIMIT),
-            None => TRANSACTION_SIZE_LIMIT,
-        }
+        self.options
+            .max_packet_size
+            .unwrap_or(TRANSACTION_SIZE_LIMIT)
     }
 
     /// Get the client.
     pub fn client(&self) -> &RpcClient {
-        &self.client
+        &self.ctx.client
     }
 
     /// Is empty.
     pub fn is_empty(&self) -> bool {
-        self.builders.is_empty()
+        self.groups.is_empty()
     }
 
     /// Get total number of transactions.
     pub fn len(&self) -> usize {
-        self.builders.len()
+        self.groups.iter().map(|pg| pg.len()).sum()
     }
 
     /// Try clone empty.
     pub fn try_clone_empty(&self) -> crate::Result<Self> {
-        let cluster = self.client.url().parse()?;
-        let commitment = self.client.commitment();
+        let cluster = self.ctx.client.url().parse()?;
+        let commitment = self.ctx.client.commitment();
         Ok(Self::new_with_options(CreateBundleOptions {
             cluster,
             commitment,
             options: self.options.clone(),
         }))
-    }
-
-    /// Set options.
-    pub fn set_options(&mut self, options: BundleOptions) -> &mut Self {
-        self.options = options;
-        self
     }
 }
 
@@ -153,65 +163,23 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
     #[allow(clippy::result_large_err)]
     pub fn try_push_with_opts(
         &mut self,
-        mut txn: TransactionBuilder<'a, C>,
+        txn: TransactionBuilder<'a, C>,
         new_transaction: bool,
     ) -> Result<&mut Self, (TransactionBuilder<'a, C>, crate::Error)> {
-        let packet_size = self.packet_size();
-        let mut ix = txn.instructions_with_options(true, None);
-        let incoming_lookup_table = txn.get_complete_lookup_table();
-        if transaction_size(
-            txn.get_payer(),
-            &ix,
-            true,
-            Some(&incoming_lookup_table),
-            txn.get_luts().len(),
-        ) > packet_size
-        {
-            return Err((
-                txn,
-                crate::Error::AddTransaction("the size of this instruction is too big"),
-            ));
-        }
-        if self.builders.is_empty() || new_transaction {
-            tracing::debug!("adding to a new tx");
-            if !self.builders.is_empty() && self.options.force_one_transaction {
-                return Err((txn, crate::Error::AddTransaction("cannot create more than one transaction because `force_one_transaction` is set")));
-            }
-            self.builders.push(txn);
-        } else {
-            let last = self.builders.last_mut().unwrap();
-
-            let mut ixs_after_merge = last.instructions_with_options(false, None);
-            ixs_after_merge.append(&mut ix);
-
-            let mut lookup_table = last.get_complete_lookup_table();
-            lookup_table.extend(incoming_lookup_table);
-            let mut lookup_table_addresses = last.get_luts().keys().collect::<HashSet<_>>();
-            lookup_table_addresses.extend(txn.get_luts().keys());
-
-            let size_after_merge = transaction_size(
-                last.get_payer(),
-                &ixs_after_merge,
-                true,
-                Some(&lookup_table),
-                lookup_table_addresses.len(),
-            );
-            if size_after_merge <= packet_size
-                && ixs_after_merge.len() <= self.options.max_instructions_for_one_tx
-            {
-                tracing::debug!(size_after_merge, "adding to the last tx");
-                last.try_merge(&mut txn).map_err(|err| (txn, err))?;
-            } else {
-                tracing::debug!(
-                    size_after_merge,
-                    "exceed packet data size limit, adding to a new tx"
-                );
-                if self.options.force_one_transaction {
-                    return Err((txn, crate::Error::AddTransaction("cannot create more than one transaction because `force_one_transaction` is set")));
-                }
-                self.builders.push(txn);
-            }
-        }
+        let ag = txn.into_atomic_group(
+            &mut self.ctx.cfg_signers,
+            &mut self.ctx.signers,
+            &mut self.luts,
+            AtomicGroupOptions {
+                is_mergeable: !new_transaction,
+            },
+        );
+        self.groups.push(ParallelGroup::with_options(
+            [ag],
+            ParallelGroupOptions {
+                is_mergeable: !new_transaction,
+            },
+        ));
         Ok(self)
     }
 
@@ -243,9 +211,101 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
         Ok(self)
     }
 
-    /// Get back all collected [`TransactionBuilder`]s.
-    pub fn into_builders(self) -> Vec<TransactionBuilder<'a, C>> {
-        self.builders
+    /// Returns the transaction groups.
+    pub fn into_parallel_groups(self) -> Vec<ParallelGroup> {
+        self.groups
+    }
+
+    /// Insert all the transaction groups of `other` into `self`.
+    ///
+    /// If `new_transaction` is `true`, then a new transaction will be created before pushing.
+    pub fn append(&mut self, other: Self, new_transaction: bool) -> crate::Result<()> {
+        let Self {
+            mut groups,
+            ctx:
+                Ctx {
+                    mut cfg_signers,
+                    signers,
+                    ..
+                },
+            luts,
+            ..
+        } = other;
+
+        if let Some(first) = groups.first_mut() {
+            first.set_is_mergeable(first.is_mergeable() && !new_transaction);
+        }
+
+        self.groups.append(&mut groups);
+        self.ctx.cfg_signers.merge(&mut cfg_signers);
+        self.ctx.signers.extend(signers.into_iter());
+        self.luts.extend(luts);
+
+        Ok(())
+    }
+
+    /// Build the [`Bundle`].
+    pub fn build(self) -> crate::Result<Bundle<'a, C>> {
+        let Self {
+            groups,
+            options,
+            ctx,
+            luts,
+        } = self;
+        let mut group = TransactionGroup::with_options_and_luts(
+            TransactionGroupOptions {
+                max_transaction_size: options.max_packet_size.unwrap_or(TRANSACTION_SIZE_LIMIT),
+                max_instructions_per_tx: options.max_instructions_for_one_tx,
+                memo: None,
+            },
+            luts,
+        );
+        for pg in groups {
+            group.add(pg)?;
+        }
+        group.optimize(false);
+        Ok(Bundle { ctx, group })
+    }
+}
+
+struct Ctx<'a, C> {
+    client: RpcClient,
+    cfg_signers: TransactionSigners<C>,
+    signers: HashMap<Pubkey, &'a dyn Signer>,
+}
+
+/// A bundle of transactions.
+pub struct Bundle<'a, C> {
+    ctx: Ctx<'a, C>,
+    group: TransactionGroup,
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> Bundle<'a, C> {
+    /// Is empty.
+    pub fn is_empty(&self) -> bool {
+        self.group.is_empty()
+    }
+
+    /// Get total number of transactions.
+    pub fn len(&self) -> usize {
+        self.group.len()
+    }
+
+    /// Returns the inner [`TransactionGroup`].
+    pub fn into_group(self) -> TransactionGroup {
+        self.group
+    }
+
+    /// Estimate execution fee.
+    pub fn estimate_execution_fee(
+        &self,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+    ) -> u64 {
+        self.group.estimate_execution_fee(
+            compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
+        )
     }
 
     /// Send all in order and returns the signatures of the success transactions.
@@ -284,7 +344,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
     pub async fn send_all_with_opts(
         self,
         opts: SendBundleOptions,
-        mut before_sign: impl FnMut(&VersionedMessage) -> crate::Result<()>,
+        before_sign: impl FnMut(&VersionedMessage) -> crate::Result<()>,
     ) -> Result<Vec<WithSlot<Signature>>, (Vec<WithSlot<Signature>>, crate::Error)> {
         let SendBundleOptions {
             without_compute_budget,
@@ -297,40 +357,41 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
         } = opts;
         config.preflight_commitment = config
             .preflight_commitment
-            .or(Some(self.client.commitment().commitment));
-        let latest_hash = self
-            .client
+            .or(Some(self.ctx.client.commitment().commitment));
+
+        let Self {
+            ctx:
+                Ctx {
+                    client,
+                    cfg_signers,
+                    signers,
+                },
+            group,
+        } = self;
+
+        let latest_hash = client
             .get_latest_blockhash()
             .await
             .map_err(|err| (vec![], Box::new(err).into()))?;
-        let txs = self
-            .builders
-            .into_iter()
-            .enumerate()
-            .map(|(idx, mut builder)| {
-                tracing::debug!(
-                    size = builder.transaction_size(true),
-                    "signing transaction {idx}"
-                );
 
-                if let Some(lamports) = compute_unit_min_priority_lamports {
-                    builder
-                        .compute_budget_mut()
-                        .set_min_priority_lamports(Some(lamports));
-                }
+        let mut transaction_signers = cfg_signers.to_local();
+        transaction_signers.extend(signers.into_values());
 
-                builder.signed_transaction_with_blockhash_and_options(
-                    latest_hash,
-                    without_compute_budget,
-                    compute_unit_price_micro_lamports,
-                    &mut before_sign,
-                )
-            })
+        let txns = group
+            .to_transactions_with_options(
+                &transaction_signers,
+                latest_hash,
+                false,
+                without_compute_budget,
+                compute_unit_price_micro_lamports,
+                compute_unit_min_priority_lamports,
+                before_sign,
+            )
             .collect::<crate::Result<Vec<_>>>()
             .map_err(|err| (vec![], err))?;
-        send_all_txs(
-            &self.client,
-            txs,
+        send_all_txns(
+            &client,
+            txns,
             config,
             continue_on_error,
             !disable_error_tracing,
@@ -338,73 +399,59 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
         )
         .await
     }
-
-    /// Estimate execution fee.
-    pub async fn estimate_execution_fee(
-        &self,
-        compute_unit_price_micro_lamports: Option<u64>,
-    ) -> crate::Result<u64> {
-        self.builders
-            .iter()
-            .map(|txn| txn.estimate_execution_fee(&self.client, compute_unit_price_micro_lamports))
-            .collect::<futures_util::stream::FuturesUnordered<_>>()
-            .try_fold(0, |acc, fee| futures_util::future::ready(Ok(acc + fee)))
-            .await
-    }
-
-    /// Insert all the instructions of `other` into `self`.
-    ///
-    /// If `new_transaction` is `true`, then a new transaction will be created before pushing.
-    pub fn append(&mut self, other: Self, new_transaction: bool) -> crate::Result<()> {
-        let builders = other.into_builders();
-
-        for (idx, txn) in builders.into_iter().enumerate() {
-            self.try_push_with_opts(txn, new_transaction && idx == 0)
-                .map_err(|(_, err)| err)?;
-        }
-
-        Ok(())
-    }
 }
 
-async fn send_all_txs(
+async fn send_all_txns(
     client: &RpcClient,
-    txs: impl IntoIterator<Item = VersionedTransaction>,
+    txns: Vec<Vec<VersionedTransaction>>,
     config: RpcSendTransactionConfig,
     continue_on_error: bool,
     enable_tracing: bool,
     inspector_cluster: Option<Cluster>,
 ) -> Result<Vec<WithSlot<Signature>>, (Vec<WithSlot<Signature>>, crate::Error)> {
-    let txs = txs.into_iter();
-    let (min, max) = txs.size_hint();
-    let mut signatures = Vec::with_capacity(max.unwrap_or(min));
+    let size = txns.iter().map(|txns| txns.len()).sum();
+    let mut signatures = Vec::with_capacity(size);
     let mut error = None;
-    for (idx, tx) in txs.into_iter().enumerate() {
-        tracing::debug!(
-            commitment = ?client.commitment(),
-            ?config,
-            "sending transaction {idx}"
-        );
-        match client
-            .send_and_confirm_transaction_with_config(&tx, config)
-            .await
-        {
-            Ok(signature) => {
-                signatures.push(signature);
-            }
-            Err(err) => {
-                if enable_tracing {
-                    let cluster = inspector_cluster
-                        .clone()
-                        .or_else(|| client.url().parse().ok());
-                    let inspector_url = inspect_transaction(&tx.message, cluster.as_ref(), false);
-                    let hash = tx.message.recent_blockhash();
-                    tracing::error!(%err, %hash, ?config, "transaction {idx} failed: {inspector_url}");
-                }
-
-                error = Some(Box::new(err).into());
-                if !continue_on_error {
-                    break;
+    for (batch_idx, txns) in txns.into_iter().enumerate() {
+        let mut batch = txns
+            .iter().enumerate()
+            .map(|(idx, txn)| {
+                tracing::debug!(
+                    %batch_idx,
+                    commitment = ?client.commitment(),
+                    ?config,
+                    "sending transaction {idx}"
+                );
+                let inspector_cluster = inspector_cluster.clone();
+                client
+                    .send_and_confirm_transaction_with_config(txn, config)
+                    .then(move |res| match res {
+                        Ok(signature) => {
+                            std::future::ready(Ok(signature))
+                        }
+                        Err(err) => {
+                            if enable_tracing {
+                                let cluster = inspector_cluster
+                                    .clone()
+                                    .or_else(|| client.url().parse().ok());
+                                let inspector_url =
+                                    inspect_transaction(&txn.message, cluster.as_ref(), false);
+                                let hash = txn.message.recent_blockhash();
+                                tracing::error!(%err, %hash, ?config, "[batch {batch_idx}] transaction {idx} failed: {inspector_url}");
+                            }
+                            std::future::ready(Err(err))
+                        }
+                    })
+            })
+            .collect::<FuturesOrdered<_>>();
+        while let Some(res) = batch.next().await {
+            match res {
+                Ok(signature) => signatures.push(signature),
+                Err(err) => {
+                    error = Some(Box::new(err).into());
+                    if !continue_on_error {
+                        break;
+                    }
                 }
             }
         }
@@ -412,15 +459,5 @@ async fn send_all_txs(
     match error {
         None => Ok(signatures),
         Some(err) => Err((signatures, err)),
-    }
-}
-
-impl<'a, C> IntoIterator for BundleBuilder<'a, C> {
-    type Item = TransactionBuilder<'a, C>;
-
-    type IntoIter = <Vec<TransactionBuilder<'a, C>> as IntoIterator>::IntoIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.builders.into_iter()
     }
 }

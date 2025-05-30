@@ -69,9 +69,15 @@ impl ComputeBudget {
         self
     }
 
-    fn budget_price(&self, compute_unit_price_micro_lamports: Option<u64>) -> u64 {
+    fn budget_price(
+        &self,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+    ) -> u64 {
         let mut price = compute_unit_price_micro_lamports.unwrap_or(self.price_micro_lamports);
-        if let Some(min_price) = self.min_priority_lamports.and_then(|min_lamports| {
+        let min_priority_lamports =
+            compute_unit_min_priority_lamports.or(self.min_priority_lamports);
+        if let Some(min_price) = min_priority_lamports.and_then(|min_lamports| {
             min_lamports
                 .checked_mul(Self::MICRO_LAMPORTS)?
                 .checked_div(self.budget_units() as u64)
@@ -89,8 +95,12 @@ impl ComputeBudget {
     pub fn compute_budget_instructions(
         &self,
         compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
     ) -> Vec<Instruction> {
-        let price = self.budget_price(compute_unit_price_micro_lamports);
+        let price = self.budget_price(
+            compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
+        );
         vec![
             ComputeBudgetInstruction::set_compute_unit_limit(self.budget_units()),
             ComputeBudgetInstruction::set_compute_unit_price(price),
@@ -108,8 +118,16 @@ impl ComputeBudget {
     }
 
     /// Estimate priority fee.
-    pub fn fee(&self, compute_unit_price_micro_lamports: Option<u64>) -> u64 {
-        self.budget_units() as u64 * self.budget_price(compute_unit_price_micro_lamports)
+    pub fn fee(
+        &self,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+    ) -> u64 {
+        self.budget_units() as u64
+            * self.budget_price(
+                compute_unit_price_micro_lamports,
+                compute_unit_min_priority_lamports,
+            )
             / Self::MICRO_LAMPORTS
     }
 }

@@ -1,4 +1,8 @@
-use std::{borrow::Cow, collections::BTreeMap, ops::Deref};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashSet},
+    ops::Deref,
+};
 
 use smallvec::SmallVec;
 use solana_sdk::{
@@ -35,8 +39,23 @@ pub struct GetInstructionsOptions {
     pub without_compute_budget: bool,
     /// Compute unit price in micro lamports.
     pub compute_unit_price_micro_lamports: Option<u64>,
+    /// Compute unit min priority lamports.
+    pub compute_unit_min_priority_lamports: Option<u64>,
     /// If set, a memo will be included in the final transaction.
     pub memo: Option<String>,
+}
+
+/// Options type for [`AtomicGroup`].
+#[derive(Debug, Clone)]
+pub struct AtomicGroupOptions {
+    /// Indicates whether the group is mergeable.
+    pub is_mergeable: bool,
+}
+
+impl Default for AtomicGroupOptions {
+    fn default() -> Self {
+        Self { is_mergeable: true }
+    }
 }
 
 /// A group of instructions that are expected to be executed in the same transaction.
@@ -47,13 +66,25 @@ pub struct AtomicGroup {
     owned_signers: BTreeMap<Pubkey, BoxClonableSigner<'static>>,
     instructions: SmallVec<[Instruction; ATOMIC_SIZE]>,
     compute_budget: ComputeBudget,
+    options: AtomicGroupOptions,
 }
 
 impl AtomicGroup {
-    /// Create from an iterator of instructions.
-    pub fn with_instructions(
+    /// Returns whether the atomic group is mergeable.
+    pub fn is_mergeable(&self) -> bool {
+        self.options().is_mergeable
+    }
+
+    /// Returns the options of the group.
+    pub fn options(&self) -> &AtomicGroupOptions {
+        &self.options
+    }
+
+    /// Create from an iterator of instructions and options.
+    pub fn with_instructions_and_options(
         payer: &Pubkey,
         instructions: impl IntoIterator<Item = Instruction>,
+        options: AtomicGroupOptions,
     ) -> Self {
         Self {
             payer: *payer,
@@ -61,7 +92,16 @@ impl AtomicGroup {
             owned_signers: Default::default(),
             instructions: SmallVec::from_iter(instructions),
             compute_budget: Default::default(),
+            options,
         }
+    }
+
+    /// Create from an iterator of instructions.
+    pub fn with_instructions(
+        payer: &Pubkey,
+        instructions: impl IntoIterator<Item = Instruction>,
+    ) -> Self {
+        Self::with_instructions_and_options(payer, instructions, Default::default())
     }
 
     /// Create a new empty group.
@@ -111,9 +151,12 @@ impl AtomicGroup {
     fn compute_budget_instructions(
         &self,
         compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
     ) -> Vec<Instruction> {
-        self.compute_budget
-            .compute_budget_instructions(compute_unit_price_micro_lamports)
+        self.compute_budget.compute_budget_instructions(
+            compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
+        )
     }
 
     /// Returns instructions.
@@ -124,7 +167,10 @@ impl AtomicGroup {
         let compute_budget_instructions = if options.without_compute_budget {
             Vec::default()
         } else {
-            self.compute_budget_instructions(options.compute_unit_price_micro_lamports)
+            self.compute_budget_instructions(
+                options.compute_unit_price_micro_lamports,
+                options.compute_unit_min_priority_lamports,
+            )
         };
         let memo_instruction = options
             .memo
@@ -229,8 +275,10 @@ impl AtomicGroup {
         recent_blockhash: Hash,
         options: GetInstructionsOptions,
         luts: Option<&AddressLookupTables>,
+        mut before_sign: impl FnMut(&VersionedMessage) -> crate::Result<()>,
     ) -> crate::Result<VersionedTransaction> {
         let message = self.message_with_blockhash_and_options(recent_blockhash, options, luts)?;
+        (before_sign)(&message)?;
         let signers = self
             .signers
             .values()
@@ -238,6 +286,33 @@ impl AtomicGroup {
             .chain(self.owned_signers.values().map(|s| s as &dyn Signer))
             .collect::<Vec<_>>();
         Ok(VersionedTransaction::try_new(message, &signers)?)
+    }
+
+    /// Estimates the execution fee of the result transaction.
+    pub fn estimate_execution_fee(
+        &self,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+    ) -> u64 {
+        let ixs = self
+            .instructions_with_options(GetInstructionsOptions {
+                without_compute_budget: true,
+                ..Default::default()
+            })
+            .collect::<Vec<_>>();
+
+        let num_signers = ixs
+            .iter()
+            .flat_map(|ix| ix.accounts.iter())
+            .filter(|meta| meta.is_signer)
+            .map(|meta| &meta.pubkey)
+            .collect::<HashSet<_>>()
+            .len() as u64;
+        num_signers * 5_000
+            + self.compute_budget.fee(
+                compute_unit_price_micro_lamports,
+                compute_unit_min_priority_lamports,
+            )
     }
 }
 
@@ -255,14 +330,57 @@ impl Deref for AtomicGroup {
     }
 }
 
+/// The options type for [`ParallelGroup`].
+#[derive(Debug, Clone)]
+pub struct ParallelGroupOptions {
+    /// Indicates whether the [`ParallelGroup`] is mergeable.
+    pub is_mergeable: bool,
+}
+
+impl Default for ParallelGroupOptions {
+    fn default() -> Self {
+        Self { is_mergeable: true }
+    }
+}
+
 /// A group of atomic instructions that can be executed in parallel.
 #[derive(Debug, Clone, Default)]
-pub struct ParallelGroup(SmallVec<[AtomicGroup; PARALLEL_SIZE]>);
+pub struct ParallelGroup {
+    groups: SmallVec<[AtomicGroup; PARALLEL_SIZE]>,
+    options: ParallelGroupOptions,
+}
 
 impl ParallelGroup {
+    /// Create a new [`ParallelGroup`] with the given options.
+    pub fn with_options(
+        groups: impl IntoIterator<Item = AtomicGroup>,
+        options: ParallelGroupOptions,
+    ) -> Self {
+        Self {
+            groups: FromIterator::from_iter(groups),
+            options,
+        }
+    }
+
+    /// Returns the options.
+    pub fn options(&self) -> &ParallelGroupOptions {
+        &self.options
+    }
+
+    /// Returns whether the group is mergeable.
+    pub fn is_mergeable(&self) -> bool {
+        self.options().is_mergeable
+    }
+
+    /// Set whether the group is mergeable.
+    pub fn set_is_mergeable(&mut self, is_mergeable: bool) -> &mut Self {
+        self.options.is_mergeable = is_mergeable;
+        self
+    }
+
     /// Add an [`AtomicGroup`].
     pub fn add(&mut self, group: AtomicGroup) -> &mut Self {
-        self.0.push(group);
+        self.groups.push(group);
         self
     }
 
@@ -272,34 +390,65 @@ impl ParallelGroup {
         luts: &AddressLookupTables,
         allow_payer_change: bool,
     ) -> &mut Self {
-        if options.optimize(&mut self.0, luts, allow_payer_change) {
-            self.0 = self.0.drain(..).filter(|group| !group.is_empty()).collect();
+        if options.optimize(&mut self.groups, luts, allow_payer_change) {
+            self.groups = self
+                .groups
+                .drain(..)
+                .filter(|group| !group.is_empty())
+                .collect();
         }
         self
     }
 
     pub(crate) fn single(&self) -> Option<&AtomicGroup> {
-        if self.0.len() == 1 {
-            Some(&self.0[0])
+        if self.groups.len() == 1 {
+            Some(&self.groups[0])
         } else {
             None
         }
     }
 
     pub(crate) fn single_mut(&mut self) -> Option<&mut AtomicGroup> {
-        if self.0.len() == 1 {
-            Some(&mut self.0[0])
+        if self.groups.len() == 1 {
+            Some(&mut self.groups[0])
         } else {
             None
         }
     }
 
     pub(crate) fn into_single(mut self) -> Option<AtomicGroup> {
-        if self.0.len() == 1 {
-            Some(self.0.remove(0))
+        if self.groups.len() == 1 {
+            Some(self.groups.remove(0))
         } else {
             None
         }
+    }
+
+    /// Returns the total number of transactions.
+    pub fn len(&self) -> usize {
+        self.groups.len()
+    }
+
+    /// Returns whether the group is empty.
+    pub fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+
+    /// Estiamtes the execution fee of the result transactions
+    pub fn estimate_execution_fee(
+        &self,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+    ) -> u64 {
+        self.groups
+            .iter()
+            .map(|ag| {
+                ag.estimate_execution_fee(
+                    compute_unit_price_micro_lamports,
+                    compute_unit_min_priority_lamports,
+                )
+            })
+            .sum()
     }
 }
 
@@ -313,7 +462,7 @@ impl From<AtomicGroup> for ParallelGroup {
 
 impl FromIterator<AtomicGroup> for ParallelGroup {
     fn from_iter<T: IntoIterator<Item = AtomicGroup>>(iter: T) -> Self {
-        Self(FromIterator::from_iter(iter))
+        Self::with_options(iter, Default::default())
     }
 }
 
@@ -321,6 +470,6 @@ impl Deref for ParallelGroup {
     type Target = [AtomicGroup];
 
     fn deref(&self) -> &Self::Target {
-        self.0.deref()
+        self.groups.deref()
     }
 }

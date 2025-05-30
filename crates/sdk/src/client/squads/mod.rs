@@ -3,6 +3,7 @@ mod utils;
 use std::{collections::HashMap, future::Future, ops::Deref};
 
 use anchor_lang::{AnchorSerialize, InstructionData, ToAccountMetas};
+use gmsol_solana_utils::instruction_group::GetInstructionsOptions;
 use gmsol_solana_utils::make_bundle_builder::MakeBundleBuilder;
 use gmsol_solana_utils::solana_client::nonblocking::rpc_client::RpcClient;
 use gmsol_solana_utils::{
@@ -439,15 +440,27 @@ where
         let mut transaction_datas = vec![];
         let mut compute_budgets = vec![];
 
-        for mut txn in inner.into_builders() {
+        let tg = inner.build()?.into_group();
+
+        let luts = tg.luts();
+
+        for (key, addresses) in luts.iter() {
+            luts_cache.entry(*key).or_insert(AddressLookupTableAccount {
+                key: *key,
+                addresses: addresses.clone(),
+            });
+        }
+
+        for ag in tg.groups().iter().flat_map(|pg| pg.iter()) {
             txn_idx += 1;
-            for (key, addresses) in txn.get_luts() {
-                luts_cache.entry(*key).or_insert(AddressLookupTableAccount {
-                    key: *key,
-                    addresses: addresses.clone(),
-                });
-            }
-            let message = txn.message_with_blockhash_and_options(Default::default(), true, None)?;
+            let message = ag.message_with_blockhash_and_options(
+                Default::default(),
+                GetInstructionsOptions {
+                    without_compute_budget: true,
+                    ..Default::default()
+                },
+                Some(luts),
+            )?;
             let (rpc, (transaction, data)) = self
                 .client
                 .squads_create_vault_transaction_and_return_data(
@@ -464,7 +477,7 @@ where
             transactions.push(transaction);
             transaction_indexes.push(txn_idx);
             transaction_datas.push(data);
-            compute_budgets.push(*txn.compute_budget_mut());
+            compute_budgets.push(*ag.compute_budget());
         }
 
         if !transactions.is_empty() {

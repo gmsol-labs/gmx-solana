@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{hash_map, HashMap, HashSet},
+    ops::Deref,
+};
 
 use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
 
@@ -49,5 +52,28 @@ impl FromIterator<(Pubkey, Vec<Pubkey>)> for AddressLookupTables {
         Self {
             luts: FromIterator::from_iter(iter),
         }
+    }
+}
+
+impl Extend<(Pubkey, Vec<Pubkey>)> for AddressLookupTables {
+    fn extend<T: IntoIterator<Item = (Pubkey, Vec<Pubkey>)>>(&mut self, iter: T) {
+        self.luts.extend(iter);
+    }
+}
+
+impl IntoIterator for AddressLookupTables {
+    type IntoIter = hash_map::IntoIter<Pubkey, Vec<Pubkey>>;
+    type Item = (Pubkey, Vec<Pubkey>);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.luts.into_iter()
+    }
+}
+
+impl Deref for AddressLookupTables {
+    type Target = HashMap<Pubkey, Vec<Pubkey>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.luts
     }
 }

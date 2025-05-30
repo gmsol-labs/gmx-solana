@@ -3,6 +3,7 @@ use std::{collections::HashMap, fmt, ops::Deref, rc::Rc, sync::Arc};
 use dyn_clone::{clone_trait_object, DynClone};
 use solana_sdk::{
     hash::Hash,
+    message::VersionedMessage,
     pubkey::Pubkey,
     signature::Signature,
     signer::{Signer, SignerError},
@@ -123,7 +124,7 @@ impl<C> TransactionSigners<C> {
     }
 }
 
-impl<C: Deref<Target = impl Signer>> TransactionSigners<C> {
+impl<C: Deref<Target = impl Signer + ?Sized>> TransactionSigners<C> {
     /// Insert a signer.
     pub fn insert(&mut self, signer: C) -> Option<C> {
         self.signers.insert(signer.pubkey(), signer)
@@ -137,12 +138,14 @@ impl<C: Deref<Target = impl Signer>> TransactionSigners<C> {
         options: GetInstructionsOptions,
         luts: Option<&AddressLookupTables>,
         allow_partial_sign: bool,
+        before_sign: impl FnMut(&VersionedMessage) -> crate::Result<()>,
     ) -> crate::Result<VersionedTransaction> {
         let signers = self.project(ag);
         let mut tx = ag.partially_signed_transaction_with_blockhash_and_options(
             recent_blockhash,
             options,
             luts,
+            before_sign,
         )?;
         let message = tx.message.serialize();
         let expected_signers = &tx.message.static_account_keys()
@@ -165,9 +168,31 @@ impl<C: Deref<Target = impl Signer>> TransactionSigners<C> {
         }
         Ok(tx)
     }
+
+    /// Merge two [`TransactionSigner`]s.
+    pub fn merge(&mut self, other: &mut Self) {
+        self.signers
+            .extend(std::mem::take(&mut other.signers).into_iter());
+    }
+
+    /// Converts the current set of signers into trait object references to [`Signer`].
+    pub fn to_local(&self) -> TransactionSigners<&dyn Signer> {
+        TransactionSigners {
+            signers: self
+                .signers
+                .iter()
+                .map(|(k, signer)| (*k, signer as &dyn Signer))
+                .collect(),
+        }
+    }
+
+    /// Returns signers.
+    pub fn signers(&self) -> impl Iterator<Item = &Pubkey> {
+        self.signers.keys()
+    }
 }
 
-impl<C: Deref<Target = impl Signer>> FromIterator<C> for TransactionSigners<C> {
+impl<C: Deref<Target = impl Signer + ?Sized>> FromIterator<C> for TransactionSigners<C> {
     fn from_iter<T: IntoIterator<Item = C>>(iter: T) -> Self {
         let mut this = Self::default();
         for signer in iter {
@@ -177,7 +202,7 @@ impl<C: Deref<Target = impl Signer>> FromIterator<C> for TransactionSigners<C> {
     }
 }
 
-impl<C: Deref<Target = impl Signer>> Extend<C> for TransactionSigners<C> {
+impl<C: Deref<Target = impl Signer + ?Sized>> Extend<C> for TransactionSigners<C> {
     fn extend<T: IntoIterator<Item = C>>(&mut self, iter: T) {
         for signer in iter {
             self.insert(signer);

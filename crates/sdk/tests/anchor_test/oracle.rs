@@ -102,11 +102,11 @@ async fn use_chainlink_data_streams() -> eyre::Result<()> {
     let execute = keeper.execute_deposit(store, oracle, &deposit, false);
     tokio::time::sleep(Duration::from_secs(2)).await;
     let execute = WithPullOracle::new(chainlink, execute, None).await?;
-    let mut execute = EstimateFee::new(execute, None);
+    let mut execute = EstimateFee::new(execute, None, None);
 
     let txs = execute.build().await?;
 
-    match txs.send_all(false).await {
+    match txs.build()?.send_all(false).await {
         Ok(signatures) => {
             tracing::info!("execute deposit successfully, txs={signatures:#?}");
         }

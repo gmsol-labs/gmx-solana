@@ -90,6 +90,7 @@ impl IntoAtomicGroup for WrapNative {
 
 #[cfg(test)]
 mod tests {
+    use gmsol_solana_utils::transaction_builder::default_before_sign;
     use solana_sdk::pubkey::Pubkey;
 
     use super::*;
@@ -109,6 +110,7 @@ mod tests {
                 Default::default(),
                 Default::default(),
                 None,
+                default_before_sign,
             )
             .unwrap();
     }
@@ -125,6 +127,7 @@ mod tests {
                 Default::default(),
                 Default::default(),
                 None,
+                default_before_sign,
             )
             .unwrap();
     }

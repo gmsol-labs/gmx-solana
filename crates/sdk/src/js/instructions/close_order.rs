@@ -20,6 +20,8 @@ use wasm_bindgen::prelude::*;
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CloseOrderArgs {
     recent_blockhash: String,
+    compute_unit_price_micro_lamports: Option<u64>,
+    compute_unit_min_priority_lamports: Option<u64>,
     payer: StringPubkey,
     orders: HashMap<StringPubkey, CloseOrderHint>,
     #[serde(default)]
@@ -85,5 +87,7 @@ pub fn close_orders(args: CloseOrderArgs) -> crate::Result<TransactionGroup> {
     TransactionGroup::new(
         group.add(prepare)?.add(close)?.optimize(false),
         &args.recent_blockhash,
+        args.compute_unit_price_micro_lamports,
+        args.compute_unit_min_priority_lamports,
     )
 }

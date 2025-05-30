@@ -30,6 +30,7 @@ dyn-clone = { workspace = true }
 url = { workspace = true }
 smallvec = { workspace = true }
 spl-memo = { workspace = true }
+either = { workspace = true }
 
 tracing = { workspace = true, optional = true }
 solana-client = { workspace = true, optional = true }

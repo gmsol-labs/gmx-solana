@@ -201,7 +201,7 @@ impl super::Command for Admin {
                     rpc.into_bundle_with_options(options)?
                 } else {
                     let transaction = rpc
-                        .signed_transaction_with_options(true, None, default_before_sign)
+                        .signed_transaction_with_options(true, None, None, default_before_sign)
                         .await?;
                     let response = client
                         .store_program()
@@ -227,7 +227,7 @@ impl super::Command for Admin {
                     rpc.into_bundle_with_options(options)?
                 } else {
                     let transaction = rpc
-                        .signed_transaction_with_options(true, None, default_before_sign)
+                        .signed_transaction_with_options(true, None, None, default_before_sign)
                         .await?;
                     let response = client
                         .store_program()

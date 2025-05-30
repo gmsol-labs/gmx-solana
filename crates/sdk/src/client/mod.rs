@@ -890,7 +890,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         );
         let status = view::view::<MarketStatus>(
             &self.store_program().rpc(),
-            &req.signed_transaction_with_options(true, None, default_before_sign)
+            &req.signed_transaction_with_options(true, None, None, default_before_sign)
                 .await?,
         )
         .await?;
@@ -909,7 +909,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         let req = self.get_market_token_price(store, market_token, prices, pnl_factor, maximize);
         let price = view::view::<u128>(
             &self.store_program().rpc(),
-            &req.signed_transaction_with_options(true, None, default_before_sign)
+            &req.signed_transaction_with_options(true, None, None, default_before_sign)
                 .await?,
         )
         .await?;

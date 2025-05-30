@@ -22,6 +22,8 @@ struct UpdateParams {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct UpdateOrderArgs {
     recent_blockhash: String,
+    compute_unit_price_micro_lamports: Option<u64>,
+    compute_unit_min_priority_lamports: Option<u64>,
     payer: StringPubkey,
     orders: HashMap<StringPubkey, UpdateParams>,
     #[serde(default)]
@@ -52,5 +54,10 @@ pub fn update_orders(args: UpdateOrderArgs) -> crate::Result<TransactionGroup> {
         })
         .collect::<crate::Result<ParallelGroup>>()?;
 
-    TransactionGroup::new(group.add(updates)?.optimize(false), &args.recent_blockhash)
+    TransactionGroup::new(
+        group.add(updates)?.optimize(false),
+        &args.recent_blockhash,
+        args.compute_unit_price_micro_lamports,
+        args.compute_unit_min_priority_lamports,
+    )
 }

@@ -1,9 +1,10 @@
-use std::{ops::Deref, path::Path};
+use std::{ops::Deref, path::Path, sync::Arc};
 
 use admin::Admin;
 use alt::Alt;
 use competition::Competition;
 use configuration::Configuration;
+use either::Either;
 use enum_dispatch::enum_dispatch;
 use exchange::Exchange;
 use eyre::OptionExt;
@@ -13,13 +14,16 @@ use gmsol_sdk::{
     ops::TimelockOps,
     programs::anchor_lang::prelude::Pubkey,
     solana_utils::{
-        bundle_builder::{BundleBuilder, BundleOptions, SendBundleOptions},
+        bundle_builder::{Bundle, BundleBuilder, BundleOptions, SendBundleOptions},
+        instruction_group::GetInstructionsOptions,
         signer::LocalSignerRef,
         solana_client::rpc_config::RpcSendTransactionConfig,
         solana_sdk::{
             message::VersionedMessage,
-            signature::{Keypair, Signature},
+            signature::{Keypair, NullSigner, Signature},
+            transaction::VersionedTransaction,
         },
+        transaction_builder::default_before_sign,
         utils::{inspect_transaction, WithSlot},
     },
     utils::instruction_serialization::{serialize_message, InstructionSerialization},
@@ -252,10 +256,9 @@ impl CommandClient {
         let serialize_only = self.serialize_only;
         if let Some(format) = serialize_only {
             println!("\n[Transactions]");
-            for (idx, rpc) in bundle.into_builders().into_iter().enumerate() {
-                let message =
-                    rpc.message_with_blockhash_and_options(Default::default(), true, None)?;
-                println!("TXN[{idx}]: {}", serialize_message(&message, format)?);
+            let txns = to_transactions(bundle.build()?)?;
+            for (idx, rpc) in txns.into_iter().enumerate() {
+                println!("TXN[{idx}]: {}", serialize_message(&rpc.message, format)?);
             }
         } else if let Some(IxBufferCtx {
             buffer,
@@ -263,12 +266,14 @@ impl CommandClient {
             is_draft,
         }) = self.ix_buffer_ctx.as_ref()
         {
-            let txns = bundle.into_builders();
+            let tg = bundle.build()?.into_group();
+            let luts = tg.luts();
+            let ags = tg.groups().iter().flat_map(|pg| pg.iter());
 
             let mut bundle = client.bundle();
-            let len = txns.len();
+            let len = tg.len();
             let steps = len + 1;
-            for (txn_idx, txn) in txns.into_iter().enumerate() {
+            for (txn_idx, txn) in ags.enumerate() {
                 match buffer {
                     InstructionBuffer::Timelock { role } => {
                         if *is_draft {
@@ -280,13 +285,21 @@ impl CommandClient {
                         tracing::info!("Creating instruction buffers for transaction {txn_idx}");
 
                         for (idx, ix) in txn
-                            .instructions_with_options(true, None)
+                            .instructions_with_options(GetInstructionsOptions {
+                                without_compute_budget: true,
+                                ..Default::default()
+                            })
                             .into_iter()
                             .enumerate()
                         {
                             let buffer = Keypair::new();
                             let (rpc, buffer) = client
-                                .create_timelocked_instruction(&self.store, role, buffer, ix)?
+                                .create_timelocked_instruction(
+                                    &self.store,
+                                    role,
+                                    buffer,
+                                    (*ix).clone(),
+                                )?
                                 .swap_output(());
                             bundle.push(rpc)?;
                             println!("ix[{idx}]: {buffer}");
@@ -300,8 +313,14 @@ impl CommandClient {
                         use gmsol_sdk::client::squads::SquadsOps;
                         use gmsol_sdk::solana_utils::utils::inspect_transaction;
 
-                        let message =
-                            txn.message_with_blockhash_and_options(Default::default(), true, None)?;
+                        let message = txn.message_with_blockhash_and_options(
+                            Default::default(),
+                            GetInstructionsOptions {
+                                without_compute_budget: true,
+                                ..Default::default()
+                            },
+                            Some(luts),
+                        )?;
 
                         let (rpc, transaction) = client
                             .squads_create_vault_transaction(
@@ -356,6 +375,7 @@ impl CommandClient {
             let mut idx = 0;
             let steps = bundle.len();
             let (signatures, err) = match bundle
+                .build()?
                 .send_all_with_opts(options, |m| before_sign(&mut idx, steps, self.verbose, m))
                 .await
             {
@@ -373,6 +393,7 @@ impl CommandClient {
             let mut idx = 0;
             let steps = bundle.len();
             match bundle
+                .build()?
                 .send_all_with_opts(options, |m| before_sign(&mut idx, steps, self.verbose, m))
                 .await
             {
@@ -439,4 +460,25 @@ fn display_signatures(
         None => Ok(()),
         Some(err) => Err(err),
     }
+}
+
+fn to_transactions(
+    bundle: Bundle<'_, LocalSignerRef>,
+) -> gmsol_sdk::Result<Vec<VersionedTransaction>> {
+    let bundle = bundle.into_group();
+    bundle
+        .to_transactions_with_options::<Arc<NullSigner>, _>(
+            &Default::default(),
+            Default::default(),
+            true,
+            true,
+            None,
+            None,
+            default_before_sign,
+        )
+        .flat_map(|txns| match txns {
+            Ok(txns) => Either::Left(txns.into_iter().map(Ok)),
+            Err(err) => Either::Right(std::iter::once(Err(err.into()))),
+        })
+        .collect()
 }

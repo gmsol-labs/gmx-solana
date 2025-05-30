@@ -127,6 +127,7 @@ impl IntoAtomicGroup for UpdateOrder {
 
 #[cfg(test)]
 mod tests {
+    use gmsol_solana_utils::transaction_builder::default_before_sign;
     use solana_sdk::pubkey::Pubkey;
 
     use crate::constants;
@@ -156,6 +157,7 @@ mod tests {
                 Default::default(),
                 Default::default(),
                 None,
+                default_before_sign,
             )?;
         Ok(())
     }

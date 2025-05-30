@@ -23,7 +23,14 @@ use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcSendTrans
 #[cfg(client)]
 use solana_sdk::signature::Signature;
 
-use crate::{cluster::Cluster, compute_budget::ComputeBudget, signer::BoxClonableSigner};
+use crate::{
+    address_lookup_table::AddressLookupTables,
+    cluster::Cluster,
+    compute_budget::ComputeBudget,
+    instruction_group::AtomicGroupOptions,
+    signer::{BoxClonableSigner, TransactionSigners},
+    AtomicGroup,
+};
 
 #[cfg(client)]
 use crate::{
@@ -200,6 +207,29 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> TransactionBuilder<'a, C> {
     pub fn into_bundle(self) -> crate::Result<BundleBuilder<'a, C>> {
         self.into_bundle_with_options(Default::default())
     }
+
+    pub(crate) fn into_atomic_group(
+        self,
+        cfg_signers: &mut TransactionSigners<C>,
+        signers: &mut HashMap<Pubkey, &'a dyn Signer>,
+        luts: &mut AddressLookupTables,
+        options: AtomicGroupOptions,
+    ) -> AtomicGroup {
+        let payer = self.get_payer();
+        let instructions = self.instructions_with_options(true, None, None);
+        let mut group = AtomicGroup::with_instructions_and_options(&payer, instructions, options);
+        for signer in self.signers.iter() {
+            group.add_signer(&signer.pubkey());
+        }
+        for signer in self.owned_signers {
+            group.add_owned_signer(signer);
+        }
+        *group.compute_budget_mut() = self.compute_budget;
+        cfg_signers.insert(self.cfg.payer);
+        signers.extend(self.signers.into_iter().map(|k| (k.pubkey(), k)));
+        luts.extend(self.luts);
+        group
+    }
 }
 
 impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T> {
@@ -292,9 +322,12 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
     fn get_compute_budget_instructions(
         &self,
         compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
     ) -> Vec<Instruction> {
-        self.compute_budget
-            .compute_budget_instructions(compute_unit_price_micro_lamports)
+        self.compute_budget.compute_budget_instructions(
+            compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
+        )
     }
 
     /// Take and construct the "main" instruction if present.
@@ -319,7 +352,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
 
     /// Construct all instructions.
     pub fn instructions(&self) -> Vec<Instruction> {
-        self.instructions_with_options(false, None)
+        self.instructions_with_options(false, None, None)
     }
 
     /// Construct all instructions with options.
@@ -327,11 +360,15 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         &self,
         without_compute_budget: bool,
         compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
     ) -> Vec<Instruction> {
         let mut instructions = if without_compute_budget {
             Vec::default()
         } else {
-            self.get_compute_budget_instructions(compute_unit_price_micro_lamports)
+            self.get_compute_budget_instructions(
+                compute_unit_price_micro_lamports,
+                compute_unit_min_priority_lamports,
+            )
         };
         instructions.append(&mut self.pre_instructions.clone());
         if let Some(ix) = self.get_instruction() {
@@ -430,10 +467,14 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         latest_hash: Hash,
         without_compute_budget: bool,
         compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
         with_luts: bool,
     ) -> crate::Result<v0::Message> {
-        let instructions = self
-            .instructions_with_options(without_compute_budget, compute_unit_price_micro_lamports);
+        let instructions = self.instructions_with_options(
+            without_compute_budget,
+            compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
+        );
         let luts = if with_luts {
             self.luts
                 .iter()
@@ -457,12 +498,14 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         latest_hash: Hash,
         without_compute_budget: bool,
         compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
     ) -> crate::Result<VersionedMessage> {
         Ok(VersionedMessage::V0(
             self.v0_message_with_blockhash_and_options(
                 latest_hash,
                 without_compute_budget,
                 compute_unit_price_micro_lamports,
+                compute_unit_min_priority_lamports,
                 true,
             )?,
         ))
@@ -474,6 +517,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         &self,
         without_compute_budget: bool,
         compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
     ) -> crate::Result<VersionedMessage> {
         let client = self.cfg.rpc();
         let latest_hash = client.get_latest_blockhash().await.map_err(Box::new)?;
@@ -482,6 +526,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
             latest_hash,
             without_compute_budget,
             compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
         )
     }
 
@@ -491,12 +536,14 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         latest_hash: Hash,
         without_compute_budget: bool,
         compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
         before_sign: impl FnOnce(&VersionedMessage) -> crate::Result<()>,
     ) -> crate::Result<VersionedTransaction> {
         let message = self.message_with_blockhash_and_options(
             latest_hash,
             without_compute_budget,
             compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
         )?;
         (before_sign)(&message)?;
         let mut signers = self.signers.clone();
@@ -516,6 +563,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         &self,
         without_compute_budget: bool,
         compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
         before_sign: impl FnOnce(&VersionedMessage) -> crate::Result<()>,
     ) -> crate::Result<VersionedTransaction> {
         let client = self.cfg.rpc();
@@ -525,6 +573,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
             latest_hash,
             without_compute_budget,
             compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
             before_sign,
         )
     }
@@ -535,6 +584,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         &self,
         without_compute_budget: bool,
         compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
         mut config: RpcSendTransactionConfig,
         before_sign: impl FnOnce(&VersionedMessage) -> crate::Result<()>,
     ) -> crate::Result<WithSlot<Signature>> {
@@ -545,6 +595,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
             latest_hash,
             without_compute_budget,
             compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
             before_sign,
         )?;
 
@@ -567,6 +618,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
             .send_with_options(
                 false,
                 None,
+                None,
                 RpcSendTransactionConfig {
                     skip_preflight: true,
                     ..Default::default()
@@ -581,7 +633,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
     #[cfg(client)]
     pub async fn send(self) -> crate::Result<Signature> {
         Ok(self
-            .send_with_options(false, None, Default::default(), default_before_sign)
+            .send_with_options(false, None, None, Default::default(), default_before_sign)
             .await?
             .into_value())
     }
@@ -621,7 +673,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         _client: &RpcClient,
         compute_unit_price_micro_lamports: Option<u64>,
     ) -> crate::Result<u64> {
-        let ixs = self.instructions_with_options(true, None);
+        let ixs = self.instructions_with_options(true, None, None);
 
         let num_signers = ixs
             .iter()
@@ -630,7 +682,10 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
             .map(|meta| &meta.pubkey)
             .collect::<HashSet<_>>()
             .len() as u64;
-        let fee = num_signers * 5_000 + self.compute_budget.fee(compute_unit_price_micro_lamports);
+        let fee = num_signers * 5_000
+            + self
+                .compute_budget
+                .fee(compute_unit_price_micro_lamports, None);
         Ok(fee)
     }
 }

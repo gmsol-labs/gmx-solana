@@ -107,10 +107,10 @@ impl<'a> Executor<'a> {
         options: BundleOptions,
     ) -> gmsol_sdk::Result<()> {
         let pyth = PythPullOracleWithHermes::from_parts(self.client, &self.hermes, &self.pyth);
-        let compute_unit_price = self
-            .client
-            .send_bundle_options()
-            .compute_unit_price_micro_lamports;
+        let send_bundle_options = self.client.send_bundle_options();
+        let compute_unit_price = send_bundle_options.compute_unit_price_micro_lamports;
+        let compute_unit_min_priority_lamports =
+            send_bundle_options.compute_unit_min_priority_lamports;
         let chainlink = self
             .chainlink
             .as_ref()
@@ -125,7 +125,11 @@ impl<'a> Executor<'a> {
 
         let bundle = match (chainlink.as_ref(), switchboard) {
             (None, None) => {
-                let mut estiamted_fee = EstimateFee::new(with_pyth, compute_unit_price);
+                let mut estiamted_fee = EstimateFee::new(
+                    with_pyth,
+                    compute_unit_price,
+                    compute_unit_min_priority_lamports,
+                );
                 estiamted_fee.build_with_options(options).await?
             }
             (Some(chainlink), None) => {
@@ -136,7 +140,11 @@ impl<'a> Executor<'a> {
                     .prepare_feeds_bundle(&feed_ids, options.clone())
                     .await?;
 
-                let mut estiamted_fee = EstimateFee::new(with_chainlink, compute_unit_price);
+                let mut estiamted_fee = EstimateFee::new(
+                    with_chainlink,
+                    compute_unit_price,
+                    compute_unit_min_priority_lamports,
+                );
 
                 bundle.append(estiamted_fee.build_with_options(options).await?, false)?;
 
@@ -145,7 +153,11 @@ impl<'a> Executor<'a> {
             (None, Some(switchboard)) => {
                 let with_switchboard = WithPullOracle::new(switchboard, with_pyth, None).await?;
 
-                let mut estiamted_fee = EstimateFee::new(with_switchboard, compute_unit_price);
+                let mut estiamted_fee = EstimateFee::new(
+                    with_switchboard,
+                    compute_unit_price,
+                    compute_unit_min_priority_lamports,
+                );
                 estiamted_fee.build_with_options(options).await?
             }
             (Some(chainlink), Some(switchboard)) => {
@@ -155,7 +167,11 @@ impl<'a> Executor<'a> {
                 let with_switchboard =
                     WithPullOracle::new(switchboard, with_chainlink, None).await?;
 
-                let mut estiamted_fee = EstimateFee::new(with_switchboard, compute_unit_price);
+                let mut estiamted_fee = EstimateFee::new(
+                    with_switchboard,
+                    compute_unit_price,
+                    compute_unit_min_priority_lamports,
+                );
 
                 let mut bundle = chainlink
                     .prepare_feeds_bundle(&feed_ids, options.clone())
