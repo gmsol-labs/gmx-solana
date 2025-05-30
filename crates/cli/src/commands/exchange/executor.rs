@@ -31,7 +31,7 @@ pub struct ExecutorArgs {
 }
 
 impl ExecutorArgs {
-    pub(super) async fn build<'a>(
+    pub(crate) async fn build<'a>(
         &self,
         client: &'a CommandClient,
     ) -> gmsol_sdk::Result<Executor<'a>> {
@@ -54,7 +54,7 @@ pub(crate) struct Executor<'a> {
 }
 
 impl<'a> Executor<'a> {
-    async fn new_with_envs(
+    pub(crate) async fn new_with_envs(
         client: &'a CommandClient,
         testnet: bool,
         feed_index: u16,

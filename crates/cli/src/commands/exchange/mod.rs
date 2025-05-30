@@ -1,5 +1,5 @@
 #[cfg(feature = "execute")]
-mod executor;
+pub(crate) mod executor;
 
 use std::ops::Deref;
 
