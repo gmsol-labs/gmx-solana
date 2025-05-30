@@ -16,20 +16,20 @@ pub struct Configuration {
 enum Command {
     /// Insert an amount to the config.
     InsertAmount {
-        amount: Value,
-        #[arg(long, short)]
+        amount: u64,
+        #[arg(long)]
         key: AmountKey,
     },
     /// Insert a factor to the config.
     InsertFactor {
         factor: Value,
-        #[arg(long, short)]
+        #[arg(long)]
         key: FactorKey,
     },
     /// Insert an address to the config.
     InsertAddress {
         address: Pubkey,
-        #[arg(long, short)]
+        #[arg(long)]
         key: AddressKey,
     },
     /// Toggle feature.
@@ -60,8 +60,7 @@ impl super::Command for Configuration {
 
         let bundle = match &self.command {
             Command::InsertAmount { amount, key } => {
-                let value = amount.to_u128()?.try_into()?;
-                let builder = client.insert_global_amount_by_key(store, *key, &value);
+                let builder = client.insert_global_amount_by_key(store, *key, amount);
                 builder.into_bundle_with_options(options)?
             }
             Command::InsertFactor { factor, key } => {
