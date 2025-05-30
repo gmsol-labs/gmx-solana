@@ -33,7 +33,7 @@ enum Command {
         key: AddressKey,
     },
     /// Toggle feature.
-    Toggle {
+    ToggleFeature {
         /// Feature domain.
         #[clap(requires = "toggle")]
         domain: DomainDisabledFlag,
@@ -72,7 +72,7 @@ impl super::Command for Configuration {
                 let builder = client.insert_global_address_by_key(store, *key, address);
                 builder.into_bundle_with_options(options)?
             }
-            Command::Toggle {
+            Command::ToggleFeature {
                 domain,
                 action,
                 enable,
