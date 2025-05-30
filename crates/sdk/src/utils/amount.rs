@@ -7,8 +7,8 @@ use crate::{
 use rust_decimal::Decimal;
 
 use super::{
-    signed_value_to_decimal, unsigned_amount_to_decimal, unsigned_fixed_to_decimal,
-    unsigned_value_to_decimal,
+    decimal_to_signed_value, signed_value_to_decimal, unsigned_amount_to_decimal,
+    unsigned_fixed_to_decimal, unsigned_value_to_decimal,
 };
 
 const LAMPORT_DECIMALS: u8 = 9;
@@ -39,6 +39,11 @@ impl Lamport {
     /// Convert to `u64`
     pub fn to_u64(&self) -> crate::Result<u64> {
         decimal_to_amount(self.0, LAMPORT_DECIMALS)
+    }
+
+    /// Create from `u64`.
+    pub fn from_u64(amount: u64) -> Self {
+        Self(unsigned_amount_to_decimal(amount, LAMPORT_DECIMALS).normalize())
     }
 
     /// Returns whether the amount is zero.
@@ -73,6 +78,11 @@ impl GmAmount {
     /// Convert to `u64`
     pub fn to_u64(&self) -> crate::Result<u64> {
         decimal_to_amount(self.0, MARKET_TOKEN_DECIMALS)
+    }
+
+    /// Create from `u64`.
+    pub fn from_u64(amount: u64) -> Self {
+        Self(unsigned_amount_to_decimal(amount, MARKET_TOKEN_DECIMALS).normalize())
     }
 
     /// Returns whether the amount is zero.
@@ -160,6 +170,11 @@ impl Value {
     /// Convert to `u128`.
     pub fn to_u128(&self) -> crate::Result<u128> {
         decimal_to_value(self.0, MARKET_DECIMALS)
+    }
+
+    /// Convert to `i128`.
+    pub fn to_i128(&self) -> i128 {
+        decimal_to_signed_value(self.0, MARKET_DECIMALS)
     }
 
     /// Create from `i128`.
