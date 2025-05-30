@@ -6,8 +6,6 @@ use std::ops::Deref;
 use eyre::OptionExt;
 use gmsol_sdk::{
     builders::{token::WrapNative, NonceBytes},
-    client::token_map::TokenMap,
-    core::token_config::TokenMapAccess,
     ops::{
         exchange::{deposit, withdrawal},
         AddressLookupTableOps, ExchangeOps,
@@ -23,7 +21,7 @@ use gmsol_sdk::{
     utils::{Amount, GmAmount, Lamport, Value},
 };
 
-use crate::config::DisplayOptions;
+use crate::{commands::utils::token_amount, config::DisplayOptions};
 
 /// Exchange-related commands.
 #[derive(Debug, clap::Args)]
@@ -700,30 +698,6 @@ impl Side {
     pub fn is_long(&self) -> bool {
         matches!(self, Self::Long)
     }
-}
-
-fn token_amount(
-    amount: &Amount,
-    token: Option<&Pubkey>,
-    token_map: &TokenMap,
-    market: &Market,
-    is_long: bool,
-) -> eyre::Result<u64> {
-    let token = match token {
-        Some(token) => token,
-        None => {
-            if is_long {
-                &market.meta.long_token_mint
-            } else {
-                &market.meta.short_token_mint
-            }
-        }
-    };
-    let decimals = token_map
-        .get(token)
-        .ok_or_eyre("token config not found")?
-        .token_decimals;
-    Ok(amount.to_u64(decimals)?)
 }
 
 async fn wait_for_order<C: Deref<Target = impl Signer> + Clone>(

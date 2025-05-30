@@ -83,6 +83,7 @@ pyth = [
 switchboard = ["switchboard-on-demand-client"]
 squads = []
 discover = ["client", "tower/discover", "tokio/time", "pin-project-lite"]
+clap = ["dep:clap", "gmsol-utils/clap"]
 
 anchor-test = ["client", "chainlink", "pyth", "decode"]
 
