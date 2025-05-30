@@ -1,8 +1,8 @@
 use gmsol_sdk::{
+    core::config::{ActionDisabledFlag, AddressKey, AmountKey, DomainDisabledFlag, FactorKey},
     ops::config::ConfigOps,
     programs::anchor_lang::prelude::Pubkey,
     utils::Value,
-    core::config::{ActionDisabledFlag, DomainDisabledFlag, AddressKey, AmountKey, FactorKey},
 };
 
 /// On-chain configuration and features management.
