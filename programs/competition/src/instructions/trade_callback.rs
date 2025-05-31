@@ -39,9 +39,9 @@ pub struct OnCallback<'info> {
     /// The trader public key.
     /// CHECK: Only the address is required.
     pub trader: UncheckedAccount<'info>,
-    /// The action account.
+    /// The shared data account.
     /// CHECK: this is just a placeholder.
-    pub action: UncheckedAccount<'info>,
+    pub shared_data: UncheckedAccount<'info>,
 }
 
 impl OnCallback<'_> {
@@ -68,11 +68,14 @@ impl OnCallback<'_> {
     fn validate_competition(&self) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let comp = &self.competition;
-        require!(comp.is_active, CompetitionError::CompetitionNotActive);
-        require!(
-            now >= comp.start_time && now <= comp.end_time,
-            CompetitionError::OutsideCompetitionTime
-        );
+        if !comp.is_active {
+            msg!("competition: the competition is not active");
+            return Ok(());
+        }
+        if !(now >= comp.start_time && now <= comp.end_time) {
+            msg!("competition: outside of the competition time");
+            return Ok(());
+        }
         Ok(())
     }
 }
@@ -182,14 +185,14 @@ impl OnExecuted<'_> {
         // Check if volume exceeds threshold and extend competition time if needed
         if volume >= comp.volume_threshold {
             let old_end_time = comp.end_time;
-            let proposed_end_time = old_end_time.saturating_add(comp.time_extension);
-            let max_end_time = now.saturating_add(comp.max_extension);
+            let proposed_end_time = old_end_time.saturating_add(comp.extension_duration);
+            let max_end_time = now.saturating_add(comp.extension_cap);
 
             // Take the minimum of proposed end time and max end time
             comp.end_time = proposed_end_time.min(max_end_time).max(old_end_time);
 
             // Record the trigger address
-            comp.extension_trigger = Some(part.trader);
+            comp.extension_triggerer = Some(part.trader);
 
             debug_assert!(comp.end_time >= old_end_time);
             let actual_extension = comp.end_time - old_end_time;
@@ -235,10 +238,11 @@ impl OnExecuted<'_> {
             .map(|pos| pos + 1)
             .unwrap_or(0);
 
-        comp.leaderboard.insert(insert_pos, entry);
-
-        if comp.leaderboard.len() > MAX_LEADERBOARD_LEN as usize {
-            comp.leaderboard.truncate(MAX_LEADERBOARD_LEN as usize);
+        if insert_pos < MAX_LEADERBOARD_LEN as usize {
+            comp.leaderboard.insert(insert_pos, entry);
+            if comp.leaderboard.len() > MAX_LEADERBOARD_LEN as usize {
+                comp.leaderboard.truncate(MAX_LEADERBOARD_LEN as usize);
+            }
         }
     }
 }

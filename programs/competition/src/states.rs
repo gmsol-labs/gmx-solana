@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 /// The expected program ID of the caller.
-pub const EXPECTED_STORE_PROGRAM_ID: Pubkey = gmsol_programs::gmsol_store::ID_CONST;
+pub const EXPECTED_STORE_PROGRAM_ID: Pubkey = gmsol_callback::states::CALLER_PROGRAM_ID;
 
 /// The seed for [`Competition`] account.
 #[constant]
@@ -43,14 +43,14 @@ pub struct Competition {
     /// The fixed-length leaderboard.
     #[max_len(MAX_LEADERBOARD_LEN)]
     pub leaderboard: Vec<LeaderEntry>,
-    /// Volume threshold in USD
+    /// Volume threshold in USD.
     pub volume_threshold: u128,
-    /// Time extension in seconds
-    pub time_extension: i64,
-    /// Maximum time extension in seconds
-    pub max_extension: i64,
-    /// Address that triggered time extension
-    pub extension_trigger: Option<Pubkey>,
+    /// Time extension in seconds.
+    pub extension_duration: i64,
+    /// Maximum time extension in seconds.
+    pub extension_cap: i64,
+    /// Address that triggered time extension.
+    pub extension_triggerer: Option<Pubkey>,
 }
 
 /// The per-trader statistics.
