@@ -35,18 +35,21 @@ impl InitializeCompetition<'_> {
         start_time: i64,
         end_time: i64,
         volume_threshold: u128,
-        time_extension: i64,
-        max_extension: i64,
+        extension_duration: i64,
+        extension_cap: i64,
     ) -> Result<()> {
         require!(start_time < end_time, CompetitionError::InvalidTimeRange);
-        require!(time_extension > 0, CompetitionError::InvalidTimeExtension);
+        require!(
+            extension_duration > 0,
+            CompetitionError::InvalidTimeExtension
+        );
         require!(
             volume_threshold > 0,
             CompetitionError::InvalidVolumeThreshold
         );
-        require!(max_extension > 0, CompetitionError::InvalidMaxExtension);
+        require!(extension_cap > 0, CompetitionError::InvalidMaxExtension);
         require!(
-            max_extension >= time_extension,
+            extension_cap >= extension_duration,
             CompetitionError::InvalidMaxExtension
         );
 
@@ -58,9 +61,9 @@ impl InitializeCompetition<'_> {
         comp.is_active = true;
         comp.leaderboard = Vec::default();
         comp.volume_threshold = volume_threshold;
-        comp.time_extension = time_extension;
-        comp.max_extension = max_extension;
-        comp.extension_trigger = None;
+        comp.extension_duration = extension_duration;
+        comp.extension_cap = extension_cap;
+        comp.extension_triggerer = None;
         Ok(())
     }
 }

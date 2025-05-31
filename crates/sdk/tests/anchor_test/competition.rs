@@ -87,9 +87,9 @@ async fn competition() -> eyre::Result<()> {
     assert_eq!(competition_account.start_time, start_time);
     assert_eq!(competition_account.end_time, end_time);
     assert_eq!(competition_account.volume_threshold, volume_threshold);
-    assert_eq!(competition_account.time_extension, time_extension);
-    assert_eq!(competition_account.max_extension, max_extension);
-    assert!(competition_account.extension_trigger.is_none());
+    assert_eq!(competition_account.extension_duration, time_extension);
+    assert_eq!(competition_account.extension_cap, max_extension);
+    assert!(competition_account.extension_triggerer.is_none());
 
     // Create and execute order with volume exceeding threshold
     let size = 12_000 * MARKET_USD_UNIT; // 12,000 USD > 10,000 USD threshold
@@ -170,7 +170,7 @@ async fn competition() -> eyre::Result<()> {
         competition_account.end_time,
         proposed_end_time.min(max_end_time)
     );
-    assert_eq!(competition_account.extension_trigger, Some(owner));
+    assert_eq!(competition_account.extension_triggerer, Some(owner));
 
     // Verify participant account creation
     let participant_account = client
