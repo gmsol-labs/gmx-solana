@@ -29,7 +29,10 @@ gmsol-sdk = { workspace = true, features = [
     "clap",
     "competition",
     "decode",
+    "bundle_builder",
+    "token",
 ] }
+gmsol-treasury = { workspace = true }
 
 eyre = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
@@ -52,6 +55,9 @@ humantime = { workspace = true }
 either = { workspace = true }
 prettytable = { workspace = true }
 indexmap = { workspace = true }
+serde_with = { workspace = true }
+solana-sdk = { workspace = true }
+spl-token = { workspace = true }
 
 color-eyre = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true, features = [
