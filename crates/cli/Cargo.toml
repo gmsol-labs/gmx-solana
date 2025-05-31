@@ -30,7 +30,6 @@ gmsol-sdk = { workspace = true, features = [
     "competition",
     "decode",
     "bundle_builder",
-    "token",
 ] }
 gmsol-treasury = { workspace = true }
 

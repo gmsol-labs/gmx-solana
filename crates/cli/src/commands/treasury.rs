@@ -8,14 +8,13 @@ use anchor_spl::{
 };
 use eyre::OptionExt;
 use gmsol_sdk::{
-    builders::token::WrapNative,
-    bundle_builder::BundleOptions,
     core::config::{ActionDisabledFlag, AddressKey, AmountKey, DomainDisabledFlag, FactorKey},
     ops::{config::ConfigOps, treasury::TreasuryOps},
     programs::{anchor_lang::prelude::Pubkey, gmsol_store::accounts::Market},
     solana_utils::instruction_group::GetInstructionsOptions,
     utils::{Amount, GmAmount, Value},
 };
+use gmsol_solana_utils::bundle_builder::BundleOptions;
 use gmsol_treasury::states::treasury::TokenFlag;
 use rust_decimal::Decimal;
 use serde_with::serde_as;
