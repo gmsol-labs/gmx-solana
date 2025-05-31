@@ -85,8 +85,9 @@ impl OutputFormat {
         }
     }
 
-    fn project(&self, map: Map<String, Value>, options: &DisplayOptions) -> Map<String, Value> {
-        let map = if let Some(proj) = self.projection(options) {
+    fn project(&self, mut map: Map<String, Value>, options: &DisplayOptions) -> Map<String, Value> {
+        map.append(&mut options.extra.clone());
+        if let Some(proj) = self.projection(options) {
             let mut flat = Map::new();
             flatten_json(&map, None, &mut flat);
             proj.iter()
@@ -94,8 +95,7 @@ impl OutputFormat {
                 .collect()
         } else {
             map
-        };
-        map
+        }
     }
 
     fn display_json_many(items: &[Map<String, Value>]) -> eyre::Result<String> {
@@ -142,6 +142,8 @@ pub struct DisplayOptions {
     pub projection: Option<IndexMap<String, String>>,
     /// Whether projection should be applied only when the format is `table`.
     pub projection_table_only: bool,
+    /// Extra fields.
+    pub extra: Map<String, Value>,
 }
 
 impl DisplayOptions {
@@ -164,7 +166,17 @@ impl DisplayOptions {
                     .collect(),
             ),
             projection_table_only,
+            extra: Default::default(),
         }
+    }
+
+    /// Add extra fields.
+    pub fn add_extra(mut self, value: impl Serialize) -> eyre::Result<Self> {
+        let Value::Object(mut map) = serde_json::to_value(value)? else {
+            eyre::bail!("internal: only map-like structures are supported");
+        };
+        self.extra.append(&mut map);
+        Ok(self)
     }
 }
 

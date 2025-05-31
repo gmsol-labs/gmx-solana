@@ -6,12 +6,13 @@ use std::ops::Deref;
 use eyre::OptionExt;
 use gmsol_sdk::{
     builders::{token::WrapNative, NonceBytes},
+    decode::gmsol::programs::GMSOLAccountData,
     ops::{
         exchange::{deposit, withdrawal},
         AddressLookupTableOps, ExchangeOps,
     },
     programs::{anchor_lang::prelude::Pubkey, gmsol_store::accounts::Market},
-    serde::{serde_market::SerdeMarket, StringPubkey},
+    serde::{serde_market::SerdeMarket, serde_position::SerdePosition, StringPubkey},
     solana_utils::{
         instruction_group::GetInstructionsOptions,
         solana_sdk::{
@@ -46,7 +47,7 @@ enum Command {
         #[arg(long, group = "market-address")]
         address: Option<StringPubkey>,
     },
-    /// Fetches action accounts.
+    /// Fetches action or position accounts.
     Actions { address: Pubkey },
     /// Creates a deposit.
     CreateDeposit {
@@ -224,8 +225,7 @@ impl super::Command for Exchange {
         let token_map = match &self.command {
             Command::CloseOrder { .. }
             | Command::CloseDeposit { .. }
-            | Command::CloseWithdrawal { .. }
-            | Command::Actions { .. } => None,
+            | Command::CloseWithdrawal { .. } => None,
             Command::CreateWithdrawal {
                 min_long_token_amount,
                 min_short_token_amount,
@@ -240,12 +240,12 @@ impl super::Command for Exchange {
         let options = ctx.bundle_options();
         let mut collector = (!self.skip_native_wrap).then(NativeCollector::default);
         let owner = &client.payer();
+        let output = ctx.config().output();
         let bundle = match &self.command {
             Command::Markets {
                 market_token,
                 address,
             } => {
-                let output = ctx.config().output();
                 let token_map = token_map.as_ref().expect("must exist");
                 if address.is_none() && market_token.is_none() {
                     let markets = client.markets(store).await?;
@@ -326,7 +326,47 @@ impl super::Command for Exchange {
                     .await?
                     .into_value()
                     .ok_or_eyre("account not found")?;
-                println!("{decoded:#?}");
+                match decoded {
+                    GMSOLAccountData::Position(position) => {
+                        let market_address =
+                            client.find_market_address(store, &position.market_token);
+                        let market = client.market(&market_address).await?;
+                        let position = SerdePosition::from_position(
+                            &position,
+                            &market.meta.into(),
+                            token_map.as_ref().expect("must exist"),
+                        )?;
+                        println!(
+                            "{}",
+                            output.display_keyed_account(
+                                address,
+                                position,
+                                DisplayOptions::table_projection([
+                                    ("kind", "Kind"),
+                                    ("pubkey", "Address"),
+                                    ("owner", "Owner"),
+                                    ("is_long", "Is Long"),
+                                    ("market_token", "Market Token"),
+                                    ("collateral_token", "Collateral Token"),
+                                    ("state.trade_id", "Last Trade ID"),
+                                    ("state.updated_at_slot", "Last Updated Slot"),
+                                    ("state.increased_at", "Last Increased At"),
+                                    ("state.decreased_at", "Last Decreased At"),
+                                    ("state.collateral_amount", "Collateral Amount"),
+                                    ("state.size_in_usd", "$ Size"),
+                                    ("state.size_in_tokens", "◎ Size In Tokens"),
+                                ])
+                                .add_extra(serde_json::json!({
+                                    "kind": "Position",
+                                }))?
+                            )?
+                        );
+                    }
+                    decoded => {
+                        println!("{decoded:#?}");
+                    }
+                }
+
                 return Ok(());
             }
             #[cfg(feature = "execute")]

@@ -8,7 +8,6 @@ use gmsol_programs::{
 };
 use gmsol_utils::market::{MarketConfigKey, MarketFlag};
 use indexmap::IndexMap;
-use rust_decimal::prelude::FromPrimitive;
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -288,7 +287,7 @@ fn unpack_funding_amount_per_size_pool(
     short_token_decimals: u8,
 ) -> crate::Result<SerdePool> {
     use gmsol_programs::constants::FUNDING_AMOUNT_PER_SIZE_ADJUSTMENT;
-    use rust_decimal::Decimal;
+    use rust_decimal::{prelude::FromPrimitive, Decimal};
 
     let adjustment = Decimal::from_i128(FUNDING_AMOUNT_PER_SIZE_ADJUSTMENT as i128).unwrap();
     let mut pool = SerdePool::from_pool(pool, long_token_decimals, short_token_decimals)?;
