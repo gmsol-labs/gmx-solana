@@ -8,23 +8,80 @@ use anchor_spl::{
 };
 use eyre::OptionExt;
 use gmsol_sdk::{
-    core::config::{ActionDisabledFlag, AddressKey, AmountKey, DomainDisabledFlag, FactorKey},
-    ops::{config::ConfigOps, treasury::TreasuryOps},
-    programs::{anchor_lang::prelude::Pubkey, gmsol_store::accounts::Market},
+    ops::{treasury::TreasuryOps, system::SystemProgramOps, token_account::TokenAccountOps},
+    programs::{anchor_lang::prelude::Pubkey},
     solana_utils::instruction_group::GetInstructionsOptions,
-    utils::{Amount, GmAmount, Value},
+    utils::{Amount, Value},
+    model::MarketModel,
+    client::ops::treasury::CreateTreasurySwapOptions,
+    builders::token::WrapNative,
 };
+use gmsol_model::market::BaseMarket;
 use gmsol_solana_utils::bundle_builder::BundleOptions;
 use gmsol_treasury::states::treasury::TokenFlag;
 use rust_decimal::Decimal;
 use serde_with::serde_as;
 use solana_sdk::instruction::Instruction;
 use spl_token;
+use gmsol_model::BalanceExt;
+use gmsol_utils::token_config::TokenMapAccess;
+
 
 use crate::{
     commands::utils::token_amount,
-    utils::{decimal_to_amount, toml_from_file, SelectGtExchangeVault, Side},
 };
+
+#[derive(Clone, Copy)]
+pub struct TokenFlagWrapper(pub TokenFlag);
+
+impl clap::ValueEnum for TokenFlagWrapper {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[
+            TokenFlagWrapper(TokenFlag::AllowDeposit),
+            TokenFlagWrapper(TokenFlag::AllowWithdrawal),
+        ]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        Some(match self.0 {
+            TokenFlag::AllowDeposit => clap::builder::PossibleValue::new("allow_deposit"),
+            TokenFlag::AllowWithdrawal => clap::builder::PossibleValue::new("allow_withdrawal"),
+        })
+    }
+}
+
+impl std::fmt::Debug for TokenFlagWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            TokenFlag::AllowDeposit => write!(f, "AllowDeposit"),
+            TokenFlag::AllowWithdrawal => write!(f, "AllowWithdrawal"),
+        }
+    }
+}
+
+/// Convert decimal amount to u64 amount with specified decimals
+fn decimal_to_amount(
+    mut amount: Decimal,
+    decimals: u8,
+) -> eyre::Result<u64> {
+    amount.rescale(decimals as u32);
+    let amount = amount
+        .mantissa()
+        .try_into()
+        .map_err(|_| eyre::eyre!("Failed to convert decimal to u64"))?;
+    Ok(amount)
+}
+
+/// Read and parse a TOML file into a type
+fn toml_from_file<T>(path: &impl AsRef<std::path::Path>) -> eyre::Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    use std::io::Read;
+    let mut buffer = String::new();
+    std::fs::File::open(path)?.read_to_string(&mut buffer)?;
+    toml::from_str(&buffer).map_err(|e| eyre::eyre!("Failed to parse TOML: {}", e))
+}
 
 #[cfg(feature = "execute")]
 use crate::commands::exchange::executor;
@@ -61,7 +118,7 @@ enum Command {
     ToggleTokenFlag {
         token: Pubkey,
         #[arg(requires = "toggle")]
-        flag: TokenFlag,
+        flag: TokenFlagWrapper,
         /// Enable the given flag.
         #[arg(long, group = "toggle")]
         enable: bool,
@@ -206,7 +263,7 @@ impl super::Command for Treasury {
                 assert!(*enable != *disable);
                 let value = *enable;
                 client
-                    .toggle_token_flag(store, None, token, *flag, value)
+                    .toggle_token_flag(store, None, token, flag.0, value)
                     .await?
             }
             Command::SetReferralReward { factors } => {
@@ -215,7 +272,7 @@ impl super::Command for Treasury {
                 }
                 let factors = factors
                     .iter()
-                    .map(|f| f.to_u128())
+                    .map(|f| f.to_u128().map_err(eyre::Report::from))
                     .collect::<eyre::Result<Vec<_>>>()?;
                 client.set_referral_reward(store, factors)
             }
@@ -234,35 +291,38 @@ impl super::Command for Treasury {
             } => {
                 let market = client.find_market_address(store, market_token);
                 let market = client.market(&market).await?;
-                let amount = market.claimable_fee_pool()?.amount(side.is_long())?;
+                let market_model = MarketModel::from_parts(market, 1);
+                let amount = market_model.claimable_fee_pool()?.amount(side.is_long())?;
                 if amount == 0 {
-                    return Err(gmsol_sdk::Error::invalid_argument(
-                        "no claimable fees for this side",
-                    ));
+                    return Err(eyre::eyre!("no claimable fees for this side"));
                 }
-                let token_mint = market.meta().pnl_token(side.is_long());
+                let token_mint = if side.is_long() {
+                    &market.meta.long_token_mint
+                } else {
+                    &market.meta.short_token_mint
+                };
                 let min_amount = token_amount(
                     min_amount,
-                    Some(&token_mint),
+                    Some(token_mint),
                     &token_map,
-                    &market,
+                    &market_model,
                     side.is_long(),
                 )?;
                 let claim = client.claim_fees_to_receiver_vault(
                     store,
                     market_token,
-                    &token_mint,
+                    token_mint,
                     min_amount,
                 );
 
                 if *deposit {
                     let store_account = client.store(store).await?;
-                    let time_window = store_account.gt().exchange_time_window();
+                    let time_window = store_account.gt.exchange_time_window;
                     let (deposit, gt_exchange_vault) = client
                         .deposit_to_treasury_valut(
                             store,
                             None,
-                            &token_mint,
+                            token_mint,
                             token_program_id.as_ref(),
                             time_window,
                         )
@@ -279,7 +339,7 @@ impl super::Command for Treasury {
                 token_program_id,
             } => {
                 let store_account = client.store(store).await?;
-                let time_window = store_account.gt().exchange_time_window();
+                let time_window = store_account.gt.exchange_time_window;
 
                 let (rpc, gt_exchange_vault) = client
                     .deposit_to_treasury_valut(
@@ -336,9 +396,10 @@ impl super::Command for Treasury {
                 let receiver = client.find_treasury_receiver_address(&config);
                 let market = client.find_market_address(store, market_token);
                 let market = client.market(&market).await?;
+                let meta = &market.meta;
                 let amount = match amount {
                     Some(amount) => token_amount(
-                        amount,
+                        &amount,
                         Some(swap_in),
                         &token_map,
                         &market,
@@ -356,7 +417,7 @@ impl super::Command for Treasury {
                 };
                 let min_output_amount = min_output_amount.map(|amount| {
                     token_amount(
-                        amount,
+                        &amount,
                         Some(swap_out),
                         &token_map,
                         &market,
@@ -372,7 +433,7 @@ impl super::Command for Treasury {
                         amount,
                         CreateTreasurySwapOptions {
                             swap_path: extra_swap_path.clone(),
-                            min_swap_out_amount: min_output_amount.as_ref(),
+                            min_swap_out_amount: min_output_amount,
                             ..Default::default()
                         },
                     )
@@ -480,7 +541,7 @@ impl super::Command for Treasury {
                     )?;
                 }
 
-                return client.send_or_serialize(bundle).await?;
+                return Ok(client.send_or_serialize(bundle).await?);
             }
             #[cfg(feature = "execute")]
             Command::ConfirmGtBuyback {
@@ -531,7 +592,7 @@ impl NativeCollector {
         owner: &Pubkey,
         token: Option<&Pubkey>,
         token_account: Option<&Pubkey>,
-        market: &Market,
+        market: &MarketModel,
         is_long: bool,
     ) -> eyre::Result<()> {
         use anchor_spl::{
@@ -618,3 +679,54 @@ struct BatchWithdraw {
     #[serde(default)]
     sync: Vec<Sync>,
 }
+
+/// Select GT Exchange Vault by date or direct address
+#[derive(clap::Args, Clone, Debug)]
+pub struct SelectGtExchangeVault {
+    /// Direct GT Exchange Vault address
+    gt_exchange_vault: Option<Pubkey>,
+    /// Select by date
+    #[clap(flatten)]
+    date: SelectGtExchangeVaultByDate,
+}
+
+/// Select GT Exchange Vault by date
+#[derive(clap::Args, Clone, Debug)]
+pub struct SelectGtExchangeVaultByDate {
+    /// Date to select vault
+    #[arg(long, short)]
+    date: Option<humantime::Timestamp>,
+}
+
+impl SelectGtExchangeVault {
+    /// Get GT Exchange Vault address
+    pub async fn get(&self, store: &Pubkey, client: &crate::commands::CommandClient) -> eyre::Result<Pubkey> {
+        if let Some(address) = self.gt_exchange_vault {
+            Ok(address)
+        } else {
+            self.date.get(store, client).await
+        }
+    }
+}
+
+impl SelectGtExchangeVaultByDate {
+    /// Get GT Exchange Vault address by date
+    pub async fn get(&self, store: &Pubkey, client: &crate::commands::CommandClient) -> eyre::Result<Pubkey> {
+        use std::time::SystemTime;
+
+        let store_account = client.store(store).await?;
+        let time_window = store_account.gt.exchange_time_window;
+        let date = self
+            .date
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| humantime::Timestamp::from(SystemTime::now()));
+        let ts = date
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(|e| eyre::eyre!("Failed to get timestamp: {}", e))?
+            .as_secs();
+        let index = ts / time_window as u64;
+        Ok(client.find_gt_exchange_vault_address(store, index as i64, time_window))
+    }
+}
+

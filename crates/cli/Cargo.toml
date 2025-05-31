@@ -29,9 +29,11 @@ gmsol-sdk = { workspace = true, features = [
     "clap",
     "competition",
     "decode",
-    "bundle_builder",
+    "treasury",
 ] }
-gmsol-treasury = { workspace = true }
+gmsol-treasury = { workspace = true, features = ["debug"] }
+gmsol-model = { workspace = true }
+gmsol-store = { workspace = true }
 
 eyre = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
@@ -63,3 +65,5 @@ tracing-subscriber = { workspace = true, optional = true, features = [
     "env-filter",
 ] }
 solana-remote-wallet = { workspace = true, optional = true }
+gmsol-solana-utils = { path = "../solana-utils" }
+gmsol-utils = { path = "../utils" }
