@@ -388,11 +388,9 @@ impl super::Command for Treasury {
                 let receiver = client.find_treasury_receiver_address(&config);
                 let market = client.find_market_address(store, market_token);
                 let market = client.market(&market).await?;
-                let meta = &market.meta;
+                // let meta = &market.meta;
                 let amount = match amount {
-                    Some(amount) => {
-                        token_amount(&amount, Some(swap_in), &token_map, &market, true)?
-                    }
+                    Some(amount) => token_amount(amount, Some(swap_in), &token_map, &market, true)?,
                     None => {
                         let vault = get_associated_token_address(&receiver, swap_in);
                         let account = client
@@ -536,7 +534,6 @@ impl super::Command for Treasury {
                 executor.execute(builder, options).await?;
                 return Ok(());
             }
-            _ => todo!(),
         };
 
         let bundle = bundle.into_bundle_with_options(BundleOptions {
@@ -562,66 +559,6 @@ impl Side {
     /// Is long side.
     pub fn is_long(&self) -> bool {
         matches!(self, Self::Long)
-    }
-}
-
-#[derive(Default)]
-struct NativeCollector {
-    lamports: u64,
-}
-
-impl NativeCollector {
-    fn add(
-        &mut self,
-        amount: u64,
-        owner: &Pubkey,
-        token: Option<&Pubkey>,
-        token_account: Option<&Pubkey>,
-        market: &MarketModel,
-        is_long: bool,
-    ) -> eyre::Result<()> {
-        use anchor_spl::{
-            associated_token::get_associated_token_address, token::spl_token::native_mint::ID,
-        };
-
-        let token = match token {
-            Some(token) => token,
-            None => {
-                if is_long {
-                    &market.meta.long_token_mint
-                } else {
-                    &market.meta.short_token_mint
-                }
-            }
-        };
-
-        if *token == ID {
-            if let Some(token_account) = token_account {
-                let expected_account = get_associated_token_address(owner, token);
-                if expected_account != *token_account {
-                    eyre::bail!("wrapping native token requires an associated token account");
-                }
-            }
-            self.lamports += amount;
-        }
-
-        Ok(())
-    }
-
-    fn to_instructions(&self, owner: &Pubkey) -> eyre::Result<Vec<Instruction>> {
-        use gmsol_sdk::IntoAtomicGroup;
-
-        Ok(WrapNative::builder()
-            .lamports(self.lamports)
-            .owner(*owner)
-            .build()
-            .into_atomic_group(&false)?
-            .instructions_with_options(GetInstructionsOptions {
-                without_compute_budget: true,
-                ..Default::default()
-            })
-            .map(|ix| (*ix).clone())
-            .collect())
     }
 }
 
