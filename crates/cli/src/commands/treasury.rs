@@ -152,8 +152,6 @@ enum Command {
         gt_exchange_vault: SelectGtExchangeVault,
         #[arg(long)]
         oracle: Pubkey,
-        #[arg(long, short = 't')]
-        oracle_testnet: bool,
         #[command(flatten)]
         args: executor::ExecutorArgs,
     },
@@ -530,7 +528,6 @@ impl super::Command for Treasury {
             Command::ConfirmGtBuyback {
                 gt_exchange_vault,
                 oracle,
-                oracle_testnet,
                 args,
             } => {
                 let gt_exchange_vault = gt_exchange_vault.get(store, client).await?;
