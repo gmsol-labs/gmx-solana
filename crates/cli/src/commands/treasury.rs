@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::commands::utils::token_amount;
 use anchor_spl::{
     associated_token::{
         get_associated_token_address, get_associated_token_address_with_program_id,
@@ -7,53 +8,18 @@ use anchor_spl::{
     token_interface::TokenAccount,
 };
 use eyre::OptionExt;
-use gmsol_model::market::BaseMarket;
-use gmsol_model::BalanceExt;
 use gmsol_sdk::{
     client::ops::treasury::CreateTreasurySwapOptions,
-    model::MarketModel,
+    core::token_config::{TokenFlag, TokenMapAccess},
+    model::{BalanceExt, BaseMarket, MarketModel},
     ops::{system::SystemProgramOps, token_account::TokenAccountOps, treasury::TreasuryOps},
     programs::anchor_lang::prelude::Pubkey,
-    // solana_utils::instruction_group::GetInstructionsOptions,
+    serde::StringPubkey,
+    solana_utils::bundle_builder::BundleOptions,
     utils::{Amount, Value},
 };
-use gmsol_solana_utils::bundle_builder::BundleOptions;
-use gmsol_treasury::states::treasury::TokenFlag;
-use gmsol_utils::token_config::TokenMapAccess;
 use rust_decimal::Decimal;
-use serde_with::serde_as;
-// use solana_sdk::instruction::Instruction;
 use spl_token;
-
-use crate::commands::utils::token_amount;
-
-#[derive(Clone, Copy)]
-pub struct TokenFlagWrapper(pub TokenFlag);
-
-impl clap::ValueEnum for TokenFlagWrapper {
-    fn value_variants<'a>() -> &'a [Self] {
-        &[
-            TokenFlagWrapper(TokenFlag::AllowDeposit),
-            TokenFlagWrapper(TokenFlag::AllowWithdrawal),
-        ]
-    }
-
-    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
-        Some(match self.0 {
-            TokenFlag::AllowDeposit => clap::builder::PossibleValue::new("allow_deposit"),
-            TokenFlag::AllowWithdrawal => clap::builder::PossibleValue::new("allow_withdrawal"),
-        })
-    }
-}
-
-impl std::fmt::Debug for TokenFlagWrapper {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.0 {
-            TokenFlag::AllowDeposit => write!(f, "AllowDeposit"),
-            TokenFlag::AllowWithdrawal => write!(f, "AllowWithdrawal"),
-        }
-    }
-}
 
 /// Convert decimal amount to u64 amount with specified decimals
 fn decimal_to_amount(mut amount: Decimal, decimals: u8) -> eyre::Result<u64> {
@@ -111,7 +77,7 @@ enum Command {
     ToggleTokenFlag {
         token: Pubkey,
         #[arg(requires = "toggle")]
-        flag: TokenFlagWrapper,
+        flag: TokenFlag,
         /// Enable the given flag.
         #[arg(long, group = "toggle")]
         enable: bool,
@@ -254,7 +220,7 @@ impl super::Command for Treasury {
                 assert!(*enable != *disable);
                 let value = *enable;
                 client
-                    .toggle_token_flag(store, None, token, flag.0, value)
+                    .toggle_token_flag(store, None, token, *flag, value)
                     .await?
             }
             Command::SetReferralReward { factors } => {
@@ -561,38 +527,29 @@ impl Side {
     }
 }
 
-#[serde_with::serde_as]
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct Withdraw {
-    #[serde_as(as = "serde_with::DisplayFromStr")]
-    token: Pubkey,
+    token: StringPubkey,
     #[serde(default = "default_token_program_id")]
-    #[serde_as(as = "serde_with::DisplayFromStr")]
-    token_program_id: Pubkey,
+    token_program_id: StringPubkey,
     #[serde(default)]
     token_decimals: Option<u8>,
     amount: Decimal,
-    #[serde_as(as = "serde_with::DisplayFromStr")]
-    target: Pubkey,
+    target: StringPubkey,
 }
 
-fn default_token_program_id() -> Pubkey {
-    spl_token::ID
+fn default_token_program_id() -> StringPubkey {
+    spl_token::ID.into()
 }
 
-#[serde_with::serde_as]
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct Sync {
-    #[serde_as(as = "serde_with::DisplayFromStr")]
-    token: Pubkey,
+    token: StringPubkey,
     #[serde(default = "default_token_program_id")]
-    #[serde_as(as = "serde_with::DisplayFromStr")]
-    token_program_id: Pubkey,
-    #[serde_as(as = "serde_with::DisplayFromStr")]
-    gt_exchange_vault: Pubkey,
+    token_program_id: StringPubkey,
+    gt_exchange_vault: StringPubkey,
 }
 
-#[serde_with::serde_as]
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct BatchWithdraw {
     #[serde(default)]

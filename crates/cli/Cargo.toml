@@ -31,9 +31,6 @@ gmsol-sdk = { workspace = true, features = [
     "decode",
     "treasury",
 ] }
-gmsol-treasury = { workspace = true, features = ["debug"] }
-gmsol-model = { workspace = true }
-gmsol-store = { workspace = true }
 
 eyre = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
@@ -56,8 +53,6 @@ humantime = { workspace = true }
 either = { workspace = true }
 prettytable = { workspace = true }
 indexmap = { workspace = true }
-serde_with = { workspace = true }
-solana-sdk = { workspace = true }
 spl-token = { workspace = true }
 
 color-eyre = { workspace = true, optional = true }
@@ -65,5 +60,3 @@ tracing-subscriber = { workspace = true, optional = true, features = [
     "env-filter",
 ] }
 solana-remote-wallet = { workspace = true, optional = true }
-gmsol-solana-utils = { path = "../solana-utils" }
-gmsol-utils = { path = "../utils" }
