@@ -16,20 +16,8 @@ use gmsol_sdk::{
     programs::anchor_lang::prelude::Pubkey,
     serde::StringPubkey,
     solana_utils::bundle_builder::BundleOptions,
-    utils::{Amount, Value},
+    utils::{Amount, Lamport, Value},
 };
-use rust_decimal::Decimal;
-use spl_token;
-
-/// Convert decimal amount to u64 amount with specified decimals
-fn decimal_to_amount(mut amount: Decimal, decimals: u8) -> eyre::Result<u64> {
-    amount.rescale(decimals as u32);
-    let amount = amount
-        .mantissa()
-        .try_into()
-        .map_err(|_| eyre::eyre!("Failed to convert decimal to u64"))?;
-    Ok(amount)
-}
 
 /// Read and parse a TOML file into a type
 fn toml_from_file<T>(path: &impl AsRef<std::path::Path>) -> eyre::Result<T>
@@ -145,7 +133,7 @@ enum Command {
         extra_swap_path: Vec<Pubkey>,
         /// Fund the swap owner.
         #[arg(long, value_name = "LAMPORTS")]
-        fund: Option<u64>,
+        fund: Option<Lamport>,
     },
     /// Cancel Swap.
     CancelSwap { order: Pubkey },
@@ -386,7 +374,7 @@ impl super::Command for Treasury {
                 println!("{order}");
                 if let Some(lamports) = fund {
                     let swap_owner = client.find_treasury_receiver_address(&config);
-                    let fund = client.transfer(&swap_owner, *lamports)?;
+                    let fund = client.transfer(&swap_owner, lamports.to_u64()?)?;
                     fund.merge(rpc)
                 } else {
                     rpc
@@ -451,7 +439,7 @@ impl super::Command for Treasury {
                             .ok_or_eyre("token mint not found")?
                             .decimals
                     };
-                    let amount = decimal_to_amount(withdraw.amount, decimals)?;
+                    let amount = withdraw.amount.to_u64(decimals)?;
                     let prepare = client.prepare_associated_token_account(
                         &withdraw.token,
                         &withdraw.token_program_id,
@@ -534,7 +522,7 @@ struct Withdraw {
     token_program_id: StringPubkey,
     #[serde(default)]
     token_decimals: Option<u8>,
-    amount: Decimal,
+    amount: Amount,
     target: StringPubkey,
 }
 
