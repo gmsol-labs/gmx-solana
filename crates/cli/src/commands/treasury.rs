@@ -168,7 +168,7 @@ impl super::Command for Treasury {
         let options = ctx.bundle_options();
         let token_map = client.authorized_token_map(store).await?;
 
-        let bundle = match &self.command {
+        let txn = match &self.command {
             Command::InitConfig => {
                 let (rpc, config) = client.initialize_config(store).swap_output(());
                 println!("{config}");
@@ -489,10 +489,7 @@ impl super::Command for Treasury {
             }
         };
 
-        let bundle = bundle.into_bundle_with_options(BundleOptions {
-            force_one_transaction: true,
-            ..Default::default()
-        })?;
+        let bundle = txn.into_bundle_with_options(options)?;
 
         client.send_or_serialize(bundle).await?;
         Ok(())
