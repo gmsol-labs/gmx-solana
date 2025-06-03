@@ -18,4 +18,6 @@ pub enum CompetitionError {
     InvalidVolumeThreshold,
     #[msg("Invalid max extension")]
     InvalidMaxExtension,
+    #[msg("competition is still in progress")]
+    CompetitionInProgress,
 }

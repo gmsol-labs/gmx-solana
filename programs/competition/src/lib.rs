@@ -103,4 +103,9 @@ pub mod gmsol_competition {
     ) -> Result<()> {
         Ok(())
     }
+
+    /// Close the participant account and recover rent.
+    pub fn close_participant(ctx: Context<CloseParticipant>) -> Result<()> {
+        CloseParticipant::invoke(ctx)
+    }
 }
