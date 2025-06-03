@@ -1,8 +1,8 @@
-use crate::config::{DisplayOptions, OutputFormat};
+use crate::config::DisplayOptions;
 use gmsol_sdk::{
-    ops::gt::GtOps,
-    ops::treasury::TreasuryOps,
+    ops::{gt::GtOps, treasury::TreasuryOps},
     programs::anchor_lang::prelude::Pubkey,
+    serde::StringPubkey,
     utils::{unsigned_amount_to_decimal, Amount},
 };
 use std::num::NonZeroU32;
@@ -188,7 +188,7 @@ impl super::Command for Gt {
                         let owner = owner.unwrap_or(client.payer());
                         let exchanges = client.gt_exchanges(store, &owner).await?;
 
-                        let output = OutputFormat::Table;
+                        let output = ctx.config().output();
                         let options = DisplayOptions::table_projection([
                             ("address", "Pubkey"),
                             ("vault", "Vault"),
@@ -199,8 +199,8 @@ impl super::Command for Gt {
                             let amount =
                                 unsigned_amount_to_decimal(exchange.amount, decimals).normalize();
                             serde_json::json!({
-                                "address": address,
-                                "vault": exchange.vault,
+                                "address": StringPubkey(address),
+                                "vault": StringPubkey(exchange.vault),
                                 "amount": amount,
                             })
                         });
