@@ -68,14 +68,11 @@ impl OnCallback<'_> {
     fn validate_competition(&self) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let comp = &self.competition;
-        if !comp.is_active {
-            msg!("competition: the competition is not active");
-            return Ok(());
-        }
-        if !(now >= comp.start_time && now <= comp.end_time) {
-            msg!("competition: outside of the competition time");
-            return Ok(());
-        }
+        require!(comp.is_active, CompetitionError::CompetitionNotActive);
+        require!(
+            now >= comp.start_time && now <= comp.end_time,
+            CompetitionError::OutsideCompetitionTime
+        );
         Ok(())
     }
 }
