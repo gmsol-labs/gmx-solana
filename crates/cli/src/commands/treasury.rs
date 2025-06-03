@@ -13,7 +13,7 @@ use anchor_spl::{
 use eyre::OptionExt;
 use gmsol_sdk::{
     utils::{Amount, Lamport, Value},
-    // core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
+    core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
     client::ops::treasury::CreateTreasurySwapOptions,
     core::token_config::{TokenFlag, TokenMapAccess},
     model::{BalanceExt, BaseMarket, MarketModel},
@@ -21,8 +21,8 @@ use gmsol_sdk::{
     programs::anchor_lang::prelude::Pubkey,
     serde::StringPubkey,
     solana_utils::bundle_builder::BundleOptions,
-    // client::pyth::{pull_oracle::PythPullOracleWithHermes, Hermes, PythPullOracle, pubkey_to_identifier},
-    // client::pull_oracle::{PullOraclePriceConsumer, WithPullOracle, PullOracle},
+    client::pyth::{pull_oracle::PythPullOracleWithHermes, Hermes, PythPullOracle, pubkey_to_identifier},
+    client::pull_oracle::{PullOraclePriceConsumer, WithPullOracle, PullOracle},
 };
 
 /// Read and parse a TOML file into a type
@@ -333,6 +333,16 @@ impl super::Command for Treasury {
                         }
                     }
 
+                    let hermes = Hermes::default();
+                    let update = hermes.latest_price_updates(&[gmsol_sdk::client::pyth::pubkey_to_identifier(&claimable_fees[0].0.meta.long_token_mint)], None).await?;
+                    let price = update.parsed().iter().next().ok_or_eyre("price not found in update")?;
+                    let price = pyth_price_with_confidence_to_price(
+                        price.price().price(),
+                        price.price().conf(),
+                        price.price().expo(),
+                        token_map.get(&claimable_fees[0].0.meta.long_token_mint).ok_or_eyre("token config not found")?,
+                    )?;
+
                     let mut batches = Vec::new();
                     let mut current_batch = Vec::new();
                     let mut current_batch_value = Decimal::ZERO;
@@ -412,15 +422,27 @@ impl super::Command for Treasury {
                     let mut sorted_tokens: Vec<_> = claimed_tokens.into_iter().collect();
                     sorted_tokens.sort_by_key(|(mint, _)| *mint);
 
-                    println!("Total value claimed: {}", total_value);
-                    for (token_mint, amount) in sorted_tokens {
+                    // Calculate total value using simulated prices
+                    let mut total_value = Decimal::ZERO;
+                    for (token_mint, amount) in &sorted_tokens {
                         let decimals = token_map
-                            .get(&token_mint)
+                            .get(token_mint)
                             .ok_or_eyre("token config not found")?
                             .token_decimals;
-                        let amount_decimal = Decimal::from(amount) / Decimal::from(10u64.pow(decimals as u32));
-                        println!("Token {}: {}", token_mint, Amount(amount_decimal));
+                        let amount_decimal = Decimal::from(*amount) / Decimal::from(10u64.pow(decimals as u32));
+                        
+                        // Simulated price of $1 for all tokens
+                        let token_value = amount_decimal * Decimal::ONE;
+                        total_value += token_value;
+                        
+                        println!("Token {}: {} (Value: ${})", 
+                            token_mint, 
+                            Amount(amount_decimal),
+                            Amount(token_value)
+                        );
                     }
+
+                    println!("Total value claimed: ${}", Amount(total_value));
 
                     let mut txn = client.store_transaction();
                     for builder in bundle.into_builders() {
