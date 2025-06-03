@@ -20,10 +20,7 @@ remote-wallet = ["solana-remote-wallet"]
 bin = ["color-eyre", "tracing-subscriber"]
 devnet = ["gmsol-sdk/devnet"]
 squads = ["gmsol-sdk/squads"]
-chainlink = ["gmsol-sdk/chainlink"]
-pyth = ["gmsol-sdk/pyth"]
-switchboard = ["gmsol-sdk/switchboard"]
-execute = ["chainlink", "pyth", "switchboard"]
+execute = ["gmsol-sdk/chainlink","gmsol-sdk/pyth", "gmsol-sdk/switchboard", "gmsol-sdk/client"]
 
 [dependencies]
 gmsol-sdk = { workspace = true, features = [
@@ -33,7 +30,7 @@ gmsol-sdk = { workspace = true, features = [
     "competition",
     "decode",
     "treasury",
-    "timelock",
+    "pyth",
 ] }
 
 eyre = { workspace = true }

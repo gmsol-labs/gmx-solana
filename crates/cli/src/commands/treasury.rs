@@ -1,4 +1,7 @@
 use std::path::PathBuf;
+use std::num::NonZeroU8;
+use rust_decimal::Decimal;
+use std::collections::HashMap;
 
 use crate::commands::utils::token_amount;
 use anchor_spl::{
@@ -9,6 +12,8 @@ use anchor_spl::{
 };
 use eyre::OptionExt;
 use gmsol_sdk::{
+    utils::{Amount, Lamport, Value},
+    // core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
     client::ops::treasury::CreateTreasurySwapOptions,
     core::token_config::{TokenFlag, TokenMapAccess},
     model::{BalanceExt, BaseMarket, MarketModel},
@@ -16,7 +21,8 @@ use gmsol_sdk::{
     programs::anchor_lang::prelude::Pubkey,
     serde::StringPubkey,
     solana_utils::bundle_builder::BundleOptions,
-    utils::{Amount, Lamport, Value},
+    // client::pyth::{pull_oracle::PythPullOracleWithHermes, Hermes, PythPullOracle, pubkey_to_identifier},
+    // client::pull_oracle::{PullOraclePriceConsumer, WithPullOracle, PullOracle},
 };
 
 /// Read and parse a TOML file into a type
@@ -77,15 +83,20 @@ enum Command {
     SetReferralReward { factors: Vec<Value> },
     /// Claim fees.
     ClaimFees {
-        market_token: Pubkey,
         #[arg(long)]
-        side: Side,
+        market_token: Option<Pubkey>,
+        #[arg(long)]
+        side: Option<Side>,
         #[arg(long)]
         deposit: bool,
         #[arg(long)]
         token_program_id: Option<Pubkey>,
         #[arg(long, short, default_value_t = Amount::ZERO)]
         min_amount: Amount,
+        #[arg(long, default_value_t = Amount(Decimal::from(1000)))]
+        min_value_per_batch: Amount,
+        #[arg(long, default_value_t = NonZeroU8::new(1).unwrap())]
+        batch: NonZeroU8,
     },
     /// Deposit into treasury vault.
     DepositToTreasury {
@@ -233,50 +244,189 @@ impl super::Command for Treasury {
                 deposit,
                 token_program_id,
                 min_amount,
+                min_value_per_batch,
+                batch,
             } => {
-                let market = client.find_market_address(store, market_token);
-                let market = client.market(&market).await?;
-                let market_model = MarketModel::from_parts(market.clone(), 1);
-                let amount = market_model.claimable_fee_pool()?.amount(side.is_long())?;
-                if amount == 0 {
-                    return Err(eyre::eyre!("no claimable fees for this side"));
-                }
-                let token_mint = if side.is_long() {
-                    &market.meta.long_token_mint
-                } else {
-                    &market.meta.short_token_mint
-                };
-                let min_amount = token_amount(
-                    min_amount,
-                    Some(token_mint),
-                    &token_map,
-                    &market_model,
-                    side.is_long(),
-                )?;
-                let claim = client.claim_fees_to_receiver_vault(
-                    store,
-                    market_token,
-                    token_mint,
-                    min_amount,
-                );
+                if let Some(market_token) = market_token {
+                    // Single market mode
+                    let side = side.ok_or_eyre("side is required for single market mode")?;
+                    let market = client.find_market_address(store, market_token);
+                    let market = client.market(&market).await?;
+                    let market_model = MarketModel::from_parts(market.clone(), 1);
+                    let amount = market_model.claimable_fee_pool()?.amount(side.is_long())?;
+                    if amount == 0 {
+                        return Err(eyre::eyre!("no claimable fees for this side"));
+                    }
+                    let token_mint = if side.is_long() {
+                        &market.meta.long_token_mint
+                    } else {
+                        &market.meta.short_token_mint
+                    };
+                    let min_amount = token_amount(
+                        min_amount,
+                        Some(token_mint),
+                        &token_map,
+                        &market_model,
+                        side.is_long(),
+                    )?;
+                    let claim = client.claim_fees_to_receiver_vault(
+                        store,
+                        market_token,
+                        token_mint,
+                        min_amount,
+                    );
 
-                if *deposit {
-                    let store_account = client.store(store).await?;
-                    let time_window = store_account.gt.exchange_time_window;
-                    let (deposit, gt_exchange_vault) = client
-                        .deposit_to_treasury_valut(
-                            store,
-                            None,
-                            token_mint,
-                            token_program_id.as_ref(),
-                            time_window,
-                        )
-                        .await?
-                        .swap_output(());
-                    println!("{gt_exchange_vault}");
-                    claim.merge(deposit)
+                    if *deposit {
+                        let store_account = client.store(store).await?;
+                        let time_window = store_account.gt.exchange_time_window;
+                        let (deposit, gt_exchange_vault) = client
+                            .deposit_to_treasury_valut(
+                                store,
+                                None,
+                                token_mint,
+                                token_program_id.as_ref(),
+                                time_window,
+                            )
+                            .await?
+                            .swap_output(());
+                        println!("{gt_exchange_vault}");
+                        let mut bundle = client.bundle_with_options(options.clone());
+                        bundle.push(claim.merge(deposit))?;
+                        let mut txn = client.store_transaction();
+                        for builder in bundle.into_builders() {
+                            txn = txn.merge(builder);
+                        }
+                        txn
+                    } else {
+                        let mut bundle = client.bundle_with_options(options.clone());
+                        bundle.push(claim)?;
+                        let mut txn = client.store_transaction();
+                        for builder in bundle.into_builders() {
+                            txn = txn.merge(builder);
+                        }
+                        txn
+                    }
                 } else {
-                    claim
+                    // Batch processing mode
+                    let min_value_per_batch = *min_value_per_batch;
+                    
+                    let markets = client.markets(store).await?;
+                    let mut claimable_fees = Vec::new();
+                    
+                    for (_, market) in markets {
+                        let market_model = MarketModel::from_parts(market.clone(), 1);
+                        if let Ok(fee_pool) = market_model.claimable_fee_pool() {
+                            if side.map_or(true, |s| s.is_long()) {
+                                if let Ok(amount) = fee_pool.amount(true) {
+                                    if amount > 0 {
+                                        claimable_fees.push((market.clone(), true, amount));
+                                    }
+                                }
+                            }
+                            if side.map_or(true, |s| !s.is_long()) {
+                                if let Ok(amount) = fee_pool.amount(false) {
+                                    if amount > 0 {
+                                        claimable_fees.push((market.clone(), false, amount));
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    let mut batches = Vec::new();
+                    let mut current_batch = Vec::new();
+                    let mut current_batch_value = Decimal::ZERO;
+                    
+                    for (market, is_long, amount) in claimable_fees {
+                        let token_mint = if is_long {
+                            &market.meta.long_token_mint
+                        } else {
+                            &market.meta.short_token_mint
+                        };
+                        
+                        let token_config = token_map
+                            .get(token_mint)
+                            .ok_or_eyre("token config not found")?;
+                            
+                        let decimals = token_config.token_decimals;
+                        let amount_decimal = Decimal::from(amount) / Decimal::from(10u64.pow(decimals as u32));
+                        
+                        if current_batch.len() >= batch.get() as usize {
+                            if current_batch_value >= min_value_per_batch.0 {
+                                batches.push(current_batch);
+                            }
+                            current_batch = Vec::new();
+                            current_batch_value = Decimal::ZERO;
+                        }
+                        
+                        current_batch.push((market.clone(), is_long, amount, token_mint.clone()));
+                        current_batch_value += amount_decimal;
+                    }
+                    
+                    if !current_batch.is_empty() && current_batch_value >= min_value_per_batch.0 {
+                        batches.push(current_batch);
+                    }
+
+                    let mut bundle = client.bundle_with_options(options.clone());
+                    let mut total_value = Decimal::ZERO;
+                    let mut claimed_tokens = HashMap::new();
+
+                    for batch in batches {
+                        let mut batch_builder = client.store_transaction();
+                        
+                        for (market, is_long, amount, token_mint) in batch {
+                            let claim = client.claim_fees_to_receiver_vault(
+                                store,
+                                &market.meta.market_token_mint,
+                                &token_mint,
+                                amount as u64,
+                            );
+                            batch_builder = batch_builder.merge(claim);
+                            
+                            *claimed_tokens.entry(token_mint).or_insert(0) += amount;
+                        }
+                        
+                        bundle.push(batch_builder)?;
+                    }
+
+                    if *deposit {
+                        let store_account = client.store(store).await?;
+                        let time_window = store_account.gt.exchange_time_window;
+                        
+                        for (token_mint, amount) in &claimed_tokens {
+                            let (deposit, _) = client
+                                .deposit_to_treasury_valut(
+                                    store,
+                                    None,
+                                    token_mint,
+                                    token_program_id.as_ref(),
+                                    time_window,
+                                )
+                                .await?
+                                .swap_output(());
+                            bundle.push(deposit)?;
+                        }
+                    }
+
+                    // Sort tokens by mint address for consistent output
+                    let mut sorted_tokens: Vec<_> = claimed_tokens.into_iter().collect();
+                    sorted_tokens.sort_by_key(|(mint, _)| *mint);
+
+                    println!("Total value claimed: {}", total_value);
+                    for (token_mint, amount) in sorted_tokens {
+                        let decimals = token_map
+                            .get(&token_mint)
+                            .ok_or_eyre("token config not found")?
+                            .token_decimals;
+                        let amount_decimal = Decimal::from(amount) / Decimal::from(10u64.pow(decimals as u32));
+                        println!("Token {}: {}", token_mint, Amount(amount_decimal));
+                    }
+
+                    let mut txn = client.store_transaction();
+                    for builder in bundle.into_builders() {
+                        txn = txn.merge(builder);
+                    }
+                    txn
                 }
             }
             Command::DepositToTreasury {
