@@ -58,7 +58,6 @@ impl InitializeCompetition<'_> {
         comp.authority = ctx.accounts.payer.key();
         comp.start_time = start_time;
         comp.end_time = end_time;
-        comp.is_active = true;
         comp.leaderboard = Vec::default();
         comp.volume_threshold = volume_threshold;
         comp.extension_duration = extension_duration;

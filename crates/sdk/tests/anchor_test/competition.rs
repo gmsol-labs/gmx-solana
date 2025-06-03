@@ -83,7 +83,6 @@ async fn competition() -> eyre::Result<()> {
         .account::<Competition>(&competition)
         .await?
         .expect("must exist");
-    assert!(competition_account.is_active);
     assert_eq!(competition_account.start_time, start_time);
     assert_eq!(competition_account.end_time, end_time);
     assert_eq!(competition_account.volume_threshold, volume_threshold);

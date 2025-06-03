@@ -38,8 +38,6 @@ pub struct Competition {
     pub start_time: i64,
     /// The competition end timestamp.
     pub end_time: i64,
-    /// Whether the competition is active.
-    pub is_active: bool,
     /// The fixed-length leaderboard.
     #[max_len(MAX_LEADERBOARD_LEN)]
     pub leaderboard: Vec<LeaderEntry>,
