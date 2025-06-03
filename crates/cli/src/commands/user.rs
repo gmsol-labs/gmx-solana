@@ -36,7 +36,7 @@ impl super::Command for User {
         let store = ctx.store();
         let options = ctx.bundle_options();
 
-        let bundle = match &self.command {
+        let txn = match &self.command {
             Command::Prepare => client.prepare_user(store)?,
             Command::InitReferralCode { code } => {
                 client.initialize_referral_code(store, ReferralCodeV2::decode(code)?)?
@@ -59,7 +59,7 @@ impl super::Command for User {
             }
         };
 
-        let bundle = bundle.into_bundle_with_options(options)?;
+        let bundle = txn.into_bundle_with_options(options)?;
         client.send_or_serialize(bundle).await?;
         Ok(())
     }
