@@ -109,9 +109,9 @@ pub struct OnExecuted<'info> {
     /// The action account.
     /// CHECK: this is just a placeholder.
     pub action: UncheckedAccount<'info>,
-    /// CHECK: this is just a placeholder
+    /// CHECK: this is just a placeholder.
     pub position: UncheckedAccount<'info>,
-    /// Trade event data
+    /// Trade event data.
     pub trade_event: Option<AccountLoader<'info, TradeData>>,
 }
 
@@ -150,7 +150,7 @@ impl OnExecuted<'_> {
             return Ok(());
         }
 
-        // Get volume from the trade event
+        // Get volume from the trade event.
         let Some(trade_event) = &ctx.accounts.trade_event else {
             msg!("competition: no trade event");
             return Ok(());
@@ -158,7 +158,13 @@ impl OnExecuted<'_> {
         let trade_event = trade_event.load()
             .map_err(|_| CompetitionError::InvalidTradeEvent)?;
 
-        // Calculate volume as the absolute difference between after and before size_in_usd
+        // Validate that the trade event belongs to the trader.
+        require!(
+            trade_event.authority == ctx.accounts.trader.key(),
+            CompetitionError::InvalidTradeEvent
+        );
+
+        // Calculate volume as the absolute difference between after and before size_in_usd.
         let volume = trade_event
             .after
             .size_in_usd
@@ -175,16 +181,16 @@ impl OnExecuted<'_> {
         part.volume = part.volume.saturating_add(volume);
         part.last_updated_at = now;
 
-        // Check if volume exceeds threshold and extend competition time if needed
+        // Check if volume exceeds threshold and extend competition time if needed.
         if volume >= comp.volume_threshold {
             let old_end_time = comp.end_time;
             let proposed_end_time = old_end_time.saturating_add(comp.extension_duration);
             let max_end_time = now.saturating_add(comp.extension_cap);
 
-            // Take the minimum of proposed end time and max end time
+            // Take the minimum of proposed end time and max end time.
             comp.end_time = proposed_end_time.min(max_end_time).max(old_end_time);
 
-            // Record the trigger address
+            // Record the trigger address.
             comp.extension_triggerer = Some(part.trader);
 
             debug_assert!(comp.end_time >= old_end_time);
