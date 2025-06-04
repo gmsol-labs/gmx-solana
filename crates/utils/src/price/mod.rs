@@ -1,7 +1,13 @@
 /// Decimal type for price.
 pub mod decimal;
 
-pub use self::decimal::{Decimal, DecimalError};
+/// Price Feed Price.
+pub mod feed_price;
+
+pub use self::{
+    decimal::{Decimal, DecimalError},
+    feed_price::PriceFeedPrice,
+};
 use anchor_lang::prelude::*;
 
 pub use ruint::aliases::U192;

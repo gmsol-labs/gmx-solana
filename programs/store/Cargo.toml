@@ -42,6 +42,7 @@ test-only = []
 gmsol-model = { workspace = true, features = ["u128", "solana", "strum"] }
 gmsol-utils = { workspace = true }
 gmsol-callback = { workspace = true, features = ["interface"] }
+gmsol-chainlink-datastreams = { workspace = true, features = ["gmsol"] }
 
 bytemuck = { workspace = true, features = ["min_const_generics"] }
 anchor-lang = { workspace = true, features = ["init-if-needed", "event-cpi"] }
@@ -68,7 +69,6 @@ bytes = { workspace = true, optional = true }
 typed-builder = { workspace = true }
 bs58 = { workspace = true, optional = true }
 derive_more = { workspace = true, optional = true }
-gmsol-chainlink-datastreams = { workspace = true }
 rust_decimal = { workspace = true }
 cfg-if = { workspace = true }
 

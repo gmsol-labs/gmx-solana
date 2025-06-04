@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Refactored `PriceFlag` into the `gmsol-utils` crate.
 - programs(store): Refactored `OracleFlag` into the `gmsol-utils` crate.
 - programs(store): Refactored `UserFlag` into the `gmsol-utils` crate.
+- programs(store): Refactroed `PriceFeedPrice` into the `gmsol-utils` crate.
 - programs(timelock): Refactored `InstructionFlag` into the `gmsol-utils` crate.
 - model: Added `paid_in_secondary_output_amount` and `is_collateral_token_long` parameters to the `on_insufficient_funding_fee_payment` function.
 - model: The `PoolDelta::price_impact` function now returns a `PriceImpact` structure that includes a `BalanceChange`, instead of just the price impact value.
@@ -65,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added list query methods for all remaining action types.
 - sdk(sdk): Added `IdlOps` to support IDL account operations and implemented it for `Client`.
 - sdk(sdk): Added `Borrow<Pubkey>` and `Display` implementations for `StringPubkey`.
+- sdk(chainlink-datastreams): Added `FromChainlinkReport` trait.
+- sdk(chainlink-datastreams): Added `FromChainlinkReport` implementation for `PriceFeedPrice` behind the `gmsol` feature.
 - just: Added the `cli` recipe for running the `gmsol` commands.
 
 ### Fixed

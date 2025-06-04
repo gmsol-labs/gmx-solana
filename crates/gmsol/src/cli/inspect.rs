@@ -1024,13 +1024,14 @@ impl InspectArgs {
                 watch,
             } => {
                 use gmsol::{chainlink::Client, types::PriceFeedPrice};
-                use gmsol_chainlink_datastreams::report::Report;
+                use gmsol_chainlink_datastreams::{report::Report, FromChainlinkReport};
                 use time::OffsetDateTime;
 
                 fn display_report(report: &Report) -> gmsol::Result<String> {
                     Ok(format!(
                         "{:#?}",
-                        PriceFeedPrice::from_chainlink_report(report)?
+                        PriceFeedPrice::from_chainlink_report(report)
+                            .map_err(gmsol::Error::unknown)?
                     ))
                 }
 

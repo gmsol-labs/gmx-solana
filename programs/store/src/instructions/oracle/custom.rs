@@ -135,7 +135,9 @@ impl<'info> internal::Authentication<'info> for UpdatePriceFeedWithChainlink<'in
 
 impl UpdatePriceFeedWithChainlink<'_> {
     fn decode_and_validate_report(&self, compressed_full_report: &[u8]) -> Result<PriceFeedPrice> {
-        use gmsol_chainlink_datastreams::report::decode_compressed_full_report;
+        use gmsol_chainlink_datastreams::{
+            report::decode_compressed_full_report, Error as ChainlinkError, FromChainlinkReport,
+        };
 
         let report = decode_compressed_full_report(compressed_full_report).map_err(|err| {
             msg!("[Decode Error] {}", err);
@@ -148,7 +150,15 @@ impl UpdatePriceFeedWithChainlink<'_> {
             CoreError::InvalidPriceReport
         );
 
-        PriceFeedPrice::from_chainlink_report(&report)
+        PriceFeedPrice::from_chainlink_report(&report).map_err(|err| {
+            msg!("Invalid report: {}", err);
+            let err = match err {
+                ChainlinkError::NegativePrice(_) => CoreError::NegativePriceIsNotSupported,
+                ChainlinkError::InvalidRange(_) => CoreError::InvalidPriceReport,
+                ChainlinkError::Overflow(_) => CoreError::PriceOverflow,
+            };
+            error!(err)
+        })
     }
 
     fn verify_report(&self, signed_report: Vec<u8>) -> Result<()> {

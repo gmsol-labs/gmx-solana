@@ -1,9 +1,6 @@
 use anchor_lang::prelude::*;
 use bytemuck::Zeroable;
-use gmsol_utils::{
-    price::{PriceFlag, MAX_PRICE_FLAG},
-    InitSpace,
-};
+use gmsol_utils::InitSpace;
 
 use crate::{
     states::{Seed, TokenConfig},
@@ -11,6 +8,8 @@ use crate::{
 };
 
 use super::PriceProviderKind;
+
+pub use gmsol_utils::price::feed_price::PriceFeedPrice;
 
 /// Custom Price Feed.
 #[account(zero_copy)]
@@ -83,15 +82,27 @@ impl PriceFeed {
             CoreError::PreconditionsAreNotMet
         );
 
-        require_gte!(price.ts, self.price.ts, CoreError::InvalidArgument);
+        require_gte!(price.ts(), self.price.ts(), CoreError::InvalidArgument);
         require_gte!(
             current_ts.saturating_add_unsigned(max_future_excess),
-            price.ts,
+            price.ts(),
             CoreError::InvalidArgument
         );
-        require_gte!(price.max_price, price.min_price, CoreError::InvalidArgument);
-        require_gte!(price.max_price, price.price, CoreError::InvalidArgument);
-        require_gte!(price.price, price.min_price, CoreError::InvalidArgument);
+        require_gte!(
+            *price.max_price(),
+            *price.min_price(),
+            CoreError::InvalidArgument
+        );
+        require_gte!(
+            *price.max_price(),
+            *price.price(),
+            CoreError::InvalidArgument
+        );
+        require_gte!(
+            *price.price(),
+            *price.min_price(),
+            CoreError::InvalidArgument
+        );
 
         self.last_published_at_slot = slot;
         self.last_published_at = current_ts;
@@ -136,7 +147,7 @@ impl PriceFeed {
         require_keys_eq!(self.feed_id, feed_id, CoreError::InvalidPriceFeedAccount);
         require!(self.price.is_market_open(), CoreError::MarketNotOpen);
 
-        let timestamp = self.price.ts;
+        let timestamp = self.price.ts();
         let current = clock.unix_timestamp;
         if current > timestamp && current - timestamp > token_config.heartbeat_duration().into() {
             return Err(CoreError::PriceFeedNotUpdated.into());
@@ -148,107 +159,8 @@ impl PriceFeed {
     }
 
     fn try_to_price(&self, token_config: &TokenConfig) -> Result<gmsol_utils::Price> {
-        self.price().try_to_price(token_config)
-    }
-}
-
-gmsol_utils::flags!(PriceFlag, MAX_PRICE_FLAG, u8);
-
-/// Price structure for Price Feed.
-#[zero_copy]
-#[cfg_attr(feature = "debug", derive(Debug))]
-pub struct PriceFeedPrice {
-    decimals: u8,
-    flags: PriceFlagContainer,
-    padding: [u8; 6],
-    ts: i64,
-    price: u128,
-    min_price: u128,
-    max_price: u128,
-}
-
-impl PriceFeedPrice {
-    /// Get ts.
-    pub fn ts(&self) -> i64 {
-        self.ts
-    }
-
-    /// Get min price.
-    pub fn min_price(&self) -> &u128 {
-        &self.min_price
-    }
-
-    /// Get max price.
-    pub fn max_price(&self) -> &u128 {
-        &self.max_price
-    }
-
-    /// Get price.
-    pub fn price(&self) -> &u128 {
-        &self.price
-    }
-
-    /// Is market open.
-    pub fn is_market_open(&self) -> bool {
-        self.flags.get_flag(PriceFlag::Open)
-    }
-
-    /// Try converting to [`Price`](gmsol_utils::Price).
-    pub fn try_to_price(&self, token_config: &TokenConfig) -> Result<gmsol_utils::Price> {
-        use gmsol_utils::price::{Decimal, Price};
-
-        let token_decimals = token_config.token_decimals();
-        let precision = token_config.precision();
-
-        let min = Decimal::try_from_price(self.min_price, self.decimals, token_decimals, precision)
-            .map_err(|_| error!(CoreError::InvalidPriceFeedPrice))?;
-
-        let max = Decimal::try_from_price(self.max_price, self.decimals, token_decimals, precision)
-            .map_err(|_| error!(CoreError::InvalidPriceFeedPrice))?;
-
-        Ok(Price { min, max })
-    }
-
-    /// Create from chainlink price report.
-    pub fn from_chainlink_report(
-        report: &gmsol_chainlink_datastreams::report::Report,
-    ) -> Result<Self> {
-        use gmsol_chainlink_datastreams::report::Report;
-        use gmsol_utils::price::{find_divisor_decimals, TEN, U192};
-
-        let price = report
-            .non_negative_price()
-            .ok_or_else(|| error!(CoreError::NegativePriceIsNotSupported))?;
-        let bid = report
-            .non_negative_bid()
-            .ok_or_else(|| error!(CoreError::NegativePriceIsNotSupported))?;
-        let ask = report
-            .non_negative_ask()
-            .ok_or_else(|| error!(CoreError::NegativePriceIsNotSupported))?;
-
-        require!(ask >= price, CoreError::InvalidPriceReport);
-        require!(price >= bid, CoreError::InvalidPriceReport);
-
-        let divisor_decimals = find_divisor_decimals(&ask);
-
-        require_gte!(Report::DECIMALS, divisor_decimals, CoreError::PriceOverflow);
-
-        let divisor = TEN.pow(U192::from(divisor_decimals));
-
-        debug_assert!(!divisor.is_zero());
-
-        let mut price = Self {
-            decimals: Report::DECIMALS - divisor_decimals,
-            flags: Default::default(),
-            padding: [0; 6],
-            ts: i64::from(report.observations_timestamp),
-            price: (price / divisor).try_into().unwrap(),
-            min_price: (bid / divisor).try_into().unwrap(),
-            max_price: (ask / divisor).try_into().unwrap(),
-        };
-
-        price.flags.set_flag(PriceFlag::Open, true);
-
-        Ok(price)
+        self.price()
+            .try_to_price(token_config)
+            .map_err(|_| error!(CoreError::InvalidPriceFeedPrice))
     }
 }

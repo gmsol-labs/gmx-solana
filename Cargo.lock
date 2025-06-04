@@ -2308,6 +2308,7 @@ dependencies = [
  "anchor-lang",
  "chainlink-data-streams-report",
  "gmsol-mock-chainlink-verifier",
+ "gmsol-utils",
  "hex",
  "num-bigint 0.4.6",
  "ruint",

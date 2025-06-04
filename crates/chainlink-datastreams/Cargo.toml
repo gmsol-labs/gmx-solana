@@ -10,8 +10,11 @@ readme.workspace = true
 
 [features]
 mock = []
+gmsol = ["gmsol-utils"]
 
 [dependencies]
+gmsol-utils = { workspace = true, optional = true }
+
 ruint = { workspace = true, default-features = false }
 hex = { workspace = true }
 gmsol-mock-chainlink-verifier = { workspace = true, features = ["cpi"] }
