@@ -87,7 +87,7 @@ impl CreateParticipantIdempotent<'_> {
         if p.trader == Pubkey::default() {
             let now = Clock::get()?.unix_timestamp;
             let trader = self.trader.key();
-            require_neq!(trader, Pubkey::default());
+            require_keys_neq!(trader, Pubkey::default());
 
             p.bump = bump;
             p.competition = self.competition.key();
