@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use std::num::NonZeroU8;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
+use std::num::NonZeroU8;
+use std::path::PathBuf;
 
 use crate::commands::utils::token_amount;
 use anchor_spl::{
@@ -10,20 +10,20 @@ use anchor_spl::{
     },
     token_interface::TokenAccount,
 };
-use eyre::{OptionExt, Result};
+use eyre::OptionExt;
 use gmsol_sdk::{
-    utils::{Amount, Lamport, Value},
-    core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
     client::ops::treasury::CreateTreasurySwapOptions,
-    core::token_config::{TokenFlag, TokenMapAccess},
+    client::pyth::{pubkey_to_identifier, Hermes},
+    core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
+    core::token_config::{TokenConfig, TokenFlag, TokenMapAccess},
     model::{BalanceExt, BaseMarket, MarketModel},
     ops::{system::SystemProgramOps, token_account::TokenAccountOps, treasury::TreasuryOps},
     programs::anchor_lang::prelude::Pubkey,
     serde::StringPubkey,
     solana_utils::bundle_builder::BundleOptions,
-    client::pyth::{pull_oracle::PythPullOracleWithHermes, Hermes, PythPullOracle, pubkey_to_identifier},
-    client::pull_oracle::{PullOraclePriceConsumer, WithPullOracle, PullOracle},
+    utils::{Amount, Lamport, Value},
 };
+use pyth_sdk::Identifier;
 
 /// Read and parse a TOML file into a type
 fn toml_from_file<T>(path: &impl AsRef<std::path::Path>) -> eyre::Result<T>
@@ -95,7 +95,7 @@ enum Command {
         min_amount: Amount,
         #[arg(long, default_value_t = Amount(Decimal::from(1000)))]
         min_value_per_batch: Amount,
-        #[arg(long, default_value_t = NonZeroU8::new(1).unwrap())]
+        #[arg(long, default_value_t = NonZeroU8::new(3).unwrap())]
         batch: NonZeroU8,
     },
     /// Deposit into treasury vault.
@@ -310,7 +310,8 @@ impl super::Command for Treasury {
                     // Batch processing mode
                     let markets = client.markets(store).await?;
                     let mut claimable_fees = Vec::new();
-                    
+
+                    // Step 1: Collect all market claimable fees
                     for (_, market) in markets {
                         let market_model = MarketModel::from_parts(market.clone(), 1);
                         if let Ok(fee_pool) = market_model.claimable_fee_pool() {
@@ -331,13 +332,19 @@ impl super::Command for Treasury {
                         }
                     }
 
+                    // Step 2: Fetch all prices from Pyth using Hermes
                     let hermes = Hermes::default();
                     let mut batches = Vec::new();
                     let mut current_batch = Vec::new();
                     let mut current_batch_value = Decimal::ZERO;
 
+                    // Helper function to get token config
+                    let get_token_config = |token_mint: &Pubkey| -> eyre::Result<&TokenConfig> {
+                        token_map
+                            .get(token_mint)
+                            .ok_or_eyre("token config not found")
+                    };
 
-                    // here is start
                     let mut feed_to_token = HashMap::new();
                     for (market, is_long, _) in &claimable_fees {
                         let token_mint = if *is_long {
@@ -346,25 +353,24 @@ impl super::Command for Treasury {
                             &market.meta.short_token_mint
                         };
 
-                        let token_config = token_map
-                            .get(token_mint)
-                            .ok_or_eyre("token config not found")?;
+                        let token_config = get_token_config(token_mint)?;
 
                         let feed = token_config
                             .get_feed(&PriceProviderKind::Pyth)
                             .map_err(|_| eyre::eyre!("no Pyth feed found for token"))?;
 
-                        feed_to_token.insert(pubkey_to_identifier(&feed), (token_mint.clone(), token_config.clone()));
+                        feed_to_token
+                            .insert(pubkey_to_identifier(&feed), (*token_mint, *token_config));
                     }
 
                     let feed_ids: Vec<_> = feed_to_token.keys().cloned().collect();
-                    let update = hermes
-                        .latest_price_updates(&feed_ids, None)
-                        .await?;
+                    let update = hermes.latest_price_updates(&feed_ids, None).await?;
 
+                    // Process price updates and create price mapping
                     let mut price_map = HashMap::new();
                     for price in update.parsed() {
-                        let feed_id = pubkey_to_identifier(&price.id().parse::<Pubkey>()?);
+                        let feed_id = Identifier::from_hex(price.id())
+                            .map_err(|e| eyre::eyre!("Failed to parse feed id: {}", e))?;
                         if let Some((token_mint, token_config)) = feed_to_token.get(&feed_id) {
                             let price = pyth_price_with_confidence_to_price(
                                 price.price().price(),
@@ -372,12 +378,11 @@ impl super::Command for Treasury {
                                 price.price().expo(),
                                 token_config,
                             )?;
-                            price_map.insert(token_mint.clone(), price);
+                            price_map.insert(*token_mint, price);
                         }
                     }
 
-                    // here is end
-
+                    // Step 3: Build transaction batches based on min_value_per_batch and batch size
                     for (market, is_long, amount) in claimable_fees {
                         let token_mint = if is_long {
                             &market.meta.long_token_mint
@@ -385,37 +390,16 @@ impl super::Command for Treasury {
                             &market.meta.short_token_mint
                         };
 
-                        let token_config = token_map
+                        let token_config = get_token_config(token_mint)?;
+                        let amount = Amount::from_u64(amount as u64, token_config.token_decimals);
+                        let price = price_map
                             .get(token_mint)
-                            .ok_or_eyre("token config not found")?;
+                            .ok_or_eyre("price not found in price map")?;
 
-                        let decimals = token_config.token_decimals;
-                        let amount_decimal = Decimal::from(amount) / Decimal::from(10u64.pow(decimals as u32));
+                        // Calculate value using the price directly since it's already properly scaled
+                        let token_value = amount.0 * Decimal::from(price.min.value);
 
-                        // Get price from Hermes
-                        let feed = token_config
-                            .get_feed(&PriceProviderKind::Pyth)
-                            .map_err(|_| eyre::eyre!("no Pyth feed found for token"))?;
-
-                        let update = hermes
-                            .latest_price_updates(&[gmsol_sdk::client::pyth::pubkey_to_identifier(&feed)], None)
-                            .await?;
-
-                        let price = update
-                            .parsed()
-                            .iter()
-                            .find(|p| p.id() == gmsol_sdk::client::pyth::pubkey_to_identifier(&feed).to_hex())
-                            .ok_or_eyre("price not found in update")?;
-
-                        let price = pyth_price_with_confidence_to_price(
-                            price.price().price(),
-                            price.price().conf(),
-                            price.price().expo(),
-                            token_config,
-                        )?;
-
-                        let token_value = amount_decimal * Decimal::from(price.min.to_unit_price());
-
+                        // Create new batch if current batch is full or exceeds min_value_per_batch
                         if (current_batch.len() >= batch.get() as usize
                             || (current_batch_value + token_value) >= min_value_per_batch.0)
                             && !current_batch.is_empty()
@@ -433,13 +417,13 @@ impl super::Command for Treasury {
                         batches.push(current_batch);
                     }
 
+                    // Step 4: Build bundle with claim transactions and optional deposit instructions
                     let mut bundle = client.bundle_with_options(options.clone());
-                    let mut total_value = Decimal::ZERO;
                     let mut claimed_tokens = HashMap::new();
 
                     for batch in batches {
                         let mut batch_builder = client.store_transaction();
-                        
+
                         for (market, is_long, amount) in batch {
                             let token_mint = if is_long {
                                 &market.meta.long_token_mint
@@ -447,25 +431,29 @@ impl super::Command for Treasury {
                                 &market.meta.short_token_mint
                             };
 
+                            let token_config = get_token_config(token_mint)?;
+
                             let claim = client.claim_fees_to_receiver_vault(
                                 store,
                                 &market.meta.market_token_mint,
                                 token_mint,
-                                amount as u64,
+                                amount.to_u64(token_config.token_decimals)?,
                             );
                             batch_builder = batch_builder.merge(claim);
-                            
-                            *claimed_tokens.entry(token_mint.clone()).or_insert(0) += amount;
+
+                            *claimed_tokens.entry(*token_mint).or_insert(0) +=
+                                amount.to_u64(token_config.token_decimals)?;
                         }
-                        
+
                         bundle.push(batch_builder)?;
                     }
 
+                    // Add deposit instructions if --deposit is specified
                     if *deposit {
                         let store_account = client.store(store).await?;
                         let time_window = store_account.gt.exchange_time_window;
-                        
-                        for (token_mint, amount) in &claimed_tokens {
+
+                        for token_mint in claimed_tokens.keys() {
                             let (deposit, _) = client
                                 .deposit_to_treasury_valut(
                                     store,
@@ -480,48 +468,27 @@ impl super::Command for Treasury {
                         }
                     }
 
-                    // Sort tokens by mint address for consistent output
+                    // Step 5: Display claimed values and token amounts in human-readable format
                     let mut sorted_tokens: Vec<_> = claimed_tokens.into_iter().collect();
                     sorted_tokens.sort_by_key(|(mint, _)| *mint);
 
-                    // Calculate total value using Hermes prices
                     let mut total_value = Decimal::ZERO;
                     for (token_mint, amount) in &sorted_tokens {
-                        let token_config = token_map
+                        let token_config = get_token_config(token_mint)?;
+                        let amount = Amount::from_u64(*amount, token_config.token_decimals);
+                        let price = price_map
                             .get(token_mint)
-                            .ok_or_eyre("token config not found")?;
+                            .ok_or_eyre("price not found in price map")?;
 
-                        let decimals = token_config.token_decimals;
-                        let amount_decimal = Decimal::from(*amount) / Decimal::from(10u64.pow(decimals as u32));
-
-                        // Get price from Hermes
-                        let feed = token_config
-                            .get_feed(&PriceProviderKind::Pyth)
-                            .map_err(|_| eyre::eyre!("no Pyth feed found for token"))?;
-
-                        let update = hermes
-                            .latest_price_updates(&[gmsol_sdk::client::pyth::pubkey_to_identifier(&feed)], None)
-                            .await?;
-
-                        let price = update
-                            .parsed()
-                            .iter()
-                            .find(|p| p.id() == gmsol_sdk::client::pyth::pubkey_to_identifier(&feed).to_hex())
-                            .ok_or_eyre("price not found in update")?;
-
-                        let price = pyth_price_with_confidence_to_price(
-                            price.price().price(),
-                            price.price().conf(),
-                            price.price().expo(),
-                            token_config,
-                        )?;
-
-                        let token_value = amount_decimal * Decimal::from(price.min.to_unit_price());
+                        // Calculate value using the price directly since it's already properly scaled
+                        let token_value = amount.0 * Decimal::from(price.min.value);
                         total_value += token_value;
 
-                        println!("Token {}: {} (Value: ${})", 
-                            token_mint, 
-                            Amount(amount_decimal),
+                        println!(
+                            "Token {}: {} (Price: ${}, Value: ${})",
+                            token_mint,
+                            amount,
+                            Amount(Decimal::from(price.min.value)),
                             Amount(token_value)
                         );
                     }
