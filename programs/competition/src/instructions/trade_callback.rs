@@ -155,7 +155,8 @@ impl OnExecuted<'_> {
             msg!("competition: no trade event");
             return Ok(());
         };
-        let trade_event = trade_event.load()?;
+        let trade_event = trade_event.load()
+            .map_err(|_| CompetitionError::InvalidTradeEvent)?;
 
         // Calculate volume as the absolute difference between after and before size_in_usd
         let volume = trade_event
