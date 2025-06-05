@@ -13,7 +13,7 @@ use anchor_spl::{
 use eyre::OptionExt;
 use gmsol_sdk::{
     client::ops::treasury::CreateTreasurySwapOptions,
-    client::pyth::{pubkey_to_identifier, Hermes},
+    client::pyth::{pubkey_to_identifier, Hermes, pull_oracle::hermes::Identifier},
     core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
     core::token_config::{TokenConfig, TokenFlag, TokenMapAccess},
     model::{BalanceExt, BaseMarket, MarketModel},
@@ -23,7 +23,6 @@ use gmsol_sdk::{
     solana_utils::bundle_builder::BundleOptions,
     utils::{Amount, Lamport, Value},
 };
-use pyth_sdk::Identifier;
 
 /// Read and parse a TOML file into a type
 fn toml_from_file<T>(path: &impl AsRef<std::path::Path>) -> eyre::Result<T>
@@ -468,40 +467,43 @@ impl super::Command for Treasury {
                         }
                     }
 
-                    // Step 5: Display claimed values and token amounts in human-readable format
-                    let mut sorted_tokens: Vec<_> = claimed_tokens.into_iter().collect();
-                    sorted_tokens.sort_by_key(|(mint, _)| *mint);
+                   // Step 5: Display claimed values and token amounts in human-readable format
+                   let mut sorted_tokens: Vec<_> = claimed_tokens.into_iter().collect();
+                   sorted_tokens.sort_by_key(|(mint, _)| *mint);
 
-                    let mut total_value = Decimal::ZERO;
-                    for (token_mint, amount) in &sorted_tokens {
-                        let token_config = get_token_config(token_mint)?;
-                        let amount = Amount::from_u64(*amount, token_config.token_decimals);
-                        let price = price_map
-                            .get(token_mint)
-                            .ok_or_eyre("price not found in price map")?;
+                   let mut total_value = 0 as u128;
+                   for (token_mint, amount) in &sorted_tokens {
+                       let token_config = get_token_config(token_mint)?;
+                       // let amount = Amount::from_u64(*amount, token_config.token_decimals);
+                       let amount = *amount as u128;
+                       let price = price_map
+                           .get(token_mint)
+                           .ok_or_eyre("price not found in price map")?;
 
-                        // Calculate value using the price directly since it's already properly scaled
-                        let token_value = amount.0 * Decimal::from(price.min.value);
-                        total_value += token_value;
+                       // Calculate value using the price directly since it's already properly scaled
+                       let unit_price = price.min.to_unit_price();
+                       let token_value = amount * unit_price;
+                       total_value += token_value;
 
-                        println!(
-                            "Token {}: {} (Price: ${}, Value: ${})",
-                            token_mint,
-                            amount,
-                            Amount(Decimal::from(price.min.value)),
-                            Amount(token_value)
-                        );
-                    }
+                       println!(
+                           "Token {}: {} (Price: ${}, Raw Price: {}, Value: ${}, Precision: {})",
+                           token_mint,
+                           amount,
+                           Amount(Decimal::from(unit_price)),
+                           unit_price,
+                           Value::from_u128(token_value),
+                           token_config.precision()
+                       );
+                   }
 
-                    println!("Total value claimed: ${}", Amount(total_value));
+                   println!("Total value claimed: ${}", Value::from_u128(total_value));
 
-                    let mut txn = client.store_transaction();
-                    for builder in bundle.into_builders() {
-                        txn = txn.merge(builder);
-                    }
-                    txn
-                }
-            }
+                   // Process each transaction independently
+                   let bundle = client.bundle_with_options(options.clone());
+                   client.send_or_serialize(bundle).await?;
+                   return Ok(());
+               }
+           }
             Command::DepositToTreasury {
                 token_mint,
                 token_program_id,
