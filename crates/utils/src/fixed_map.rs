@@ -43,6 +43,12 @@ macro_rules! fixed_map {
                 count: u32,
             }
 
+            impl Default for $map {
+                fn default() -> Self {
+                    bytemuck::Zeroable::zeroed()
+                }
+            }
+
             $crate::impl_fixed_map!($map, $key_len, $key, $to_key, $value, $len);
         }
     };
@@ -69,12 +75,6 @@ macro_rules! impl_fixed_map {
                 std::mem::size_of::<$map>(),
                 <$map as $crate::InitSpace>::INIT_SPACE
             );
-
-            impl Default for $map {
-                fn default() -> Self {
-                    bytemuck::Zeroable::zeroed()
-                }
-            }
 
             #[allow(dead_code)]
             impl $map {
