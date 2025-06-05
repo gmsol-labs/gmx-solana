@@ -159,8 +159,9 @@ impl OnExecuted<'_> {
             .map_err(|_| CompetitionError::InvalidTradeEvent)?;
 
         // Validate that the trade event belongs to the trader.
-        require!(
-            trade_event.user == ctx.accounts.trader.key(),
+        require_keys_eq!(
+            trade_event.user,
+            ctx.accounts.trader.key(),
             CompetitionError::InvalidTradeEvent
         );
 
