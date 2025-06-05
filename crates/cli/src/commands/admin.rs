@@ -15,6 +15,8 @@ pub struct Admin {
 enum Command {
     /// Display member table.
     Members,
+    /// Display role table.
+    Roles,
     /// Initialize callback authority.
     InitCallbackAuthority,
 }
@@ -81,6 +83,31 @@ impl super::Command for Admin {
                             ("pubkey", "Member"),
                             ("roles", "Roles")
                         ])
+                    )?
+                );
+                return Ok(());
+            }
+            Command::Roles => {
+                let store = client.store(store).await?;
+                let role_store = &store.role;
+                let roles = role_store
+                    .roles()
+                    .enumerate()
+                    .map(|(idx, res)| {
+                        res.map(|name| {
+                            serde_json::json!({
+                                "index": idx,
+                                "role": name,
+                            })
+                        })
+                        .map_err(eyre::Error::from)
+                    })
+                    .collect::<eyre::Result<Vec<_>>>()?;
+                println!(
+                    "{}",
+                    output.display_many(
+                        roles,
+                        DisplayOptions::table_projection([("index", "Index"), ("role", "Role")])
                     )?
                 );
                 return Ok(());
