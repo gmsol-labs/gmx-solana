@@ -1,5 +1,4 @@
 use rust_decimal::Decimal;
-use std::collections::HashMap;
 use std::num::NonZeroU8;
 use std::path::PathBuf;
 
@@ -13,15 +12,24 @@ use anchor_spl::{
 use eyre::OptionExt;
 use gmsol_sdk::{
     client::ops::treasury::CreateTreasurySwapOptions,
-    client::pyth::{pubkey_to_identifier, pull_oracle::hermes::Identifier, Hermes},
-    core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
-    core::token_config::{TokenConfig, TokenFlag, TokenMapAccess},
+    core::token_config::{TokenFlag, TokenMapAccess},
     model::{BalanceExt, BaseMarket, MarketModel},
     ops::{system::SystemProgramOps, token_account::TokenAccountOps, treasury::TreasuryOps},
     programs::anchor_lang::prelude::Pubkey,
     serde::StringPubkey,
     solana_utils::bundle_builder::BundleOptions,
     utils::{Amount, Lamport, Value},
+};
+
+#[cfg(feature = "execute")]
+use {
+    std::collections::HashMap,
+    gmsol_sdk::{
+        client::pyth::{pubkey_to_identifier, pull_oracle::hermes::Identifier, Hermes},
+        core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
+        core::token_config::TokenConfig,
+    },
+    crate::commands::exchange::executor,
 };
 
 /// Read and parse a TOML file into a type
@@ -35,8 +43,8 @@ where
     toml::from_str(&buffer).map_err(|e| eyre::eyre!("Failed to parse TOML: {}", e))
 }
 
-#[cfg(feature = "execute")]
-use crate::commands::exchange::executor;
+// #[cfg(feature = "execute")]
+// use crate::commands::exchange::executor;
 
 /// Treasury management commands.
 #[derive(Debug, clap::Args)]
@@ -305,125 +313,49 @@ impl super::Command for Treasury {
                         bundle
                     }
                 } else {
-                    // Batch processing mode
-                    let markets = client.markets(store).await?;
-                    let mut claimable_fees = Vec::new();
+                    #[cfg(feature = "execute")]
+                    {
+                        // Batch processing mode with Pyth support
+                        let markets = client.markets(store).await?;
+                        let mut claimable_fees = Vec::new();
 
-                    // Step 1: Collect all market claimable fees
-                    for (_, market) in markets {
-                        let market_model = MarketModel::from_parts(market.clone(), 1);
-                        if let Ok(fee_pool) = market_model.claimable_fee_pool() {
-                            if side.map_or(true, |s| s.is_long()) {
-                                if let Ok(amount) = fee_pool.amount(true) {
-                                    if amount > 0 {
-                                        claimable_fees.push((market.clone(), true, amount));
+                        // Step 1: Collect all market claimable fees
+                        for (_, market) in markets {
+                            let market_model = MarketModel::from_parts(market.clone(), 1);
+                            if let Ok(fee_pool) = market_model.claimable_fee_pool() {
+                                if side.map_or(true, |s| s.is_long()) {
+                                    if let Ok(amount) = fee_pool.amount(true) {
+                                        if amount > 0 {
+                                            claimable_fees.push((market.clone(), true, amount));
+                                        }
+                                    }
+                                }
+                                if side.map_or(true, |s| !s.is_long()) {
+                                    if let Ok(amount) = fee_pool.amount(false) {
+                                        if amount > 0 {
+                                            claimable_fees.push((market.clone(), false, amount));
+                                        }
                                     }
                                 }
                             }
-                            if side.map_or(true, |s| !s.is_long()) {
-                                if let Ok(amount) = fee_pool.amount(false) {
-                                    if amount > 0 {
-                                        claimable_fees.push((market.clone(), false, amount));
-                                    }
-                                }
-                            }
                         }
-                    }
 
-                    // Step 2: Fetch all prices from Pyth using Hermes
-                    let hermes = Hermes::default();
-                    let mut batches = Vec::new();
-                    let mut current_batch = Vec::new();
-                    let mut current_batch_value = Decimal::ZERO;
+                        // Step 2: Fetch all prices from Pyth using Hermes
+                        let hermes = Hermes::default();
+                        let mut batches = Vec::new();
+                        let mut current_batch = Vec::new();
+                        let mut current_batch_value = Decimal::ZERO;
 
-                    // Helper function to get token config
-                    let get_token_config = |token_mint: &Pubkey| -> eyre::Result<&TokenConfig> {
-                        token_map
-                            .get(token_mint)
-                            .ok_or_eyre("token config not found")
-                    };
-
-                    let mut feed_to_token = HashMap::new();
-                    for (market, is_long, _) in &claimable_fees {
-                        let token_mint = if *is_long {
-                            &market.meta.long_token_mint
-                        } else {
-                            &market.meta.short_token_mint
+                        // Helper function to get token config
+                        let get_token_config = |token_mint: &Pubkey| -> eyre::Result<&TokenConfig> {
+                            token_map
+                                .get(token_mint)
+                                .ok_or_eyre("token config not found")
                         };
 
-                        let token_config = get_token_config(token_mint)?;
-
-                        let feed = token_config
-                            .get_feed(&PriceProviderKind::Pyth)
-                            .map_err(|_| eyre::eyre!("no Pyth feed found for token"))?;
-
-                        feed_to_token
-                            .insert(pubkey_to_identifier(&feed), (*token_mint, *token_config));
-                    }
-
-                    let feed_ids: Vec<_> = feed_to_token.keys().cloned().collect();
-                    let update = hermes.latest_price_updates(&feed_ids, None).await?;
-
-                    // Process price updates and create price mapping
-                    let mut price_map = HashMap::new();
-                    for price in update.parsed() {
-                        let feed_id = Identifier::from_hex(price.id())
-                            .map_err(|e| eyre::eyre!("Failed to parse feed id: {}", e))?;
-                        if let Some((token_mint, token_config)) = feed_to_token.get(&feed_id) {
-                            let price = pyth_price_with_confidence_to_price(
-                                price.price().price(),
-                                price.price().conf(),
-                                price.price().expo(),
-                                token_config,
-                            )?;
-                            price_map.insert(*token_mint, price);
-                        }
-                    }
-
-                    // Step 3: Build transaction batches based on min_value_per_batch and batch size
-                    for (market, is_long, amount) in claimable_fees {
-                        let token_mint = if is_long {
-                            &market.meta.long_token_mint
-                        } else {
-                            &market.meta.short_token_mint
-                        };
-
-                        let token_config = get_token_config(token_mint)?;
-                        let amount = Amount::from_u64(amount as u64, token_config.token_decimals);
-                        let price = price_map
-                            .get(token_mint)
-                            .ok_or_eyre("price not found in price map")?;
-
-                        // Calculate value using the price directly since it's already properly scaled
-                        let token_value = amount.0 * Decimal::from(price.min.value);
-
-                        // Create new batch if current batch is full or exceeds min_value_per_batch
-                        if (current_batch.len() >= batch.get() as usize
-                            || (current_batch_value + token_value) >= min_value_per_batch.0)
-                            && !current_batch.is_empty()
-                        {
-                            batches.push(current_batch);
-                            current_batch = Vec::new();
-                            current_batch_value = Decimal::ZERO;
-                        }
-
-                        current_batch.push((market, is_long, amount));
-                        current_batch_value += token_value;
-                    }
-
-                    if !current_batch.is_empty() {
-                        batches.push(current_batch);
-                    }
-
-                    // Step 4: Build bundle with claim transactions and optional deposit instructions
-                    let mut bundle = client.bundle_with_options(options.clone());
-                    let mut claimed_tokens = HashMap::new();
-
-                    for batch in batches {
-                        let mut batch_builder = client.store_transaction();
-
-                        for (market, is_long, amount) in batch {
-                            let token_mint = if is_long {
+                        let mut feed_to_token = HashMap::new();
+                        for (market, is_long, _) in &claimable_fees {
+                            let token_mint = if *is_long {
                                 &market.meta.long_token_mint
                             } else {
                                 &market.meta.short_token_mint
@@ -431,73 +363,155 @@ impl super::Command for Treasury {
 
                             let token_config = get_token_config(token_mint)?;
 
-                            let claim = client.claim_fees_to_receiver_vault(
-                                store,
-                                &market.meta.market_token_mint,
-                                token_mint,
-                                amount.to_u64(token_config.token_decimals)?,
-                            );
-                            batch_builder = batch_builder.merge(claim);
+                            let feed = token_config
+                                .get_feed(&PriceProviderKind::Pyth)
+                                .map_err(|_| eyre::eyre!("no Pyth feed found for token"))?;
 
-                            *claimed_tokens.entry(*token_mint).or_insert(0) +=
-                                amount.to_u64(token_config.token_decimals)?;
+                            feed_to_token
+                                .insert(pubkey_to_identifier(&feed), (*token_mint, *token_config));
                         }
 
-                        bundle.push(batch_builder)?;
-                    }
+                        let feed_ids: Vec<_> = feed_to_token.keys().cloned().collect();
+                        let update = hermes.latest_price_updates(&feed_ids, None).await?;
 
-                    // Add deposit instructions if --deposit is specified
-                    if *deposit {
-                        let store_account = client.store(store).await?;
-                        let time_window = store_account.gt.exchange_time_window;
+                        // Process price updates and create price mapping
+                        let mut price_map = HashMap::new();
+                        for price in update.parsed() {
+                            let feed_id = Identifier::from_hex(price.id())
+                                .map_err(|e| eyre::eyre!("Failed to parse feed id: {}", e))?;
+                            if let Some((token_mint, token_config)) = feed_to_token.get(&feed_id) {
+                                let price = pyth_price_with_confidence_to_price(
+                                    price.price().price(),
+                                    price.price().conf(),
+                                    price.price().expo(),
+                                    token_config,
+                                )?;
+                                price_map.insert(*token_mint, price);
+                            }
+                        }
 
-                        for token_mint in claimed_tokens.keys() {
-                            let (deposit, _) = client
-                                .deposit_to_treasury_valut(
+                        // Step 3: Build transaction batches based on min_value_per_batch and batch size
+                        for (market, is_long, amount) in claimable_fees {
+                            let token_mint = if is_long {
+                                &market.meta.long_token_mint
+                            } else {
+                                &market.meta.short_token_mint
+                            };
+
+                            let token_config = get_token_config(token_mint)?;
+                            let amount = Amount::from_u64(amount as u64, token_config.token_decimals);
+                            let price = price_map
+                                .get(token_mint)
+                                .ok_or_eyre("price not found in price map")?;
+
+                            // Calculate value using the price directly since it's already properly scaled
+                            let token_value = amount.0 * Decimal::from(price.min.value);
+
+                            // Create new batch if current batch is full or exceeds min_value_per_batch
+                            if (current_batch.len() >= batch.get() as usize
+                                || (current_batch_value + token_value) >= min_value_per_batch.0)
+                                && !current_batch.is_empty()
+                            {
+                                batches.push(current_batch);
+                                current_batch = Vec::new();
+                                current_batch_value = Decimal::ZERO;
+                            }
+
+                            current_batch.push((market, is_long, amount));
+                            current_batch_value += token_value;
+                        }
+
+                        if !current_batch.is_empty() {
+                            batches.push(current_batch);
+                        }
+
+                        // Step 4: Build bundle with claim transactions and optional deposit instructions
+                        let mut bundle = client.bundle_with_options(options.clone());
+                        let mut claimed_tokens = HashMap::new();
+
+                        for batch in batches {
+                            let mut batch_builder = client.store_transaction();
+
+                            for (market, is_long, amount) in batch {
+                                let token_mint = if is_long {
+                                    &market.meta.long_token_mint
+                                } else {
+                                    &market.meta.short_token_mint
+                                };
+
+                                let token_config = get_token_config(token_mint)?;
+
+                                let claim = client.claim_fees_to_receiver_vault(
                                     store,
-                                    None,
+                                    &market.meta.market_token_mint,
                                     token_mint,
-                                    token_program_id.as_ref(),
-                                    time_window,
-                                )
-                                .await?
-                                .swap_output(());
-                            bundle.push(deposit)?;
+                                    amount.to_u64(token_config.token_decimals)?,
+                                );
+                                batch_builder = batch_builder.merge(claim);
+
+                                *claimed_tokens.entry(*token_mint).or_insert(0) +=
+                                    amount.to_u64(token_config.token_decimals)?;
+                            }
+
+                            bundle.push(batch_builder)?;
                         }
+
+                        // Add deposit instructions if --deposit is specified
+                        if *deposit {
+                            let store_account = client.store(store).await?;
+                            let time_window = store_account.gt.exchange_time_window;
+
+                            for token_mint in claimed_tokens.keys() {
+                                let (deposit, _) = client
+                                    .deposit_to_treasury_valut(
+                                        store,
+                                        None,
+                                        token_mint,
+                                        token_program_id.as_ref(),
+                                        time_window,
+                                    )
+                                    .await?
+                                    .swap_output(());
+                                bundle.push(deposit)?;
+                            }
+                        }
+
+                        // Step 5: Display claimed values and token amounts in human-readable format
+                        let mut sorted_tokens: Vec<_> = claimed_tokens.into_iter().collect();
+                        sorted_tokens.sort_by_key(|(mint, _)| *mint);
+
+                        let mut total_value = 0 as u128;
+                        for (token_mint, amount) in &sorted_tokens {
+                            let token_config = get_token_config(token_mint)?;
+                            let amount = *amount as u128;
+                            let price = price_map
+                                .get(token_mint)
+                                .ok_or_eyre("price not found in price map")?;
+
+                            // Calculate value using the price directly since it's already properly scaled
+                            let unit_price = price.min.to_unit_price();
+                            let token_value = amount * unit_price;
+                            total_value += token_value;
+
+                            println!(
+                                "Token {}: {} (Price: ${}, Raw Price: {}, Value: ${}, Precision: {})",
+                                token_mint,
+                                amount,
+                                Amount(Decimal::from(unit_price)),
+                                unit_price,
+                                Value::from_u128(token_value),
+                                token_config.precision()
+                            );
+                        }
+
+                        println!("Total value claimed: ${}", Value::from_u128(total_value));
+
+                        bundle
                     }
-
-                    // Step 5: Display claimed values and token amounts in human-readable format
-                    let mut sorted_tokens: Vec<_> = claimed_tokens.into_iter().collect();
-                    sorted_tokens.sort_by_key(|(mint, _)| *mint);
-
-                    let mut total_value = 0 as u128;
-                    for (token_mint, amount) in &sorted_tokens {
-                        let token_config = get_token_config(token_mint)?;
-                        // let amount = Amount::from_u64(*amount, token_config.token_decimals);
-                        let amount = *amount as u128;
-                        let price = price_map
-                            .get(token_mint)
-                            .ok_or_eyre("price not found in price map")?;
-
-                        // Calculate value using the price directly since it's already properly scaled
-                        let unit_price = price.min.to_unit_price();
-                        let token_value = amount * unit_price;
-                        total_value += token_value;
-
-                        println!(
-                            "Token {}: {} (Price: ${}, Raw Price: {}, Value: ${}, Precision: {})",
-                            token_mint,
-                            amount,
-                            Amount(Decimal::from(unit_price)),
-                            unit_price,
-                            Value::from_u128(token_value),
-                            token_config.precision()
-                        );
+                    #[cfg(not(feature = "execute"))]
+                    {
+                        return Err(eyre::eyre!("Batch processing mode requires the 'execute' feature to be enabled"));
                     }
-
-                    println!("Total value claimed: ${}", Value::from_u128(total_value));
-
-                    bundle
                 }
             }
             Command::DepositToTreasury {
