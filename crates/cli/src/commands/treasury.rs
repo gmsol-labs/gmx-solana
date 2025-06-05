@@ -13,7 +13,7 @@ use anchor_spl::{
 use eyre::OptionExt;
 use gmsol_sdk::{
     client::ops::treasury::CreateTreasurySwapOptions,
-    client::pyth::{pubkey_to_identifier, Hermes, pull_oracle::hermes::Identifier},
+    client::pyth::{pubkey_to_identifier, pull_oracle::hermes::Identifier, Hermes},
     core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
     core::token_config::{TokenConfig, TokenFlag, TokenMapAccess},
     model::{BalanceExt, BaseMarket, MarketModel},
@@ -178,37 +178,41 @@ impl super::Command for Treasury {
         let options = ctx.bundle_options();
         let token_map = client.authorized_token_map(store).await?;
 
-        let txn = match &self.command {
+        let bundle = match &self.command {
             Command::InitConfig => {
                 let (rpc, config) = client.initialize_config(store).swap_output(());
                 println!("{config}");
-                rpc
+                rpc.into_bundle_with_options(options)?
             }
             Command::InitTreasury { index } => {
                 let (rpc, address) = client
                     .initialize_treasury_vault_config(store, *index)
                     .swap_output(());
                 println!("{address}");
-                rpc
+                rpc.into_bundle_with_options(options)?
             }
-            Command::TransferReceiver { new_receiver } => {
-                client.transfer_receiver(store, new_receiver)
-            }
+            Command::TransferReceiver { new_receiver } => client
+                .transfer_receiver(store, new_receiver)
+                .into_bundle_with_options(options)?,
             Command::SetTreasury {
                 treasury_vault_config,
-            } => client.set_treasury_vault_config(store, treasury_vault_config),
-            Command::SetGtFactor { factor } => client.set_gt_factor(store, factor.to_u128()?)?,
-            Command::SetBuybackFactor { factor } => {
-                client.set_buyback_factor(store, factor.to_u128()?)?
-            }
-            Command::InsertToken { token } => {
-                client.insert_token_to_treasury(store, None, token).await?
-            }
-            Command::RemoveToken { token } => {
-                client
-                    .remove_token_from_treasury(store, None, token)
-                    .await?
-            }
+            } => client
+                .set_treasury_vault_config(store, treasury_vault_config)
+                .into_bundle_with_options(options)?,
+            Command::SetGtFactor { factor } => client
+                .set_gt_factor(store, factor.to_u128()?)?
+                .into_bundle_with_options(options)?,
+            Command::SetBuybackFactor { factor } => client
+                .set_buyback_factor(store, factor.to_u128()?)?
+                .into_bundle_with_options(options)?,
+            Command::InsertToken { token } => client
+                .insert_token_to_treasury(store, None, token)
+                .await?
+                .into_bundle_with_options(options)?,
+            Command::RemoveToken { token } => client
+                .remove_token_from_treasury(store, None, token)
+                .await?
+                .into_bundle_with_options(options)?,
             Command::ToggleTokenFlag {
                 token,
                 flag,
@@ -220,6 +224,7 @@ impl super::Command for Treasury {
                 client
                     .toggle_token_flag(store, None, token, *flag, value)
                     .await?
+                    .into_bundle_with_options(options)?
             }
             Command::SetReferralReward { factors } => {
                 if factors.is_empty() {
@@ -229,7 +234,9 @@ impl super::Command for Treasury {
                     .iter()
                     .map(|f| f.to_u128().map_err(eyre::Report::from))
                     .collect::<eyre::Result<Vec<_>>>()?;
-                client.set_referral_reward(store, factors)
+                client
+                    .set_referral_reward(store, factors)
+                    .into_bundle_with_options(options)?
             }
             Command::Receiver => {
                 let config = client.find_treasury_config_address(store);
@@ -291,19 +298,11 @@ impl super::Command for Treasury {
                         println!("{gt_exchange_vault}");
                         let mut bundle = client.bundle_with_options(options.clone());
                         bundle.push(claim.merge(deposit))?;
-                        let mut txn = client.store_transaction();
-                        for builder in bundle.into_builders() {
-                            txn = txn.merge(builder);
-                        }
-                        txn
+                        bundle
                     } else {
                         let mut bundle = client.bundle_with_options(options.clone());
                         bundle.push(claim)?;
-                        let mut txn = client.store_transaction();
-                        for builder in bundle.into_builders() {
-                            txn = txn.merge(builder);
-                        }
-                        txn
+                        bundle
                     }
                 } else {
                     // Batch processing mode
@@ -467,43 +466,40 @@ impl super::Command for Treasury {
                         }
                     }
 
-                   // Step 5: Display claimed values and token amounts in human-readable format
-                   let mut sorted_tokens: Vec<_> = claimed_tokens.into_iter().collect();
-                   sorted_tokens.sort_by_key(|(mint, _)| *mint);
+                    // Step 5: Display claimed values and token amounts in human-readable format
+                    let mut sorted_tokens: Vec<_> = claimed_tokens.into_iter().collect();
+                    sorted_tokens.sort_by_key(|(mint, _)| *mint);
 
-                   let mut total_value = 0 as u128;
-                   for (token_mint, amount) in &sorted_tokens {
-                       let token_config = get_token_config(token_mint)?;
-                       // let amount = Amount::from_u64(*amount, token_config.token_decimals);
-                       let amount = *amount as u128;
-                       let price = price_map
-                           .get(token_mint)
-                           .ok_or_eyre("price not found in price map")?;
+                    let mut total_value = 0 as u128;
+                    for (token_mint, amount) in &sorted_tokens {
+                        let token_config = get_token_config(token_mint)?;
+                        // let amount = Amount::from_u64(*amount, token_config.token_decimals);
+                        let amount = *amount as u128;
+                        let price = price_map
+                            .get(token_mint)
+                            .ok_or_eyre("price not found in price map")?;
 
-                       // Calculate value using the price directly since it's already properly scaled
-                       let unit_price = price.min.to_unit_price();
-                       let token_value = amount * unit_price;
-                       total_value += token_value;
+                        // Calculate value using the price directly since it's already properly scaled
+                        let unit_price = price.min.to_unit_price();
+                        let token_value = amount * unit_price;
+                        total_value += token_value;
 
-                       println!(
-                           "Token {}: {} (Price: ${}, Raw Price: {}, Value: ${}, Precision: {})",
-                           token_mint,
-                           amount,
-                           Amount(Decimal::from(unit_price)),
-                           unit_price,
-                           Value::from_u128(token_value),
-                           token_config.precision()
-                       );
-                   }
+                        println!(
+                            "Token {}: {} (Price: ${}, Raw Price: {}, Value: ${}, Precision: {})",
+                            token_mint,
+                            amount,
+                            Amount(Decimal::from(unit_price)),
+                            unit_price,
+                            Value::from_u128(token_value),
+                            token_config.precision()
+                        );
+                    }
 
-                   println!("Total value claimed: ${}", Value::from_u128(total_value));
+                    println!("Total value claimed: ${}", Value::from_u128(total_value));
 
-                   // Process each transaction independently
-                   let bundle = client.bundle_with_options(options.clone());
-                   client.send_or_serialize(bundle).await?;
-                   return Ok(());
-               }
-           }
+                    bundle
+                }
+            }
             Command::DepositToTreasury {
                 token_mint,
                 token_program_id,
@@ -523,7 +519,7 @@ impl super::Command for Treasury {
                     .swap_output(());
                 println!("{gt_exchange_vault}");
 
-                rpc
+                rpc.into_bundle_with_options(options)?
             }
             Command::PrepareGtBank { gt_exchange_vault } => {
                 let gt_exchange_vault = gt_exchange_vault.get(store, client).await?;
@@ -535,7 +531,7 @@ impl super::Command for Treasury {
                 tracing::info!("Preparing GT bank: {gt_bank}");
                 println!("{gt_bank}");
 
-                txn
+                txn.into_bundle_with_options(options)?
             }
             Command::SyncGtBank {
                 gt_exchange_vault,
@@ -552,6 +548,7 @@ impl super::Command for Treasury {
                         token_program_id.as_ref(),
                     )
                     .await?
+                    .into_bundle_with_options(options)?
             }
             Command::CreateSwap {
                 market_token,
@@ -566,7 +563,6 @@ impl super::Command for Treasury {
                 let receiver = client.find_treasury_receiver_address(&config);
                 let market = client.find_market_address(store, market_token);
                 let market = client.market(&market).await?;
-                // let meta = &market.meta;
                 let amount = match amount {
                     Some(amount) => token_amount(amount, Some(swap_in), &token_map, &market, true)?,
                     None => {
@@ -600,14 +596,15 @@ impl super::Command for Treasury {
                 if let Some(lamports) = fund {
                     let swap_owner = client.find_treasury_receiver_address(&config);
                     let fund = client.transfer(&swap_owner, lamports.to_u64()?)?;
-                    fund.merge(rpc)
+                    fund.merge(rpc).into_bundle_with_options(options)?
                 } else {
-                    rpc
+                    rpc.into_bundle_with_options(options)?
                 }
             }
-            Command::CancelSwap { order } => {
-                client.cancel_treasury_swap(store, order, None).await?
-            }
+            Command::CancelSwap { order } => client
+                .cancel_treasury_swap(store, order, None)
+                .await?
+                .into_bundle_with_options(options)?,
             Command::Withdraw {
                 token,
                 token_program_id,
@@ -636,6 +633,7 @@ impl super::Command for Treasury {
                         &target,
                     )
                     .await?
+                    .into_bundle_with_options(options)?
             }
             Command::BatchWithdraw { file, force_one_tx } => {
                 let batch = toml_from_file::<BatchWithdraw>(file)?;
@@ -698,7 +696,7 @@ impl super::Command for Treasury {
                     )?;
                 }
 
-                return Ok(client.send_or_serialize(bundle).await?);
+                bundle
             }
             #[cfg(feature = "execute")]
             Command::ConfirmGtBuyback {
@@ -713,8 +711,6 @@ impl super::Command for Treasury {
                 return Ok(());
             }
         };
-
-        let bundle = txn.into_bundle_with_options(options)?;
 
         client.send_or_serialize(bundle).await?;
         Ok(())
