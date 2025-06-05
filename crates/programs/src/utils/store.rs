@@ -186,14 +186,20 @@ mod utils {
         events::TradeEvent,
         types::{
             ActionFlagContainer, ActionHeader, GlvMarketConfig, GlvMarketFlagContainer, GlvMarkets,
-            GlvMarketsEntry, MarketConfig, MarketFlagContainer, MarketMeta, OrderActionParams,
-            OrderKind, SwapActionParams, TokenAndAccount, Tokens, TokensEntry,
-            UpdateTokenConfigParams,
+            GlvMarketsEntry, MarketConfig, MarketFlagContainer, MarketMeta, Members, MembersEntry,
+            OrderActionParams, OrderKind, RoleMap, RoleMapEntry, RoleMetadata, RoleStore,
+            SwapActionParams, TokenAndAccount, Tokens, TokensEntry, UpdateTokenConfigParams,
         },
     };
 
     const MAX_TOKENS: usize = 256;
     const MAX_ALLOWED_NUMBER_OF_MARKETS: usize = 96;
+    const MAX_ROLES: usize = 32;
+    const MAX_MEMBERS: usize = 64;
+
+    impl_fixed_map!(RoleMap, RoleMetadata, MAX_ROLES);
+
+    impl_fixed_map!(Members, Pubkey, pubkey::to_bytes, u32, MAX_MEMBERS);
 
     impl_fixed_map!(Tokens, Pubkey, pubkey::to_bytes, u8, MAX_TOKENS);
     impl_fixed_map!(
@@ -591,6 +597,65 @@ mod utils {
         /// Get name.
         pub fn name(&self) -> crate::Result<&str> {
             bytes_to_fixed_str(&self.name).map_err(crate::Error::custom)
+        }
+    }
+
+    impl RoleMetadata {
+        /// A `u8` value indicates that this role is enabled.
+        pub const ROLE_ENABLED: u8 = u8::MAX;
+
+        /// Get the name of this role.
+        pub fn name(&self) -> crate::Result<&str> {
+            bytes_to_fixed_str(&self.name).map_err(crate::Error::custom)
+        }
+
+        /// Is enbaled.
+        pub fn is_enabled(&self) -> bool {
+            self.enabled == Self::ROLE_ENABLED
+        }
+    }
+
+    impl RoleStore {
+        fn enabled_role_index(&self, role: &str) -> crate::Result<Option<u8>> {
+            if let Some(metadata) = self.roles.get(role) {
+                if metadata.name()? != role {
+                    return Err(crate::Error::custom("invalid role store"));
+                }
+                if !metadata.is_enabled() {
+                    return Err(crate::Error::custom("the given role is disabled"));
+                }
+                Ok(Some(metadata.index))
+            } else {
+                Ok(None)
+            }
+        }
+
+        /// Returns whether the address has the give role.
+        pub fn has_role(&self, authority: &Pubkey, role: &str) -> crate::Result<bool> {
+            use gmsol_utils::bitmaps::Bitmap;
+            type RoleBitmap = Bitmap<MAX_ROLES>;
+
+            let value = self
+                .members
+                .get(authority)
+                .ok_or_else(|| crate::Error::custom("not a member"))?;
+            let index = self
+                .enabled_role_index(role)?
+                .ok_or_else(|| crate::Error::custom("no such role"))?;
+            let bitmap = RoleBitmap::from_value(*value);
+            Ok(bitmap.get(index as usize))
+        }
+
+        /// Returns all members.
+        pub fn members(&self) -> impl Iterator<Item = Pubkey> + '_ {
+            self.members
+                .entries()
+                .map(|(key, _)| Pubkey::new_from_array(*key))
+        }
+
+        /// Returns all roles.
+        pub fn roles(&self) -> impl Iterator<Item = crate::Result<&str>> + '_ {
+            self.roles.entries().map(|(_, value)| value.name())
         }
     }
 }
