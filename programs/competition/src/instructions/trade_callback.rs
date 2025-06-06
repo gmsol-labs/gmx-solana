@@ -155,7 +155,8 @@ impl OnExecuted<'_> {
             msg!("competition: no trade event");
             return Ok(());
         };
-        let trade_event = trade_event.load()
+        let trade_event = trade_event
+            .load()
             .map_err(|_| CompetitionError::InvalidTradeEvent)?;
 
         // Validate that the trade event belongs to the trader.
