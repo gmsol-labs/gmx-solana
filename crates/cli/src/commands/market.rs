@@ -3,7 +3,13 @@ use std::{num::NonZeroUsize, path::PathBuf};
 use either::Either;
 use eyre::OptionExt;
 use gmsol_sdk::{
-    core::token_config::TokenMapAccess,
+    core::{
+        oracle::PriceProviderKind,
+        token_config::{
+            TokenMapAccess, UpdateTokenConfigParams, DEFAULT_HEARTBEAT_DURATION, DEFAULT_PRECISION,
+            DEFAULT_TIMESTAMP_ADJUSTMENT,
+        },
+    },
     ops::{MarketOps, OracleOps, StoreOps, TokenConfigOps},
     programs::anchor_lang::prelude::Pubkey,
     serde::{serde_market::SerdeMarketConfig, serde_token_map::SerdeTokenConfig, StringPubkey},
@@ -18,7 +24,10 @@ use indexmap::IndexMap;
 
 use crate::{commands::utils::toml_from_file, config::DisplayOptions};
 
-use super::{utils::KeypairArgs, CommandClient};
+use super::{
+    utils::{KeypairArgs, ToggleValue},
+    CommandClient,
+};
 
 /// Market management commands.
 #[derive(Debug, clap::Args)]
@@ -53,6 +62,29 @@ enum Command {
     },
     /// Set the selected token map as the authorized one.
     SetTokenMap { token_map: Pubkey },
+    /// Insert token configs from file.
+    InsertTokenConfigs {
+        #[arg(long)]
+        token_map: Option<Pubkey>,
+        #[arg(long)]
+        set_token_map: bool,
+        path: PathBuf,
+    },
+    /// Toggle the token config for the given token.
+    ToggleTokenConfig {
+        #[arg(long)]
+        token_map: Option<Pubkey>,
+        token: Pubkey,
+        #[command(flatten)]
+        toggle: ToggleValue,
+    },
+    /// Set expected provider of token.
+    SetExpectedProvider {
+        #[arg(long)]
+        token_map: Option<Pubkey>,
+        token: Pubkey,
+        provider: PriceProviderKind,
+    },
     /// Create a `MarketConfigBuffer` account.
     CreateBuffer {
         #[command(flatten)]
@@ -221,6 +253,35 @@ impl super::Command for Market {
             Command::SetTokenMap { token_map } => client
                 .set_token_map(store, token_map)
                 .into_bundle_with_options(options)?,
+            Command::InsertTokenConfigs {
+                path,
+                token_map,
+                set_token_map,
+            } => {
+                let configs: IndexMap<String, TokenConfig> = toml_from_file(path)?;
+                let token_map = token_map_address(client, token_map.as_ref()).await?;
+                insert_token_configs(client, &token_map, *set_token_map, &configs, options)?
+            }
+            Command::ToggleTokenConfig {
+                token,
+                token_map,
+                toggle,
+            } => {
+                let token_map_address = token_map_address(client, token_map.as_ref()).await?;
+                client
+                    .toggle_token_config(store, &token_map_address, token, toggle.is_enable())
+                    .into_bundle_with_options(options)?
+            }
+            Command::SetExpectedProvider {
+                token_map,
+                token,
+                provider,
+            } => {
+                let token_map_address = token_map_address(client, token_map.as_ref()).await?;
+                client
+                    .set_expected_provider(store, &token_map_address, token, *provider)
+                    .into_bundle_with_options(options)?
+            }
             Command::CreateBuffer {
                 keypair,
                 expire_after,
@@ -362,6 +423,172 @@ async fn push_to_market_config_buffer<'a>(
             &buffer,
             batch.iter().map(|(key, value)| (key, *value)),
         ))?;
+    }
+
+    Ok(bundle)
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct TokenConfig {
+    address: StringPubkey,
+    #[serde(default)]
+    synthetic: Option<u8>,
+    enable: bool,
+    expected_provider: PriceProviderKind,
+    feeds: Feeds,
+    #[serde(default = "default_precision")]
+    precision: u8,
+    #[serde(default = "default_heartbeat_duration")]
+    heartbeat_duration: u32,
+    #[serde(default)]
+    update: bool,
+}
+
+fn default_heartbeat_duration() -> u32 {
+    DEFAULT_HEARTBEAT_DURATION
+}
+
+fn default_precision() -> u8 {
+    DEFAULT_PRECISION
+}
+
+impl<'a> TryFrom<&'a TokenConfig> for UpdateTokenConfigParams {
+    type Error = eyre::Error;
+
+    fn try_from(config: &'a TokenConfig) -> Result<Self, Self::Error> {
+        let mut builder = Self::default()
+            .with_expected_provider(config.expected_provider)
+            .with_heartbeat_duration(config.heartbeat_duration)
+            .with_precision(config.precision);
+        if let Some(feed_id) = config.feeds.switchboard_feed_id()? {
+            builder = builder.update_price_feed(
+                &PriceProviderKind::Switchboard,
+                feed_id,
+                Some(config.feeds.switchboard_feed_timestamp_adjustment),
+            )?;
+        }
+        if let Some(pyth_feed_id) = config.feeds.pyth_feed_id()? {
+            builder = builder.update_price_feed(
+                &PriceProviderKind::Pyth,
+                pyth_feed_id,
+                Some(config.feeds.pyth_feed_timestamp_adjustment),
+            )?;
+        }
+        if let Some(feed_id) = config.feeds.chainlink_data_streams_feed_id()? {
+            builder = builder.update_price_feed(
+                &PriceProviderKind::ChainlinkDataStreams,
+                feed_id,
+                Some(
+                    config
+                        .feeds
+                        .chainlink_data_streams_feed_timestamp_adjustment,
+                ),
+            )?;
+        }
+        Ok(builder)
+    }
+}
+
+#[derive(Debug, clap::Args, serde::Serialize, serde::Deserialize)]
+#[group(required = true, multiple = true)]
+struct Feeds {
+    /// Switchboard feed id.
+    #[arg(long)]
+    switchboard_feed_id: Option<String>,
+    /// Switchboard feed timestamp adjustment.
+    #[arg(long, default_value_t = DEFAULT_TIMESTAMP_ADJUSTMENT)]
+    #[serde(default = "default_timestamp_adjustment")]
+    switchboard_feed_timestamp_adjustment: u32,
+    /// Pyth feed id.
+    #[arg(long)]
+    pyth_feed_id: Option<String>,
+    /// Pyth feed timestamp adjustment.
+    #[arg(long, default_value_t = DEFAULT_TIMESTAMP_ADJUSTMENT)]
+    #[serde(default = "default_timestamp_adjustment")]
+    pyth_feed_timestamp_adjustment: u32,
+    /// Chainlink Data Streams feed id.
+    #[arg(long)]
+    chainlink_data_streams_feed_id: Option<String>,
+    #[arg(long, default_value_t = DEFAULT_TIMESTAMP_ADJUSTMENT)]
+    #[serde(default = "default_timestamp_adjustment")]
+    chainlink_data_streams_feed_timestamp_adjustment: u32,
+}
+
+fn default_timestamp_adjustment() -> u32 {
+    DEFAULT_TIMESTAMP_ADJUSTMENT
+}
+
+impl Feeds {
+    fn pyth_feed_id(&self) -> eyre::Result<Option<Pubkey>> {
+        use gmsol_sdk::client::pyth::pull_oracle::hermes::Identifier;
+
+        let Some(pyth_feed_id) = self.pyth_feed_id.as_ref() else {
+            return Ok(None);
+        };
+        let feed_id = pyth_feed_id.strip_prefix("0x").unwrap_or(pyth_feed_id);
+        let feed_id = Identifier::from_hex(feed_id)?;
+        let feed_id_as_key = Pubkey::new_from_array(feed_id.to_bytes());
+        Ok(Some(feed_id_as_key))
+    }
+
+    fn chainlink_data_streams_feed_id(&self) -> eyre::Result<Option<Pubkey>> {
+        use gmsol_sdk::client::chainlink::pull_oracle::parse_feed_id;
+
+        let Some(feed_id) = self.chainlink_data_streams_feed_id.as_ref() else {
+            return Ok(None);
+        };
+        let feed_id = parse_feed_id(feed_id)?;
+        let feed_id_as_key = Pubkey::new_from_array(feed_id);
+        Ok(Some(feed_id_as_key))
+    }
+
+    fn switchboard_feed_id(&self) -> eyre::Result<Option<Pubkey>> {
+        let Some(feed_id) = self.switchboard_feed_id.as_ref() else {
+            return Ok(None);
+        };
+        let feed_id_as_key = feed_id.parse()?;
+        Ok(Some(feed_id_as_key))
+    }
+}
+
+fn insert_token_configs<'a>(
+    client: &'a CommandClient,
+    token_map: &Pubkey,
+    set_token_map: bool,
+    configs: &IndexMap<String, TokenConfig>,
+    options: BundleOptions,
+) -> eyre::Result<BundleBuilder<'a, LocalSignerRef>> {
+    let store = &client.store;
+    let mut bundle = client.bundle_with_options(options);
+
+    if set_token_map {
+        bundle.push(client.set_token_map(store, token_map))?;
+    }
+
+    for (name, config) in configs {
+        let token = &config.address;
+        if let Some(decimals) = config.synthetic {
+            bundle.push(client.insert_synthetic_token_config(
+                store,
+                token_map,
+                name,
+                token,
+                decimals,
+                config.try_into()?,
+                config.enable,
+                !config.update,
+            ))?;
+        } else {
+            bundle.push(client.insert_token_config(
+                store,
+                token_map,
+                name,
+                token,
+                config.try_into()?,
+                config.enable,
+                !config.update,
+            ))?;
+        }
     }
 
     Ok(bundle)
