@@ -819,25 +819,19 @@ fn default_timestamp_adjustment() -> u32 {
 
 impl Feeds {
     fn pyth_feed_id(&self) -> eyre::Result<Option<Pubkey>> {
-        use gmsol_sdk::client::pyth::pull_oracle::hermes::Identifier;
-
         let Some(pyth_feed_id) = self.pyth_feed_id.as_ref() else {
             return Ok(None);
         };
-        let feed_id = pyth_feed_id.strip_prefix("0x").unwrap_or(pyth_feed_id);
-        let feed_id = Identifier::from_hex(feed_id)?;
-        let feed_id_as_key = Pubkey::new_from_array(feed_id.to_bytes());
+        let feed_id_as_key = Pubkey::new_from_array(parse_hex_encoded_feed_id(pyth_feed_id)?);
         Ok(Some(feed_id_as_key))
     }
 
     fn chainlink_data_streams_feed_id(&self) -> eyre::Result<Option<Pubkey>> {
-        use gmsol_sdk::client::chainlink::pull_oracle::parse_feed_id;
-
         let Some(feed_id) = self.chainlink_data_streams_feed_id.as_ref() else {
             return Ok(None);
         };
-        let feed_id = parse_feed_id(feed_id)?;
-        let feed_id_as_key = Pubkey::new_from_array(feed_id);
+
+        let feed_id_as_key = Pubkey::new_from_array(parse_hex_encoded_feed_id(feed_id)?);
         Ok(Some(feed_id_as_key))
     }
 
@@ -932,4 +926,13 @@ async fn create_markets<'a>(
     }
 
     Ok(bundle)
+}
+
+fn parse_hex_encoded_feed_id(feed_id: &str) -> eyre::Result<[u8; 32]> {
+    let feed_id = feed_id.strip_prefix("0x").unwrap_or(feed_id);
+
+    let mut bytes = [0; 32];
+    hex::decode_to_slice(feed_id, &mut bytes)?;
+
+    Ok(bytes)
 }
