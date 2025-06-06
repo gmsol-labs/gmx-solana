@@ -131,6 +131,27 @@ enum Command {
         #[arg(long, default_value = "1d")]
         expire_after: humantime::Duration,
     },
+    /// Create Market Vault.
+    CreateVault { token: Pubkey },
+    /// Create Market.
+    CreateMarket {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        index_token: Pubkey,
+        #[arg(long)]
+        long_token: Pubkey,
+        #[arg(long)]
+        short_token: Pubkey,
+        #[arg(long)]
+        enable: bool,
+    },
+    /// Create Markets from file.
+    CreateMarkets {
+        path: PathBuf,
+        #[arg(long)]
+        enable: bool,
+    },
 }
 
 impl super::Command for Market {
@@ -344,6 +365,36 @@ impl super::Command for Market {
                 .await?;
                 client.send_or_serialize(bundle).await?;
                 return Ok(());
+            }
+            Command::CreateVault { token } => {
+                let (rpc, vault) = client.initialize_market_vault(store, token);
+                println!("Market Vault: {vault}");
+                rpc.into_bundle_with_options(options)?
+            }
+            Command::CreateMarket {
+                name,
+                index_token,
+                long_token,
+                short_token,
+                enable,
+            } => {
+                let (rpc, market_token) = client
+                    .create_market(
+                        store,
+                        name,
+                        index_token,
+                        long_token,
+                        short_token,
+                        *enable,
+                        None,
+                    )
+                    .await?;
+                println!("Market Token: {market_token}");
+                rpc.into_bundle_with_options(options)?
+            }
+            Command::CreateMarkets { path, enable } => {
+                let markets: IndexMap<String, CreateMarket> = toml_from_file(path)?;
+                create_markets(client, *enable, &markets, options).await?
             }
         };
 
@@ -589,6 +640,47 @@ fn insert_token_configs<'a>(
                 !config.update,
             ))?;
         }
+    }
+
+    Ok(bundle)
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct CreateMarket {
+    index_token: StringPubkey,
+    long_token: StringPubkey,
+    short_token: StringPubkey,
+}
+
+async fn create_markets<'a>(
+    client: &'a CommandClient,
+    enable: bool,
+    markets: &IndexMap<String, CreateMarket>,
+    options: BundleOptions,
+) -> eyre::Result<BundleBuilder<'a, LocalSignerRef>> {
+    let store = &client.store;
+    let mut bundle = client.bundle_with_options(options);
+    let token_map = token_map_address(client, None).await?;
+    let mut tokens = IndexMap::with_capacity(markets.len());
+    for (name, market) in markets {
+        let (rpc, token) = client
+            .create_market(
+                store,
+                name,
+                &market.index_token,
+                &market.long_token,
+                &market.short_token,
+                enable,
+                Some(&token_map),
+            )
+            .await?;
+        tracing::info!("Adding instruction to create market `{name}` with token={token}");
+        tokens.insert(name, token);
+        bundle.push(rpc)?;
+    }
+
+    for (name, token) in tokens {
+        println!("{name}: {token}");
     }
 
     Ok(bundle)
