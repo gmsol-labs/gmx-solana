@@ -1,9 +1,11 @@
 use std::{num::NonZeroUsize, path::PathBuf};
 
+use anchor_spl::associated_token::get_associated_token_address;
 use either::Either;
 use eyre::OptionExt;
 use gmsol_sdk::{
     core::{
+        market::MarketConfigFlag,
         oracle::PriceProviderKind,
         token_config::{
             TokenMapAccess, UpdateTokenConfigParams, DEFAULT_HEARTBEAT_DURATION, DEFAULT_PRECISION,
@@ -25,7 +27,7 @@ use indexmap::IndexMap;
 use crate::{commands::utils::toml_from_file, config::DisplayOptions};
 
 use super::{
-    utils::{KeypairArgs, ToggleValue},
+    utils::{KeypairArgs, Side, ToggleValue},
     CommandClient,
 };
 
@@ -151,6 +153,40 @@ enum Command {
         path: PathBuf,
         #[arg(long)]
         enable: bool,
+    },
+    /// Toggle market.
+    ToggleMarket {
+        market_token: Pubkey,
+        #[command(flatten)]
+        toggle: ToggleValue,
+    },
+    /// Fund Market.
+    FundMarket {
+        /// The address of the market token of the Market to fund
+        market_token: Pubkey,
+        /// The funding side.
+        #[arg(long)]
+        side: Side,
+        /// The funding amount.
+        #[arg(long, short)]
+        amount: u64,
+    },
+    /// Toggle GT minting.
+    ToggleGtMinting {
+        market_token: Pubkey,
+        #[command(flatten)]
+        toggle: ToggleValue,
+    },
+    /// Update Market Config Flag.
+    ToggleConfigFlag {
+        /// The market token of the market to update.
+        market_token: Pubkey,
+        /// The config key to udpate.
+        #[arg(long)]
+        key: MarketConfigFlag,
+        /// The boolean value that the flag to update to.
+        #[command(flatten)]
+        toggle: ToggleValue,
     },
 }
 
@@ -396,6 +432,41 @@ impl super::Command for Market {
                 let markets: IndexMap<String, CreateMarket> = toml_from_file(path)?;
                 create_markets(client, *enable, &markets, options).await?
             }
+            Command::ToggleMarket {
+                market_token,
+                toggle,
+            } => client
+                .toggle_market(store, market_token, toggle.is_enable())
+                .into_bundle_with_options(options)?,
+            Command::FundMarket {
+                market_token,
+                side,
+                amount,
+            } => {
+                let market = client.market_by_token(store, market_token).await?;
+                let token = match side {
+                    Side::Long => market.meta.long_token_mint,
+                    Side::Short => market.meta.short_token_mint,
+                };
+                let source_account = get_associated_token_address(&client.payer(), &token);
+                client
+                    .fund_market(store, market_token, &source_account, *amount, Some(&token))
+                    .await?
+                    .into_bundle_with_options(options)?
+            }
+            Command::ToggleGtMinting {
+                market_token,
+                toggle,
+            } => client
+                .toggle_gt_minting(store, market_token, toggle.is_enable())
+                .into_bundle_with_options(options)?,
+            Command::ToggleConfigFlag {
+                market_token,
+                key,
+                toggle,
+            } => client
+                .update_market_config_flag_by_key(store, market_token, *key, toggle.is_enable())?
+                .into_bundle_with_options(options)?,
         };
 
         client.send_or_serialize(bundle).await?;

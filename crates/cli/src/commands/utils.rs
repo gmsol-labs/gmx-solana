@@ -121,3 +121,19 @@ impl ToggleValue {
         self.enable
     }
 }
+
+/// Side.
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+pub(crate) enum Side {
+    /// Long.
+    Long,
+    /// Short.
+    Short,
+}
+
+impl Side {
+    /// Is long side.
+    pub(crate) fn is_long(&self) -> bool {
+        matches!(self, Self::Long)
+    }
+}

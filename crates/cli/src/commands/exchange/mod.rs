@@ -37,7 +37,10 @@ use crate::{
     config::DisplayOptions,
 };
 
-use super::{glv::GlvToken, utils::price_to_min_output_amount};
+use super::{
+    glv::GlvToken,
+    utils::{price_to_min_output_amount, Side},
+};
 
 /// Exchange-related commands.
 #[derive(Debug, clap::Args)]
@@ -2192,22 +2195,6 @@ impl super::Command for Exchange {
 
         client.send_or_serialize(bundle).await?;
         Ok(())
-    }
-}
-
-/// Side.
-#[derive(clap::ValueEnum, Clone, Copy, Debug)]
-pub enum Side {
-    /// Long.
-    Long,
-    /// Short.
-    Short,
-}
-
-impl Side {
-    /// Is long side.
-    pub fn is_long(&self) -> bool {
-        matches!(self, Self::Long)
     }
 }
 
