@@ -64,7 +64,7 @@ impl SerdeMarket {
             state: SerdeMarketState::from_other_state(&market.state.other, decimals),
             clocks: (&market.state.clocks).into(),
             pools: SerdeMarketPools::from_pools(&market.state.pools, decimals)?,
-            config: (&market.config).into(),
+            config: SerdeMarketConfig::from_market_config(&market.config, decimals)?,
         })
     }
 }
@@ -300,16 +300,22 @@ fn unpack_funding_amount_per_size_pool(
 /// Serializable version of [`MarketConfig`].
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
-pub struct SerdeMarketConfig(pub IndexMap<MarketConfigKey, Value>);
+pub struct SerdeMarketConfig(pub IndexMap<MarketConfigKey, Amount>);
 
-impl<'a> From<&'a MarketConfig> for SerdeMarketConfig {
-    fn from(config: &'a MarketConfig) -> Self {
+impl SerdeMarketConfig {
+    /// Create from [`MarketConfig`].
+    pub fn from_market_config(
+        config: &MarketConfig,
+        decimals: MarketDecimals,
+    ) -> crate::Result<Self> {
         let map = MarketConfigKey::iter()
-            .filter_map(|key| {
-                let factor = config.get(key)?;
-                Some((key, Value::from_u128(*factor)))
+            .map(|key| {
+                let factor = config.get(key).ok_or(crate::Error::NotFound)?;
+                let amount = Amount::from_u128(*factor, decimals.market_config_decimals(key)?)?;
+                Ok((key, amount))
             })
-            .collect();
-        Self(map)
+            .collect::<crate::Result<_>>()?;
+
+        Ok(Self(map))
     }
 }
