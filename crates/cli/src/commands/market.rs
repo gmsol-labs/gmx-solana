@@ -13,7 +13,7 @@ use gmsol_sdk::{
         },
     },
     ops::{MarketOps, OracleOps, StoreOps, TokenConfigOps},
-    programs::anchor_lang::prelude::Pubkey,
+    programs::{anchor_lang::prelude::Pubkey, gmsol_store::accounts::MarketConfigBuffer},
     serde::{serde_market::SerdeMarketConfig, serde_token_map::SerdeTokenConfig, StringPubkey},
     solana_utils::{
         bundle_builder::{BundleBuilder, BundleOptions},
@@ -22,7 +22,7 @@ use gmsol_sdk::{
     },
     utils::market::MarketDecimals,
 };
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 
 use crate::{commands::utils::toml_from_file, config::DisplayOptions};
 
@@ -187,6 +187,16 @@ enum Command {
         /// The boolean value that the flag to update to.
         #[command(flatten)]
         toggle: ToggleValue,
+    },
+    /// Update Market Configs from file.
+    UpdateConfigs {
+        path: PathBuf,
+        /// Recevier for the buffer's lamports.
+        #[arg(long)]
+        receiver: Option<Pubkey>,
+        /// Whether to keep the used market config buffer accounts.
+        #[arg(long)]
+        keep_buffers: bool,
     },
 }
 
@@ -467,6 +477,16 @@ impl super::Command for Market {
             } => client
                 .update_market_config_flag_by_key(store, market_token, *key, toggle.is_enable())?
                 .into_bundle_with_options(options)?,
+            Command::UpdateConfigs {
+                path,
+                receiver,
+                keep_buffers,
+            } => {
+                let configs: MarketConfigs = toml_from_file(path)?;
+                configs
+                    .update_market_configs(client, receiver.as_ref(), !*keep_buffers, options)
+                    .await?
+            }
         };
 
         client.send_or_serialize(bundle).await?;
@@ -503,6 +523,78 @@ struct MarketConfig {
 struct MarketConfigs {
     #[serde(flatten)]
     configs: IndexMap<StringPubkey, MarketConfig>,
+}
+
+impl MarketConfigs {
+    async fn update_market_configs<'a>(
+        &self,
+        client: &'a CommandClient,
+        receiver: Option<&Pubkey>,
+        close_buffers: bool,
+        options: BundleOptions,
+    ) -> eyre::Result<BundleBuilder<'a, LocalSignerRef>> {
+        let store = &client.store;
+        let token_map = client.authorized_token_map(store).await?;
+        let mut bundle = client.bundle_with_options(options);
+
+        let mut buffers_to_close = IndexSet::<Pubkey>::default();
+
+        for (market_token, config) in &self.configs {
+            let market = client.market_by_token(store, market_token).await?;
+            let decimals = MarketDecimals::new(&market.meta.into(), &token_map)?;
+            if let Some(buffer) = &config.buffer {
+                let buffer_account = client
+                    .account::<MarketConfigBuffer>(buffer)
+                    .await?
+                    .ok_or(gmsol_sdk::Error::NotFound)?;
+                if buffer_account.store != *store {
+                    return Err(gmsol_sdk::Error::custom(
+                        "The provided buffer account is owned by different store",
+                    )
+                    .into());
+                }
+                if buffer_account.authority != client.payer() {
+                    return Err(gmsol_sdk::Error::custom(
+                        "The authority of the provided buffer account is not the payer",
+                    )
+                    .into());
+                }
+                tracing::info!("A buffer account is provided, it will be used first to update the market config. Add instruction to update `{market_token}` with it");
+                bundle.push(client.update_market_config_with_buffer(
+                    store,
+                    market_token,
+                    buffer,
+                ))?;
+                if close_buffers {
+                    buffers_to_close.insert(**buffer);
+                }
+            }
+            for (key, value) in &config.config.0 {
+                let value = value.to_u128(decimals.market_config_decimals(*key)?)?;
+                tracing::info!(%market_token, "Add instruction to update `{key}` to `{value}`");
+                bundle.push(client.update_market_config_by_key(
+                    store,
+                    market_token,
+                    *key,
+                    &value,
+                )?)?;
+            }
+            if let Some(enable) = config.enable {
+                tracing::info!(%market_token,
+                    "Add instruction to {} market",
+                    if enable { "enable" } else { "disable" },
+                );
+                bundle.push(client.toggle_market(store, market_token, enable))?;
+            }
+        }
+
+        // Push close buffer instructions.
+        for buffer in buffers_to_close.iter() {
+            bundle.push(client.close_marekt_config_buffer(buffer, receiver))?;
+        }
+
+        Ok(bundle)
+    }
 }
 
 async fn push_to_market_config_buffer<'a>(
