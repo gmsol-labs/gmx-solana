@@ -1,19 +1,24 @@
-use std::path::PathBuf;
+use std::{num::NonZeroUsize, path::PathBuf};
 
+use either::Either;
 use eyre::OptionExt;
 use gmsol_sdk::{
     core::token_config::TokenMapAccess,
-    ops::{OracleOps, StoreOps, TokenConfigOps},
+    ops::{MarketOps, OracleOps, StoreOps, TokenConfigOps},
     programs::anchor_lang::prelude::Pubkey,
-    serde::{serde_token_map::SerdeTokenConfig, StringPubkey},
-    solana_utils::solana_sdk::signature::{EncodableKey, Keypair},
+    serde::{serde_market::SerdeMarketConfig, serde_token_map::SerdeTokenConfig, StringPubkey},
+    solana_utils::{
+        bundle_builder::{BundleBuilder, BundleOptions},
+        signer::LocalSignerRef,
+        solana_sdk::{signature::Keypair, signer::Signer},
+    },
+    utils::market::MarketDecimals,
 };
 use indexmap::IndexMap;
-use rand::{rngs::StdRng, SeedableRng};
 
-use crate::config::DisplayOptions;
+use crate::{commands::utils::toml_from_file, config::DisplayOptions};
 
-use super::CommandClient;
+use super::{utils::KeypairArgs, CommandClient};
 
 /// Market management commands.
 #[derive(Debug, clap::Args)]
@@ -26,12 +31,8 @@ pub struct Market {
 enum Command {
     /// Create an oracle buffer.
     CreateOracle {
-        /// Path to the keypair of the account to be initialized as a oracle buffer.
-        /// If not provided, a new keypair will be generated.
-        oracle: Option<PathBuf>,
-        /// Optional random seed to use for oracle buffer initialization.
-        #[arg(long)]
-        seed: Option<u64>,
+        #[command(flatten)]
+        keypair: KeypairArgs,
         /// Pubkey of the authority for the oracle buffer.
         #[arg(long)]
         authority: Option<Pubkey>,
@@ -47,15 +48,57 @@ enum Command {
     },
     /// Create a new token map.
     CreateTokenMap {
-        /// Path to the keypair of the account to be initialized as a token map.
-        /// If not provided, a new keypair will be generated.
-        token_map: Option<PathBuf>,
-        /// Optional random seed to use for token map initialization.
-        #[arg(long)]
-        seed: Option<u64>,
+        #[command(flatten)]
+        keypair: KeypairArgs,
     },
     /// Set the selected token map as the authorized one.
     SetTokenMap { token_map: Pubkey },
+    /// Create a `MarketConfigBuffer` account.
+    CreateBuffer {
+        #[command(flatten)]
+        keypair: KeypairArgs,
+        /// The buffer will expire after this duration.
+        #[arg(long, default_value = "1d")]
+        expire_after: humantime::Duration,
+    },
+    /// Close a `MarketConfigBuffer` account.
+    CloseBuffer {
+        /// Buffer account to close.
+        buffer: Pubkey,
+        /// Address to receive the lamports.
+        #[arg(long)]
+        receiver: Option<Pubkey>,
+    },
+    /// Set the authority of the `MarketConfigBuffer` account.
+    SetBufferAuthority {
+        /// Buffer account of which to set the authority.
+        buffer: Pubkey,
+        /// New authority.
+        #[arg(long)]
+        new_authority: Pubkey,
+    },
+    /// Push to `MarketConfigBuffer` account with configs read from file.
+    PushToBuffer {
+        /// Path to the config file to read from.
+        #[arg(requires = "buffer-input")]
+        path: PathBuf,
+        /// Buffer account to be pushed to.
+        #[arg(long, group = "buffer-input")]
+        buffer: Option<Pubkey>,
+        /// Whether to create a new buffer account.
+        #[arg(long, group = "buffer-input")]
+        init: bool,
+        /// The expected market token to use for this buffer.
+        #[arg(long)]
+        market_token: Pubkey,
+        /// The number of keys to push in single instruction.
+        #[arg(long, default_value = "16")]
+        batch: NonZeroUsize,
+        /// The buffer will expire after this duration.
+        /// Only effective when used with `--init`.
+        #[arg(long, default_value = "1d")]
+        expire_after: humantime::Duration,
+    },
 }
 
 impl super::Command for Market {
@@ -70,24 +113,8 @@ impl super::Command for Market {
         let output = ctx.config().output();
 
         let bundle = match &self.command {
-            Command::CreateOracle {
-                oracle,
-                seed,
-                authority,
-            } => {
-                let oracle = match oracle {
-                    Some(path) => {
-                        Keypair::read_from_file(path).map_err(|err| eyre::eyre!("{err}"))?
-                    }
-                    None => {
-                        let mut rng = if let Some(seed) = seed {
-                            StdRng::seed_from_u64(*seed)
-                        } else {
-                            StdRng::from_entropy()
-                        };
-                        Keypair::generate(&mut rng)
-                    }
-                };
+            Command::CreateOracle { keypair, authority } => {
+                let oracle = keypair.to_keypair()?;
                 let (rpc, oracle) = client
                     .initialize_oracle(store, &oracle, authority.as_ref())
                     .await?;
@@ -183,20 +210,8 @@ impl super::Command for Market {
 
                 return Ok(());
             }
-            Command::CreateTokenMap { token_map, seed } => {
-                let token_map = match token_map {
-                    Some(path) => {
-                        Keypair::read_from_file(path).map_err(|err| eyre::eyre!("{err}"))?
-                    }
-                    None => {
-                        let mut rng = if let Some(seed) = seed {
-                            StdRng::seed_from_u64(*seed)
-                        } else {
-                            StdRng::from_entropy()
-                        };
-                        Keypair::generate(&mut rng)
-                    }
-                };
+            Command::CreateTokenMap { keypair } => {
+                let token_map = keypair.to_keypair()?;
                 let (rpc, token_map) = client.initialize_token_map(store, &token_map);
                 println!("Token Map: {token_map}");
                 let bundle = rpc.into_bundle_with_options(options)?;
@@ -206,6 +221,69 @@ impl super::Command for Market {
             Command::SetTokenMap { token_map } => client
                 .set_token_map(store, token_map)
                 .into_bundle_with_options(options)?,
+            Command::CreateBuffer {
+                keypair,
+                expire_after,
+            } => {
+                let buffer_keypair = keypair.to_keypair()?;
+                let rpc = client.initialize_market_config_buffer(
+                    store,
+                    &buffer_keypair,
+                    expire_after.as_secs().try_into()?,
+                );
+
+                client
+                    .send_or_serialize(rpc.into_bundle_with_options(options)?)
+                    .await?;
+                return Ok(());
+            }
+            Command::CloseBuffer { buffer, receiver } => client
+                .close_marekt_config_buffer(buffer, receiver.as_ref())
+                .into_bundle_with_options(options)?,
+            Command::SetBufferAuthority {
+                buffer,
+                new_authority,
+            } => client
+                .set_market_config_buffer_authority(buffer, new_authority)
+                .into_bundle_with_options(options)?,
+            Command::PushToBuffer {
+                path,
+                buffer,
+                init,
+                market_token,
+                batch,
+                expire_after,
+            } => {
+                let config: Either<MarketConfigs, SerdeMarketConfig> = toml_from_file(path)?;
+                let config = match config {
+                    Either::Left(configs) => {
+                        let config = configs
+                            .configs
+                            .get(market_token)
+                            .ok_or_eyre(format!("the config for `{market_token}` not found"))?;
+                        config.config.clone()
+                    }
+                    Either::Right(config) => config,
+                };
+                assert!(buffer.is_none() == *init, "must hold");
+                let keypair = Keypair::new();
+                let buffer = match buffer {
+                    Some(buffer) => Either::Left(buffer),
+                    None => Either::Right(&keypair),
+                };
+                let bundle = push_to_market_config_buffer(
+                    client,
+                    buffer,
+                    market_token,
+                    &config,
+                    expire_after,
+                    *batch,
+                    options,
+                )
+                .await?;
+                client.send_or_serialize(bundle).await?;
+                return Ok(());
+            }
         };
 
         client.send_or_serialize(bundle).await?;
@@ -226,4 +304,65 @@ async fn token_map_address(
             .ok_or_eyre("no authorized token map")?,
     };
     Ok(address)
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+struct MarketConfig {
+    #[serde(default)]
+    enable: Option<bool>,
+    #[serde(default)]
+    buffer: Option<StringPubkey>,
+    #[serde(flatten)]
+    config: SerdeMarketConfig,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct MarketConfigs {
+    #[serde(flatten)]
+    configs: IndexMap<StringPubkey, MarketConfig>,
+}
+
+async fn push_to_market_config_buffer<'a>(
+    client: &'a CommandClient,
+    buffer: Either<&Pubkey, &'a Keypair>,
+    market_token: &Pubkey,
+    config: &SerdeMarketConfig,
+    expire_after: &humantime::Duration,
+    batch: NonZeroUsize,
+    options: BundleOptions,
+) -> eyre::Result<BundleBuilder<'a, LocalSignerRef>> {
+    let store = &client.store;
+    let market = client.market_by_token(store, market_token).await?;
+    let token_map = client.authorized_token_map(store).await?;
+    let decimals = MarketDecimals::new(&market.meta.into(), &token_map)?;
+
+    let mut bundle = client.bundle_with_options(options);
+
+    let buffer = match buffer {
+        Either::Left(pubkey) => *pubkey,
+        Either::Right(keypair) => {
+            bundle.push(client.initialize_market_config_buffer(
+                store,
+                keypair,
+                expire_after.as_secs().try_into().unwrap_or(u32::MAX),
+            ))?;
+            keypair.pubkey()
+        }
+    };
+
+    println!("Buffer: {buffer}");
+
+    let configs = config
+        .0
+        .iter()
+        .map(|(k, v)| Ok((k, v.to_u128(decimals.market_config_decimals(*k)?)?)))
+        .collect::<eyre::Result<Vec<_>>>()?;
+    for batch in configs.chunks(batch.get()) {
+        bundle.push(client.push_to_market_config_buffer(
+            &buffer,
+            batch.iter().map(|(key, value)| (key, *value)),
+        ))?;
+    }
+
+    Ok(bundle)
 }

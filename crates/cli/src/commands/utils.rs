@@ -3,8 +3,10 @@ use gmsol_sdk::{
     client::token_map::TokenMap,
     core::token_config::TokenMapAccess,
     programs::{anchor_lang::prelude::Pubkey, gmsol_store::accounts::Market},
+    solana_utils::solana_sdk::{signature::Keypair, signer::EncodableKey},
     utils::{market::MarketDecimals, unsigned_amount_to_decimal, Amount, Value},
 };
+use rand::{rngs::StdRng, SeedableRng};
 use rust_decimal::{Decimal, MathematicalOps};
 
 pub(crate) fn get_token_amount_with_token_map(
@@ -64,4 +66,42 @@ pub(crate) fn price_to_min_output_amount(
     let token_out_amount = Amount(token_in_amount.checked_div(token_in_to_token_out_price.0)?);
     let token_out = token_map.get(token_out)?;
     token_out_amount.to_u64(token_out.token_decimals).ok()
+}
+
+pub(crate) fn toml_from_file<T>(path: &impl AsRef<std::path::Path>) -> eyre::Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    use std::io::Read;
+
+    let mut buffer = String::new();
+    std::fs::File::open(path)?.read_to_string(&mut buffer)?;
+    Ok(toml::from_str(&buffer)?)
+}
+
+#[derive(Debug, clap::Args)]
+pub(crate) struct KeypairArgs {
+    /// Path to the keypair of the account to use.
+    /// If not provided, a new keypair will be generated.
+    keypair: Option<std::path::PathBuf>,
+    /// Optional random seed to use for keypair generation.
+    #[arg(long)]
+    seed: Option<u64>,
+}
+
+impl KeypairArgs {
+    pub(crate) fn to_keypair(&self) -> eyre::Result<Keypair> {
+        let keypair = match self.keypair.as_ref() {
+            Some(path) => Keypair::read_from_file(path).map_err(|err| eyre::eyre!("{err}"))?,
+            None => {
+                let mut rng = if let Some(seed) = self.seed {
+                    StdRng::seed_from_u64(seed)
+                } else {
+                    StdRng::from_entropy()
+                };
+                Keypair::generate(&mut rng)
+            }
+        };
+        Ok(keypair)
+    }
 }
