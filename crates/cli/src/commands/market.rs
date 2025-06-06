@@ -5,6 +5,7 @@ use either::Either;
 use eyre::OptionExt;
 use gmsol_sdk::{
     core::{
+        config::FactorKey,
         market::MarketConfigFlag,
         oracle::PriceProviderKind,
         token_config::{
@@ -12,7 +13,7 @@ use gmsol_sdk::{
             DEFAULT_TIMESTAMP_ADJUSTMENT,
         },
     },
-    ops::{MarketOps, OracleOps, StoreOps, TokenConfigOps},
+    ops::{ConfigOps, GtOps, MarketOps, OracleOps, StoreOps, TokenConfigOps},
     programs::{anchor_lang::prelude::Pubkey, gmsol_store::accounts::MarketConfigBuffer},
     serde::{serde_market::SerdeMarketConfig, serde_token_map::SerdeTokenConfig, StringPubkey},
     solana_utils::{
@@ -20,9 +21,10 @@ use gmsol_sdk::{
         signer::LocalSignerRef,
         solana_sdk::{signature::Keypair, signer::Signer},
     },
-    utils::market::MarketDecimals,
+    utils::{market::MarketDecimals, Amount, Value},
 };
 use indexmap::{IndexMap, IndexSet};
+use rust_decimal::Decimal;
 
 use crate::{commands::utils::toml_from_file, config::DisplayOptions};
 
@@ -171,12 +173,6 @@ enum Command {
         #[arg(long, short)]
         amount: u64,
     },
-    /// Toggle GT minting.
-    ToggleGtMinting {
-        market_token: Pubkey,
-        #[command(flatten)]
-        toggle: ToggleValue,
-    },
     /// Update Market Config Flag.
     ToggleConfigFlag {
         /// The market token of the market to update.
@@ -198,6 +194,37 @@ enum Command {
         #[arg(long)]
         keep_buffers: bool,
     },
+    /// Toggle GT minting.
+    ToggleGtMinting {
+        market_token: Pubkey,
+        #[command(flatten)]
+        toggle: ToggleValue,
+    },
+    /// Initialize GT.
+    InitGt {
+        #[arg(long, short, default_value_t = 7)]
+        decimals: u8,
+        #[arg(long, short = 'c', default_value_t = Value(Decimal::new(1, 2)))]
+        initial_minting_cost: Value,
+        #[arg(long, default_value_t = Value(Decimal::new(1_021, 3)))]
+        grow_factor: Value,
+        #[arg(long, default_value_t = Amount(Decimal::new(210_000, 0)))]
+        grow_step: Amount,
+        #[arg(required = true)]
+        ranks: Vec<Amount>,
+    },
+    /// Set order fee discount factors.
+    SetOrderFeeDiscountFactors {
+        #[arg(required = true)]
+        factors: Vec<Value>,
+    },
+    /// Set referral reward factors.
+    SetReferralRewardFactors {
+        #[arg(required = true)]
+        factors: Vec<Value>,
+    },
+    /// Set referred discount.
+    SetReferredDiscountFactor { factor: Value },
 }
 
 impl super::Command for Market {
@@ -265,18 +292,18 @@ impl super::Command for Market {
                     let authorized_token_map_address =
                         client.authorized_token_map_address(store).await?;
                     let output = output.display_keyed_account(
-                        &token_map_address,
-                        serde_json::json!({
-                            "store": StringPubkey(token_map.header().store),
-                            "tokens": token_map.header().tokens.len(),
-                            "is_authorized": authorized_token_map_address == Some(token_map_address),
-                        }),
-                        DisplayOptions::table_projection([
-                            ("pubkey", "Address"),
-                            ("tokens", "Tokens"),
-                            ("is_authorized", "Authorized"),
-                        ]),
-                    )?;
+                                &token_map_address,
+                                serde_json::json!({
+                                    "store": StringPubkey(token_map.header().store),
+                                    "tokens": token_map.header().tokens.len(),
+                                    "is_authorized": authorized_token_map_address == Some(token_map_address),
+                                }),
+                                DisplayOptions::table_projection([
+                                    ("pubkey", "Address"),
+                                    ("tokens", "Tokens"),
+                                    ("is_authorized", "Authorized"),
+                                ]),
+                            )?;
                     println!("{output}");
                 } else {
                     let mut map = token_map
@@ -464,12 +491,6 @@ impl super::Command for Market {
                     .await?
                     .into_bundle_with_options(options)?
             }
-            Command::ToggleGtMinting {
-                market_token,
-                toggle,
-            } => client
-                .toggle_gt_minting(store, market_token, toggle.is_enable())
-                .into_bundle_with_options(options)?,
             Command::ToggleConfigFlag {
                 market_token,
                 key,
@@ -487,6 +508,70 @@ impl super::Command for Market {
                     .update_market_configs(client, receiver.as_ref(), !*keep_buffers, options)
                     .await?
             }
+            Command::ToggleGtMinting {
+                market_token,
+                toggle,
+            } => client
+                .toggle_gt_minting(store, market_token, toggle.is_enable())
+                .into_bundle_with_options(options)?,
+            Command::InitGt {
+                decimals,
+                initial_minting_cost,
+                grow_factor,
+                grow_step,
+                ranks,
+            } => {
+                debug_assert!(!ranks.is_empty());
+                let decimals = *decimals;
+                let ranks = ranks
+                    .iter()
+                    .map(|a| Ok(a.to_u64(decimals)?))
+                    .collect::<eyre::Result<Vec<_>>>()?;
+                if !ranks.is_sorted() {
+                    eyre::bail!("ranks must be sorted");
+                }
+                let initial_minting_cost =
+                    initial_minting_cost.to_u128()? / 10u128.pow(decimals.into());
+                let grow_factor = grow_factor.to_u128()?;
+                let grow_step = grow_step.to_u64(decimals)?;
+                client
+                    .initialize_gt(
+                        store,
+                        decimals,
+                        initial_minting_cost,
+                        grow_factor,
+                        grow_step,
+                        ranks,
+                    )
+                    .into_bundle_with_options(options)?
+            }
+            Command::SetOrderFeeDiscountFactors { factors } => {
+                debug_assert!(!factors.is_empty());
+                let factors = factors
+                    .iter()
+                    .map(|v| Ok(v.to_u128()?))
+                    .collect::<eyre::Result<Vec<_>>>()?;
+                client
+                    .gt_set_order_fee_discount_factors(store, factors)
+                    .into_bundle_with_options(options)?
+            }
+            Command::SetReferralRewardFactors { factors } => {
+                debug_assert!(!factors.is_empty());
+                let factors = factors
+                    .iter()
+                    .map(|v| Ok(v.to_u128()?))
+                    .collect::<eyre::Result<Vec<_>>>()?;
+                client
+                    .gt_set_referral_reward_factors(store, factors)
+                    .into_bundle_with_options(options)?
+            }
+            Command::SetReferredDiscountFactor { factor } => client
+                .insert_global_factor_by_key(
+                    store,
+                    FactorKey::OrderFeeDiscountForReferredUser,
+                    &factor.to_u128()?,
+                )
+                .into_bundle_with_options(options)?,
         };
 
         client.send_or_serialize(bundle).await?;
