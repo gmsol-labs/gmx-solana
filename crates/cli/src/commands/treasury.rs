@@ -1,5 +1,3 @@
-use rust_decimal::Decimal;
-use std::num::NonZeroU8;
 use std::path::PathBuf;
 
 use crate::commands::utils::token_amount;
@@ -23,13 +21,14 @@ use gmsol_sdk::{
 
 #[cfg(feature = "execute")]
 use {
-    std::collections::HashMap,
+    crate::commands::exchange::executor,
     gmsol_sdk::{
         client::pyth::{pubkey_to_identifier, pull_oracle::hermes::Identifier, Hermes},
         core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
         core::token_config::TokenConfig,
     },
-    crate::commands::exchange::executor,
+    std::{collections::HashMap,num::NonZeroU8},
+    rust_decimal::Decimal,
 };
 
 /// Read and parse a TOML file into a type
@@ -100,8 +99,10 @@ enum Command {
         token_program_id: Option<Pubkey>,
         #[arg(long, short, default_value_t = Amount::ZERO)]
         min_amount: Amount,
+        #[cfg(feature = "execute")]
         #[arg(long, default_value_t = Amount(Decimal::from(1000)))]
         min_value_per_batch: Amount,
+        #[cfg(feature = "execute")]
         #[arg(long, default_value_t = NonZeroU8::new(3).unwrap())]
         batch: NonZeroU8,
     },
@@ -258,7 +259,9 @@ impl super::Command for Treasury {
                 deposit,
                 token_program_id,
                 min_amount,
+                #[cfg(feature = "execute")]
                 min_value_per_batch,
+                #[cfg(feature = "execute")]
                 batch,
             } => {
                 if let Some(market_token) = market_token {
@@ -480,7 +483,7 @@ impl super::Command for Treasury {
                         let mut sorted_tokens: Vec<_> = claimed_tokens.into_iter().collect();
                         sorted_tokens.sort_by_key(|(mint, _)| *mint);
 
-                        let mut total_value = 0 as u128;
+                        let mut total_value = 0_u128;
                         for (token_mint, amount) in &sorted_tokens {
                             let token_config = get_token_config(token_mint)?;
                             let amount = *amount as u128;
@@ -510,7 +513,9 @@ impl super::Command for Treasury {
                     }
                     #[cfg(not(feature = "execute"))]
                     {
-                        return Err(eyre::eyre!("Batch processing mode requires the 'execute' feature to be enabled"));
+                        return Err(eyre::eyre!(
+                            "Batch processing mode requires the 'execute' feature to be enabled"
+                        ));
                     }
                 }
             }
