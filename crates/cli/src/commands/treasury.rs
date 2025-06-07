@@ -19,6 +19,22 @@ use gmsol_sdk::{
     utils::{Amount, Lamport, Value},
 };
 
+#[cfg(feature = "execute")]
+// use crate::commands::exchange::executor;
+use {
+    crate::commands::exchange::executor,
+    gmsol_sdk::{
+        client::pyth::{pubkey_to_identifier, pull_oracle::hermes::Identifier, Hermes},
+        core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
+        core::token_config::TokenConfig,
+        programs::gmsol_store::accounts::Market,
+        programs::gmsol_treasury::accounts::{Config, TreasuryVaultConfig},
+        utils::zero_copy::ZeroCopy,
+    },
+    rust_decimal::Decimal,
+    std::{collections::HashMap, num::NonZeroU8, sync::Arc},
+};
+
 /// Read and parse a TOML file into a type
 fn toml_from_file<T>(path: &impl AsRef<std::path::Path>) -> eyre::Result<T>
 where
@@ -30,8 +46,8 @@ where
     toml::from_str(&buffer).map_err(|e| eyre::eyre!("Failed to parse TOML: {}", e))
 }
 
-#[cfg(feature = "execute")]
-use crate::commands::exchange::executor;
+// #[cfg(feature = "execute")]
+// use crate::commands::exchange::executor;
 
 /// Treasury management commands.
 #[derive(Debug, clap::Args)]
@@ -77,15 +93,22 @@ enum Command {
     SetReferralReward { factors: Vec<Value> },
     /// Claim fees.
     ClaimFees {
-        market_token: Pubkey,
         #[arg(long)]
-        side: Side,
+        market_token: Option<Pubkey>,
+        #[arg(long)]
+        side: Option<Side>,
         #[arg(long)]
         deposit: bool,
         #[arg(long)]
         token_program_id: Option<Pubkey>,
         #[arg(long, short, default_value_t = Amount::ZERO)]
         min_amount: Amount,
+        #[cfg(feature = "execute")]
+        #[arg(long, default_value_t = Amount(Decimal::from(1000)))]
+        min_value_per_batch: Amount,
+        #[cfg(feature = "execute")]
+        #[arg(long, default_value_t = NonZeroU8::new(3).unwrap())]
+        batch: NonZeroU8,
     },
     /// Deposit into treasury vault.
     DepositToTreasury {
@@ -168,37 +191,41 @@ impl super::Command for Treasury {
         let options = ctx.bundle_options();
         let token_map = client.authorized_token_map(store).await?;
 
-        let txn = match &self.command {
+        let bundle = match &self.command {
             Command::InitConfig => {
                 let (rpc, config) = client.initialize_config(store).swap_output(());
                 println!("{config}");
-                rpc
+                rpc.into_bundle_with_options(options)?
             }
             Command::InitTreasury { index } => {
                 let (rpc, address) = client
                     .initialize_treasury_vault_config(store, *index)
                     .swap_output(());
                 println!("{address}");
-                rpc
+                rpc.into_bundle_with_options(options)?
             }
-            Command::TransferReceiver { new_receiver } => {
-                client.transfer_receiver(store, new_receiver)
-            }
+            Command::TransferReceiver { new_receiver } => client
+                .transfer_receiver(store, new_receiver)
+                .into_bundle_with_options(options)?,
             Command::SetTreasury {
                 treasury_vault_config,
-            } => client.set_treasury_vault_config(store, treasury_vault_config),
-            Command::SetGtFactor { factor } => client.set_gt_factor(store, factor.to_u128()?)?,
-            Command::SetBuybackFactor { factor } => {
-                client.set_buyback_factor(store, factor.to_u128()?)?
-            }
-            Command::InsertToken { token } => {
-                client.insert_token_to_treasury(store, None, token).await?
-            }
-            Command::RemoveToken { token } => {
-                client
-                    .remove_token_from_treasury(store, None, token)
-                    .await?
-            }
+            } => client
+                .set_treasury_vault_config(store, treasury_vault_config)
+                .into_bundle_with_options(options)?,
+            Command::SetGtFactor { factor } => client
+                .set_gt_factor(store, factor.to_u128()?)?
+                .into_bundle_with_options(options)?,
+            Command::SetBuybackFactor { factor } => client
+                .set_buyback_factor(store, factor.to_u128()?)?
+                .into_bundle_with_options(options)?,
+            Command::InsertToken { token } => client
+                .insert_token_to_treasury(store, None, token)
+                .await?
+                .into_bundle_with_options(options)?,
+            Command::RemoveToken { token } => client
+                .remove_token_from_treasury(store, None, token)
+                .await?
+                .into_bundle_with_options(options)?,
             Command::ToggleTokenFlag {
                 token,
                 flag,
@@ -210,6 +237,7 @@ impl super::Command for Treasury {
                 client
                     .toggle_token_flag(store, None, token, *flag, value)
                     .await?
+                    .into_bundle_with_options(options)?
             }
             Command::SetReferralReward { factors } => {
                 if factors.is_empty() {
@@ -219,7 +247,9 @@ impl super::Command for Treasury {
                     .iter()
                     .map(|f| f.to_u128().map_err(eyre::Report::from))
                     .collect::<eyre::Result<Vec<_>>>()?;
-                client.set_referral_reward(store, factors)
+                client
+                    .set_referral_reward(store, factors)
+                    .into_bundle_with_options(options)?
             }
             Command::Receiver => {
                 let config = client.find_treasury_config_address(store);
@@ -233,50 +263,388 @@ impl super::Command for Treasury {
                 deposit,
                 token_program_id,
                 min_amount,
+                #[cfg(feature = "execute")]
+                min_value_per_batch,
+                #[cfg(feature = "execute")]
+                batch,
             } => {
-                let market = client.find_market_address(store, market_token);
-                let market = client.market(&market).await?;
-                let market_model = MarketModel::from_parts(market.clone(), 1);
-                let amount = market_model.claimable_fee_pool()?.amount(side.is_long())?;
-                if amount == 0 {
-                    return Err(eyre::eyre!("no claimable fees for this side"));
-                }
-                let token_mint = if side.is_long() {
-                    &market.meta.long_token_mint
-                } else {
-                    &market.meta.short_token_mint
-                };
-                let min_amount = token_amount(
-                    min_amount,
-                    Some(token_mint),
-                    &token_map,
-                    &market_model,
-                    side.is_long(),
-                )?;
-                let claim = client.claim_fees_to_receiver_vault(
-                    store,
-                    market_token,
-                    token_mint,
-                    min_amount,
-                );
+                if let Some(market_token) = market_token {
+                    // Single market mode
+                    let side = side.ok_or_eyre("side is required for single market mode")?;
+                    let market = client.find_market_address(store, market_token);
+                    let market = client.market(&market).await?;
+                    let market_model = MarketModel::from_parts(market.clone(), 1);
+                    let amount = market_model.claimable_fee_pool()?.amount(side.is_long())?;
+                    if amount == 0 {
+                        return Err(eyre::eyre!("no claimable fees for this side"));
+                    }
+                    let token_mint = if side.is_long() {
+                        &market.meta.long_token_mint
+                    } else {
+                        &market.meta.short_token_mint
+                    };
+                    let min_amount = token_amount(
+                        min_amount,
+                        Some(token_mint),
+                        &token_map,
+                        &market_model,
+                        side.is_long(),
+                    )?;
+                    let claim = client.claim_fees_to_receiver_vault(
+                        store,
+                        market_token,
+                        token_mint,
+                        min_amount,
+                    );
 
-                if *deposit {
-                    let store_account = client.store(store).await?;
-                    let time_window = store_account.gt.exchange_time_window;
-                    let (deposit, gt_exchange_vault) = client
-                        .deposit_to_treasury_valut(
-                            store,
-                            None,
-                            token_mint,
-                            token_program_id.as_ref(),
-                            time_window,
-                        )
-                        .await?
-                        .swap_output(());
-                    println!("{gt_exchange_vault}");
-                    claim.merge(deposit)
+                    if *deposit {
+                        let store_account = client.store(store).await?;
+                        let time_window = store_account.gt.exchange_time_window;
+                        let (deposit, gt_exchange_vault) = client
+                            .deposit_to_treasury_valut(
+                                store,
+                                None,
+                                token_mint,
+                                token_program_id.as_ref(),
+                                time_window,
+                            )
+                            .await?
+                            .swap_output(());
+                        println!("{gt_exchange_vault}");
+                        let mut bundle = client.bundle_with_options(options.clone());
+                        bundle.push(claim.merge(deposit))?;
+                        bundle
+                    } else {
+                        let mut bundle = client.bundle_with_options(options.clone());
+                        bundle.push(claim)?;
+                        bundle
+                    }
                 } else {
-                    claim
+                    #[cfg(feature = "execute")]
+                    {
+                        // Batch processing mode with Pyth support
+                        let markets = client.markets(store).await?;
+                        let mut claimable_fees = Vec::new();
+
+                        // Step 1: Collect all market claimable fees
+                        for (_, market) in markets {
+                            let market_model = MarketModel::from_parts(market.clone(), 1);
+                            if let Ok(fee_pool) = market_model.claimable_fee_pool() {
+                                if side.map_or(true, |s| s.is_long()) {
+                                    if let Ok(amount) = fee_pool.amount(true) {
+                                        if amount > 0 {
+                                            claimable_fees.push((market.clone(), true, amount));
+                                        }
+                                    }
+                                }
+                                // Skip short token processing for single token pool when no side is specified
+                                if side.map_or(true, |s| !s.is_long())
+                                    && !(side.is_none()
+                                        && market.meta.long_token_mint
+                                            == market.meta.short_token_mint)
+                                {
+                                    if let Ok(amount) = fee_pool.amount(false) {
+                                        if amount > 0 {
+                                            claimable_fees.push((market.clone(), false, amount));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Step 2: Fetch all prices from Pyth using Hermes
+                        let hermes = Hermes::default();
+                        // let mut batches: Vec<Vec<(Arc<Market>, bool, Amount)>> = Vec::new();
+                        // let mut current_batch: Vec<(Arc<Market>, bool, Amount)> = Vec::new();
+                        // let mut current_batch_value = Decimal::ZERO;
+
+                        // Helper function to get token config
+                        let get_token_config = |token_mint: &Pubkey| -> eyre::Result<&TokenConfig> {
+                            token_map
+                                .get(token_mint)
+                                .ok_or_eyre("token config not found")
+                        };
+
+                        let mut feed_to_token = HashMap::new();
+                        for (market, is_long, _) in &claimable_fees {
+                            let token_mint = if *is_long {
+                                &market.meta.long_token_mint
+                            } else {
+                                &market.meta.short_token_mint
+                            };
+
+                            let token_config = get_token_config(token_mint)?;
+
+                            let feed = token_config
+                                .get_feed(&PriceProviderKind::Pyth)
+                                .map_err(|_| eyre::eyre!("no Pyth feed found for token"))?;
+
+                            feed_to_token
+                                .insert(pubkey_to_identifier(&feed), (*token_mint, *token_config));
+                        }
+
+                        let feed_ids: Vec<_> = feed_to_token.keys().cloned().collect();
+                        let update = hermes.latest_price_updates(&feed_ids, None).await?;
+
+                        // Process price updates and create price mapping
+                        let mut price_map = HashMap::new();
+                        for price in update.parsed() {
+                            let feed_id = Identifier::from_hex(price.id())
+                                .map_err(|e| eyre::eyre!("Failed to parse feed id: {}", e))?;
+                            if let Some((token_mint, token_config)) = feed_to_token.get(&feed_id) {
+                                let price = pyth_price_with_confidence_to_price(
+                                    price.price().price(),
+                                    price.price().conf(),
+                                    price.price().expo(),
+                                    token_config,
+                                )?;
+                                price_map.insert(*token_mint, price);
+                            }
+                        }
+
+                        // Step 3: Build transaction batches based on min_value_per_batch and batch size
+                        // Sort claims by value in descending order to maximize batch value
+                        claimable_fees.sort_by(|a, b| {
+                            let value_a = if a.1 {
+                                price_map.get(&a.0.meta.long_token_mint)
+                            } else {
+                                price_map.get(&a.0.meta.short_token_mint)
+                            }
+                            .map(|p| p.min.value)
+                            .unwrap_or(0);
+
+                            let value_b = if b.1 {
+                                price_map.get(&b.0.meta.long_token_mint)
+                            } else {
+                                price_map.get(&b.0.meta.short_token_mint)
+                            }
+                            .map(|p| p.min.value)
+                            .unwrap_or(0);
+
+                            value_b.cmp(&value_a)
+                        });
+
+                        let mut batches: Vec<Vec<(Arc<Market>, bool, Amount)>> = Vec::new();
+                        let mut current_batch: Vec<(Arc<Market>, bool, Amount)> = Vec::new();
+                        let mut current_batch_value = Decimal::ZERO;
+                        let mut remaining_claims = claimable_fees;
+
+                        while !remaining_claims.is_empty() {
+                            let mut best_claim_index = None;
+                            let mut best_claim_value = Decimal::ZERO;
+
+                            // Find the best claim that can be added to current batch
+                            for (i, (market, is_long, amount)) in
+                                remaining_claims.iter().enumerate()
+                            {
+                                let token_mint = if *is_long {
+                                    &market.meta.long_token_mint
+                                } else {
+                                    &market.meta.short_token_mint
+                                };
+
+                                let token_config = get_token_config(token_mint)?;
+                                let amount =
+                                    Amount::from_u64(*amount as u64, token_config.token_decimals);
+                                let price = price_map
+                                    .get(token_mint)
+                                    .ok_or_eyre("price not found in price map")?;
+
+                                let token_value = amount.0 * Decimal::from(price.min.value);
+
+                                // Check if adding this claim would exceed batch size
+                                if current_batch.len() >= batch.get() as usize {
+                                    continue;
+                                }
+
+                                // If this claim would help reach min_value, prioritize it
+                                if current_batch_value + token_value >= min_value_per_batch.0 {
+                                    best_claim_index = Some(i);
+                                    // best_claim_value = token_value;
+                                    break;
+                                }
+
+                                // Otherwise, keep track of the highest value claim
+                                if token_value > best_claim_value {
+                                    best_claim_index = Some(i);
+                                    best_claim_value = token_value;
+                                }
+                            }
+
+                            match best_claim_index {
+                                Some(index) => {
+                                    let (market, is_long, amount) = remaining_claims.remove(index);
+                                    let token_mint = if is_long {
+                                        &market.meta.long_token_mint
+                                    } else {
+                                        &market.meta.short_token_mint
+                                    };
+
+                                    let token_config = get_token_config(token_mint)?;
+                                    let amount = Amount::from_u64(
+                                        amount as u64,
+                                        token_config.token_decimals,
+                                    );
+                                    let price = price_map
+                                        .get(token_mint)
+                                        .ok_or_eyre("price not found in price map")?;
+
+                                    let token_value = amount.0 * Decimal::from(price.min.value);
+
+                                    current_batch.push((market, is_long, amount));
+                                    current_batch_value += token_value;
+
+                                    // If batch is full or we've reached min_value, check if we should push it
+                                    if current_batch_value >= min_value_per_batch.0 {
+                                        batches.push(current_batch);
+                                        current_batch = Vec::new();
+                                        current_batch_value = Decimal::ZERO;
+                                    }
+                                }
+                                None => {
+                                    // No more claims can be added to current batch
+                                    if current_batch_value >= min_value_per_batch.0 {
+                                        batches.push(current_batch);
+                                    }
+                                    current_batch = Vec::new();
+                                    current_batch_value = Decimal::ZERO;
+                                }
+                            }
+                        }
+
+                        // Handle the last batch if it meets the minimum value requirement
+                        if !current_batch.is_empty() && current_batch_value >= min_value_per_batch.0
+                        {
+                            batches.push(current_batch);
+                        }
+
+                        // Step 4: Build bundle with claim transactions and optional deposit instructions
+                        let mut bundle = client.bundle_with_options(options.clone());
+                        let mut claimed_tokens = HashMap::new();
+
+                        for batch in batches {
+                            let mut batch_builder = client.store_transaction();
+
+                            for (market, is_long, amount) in batch {
+                                let token_mint = if is_long {
+                                    &market.meta.long_token_mint
+                                } else {
+                                    &market.meta.short_token_mint
+                                };
+
+                                let token_config = get_token_config(token_mint)?;
+
+                                let claim = client.claim_fees_to_receiver_vault(
+                                    store,
+                                    &market.meta.market_token_mint,
+                                    token_mint,
+                                    amount.to_u64(token_config.token_decimals)?,
+                                );
+                                batch_builder = batch_builder.merge(claim);
+
+                                *claimed_tokens.entry(*token_mint).or_insert(0) +=
+                                    amount.to_u64(token_config.token_decimals)?;
+                            }
+
+                            bundle.push(batch_builder)?;
+                        }
+
+                        // Add deposit instructions if --deposit is specified
+                        if *deposit {
+                            // println!("Skipping all token deposits temporarily");
+                            // return Ok(());
+
+                            let store_account = client.store(store).await?;
+                            let time_window = store_account.gt.exchange_time_window;
+
+                            // Get treasury vault config
+                            let config = client.find_treasury_config_address(store);
+                            // println!("Treasury global config address: {}", config);
+
+                            let config_account = client
+                                .account::<ZeroCopy<Config>>(&config)
+                                .await?
+                                .ok_or_eyre("treasury config not found")?;
+
+                            let treasury_vault_config = config_account.0.treasury_vault_config;
+                            // println!("Treasury vault config address: {}", treasury_vault_config);
+
+                            let treasury_vault_config = client
+                                .account::<ZeroCopy<TreasuryVaultConfig>>(&treasury_vault_config)
+                                .await?
+                                .ok_or_eyre("treasury vault config not found")?;
+
+                            for token_mint in claimed_tokens.keys() {
+                                // Check if token exists in the treasury vault config
+                                if treasury_vault_config.0.tokens.get(token_mint).is_none() {
+                                    println!(
+                                        "Skipping deposit for token {} as it is not in treasury vault config",
+                                        token_mint
+                                    );
+                                    continue;
+                                }
+
+                                let (deposit, _) = client
+                                    .deposit_to_treasury_valut(
+                                        store,
+                                        None,
+                                        token_mint,
+                                        token_program_id.as_ref(),
+                                        time_window,
+                                    )
+                                    .await?
+                                    .swap_output(());
+                                bundle.push(deposit)?;
+                            }
+                        }
+
+                        // Step 5: Display claimed values and token amounts in human-readable format
+                        let mut sorted_tokens: Vec<_> = claimed_tokens.into_iter().collect();
+                        sorted_tokens.sort_by_key(|(mint, _)| *mint);
+
+                        let mut total_value = 0_u128;
+                        let mut last_token_config = None;
+                        for (token_mint, amount) in &sorted_tokens {
+                            let token_config = get_token_config(token_mint)?;
+                            last_token_config = Some(token_config);
+                            let amount = *amount as u128;
+                            let price = price_map
+                                .get(token_mint)
+                                .ok_or_eyre("price not found in price map")?;
+
+                            // Calculate value using the price directly since it's already properly scaled
+                            let unit_price = price.min.to_unit_price();
+                            let token_value = amount * unit_price;
+                            total_value += token_value;
+
+                            println!(
+                                "Token {}: {} (Price: ${}, Value: ${})",
+                                token_mint,
+                                Amount::from_u64(amount as u64, token_config.token_decimals),
+                                Value::from_u128(
+                                    unit_price * 10u128.pow(token_config.token_decimals as u32)
+                                ),
+                                Value::from_u128(token_value)
+                            );
+                        }
+
+                        if let Some(token_config) = last_token_config {
+                            println!(
+                                "Total value claimed: ${}",
+                                Value::from_u128(
+                                    total_value * 10u128.pow(token_config.token_decimals as u32)
+                                )
+                            );
+                        }
+
+                        bundle
+                    }
+                    #[cfg(not(feature = "execute"))]
+                    {
+                        return Err(eyre::eyre!(
+                            "Batch processing mode requires the 'execute' feature to be enabled"
+                        ));
+                    }
                 }
             }
             Command::DepositToTreasury {
@@ -298,7 +666,7 @@ impl super::Command for Treasury {
                     .swap_output(());
                 println!("{gt_exchange_vault}");
 
-                rpc
+                rpc.into_bundle_with_options(options)?
             }
             Command::PrepareGtBank { gt_exchange_vault } => {
                 let gt_exchange_vault = gt_exchange_vault.get(store, client).await?;
@@ -310,7 +678,7 @@ impl super::Command for Treasury {
                 tracing::info!("Preparing GT bank: {gt_bank}");
                 println!("{gt_bank}");
 
-                txn
+                txn.into_bundle_with_options(options)?
             }
             Command::SyncGtBank {
                 gt_exchange_vault,
@@ -327,6 +695,7 @@ impl super::Command for Treasury {
                         token_program_id.as_ref(),
                     )
                     .await?
+                    .into_bundle_with_options(options)?
             }
             Command::CreateSwap {
                 market_token,
@@ -341,7 +710,6 @@ impl super::Command for Treasury {
                 let receiver = client.find_treasury_receiver_address(&config);
                 let market = client.find_market_address(store, market_token);
                 let market = client.market(&market).await?;
-                // let meta = &market.meta;
                 let amount = match amount {
                     Some(amount) => token_amount(amount, Some(swap_in), &token_map, &market, true)?,
                     None => {
@@ -375,14 +743,15 @@ impl super::Command for Treasury {
                 if let Some(lamports) = fund {
                     let swap_owner = client.find_treasury_receiver_address(&config);
                     let fund = client.transfer(&swap_owner, lamports.to_u64()?)?;
-                    fund.merge(rpc)
+                    fund.merge(rpc).into_bundle_with_options(options)?
                 } else {
-                    rpc
+                    rpc.into_bundle_with_options(options)?
                 }
             }
-            Command::CancelSwap { order } => {
-                client.cancel_treasury_swap(store, order, None).await?
-            }
+            Command::CancelSwap { order } => client
+                .cancel_treasury_swap(store, order, None)
+                .await?
+                .into_bundle_with_options(options)?,
             Command::Withdraw {
                 token,
                 token_program_id,
@@ -411,6 +780,7 @@ impl super::Command for Treasury {
                         &target,
                     )
                     .await?
+                    .into_bundle_with_options(options)?
             }
             Command::BatchWithdraw { file, force_one_tx } => {
                 let batch = toml_from_file::<BatchWithdraw>(file)?;
@@ -473,7 +843,7 @@ impl super::Command for Treasury {
                     )?;
                 }
 
-                return Ok(client.send_or_serialize(bundle).await?);
+                bundle
             }
             #[cfg(feature = "execute")]
             Command::ConfirmGtBuyback {
@@ -488,8 +858,6 @@ impl super::Command for Treasury {
                 return Ok(());
             }
         };
-
-        let bundle = txn.into_bundle_with_options(options)?;
 
         client.send_or_serialize(bundle).await?;
         Ok(())
