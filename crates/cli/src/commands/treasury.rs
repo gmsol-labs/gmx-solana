@@ -26,6 +26,7 @@ use {
         client::pyth::{pubkey_to_identifier, pull_oracle::hermes::Identifier, Hermes},
         core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
         core::token_config::TokenConfig,
+        programs::gmsol_treasury::accounts::TreasuryVaultConfig,
     },
     std::{collections::HashMap,num::NonZeroU8},
     rust_decimal::Decimal,
@@ -464,7 +465,20 @@ impl super::Command for Treasury {
                             let store_account = client.store(store).await?;
                             let time_window = store_account.gt.exchange_time_window;
 
+                            // Get treasury vault config
+                            let config = client.find_treasury_config_address(store);
+                            let treasury_vault_config = client
+                                .account::<TreasuryVaultConfig>(&config)
+                                .await?
+                                .ok_or_eyre("treasury vault config not found")?;
+
                             for token_mint in claimed_tokens.keys() {
+                                // Check if deposit is allowed for this token
+                                if !treasury_vault_config.is_deposit_allowed(token_mint)? {
+                                    println!("Skipping deposit for token {} as it is not allowed", token_mint);
+                                    continue;
+                                }
+
                                 let (deposit, _) = client
                                     .deposit_to_treasury_valut(
                                         store,
