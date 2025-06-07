@@ -34,6 +34,7 @@ gmsol-sdk = { workspace = true, features = [
     "decode",
     "treasury",
     "timelock",
+    "pyth",
 ] }
 
 eyre = { workspace = true }

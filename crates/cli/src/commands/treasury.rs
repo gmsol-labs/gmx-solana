@@ -20,16 +20,18 @@ use gmsol_sdk::{
 };
 
 #[cfg(feature = "execute")]
+use crate::commands::exchange::executor;
+
 use {
-    crate::commands::exchange::executor,
+    // crate::commands::exchange::executor,
     gmsol_sdk::{
         client::pyth::{pubkey_to_identifier, pull_oracle::hermes::Identifier, Hermes},
         core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
         core::token_config::TokenConfig,
         programs::gmsol_treasury::accounts::TreasuryVaultConfig,
     },
-    std::{collections::HashMap,num::NonZeroU8},
     rust_decimal::Decimal,
+    std::{collections::HashMap, num::NonZeroU8},
 };
 
 /// Read and parse a TOML file into a type
@@ -100,10 +102,10 @@ enum Command {
         token_program_id: Option<Pubkey>,
         #[arg(long, short, default_value_t = Amount::ZERO)]
         min_amount: Amount,
-        #[cfg(feature = "execute")]
+        // #[cfg(feature = "execute")]
         #[arg(long, default_value_t = Amount(Decimal::from(1000)))]
         min_value_per_batch: Amount,
-        #[cfg(feature = "execute")]
+        // #[cfg(feature = "execute")]
         #[arg(long, default_value_t = NonZeroU8::new(3).unwrap())]
         batch: NonZeroU8,
     },
@@ -260,9 +262,9 @@ impl super::Command for Treasury {
                 deposit,
                 token_program_id,
                 min_amount,
-                #[cfg(feature = "execute")]
+                // #[cfg(feature = "execute")]
                 min_value_per_batch,
-                #[cfg(feature = "execute")]
+                // #[cfg(feature = "execute")]
                 batch,
             } => {
                 if let Some(market_token) = market_token {
@@ -317,7 +319,7 @@ impl super::Command for Treasury {
                         bundle
                     }
                 } else {
-                    #[cfg(feature = "execute")]
+                    // #[cfg(feature = "execute")]
                     {
                         // Batch processing mode with Pyth support
                         let markets = client.markets(store).await?;
@@ -334,7 +336,8 @@ impl super::Command for Treasury {
                                         }
                                     }
                                 }
-                                if side.map_or(true, |s| !s.is_long()) {
+                                // Skip short token processing for single token pool when no side is specified
+                                if side.map_or(true, |s| !s.is_long()) && !(side.is_none() && market.meta.long_token_mint == market.meta.short_token_mint) {
                                     if let Ok(amount) = fee_pool.amount(false) {
                                         if amount > 0 {
                                             claimable_fees.push((market.clone(), false, amount));
@@ -403,7 +406,8 @@ impl super::Command for Treasury {
                             };
 
                             let token_config = get_token_config(token_mint)?;
-                            let amount = Amount::from_u64(amount as u64, token_config.token_decimals);
+                            let amount =
+                                Amount::from_u64(amount as u64, token_config.token_decimals);
                             let price = price_map
                                 .get(token_mint)
                                 .ok_or_eyre("price not found in price map")?;
@@ -462,22 +466,30 @@ impl super::Command for Treasury {
 
                         // Add deposit instructions if --deposit is specified
                         if *deposit {
+                            println!("Skipping all token deposits temporarily");
+                            return Ok(());
+                            
                             let store_account = client.store(store).await?;
                             let time_window = store_account.gt.exchange_time_window;
 
                             // Get treasury vault config
-                            let config = client.find_treasury_config_address(store);
-                            let treasury_vault_config = client
-                                .account::<TreasuryVaultConfig>(&config)
-                                .await?
-                                .ok_or_eyre("treasury vault config not found")?;
+                            // let config = client.find_treasury_config_address(store);
+                            // println!("Treasury vault config address: {}", config);
+                            
+                            // let treasury_vault_config = client
+                            //     .account::<TreasuryVaultConfig>(&config)
+                            //     .await?
+                            //     .ok_or_eyre("treasury vault config not found")?;
 
                             for token_mint in claimed_tokens.keys() {
-                                // Check if deposit is allowed for this token
-                                if !treasury_vault_config.is_deposit_allowed(token_mint)? {
-                                    println!("Skipping deposit for token {} as it is not allowed", token_mint);
-                                    continue;
-                                }
+                                // // Check if token exists in the treasury vault config
+                                // if treasury_vault_config.tokens.get(token_mint).is_none() {
+                                //     println!(
+                                //         "Skipping deposit for token {} as it is not in treasury vault config",
+                                //         token_mint
+                                //     );
+                                //     continue;
+                                // }
 
                                 let (deposit, _) = client
                                     .deposit_to_treasury_valut(
@@ -498,8 +510,10 @@ impl super::Command for Treasury {
                         sorted_tokens.sort_by_key(|(mint, _)| *mint);
 
                         let mut total_value = 0_u128;
+                        let mut last_token_config = None;
                         for (token_mint, amount) in &sorted_tokens {
                             let token_config = get_token_config(token_mint)?;
+                            last_token_config = Some(token_config);
                             let amount = *amount as u128;
                             let price = price_map
                                 .get(token_mint)
@@ -511,26 +525,33 @@ impl super::Command for Treasury {
                             total_value += token_value;
 
                             println!(
-                                "Token {}: {} (Price: ${}, Raw Price: {}, Value: ${}, Precision: {})",
+                                "Token {}: {} (Price: ${}, Value: ${})",
                                 token_mint,
-                                amount,
-                                Amount(Decimal::from(unit_price)),
-                                unit_price,
-                                Value::from_u128(token_value),
-                                token_config.precision()
+                                Amount::from_u64(amount as u64, token_config.token_decimals),
+                                Value::from_u128(
+                                    unit_price * 10u128.pow(token_config.token_decimals as u32)
+                                ),
+                                Value::from_u128(token_value)
                             );
                         }
 
-                        println!("Total value claimed: ${}", Value::from_u128(total_value));
+                        if let Some(token_config) = last_token_config {
+                            println!(
+                                "Total value claimed: ${}",
+                                Value::from_u128(
+                                    total_value * 10u128.pow(token_config.token_decimals as u32)
+                                )
+                            );
+                        }
 
                         bundle
                     }
-                    #[cfg(not(feature = "execute"))]
-                    {
-                        return Err(eyre::eyre!(
-                            "Batch processing mode requires the 'execute' feature to be enabled"
-                        ));
-                    }
+                    // #[cfg(not(feature = "execute"))]
+                    // {
+                    //     return Err(eyre::eyre!(
+                    //         "Batch processing mode requires the 'execute' feature to be enabled"
+                    //     ));
+                    // }
                 }
             }
             Command::DepositToTreasury {
