@@ -15,6 +15,10 @@ pub const PARTICIPANT_SEED: &[u8] = b"participant";
 #[constant]
 pub const MAX_LEADERBOARD_LEN: u8 = 5;
 
+/// The buffer time in seconds for competition start time.
+#[constant]
+pub const START_TIME_BUFFER: i64 = 10;
+
 /// A single leaderboard record.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, PartialEq, Eq, InitSpace)]
 #[cfg_attr(feature = "debug", derive(Debug))]
