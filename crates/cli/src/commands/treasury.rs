@@ -35,6 +35,17 @@ use {
     std::{collections::HashMap, num::NonZeroU8, sync::Arc},
 };
 
+/// Structure to store token value information
+#[cfg(feature = "execute")]
+#[derive(Debug)]
+struct TokenValueInfo {
+    market: Arc<Market>,
+    is_long: bool,
+    amount: u64,
+    unit_price: u128,
+    value: Value,
+}
+
 /// Read and parse a TOML file into a type
 fn toml_from_file<T>(path: &impl AsRef<std::path::Path>) -> eyre::Result<T>
 where
@@ -402,120 +413,106 @@ impl super::Command for Treasury {
                             }
                         }
 
+                        // New: Calculate and store token values
+                        let mut token_value_infos = Vec::new();
+                        for (market, is_long, amount) in &claimable_fees {
+                            let token_mint = if *is_long {
+                                &market.meta.long_token_mint
+                            } else {
+                                &market.meta.short_token_mint
+                            };
+
+                            let price = price_map
+                                .get(token_mint)
+                                .ok_or_eyre("price not found in price map")?;
+                            let unit_price = price.min.to_unit_price();
+                            // amount is already in unit token, unit_price is in 10^-20 USD / unit token
+                            let value = Value::from_u128(*amount * unit_price);
+                            // println!("DEBUG: Creating TokenValueInfo - token: {}, amount: {}, unit_price: {}, value: {}",
+                            //     token_mint, amount, unit_price, value);
+                            token_value_infos.push(TokenValueInfo {
+                                market: market.clone(),
+                                is_long: *is_long,
+                                amount: *amount as u64,
+                                unit_price,
+                                value,
+                            });
+                        }
+
+                        // New: Sort token values
+                        token_value_infos.sort_by(|a, b| b.value.cmp(&a.value));
+
                         // Step 3: Build transaction batches based on min_value_per_batch and batch size
                         // Sort claims by value in descending order to maximize batch value
                         claimable_fees.sort_by(|a, b| {
-                            let value_a = if a.1 {
-                                price_map.get(&a.0.meta.long_token_mint)
-                            } else {
-                                price_map.get(&a.0.meta.short_token_mint)
-                            }
-                            .map(|p| p.min.value)
-                            .unwrap_or(0);
+                            let value_a = token_value_infos
+                                .iter()
+                                .find(|info| {
+                                    info.market.meta.market_token_mint == a.0.meta.market_token_mint
+                                        && info.is_long == a.1
+                                })
+                                .map(|info| info.value)
+                                .unwrap_or(Value::ZERO);
 
-                            let value_b = if b.1 {
-                                price_map.get(&b.0.meta.long_token_mint)
-                            } else {
-                                price_map.get(&b.0.meta.short_token_mint)
-                            }
-                            .map(|p| p.min.value)
-                            .unwrap_or(0);
+                            let value_b = token_value_infos
+                                .iter()
+                                .find(|info| {
+                                    info.market.meta.market_token_mint == b.0.meta.market_token_mint
+                                        && info.is_long == b.1
+                                })
+                                .map(|info| info.value)
+                                .unwrap_or(Value::ZERO);
 
                             value_b.cmp(&value_a)
                         });
 
+                        // Use chunks to create batches
                         let mut batches: Vec<Vec<(Arc<Market>, bool, Amount)>> = Vec::new();
-                        let mut current_batch: Vec<(Arc<Market>, bool, Amount)> = Vec::new();
-                        let mut current_batch_value = Decimal::ZERO;
-                        let mut remaining_claims = claimable_fees;
+                        let batch_size = batch.get() as usize;
 
-                        while !remaining_claims.is_empty() {
-                            let mut best_claim_index = None;
-                            let mut best_claim_value = Decimal::ZERO;
+                        for chunk in claimable_fees.chunks(batch_size) {
+                            let mut chunk_value = Decimal::ZERO;
+                            // let mut valid_chunk = true;
 
-                            // Find the best claim that can be added to current batch
-                            for (i, (market, is_long, amount)) in
-                                remaining_claims.iter().enumerate()
-                            {
-                                let token_mint = if *is_long {
-                                    &market.meta.long_token_mint
-                                } else {
-                                    &market.meta.short_token_mint
-                                };
-
-                                let token_config = get_token_config(token_mint)?;
-                                let amount =
-                                    Amount::from_u64(*amount as u64, token_config.token_decimals);
-                                let price = price_map
-                                    .get(token_mint)
-                                    .ok_or_eyre("price not found in price map")?;
-
-                                let token_value = amount.0 * Decimal::from(price.min.value);
-
-                                // Check if adding this claim would exceed batch size
-                                if current_batch.len() >= batch.get() as usize {
-                                    continue;
-                                }
-
-                                // If this claim would help reach min_value, prioritize it
-                                if current_batch_value + token_value >= min_value_per_batch.0 {
-                                    best_claim_index = Some(i);
-                                    // best_claim_value = token_value;
-                                    break;
-                                }
-
-                                // Otherwise, keep track of the highest value claim
-                                if token_value > best_claim_value {
-                                    best_claim_index = Some(i);
-                                    best_claim_value = token_value;
-                                }
+                            // Calculate total value for this chunk
+                            for (market, is_long, _) in chunk {
+                                let token_value = token_value_infos
+                                    .iter()
+                                    .find(|info| {
+                                        info.market.meta.market_token_mint
+                                            == market.meta.market_token_mint
+                                            && info.is_long == *is_long
+                                    })
+                                    .map(|info| info.value)
+                                    .unwrap_or(Value::ZERO);
+                                chunk_value += token_value.0;
                             }
 
-                            match best_claim_index {
-                                Some(index) => {
-                                    let (market, is_long, amount) = remaining_claims.remove(index);
-                                    let token_mint = if is_long {
-                                        &market.meta.long_token_mint
-                                    } else {
-                                        &market.meta.short_token_mint
-                                    };
-
-                                    let token_config = get_token_config(token_mint)?;
-                                    let amount = Amount::from_u64(
-                                        amount as u64,
-                                        token_config.token_decimals,
-                                    );
-                                    let price = price_map
-                                        .get(token_mint)
-                                        .ok_or_eyre("price not found in price map")?;
-
-                                    let token_value = amount.0 * Decimal::from(price.min.value);
-
-                                    current_batch.push((market, is_long, amount));
-                                    current_batch_value += token_value;
-
-                                    // If batch is full or we've reached min_value, check if we should push it
-                                    if current_batch_value >= min_value_per_batch.0 {
-                                        batches.push(current_batch);
-                                        current_batch = Vec::new();
-                                        current_batch_value = Decimal::ZERO;
-                                    }
-                                }
-                                None => {
-                                    // No more claims can be added to current batch
-                                    if current_batch_value >= min_value_per_batch.0 {
-                                        batches.push(current_batch);
-                                    }
-                                    current_batch = Vec::new();
-                                    current_batch_value = Decimal::ZERO;
-                                }
+                            // Only add chunks that meet the minimum value requirement
+                            if chunk_value >= min_value_per_batch.0 {
+                                // Convert the chunk to the correct type
+                                let converted_chunk: Vec<(Arc<Market>, bool, Amount)> = chunk
+                                    .iter()
+                                    .map(|(market, is_long, amount)| {
+                                        let token_mint = if *is_long {
+                                            &market.meta.long_token_mint
+                                        } else {
+                                            &market.meta.short_token_mint
+                                        };
+                                        let token_config = get_token_config(token_mint).unwrap();
+                                        let amount = Amount::from_u64(
+                                            *amount as u64,
+                                            token_config.token_decimals,
+                                        );
+                                        (market.clone(), *is_long, amount)
+                                    })
+                                    .collect();
+                                batches.push(converted_chunk);
+                            } else {
+                                // Since claims are sorted by value, if this chunk doesn't meet the threshold,
+                                // subsequent chunks won't either
+                                break;
                             }
-                        }
-
-                        // Handle the last batch if it meets the minimum value requirement
-                        if !current_batch.is_empty() && current_batch_value >= min_value_per_batch.0
-                        {
-                            batches.push(current_batch);
                         }
 
                         // Step 4: Build bundle with claim transactions and optional deposit instructions
@@ -575,10 +572,16 @@ impl super::Command for Treasury {
                                 .ok_or_eyre("treasury vault config not found")?;
 
                             for token_mint in claimed_tokens.keys() {
-                                // Check if token exists in the treasury vault config
-                                if treasury_vault_config.0.tokens.get(token_mint).is_none() {
+                                // Skip if token doesn't exist or deposit is not allowed
+                                if !treasury_vault_config
+                                    .0
+                                    .tokens
+                                    .get(token_mint)
+                                    .map(|config| config.flags.get_flag(TokenFlag::AllowDeposit))
+                                    .unwrap_or(false)
+                                {
                                     println!(
-                                        "Skipping deposit for token {} as it is not in treasury vault config",
+                                        "Skipping deposit for token {} as it is not allowed",
                                         token_mint
                                     );
                                     continue;
@@ -602,40 +605,47 @@ impl super::Command for Treasury {
                         let mut sorted_tokens: Vec<_> = claimed_tokens.into_iter().collect();
                         sorted_tokens.sort_by_key(|(mint, _)| *mint);
 
-                        let mut total_value = 0_u128;
-                        let mut last_token_config = None;
-                        for (token_mint, amount) in &sorted_tokens {
+                        let mut total_value = Value::ZERO;
+                        for (token_mint, _) in &sorted_tokens {
                             let token_config = get_token_config(token_mint)?;
-                            last_token_config = Some(token_config);
-                            let amount = *amount as u128;
-                            let price = price_map
-                                .get(token_mint)
-                                .ok_or_eyre("price not found in price map")?;
 
-                            // Calculate value using the price directly since it's already properly scaled
-                            let unit_price = price.min.to_unit_price();
-                            let token_value = amount * unit_price;
-                            total_value += token_value;
+                            let mut total_amount = 0;
+                            let mut token_total_value = Value::ZERO;
+                            let mut unit_price = 0;
+
+                            for info in token_value_infos.iter() {
+                                let info_token_mint = if info.is_long {
+                                    &info.market.meta.long_token_mint
+                                } else {
+                                    &info.market.meta.short_token_mint
+                                };
+                                if info_token_mint == token_mint {
+                                    total_amount += info.amount;
+                                    token_total_value = Value::from_u128(
+                                        token_total_value.to_u128().unwrap_or(0)
+                                            + info.value.to_u128().unwrap_or(0),
+                                    );
+                                    unit_price = info.unit_price;
+                                }
+                            }
+
+                            total_value = Value::from_u128(
+                                total_value.to_u128().unwrap_or(0)
+                                    + token_total_value.to_u128().unwrap_or(0),
+                            );
 
                             println!(
                                 "Token {}: {} (Price: ${}, Value: ${})",
                                 token_mint,
-                                Amount::from_u64(amount as u64, token_config.token_decimals),
+                                Amount::from_u64(total_amount, token_config.token_decimals),
                                 Value::from_u128(
                                     unit_price * 10u128.pow(token_config.token_decimals as u32)
                                 ),
-                                Value::from_u128(token_value)
+                                token_total_value
                             );
                         }
 
-                        if let Some(token_config) = last_token_config {
-                            println!(
-                                "Total value claimed: ${}",
-                                Value::from_u128(
-                                    total_value * 10u128.pow(token_config.token_decimals as u32)
-                                )
-                            );
-                        }
+                        println!("Total value claimed: ${}", total_value);
 
                         bundle
                     }

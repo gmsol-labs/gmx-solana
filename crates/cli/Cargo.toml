@@ -61,7 +61,6 @@ indexmap = { workspace = true }
 bs58 = { workspace = true }
 hex = { workspace = true }
 futures-util = { workspace = true }
-pyth-sdk = { workspace = true }
 rand = { workspace = true }
 
 color-eyre = { workspace = true, optional = true }
