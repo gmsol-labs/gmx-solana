@@ -56,8 +56,9 @@ async fn competition() -> eyre::Result<()> {
     .0;
     let end_time = start_time + 3600 * 24; // 24 hour competition
     let volume_threshold = 10_000 * MARKET_USD_UNIT; // 10,000 USD threshold
-    let time_extension = 10; // 10 seconds extension
-    let max_extension = 3600 * 24; // 24 hour maximum extension
+    let extension_duration = 10; // 10 seconds extension
+    let extension_cap = 3600 * 24; // 24 hour maximum extension
+    let only_count_increase = false;
 
     let init_competition = client
         .store_transaction()
@@ -66,8 +67,9 @@ async fn competition() -> eyre::Result<()> {
             start_time,
             end_time,
             volume_threshold,
-            time_extension,
-            max_extension,
+            extension_duration,
+            extension_cap,
+            only_count_increase,
         })
         .anchor_accounts(gmsol_competition::accounts::InitializeCompetition {
             payer: client.payer(),
@@ -86,8 +88,8 @@ async fn competition() -> eyre::Result<()> {
     assert_eq!(competition_account.start_time, start_time);
     assert_eq!(competition_account.end_time, end_time);
     assert_eq!(competition_account.volume_threshold, volume_threshold);
-    assert_eq!(competition_account.extension_duration, time_extension);
-    assert_eq!(competition_account.extension_cap, max_extension);
+    assert_eq!(competition_account.extension_duration, extension_duration);
+    assert_eq!(competition_account.extension_cap, extension_cap);
     assert!(competition_account.extension_triggerer.is_none());
 
     // Create and execute order with volume exceeding threshold
@@ -163,8 +165,8 @@ async fn competition() -> eyre::Result<()> {
         .account::<Participant>(&participant)
         .await?
         .expect("must exist");
-    let proposed_end_time = end_time + time_extension;
-    let max_end_time = participant_account.last_updated_at + max_extension;
+    let proposed_end_time = end_time + extension_duration;
+    let max_end_time = participant_account.last_updated_at + extension_cap;
     assert_eq!(
         competition_account.end_time,
         proposed_end_time.min(max_end_time)

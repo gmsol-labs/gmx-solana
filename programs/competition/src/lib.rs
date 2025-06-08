@@ -19,16 +19,18 @@ pub mod gmsol_competition {
         start_time: i64,
         end_time: i64,
         volume_threshold: u128,
-        time_extension: i64,
-        max_extension: i64,
+        extension_duration: i64,
+        extension_cap: i64,
+        only_count_increase: bool,
     ) -> Result<()> {
         InitializeCompetition::invoke(
             ctx,
             start_time,
             end_time,
             volume_threshold,
-            time_extension,
-            max_extension,
+            extension_duration,
+            extension_cap,
+            only_count_increase,
         )
     }
 

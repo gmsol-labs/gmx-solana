@@ -37,9 +37,13 @@ impl InitializeCompetition<'_> {
         volume_threshold: u128,
         extension_duration: i64,
         extension_cap: i64,
+        only_count_increase: bool,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        require!(start_time > now - START_TIME_BUFFER, CompetitionError::InvalidTimeRange);
+        require!(
+            start_time > now - START_TIME_BUFFER,
+            CompetitionError::InvalidTimeRange
+        );
         require!(start_time < end_time, CompetitionError::InvalidTimeRange);
         require!(
             extension_duration > 0,
@@ -65,6 +69,7 @@ impl InitializeCompetition<'_> {
         comp.extension_duration = extension_duration;
         comp.extension_cap = extension_cap;
         comp.extension_triggerer = None;
+        comp.only_count_increase = only_count_increase;
         Ok(())
     }
 }

@@ -53,6 +53,8 @@ pub struct Competition {
     pub extension_cap: i64,
     /// Address that triggered time extension.
     pub extension_triggerer: Option<Pubkey>,
+    /// Whether to only count volume from position increases.
+    pub only_count_increase: bool,
 }
 
 /// The per-trader statistics.
