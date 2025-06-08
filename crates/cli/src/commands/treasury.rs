@@ -57,9 +57,6 @@ where
     toml::from_str(&buffer).map_err(|e| eyre::eyre!("Failed to parse TOML: {}", e))
 }
 
-// #[cfg(feature = "execute")]
-// use crate::commands::exchange::executor;
-
 /// Treasury management commands.
 #[derive(Debug, clap::Args)]
 pub struct Treasury {
@@ -341,7 +338,7 @@ impl super::Command for Treasury {
                         for (_, market) in markets {
                             let market_model = MarketModel::from_parts(market.clone(), 1);
                             if let Ok(fee_pool) = market_model.claimable_fee_pool() {
-                                if side.map_or(true, |s| s.is_long()) {
+                                if side.is_none() || side.unwrap().is_long() {
                                     if let Ok(amount) = fee_pool.amount(true) {
                                         if amount > 0 {
                                             claimable_fees.push((market.clone(), true, amount));
@@ -349,7 +346,7 @@ impl super::Command for Treasury {
                                     }
                                 }
                                 // Skip short token processing for single token pool when no side is specified
-                                if side.map_or(true, |s| !s.is_long())
+                                if (side.is_none() || !side.unwrap().is_long())
                                     && !(side.is_none()
                                         && market.meta.long_token_mint
                                             == market.meta.short_token_mint)
@@ -365,9 +362,6 @@ impl super::Command for Treasury {
 
                         // Step 2: Fetch all prices from Pyth using Hermes
                         let hermes = Hermes::default();
-                        // let mut batches: Vec<Vec<(Arc<Market>, bool, Amount)>> = Vec::new();
-                        // let mut current_batch: Vec<(Arc<Market>, bool, Amount)> = Vec::new();
-                        // let mut current_batch_value = Decimal::ZERO;
 
                         // Helper function to get token config
                         let get_token_config = |token_mint: &Pubkey| -> eyre::Result<&TokenConfig> {
@@ -443,49 +437,17 @@ impl super::Command for Treasury {
                         token_value_infos.sort_by(|a, b| b.value.cmp(&a.value));
 
                         // Step 3: Build transaction batches based on min_value_per_batch and batch size
-                        // Sort claims by value in descending order to maximize batch value
-                        claimable_fees.sort_by(|a, b| {
-                            let value_a = token_value_infos
-                                .iter()
-                                .find(|info| {
-                                    info.market.meta.market_token_mint == a.0.meta.market_token_mint
-                                        && info.is_long == a.1
-                                })
-                                .map(|info| info.value)
-                                .unwrap_or(Value::ZERO);
-
-                            let value_b = token_value_infos
-                                .iter()
-                                .find(|info| {
-                                    info.market.meta.market_token_mint == b.0.meta.market_token_mint
-                                        && info.is_long == b.1
-                                })
-                                .map(|info| info.value)
-                                .unwrap_or(Value::ZERO);
-
-                            value_b.cmp(&value_a)
-                        });
-
                         // Use chunks to create batches
                         let mut batches: Vec<Vec<(Arc<Market>, bool, Amount)>> = Vec::new();
                         let batch_size = batch.get() as usize;
 
-                        for chunk in claimable_fees.chunks(batch_size) {
+                        for chunk in token_value_infos.chunks(batch_size) {
                             let mut chunk_value = Decimal::ZERO;
                             // let mut valid_chunk = true;
 
                             // Calculate total value for this chunk
-                            for (market, is_long, _) in chunk {
-                                let token_value = token_value_infos
-                                    .iter()
-                                    .find(|info| {
-                                        info.market.meta.market_token_mint
-                                            == market.meta.market_token_mint
-                                            && info.is_long == *is_long
-                                    })
-                                    .map(|info| info.value)
-                                    .unwrap_or(Value::ZERO);
-                                chunk_value += token_value.0;
+                            for info in chunk {
+                                chunk_value += info.value.0;
                             }
 
                             // Only add chunks that meet the minimum value requirement
@@ -493,18 +455,18 @@ impl super::Command for Treasury {
                                 // Convert the chunk to the correct type
                                 let converted_chunk: Vec<(Arc<Market>, bool, Amount)> = chunk
                                     .iter()
-                                    .map(|(market, is_long, amount)| {
-                                        let token_mint = if *is_long {
-                                            &market.meta.long_token_mint
+                                    .map(|info| {
+                                        let token_mint = if info.is_long {
+                                            &info.market.meta.long_token_mint
                                         } else {
-                                            &market.meta.short_token_mint
+                                            &info.market.meta.short_token_mint
                                         };
                                         let token_config = get_token_config(token_mint).unwrap();
                                         let amount = Amount::from_u64(
-                                            *amount as u64,
+                                            info.amount,
                                             token_config.token_decimals,
                                         );
-                                        (market.clone(), *is_long, amount)
+                                        (info.market.clone(), info.is_long, amount)
                                     })
                                     .collect();
                                 batches.push(converted_chunk);
