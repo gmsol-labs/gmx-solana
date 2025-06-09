@@ -1,6 +1,6 @@
 use crate::{
     error::CompetitionError,
-    states::{Competition, COMPETITION_SEED, START_TIME_BUFFER},
+    states::{Competition, COMPETITION_SEED},
 };
 use anchor_lang::prelude::*;
 
@@ -40,10 +40,7 @@ impl InitializeCompetition<'_> {
         only_count_increase: bool,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        require!(
-            start_time > now - START_TIME_BUFFER,
-            CompetitionError::InvalidTimeRange
-        );
+        require!(start_time > now, CompetitionError::InvalidTimeRange);
         require!(start_time < end_time, CompetitionError::InvalidTimeRange);
         require!(
             extension_duration > 0,
