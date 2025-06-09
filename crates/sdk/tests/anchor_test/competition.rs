@@ -8,8 +8,8 @@ use gmsol_sdk::{
 };
 use rand::Rng;
 use solana_sdk::{pubkey::Pubkey, system_program};
-use time::OffsetDateTime;
 use std::time::Duration;
+use time::OffsetDateTime;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
 
