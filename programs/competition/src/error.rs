@@ -20,4 +20,6 @@ pub enum CompetitionError {
     InvalidMaxExtension,
     #[msg("Competition is still in progress")]
     CompetitionInProgress,
+    #[msg("Invalid volume merge window")]
+    InvalidVolumeMergeWindow,
 }

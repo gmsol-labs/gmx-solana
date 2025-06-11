@@ -94,6 +94,7 @@ impl CreateParticipantIdempotent<'_> {
             p.trader = trader;
             p.volume = 0;
             p.last_updated_at = now;
+            p.merged_volume = 0;
         }
         Ok(())
     }

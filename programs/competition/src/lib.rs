@@ -22,6 +22,7 @@ pub mod gmsol_competition {
         extension_duration: i64,
         extension_cap: i64,
         only_count_increase: bool,
+        volume_merge_window: i64,
     ) -> Result<()> {
         InitializeCompetition::invoke(
             ctx,
@@ -31,6 +32,7 @@ pub mod gmsol_competition {
             extension_duration,
             extension_cap,
             only_count_increase,
+            volume_merge_window,
         )
     }
 

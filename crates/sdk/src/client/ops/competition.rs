@@ -66,6 +66,7 @@ pub struct CompetitionParams {
     extension_duration: i64,
     extension_cap: i64,
     only_count_increase: bool,
+    volume_merge_window: i64,
 }
 
 impl From<CompetitionParams> for args::InitializeCompetition {
@@ -77,6 +78,7 @@ impl From<CompetitionParams> for args::InitializeCompetition {
             extension_duration,
             extension_cap,
             only_count_increase,
+            volume_merge_window,
         } = params;
         Self {
             start_time,
@@ -85,6 +87,7 @@ impl From<CompetitionParams> for args::InitializeCompetition {
             extension_duration,
             extension_cap,
             only_count_increase,
+            volume_merge_window,
         }
     }
 }

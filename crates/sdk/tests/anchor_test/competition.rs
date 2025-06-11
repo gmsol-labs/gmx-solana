@@ -61,6 +61,7 @@ async fn competition() -> eyre::Result<()> {
     let extension_duration = 10; // 10 seconds extension
     let extension_cap = 3600 * 24; // 24 hour maximum extension
     let only_count_increase = false;
+    let volume_merge_window = 1; // 1 seconds merge window
 
     let init_competition = client
         .store_transaction()
@@ -72,6 +73,7 @@ async fn competition() -> eyre::Result<()> {
             extension_duration,
             extension_cap,
             only_count_increase,
+            volume_merge_window,
         })
         .anchor_accounts(gmsol_competition::accounts::InitializeCompetition {
             payer: client.payer(),
@@ -95,6 +97,7 @@ async fn competition() -> eyre::Result<()> {
     assert_eq!(competition_account.volume_threshold, volume_threshold);
     assert_eq!(competition_account.extension_duration, extension_duration);
     assert_eq!(competition_account.extension_cap, extension_cap);
+    assert_eq!(competition_account.volume_merge_window, volume_merge_window);
     assert!(competition_account.extension_triggerer.is_none());
 
     // Create and execute order with volume exceeding threshold

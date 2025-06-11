@@ -51,6 +51,8 @@ pub struct Competition {
     pub extension_triggerer: Option<Pubkey>,
     /// Whether to only count volume from position increases.
     pub only_count_increase: bool,
+    /// Time window in seconds for merging volumes from the same trader.
+    pub volume_merge_window: i64,
 }
 
 /// The per-trader statistics.
@@ -68,4 +70,6 @@ pub struct Participant {
     pub volume: u128,
     /// The last update timestamp.
     pub last_updated_at: i64,
+    /// The merged volume within the time window.
+    pub merged_volume: u128,
 }
