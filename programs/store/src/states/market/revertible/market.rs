@@ -323,6 +323,10 @@ impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for RevertibleMarke
         })
     }
 
+    fn virtual_inventory_for_swaps_pool(&self) -> gmsol_model::Result<Option<&Self::Pool>> {
+        Ok(None)
+    }
+
     fn usd_to_amount_divisor(&self) -> Self::Num {
         self.market.usd_to_amount_divisor()
     }
@@ -363,6 +367,10 @@ impl gmsol_model::BaseMarketMut<{ constants::MARKET_DECIMALS }> for RevertibleMa
 
     fn claimable_fee_pool_mut(&mut self) -> gmsol_model::Result<&mut Self::Pool> {
         self.pool_mut(PoolKind::ClaimableFee)
+    }
+
+    fn virtual_inventory_for_swaps_pool_mut(&self) -> gmsol_model::Result<Option<&mut Self::Pool>> {
+        Ok(None)
     }
 }
 

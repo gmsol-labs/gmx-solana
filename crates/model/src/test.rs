@@ -498,6 +498,10 @@ where
         }
     }
 
+    fn virtual_inventory_for_swaps_pool(&self) -> crate::Result<Option<&Self::Pool>> {
+        Ok(None)
+    }
+
     fn usd_to_amount_divisor(&self) -> Self::Num {
         self.value_to_amount_divisor.clone()
     }
@@ -545,6 +549,10 @@ where
 
     fn claimable_fee_pool_mut(&mut self) -> crate::Result<&mut Self::Pool> {
         Ok(&mut self.fee)
+    }
+
+    fn virtual_inventory_for_swaps_pool_mut(&self) -> crate::Result<Option<&mut Self::Pool>> {
+        Ok(None)
     }
 }
 

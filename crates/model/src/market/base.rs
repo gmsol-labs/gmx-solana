@@ -2,9 +2,8 @@ use crate::{
     fixed::FixedPointOps,
     num::{MulDiv, Num, Unsigned, UnsignedAbs},
     pool::{balance::Merged, Balance, BalanceExt, Pool},
-    price::Price,
-    price::Prices,
-    PoolExt,
+    price::{Price, Prices},
+    Delta, PoolExt,
 };
 use num_traits::{CheckedAdd, CheckedSub, Signed, Zero};
 
@@ -39,6 +38,9 @@ pub trait BaseMarket<const DECIMALS: u8> {
     /// Get collateral sum pool.
     fn collateral_sum_pool(&self, is_long: bool) -> crate::Result<&Self::Pool>;
 
+    /// Get virtual inventory for swaps.
+    fn virtual_inventory_for_swaps_pool(&self) -> crate::Result<Option<&Self::Pool>>;
+
     /// USD value to market token amount divisor.
     ///
     /// One should make sure it is non-zero.
@@ -68,12 +70,20 @@ pub trait BaseMarketMut<const DECIMALS: u8>: BaseMarket<DECIMALS> {
     /// Get the liquidity pool mutably.
     /// # Requirements
     /// - This method must return `Ok` if [`BaseMarket::liquidity_pool`] does.
+    /// # Notes
+    /// - Avoid using this function directly unless necessary.
+    ///   Use [`BaseMarketMut::apply_delta`] instead.
     fn liquidity_pool_mut(&mut self) -> crate::Result<&mut Self::Pool>;
 
     /// Get the mutable reference of the claimable fee pool.
     /// # Requirements
     /// - This method must return `Ok` if [`BaseMarket::claimable_fee_pool`] does.
     fn claimable_fee_pool_mut(&mut self) -> crate::Result<&mut Self::Pool>;
+
+    /// Get virtual inventory for swaps mutably.
+    /// # Requirements
+    /// - This method must return `Ok(Some(_))` if [`BaseMarket::virtual_inventory_for_swaps_pool`] does.
+    fn virtual_inventory_for_swaps_pool_mut(&self) -> crate::Result<Option<&mut Self::Pool>>;
 }
 
 impl<M: BaseMarket<DECIMALS>, const DECIMALS: u8> BaseMarket<DECIMALS> for &mut M {
@@ -105,6 +115,10 @@ impl<M: BaseMarket<DECIMALS>, const DECIMALS: u8> BaseMarket<DECIMALS> for &mut 
 
     fn collateral_sum_pool(&self, is_long: bool) -> crate::Result<&Self::Pool> {
         (**self).collateral_sum_pool(is_long)
+    }
+
+    fn virtual_inventory_for_swaps_pool(&self) -> crate::Result<Option<&Self::Pool>> {
+        (**self).virtual_inventory_for_swaps_pool()
     }
 
     fn usd_to_amount_divisor(&self) -> Self::Num {
@@ -143,6 +157,10 @@ impl<M: BaseMarketMut<DECIMALS>, const DECIMALS: u8> BaseMarketMut<DECIMALS> for
 
     fn claimable_fee_pool_mut(&mut self) -> crate::Result<&mut Self::Pool> {
         (**self).claimable_fee_pool_mut()
+    }
+
+    fn virtual_inventory_for_swaps_pool_mut(&self) -> crate::Result<Option<&mut Self::Pool>> {
+        (**self).virtual_inventory_for_swaps_pool_mut()
     }
 }
 
@@ -403,6 +421,20 @@ pub trait BaseMarketExt<const DECIMALS: u8>: BaseMarket<DECIMALS> {
             ))?;
         Ok(collateral_amount)
     }
+
+    /// Returns the liquidity pool and virtual inventory for swaps pool after applying the delta.
+    fn checked_apply_delta(
+        &self,
+        delta: Delta<&Self::Signed>,
+    ) -> crate::Result<(Self::Pool, Option<Self::Pool>)> {
+        let liquidity_pool = self.liquidity_pool()?.checked_apply_delta(delta)?;
+        let virtual_inventory_for_swaps_pool = self
+            .virtual_inventory_for_swaps_pool()?
+            .map(|p| p.checked_apply_delta(delta))
+            .transpose()?;
+
+        Ok((liquidity_pool, virtual_inventory_for_swaps_pool))
+    }
 }
 
 impl<M: BaseMarket<DECIMALS> + ?Sized, const DECIMALS: u8> BaseMarketExt<DECIMALS> for M {}
@@ -411,13 +443,24 @@ impl<M: BaseMarket<DECIMALS> + ?Sized, const DECIMALS: u8> BaseMarketExt<DECIMAL
 pub trait BaseMarketMutExt<const DECIMALS: u8>: BaseMarketMut<DECIMALS> {
     /// Apply delta to the primary pool.
     fn apply_delta(&mut self, is_long_token: bool, delta: &Self::Signed) -> crate::Result<()> {
-        if is_long_token {
-            self.liquidity_pool_mut()?
-                .apply_delta_to_long_amount(delta)?;
+        let delta = if is_long_token {
+            Delta::new_with_long(delta)
         } else {
-            self.liquidity_pool_mut()?
-                .apply_delta_to_short_amount(delta)?;
+            Delta::new_with_short(delta)
+        };
+        let (liquidity_pool, virtual_inventory_for_swaps_pool) = self.checked_apply_delta(delta)?;
+
+        *self
+            .liquidity_pool_mut()
+            .expect("liquidity pool must be valid") = liquidity_pool;
+        if let Some(virtual_inventory_for_swaps_pool) = virtual_inventory_for_swaps_pool {
+            *self
+                .virtual_inventory_for_swaps_pool_mut()
+                .expect("virtual inventory for_swaps pool must be valid")
+                .expect("virtual inventory for_swaps pool must exist") =
+                virtual_inventory_for_swaps_pool;
         }
+
         Ok(())
     }
 

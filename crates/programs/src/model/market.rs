@@ -280,6 +280,10 @@ impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for MarketModel {
         self.try_pool(kind)
     }
 
+    fn virtual_inventory_for_swaps_pool(&self) -> gmsol_model::Result<Option<&Self::Pool>> {
+        todo!()
+    }
+
     fn usd_to_amount_divisor(&self) -> Self::Num {
         constants::MARKET_USD_TO_AMOUNT_DIVISOR
     }
@@ -582,6 +586,10 @@ impl gmsol_model::BaseMarketMut<{ constants::MARKET_DECIMALS }> for MarketModel 
 
     fn claimable_fee_pool_mut(&mut self) -> gmsol_model::Result<&mut Self::Pool> {
         self.make_market_mut().try_pool_mut(PoolKind::ClaimableFee)
+    }
+
+    fn virtual_inventory_for_swaps_pool_mut(&self) -> gmsol_model::Result<Option<&mut Self::Pool>> {
+        todo!()
     }
 }
 

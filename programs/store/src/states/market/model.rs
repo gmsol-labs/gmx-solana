@@ -59,6 +59,10 @@ impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for Market {
         self.try_pool(kind)
     }
 
+    fn virtual_inventory_for_swaps_pool(&self) -> gmsol_model::Result<Option<&Self::Pool>> {
+        Ok(None)
+    }
+
     fn usd_to_amount_divisor(&self) -> Self::Num {
         constants::MARKET_USD_TO_AMOUNT_DIVISOR
     }
@@ -377,6 +381,10 @@ where
 
     fn collateral_sum_pool(&self, is_long: bool) -> gmsol_model::Result<&Self::Pool> {
         self.market.collateral_sum_pool(is_long)
+    }
+
+    fn virtual_inventory_for_swaps_pool(&self) -> gmsol_model::Result<Option<&Self::Pool>> {
+        self.market.virtual_inventory_for_swaps_pool()
     }
 
     fn usd_to_amount_divisor(&self) -> Self::Num {

@@ -4,8 +4,9 @@ use crate::{
     action::swap::Swap,
     num::{Unsigned, UnsignedAbs},
     params::{FeeParams, PriceImpactParams},
+    pool::delta::{PoolDelta, PriceImpact},
     price::{Price, Prices},
-    Balance, BaseMarket, Pool,
+    Balance, BalanceExt, BaseMarket, Pool,
 };
 
 use super::BaseMarketMut;
@@ -47,6 +48,44 @@ impl<M: SwapMarketMut<DECIMALS>, const DECIMALS: u8> SwapMarketMut<DECIMALS> for
 
 /// Extension trait for [`SwapMarket`].
 pub trait SwapMarketExt<const DECIMALS: u8>: SwapMarket<DECIMALS> {
+    /// Calculate swap price impact.
+    fn swap_impact_value(
+        &self,
+        liquidity_pool_delta: &PoolDelta<Self::Num>,
+        include_virtual_inventory_impact: bool,
+    ) -> crate::Result<PriceImpact<Self::Signed>> {
+        let params = self.swap_impact_params()?;
+
+        let impact = liquidity_pool_delta.price_impact(&params)?;
+
+        if !impact.value.is_negative() || !include_virtual_inventory_impact {
+            return Ok(impact);
+        }
+
+        let Some(virtual_inventory) = self.virtual_inventory_for_swaps_pool()? else {
+            return Ok(impact);
+        };
+
+        let delta = liquidity_pool_delta.delta();
+        let long_token_price = liquidity_pool_delta.long_token_price();
+        let short_token_price = liquidity_pool_delta.short_token_price();
+
+        let virtual_inventory_impact = virtual_inventory
+            .pool_delta_with_values(
+                delta.long_value().clone(),
+                delta.short_value().clone(),
+                long_token_price,
+                short_token_price,
+            )?
+            .price_impact(&params)?;
+
+        if virtual_inventory_impact.value < impact.value {
+            Ok(virtual_inventory_impact)
+        } else {
+            Ok(impact)
+        }
+    }
+
     /// Get the swap impact amount with cap.
     fn swap_impact_amount_with_cap(
         &self,

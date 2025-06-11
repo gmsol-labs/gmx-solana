@@ -3,7 +3,7 @@ use num_traits::{CheckedAdd, CheckedMul, CheckedSub, Signed, Zero};
 use crate::{
     market::{
         BaseMarket, BaseMarketExt, BaseMarketMutExt, LiquidityMarketExt, LiquidityMarketMut,
-        SwapMarketMutExt,
+        SwapMarketExt, SwapMarketMutExt,
     },
     num::{MulDiv, Unsigned, UnsignedAbs},
     params::Fees,
@@ -187,7 +187,7 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> Deposit<M, DECIMALS> {
             &self.params.long_token_price().mid(),
             &self.params.short_token_price().mid(),
         )?;
-        let price_impact = delta.price_impact(&self.market.swap_impact_params()?)?;
+        let price_impact = self.market.swap_impact_value(&delta, true)?;
         let delta = delta.delta();
         debug_assert!(!delta.long_value().is_negative(), "must be non-negative");
         debug_assert!(!delta.short_value().is_negative(), "must be non-negative");

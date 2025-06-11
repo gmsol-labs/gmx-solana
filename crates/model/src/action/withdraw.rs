@@ -1,5 +1,5 @@
 use crate::{
-    market::{BaseMarket, BaseMarketExt, LiquidityMarketExt, LiquidityMarketMut},
+    market::{BaseMarket, BaseMarketExt, BaseMarketMutExt, LiquidityMarketExt, LiquidityMarketMut},
     num::{MulDiv, Unsigned, UnsignedAbs},
     params::Fees,
     pool::delta::BalanceChange,
@@ -210,21 +210,20 @@ impl<const DECIMALS: u8, M: LiquidityMarketMut<DECIMALS>> MarketAction for Withd
         )?;
         // Apply pool delta.
         // The delta must be the amount leaves the pool: -(amount_after_fees + fee_receiver_amount)
-        let pool = self.market.liquidity_pool_mut()?;
 
         let delta = long_token_fees
             .fee_amount_for_receiver()
             .checked_add(&long_token_amount)
             .ok_or(crate::Error::Overflow)?
             .to_opposite_signed()?;
-        pool.apply_delta_amount(true, &delta)?;
+        self.market.apply_delta(true, &delta)?;
 
         let delta = short_token_fees
             .fee_amount_for_receiver()
             .checked_add(&short_token_amount)
             .ok_or(crate::Error::Overflow)?
             .to_opposite_signed()?;
-        pool.apply_delta_amount(false, &delta)?;
+        self.market.apply_delta(false, &delta)?;
 
         self.market.validate_reserve(&self.params.prices, true)?;
         self.market.validate_reserve(&self.params.prices, false)?;

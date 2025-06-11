@@ -142,6 +142,8 @@ pub struct PoolDelta<T: Unsigned> {
     current: PoolValue<T>,
     next: PoolValue<T>,
     delta: PoolValue<T::Signed>,
+    long_token_price: T,
+    short_token_price: T,
 }
 
 impl<T: Unsigned> PoolDelta<T> {
@@ -154,7 +156,7 @@ impl<T: Unsigned> PoolDelta<T> {
         short_token_price: &T,
     ) -> crate::Result<Self>
     where
-        T: CheckedAdd + CheckedSub + CheckedMul,
+        T: CheckedAdd + CheckedSub + CheckedMul + Clone,
         P: Balance<Num = T, Signed = T::Signed> + ?Sized,
     {
         let current = PoolValue::try_new(pool, long_token_price, short_token_price)?;
@@ -179,6 +181,8 @@ impl<T: Unsigned> PoolDelta<T> {
             current,
             next,
             delta,
+            long_token_price: long_token_price.clone(),
+            short_token_price: short_token_price.clone(),
         })
     }
 
@@ -191,7 +195,7 @@ impl<T: Unsigned> PoolDelta<T> {
         short_token_price: &T,
     ) -> crate::Result<Self>
     where
-        T: CheckedAdd + CheckedSub + CheckedMul,
+        T: CheckedAdd + CheckedSub + CheckedMul + Clone,
         P: Balance<Num = T, Signed = T::Signed> + ?Sized,
     {
         let delta_long_token_usd_value = long_token_price
@@ -212,6 +216,16 @@ impl<T: Unsigned> PoolDelta<T> {
     /// Get delta values.
     pub fn delta(&self) -> &PoolValue<T::Signed> {
         &self.delta
+    }
+
+    /// Returns long token price.
+    pub fn long_token_price(&self) -> &T {
+        &self.long_token_price
+    }
+
+    /// Returns short token price.
+    pub fn short_token_price(&self) -> &T {
+        &self.short_token_price
     }
 }
 

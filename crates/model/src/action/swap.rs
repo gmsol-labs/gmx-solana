@@ -108,18 +108,13 @@ impl<const DECIMALS: u8, M: SwapMarketMut<DECIMALS>> Swap<M, DECIMALS> {
         } = self.reassign_values()?;
 
         // Calculate price impact.
-        //
-        // Note that the virtual inventory feature is not currently supported.
-        let price_impact = self
-            .market
-            .liquidity_pool()?
-            .pool_delta_with_values(
-                long_token_delta_value,
-                short_token_delta_value,
-                &self.params.long_token_price().mid(),
-                &self.params.short_token_price().mid(),
-            )?
-            .price_impact(&self.market.swap_impact_params()?)?;
+        let delta = self.market.liquidity_pool()?.pool_delta_with_values(
+            long_token_delta_value,
+            short_token_delta_value,
+            &self.params.long_token_price().mid(),
+            &self.params.short_token_price().mid(),
+        )?;
+        let price_impact = self.market.swap_impact_value(&delta, true)?;
 
         let (amount_after_fees, fees) = self.charge_fees(price_impact.balance_change)?;
 
@@ -235,21 +230,20 @@ impl<const DECIMALS: u8, M: SwapMarketMut<DECIMALS>> Swap<M, DECIMALS> {
 
         // Apply delta to liquidity pools.
         // `token_in_amount` is assumed to have been transferred in.
-        let liquidity =
-            self.market
-                .liquidity_pool()?
-                .checked_apply_delta(Delta::new_both_sides(
-                    self.params.is_token_in_long,
-                    &token_in_amount
-                        .checked_add(fees.fee_amount_for_pool())
-                        .ok_or(crate::Error::Overflow)?
-                        .to_signed()?,
-                    &pool_amount_out.to_opposite_signed()?,
-                ))?;
+        let (liquidity, virtual_inventory) =
+            self.market.checked_apply_delta(Delta::new_both_sides(
+                self.params.is_token_in_long,
+                &token_in_amount
+                    .checked_add(fees.fee_amount_for_pool())
+                    .ok_or(crate::Error::Overflow)?
+                    .to_signed()?,
+                &pool_amount_out.to_opposite_signed()?,
+            ))?;
 
         let cache = Cache {
             market: &self.market,
             liquidity,
+            virtual_inventory,
             swap_impact,
             claimable_fee,
         };
@@ -287,6 +281,7 @@ where
 
         let Cache {
             liquidity,
+            virtual_inventory,
             swap_impact,
             claimable_fee,
             ..
@@ -296,6 +291,14 @@ where
             .market
             .liquidity_pool_mut()
             .expect("liquidity pool must be valid") = liquidity;
+
+        if let Some(pool) = virtual_inventory {
+            *self
+                .market
+                .virtual_inventory_for_swaps_pool_mut()
+                .expect("virtual inventory for_swaps pool must be valid")
+                .expect("virtual inventory for_swaps pool must exist") = pool;
+        }
 
         *self
             .market
@@ -476,6 +479,7 @@ where
 {
     market: &'a M,
     liquidity: M::Pool,
+    virtual_inventory: Option<M::Pool>,
     swap_impact: M::Pool,
     claimable_fee: M::Pool,
 }
@@ -512,6 +516,10 @@ where
 
     fn collateral_sum_pool(&self, is_long: bool) -> crate::Result<&Self::Pool> {
         self.market.collateral_sum_pool(is_long)
+    }
+
+    fn virtual_inventory_for_swaps_pool(&self) -> crate::Result<Option<&Self::Pool>> {
+        self.market.virtual_inventory_for_swaps_pool()
     }
 
     fn usd_to_amount_divisor(&self) -> Self::Num {
