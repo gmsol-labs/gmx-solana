@@ -31,7 +31,7 @@ use crate::{
 use num_traits::{CheckedSub, Signed};
 
 /// Test Pool.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct TestPool<T> {
     long_amount: T,
     short_amount: T,
@@ -971,7 +971,7 @@ where
         ty: DecreasePositionSwapType,
         report: &crate::action::swap::SwapReport<Self::Num, <Self::Num as Unsigned>::Signed>,
     ) -> crate::Result<()> {
-        println!("swapped: ty={ty}, report={report:?}");
+        println!("swapped: ty={ty:?}, report={report:?}");
         Ok(())
     }
 
@@ -980,7 +980,7 @@ where
         ty: DecreasePositionSwapType,
         error: crate::Error,
     ) -> crate::Result<()> {
-        eprintln!("swap error: ty={ty}, err={error}");
+        eprintln!("swap error: ty={ty:?}, err={error}");
         Ok(())
     }
 }

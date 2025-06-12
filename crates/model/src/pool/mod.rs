@@ -1,3 +1,7 @@
+use num_traits::CheckedSub;
+
+use crate::num::Unsigned;
+
 use self::delta::PoolDelta;
 
 /// Balance.
@@ -27,6 +31,30 @@ pub trait Pool: Balance + Sized {
 
     /// Checked apply delta amounts.
     fn checked_apply_delta(&self, delta: Delta<&Self::Signed>) -> crate::Result<Self>;
+
+    /// Cancel the amounts, for example, (1000, 200) -> (800, 0).
+    /// # Warning
+    /// - Note that the default implementation may lead to unnecessary
+    ///   failures due to the numeric range limitations of signed integers.
+    fn checked_cancel_amounts(&self) -> crate::Result<Self>
+    where
+        Self::Signed: CheckedSub,
+    {
+        let long_amount = self.long_amount()?;
+        let short_amount = self.short_amount()?;
+        let is_long_side_left = long_amount >= short_amount;
+        let leftover_amount = long_amount.clone().diff(short_amount.clone());
+        let (long_delta, short_delta) = if is_long_side_left {
+            (long_amount.diff(leftover_amount), short_amount)
+        } else {
+            (long_amount, short_amount.diff(leftover_amount))
+        };
+        self.checked_apply_delta(Delta::new_both_sides(
+            true,
+            &long_delta.to_opposite_signed()?,
+            &short_delta.to_opposite_signed()?,
+        ))
+    }
 }
 
 /// Extension trait for [`Pool`] with utils.
@@ -109,4 +137,53 @@ pub enum PoolKind {
     CollateralSumForShort,
     /// Total borrowing.
     TotalBorrowing,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{test::TestPool, Balance};
+
+    use super::{Delta, Pool};
+
+    #[test]
+    fn cancel_amounts() -> crate::Result<()> {
+        let pool = TestPool::<u64>::default();
+
+        let pool_1 = pool.checked_apply_delta(Delta::new_both_sides(true, &1_000, &3_000))?;
+        let expected_1 = pool.checked_apply_delta(Delta::new_both_sides(true, &0, &2_000))?;
+        assert_eq!(pool_1.checked_cancel_amounts()?, expected_1);
+
+        let pool_2 = pool.checked_apply_delta(Delta::new_both_sides(true, &3_005, &3_000))?;
+        let expected_2 = pool.checked_apply_delta(Delta::new_both_sides(true, &5, &0))?;
+        assert_eq!(pool_2.checked_cancel_amounts()?, expected_2);
+
+        let pool_3 = pool.checked_apply_delta(Delta::new_both_sides(true, &3_000, &3_000))?;
+        let expected_3 = pool.checked_apply_delta(Delta::new_both_sides(true, &0, &0))?;
+        assert_eq!(pool_3.checked_cancel_amounts()?, expected_3);
+
+        let pool_4 = pool
+            .checked_apply_delta(Delta::new_both_sides(true, &i64::MAX, &i64::MAX))?
+            .checked_apply_delta(Delta::new_both_sides(true, &i64::MAX, &i64::MAX))?
+            .checked_apply_delta(Delta::new_both_sides(true, &1, &1))?;
+        assert_eq!(pool_4.long_amount()?, u64::MAX);
+        assert_eq!(pool_4.short_amount()?, u64::MAX);
+        // Overflow occurs due to the limitations of the default implementation.
+        assert!(pool_4.checked_cancel_amounts().is_err());
+
+        let pool_5 = pool.checked_apply_delta(Delta::new_both_sides(true, &i64::MAX, &i64::MAX))?;
+        let expected_5 = pool.checked_apply_delta(Delta::new_both_sides(true, &0, &0))?;
+        assert_eq!(pool_5.checked_cancel_amounts()?, expected_5);
+        let pool_5 = pool
+            .checked_apply_delta(Delta::new_both_sides(true, &i64::MAX, &i64::MAX))?
+            .checked_apply_delta(Delta::new_both_sides(true, &i64::MAX, &0))?
+            .checked_apply_delta(Delta::new_both_sides(true, &1, &0))?;
+        let expected_5 = pool
+            .checked_apply_delta(Delta::new_both_sides(true, &i64::MAX, &0))?
+            .checked_apply_delta(Delta::new_both_sides(true, &1, &0))?;
+        assert_eq!(pool_5.long_amount()?, u64::MAX);
+        assert_eq!(pool_5.short_amount()?, i64::MAX.unsigned_abs());
+        assert_eq!(pool_5.checked_cancel_amounts()?, expected_5);
+
+        Ok(())
+    }
 }
