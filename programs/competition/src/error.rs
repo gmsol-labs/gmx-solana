@@ -2,8 +2,6 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum CompetitionError {
-    #[msg("Competition is not active")]
-    CompetitionNotActive,
     #[msg("Outside competition time")]
     OutsideCompetitionTime,
     #[msg("Invalid trade event")]
