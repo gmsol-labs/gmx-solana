@@ -290,6 +290,12 @@ impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for MarketModel {
         Ok(None::<&Self::Pool>)
     }
 
+    fn virtual_inventory_for_positions_pool(
+        &self,
+    ) -> gmsol_model::Result<Option<impl Deref<Target = Self::Pool>>> {
+        Ok(None::<&Self::Pool>)
+    }
+
     fn usd_to_amount_divisor(&self) -> Self::Num {
         constants::MARKET_USD_TO_AMOUNT_DIVISOR
     }
@@ -688,6 +694,12 @@ impl gmsol_model::PerpMarketMut<{ constants::MARKET_DECIMALS }> for MarketModel 
     fn total_borrowing_pool_mut(&mut self) -> gmsol_model::Result<&mut Self::Pool> {
         self.make_market_mut()
             .try_pool_mut(PoolKind::TotalBorrowing)
+    }
+
+    fn virtual_inventory_for_positions_pool_mut(
+        &mut self,
+    ) -> gmsol_model::Result<Option<impl DerefMut<Target = Self::Pool>>> {
+        Ok(None::<&mut Self::Pool>)
     }
 }
 

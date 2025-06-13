@@ -74,6 +74,19 @@ impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for Market {
         }
     }
 
+    fn virtual_inventory_for_positions_pool(
+        &self,
+    ) -> gmsol_model::Result<Option<impl Deref<Target = Self::Pool>>> {
+        match self.virtual_inventory_for_positions() {
+            Some(_) => {
+                Err(gmsol_model::Error::InvalidArgument("virtual inventory for the positions feature is not enabled when the market is used directly"))
+            },
+            None => {
+                Ok(None::<&Self::Pool>)
+            }
+        }
+    }
+
     fn usd_to_amount_divisor(&self) -> Self::Num {
         constants::MARKET_USD_TO_AMOUNT_DIVISOR
     }
@@ -398,6 +411,12 @@ where
         &self,
     ) -> gmsol_model::Result<Option<impl Deref<Target = Self::Pool>>> {
         self.market.virtual_inventory_for_swaps_pool()
+    }
+
+    fn virtual_inventory_for_positions_pool(
+        &self,
+    ) -> gmsol_model::Result<Option<impl Deref<Target = Self::Pool>>> {
+        self.market.virtual_inventory_for_positions_pool()
     }
 
     fn usd_to_amount_divisor(&self) -> Self::Num {

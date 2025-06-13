@@ -505,6 +505,12 @@ where
         Ok(None::<&Self::Pool>)
     }
 
+    fn virtual_inventory_for_positions_pool(
+        &self,
+    ) -> crate::Result<Option<impl Deref<Target = Self::Pool>>> {
+        Ok(None::<&Self::Pool>)
+    }
+
     fn usd_to_amount_divisor(&self) -> Self::Num {
         self.value_to_amount_divisor.clone()
     }
@@ -818,6 +824,12 @@ where
 
     fn total_borrowing_pool_mut(&mut self) -> crate::Result<&mut Self::Pool> {
         Ok(&mut self.total_borrowing)
+    }
+
+    fn virtual_inventory_for_positions_pool_mut(
+        &mut self,
+    ) -> crate::Result<Option<impl DerefMut<Target = Self::Pool>>> {
+        Ok(None::<&mut Self::Pool>)
     }
 
     fn just_passed_in_seconds_for_funding(&mut self) -> crate::Result<u64> {

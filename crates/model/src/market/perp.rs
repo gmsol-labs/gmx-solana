@@ -1,3 +1,5 @@
+use std::ops::DerefMut;
+
 use crate::{
     action::update_funding_state::UpdateFundingState,
     num::Unsigned,
@@ -95,6 +97,13 @@ pub trait PerpMarketMut<const DECIMALS: u8>:
     /// - This method must return `Ok` if [`BorrowingFeeMarket::total_borrowing_pool`] does.
     fn total_borrowing_pool_mut(&mut self) -> crate::Result<&mut Self::Pool>;
 
+    /// Get virtual inventory for positions mutably.
+    /// # Requirements
+    /// - This method must return `Ok(Some(_))` if [`BaseMarket::virtual_inventory_for_positions_pool`] does.
+    fn virtual_inventory_for_positions_pool_mut(
+        &mut self,
+    ) -> crate::Result<Option<impl DerefMut<Target = Self::Pool>>>;
+
     /// Insufficient funding fee payment callback.
     fn on_insufficient_funding_fee_payment(
         &mut self,
@@ -184,6 +193,12 @@ impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> PerpMarketMut<DECIMALS> for
 
     fn total_borrowing_pool_mut(&mut self) -> crate::Result<&mut Self::Pool> {
         (**self).total_borrowing_pool_mut()
+    }
+
+    fn virtual_inventory_for_positions_pool_mut(
+        &mut self,
+    ) -> crate::Result<Option<impl DerefMut<Target = Self::Pool>>> {
+        (**self).virtual_inventory_for_positions_pool_mut()
     }
 
     fn just_passed_in_seconds_for_funding(&mut self) -> crate::Result<u64> {

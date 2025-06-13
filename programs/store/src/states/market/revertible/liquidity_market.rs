@@ -190,6 +190,12 @@ impl<'a, 'info> gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }>
         self.base.virtual_inventory_for_swaps_pool()
     }
 
+    fn virtual_inventory_for_positions_pool(
+        &self,
+    ) -> gmsol_model::Result<Option<impl Deref<Target = Self::Pool>>> {
+        self.base.virtual_inventory_for_positions_pool()
+    }
+
     fn usd_to_amount_divisor(&self) -> Self::Num {
         self.base.usd_to_amount_divisor()
     }

@@ -48,7 +48,8 @@ pub enum SwapPricingKind {
 /// Revertible Market.
 pub struct RevertibleMarket<'a, 'info> {
     pub(super) market: RefMut<'a, Market>,
-    pub(super) virtual_inventory_for_swaps: Option<&'a RevertibleVirtualInventory<'info>>,
+    virtual_inventory_for_swaps: Option<&'a RevertibleVirtualInventory<'info>>,
+    virtual_inventory_for_positions: Option<&'a RevertibleVirtualInventory<'info>>,
     order_fee_discount_factor: u128,
     event_emitter: EventEmitter<'a, 'info>,
     swap_pricing: SwapPricingKind,
@@ -96,9 +97,21 @@ impl<'a, 'info> RevertibleMarket<'a, 'info> {
             })
             .transpose()?;
 
+        let virtual_inventory_for_positions = market
+            .virtual_inventory_for_positions()
+            .and_then(|key| {
+                let map = virtual_inventories?;
+                Some(
+                    map.get(key)
+                        .ok_or_else(|| error!(CoreError::InvalidArgument)),
+                )
+            })
+            .transpose()?;
+
         Ok(Self {
             market,
             virtual_inventory_for_swaps,
+            virtual_inventory_for_positions,
             order_fee_discount_factor: 0,
             event_emitter,
             swap_pricing: SwapPricingKind::Swap,
@@ -366,6 +379,20 @@ impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for RevertibleMarke
             .map_err(|_| {
                 gmsol_model::Error::InvalidArgument(
                     "internal: failed to get virtual inventory for swaps pool",
+                )
+            })
+    }
+
+    fn virtual_inventory_for_positions_pool(
+        &self,
+    ) -> gmsol_model::Result<Option<impl Deref<Target = Self::Pool>>> {
+        self.virtual_inventory_for_positions
+            .as_ref()
+            .map(|vi| vi.pool())
+            .transpose()
+            .map_err(|_| {
+                gmsol_model::Error::InvalidArgument(
+                    "internal: failed to get virtual inventory for positions pool",
                 )
             })
     }
@@ -646,6 +673,20 @@ impl gmsol_model::PerpMarketMut<{ constants::MARKET_DECIMALS }> for RevertibleMa
 
     fn total_borrowing_pool_mut(&mut self) -> gmsol_model::Result<&mut Self::Pool> {
         self.pool_mut(PoolKind::TotalBorrowing)
+    }
+
+    fn virtual_inventory_for_positions_pool_mut(
+        &mut self,
+    ) -> gmsol_model::Result<Option<impl DerefMut<Target = Self::Pool>>> {
+        self.virtual_inventory_for_positions
+            .as_mut()
+            .map(|vi| vi.pool_mut())
+            .transpose()
+            .map_err(|_| {
+                gmsol_model::Error::InvalidArgument(
+                    "internal: failed to get virtual inventory for positions pool mutably",
+                )
+            })
     }
 
     fn on_insufficient_funding_fee_payment(

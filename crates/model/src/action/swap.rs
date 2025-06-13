@@ -524,6 +524,12 @@ where
         self.market.virtual_inventory_for_swaps_pool()
     }
 
+    fn virtual_inventory_for_positions_pool(
+        &self,
+    ) -> crate::Result<Option<impl Deref<Target = Self::Pool>>> {
+        self.market.virtual_inventory_for_positions_pool()
+    }
+
     fn usd_to_amount_divisor(&self) -> Self::Num {
         self.market.usd_to_amount_divisor()
     }

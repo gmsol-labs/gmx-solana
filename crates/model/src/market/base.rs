@@ -45,6 +45,11 @@ pub trait BaseMarket<const DECIMALS: u8> {
         &self,
     ) -> crate::Result<Option<impl Deref<Target = Self::Pool>>>;
 
+    /// Get virtual inventory for positions.
+    fn virtual_inventory_for_positions_pool(
+        &self,
+    ) -> crate::Result<Option<impl Deref<Target = Self::Pool>>>;
+
     /// USD value to market token amount divisor.
     ///
     /// One should make sure it is non-zero.
@@ -127,6 +132,12 @@ impl<M: BaseMarket<DECIMALS>, const DECIMALS: u8> BaseMarket<DECIMALS> for &mut 
         &self,
     ) -> crate::Result<Option<impl Deref<Target = Self::Pool>>> {
         (**self).virtual_inventory_for_swaps_pool()
+    }
+
+    fn virtual_inventory_for_positions_pool(
+        &self,
+    ) -> crate::Result<Option<impl Deref<Target = Self::Pool>>> {
+        (**self).virtual_inventory_for_positions_pool()
     }
 
     fn usd_to_amount_divisor(&self) -> Self::Num {
