@@ -9670,6 +9670,92 @@
       ]
     },
     {
+      "name": "create_virtual_inventory_for_positions",
+      "docs": [
+        "Create [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for positions."
+      ],
+      "discriminator": [
+        114,
+        86,
+        241,
+        91,
+        247,
+        80,
+        64,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ]
+        },
+        {
+          "name": "index_token",
+          "docs": [
+            "Index token address."
+          ]
+        },
+        {
+          "name": "virtual_inventory",
+          "docs": [
+            "The virutal inventory account to create."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  105,
+                  95,
+                  102,
+                  111,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "index_token"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "The system program."
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "create_virtual_inventory_for_swaps",
       "docs": [
         "Create [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps."
@@ -18754,6 +18840,89 @@
       "returns": "bool"
     },
     {
+      "name": "join_virtual_inventory_for_positions",
+      "docs": [
+        "Join a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps."
+      ],
+      "discriminator": [
+        49,
+        213,
+        202,
+        84,
+        201,
+        143,
+        157,
+        64
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ],
+          "relations": [
+            "virtual_inventory",
+            "market"
+          ]
+        },
+        {
+          "name": "virtual_inventory",
+          "docs": [
+            "The virtual inventory account to join."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  105,
+                  95,
+                  102,
+                  111,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "docs": [
+            "The market to be added to the virtual inventory."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "join_virtual_inventory_for_swaps",
       "docs": [
         "Join a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps."
@@ -18818,6 +18987,89 @@
               {
                 "kind": "account",
                 "path": "virtual_inventory"
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "docs": [
+            "The market to be added to the virtual inventory."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "leave_virtual_inventory_for_positions",
+      "docs": [
+        "Leave a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps."
+      ],
+      "discriminator": [
+        177,
+        100,
+        253,
+        94,
+        158,
+        199,
+        45,
+        16
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ],
+          "relations": [
+            "virtual_inventory",
+            "market"
+          ]
+        },
+        {
+          "name": "virtual_inventory",
+          "docs": [
+            "The virtual inventory account to join."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  105,
+                  95,
+                  102,
+                  111,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "market"
               }
             ]
           }
@@ -34723,6 +34975,14 @@
       ],
       "type": "bytes",
       "value": "[109, 97, 114, 107, 101, 116, 95, 118, 97, 117, 108, 116]"
+    },
+    {
+      "name": "VIRTUAL_INVENTORY_FOR_POSITIONS_SEED",
+      "docs": [
+        "The seed of virtual inventory for positions accounts."
+      ],
+      "type": "bytes",
+      "value": "[118, 105, 95, 102, 111, 114, 95, 112, 111, 115, 105, 116, 105, 111, 110, 115]"
     },
     {
       "name": "VIRTUAL_INVENTORY_FOR_SWAPS_SEED",

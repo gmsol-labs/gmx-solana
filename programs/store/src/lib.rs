@@ -3846,6 +3846,30 @@ pub mod gmsol_store {
     ) -> Result<()> {
         JoinOrLeaveVirtualInventoryForSwaps::invoke_leave_unchecked(ctx)
     }
+
+    /// Create [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for positions.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn create_virtual_inventory_for_positions(
+        ctx: Context<CreateVirtualInventoryForPositions>,
+    ) -> Result<()> {
+        CreateVirtualInventoryForPositions::invoke_unchecked(ctx)
+    }
+
+    /// Join a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn join_virtual_inventory_for_positions(
+        ctx: Context<JoinOrLeaveVirtualInventoryForPositions>,
+    ) -> Result<()> {
+        JoinOrLeaveVirtualInventoryForPositions::invoke_join_unchecked(ctx)
+    }
+
+    /// Leave a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn leave_virtual_inventory_for_positions(
+        ctx: Context<JoinOrLeaveVirtualInventoryForPositions>,
+    ) -> Result<()> {
+        JoinOrLeaveVirtualInventoryForPositions::invoke_leave_unchecked(ctx)
+    }
 }
 
 /// Result type with [`CoreError`] as error type.

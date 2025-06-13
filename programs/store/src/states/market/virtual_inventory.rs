@@ -9,6 +9,10 @@ use super::{pool::PoolStorage, revertible::RevertiblePoolBuffer};
 #[constant]
 pub const VIRTUAL_INVENTORY_FOR_SWAPS_SEED: &[u8] = b"vi_for_swaps";
 
+/// The seed of virtual inventory for positions accounts.
+#[constant]
+pub const VIRTUAL_INVENTORY_FOR_POSITIONS_SEED: &[u8] = b"vi_for_positions";
+
 /// General purpose virtual inventory.
 #[account(zero_copy)]
 #[cfg_attr(feature = "debug", derive(derive_more::Debug))]
@@ -85,6 +89,21 @@ impl VirtualInventory {
             .checked_sub(1)
             .ok_or_else(|| error!(CoreError::PreconditionsAreNotMet))?;
         *pool = next_pool;
+        Ok(())
+    }
+
+    /// Cancel the pool amounts.
+    ///
+    /// # CHECK
+    /// The cancel amounts operation must be well-defined for this
+    /// virtual inventory.
+    /// For example, it is a virtual inventory for positions.
+    pub(crate) fn cancel_amounts_unchecked(&mut self) -> Result<()> {
+        *self.pool.pool_mut() = self
+            .pool
+            .pool()
+            .checked_cancel_amounts()
+            .map_err(ModelError::from)?;
         Ok(())
     }
 }

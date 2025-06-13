@@ -142,18 +142,21 @@ impl gmsol_model::Pool for Pool {
         if self.is_pure() {
             ans.long_token_amount &= 1;
         } else {
-            let is_long_side_left = ans.long_token_amount >= ans.short_token_amount;
-            let leftover_amount = ans.long_token_amount.abs_diff(ans.short_token_amount);
-            if is_long_side_left {
-                ans.long_token_amount = leftover_amount;
-                ans.short_token_amount = 0;
-            } else {
-                ans.long_token_amount = 0;
-                ans.short_token_amount = leftover_amount;
-            }
+            (ans.long_token_amount, ans.short_token_amount) =
+                cancel_amounts(ans.long_token_amount, ans.short_token_amount);
         }
 
         Ok(ans)
+    }
+}
+
+pub(crate) fn cancel_amounts(long_amount: u128, short_amount: u128) -> (u128, u128) {
+    let is_long_side_left = long_amount >= short_amount;
+    let leftover_amount = long_amount.abs_diff(short_amount);
+    if is_long_side_left {
+        (leftover_amount, 0)
+    } else {
+        (0, leftover_amount)
     }
 }
 

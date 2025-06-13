@@ -31,11 +31,14 @@ use anchor_lang::{prelude::*, Bump};
 use anchor_spl::token::Mint;
 use borsh::{BorshDeserialize, BorshSerialize};
 use config::MarketConfigFlag;
-use gmsol_model::{num::Unsigned, price::Prices, Balance, BaseMarket, ClockKind, Delta, PoolKind};
+use gmsol_model::{
+    num::Unsigned, price::Prices, Balance, BaseMarket, BaseMarketExt, ClockKind, Delta, PoolKind,
+};
 use gmsol_utils::{
     market::{MarketError, MarketFlag, MAX_MARKET_FLAGS},
     pubkey::{optional_address, DEFAULT_PUBKEY},
 };
+use pool::cancel_amounts;
 use revertible::RevertibleBuffer;
 use virtual_inventory::VirtualInventory;
 
@@ -431,7 +434,11 @@ impl Market {
     }
 
     /// Join a virtual inventory for swaps.
-    pub fn join_virtual_inventory_for_swaps(
+    ///
+    /// # CHECK
+    /// - The provided [`VirtualInventory`] must be used as a
+    ///   virtual inventory for swaps.
+    pub fn join_virtual_inventory_for_swaps_unchecked(
         &mut self,
         address: &Pubkey,
         virtual_inventory_for_swaps: &mut VirtualInventory,
@@ -492,6 +499,71 @@ impl Market {
     /// Returns the address of virtual inventory for positions.
     pub fn virtual_inventory_for_positions(&self) -> Option<&Pubkey> {
         optional_address(&self.virtual_inventory_for_positions)
+    }
+
+    /// Join a virtual inventory for positions.
+    ///
+    /// # CHECK
+    /// - The provided [`VirtualInventory`] must be used as a
+    ///   virtual inventory for positions.
+    pub fn join_virtual_inventory_for_positions_unchecked(
+        &mut self,
+        address: &Pubkey,
+        virtual_inventory_for_positions: &mut VirtualInventory,
+    ) -> Result<()> {
+        require_keys_neq!(*address, DEFAULT_PUBKEY);
+        require!(
+            self.virtual_inventory_for_positions().is_none(),
+            CoreError::PreconditionsAreNotMet
+        );
+        self.virtual_inventory_for_positions = *address;
+        let open_interest = self.open_interest().map_err(ModelError::from)?;
+        let (long_amount, short_amount) = cancel_amounts(
+            open_interest.long_amount().map_err(ModelError::from)?,
+            open_interest.short_amount().map_err(ModelError::from)?,
+        );
+        virtual_inventory_for_positions.join_unchecked(Delta::new_both_sides(
+            true,
+            &(long_amount
+                .try_into()
+                .map_err(|_| error!(CoreError::TokenAmountOverflow))?),
+            &(short_amount
+                .try_into()
+                .map_err(|_| error!(CoreError::TokenAmountOverflow))?),
+        ))?;
+        virtual_inventory_for_positions.cancel_amounts_unchecked()?;
+        Ok(())
+    }
+
+    /// Leave the virtual inventory for positions.
+    ///
+    /// # CHECK
+    /// - The provided [`VirtualInventory`] must be the associated one.
+    pub fn leave_virtual_inventory_for_positions_unchecked(
+        &mut self,
+        virtual_inventory_for_positions: &mut VirtualInventory,
+    ) -> Result<()> {
+        require!(
+            self.virtual_inventory_for_positions().is_some(),
+            CoreError::PreconditionsAreNotMet
+        );
+        let open_interest = self.open_interest().map_err(ModelError::from)?;
+        let (long_amount, short_amount) = cancel_amounts(
+            open_interest.long_amount().map_err(ModelError::from)?,
+            open_interest.short_amount().map_err(ModelError::from)?,
+        );
+        virtual_inventory_for_positions.leave_unchecked(Delta::new_both_sides(
+            false,
+            &(long_amount
+                .try_into()
+                .map_err(|_| error!(CoreError::TokenAmountOverflow))?),
+            &(short_amount
+                .try_into()
+                .map_err(|_| error!(CoreError::TokenAmountOverflow))?),
+        ))?;
+        virtual_inventory_for_positions.cancel_amounts_unchecked()?;
+        self.virtual_inventory_for_positions = DEFAULT_PUBKEY;
+        Ok(())
     }
 }
 
