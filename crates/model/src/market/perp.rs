@@ -1,15 +1,17 @@
 use std::ops::DerefMut;
 
+use num_traits::{CheckedAdd, Signed};
+
 use crate::{
     action::update_funding_state::UpdateFundingState,
-    num::Unsigned,
+    num::{Unsigned, UnsignedAbs},
     params::{
         fee::{FundingFeeParams, LiquidationFeeParams},
         FeeParams, PositionParams,
     },
     price::{Price, Prices},
-    BalanceExt, BorrowingFeeMarket, PoolExt, PositionImpactMarket, PositionImpactMarketMut,
-    SwapMarket, SwapMarketMut,
+    Balance, BalanceExt, BorrowingFeeMarket, Pool, PoolExt, PositionImpactMarket,
+    PositionImpactMarketMut, SwapMarket, SwapMarketMut,
 };
 
 use super::BaseMarketExt;
@@ -63,6 +65,9 @@ pub trait PerpMarketMut<const DECIMALS: u8>:
     /// # Requirements
     /// - This method must return `Ok` if
     ///   [`BaseMarket::open_interest_pool`](crate::BaseMarket::open_interest_pool) does.
+    /// # Notes
+    /// - Avoid using this function directly. Use [`PerpMarketMutExt::apply_delta_to_open_interest`]
+    ///   instead.
     fn open_interest_pool_mut(&mut self, is_long: bool) -> crate::Result<&mut Self::Pool>;
 
     /// Get mutable reference of open interest pool.
@@ -407,6 +412,55 @@ pub trait PerpMarketMutExt<const DECIMALS: u8>: PerpMarketMut<DECIMALS> {
     ) -> crate::Result<()> {
         self.claimable_funding_amount_per_size_pool_mut(is_long)?
             .apply_delta_amount(is_long_collateral, delta)
+    }
+
+    /// Apply delta to open interest.
+    fn apply_delta_to_open_interest(
+        &mut self,
+        is_long: bool,
+        is_long_collateral: bool,
+        delta: &Self::Signed,
+    ) -> crate::Result<()> {
+        // Apply delta to open interest pool.
+        let max_open_interest = self.max_open_interest(is_long)?;
+
+        let open_interest = self.open_interest_pool_mut(is_long)?;
+        if is_long_collateral {
+            open_interest.apply_delta_to_long_amount(delta)?;
+        } else {
+            open_interest.apply_delta_to_short_amount(delta)?;
+        }
+
+        if delta.is_positive() {
+            let is_exceeded = open_interest
+                .long_amount()?
+                .checked_add(&open_interest.short_amount()?)
+                .map(|total| total > max_open_interest)
+                .unwrap_or(true);
+
+            if is_exceeded {
+                return Err(crate::Error::MaxOpenInterestExceeded);
+            }
+        }
+
+        // Apply delta to virtual inventory for positions.
+        if let Some(mut pool) = self.virtual_inventory_for_positions_pool_mut()? {
+            let is_increased = !delta.is_negative();
+            let abs_delta = delta.unsigned_abs().to_signed()?;
+
+            // Unlike GMX, here the virtual inventory is used to record the net open interest of users.
+            match (is_long, is_increased) {
+                (true, true) | (false, false) => {
+                    pool.apply_delta_to_long_amount(&abs_delta)?;
+                }
+                (true, false) | (false, true) => {
+                    pool.apply_delta_to_short_amount(&abs_delta)?;
+                }
+            }
+            *pool = pool.checked_cancel_amounts()?;
+        }
+
+        Ok(())
     }
 }
 

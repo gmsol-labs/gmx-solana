@@ -1,6 +1,6 @@
 use std::{fmt, ops::Deref};
 
-use num_traits::{One, Signed, Zero};
+use num_traits::{CheckedNeg, One, Signed, Zero};
 
 use crate::{
     action::{
@@ -18,7 +18,7 @@ use crate::{
     params::fee::{FundingFees, PositionFees},
     pool::delta::{BalanceChange, PriceImpact},
     price::{Price, Prices},
-    Balance, BalanceExt, BaseMarket, PerpMarketMut, PnlFactorKind, Pool, PoolExt,
+    BalanceExt, BaseMarket, Delta, PerpMarketMut, PerpMarketMutExt, PnlFactorKind, Pool, PoolExt,
 };
 
 /// Read-only access to the position state.
@@ -472,7 +472,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         let PriceImpact {
             value: mut price_impact_value,
             balance_change,
-        } = self.position_price_impact(&size_delta_usd)?;
+        } = self.position_price_impact(&size_delta_usd, true)?;
 
         if price_impact_value.is_negative() {
             self.market().cap_negative_position_price_impact(
@@ -534,6 +534,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
     fn position_price_impact(
         &self,
         size_delta_usd: &Self::Signed,
+        include_virtual_inventory_impact: bool,
     ) -> crate::Result<PriceImpact<Self::Signed>> {
         struct ReassignedValues<T> {
             delta_long_usd_value: T,
@@ -565,17 +566,67 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
             delta_short_usd_value,
         } = ReassignedValues::new(self.is_long(), size_delta_usd);
 
-        let price_impact_value = self
+        let params = self.market().position_impact_params()?;
+
+        let impact = self
             .market()
             .open_interest()?
+            .pool_delta_with_values(
+                delta_long_usd_value.clone(),
+                delta_short_usd_value.clone(),
+                &usd_price,
+                &usd_price,
+            )?
+            .price_impact(&params)?;
+
+        // The virtual price impact calculation is skipped if the price impact
+        // is positive since the action is helping to balance the pool.
+        //
+        // In case two virtual pools are unbalanced in a different direction
+        // e.g. pool0 has more longs than shorts while pool1 has less longs
+        // than shorts
+        // not skipping the virtual price impact calculation would lead to
+        // a negative price impact for any trade on either pools and would
+        // disincentivise the balancing of pools
+        if !impact.value.is_negative() || !include_virtual_inventory_impact {
+            return Ok(impact);
+        }
+
+        // Calculate virtual price impact.
+        let Some(virtual_inventory) = self.market().virtual_inventory_for_positions_pool()? else {
+            return Ok(impact);
+        };
+
+        let mut leftover = virtual_inventory.checked_cancel_amounts()?;
+
+        // The virtual long and short open interest is adjusted by the `size_delta_usd`
+        // to prevent an underflow in `BalanceExt::pool_delta_with_values`.
+        // Price impact depends on the change in USD balance, so offsetting both
+        // values equally should not change the price impact calculation.
+        if size_delta_usd.is_negative() {
+            let offset = size_delta_usd
+                .checked_neg()
+                .ok_or(crate::Error::Computation(
+                    "calculating virtual open interest offset",
+                ))?;
+            leftover =
+                leftover.checked_apply_delta(Delta::new_both_sides(true, &offset, &offset))?;
+        }
+
+        let virtual_impact = leftover
             .pool_delta_with_values(
                 delta_long_usd_value,
                 delta_short_usd_value,
                 &usd_price,
                 &usd_price,
             )?
-            .price_impact(&self.market().position_impact_params()?)?;
-        Ok(price_impact_value)
+            .price_impact(&params)?;
+
+        if virtual_impact.value < impact.value {
+            Ok(virtual_impact)
+        } else {
+            Ok(impact)
+        }
     }
 
     /// Get position price impact usd and cap the value if it is positive.
@@ -584,8 +635,10 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         &self,
         index_token_price: &Price<Self::Num>,
         size_delta_usd: &Self::Signed,
+        include_virtual_inventory_impact: bool,
     ) -> crate::Result<PriceImpact<Self::Signed>> {
-        let mut impact = self.position_price_impact(size_delta_usd)?;
+        let mut impact =
+            self.position_price_impact(size_delta_usd, include_virtual_inventory_impact)?;
         self.market().cap_positive_position_price_impact(
             index_token_price,
             size_delta_usd,
@@ -603,9 +656,13 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         &self,
         index_token_price: &Price<Self::Num>,
         size_delta_usd: &Self::Signed,
+        include_virtual_inventory_impact: bool,
     ) -> crate::Result<(PriceImpact<Self::Signed>, Self::Num)> {
-        let mut impact =
-            self.capped_positive_position_price_impact(index_token_price, size_delta_usd)?;
+        let mut impact = self.capped_positive_position_price_impact(
+            index_token_price,
+            size_delta_usd,
+            include_virtual_inventory_impact,
+        )?;
         let impact_diff = self.market().cap_negative_position_price_impact(
             size_delta_usd,
             false,
@@ -766,33 +823,18 @@ where
         size_delta_usd: &Self::Signed,
         size_delta_in_tokens: &Self::Signed,
     ) -> crate::Result<()> {
-        use num_traits::CheckedAdd;
-
         if size_delta_usd.is_zero() {
             return Ok(());
         }
+
         let is_long_collateral = self.is_collateral_token_long();
         let is_long = self.is_long();
-        let max_open_interest = self.market().max_open_interest(is_long)?;
 
-        let open_interest = self.market_mut().open_interest_pool_mut(is_long)?;
-        if is_long_collateral {
-            open_interest.apply_delta_to_long_amount(size_delta_usd)?;
-        } else {
-            open_interest.apply_delta_to_short_amount(size_delta_usd)?;
-        }
-
-        if size_delta_usd.is_positive() {
-            let is_exceeded = open_interest
-                .long_amount()?
-                .checked_add(&open_interest.short_amount()?)
-                .map(|total| total > max_open_interest)
-                .unwrap_or(true);
-
-            if is_exceeded {
-                return Err(crate::Error::MaxOpenInterestExceeded);
-            }
-        }
+        self.market_mut().apply_delta_to_open_interest(
+            is_long,
+            is_long_collateral,
+            size_delta_usd,
+        )?;
 
         let open_interest_in_tokens = self
             .market_mut()

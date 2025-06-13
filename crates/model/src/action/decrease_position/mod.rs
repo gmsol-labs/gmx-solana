@@ -485,6 +485,7 @@ where
         let (price_impact, price_impact_diff_usd) = self.position.capped_position_price_impact(
             index_token_price,
             &self.size_delta_usd.to_opposite_signed()?,
+            true,
         )?;
 
         let execution_price = utils::get_execution_price_for_decrease(

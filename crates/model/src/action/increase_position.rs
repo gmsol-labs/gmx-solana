@@ -277,6 +277,7 @@ where
         let price_impact = self.position.capped_positive_position_price_impact(
             index_token_price,
             &self.params.size_delta_usd.to_signed()?,
+            true,
         )?;
 
         let price_impact_value = &price_impact.value;
