@@ -577,6 +577,20 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             .0
     }
 
+    /// Find the PDA for virtual inventory for positions.
+    pub fn find_virtual_inventory_for_positions_address(
+        &self,
+        store: &Pubkey,
+        index_token: &Pubkey,
+    ) -> Pubkey {
+        crate::pda::find_virtual_inventory_for_positions_address(
+            store,
+            index_token,
+            self.store_program_id(),
+        )
+        .0
+    }
+
     pub(crate) fn get_callback_params(&self, callback: Option<&Callback>) -> CallbackParams {
         match callback {
             Some(callback) => CallbackParams {

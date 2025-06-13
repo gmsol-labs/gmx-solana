@@ -36,6 +36,29 @@ pub trait VirtualInventoryOps<C> {
         market: &Pubkey,
         virtual_inventory_for_swaps: &Pubkey,
     ) -> crate::Result<TransactionBuilder<C>>;
+
+    /// Create a virtual inventory for positions account.
+    fn create_virtual_inventory_for_positions(
+        &self,
+        store: &Pubkey,
+        index_token: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>>;
+
+    /// Join a virtual inventory for positions.
+    fn join_virtual_inventory_for_positions(
+        &self,
+        store: &Pubkey,
+        market: &Pubkey,
+        virtual_inventory_for_positions: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>>;
+
+    /// Leave a virtual inventory for positions.
+    fn leave_virtual_inventory_for_positions(
+        &self,
+        store: &Pubkey,
+        market: &Pubkey,
+        virtual_inventory_for_positions: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> VirtualInventoryOps<C> for crate::Client<C> {
@@ -110,6 +133,65 @@ impl<C: Deref<Target = impl Signer> + Clone> VirtualInventoryOps<C> for crate::C
                 market: *market,
             })
             .anchor_args(args::LeaveVirtualInventoryForSwaps {});
+
+        Ok(txn)
+    }
+
+    fn create_virtual_inventory_for_positions(
+        &self,
+        store: &Pubkey,
+        index_token: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C, Pubkey>> {
+        let virtual_inventory =
+            self.find_virtual_inventory_for_positions_address(store, index_token);
+        let txn = self
+            .store_transaction()
+            .anchor_accounts(accounts::CreateVirtualInventoryForPositions {
+                authority: self.payer(),
+                store: *store,
+                index_token: *index_token,
+                virtual_inventory,
+                system_program: system_program::ID,
+            })
+            .anchor_args(args::CreateVirtualInventoryForPositions {})
+            .output(virtual_inventory);
+        Ok(txn)
+    }
+
+    fn join_virtual_inventory_for_positions(
+        &self,
+        store: &Pubkey,
+        market: &Pubkey,
+        virtual_inventory_for_positions: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let txn = self
+            .store_transaction()
+            .anchor_accounts(accounts::JoinVirtualInventoryForPositions {
+                authority: self.payer(),
+                store: *store,
+                virtual_inventory: *virtual_inventory_for_positions,
+                market: *market,
+            })
+            .anchor_args(args::JoinVirtualInventoryForPositions {});
+
+        Ok(txn)
+    }
+
+    fn leave_virtual_inventory_for_positions(
+        &self,
+        store: &Pubkey,
+        market: &Pubkey,
+        virtual_inventory_for_positions: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let txn = self
+            .store_transaction()
+            .anchor_accounts(accounts::LeaveVirtualInventoryForPositions {
+                authority: self.payer(),
+                store: *store,
+                virtual_inventory: *virtual_inventory_for_positions,
+                market: *market,
+            })
+            .anchor_args(args::LeaveVirtualInventoryForPositions {});
 
         Ok(txn)
     }

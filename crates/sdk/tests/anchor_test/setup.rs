@@ -331,10 +331,24 @@ impl Deployment {
 
         self.initialize_callback().await?;
 
-        self.initialize_virtual_inventories([
-            (0, vec![["SOL", "WSOL", "USDG"], ["fBTC", "WSOL", "USDG"]]),
-            (1, vec![["SOL", "fBTC", "USDG"], ["fBTC", "fBTC", "USDG"]]),
-        ])
+        self.initialize_virtual_inventories(
+            [
+                (0, vec![["SOL", "WSOL", "USDG"], ["fBTC", "WSOL", "USDG"]]),
+                (1, vec![["SOL", "fBTC", "USDG"], ["fBTC", "fBTC", "USDG"]]),
+            ],
+            [
+                ("fBTC", vec![["fBTC", "USDG"], ["WSOL", "USDG"]]),
+                (
+                    "SOL",
+                    vec![
+                        ["WSOL", "USDG"],
+                        ["WSOL", "WSOL"],
+                        ["fBTC", "fBTC"],
+                        ["fBTC", "USDG"],
+                    ],
+                ),
+            ],
+        )
         .await?;
 
         Ok(())
@@ -1071,6 +1085,7 @@ impl Deployment {
     async fn initialize_virtual_inventories<T: AsRef<str>>(
         &self,
         for_swaps: impl IntoIterator<Item = (u32, Vec<[T; 3]>)>,
+        for_positions: impl IntoIterator<Item = (T, Vec<[T; 2]>)>,
     ) -> eyre::Result<()> {
         let client = self.user_client(Self::DEFAULT_KEEPER)?;
         let store = &self.store;
@@ -1086,6 +1101,31 @@ impl Deployment {
                     .ok_or_else(|| eyre::eyre!("market token not found"))?;
                 let market = client.find_market_address(store, market_token);
                 bundle.push(client.join_virtual_inventory_for_swaps(
+                    store,
+                    &market,
+                    &virtual_inventory,
+                )?)?;
+            }
+        }
+        for (index_token, selectors) in for_positions {
+            let index_token_pubkey = if index_token.as_ref() == "SOL" {
+                Pubkey::default()
+            } else {
+                self.token(index_token.as_ref())
+                    .ok_or_eyre("index token not found")?
+                    .address
+            };
+            let (txn, virtual_inventory) = client
+                .create_virtual_inventory_for_positions(store, &index_token_pubkey)?
+                .swap_output(());
+            bundle.push(txn)?;
+            for [long, short] in selectors {
+                let market_token = self
+                    .market_token(index_token.as_ref(), long.as_ref(), short.as_ref())
+                    .ok_or_else(|| eyre::eyre!("market token not found"))?;
+                let market = client.find_market_address(store, market_token);
+
+                bundle.push(client.join_virtual_inventory_for_positions(
                     store,
                     &market,
                     &virtual_inventory,
