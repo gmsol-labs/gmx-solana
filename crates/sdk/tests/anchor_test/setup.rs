@@ -26,7 +26,7 @@ use gmsol_sdk::{
         ClientOptions,
     },
     constants::MARKET_USD_UNIT,
-    ops::token_config::UpdateFeedConfig,
+    ops::{token_config::UpdateFeedConfig, VirtualInventoryOps},
     Client,
 };
 use gmsol_solana_utils::{
@@ -330,6 +330,12 @@ impl Deployment {
         self.initialize_claim_fees_sleep().await?;
 
         self.initialize_callback().await?;
+
+        self.initialize_virtual_inventories([
+            (0, vec![["SOL", "WSOL", "USDG"], ["fBTC", "WSOL", "USDG"]]),
+            (1, vec![["SOL", "fBTC", "USDG"], ["fBTC", "fBTC", "USDG"]]),
+        ])
+        .await?;
 
         Ok(())
     }
@@ -1057,6 +1063,43 @@ impl Deployment {
             })
             .inspect_err(|(signatures, err)| {
                 tracing::error!(%err, "failed to initialize callback, successful txns: {signatures:#?}");
+            })
+            .ok();
+        Ok(())
+    }
+
+    async fn initialize_virtual_inventories<T: AsRef<str>>(
+        &self,
+        for_swaps: impl IntoIterator<Item = (u32, Vec<[T; 3]>)>,
+    ) -> eyre::Result<()> {
+        let client = self.user_client(Self::DEFAULT_KEEPER)?;
+        let store = &self.store;
+        let mut bundle = client.bundle();
+        for (index, selectors) in for_swaps {
+            let (txn, virtual_inventory) = client
+                .create_virtual_inventory_for_swaps(store, index)?
+                .swap_output(());
+            bundle.push(txn)?;
+            for [index, long, short] in selectors {
+                let market_token = self
+                    .market_token(index.as_ref(), long.as_ref(), short.as_ref())
+                    .ok_or_else(|| eyre::eyre!("market token not found"))?;
+                let market = client.find_market_address(store, market_token);
+                bundle.push(client.join_virtual_inventory_for_swaps(
+                    store,
+                    &market,
+                    &virtual_inventory,
+                )?)?;
+            }
+        }
+        bundle.send_all(false)
+            .instrument(tracing::info_span!("initalize virtual inventories"))
+            .await
+            .inspect(|signatures| {
+                tracing::info!("initialized virtual inventories with txns: {signatures:#?}");
+            })
+            .inspect_err(|(signatures, err)| {
+                tracing::error!(%err, "failed to initialize virtual inventories, successful txns: {signatures:#?}");
             })
             .ok();
         Ok(())

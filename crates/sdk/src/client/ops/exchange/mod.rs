@@ -19,7 +19,7 @@ pub mod glv_withdrawal;
 /// Builders for transactions related to GLV shifts.
 pub mod glv_shift;
 
-use std::{future::Future, ops::Deref};
+use std::{collections::HashSet, future::Future, ops::Deref};
 
 use deposit::{CloseDepositBuilder, CreateDepositBuilder, ExecuteDepositBuilder};
 use glv_deposit::{CloseGlvDepositBuilder, CreateGlvDepositBuilder, ExecuteGlvDepositBuilder};
@@ -32,7 +32,11 @@ use gmsol_programs::gmsol_store::{
     types::UpdateOrderParams,
 };
 use gmsol_solana_utils::transaction_builder::TransactionBuilder;
-use gmsol_utils::order::{OrderKind, PositionCutKind};
+use gmsol_utils::{
+    order::{OrderKind, PositionCutKind},
+    pubkey::optional_address,
+    swap::SwapActionParams,
+};
 use order::{
     CloseOrderBuilder, CreateOrderBuilder, ExecuteOrderBuilder, OrderParams, PositionCutBuilder,
     UpdateAdlBuilder,
@@ -698,5 +702,48 @@ impl<C: Deref<Target = impl Signer> + Clone> ExchangeOps<C> for Client<C> {
         let mut builder = ExecuteGlvShiftBuilder::new(self, oracle, glv_shift);
         builder.cancel_on_execution_error(cancel_on_execution_error);
         builder
+    }
+}
+
+#[derive(Default)]
+struct VirtualInventoryCollector {
+    market_tokens: HashSet<Pubkey>,
+}
+
+impl VirtualInventoryCollector {
+    fn insert_market_token(&mut self, market_token: &Pubkey) -> &mut Self {
+        self.market_tokens.insert(*market_token);
+        self
+    }
+
+    fn from_swap(swap: &SwapActionParams) -> Self {
+        let mut this = Self::default();
+
+        this.insert_market_token(&swap.current_market_token);
+
+        for market_token in swap.unique_market_tokens_excluding_current(&swap.current_market_token)
+        {
+            this.insert_market_token(market_token);
+        }
+
+        this
+    }
+
+    async fn collect<C: Deref<Target = impl Signer> + Clone>(
+        &self,
+        client: &crate::Client<C>,
+        store: &Pubkey,
+    ) -> crate::Result<HashSet<Pubkey>> {
+        let mut addresses = HashSet::new();
+        for market_token in self.market_tokens.iter() {
+            let market = client.market_by_token(store, market_token).await?;
+            if let Some(address) = optional_address(&market.virtual_inventory_for_swaps) {
+                addresses.insert(*address);
+            }
+            if let Some(address) = optional_address(&market.virtual_inventory_for_positions) {
+                addresses.insert(*address);
+            }
+        }
+        Ok(addresses)
     }
 }

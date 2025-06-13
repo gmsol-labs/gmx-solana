@@ -1,5 +1,6 @@
-use std::ops::Deref;
+use std::{collections::HashSet, ops::Deref};
 
+use anchor_lang::prelude::AccountMeta;
 use anchor_spl::associated_token::get_associated_token_address;
 use gmsol_programs::gmsol_store::{
     accounts::{Shift, Store},
@@ -32,7 +33,7 @@ use crate::{
     utils::{optional::fix_optional_account_metas, zero_copy::ZeroCopy},
 };
 
-use super::ExchangeOps;
+use super::{ExchangeOps, VirtualInventoryCollector};
 
 /// Compute unit limit for `execute_shift`
 pub const EXECUTE_SHIFT_COMPUTE_BUDGET: u32 = 400_000;
@@ -342,6 +343,7 @@ pub struct ExecuteShiftHint {
     to_market_token_escrow: Pubkey,
     /// Feeds.
     pub feeds: TokensWithFeed,
+    virtual_inventories: HashSet<Pubkey>,
 }
 
 impl ExecuteShiftHint {
@@ -352,6 +354,7 @@ impl ExecuteShiftHint {
         map: &impl TokenMapAccess,
         from_market: &impl HasMarketMeta,
         to_market: &impl HasMarketMeta,
+        virtual_inventories: HashSet<Pubkey>,
     ) -> crate::Result<Self> {
         let ordered_tokens = ordered_tokens(from_market, to_market);
         let token_records = token_records(map, &ordered_tokens).map_err(crate::Error::custom)?;
@@ -378,6 +381,7 @@ impl ExecuteShiftHint {
             to_market_token_escrow,
             token_map: *optional_address(&store.token_map).ok_or(crate::Error::NotFound)?,
             feeds,
+            virtual_inventories,
         })
     }
 }
@@ -428,8 +432,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteShiftBuilder<'a, C> {
                     .account::<ZeroCopy<Shift>>(&self.shift)
                     .await?
                     .ok_or(crate::Error::NotFound)?;
-                let stote_address = &shift.0.header.store;
-                let store = self.client.store(stote_address).await?;
+                let store_address = &shift.0.header.store;
+                let store = self.client.store(store_address).await?;
                 let token_map_address = optional_address(&store.token_map)
                     .ok_or(crate::Error::custom("token map is not set"))?;
                 let token_map = self.client.token_map(token_map_address).await?;
@@ -437,14 +441,25 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteShiftBuilder<'a, C> {
                 let to_market_token = shift.0.tokens.to_market_token.token;
                 let from_market = self
                     .client
-                    .find_market_address(stote_address, &from_market_token);
+                    .find_market_address(store_address, &from_market_token);
                 let from_market = MarketMeta::from(self.client.market(&from_market).await?.meta);
                 let to_market = self
                     .client
-                    .find_market_address(stote_address, &to_market_token);
+                    .find_market_address(store_address, &to_market_token);
                 let to_market = MarketMeta::from(self.client.market(&to_market).await?.meta);
-                let hint =
-                    ExecuteShiftHint::new(&shift.0, &store, &token_map, &from_market, &to_market)?;
+                let virtual_inventories = VirtualInventoryCollector::default()
+                    .insert_market_token(&from_market_token)
+                    .insert_market_token(&to_market_token)
+                    .collect(self.client, store_address)
+                    .await?;
+                let hint = ExecuteShiftHint::new(
+                    &shift.0,
+                    &store,
+                    &token_map,
+                    &from_market,
+                    &to_market,
+                    virtual_inventories,
+                )?;
                 self.hint = Some(hint.clone());
                 hint
             }
@@ -469,6 +484,11 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteShiftBuilder<'a, C> {
             .find_market_vault_address(&hint.store, &hint.from_market_token);
 
         let feeds = self.feeds_parser.parse_and_sort_by_tokens(&hint.feeds)?;
+        let virtual_inventories = hint
+            .virtual_inventories
+            .iter()
+            .map(|pubkey| AccountMeta::new(*pubkey, false))
+            .collect();
 
         let mut rpc = self
             .client
@@ -500,6 +520,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteShiftBuilder<'a, C> {
                 throw_on_execution_error: !self.cancel_on_execution_error,
             })
             .accounts(feeds)
+            .accounts(virtual_inventories)
             .compute_budget(ComputeBudget::default().with_limit(EXECUTE_SHIFT_COMPUTE_BUDGET));
 
         if self.close {

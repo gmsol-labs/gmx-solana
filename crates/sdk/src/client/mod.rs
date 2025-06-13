@@ -571,6 +571,12 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         crate::pda::find_callback_authority(self.store_program_id()).0
     }
 
+    /// Find the PDA for virtual inventory for swaps.
+    pub fn find_virtual_inventory_for_swaps_address(&self, store: &Pubkey, index: u32) -> Pubkey {
+        crate::pda::find_virtual_inventory_for_swaps_address(store, index, self.store_program_id())
+            .0
+    }
+
     pub(crate) fn get_callback_params(&self, callback: Option<&Callback>) -> CallbackParams {
         match callback {
             Some(callback) => CallbackParams {

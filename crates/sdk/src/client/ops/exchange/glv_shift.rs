@@ -1,5 +1,9 @@
-use std::{collections::HashMap, ops::Deref};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Deref,
+};
 
+use anchor_lang::prelude::AccountMeta;
 use anchor_spl::associated_token::get_associated_token_address;
 use gmsol_programs::gmsol_store::{
     accounts::{GlvShift, Store},
@@ -9,6 +13,7 @@ use gmsol_programs::gmsol_store::{
 };
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions},
+    compute_budget::ComputeBudget,
     make_bundle_builder::{MakeBundleBuilder, SetExecutionFee},
     transaction_builder::TransactionBuilder,
 };
@@ -32,10 +37,10 @@ use crate::{
     utils::{optional::fix_optional_account_metas, zero_copy::ZeroCopy},
 };
 
-use super::ExchangeOps;
+use super::{ExchangeOps, VirtualInventoryCollector};
 
 /// Compute unit limit for `execute_glv_shift`.
-pub const EXECUTE_GLV_WITHDRAWAL_COMPUTE_BUDGET: u32 = 800_000;
+pub const EXECUTE_GLV_SHIFT_COMPUTE_BUDGET: u32 = 800_000;
 
 /// Min execution lamports for GLV shift.
 pub const MIN_EXECUTION_LAMPORTS: u64 = 0;
@@ -276,6 +281,7 @@ pub struct ExecuteGlvShiftHint {
     to_market_token: Pubkey,
     /// Feeds.
     pub feeds: TokensWithFeed,
+    virtual_inventories: HashSet<Pubkey>,
 }
 
 impl ExecuteGlvShiftHint {
@@ -286,6 +292,7 @@ impl ExecuteGlvShiftHint {
         map: &impl TokenMapAccess,
         from_market: &impl HasMarketMeta,
         to_market: &impl HasMarketMeta,
+        virtual_inventories: HashSet<Pubkey>,
     ) -> crate::Result<Self> {
         let CloseGlvShiftHint {
             store: store_address,
@@ -308,6 +315,7 @@ impl ExecuteGlvShiftHint {
             to_market_token,
             token_map: *optional_address(&store.token_map).ok_or(crate::Error::NotFound)?,
             feeds,
+            virtual_inventories,
         })
     }
 }
@@ -376,12 +384,18 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
                     .client
                     .find_market_address(store_address, &to_market_token);
                 let to_market = MarketMeta::from(self.client.market(&to_market).await?.meta);
+                let virtual_inventories = VirtualInventoryCollector::default()
+                    .insert_market_token(&from_market_token)
+                    .insert_market_token(&to_market_token)
+                    .collect(self.client, store_address)
+                    .await?;
                 let hint = ExecuteGlvShiftHint::new(
                     &shift.0,
                     &store,
                     &token_map,
                     &from_market,
                     &to_market,
+                    virtual_inventories,
                 )?;
                 self.hint = Some(hint.clone());
                 hint
@@ -413,6 +427,11 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
         let to_market_token_glv_vault = get_associated_token_address(&glv, &hint.to_market_token);
 
         let feeds = self.feeds_parser.parse_and_sort_by_tokens(&hint.feeds)?;
+        let virtual_inventories = hint
+            .virtual_inventories
+            .iter()
+            .map(|pubkey| AccountMeta::new(*pubkey, false))
+            .collect();
 
         let mut rpc = self
             .client
@@ -445,7 +464,9 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvShiftBuilder<'a, C> {
                 throw_on_execution_error: !self.cancel_on_execution_error,
             })
             .accounts(feeds)
-            .lookup_tables(self.alts.clone());
+            .accounts(virtual_inventories)
+            .lookup_tables(self.alts.clone())
+            .compute_budget(ComputeBudget::default().with_limit(EXECUTE_GLV_SHIFT_COMPUTE_BUDGET));
 
         if self.close {
             let close = self

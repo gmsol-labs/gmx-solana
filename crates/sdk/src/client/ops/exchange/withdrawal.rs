@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{collections::HashSet, ops::Deref};
 
 use anchor_spl::associated_token::get_associated_token_address;
 use gmsol_programs::gmsol_store::{
@@ -32,7 +32,7 @@ use crate::{
     utils::{optional::fix_optional_account_metas, zero_copy::ZeroCopy},
 };
 
-use super::ExchangeOps;
+use super::{ExchangeOps, VirtualInventoryCollector};
 
 /// Compute unit limit for `execute_withdrawal`
 pub const EXECUTE_WITHDRAWAL_COMPUTE_BUDGET: u32 = 400_000;
@@ -481,11 +481,16 @@ pub struct ExecuteWithdrawalHint {
     pub feeds: TokensWithFeed,
     swap: SwapActionParams,
     should_unwrap_native_token: bool,
+    virtual_inventories: HashSet<Pubkey>,
 }
 
 impl ExecuteWithdrawalHint {
     /// Create a new hint for the execution.
-    pub fn new(withdrawal: &Withdrawal, map: &impl TokenMapAccess) -> crate::Result<Self> {
+    pub fn new(
+        withdrawal: &Withdrawal,
+        map: &impl TokenMapAccess,
+        virtual_inventories: HashSet<Pubkey>,
+    ) -> crate::Result<Self> {
         let CloseWithdrawalHint {
             owner,
             receiver,
@@ -510,6 +515,7 @@ impl ExecuteWithdrawalHint {
             feeds: swap.to_feeds(map).map_err(crate::Error::custom)?,
             swap,
             should_unwrap_native_token,
+            virtual_inventories,
         })
     }
 }
@@ -551,8 +557,13 @@ where
         &mut self,
         withdrawal: &Withdrawal,
         map: &impl TokenMapAccess,
+        virtual_inventories: HashSet<Pubkey>,
     ) -> crate::Result<&mut Self> {
-        self.hint = Some(ExecuteWithdrawalHint::new(withdrawal, map)?);
+        self.hint = Some(ExecuteWithdrawalHint::new(
+            withdrawal,
+            map,
+            virtual_inventories,
+        )?);
         Ok(self)
     }
 
@@ -567,7 +578,11 @@ where
                     .account(&self.withdrawal)
                     .await?
                     .ok_or(crate::Error::NotFound)?;
-                let hint = ExecuteWithdrawalHint::new(&withdrawal.0, &map)?;
+                let swap = withdrawal.0.swap.into();
+                let virtual_inventories = VirtualInventoryCollector::from_swap(&swap)
+                    .collect(self.client, &self.store)
+                    .await?;
+                let hint = ExecuteWithdrawalHint::new(&withdrawal.0, &map, virtual_inventories)?;
                 self.hint = Some(hint.clone());
                 Ok(hint)
             }
@@ -607,6 +622,10 @@ where
                 is_signer: false,
                 is_writable: true,
             });
+        let virtual_inventories = hint
+            .virtual_inventories
+            .iter()
+            .map(|pubkey| AccountMeta::new(*pubkey, false));
         let execute = self
             .client
             .store_transaction()
@@ -652,6 +671,7 @@ where
                 feeds
                     .into_iter()
                     .chain(swap_path_markets)
+                    .chain(virtual_inventories)
                     .collect::<Vec<_>>(),
             )
             .compute_budget(ComputeBudget::default().with_limit(EXECUTE_WITHDRAWAL_COMPUTE_BUDGET));

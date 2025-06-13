@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{collections::HashSet, ops::Deref};
 
 use anchor_spl::associated_token::get_associated_token_address;
 use gmsol_programs::gmsol_store::{
@@ -34,7 +34,7 @@ use crate::{
     utils::optional::fix_optional_account_metas,
 };
 
-use super::ExchangeOps;
+use super::{ExchangeOps, VirtualInventoryCollector};
 
 /// Compute unit limit for `execute_deposit`
 pub const EXECUTE_DEPOSIT_COMPUTE_BUDGET: u32 = 400_000;
@@ -512,11 +512,16 @@ pub struct ExecuteDepositHint {
     initial_long_token: Option<Pubkey>,
     initial_short_token: Option<Pubkey>,
     should_unwrap_native_token: bool,
+    virtual_inventories: HashSet<Pubkey>,
 }
 
 impl ExecuteDepositHint {
     /// Create a new hint for the deposit.
-    pub fn new(deposit: &Deposit, map: &impl TokenMapAccess) -> crate::Result<Self> {
+    pub fn new(
+        deposit: &Deposit,
+        map: &impl TokenMapAccess,
+        virtual_inventories: HashSet<Pubkey>,
+    ) -> crate::Result<Self> {
         let CloseDepositHint {
             owner,
             receiver,
@@ -541,6 +546,7 @@ impl ExecuteDepositHint {
             initial_long_token_escrow: initial_long_token_account,
             initial_short_token_escrow: initial_short_token_account,
             should_unwrap_native_token,
+            virtual_inventories,
         })
     }
 }
@@ -582,8 +588,9 @@ where
         &mut self,
         deposit: &Deposit,
         map: &impl TokenMapAccess,
+        virtual_inventories: HashSet<Pubkey>,
     ) -> crate::Result<&mut Self> {
-        self.hint = Some(ExecuteDepositHint::new(deposit, map)?);
+        self.hint = Some(ExecuteDepositHint::new(deposit, map, virtual_inventories)?);
         Ok(self)
     }
 
@@ -594,7 +601,11 @@ where
             None => {
                 let map = self.client.authorized_token_map(&self.store).await?;
                 let deposit = self.client.deposit(&self.deposit).await?;
-                let hint = ExecuteDepositHint::new(&deposit, &map)?;
+                let swap = deposit.swap.into();
+                let virtual_inventories = VirtualInventoryCollector::from_swap(&swap)
+                    .collect(&self.client, &self.store)
+                    .await?;
+                let hint = ExecuteDepositHint::new(&deposit, &map, virtual_inventories)?;
                 self.hint = Some(hint.clone());
                 Ok(hint)
             }
@@ -644,6 +655,10 @@ where
                 is_signer: false,
                 is_writable: true,
             });
+        let virtual_inventories = hint
+            .virtual_inventories
+            .iter()
+            .map(|pubkey| AccountMeta::new(*pubkey, false));
 
         // Execution.
         let execute = client
@@ -683,7 +698,13 @@ where
                 execution_fee: *execution_fee,
                 throw_on_execution_error: !*cancel_on_execution_error,
             })
-            .accounts(feeds.into_iter().chain(markets).collect::<Vec<_>>())
+            .accounts(
+                feeds
+                    .into_iter()
+                    .chain(markets)
+                    .chain(virtual_inventories)
+                    .collect::<Vec<_>>(),
+            )
             .compute_budget(ComputeBudget::default().with_limit(EXECUTE_DEPOSIT_COMPUTE_BUDGET));
 
         let rpc = if self.close {

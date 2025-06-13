@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     ops::Deref,
 };
 
@@ -39,7 +39,7 @@ use crate::{
     utils::{optional::fix_optional_account_metas, zero_copy::ZeroCopy},
 };
 
-use super::ExchangeOps;
+use super::{ExchangeOps, VirtualInventoryCollector};
 
 /// Compute unit limit for `execute_glv_withdrawal`.
 pub const EXECUTE_GLV_WITHDRAWAL_COMPUTE_BUDGET: u32 = 800_000;
@@ -527,6 +527,7 @@ pub struct ExecuteGlvWithdrawalHint {
     swap: SwapActionParams,
     /// Feeds.
     pub feeds: TokensWithFeed,
+    virtual_inventories: HashSet<Pubkey>,
 }
 
 impl Deref for ExecuteGlvWithdrawalHint {
@@ -545,6 +546,7 @@ impl ExecuteGlvWithdrawalHint {
         token_map_address: &Pubkey,
         token_map: &impl TokenMapAccess,
         index_tokens: impl IntoIterator<Item = Pubkey>,
+        virtual_inventories: HashSet<Pubkey>,
     ) -> crate::Result<Self> {
         let glv_market_tokens = glv.market_tokens().collect();
         let swap = glv_withdrawal.swap.into();
@@ -561,6 +563,7 @@ impl ExecuteGlvWithdrawalHint {
             feeds: collector
                 .to_feeds(token_map)
                 .map_err(crate::Error::custom)?,
+            virtual_inventories,
         })
     }
 }
@@ -615,7 +618,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvWithdrawalBuilder<'a,
         match &self.hint {
             Some(hint) => Ok(hint.clone()),
             None => {
-                let glv_deposit = self
+                let glv_withdrawal = self
                     .client
                     .account::<ZeroCopy<GlvWithdrawal>>(&self.glv_withdrawal)
                     .await?
@@ -624,7 +627,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvWithdrawalBuilder<'a,
 
                 let glv_address = self
                     .client
-                    .find_glv_address(&glv_deposit.tokens.glv_token.token);
+                    .find_glv_address(&glv_withdrawal.tokens.glv_token.token);
                 let glv = self
                     .client
                     .account::<ZeroCopy<Glv>>(&glv_address)
@@ -639,19 +642,24 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvWithdrawalBuilder<'a,
                     index_tokens.push(market.meta.index_token_mint);
                 }
 
-                let store = &glv_deposit.header.store;
+                let store = &glv_withdrawal.header.store;
                 let token_map_address = self
                     .client
                     .authorized_token_map_address(store)
                     .await?
                     .ok_or(crate::Error::NotFound)?;
                 let token_map = self.client.token_map(&token_map_address).await?;
+                let swap = glv_withdrawal.swap.into();
+                let virtual_inventories = VirtualInventoryCollector::from_swap(&swap)
+                    .collect(self.client, store)
+                    .await?;
                 let hint = ExecuteGlvWithdrawalHint::new(
                     &glv,
-                    &glv_deposit,
+                    &glv_withdrawal,
                     &token_map_address,
                     &token_map,
                     index_tokens,
+                    virtual_inventories,
                 )?;
                 self.hint = Some(hint.clone());
                 Ok(hint)
@@ -694,6 +702,10 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
                 is_signer: false,
                 is_writable: true,
             });
+        let virtual_inventories = hint
+            .virtual_inventories
+            .iter()
+            .map(|pubkey| AccountMeta::new(*pubkey, false));
 
         let glv_accounts = split_to_accounts(
             hint.glv_market_tokens.iter().copied(),
@@ -761,7 +773,13 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
                 throw_on_execution_error: !self.cancel_on_execution_error,
             })
             .accounts(glv_accounts)
-            .accounts(feeds.into_iter().chain(markets).collect::<Vec<_>>())
+            .accounts(
+                feeds
+                    .into_iter()
+                    .chain(markets)
+                    .chain(virtual_inventories)
+                    .collect::<Vec<_>>(),
+            )
             .compute_budget(
                 ComputeBudget::default().with_limit(EXECUTE_GLV_WITHDRAWAL_COMPUTE_BUDGET),
             )

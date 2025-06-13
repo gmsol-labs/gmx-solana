@@ -341,7 +341,7 @@ async fn glv_shift() -> eyre::Result<()> {
                 .add_alt(deployment.common_alt().clone())
                 .add_alt(deployment.market_alt().clone()),
             None,
-            false,
+            true,
             true,
         )
         .instrument(tracing::info_span!("executing glv shift", glv_shift=%shift))

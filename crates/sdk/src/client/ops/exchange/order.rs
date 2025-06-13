@@ -47,7 +47,7 @@ use crate::{
     utils::{optional::fix_optional_account_metas, zero_copy::ZeroCopy},
 };
 
-use super::ExchangeOps;
+use super::{ExchangeOps, VirtualInventoryCollector};
 
 /// Compute unit limit for `execute_order`
 pub const EXECUTE_ORDER_COMPUTE_BUDGET: u32 = 400_000;
@@ -725,6 +725,7 @@ pub struct ExecuteOrderHint {
     swap: SwapActionParams,
     should_unwrap_native_token: bool,
     callback: Option<Callback>,
+    virtual_inventories: HashSet<Pubkey>,
 }
 
 impl ExecuteOrderHint {
@@ -839,6 +840,7 @@ where
         store: &Arc<Store>,
         map: &impl TokenMapAccess,
         user: Option<&UserHeader>,
+        virtual_inventories: HashSet<Pubkey>,
     ) -> crate::Result<&mut Self> {
         let params = &order.params;
         let swap = SwapActionParams::from(order.swap);
@@ -878,6 +880,7 @@ where
                 .flags
                 .get_flag(ActionFlag::ShouldUnwrapNativeToken),
             callback: Callback::from_header(&order.header)?,
+            virtual_inventories,
         });
         Ok(self)
     }
@@ -900,7 +903,18 @@ where
                         .account::<ZeroCopy<UserHeader>>(&user)
                         .await?
                         .map(|user| user.0);
-                    self.hint(&order, &market, &store, &token_map, user.as_ref())?;
+                    let swap = order.swap.into();
+                    let virtual_inventories = VirtualInventoryCollector::from_swap(&swap)
+                        .collect(self.client, &self.store)
+                        .await?;
+                    self.hint(
+                        &order,
+                        &market,
+                        &store,
+                        &token_map,
+                        user.as_ref(),
+                        virtual_inventories,
+                    )?;
                 }
             }
         }
@@ -967,6 +981,10 @@ where
                 is_signer: false,
                 is_writable: true,
             });
+        let virtual_inventories = hint
+            .virtual_inventories
+            .iter()
+            .map(|pubkey| AccountMeta::new(*pubkey, false));
         let event = self.client.find_trade_event_buffer_address(
             &self.store,
             &authority,
@@ -1130,7 +1148,13 @@ where
         };
 
         execute_order = execute_order
-            .accounts(feeds.into_iter().chain(swap_markets).collect::<Vec<_>>())
+            .accounts(
+                feeds
+                    .into_iter()
+                    .chain(swap_markets)
+                    .chain(virtual_inventories)
+                    .collect::<Vec<_>>(),
+            )
             .compute_budget(ComputeBudget::default().with_limit(EXECUTE_ORDER_COMPUTE_BUDGET))
             .lookup_tables(self.alts.clone());
 
@@ -1626,6 +1650,7 @@ pub struct PositionCutHint {
     token_map: Pubkey,
     market: Pubkey,
     position_size: u128,
+    virtual_inventories: HashSet<Pubkey>,
 }
 
 impl PositionCutHint {
@@ -1650,6 +1675,10 @@ impl PositionCutHint {
             .account::<ZeroCopy<UserHeader>>(&user)
             .await?
             .map(|user| user.0);
+        let virtual_inventories = VirtualInventoryCollector::default()
+            .insert_market_token(&position.market_token)
+            .collect(client, &store_address)
+            .await?;
 
         Self::try_new(
             position,
@@ -1659,6 +1688,7 @@ impl PositionCutHint {
             meta,
             user.as_ref(),
             client.store_program_id(),
+            virtual_inventories,
         )
     }
 
@@ -1671,6 +1701,7 @@ impl PositionCutHint {
         market_meta: MarketMeta,
         user: Option<&UserHeader>,
         program_id: &Pubkey,
+        virtual_inventories: HashSet<Pubkey>,
     ) -> crate::Result<Self> {
         let records = token_records(
             token_map,
@@ -1703,6 +1734,7 @@ impl PositionCutHint {
             pnl_token: market_meta.pnl_token(position.try_is_long()?),
             meta: market_meta,
             position_size: position.state.size_in_usd,
+            virtual_inventories,
         })
     }
 
@@ -1801,6 +1833,12 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PositionCutBuilder<'a, C> {
             &time_key,
         );
         let feeds = self.feeds_parser.parse_and_sort_by_tokens(hint.feeds())?;
+        let virtual_inventories = hint
+            .virtual_inventories
+            .iter()
+            .map(|pubkey| AccountMeta::new(*pubkey, false))
+            .collect();
+
         let order = self.client.find_order_address(&store, &payer, &nonce);
 
         let long_token_escrow = get_associated_token_address(&order, &long_token_mint);
@@ -1931,6 +1969,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PositionCutBuilder<'a, C> {
 
         exec_builder = exec_builder
             .accounts(feeds)
+            .accounts(virtual_inventories)
             .compute_budget(ComputeBudget::default().with_limit(POSITION_CUT_COMPUTE_BUDGET))
             .lookup_tables(self.alts.clone());
 

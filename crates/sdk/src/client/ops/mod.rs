@@ -50,6 +50,9 @@ pub mod system;
 /// Operations for IDL accounts.
 pub mod idl;
 
+/// Operations for virtual inventory accounts.
+pub mod virtual_inventory;
+
 pub use alt::AddressLookupTableOps;
 pub use config::ConfigOps;
 pub use exchange::ExchangeOps;
@@ -66,3 +69,4 @@ pub use token_account::TokenAccountOps;
 pub use token_config::TokenConfigOps;
 pub use treasury::TreasuryOps;
 pub use user::UserOps;
+pub use virtual_inventory::VirtualInventoryOps;

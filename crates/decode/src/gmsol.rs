@@ -6,7 +6,7 @@ pub mod programs {
     use gmsol_programs::gmsol_store::{
         accounts::{
             Deposit, GlvDeposit, GlvShift, GlvWithdrawal, Market, Order, Position, Shift, Store,
-            Withdrawal,
+            VirtualInventory, Withdrawal,
         },
         events::{
             BorrowingFeesUpdated, DepositExecuted, DepositRemoved, GlvDepositRemoved, GlvPricing,
@@ -20,6 +20,7 @@ pub mod programs {
     impl_decode_for_zero_copy!(Store);
     impl_decode_for_zero_copy!(Position);
     impl_decode_for_zero_copy!(Market);
+    impl_decode_for_zero_copy!(VirtualInventory);
     impl_decode_for_zero_copy!(Deposit);
     impl_decode_for_zero_copy!(Withdrawal);
     impl_decode_for_zero_copy!(Shift);
@@ -61,6 +62,7 @@ pub mod programs {
             GlvShift,
             Store,
             Market,
+            VirtualInventory,
             Position,
             UnknownOwnedData
         ]
@@ -115,14 +117,15 @@ pub mod store {
             WithdrawalRemoved,
         },
         states::{
-            Deposit, GlvDeposit, GlvShift, GlvWithdrawal, Market, Order, Position, Shift, Store,
-            Withdrawal,
+            market::virtual_inventory::VirtualInventory, Deposit, GlvDeposit, GlvShift,
+            GlvWithdrawal, Market, Order, Position, Shift, Store, Withdrawal,
         },
     };
 
     impl_decode_for_zero_copy!(Store);
     impl_decode_for_zero_copy!(Position);
     impl_decode_for_zero_copy!(Market);
+    impl_decode_for_zero_copy!(VirtualInventory);
     impl_decode_for_zero_copy!(Deposit);
     impl_decode_for_zero_copy!(Withdrawal);
     impl_decode_for_zero_copy!(Shift);
@@ -164,6 +167,7 @@ pub mod store {
             GlvShift,
             Store,
             Market,
+            VirtualInventory,
             Position,
             UnknownOwnedData
         ]

@@ -12,6 +12,8 @@ use gmsol_programs::gmsol_treasury::accounts as treasury_accounts;
 #[allow(unused_imports)]
 use gmsol_programs::gmsol_timelock::accounts as timelock_accounts;
 
+pub use gmsol_programs::gmsol_store::constants::VIRTUAL_INVENTORY_FOR_SWAPS_SEED;
+
 /// Nonce bytes.
 pub type NonceBytes = [u8; 32];
 
@@ -424,6 +426,22 @@ pub fn find_price_feed_address(
             &index.to_le_bytes(),
             &[provider as u8],
             token.as_ref(),
+        ],
+        store_program_id,
+    )
+}
+
+/// Find PDA for virtual inventory for swaps account.
+pub fn find_virtual_inventory_for_swaps_address(
+    store: &Pubkey,
+    index: u32,
+    store_program_id: &Pubkey,
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[
+            VIRTUAL_INVENTORY_FOR_SWAPS_SEED,
+            store.as_ref(),
+            &index.to_le_bytes(),
         ],
         store_program_id,
     )
