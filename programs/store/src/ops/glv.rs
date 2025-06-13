@@ -11,6 +11,7 @@ use typed_builder::TypedBuilder;
 use crate::{
     constants,
     events::{EventEmitter, GlvPricing, GlvPricingKind},
+    ops::market::RemainingAccountsForMarket,
     states::{
         common::{
             action::{Action, ActionExt, ActionParams, ActionSigner},
@@ -343,15 +344,22 @@ impl ExecuteGlvDepositOperation<'_, '_> {
         let glv_token_amount = {
             let deposit = self.glv_deposit.load()?;
             let mut market_token_amount = deposit.params.market_token_amount;
-
+            let swap = Some(&deposit.swap);
+            let remaining_accounts = RemainingAccountsForMarket::new(
+                self.remaining_accounts,
+                self.market_token_mint.key(),
+                swap,
+            )?;
+            let virtual_inventories = remaining_accounts.load_virtual_inventories()?;
             let mut market = RevertibleLiquidityMarketOperation::new(
                 &self.store,
                 self.oracle,
                 &self.market,
                 self.market_token_mint,
                 self.token_program.clone(),
-                Some(&deposit.swap),
-                self.remaining_accounts,
+                swap,
+                remaining_accounts.swap_market_loaders(),
+                &virtual_inventories,
                 self.event_emitter,
             )?;
 
@@ -479,6 +487,7 @@ impl ExecuteGlvDepositOperation<'_, '_> {
                 .update_market_token_balance(&market_token_mint, next_market_token_balance)?;
 
             op.commit();
+            virtual_inventories.commit();
 
             glv_amount
         };
@@ -810,15 +819,22 @@ impl ExecuteGlvWithdrawalOperation<'_, '_> {
             let glv_token_amount = withdrawal.params.glv_token_amount;
             let market_token_mint = self.market_token_mint.to_account_info();
             let market_token_decimals = self.market_token_mint.decimals;
-
+            let swap = Some(&withdrawal.swap);
+            let remaining_accounts = RemainingAccountsForMarket::new(
+                self.remaining_accounts,
+                self.market_token_mint.key(),
+                swap,
+            )?;
+            let virtual_inventories = remaining_accounts.load_virtual_inventories()?;
             let mut market = RevertibleLiquidityMarketOperation::new(
                 &self.store,
                 self.oracle,
                 &self.market,
                 self.market_token_mint,
                 self.token_program.clone(),
-                Some(&withdrawal.swap),
-                self.remaining_accounts,
+                swap,
+                remaining_accounts.swap_market_loaders(),
+                &virtual_inventories,
                 self.event_emitter,
             )?;
 
@@ -932,6 +948,7 @@ impl ExecuteGlvWithdrawalOperation<'_, '_> {
             .expect("failed to transfer market tokens");
 
             executed.commit();
+            virtual_inventories.commit();
 
             (glv_token_amount, amounts)
         };
@@ -1187,6 +1204,7 @@ pub(crate) struct ExecuteGlvShiftOperation<'a, 'info> {
     oracle: &'a Oracle,
     #[builder(setter(into))]
     event_emitter: EventEmitter<'a, 'info>,
+    remaining_accounts: &'info [AccountInfo<'info>],
 }
 
 impl ExecuteGlvShiftOperation<'_, '_> {
@@ -1305,6 +1323,12 @@ impl ExecuteGlvShiftOperation<'_, '_> {
         let from_market_token_decimals = self.from_market_token_mint.decimals;
         let glv_shift = self.glv_shift.load()?;
         let shift = Borrow::<Shift>::borrow(&*glv_shift);
+        let remaining_accounts = RemainingAccountsForMarket::new(
+            self.remaining_accounts,
+            self.from_market_token_mint.key(),
+            None,
+        )?;
+        let virtual_inventories = remaining_accounts.load_virtual_inventories()?;
 
         let mut from_market = RevertibleLiquidityMarketOperation::new(
             self.store,
@@ -1314,6 +1338,7 @@ impl ExecuteGlvShiftOperation<'_, '_> {
             self.token_program.clone(),
             None,
             &[],
+            &virtual_inventories,
             self.event_emitter,
         )?;
 
@@ -1325,6 +1350,7 @@ impl ExecuteGlvShiftOperation<'_, '_> {
             self.token_program.clone(),
             None,
             &[],
+            &virtual_inventories,
             self.event_emitter,
         )?;
 
@@ -1434,6 +1460,7 @@ impl ExecuteGlvShiftOperation<'_, '_> {
         // Commit the changes.
         from_market.commit();
         to_market.commit();
+        virtual_inventories.commit();
 
         // Invertible operations after the commitment.
         {

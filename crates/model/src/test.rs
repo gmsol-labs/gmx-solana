@@ -3,6 +3,7 @@
 use std::{
     collections::HashMap,
     fmt,
+    ops::{Deref, DerefMut},
     time::{Duration, Instant},
 };
 
@@ -498,8 +499,10 @@ where
         }
     }
 
-    fn virtual_inventory_for_swaps_pool(&self) -> crate::Result<Option<&Self::Pool>> {
-        Ok(None)
+    fn virtual_inventory_for_swaps_pool(
+        &self,
+    ) -> crate::Result<Option<impl Deref<Target = Self::Pool>>> {
+        Ok(None::<&Self::Pool>)
     }
 
     fn usd_to_amount_divisor(&self) -> Self::Num {
@@ -551,8 +554,10 @@ where
         Ok(&mut self.fee)
     }
 
-    fn virtual_inventory_for_swaps_pool_mut(&self) -> crate::Result<Option<&mut Self::Pool>> {
-        Ok(None)
+    fn virtual_inventory_for_swaps_pool_mut(
+        &mut self,
+    ) -> crate::Result<Option<impl DerefMut<Target = Self::Pool>>> {
+        Ok(None::<&mut Self::Pool>)
     }
 }
 

@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use anchor_lang::prelude::*;
 use anchor_spl::token::Mint;
 use gmsol_model::params::{position::PositionImpactDistributionParams, PriceImpactParams};
@@ -182,7 +184,9 @@ impl<'a, 'info> gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }>
         self.base.collateral_sum_pool(is_long)
     }
 
-    fn virtual_inventory_for_swaps_pool(&self) -> gmsol_model::Result<Option<&Self::Pool>> {
+    fn virtual_inventory_for_swaps_pool(
+        &self,
+    ) -> gmsol_model::Result<Option<impl Deref<Target = Self::Pool>>> {
         self.base.virtual_inventory_for_swaps_pool()
     }
 
@@ -230,7 +234,9 @@ impl gmsol_model::BaseMarketMut<{ constants::MARKET_DECIMALS }>
         self.base.claimable_fee_pool_mut()
     }
 
-    fn virtual_inventory_for_swaps_pool_mut(&self) -> gmsol_model::Result<Option<&mut Self::Pool>> {
+    fn virtual_inventory_for_swaps_pool_mut(
+        &mut self,
+    ) -> gmsol_model::Result<Option<impl DerefMut<Target = Self::Pool>>> {
         self.base.virtual_inventory_for_swaps_pool_mut()
     }
 }

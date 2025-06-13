@@ -295,6 +295,8 @@ impl<'info> internal::Authentication<'info> for CloseGlvShift<'info> {
 ///
 ///   - 0..M. `[]` M feed accounts, where M represents the total number of unique tokens
 ///     of markets.
+///   - M..M+V. `[writeable]` V virtual inventory accounts, where V represents the total
+///     number of unique virtual inventories required by the markets.
 #[event_cpi]
 #[derive(Accounts)]
 pub struct ExecuteGlvShift<'info> {
@@ -479,7 +481,13 @@ impl<'info> ExecuteGlvShift<'info> {
             &self.token_map,
             &tokens,
             remaining_accounts,
-            |oracle, _remaining_accounts| builder.oracle(oracle).build().unchecked_execute(),
+            |oracle, remaining_accounts| {
+                builder
+                    .oracle(oracle)
+                    .remaining_accounts(remaining_accounts)
+                    .build()
+                    .unchecked_execute()
+            },
         )
     }
 }

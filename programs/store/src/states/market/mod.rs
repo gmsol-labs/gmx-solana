@@ -31,13 +31,17 @@ use anchor_lang::{prelude::*, Bump};
 use anchor_spl::token::Mint;
 use borsh::{BorshDeserialize, BorshSerialize};
 use config::MarketConfigFlag;
-use gmsol_model::{price::Prices, ClockKind, PoolKind};
-use gmsol_utils::market::{MarketError, MarketFlag, MAX_MARKET_FLAGS};
+use gmsol_model::{num::Unsigned, price::Prices, Balance, BaseMarket, ClockKind, Delta, PoolKind};
+use gmsol_utils::{
+    market::{MarketError, MarketFlag, MAX_MARKET_FLAGS},
+    pubkey::{optional_address, DEFAULT_PUBKEY},
+};
 use revertible::RevertibleBuffer;
+use virtual_inventory::VirtualInventory;
 
 use crate::{
     utils::fixed_str::{bytes_to_fixed_str, fixed_str_to_bytes},
-    CoreError,
+    CoreError, ModelError,
 };
 
 use super::{Factor, InitSpace, Oracle, Seed};
@@ -68,6 +72,9 @@ pub mod pool;
 /// Market Status.
 pub mod status;
 
+/// Virtual Inventory.
+pub mod virtual_inventory;
+
 mod model;
 
 const MAX_NAME_LEN: usize = 64;
@@ -91,8 +98,10 @@ pub struct Market {
     indexer: Indexer,
     state: State,
     buffer: RevertibleBuffer,
+    virtual_inventory_for_swaps: Pubkey,
+    virtual_inventory_for_positions: Pubkey,
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 256],
+    reserved: [u8; 192],
 }
 
 #[zero_copy]
@@ -414,6 +423,75 @@ impl Market {
         );
 
         Ok(())
+    }
+
+    /// Returns the address of virtual inventory for swaps.
+    pub fn virtual_inventory_for_swaps(&self) -> Option<&Pubkey> {
+        optional_address(&self.virtual_inventory_for_swaps)
+    }
+
+    /// Join a virtual inventory for swaps.
+    pub fn join_virtual_inventory_for_swaps(
+        &mut self,
+        address: &Pubkey,
+        virtual_inventory_for_swaps: &mut VirtualInventory,
+    ) -> Result<()> {
+        require_keys_neq!(*address, DEFAULT_PUBKEY);
+        require!(
+            self.virtual_inventory_for_swaps().is_none(),
+            CoreError::PreconditionsAreNotMet
+        );
+        self.virtual_inventory_for_swaps = *address;
+        let liquidity_pool = self.liquidity_pool().map_err(ModelError::from)?;
+        virtual_inventory_for_swaps.join_unchecked(Delta::new_both_sides(
+            true,
+            &(liquidity_pool
+                .long_amount()
+                .map_err(ModelError::from)?
+                .try_into()
+                .map_err(|_| error!(CoreError::TokenAmountOverflow))?),
+            &(liquidity_pool
+                .short_amount()
+                .map_err(ModelError::from)?
+                .try_into()
+                .map_err(|_| error!(CoreError::TokenAmountOverflow))?),
+        ))?;
+        Ok(())
+    }
+
+    /// Leave the virtual inventory for swaps.
+    ///
+    /// # CHECK
+    /// - The provided [`VirtualInventory`] must be the associated one.
+    pub fn leave_virtual_inventory_for_swaps_unchecked(
+        &mut self,
+        virtual_inventory_for_swaps: &mut VirtualInventory,
+    ) -> Result<()> {
+        require!(
+            self.virtual_inventory_for_swaps().is_some(),
+            CoreError::PreconditionsAreNotMet
+        );
+        let liquidity_pool = self.liquidity_pool().map_err(ModelError::from)?;
+        virtual_inventory_for_swaps.leave_unchecked(Delta::new_both_sides(
+            true,
+            &(liquidity_pool
+                .long_amount()
+                .map_err(ModelError::from)?
+                .to_opposite_signed()
+                .map_err(ModelError::from)?),
+            &(liquidity_pool
+                .short_amount()
+                .map_err(ModelError::from)?
+                .to_opposite_signed()
+                .map_err(ModelError::from)?),
+        ))?;
+        self.virtual_inventory_for_swaps = DEFAULT_PUBKEY;
+        Ok(())
+    }
+
+    /// Returns the address of virtual inventory for positions.
+    pub fn virtual_inventory_for_positions(&self) -> Option<&Pubkey> {
+        optional_address(&self.virtual_inventory_for_positions)
     }
 }
 

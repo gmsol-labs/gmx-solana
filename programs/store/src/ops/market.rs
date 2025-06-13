@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, TokenAccount};
 use gmsol_model::{
@@ -16,9 +18,10 @@ use crate::{
                 liquidity_market::RevertibleLiquidityMarket,
                 market::SwapPricingKind,
                 swap_market::{SwapDirection, SwapMarkets},
-                Revertible, RevertibleMarket, Revision,
+                Revertible, RevertibleMarket, RevertibleVirtualInventories, Revision,
             },
             utils::ValidateMarketBalances,
+            virtual_inventory::VirtualInventory,
             HasMarketMeta,
         },
         withdrawal::WithdrawalActionParams,
@@ -26,6 +29,47 @@ use crate::{
     },
     CoreError, ModelError,
 };
+
+pub(crate) type SwapMarketLoaders<'info> = [AccountLoader<'info, Market>];
+pub(crate) type VirtualInventoryLoaders<'info> =
+    HashMap<&'info Pubkey, AccountLoader<'info, VirtualInventory>>;
+
+pub(crate) struct RemainingAccountsForMarket<'info> {
+    swap_markets: Vec<AccountLoader<'info, Market>>,
+    virtual_inventories: VirtualInventoryLoaders<'info>,
+}
+
+impl<'info> RemainingAccountsForMarket<'info> {
+    pub(crate) fn new(
+        remaining_accounts: &'info [AccountInfo<'info>],
+        current_market_token: Pubkey,
+        swap: Option<&SwapActionParams>,
+    ) -> Result<Self> {
+        let (swap_markets, remaining_accounts) = match swap {
+            Some(swap) => {
+                swap.unpack_markets_for_swap(&current_market_token, remaining_accounts)?
+            }
+            None => (Vec::default(), remaining_accounts),
+        };
+        // Note: currently all remaining accounts are assumed to be `VirtualInventory` accounts.
+        let virtual_inventories = remaining_accounts
+            .iter()
+            .map(|info| Ok((info.key, AccountLoader::<VirtualInventory>::try_from(info)?)))
+            .collect::<Result<_>>()?;
+        Ok(Self {
+            swap_markets,
+            virtual_inventories,
+        })
+    }
+
+    pub(crate) fn swap_market_loaders(&self) -> &SwapMarketLoaders<'info> {
+        &self.swap_markets
+    }
+
+    pub(crate) fn load_virtual_inventories(&self) -> Result<RevertibleVirtualInventories<'info>> {
+        RevertibleVirtualInventories::from_loaders(&self.virtual_inventories)
+    }
+}
 
 /// Operation for transferring funds into market valut.
 #[derive(TypedBuilder)]
@@ -63,7 +107,12 @@ impl MarketTransferInOperation<'_, '_> {
                 amount,
             )?;
             let token = &self.vault.mint;
-            let mut market = RevertibleMarket::new(self.market, self.event_emitter)?;
+            let mut market = RevertibleMarket::new(
+                self.market,
+                // Virtual inventory feature is not required here.
+                None,
+                self.event_emitter,
+            )?;
             market
                 .record_transferred_in_by_token(token, &amount)
                 .map_err(ModelError::from)?;
@@ -112,7 +161,12 @@ impl MarketTransferOutOperation<'_, '_> {
             )
             .transfer_out(self.vault.to_account_info(), self.to, amount, decimals)?;
             let token = &self.token_mint.key();
-            let mut market = RevertibleMarket::new(self.market, self.event_emitter)?;
+            let mut market = RevertibleMarket::new(
+                self.market,
+                // Virtual inventory feature is not required here.
+                None,
+                self.event_emitter,
+            )?;
             market
                 .record_transferred_out_by_token(token, &amount)
                 .map_err(ModelError::from)?;
@@ -131,7 +185,8 @@ pub struct RevertibleLiquidityMarketOperation<'a, 'info> {
     market_token_mint: &'a mut Account<'info, Mint>,
     token_program: AccountInfo<'info>,
     swap: Option<&'a SwapActionParams>,
-    swap_markets: Vec<AccountLoader<'info, Market>>,
+    swap_market_loaders: &'a SwapMarketLoaders<'info>,
+    virtual_inventories: &'a RevertibleVirtualInventories<'info>,
     event_emitter: EventEmitter<'a, 'info>,
 }
 
@@ -143,14 +198,10 @@ impl<'a, 'info> RevertibleLiquidityMarketOperation<'a, 'info> {
         market_token_mint: &'a mut Account<'info, Mint>,
         token_program: AccountInfo<'info>,
         swap: Option<&'a SwapActionParams>,
-        remaining_accounts: &'info [AccountInfo<'info>],
+        swap_market_loaders: &'a SwapMarketLoaders<'info>,
+        virtual_inventories: &'a RevertibleVirtualInventories<'info>,
         event_emitter: EventEmitter<'a, 'info>,
     ) -> Result<Self> {
-        let swap_markets = swap
-            .map(|swap| swap.unpack_markets_for_swap(&market_token_mint.key(), remaining_accounts))
-            .transpose()?
-            .unwrap_or_default();
-
         Ok(Self {
             store,
             oracle,
@@ -158,7 +209,8 @@ impl<'a, 'info> RevertibleLiquidityMarketOperation<'a, 'info> {
             market_token_mint,
             token_program,
             swap,
-            swap_markets,
+            swap_market_loaders,
+            virtual_inventories,
             event_emitter,
         })
     }
@@ -167,16 +219,22 @@ impl<'a, 'info> RevertibleLiquidityMarketOperation<'a, 'info> {
 impl<'info> RevertibleLiquidityMarketOperation<'_, 'info> {
     pub(crate) fn op<'ctx>(&'ctx mut self) -> Result<Execute<'ctx, 'info>> {
         let current_market_token = self.market_token_mint.key();
+
         let market = RevertibleLiquidityMarket::from_revertible_market(
-            RevertibleMarket::new(self.market, self.event_emitter)?,
+            RevertibleMarket::new(
+                self.market,
+                Some(self.virtual_inventories),
+                self.event_emitter,
+            )?,
             self.market_token_mint,
             &self.token_program,
             self.store,
         )?;
         let swap_markets = SwapMarkets::new(
             &self.store.key(),
-            &self.swap_markets,
+            self.swap_market_loaders,
             Some(&current_market_token),
+            self.virtual_inventories,
             self.event_emitter,
         )?;
         Ok(Execute {

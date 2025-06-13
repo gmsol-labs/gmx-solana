@@ -15,7 +15,7 @@ use crate::{
     CoreError, CoreResult,
 };
 
-use super::market::RevertibleLiquidityMarketOperation;
+use super::market::{RemainingAccountsForMarket, RevertibleLiquidityMarketOperation};
 
 /// Create Shift Params.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -161,6 +161,7 @@ pub struct ExecuteShiftOperation<'a, 'info> {
     token_program: AccountInfo<'info>,
     #[builder(setter(into))]
     event_emitter: EventEmitter<'a, 'info>,
+    remaining_accounts: &'info [AccountInfo<'info>],
 }
 
 impl ExecuteShiftOperation<'_, '_> {
@@ -219,6 +220,12 @@ impl ExecuteShiftOperation<'_, '_> {
         self.validate_markets_and_shift()?;
 
         let shift = self.shift.load()?;
+        let remaining_accounts = RemainingAccountsForMarket::new(
+            self.remaining_accounts,
+            self.from_market_token_mint.key(),
+            None,
+        )?;
+        let virtual_inventories = remaining_accounts.load_virtual_inventories()?;
 
         let mut from_market = RevertibleLiquidityMarketOperation::new(
             self.store,
@@ -228,6 +235,7 @@ impl ExecuteShiftOperation<'_, '_> {
             self.token_program.clone(),
             None,
             &[],
+            &virtual_inventories,
             self.event_emitter,
         )?;
 
@@ -239,6 +247,7 @@ impl ExecuteShiftOperation<'_, '_> {
             self.token_program,
             None,
             &[],
+            &virtual_inventories,
             self.event_emitter,
         )?;
 
@@ -256,6 +265,7 @@ impl ExecuteShiftOperation<'_, '_> {
         // Commit the changes.
         from_market.commit();
         to_market.commit();
+        virtual_inventories.commit();
 
         Ok(())
     }

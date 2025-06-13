@@ -40,6 +40,9 @@ pub mod migration;
 /// Instructions for callback.
 pub mod callback;
 
+/// Instructions for virtual inventories.
+pub mod virtual_inventory;
+
 pub use callback::*;
 pub use config::*;
 pub use exchange::*;
@@ -54,3 +57,4 @@ pub use store::*;
 pub use token::*;
 pub use token_config::*;
 pub use user::*;
+pub use virtual_inventory::*;

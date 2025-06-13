@@ -132,7 +132,41 @@ impl RevertibleBuffer {
     }
 }
 
-pub(super) trait Cache: Revision {
+#[zero_copy]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub(crate) struct RevertiblePoolBuffer {
+    rev: u64,
+    padding: [u8; 8],
+    pool: PoolStorage,
+}
+
+impl RevertiblePoolBuffer {
+    pub(super) fn start_revertible_operation(&mut self) {
+        self.rev = self.rev.checked_add(1).expect("rev overflow");
+    }
+
+    pub(super) fn commit_to_storage(&mut self, storage: &mut PoolStorage) {
+        let state = &self.pool;
+        let rev = self.rev;
+
+        if state.is_dirty(rev) {
+            *storage = *state;
+        }
+    }
+
+    pub(super) fn pool<'a>(&'a self, storage: &'a PoolStorage) -> &'a Pool {
+        self.pool.cache_get_with(self.rev, || storage).pool()
+    }
+
+    pub(super) fn pool_mut<'a>(&'a mut self, storage: &'a PoolStorage) -> &'a mut Pool {
+        self.pool
+            .cache_get_mut_with(self.rev, || *storage)
+            .pool_mut()
+    }
+}
+
+pub(crate) trait Cache: Revision {
     fn is_dirty(&self, rev: u64) -> bool;
 
     fn set_rev(&mut self, rev: u64) -> u64;

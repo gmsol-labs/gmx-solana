@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, ops::Deref};
 
 use crate::{
     market::{BaseMarket, BaseMarketExt},
@@ -518,7 +518,9 @@ where
         self.market.collateral_sum_pool(is_long)
     }
 
-    fn virtual_inventory_for_swaps_pool(&self) -> crate::Result<Option<&Self::Pool>> {
+    fn virtual_inventory_for_swaps_pool(
+        &self,
+    ) -> crate::Result<Option<impl Deref<Target = Self::Pool>>> {
         self.market.virtual_inventory_for_swaps_pool()
     }
 

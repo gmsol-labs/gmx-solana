@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use crate::{
     fixed::FixedPointOps,
     num::{MulDiv, Num, Unsigned, UnsignedAbs},
@@ -39,7 +41,9 @@ pub trait BaseMarket<const DECIMALS: u8> {
     fn collateral_sum_pool(&self, is_long: bool) -> crate::Result<&Self::Pool>;
 
     /// Get virtual inventory for swaps.
-    fn virtual_inventory_for_swaps_pool(&self) -> crate::Result<Option<&Self::Pool>>;
+    fn virtual_inventory_for_swaps_pool(
+        &self,
+    ) -> crate::Result<Option<impl Deref<Target = Self::Pool>>>;
 
     /// USD value to market token amount divisor.
     ///
@@ -83,7 +87,9 @@ pub trait BaseMarketMut<const DECIMALS: u8>: BaseMarket<DECIMALS> {
     /// Get virtual inventory for swaps mutably.
     /// # Requirements
     /// - This method must return `Ok(Some(_))` if [`BaseMarket::virtual_inventory_for_swaps_pool`] does.
-    fn virtual_inventory_for_swaps_pool_mut(&self) -> crate::Result<Option<&mut Self::Pool>>;
+    fn virtual_inventory_for_swaps_pool_mut(
+        &mut self,
+    ) -> crate::Result<Option<impl DerefMut<Target = Self::Pool>>>;
 }
 
 impl<M: BaseMarket<DECIMALS>, const DECIMALS: u8> BaseMarket<DECIMALS> for &mut M {
@@ -117,7 +123,9 @@ impl<M: BaseMarket<DECIMALS>, const DECIMALS: u8> BaseMarket<DECIMALS> for &mut 
         (**self).collateral_sum_pool(is_long)
     }
 
-    fn virtual_inventory_for_swaps_pool(&self) -> crate::Result<Option<&Self::Pool>> {
+    fn virtual_inventory_for_swaps_pool(
+        &self,
+    ) -> crate::Result<Option<impl Deref<Target = Self::Pool>>> {
         (**self).virtual_inventory_for_swaps_pool()
     }
 
@@ -159,7 +167,9 @@ impl<M: BaseMarketMut<DECIMALS>, const DECIMALS: u8> BaseMarketMut<DECIMALS> for
         (**self).claimable_fee_pool_mut()
     }
 
-    fn virtual_inventory_for_swaps_pool_mut(&self) -> crate::Result<Option<&mut Self::Pool>> {
+    fn virtual_inventory_for_swaps_pool_mut(
+        &mut self,
+    ) -> crate::Result<Option<impl DerefMut<Target = Self::Pool>>> {
         (**self).virtual_inventory_for_swaps_pool_mut()
     }
 }

@@ -3815,6 +3815,37 @@ pub mod gmsol_store {
     pub fn initialize_callback_authority(ctx: Context<InitializeCallbackAuthority>) -> Result<()> {
         InitializeCallbackAuthority::invoke(ctx)
     }
+
+    /// Close a unused [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn close_virtual_inventory(ctx: Context<CloseVirtualInventory>) -> Result<()> {
+        CloseVirtualInventory::invoke_unchecked(ctx)
+    }
+
+    /// Create [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn create_virtual_inventory_for_swaps(
+        ctx: Context<CreateVirtualInventoryForSwaps>,
+        index: u32,
+    ) -> Result<()> {
+        CreateVirtualInventoryForSwaps::invoke_unchecked(ctx, index)
+    }
+
+    /// Join a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn join_virtual_inventory_for_swaps(
+        ctx: Context<JoinOrLeaveVirtualInventoryForSwaps>,
+    ) -> Result<()> {
+        JoinOrLeaveVirtualInventoryForSwaps::invoke_join_unchecked(ctx)
+    }
+
+    /// Leave a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn leave_virtual_inventory_for_swaps(
+        ctx: Context<JoinOrLeaveVirtualInventoryForSwaps>,
+    ) -> Result<()> {
+        JoinOrLeaveVirtualInventoryForSwaps::invoke_leave_unchecked(ctx)
+    }
 }
 
 /// Result type with [`CoreError`] as error type.
@@ -4236,4 +4267,7 @@ pub enum CoreError {
     /// Deprecated.
     #[msg("deprecated")]
     Deprecated,
+    /// Index overflow.
+    #[msg("index overflow")]
+    IndexOverflow,
 }

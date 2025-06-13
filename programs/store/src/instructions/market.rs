@@ -294,7 +294,12 @@ pub(crate) fn unchecked_market_transfer_in(
         let event_emitter =
             EventEmitter::new(&ctx.accounts.event_authority, ctx.bumps.event_authority);
         let token = &ctx.accounts.vault.mint;
-        let mut market = RevertibleMarket::new(&ctx.accounts.market, event_emitter)?;
+        let mut market = RevertibleMarket::new(
+            &ctx.accounts.market,
+            // Virtual inventory feature is not required here.
+            None,
+            event_emitter,
+        )?;
         market
             .record_transferred_in_by_token(token, &amount)
             .map_err(ModelError::from)?;
@@ -675,7 +680,12 @@ pub(crate) fn claim_fees_from_market(ctx: Context<ClaimFeesFromMarket>) -> Resul
     let amount = {
         let token = ctx.accounts.token_mint.key();
 
-        let mut market = RevertibleMarket::new(&ctx.accounts.market, event_emitter)?;
+        let mut market = RevertibleMarket::new(
+            &ctx.accounts.market,
+            // Virtual inventory feature is not required here.
+            None,
+            event_emitter,
+        )?;
         let is_long_token = market
             .market_meta()
             .to_token_side(&token)

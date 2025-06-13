@@ -135,6 +135,8 @@ pub(crate) fn validated_recent_timestamp(config: &Store, timestamp: i64) -> Resu
 ///     swap params.
 ///   - M..M+N. `[writable]` N market accounts, where N represents the total number of unique
 ///     markets excluding the current market in the swap params.
+///   - M+N..M+N+V. `[writeable]` V virtual inventory accounts, where V represents the total
+///     number of unique virtual inventories required by the markets.
 #[event_cpi]
 #[derive(Accounts)]
 #[instruction(recent_timestamp: i64)]
@@ -571,6 +573,8 @@ impl<'info> ExecuteIncreaseOrSwapOrderV2<'info> {
 ///     swap params.
 ///   - M..M+N. `[writable]` N market accounts, where N represents the total number of unique
 ///     markets excluding the current market in the swap params.
+///   - M+N..M+N+V. `[writeable]` V virtual inventory accounts, where V represents the total
+///     number of unique virtual inventories required by the markets.
 #[event_cpi]
 #[derive(Accounts)]
 #[instruction(recent_timestamp: i64)]
@@ -946,6 +950,8 @@ mod deprecated {
     ///     swap params.
     ///   - M..M+N. `[writable]` N market accounts, where N represents the total number of unique
     ///     markets excluding the current market in the swap params.
+    ///   - M+N..M+N+V. `[writeable]` V virtual inventory accounts, where V represents the total
+    ///     number of unique virtual inventories required by the markets.
     #[event_cpi]
     #[derive(Accounts)]
     #[instruction(recent_timestamp: i64)]
@@ -1367,6 +1373,8 @@ mod deprecated {
     ///     swap params.
     ///   - M..M+N. `[writable]` N market accounts, where N represents the total number of unique
     ///     markets excluding the current market in the swap params.
+    ///   - M+N..M+N+V. `[writeable]` V virtual inventory accounts, where V represents the total
+    ///     number of unique virtual inventories required by the markets.
     #[event_cpi]
     #[derive(Accounts)]
     #[instruction(recent_timestamp: i64)]

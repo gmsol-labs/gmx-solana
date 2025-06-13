@@ -34,6 +34,8 @@ use crate::{
 ///
 ///   - 0..N. `[]` N feed accounts, where N represents the total number of unique tokens
 ///     in the market.
+///   - N..N+V. `[writeable]` V virtual inventory accounts, where V represents the total
+///     number of unique virtual inventories required by the markets.
 ///
 /// # Warnings
 /// Because token accounts can be frozen by token's
@@ -308,7 +310,12 @@ pub(crate) fn unchecked_process_position_cut<'info>(
         &accounts.token_map,
         &tokens,
         remaining_accounts,
-        |oracle, _remaining_accounts| ops.oracle(oracle).build().execute(),
+        |oracle, remaining_accounts| {
+            ops.oracle(oracle)
+                .remaining_accounts(remaining_accounts)
+                .build()
+                .execute()
+        },
     )?;
 
     if should_send_trade_event {

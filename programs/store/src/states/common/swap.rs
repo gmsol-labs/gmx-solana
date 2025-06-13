@@ -27,7 +27,10 @@ pub(crate) trait SwapActionParamsExt {
         &self,
         current_market_token: &Pubkey,
         remaining_accounts: &'info [AccountInfo<'info>],
-    ) -> Result<Vec<AccountLoader<'info, Market>>>;
+    ) -> Result<(
+        Vec<AccountLoader<'info, Market>>,
+        &'info [AccountInfo<'info>],
+    )>;
 
     fn find_first_market<'info>(
         &self,
@@ -142,7 +145,10 @@ impl SwapActionParamsExt for SwapActionParams {
         &self,
         current_market_token: &Pubkey,
         remaining_accounts: &'info [AccountInfo<'info>],
-    ) -> Result<Vec<AccountLoader<'info, Market>>> {
+    ) -> Result<(
+        Vec<AccountLoader<'info, Market>>,
+        &'info [AccountInfo<'info>],
+    )> {
         let len = self
             .unique_market_tokens_excluding_current(current_market_token)
             .count();
@@ -151,8 +157,9 @@ impl SwapActionParamsExt for SwapActionParams {
             len,
             ErrorCode::AccountNotEnoughKeys
         );
-        let loaders = unpack_markets(remaining_accounts).collect::<Result<Vec<_>>>()?;
-        Ok(loaders)
+        let (remaining_accounts_for_swap, remaining_accounts) = remaining_accounts.split_at(len);
+        let loaders = unpack_markets(remaining_accounts_for_swap).collect::<Result<Vec<_>>>()?;
+        Ok((loaders, remaining_accounts))
     }
 
     fn find_first_market<'info>(

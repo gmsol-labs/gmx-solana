@@ -20,6 +20,8 @@ use crate::{
 ///
 ///   - 0..N. `[]` N feed accounts, where N represents the total number of unique tokens
 ///     in the markets.
+///   - N..N+V. `[writeable]` V virtual inventory accounts, where V represents the total
+///     number of unique virtual inventories required by the markets.
 #[event_cpi]
 #[derive(Accounts)]
 pub struct ExecuteShift<'info> {
@@ -229,7 +231,12 @@ impl<'info> ExecuteShift<'info> {
             &self.token_map,
             &tokens,
             remaining_accounts,
-            |oracle, _remaining_accounts| ops.oracle(oracle).build().execute(),
+            |oracle, remaining_accounts| {
+                ops.oracle(oracle)
+                    .remaining_accounts(remaining_accounts)
+                    .build()
+                    .execute()
+            },
         )?;
 
         Ok(executed)

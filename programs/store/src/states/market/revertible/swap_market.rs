@@ -12,7 +12,7 @@ use crate::{
     CoreError, ModelError,
 };
 
-use super::{market::RevertibleMarket, Revertible, Revision};
+use super::{market::RevertibleMarket, Revertible, RevertibleVirtualInventories, Revision};
 
 /// A map of markets used for swaps where the key is the market token mint address.
 pub struct SwapMarkets<'a, 'info> {
@@ -26,6 +26,7 @@ impl<'a, 'info> SwapMarkets<'a, 'info> {
         store: &Pubkey,
         loaders: &'a [AccountLoader<'info, Market>],
         current_market_token: Option<&Pubkey>,
+        virtual_inventories: &'a RevertibleVirtualInventories<'info>,
         event_emitter: EventEmitter<'a, 'info>,
     ) -> Result<Self> {
         let mut map = IndexMap::with_capacity(loaders.len());
@@ -39,7 +40,8 @@ impl<'a, 'info> SwapMarkets<'a, 'info> {
                 Entry::Occupied(_) => return err!(CoreError::InvalidSwapPath),
                 Entry::Vacant(e) => {
                     loader.load()?.validate(store)?;
-                    let market = RevertibleMarket::new(loader, event_emitter)?;
+                    let market =
+                        RevertibleMarket::new(loader, Some(virtual_inventories), event_emitter)?;
                     e.insert(market);
                 }
             }

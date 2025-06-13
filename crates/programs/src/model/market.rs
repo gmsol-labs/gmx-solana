@@ -1,4 +1,8 @@
-use std::{borrow::Borrow, ops::Deref, sync::Arc};
+use std::{
+    borrow::Borrow,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use anchor_lang::prelude::Pubkey;
 use bitmaps::Bitmap;
@@ -280,8 +284,10 @@ impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for MarketModel {
         self.try_pool(kind)
     }
 
-    fn virtual_inventory_for_swaps_pool(&self) -> gmsol_model::Result<Option<&Self::Pool>> {
-        todo!()
+    fn virtual_inventory_for_swaps_pool(
+        &self,
+    ) -> gmsol_model::Result<Option<impl Deref<Target = Self::Pool>>> {
+        Ok(None::<&Self::Pool>)
     }
 
     fn usd_to_amount_divisor(&self) -> Self::Num {
@@ -588,8 +594,10 @@ impl gmsol_model::BaseMarketMut<{ constants::MARKET_DECIMALS }> for MarketModel 
         self.make_market_mut().try_pool_mut(PoolKind::ClaimableFee)
     }
 
-    fn virtual_inventory_for_swaps_pool_mut(&self) -> gmsol_model::Result<Option<&mut Self::Pool>> {
-        todo!()
+    fn virtual_inventory_for_swaps_pool_mut(
+        &mut self,
+    ) -> gmsol_model::Result<Option<impl DerefMut<Target = Self::Pool>>> {
+        Ok(None::<&mut Self::Pool>)
     }
 }
 

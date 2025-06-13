@@ -40,7 +40,10 @@ use crate::{
     CoreError, ModelError,
 };
 
-use super::{execution_fee::TransferExecutionFeeOperation, market::MarketTransferOutOperation};
+use super::{
+    execution_fee::TransferExecutionFeeOperation,
+    market::{MarketTransferOutOperation, RemainingAccountsForMarket},
+};
 
 pub use gmsol_utils::order::PositionCutKind;
 
@@ -967,18 +970,23 @@ impl ExecuteOrderOperation<'_, '_> {
 
         // Prepare execution context.
         let gt_minting_enabled = self.market.load()?.is_gt_minting_enabled();
-        let mut market = RevertibleMarket::new(self.market, self.event_emitter)?
-            .with_order_fee_discount_factor(order_fee_discount_factor);
-        let current_market_token = market.market_meta().market_token_mint;
-        let loaders = self
-            .order
-            .load()?
-            .swap
-            .unpack_markets_for_swap(&current_market_token, self.remaining_accounts)?;
+        let current_market_token = self.market.load()?.market_meta().market_token_mint;
+
+        let remaining_accounts = RemainingAccountsForMarket::new(
+            self.remaining_accounts,
+            current_market_token,
+            Some(self.order.load()?.swap()),
+        )?;
+        let virtual_inventories = remaining_accounts.load_virtual_inventories()?;
+
+        let mut market =
+            RevertibleMarket::new(self.market, Some(&virtual_inventories), self.event_emitter)?
+                .with_order_fee_discount_factor(order_fee_discount_factor);
         let mut swap_markets = SwapMarkets::new(
             &self.store.key(),
-            &loaders,
+            remaining_accounts.swap_market_loaders(),
             Some(&current_market_token),
+            &virtual_inventories,
             self.event_emitter,
         )?;
         let mut transfer_out = Box::default();
@@ -1152,6 +1160,7 @@ impl ExecuteOrderOperation<'_, '_> {
             _ => return err!(CoreError::UnknownOrderKind),
         };
         swap_markets.commit();
+        virtual_inventories.commit();
         Ok((
             should_remove_position,
             transfer_out,
@@ -1812,6 +1821,7 @@ pub struct PositionCutOperation<'a, 'info> {
     should_unwrap_native_token: bool,
     #[builder(setter(into))]
     event_emitter: EventEmitter<'a, 'info>,
+    remaining_accounts: &'info [AccountInfo<'info>],
 }
 
 impl PositionCutOperation<'_, '_> {
@@ -1923,7 +1933,7 @@ impl PositionCutOperation<'_, '_> {
             .position(Some(self.position))
             .event(Some(self.event))
             .oracle(self.oracle)
-            .remaining_accounts(&[])
+            .remaining_accounts(self.remaining_accounts)
             .throw_on_execution_error(true)
             .refund(self.refund)
             .executor(self.executor.clone())

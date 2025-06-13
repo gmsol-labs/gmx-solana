@@ -16,6 +16,8 @@ use crate::{
     CoreError, CoreResult,
 };
 
+use super::market::RemainingAccountsForMarket;
+
 /// Create Deposit Params.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct CreateDepositParams {
@@ -245,14 +247,22 @@ impl ExecuteDepositOperation<'_, '_> {
         self.validate_before_execution()?;
         {
             let deposit = self.deposit.load()?;
+            let swap = Some(deposit.swap());
+            let remaining_accounts = RemainingAccountsForMarket::new(
+                self.remaining_accounts,
+                self.market_token_mint.key(),
+                swap,
+            )?;
+            let virtual_inventories = remaining_accounts.load_virtual_inventories()?;
             RevertibleLiquidityMarketOperation::new(
                 self.store,
                 self.oracle,
                 self.market,
                 self.market_token_mint,
                 self.token_program.clone(),
-                Some(deposit.swap()),
-                self.remaining_accounts,
+                swap,
+                remaining_accounts.swap_market_loaders(),
+                &virtual_inventories,
                 self.event_emitter,
             )?
             .op()?
@@ -267,6 +277,7 @@ impl ExecuteDepositOperation<'_, '_> {
                 None,
             )?
             .commit();
+            virtual_inventories.commit();
         }
         Ok(())
     }

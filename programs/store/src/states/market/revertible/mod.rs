@@ -12,12 +12,18 @@ pub mod liquidity_market;
 /// Revertible Position.
 pub mod revertible_position;
 
+/// Revertible Virtual Inventory.
+pub mod revertible_virtual_inventory;
+
 pub use self::{
     liquidity_market::RevertibleLiquidityMarket, market::RevertibleMarket,
     revertible_position::RevertiblePosition,
 };
 
-pub(super) use self::buffer::RevertibleBuffer;
+pub(crate) use self::{
+    buffer::{RevertibleBuffer, RevertiblePoolBuffer},
+    revertible_virtual_inventory::RevertibleVirtualInventories,
+};
 
 /// Revertible type.
 pub trait Revertible {

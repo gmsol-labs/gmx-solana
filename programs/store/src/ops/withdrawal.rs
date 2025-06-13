@@ -16,7 +16,7 @@ use crate::{
     CoreError, CoreResult,
 };
 
-use super::market::RevertibleLiquidityMarketOperation;
+use super::market::{RemainingAccountsForMarket, RevertibleLiquidityMarketOperation};
 
 /// Create Withdrawal Params.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -191,6 +191,13 @@ impl ExecuteWithdrawalOperation<'_, '_> {
         self.market.load()?.validate(&self.store.key())?;
 
         let withdrawal = self.withdrawal.load()?;
+        let swap = Some(withdrawal.swap());
+        let remaining_accounts = RemainingAccountsForMarket::new(
+            self.remaining_accounts,
+            self.market_token_mint.key(),
+            swap,
+        )?;
+        let virtual_inventories = remaining_accounts.load_virtual_inventories()?;
 
         let mut market = RevertibleLiquidityMarketOperation::new(
             self.store,
@@ -198,8 +205,9 @@ impl ExecuteWithdrawalOperation<'_, '_> {
             self.market,
             self.market_token_mint,
             self.token_program,
-            Some(&withdrawal.swap),
-            self.remaining_accounts,
+            swap,
+            remaining_accounts.swap_market_loaders(),
+            &virtual_inventories,
             self.event_emitter,
         )?;
 
@@ -216,6 +224,7 @@ impl ExecuteWithdrawalOperation<'_, '_> {
         let final_output_amounts = executed.output;
 
         executed.commit();
+        virtual_inventories.commit();
 
         Ok(final_output_amounts)
     }
