@@ -1,6 +1,6 @@
 use std::{
     cell::{Ref, RefMut},
-    collections::HashMap,
+    collections::BTreeMap,
     ops::Deref,
 };
 
@@ -59,7 +59,7 @@ impl Revertible for RevertibleVirtualInventory<'_> {
 
 /// A map of [`RevertibleVirtualInventory`].
 pub(crate) struct RevertibleVirtualInventories<'info> {
-    map: HashMap<&'info Pubkey, RevertibleVirtualInventory<'info>>,
+    map: BTreeMap<&'info Pubkey, RevertibleVirtualInventory<'info>>,
 }
 
 impl<'info> RevertibleVirtualInventories<'info> {
@@ -73,7 +73,7 @@ impl<'info> RevertibleVirtualInventories<'info> {
 }
 
 impl<'info> Deref for RevertibleVirtualInventories<'info> {
-    type Target = HashMap<&'info Pubkey, RevertibleVirtualInventory<'info>>;
+    type Target = BTreeMap<&'info Pubkey, RevertibleVirtualInventory<'info>>;
 
     fn deref(&self) -> &Self::Target {
         &self.map

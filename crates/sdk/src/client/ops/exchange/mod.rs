@@ -19,7 +19,11 @@ pub mod glv_withdrawal;
 /// Builders for transactions related to GLV shifts.
 pub mod glv_shift;
 
-use std::{collections::HashSet, future::Future, ops::Deref};
+use std::{
+    collections::{BTreeSet, HashSet},
+    future::Future,
+    ops::Deref,
+};
 
 use deposit::{CloseDepositBuilder, CreateDepositBuilder, ExecuteDepositBuilder};
 use glv_deposit::{CloseGlvDepositBuilder, CreateGlvDepositBuilder, ExecuteGlvDepositBuilder};
@@ -733,8 +737,8 @@ impl VirtualInventoryCollector {
         &self,
         client: &crate::Client<C>,
         store: &Pubkey,
-    ) -> crate::Result<HashSet<Pubkey>> {
-        let mut addresses = HashSet::new();
+    ) -> crate::Result<BTreeSet<Pubkey>> {
+        let mut addresses = BTreeSet::new();
         for market_token in self.market_tokens.iter() {
             let market = client.market_by_token(store, market_token).await?;
             if let Some(address) = optional_address(&market.virtual_inventory_for_swaps) {

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, TokenAccount};
@@ -32,7 +32,7 @@ use crate::{
 
 pub(crate) type SwapMarketLoaders<'info> = [AccountLoader<'info, Market>];
 pub(crate) type VirtualInventoryLoaders<'info> =
-    HashMap<&'info Pubkey, AccountLoader<'info, VirtualInventory>>;
+    BTreeMap<&'info Pubkey, AccountLoader<'info, VirtualInventory>>;
 
 pub(crate) struct RemainingAccountsForMarket<'info> {
     swap_markets: Vec<AccountLoader<'info, Market>>,

@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     ops::Deref,
 };
 
@@ -608,7 +608,7 @@ pub struct ExecuteGlvDepositHint {
     /// Feeds.
     pub feeds: TokensWithFeed,
     should_unwrap_native_token: bool,
-    virtual_inventories: HashSet<Pubkey>,
+    virtual_inventories: BTreeSet<Pubkey>,
 }
 
 impl ExecuteGlvDepositHint {
@@ -619,7 +619,7 @@ impl ExecuteGlvDepositHint {
         token_map_address: &Pubkey,
         token_map: &impl TokenMapAccess,
         index_tokens: impl IntoIterator<Item = Pubkey>,
-        virtual_inventories: HashSet<Pubkey>,
+        virtual_inventories: BTreeSet<Pubkey>,
     ) -> crate::Result<Self> {
         let CloseGlvDepositHint {
             store,

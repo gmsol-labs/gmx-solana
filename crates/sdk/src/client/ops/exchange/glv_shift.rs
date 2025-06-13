@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     ops::Deref,
 };
 
@@ -281,7 +281,7 @@ pub struct ExecuteGlvShiftHint {
     to_market_token: Pubkey,
     /// Feeds.
     pub feeds: TokensWithFeed,
-    virtual_inventories: HashSet<Pubkey>,
+    virtual_inventories: BTreeSet<Pubkey>,
 }
 
 impl ExecuteGlvShiftHint {
@@ -292,7 +292,7 @@ impl ExecuteGlvShiftHint {
         map: &impl TokenMapAccess,
         from_market: &impl HasMarketMeta,
         to_market: &impl HasMarketMeta,
-        virtual_inventories: HashSet<Pubkey>,
+        virtual_inventories: BTreeSet<Pubkey>,
     ) -> crate::Result<Self> {
         let CloseGlvShiftHint {
             store: store_address,

@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::Deref};
+use std::{collections::BTreeSet, ops::Deref};
 
 use anchor_spl::associated_token::get_associated_token_address;
 use gmsol_programs::gmsol_store::{
@@ -512,7 +512,7 @@ pub struct ExecuteDepositHint {
     initial_long_token: Option<Pubkey>,
     initial_short_token: Option<Pubkey>,
     should_unwrap_native_token: bool,
-    virtual_inventories: HashSet<Pubkey>,
+    virtual_inventories: BTreeSet<Pubkey>,
 }
 
 impl ExecuteDepositHint {
@@ -520,7 +520,7 @@ impl ExecuteDepositHint {
     pub fn new(
         deposit: &Deposit,
         map: &impl TokenMapAccess,
-        virtual_inventories: HashSet<Pubkey>,
+        virtual_inventories: BTreeSet<Pubkey>,
     ) -> crate::Result<Self> {
         let CloseDepositHint {
             owner,
@@ -588,7 +588,7 @@ where
         &mut self,
         deposit: &Deposit,
         map: &impl TokenMapAccess,
-        virtual_inventories: HashSet<Pubkey>,
+        virtual_inventories: BTreeSet<Pubkey>,
     ) -> crate::Result<&mut Self> {
         self.hint = Some(ExecuteDepositHint::new(deposit, map, virtual_inventories)?);
         Ok(self)

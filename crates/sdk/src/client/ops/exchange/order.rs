@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     ops::Deref,
     sync::Arc,
 };
@@ -725,7 +725,7 @@ pub struct ExecuteOrderHint {
     swap: SwapActionParams,
     should_unwrap_native_token: bool,
     callback: Option<Callback>,
-    virtual_inventories: HashSet<Pubkey>,
+    virtual_inventories: BTreeSet<Pubkey>,
 }
 
 impl ExecuteOrderHint {
@@ -840,7 +840,7 @@ where
         store: &Arc<Store>,
         map: &impl TokenMapAccess,
         user: Option<&UserHeader>,
-        virtual_inventories: HashSet<Pubkey>,
+        virtual_inventories: BTreeSet<Pubkey>,
     ) -> crate::Result<&mut Self> {
         let params = &order.params;
         let swap = SwapActionParams::from(order.swap);
@@ -1650,7 +1650,7 @@ pub struct PositionCutHint {
     token_map: Pubkey,
     market: Pubkey,
     position_size: u128,
-    virtual_inventories: HashSet<Pubkey>,
+    virtual_inventories: BTreeSet<Pubkey>,
 }
 
 impl PositionCutHint {
@@ -1701,7 +1701,7 @@ impl PositionCutHint {
         market_meta: MarketMeta,
         user: Option<&UserHeader>,
         program_id: &Pubkey,
-        virtual_inventories: HashSet<Pubkey>,
+        virtual_inventories: BTreeSet<Pubkey>,
     ) -> crate::Result<Self> {
         let records = token_records(
             token_map,

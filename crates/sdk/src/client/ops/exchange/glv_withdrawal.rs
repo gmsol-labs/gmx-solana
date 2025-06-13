@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     ops::Deref,
 };
 
@@ -527,7 +527,7 @@ pub struct ExecuteGlvWithdrawalHint {
     swap: SwapActionParams,
     /// Feeds.
     pub feeds: TokensWithFeed,
-    virtual_inventories: HashSet<Pubkey>,
+    virtual_inventories: BTreeSet<Pubkey>,
 }
 
 impl Deref for ExecuteGlvWithdrawalHint {
@@ -546,7 +546,7 @@ impl ExecuteGlvWithdrawalHint {
         token_map_address: &Pubkey,
         token_map: &impl TokenMapAccess,
         index_tokens: impl IntoIterator<Item = Pubkey>,
-        virtual_inventories: HashSet<Pubkey>,
+        virtual_inventories: BTreeSet<Pubkey>,
     ) -> crate::Result<Self> {
         let glv_market_tokens = glv.market_tokens().collect();
         let swap = glv_withdrawal.swap.into();

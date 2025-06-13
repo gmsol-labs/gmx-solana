@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::Deref};
+use std::{collections::BTreeSet, ops::Deref};
 
 use anchor_spl::associated_token::get_associated_token_address;
 use gmsol_programs::gmsol_store::{
@@ -481,7 +481,7 @@ pub struct ExecuteWithdrawalHint {
     pub feeds: TokensWithFeed,
     swap: SwapActionParams,
     should_unwrap_native_token: bool,
-    virtual_inventories: HashSet<Pubkey>,
+    virtual_inventories: BTreeSet<Pubkey>,
 }
 
 impl ExecuteWithdrawalHint {
@@ -489,7 +489,7 @@ impl ExecuteWithdrawalHint {
     pub fn new(
         withdrawal: &Withdrawal,
         map: &impl TokenMapAccess,
-        virtual_inventories: HashSet<Pubkey>,
+        virtual_inventories: BTreeSet<Pubkey>,
     ) -> crate::Result<Self> {
         let CloseWithdrawalHint {
             owner,
@@ -557,7 +557,7 @@ where
         &mut self,
         withdrawal: &Withdrawal,
         map: &impl TokenMapAccess,
-        virtual_inventories: HashSet<Pubkey>,
+        virtual_inventories: BTreeSet<Pubkey>,
     ) -> crate::Result<&mut Self> {
         self.hint = Some(ExecuteWithdrawalHint::new(
             withdrawal,

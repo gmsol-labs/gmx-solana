@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::Deref};
+use std::{collections::BTreeSet, ops::Deref};
 
 use anchor_lang::prelude::AccountMeta;
 use anchor_spl::associated_token::get_associated_token_address;
@@ -343,7 +343,7 @@ pub struct ExecuteShiftHint {
     to_market_token_escrow: Pubkey,
     /// Feeds.
     pub feeds: TokensWithFeed,
-    virtual_inventories: HashSet<Pubkey>,
+    virtual_inventories: BTreeSet<Pubkey>,
 }
 
 impl ExecuteShiftHint {
@@ -354,7 +354,7 @@ impl ExecuteShiftHint {
         map: &impl TokenMapAccess,
         from_market: &impl HasMarketMeta,
         to_market: &impl HasMarketMeta,
-        virtual_inventories: HashSet<Pubkey>,
+        virtual_inventories: BTreeSet<Pubkey>,
     ) -> crate::Result<Self> {
         let ordered_tokens = ordered_tokens(from_market, to_market);
         let token_records = token_records(map, &ordered_tokens).map_err(crate::Error::custom)?;
