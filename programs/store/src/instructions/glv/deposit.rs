@@ -590,7 +590,7 @@ impl<'info> internal::Authentication<'info> for CloseGlvDeposit<'info> {
 ///     swap params.
 ///   - 2N+M..2N+M+L. `[writable]` L market accounts, where L represents the total number of unique
 ///     markets excluding the current market in the swap params.
-///   - 2N+M+L..2N+M+L+V. `[writeable]` V virtual inventory accounts, where V represents the total
+///   - 2N+M+L..2N+M+L+V. `[writable]` V virtual inventory accounts, where V represents the total
 ///     number of unique virtual inventories required by the markets.
 #[event_cpi]
 #[derive(Accounts)]

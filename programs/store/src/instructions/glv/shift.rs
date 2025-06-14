@@ -295,7 +295,7 @@ impl<'info> internal::Authentication<'info> for CloseGlvShift<'info> {
 ///
 ///   - 0..M. `[]` M feed accounts, where M represents the total number of unique tokens
 ///     of markets.
-///   - M..M+V. `[writeable]` V virtual inventory accounts, where V represents the total
+///   - M..M+V. `[writable]` V virtual inventory accounts, where V represents the total
 ///     number of unique virtual inventories required by the markets.
 #[event_cpi]
 #[derive(Accounts)]

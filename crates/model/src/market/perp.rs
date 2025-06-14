@@ -448,7 +448,7 @@ pub trait PerpMarketMutExt<const DECIMALS: u8>: PerpMarketMut<DECIMALS> {
             let is_increased = !delta.is_negative();
             let abs_delta = delta.unsigned_abs().to_signed()?;
 
-            // Unlike GMX, here the virtual inventory is used to record the net open interest of users.
+            // Unlike GMX, the virtual inventory here is used to track users' net open interest.
             match (is_long, is_increased) {
                 (true, true) | (false, false) => {
                     pool.apply_delta_to_long_amount(&abs_delta)?;

@@ -34,7 +34,7 @@ use crate::{
 ///
 ///   - 0..N. `[]` N feed accounts, where N represents the total number of unique tokens
 ///     in the market.
-///   - N..N+V. `[writeable]` V virtual inventory accounts, where V represents the total
+///   - N..N+V. `[writable]` V virtual inventory accounts, where V represents the total
 ///     number of unique virtual inventories required by the markets.
 ///
 /// # Warnings
