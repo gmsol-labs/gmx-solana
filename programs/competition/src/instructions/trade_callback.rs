@@ -169,11 +169,10 @@ impl OnExecuted<'_> {
         // Calculate volume as the absolute difference between after and before size_in_usd.
         let volume = if comp.only_count_increase {
             // Only count volume from position increases
-            if trade_event.after.size_in_usd > trade_event.before.size_in_usd {
-                trade_event.after.size_in_usd - trade_event.before.size_in_usd
-            } else {
-                0
-            }
+            trade_event
+                .after
+                .size_in_usd
+                .saturating_sub(trade_event.before.size_in_usd)
         } else {
             // Count all volume changes
             trade_event
@@ -193,35 +192,64 @@ impl OnExecuted<'_> {
         part.volume = part.volume.saturating_add(volume);
         part.last_updated_at = now;
 
-        // Check if volume exceeds threshold and extend competition time if needed.
-        if volume >= comp.volume_threshold {
-            let old_end_time = comp.end_time;
-            let proposed_end_time = old_end_time.saturating_add(comp.extension_duration);
-            let max_end_time = now.saturating_add(comp.extension_cap);
+        // Determine if trade volume should be merged based on time window.
+        let time_diff = now.saturating_sub(part.last_updated_at);
+        if time_diff <= comp.volume_merge_window {
+            // Within the merge window, add to merged volume.
+            part.merged_volume = part.merged_volume.saturating_add(volume);
 
-            // Take the minimum of proposed end time and max end time.
-            comp.end_time = proposed_end_time.min(max_end_time).max(old_end_time);
-
-            // Record the trigger address.
-            comp.extension_triggerer = Some(part.trader);
-
-            debug_assert!(comp.end_time >= old_end_time);
-            let actual_extension = comp.end_time - old_end_time;
-            msg!(
-                "competition: extended time by {} seconds due to large trade volume={} from trader={}",
-                actual_extension,
-                volume,
-                part.trader
-            );
+            // Check if merged volume exceeds threshold.
+            if part.merged_volume >= comp.volume_threshold {
+                Self::extend_competition_time(comp, part, part.merged_volume)?;
+                // Reset merged volume after triggering extension.
+                part.merged_volume = 0;
+            }
+        } else {
+            // Outside the merge window, check single trade volume.
+            if volume >= comp.volume_threshold {
+                Self::extend_competition_time(comp, part, volume)?;
+                part.merged_volume = 0;
+            } else {
+                part.merged_volume = volume;
+            }
         }
 
         Self::update_leaderboard(comp, part);
 
         msg!(
-            "competition: trader={} new_volume={} volume_delta={}",
+            "competition: trader={} new_volume={} volume_delta={} merged_volume={}",
             part.trader,
             part.volume,
-            volume
+            volume,
+            part.merged_volume
+        );
+        Ok(())
+    }
+
+    /// Extend competition time if volume exceeds threshold.
+    fn extend_competition_time(
+        comp: &mut Account<Competition>,
+        part: &Participant,
+        volume: u128,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let old_end_time = comp.end_time;
+        let proposed_end_time = old_end_time.saturating_add(comp.extension_duration);
+        let max_end_time = now.saturating_add(comp.extension_cap);
+
+        // Take the minimum of proposed end time and max end time.
+        comp.end_time = proposed_end_time.min(max_end_time).max(old_end_time);
+
+        // Record the trigger address.
+        comp.extension_triggerer = Some(part.trader);
+
+        debug_assert!(comp.end_time >= old_end_time);
+        let actual_extension = comp.end_time - old_end_time;
+        msg!(
+            "competition: extended time by {} seconds due to volume={} from trader={}",
+            actual_extension,
+            volume,
+            part.trader
         );
         Ok(())
     }

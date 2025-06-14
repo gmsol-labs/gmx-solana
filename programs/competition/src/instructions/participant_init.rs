@@ -84,16 +84,18 @@ impl CreateParticipantIdempotent<'_> {
 
     fn create_participant_idempotent(&mut self, bump: u8) -> Result<()> {
         let p = &mut self.participant;
-        if p.trader == Pubkey::default() {
+        let default_pubkey = Pubkey::default();
+        if p.trader == default_pubkey {
             let now = Clock::get()?.unix_timestamp;
             let trader = self.trader.key();
-            require_keys_neq!(trader, Pubkey::default());
+            require_keys_neq!(trader, default_pubkey);
 
             p.bump = bump;
             p.competition = self.competition.key();
             p.trader = trader;
             p.volume = 0;
             p.last_updated_at = now;
+            p.merged_volume = 0;
         }
         Ok(())
     }

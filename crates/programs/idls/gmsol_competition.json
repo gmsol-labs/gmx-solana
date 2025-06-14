@@ -251,6 +251,10 @@
         {
           "name": "only_count_increase",
           "type": "bool"
+        },
+        {
+          "name": "volume_merge_window",
+          "type": "i64"
         }
       ]
     },
@@ -1076,6 +1080,13 @@
               "Whether to only count volume from position increases."
             ],
             "type": "bool"
+          },
+          {
+            "name": "volume_merge_window",
+            "docs": [
+              "Time window in seconds for merging volumes from the same trader."
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -1147,6 +1158,13 @@
               "The last update timestamp."
             ],
             "type": "i64"
+          },
+          {
+            "name": "merged_volume",
+            "docs": [
+              "The merged volume within the time window."
+            ],
+            "type": "u128"
           }
         ]
       }

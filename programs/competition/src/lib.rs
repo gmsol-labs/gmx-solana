@@ -14,6 +14,7 @@ pub mod gmsol_competition {
     use super::*;
 
     /// Initialize the global [`Competition`](crate::states::Competition) PDA.
+    #[allow(clippy::too_many_arguments)]
     pub fn initialize_competition(
         ctx: Context<InitializeCompetition>,
         start_time: i64,
@@ -22,6 +23,7 @@ pub mod gmsol_competition {
         extension_duration: i64,
         extension_cap: i64,
         only_count_increase: bool,
+        volume_merge_window: i64,
     ) -> Result<()> {
         InitializeCompetition::invoke(
             ctx,
@@ -31,6 +33,7 @@ pub mod gmsol_competition {
             extension_duration,
             extension_cap,
             only_count_increase,
+            volume_merge_window,
         )
     }
 

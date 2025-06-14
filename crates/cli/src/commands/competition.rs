@@ -31,6 +31,8 @@ enum Command {
         extension_cap: Duration,
         #[arg(long)]
         only_count_increase: bool,
+        #[arg(long, value_parser = humantime::parse_duration)]
+        volume_merge_window: Duration,
     },
     /// Fetch a competition.
     Get { address: Pubkey },
@@ -58,6 +60,7 @@ impl super::Command for Competition {
                 extension_duration,
                 extension_cap,
                 only_count_increase,
+                volume_merge_window,
             } => {
                 let (tx, competition) = client
                     .initialize_competition(
@@ -68,6 +71,7 @@ impl super::Command for Competition {
                             .extension_duration(extension_duration.as_secs().try_into()?)
                             .extension_cap(extension_cap.as_secs().try_into()?)
                             .only_count_increase(*only_count_increase)
+                            .volume_merge_window(volume_merge_window.as_secs().try_into()?)
                             .build(),
                     )
                     .swap_output(());

@@ -30,6 +30,7 @@ pub struct InitializeCompetition<'info> {
 }
 
 impl InitializeCompetition<'_> {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn invoke(
         ctx: Context<Self>,
         start_time: i64,
@@ -38,6 +39,7 @@ impl InitializeCompetition<'_> {
         extension_duration: i64,
         extension_cap: i64,
         only_count_increase: bool,
+        volume_merge_window: i64,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         require!(start_time > now, CompetitionError::InvalidTimeRange);
@@ -55,6 +57,10 @@ impl InitializeCompetition<'_> {
             extension_cap >= extension_duration,
             CompetitionError::InvalidMaxExtension
         );
+        require!(
+            volume_merge_window > 0,
+            CompetitionError::InvalidVolumeMergeWindow
+        );
 
         let comp = &mut ctx.accounts.competition;
         comp.bump = ctx.bumps.competition;
@@ -67,6 +73,7 @@ impl InitializeCompetition<'_> {
         comp.extension_cap = extension_cap;
         comp.extension_triggerer = None;
         comp.only_count_increase = only_count_increase;
+        comp.volume_merge_window = volume_merge_window;
         Ok(())
     }
 }
