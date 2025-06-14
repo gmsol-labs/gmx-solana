@@ -1693,6 +1693,7 @@ impl PositionCutHint {
     }
 
     /// Create a new hint.
+    #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         position: &Position,
         store: Arc<Store>,

@@ -191,6 +191,7 @@ pub struct RevertibleLiquidityMarketOperation<'a, 'info> {
 }
 
 impl<'a, 'info> RevertibleLiquidityMarketOperation<'a, 'info> {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         store: &'a AccountLoader<'info, Store>,
         oracle: &'a Oracle,

@@ -603,7 +603,7 @@ where
                 let deposit = self.client.deposit(&self.deposit).await?;
                 let swap = deposit.swap.into();
                 let virtual_inventories = VirtualInventoryCollector::from_swap(&swap)
-                    .collect(&self.client, &self.store)
+                    .collect(self.client, &self.store)
                     .await?;
                 let hint = ExecuteDepositHint::new(&deposit, &map, virtual_inventories)?;
                 self.hint = Some(hint.clone());
