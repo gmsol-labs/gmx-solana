@@ -86,26 +86,25 @@ impl<'a, 'info> RevertibleMarket<'a, 'info> {
         let mut market = market.load_mut()?;
         market.buffer.start_revertible_operation();
 
+        let get_enabled_virtual_inventory = |key| {
+            virtual_inventories?
+                .get(key)
+                .ok_or_else(|| error!(CoreError::InvalidArgument))
+                .and_then(|vi| {
+                    // A disabled virtual inventory is considered as not being configured.
+                    Ok((!vi.is_disabled()?).then_some(vi))
+                })
+                .transpose()
+        };
+
         let virtual_inventory_for_swaps = market
             .virtual_inventory_for_swaps()
-            .and_then(|key| {
-                let map = virtual_inventories?;
-                Some(
-                    map.get(key)
-                        .ok_or_else(|| error!(CoreError::InvalidArgument)),
-                )
-            })
+            .and_then(get_enabled_virtual_inventory)
             .transpose()?;
 
         let virtual_inventory_for_positions = market
             .virtual_inventory_for_positions()
-            .and_then(|key| {
-                let map = virtual_inventories?;
-                Some(
-                    map.get(key)
-                        .ok_or_else(|| error!(CoreError::InvalidArgument)),
-                )
-            })
+            .and_then(get_enabled_virtual_inventory)
             .transpose()?;
 
         Ok(Self {

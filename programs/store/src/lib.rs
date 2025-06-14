@@ -3822,6 +3822,20 @@ pub mod gmsol_store {
         CloseVirtualInventory::invoke_unchecked(ctx)
     }
 
+    /// Disable a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn disable_virtual_inventory(ctx: Context<DisableVirtualInventory>) -> Result<()> {
+        DisableVirtualInventory::invoke_unchecked(ctx)
+    }
+
+    /// Leave a disabled [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn leave_disabled_virtual_inventory(
+        ctx: Context<LeaveDisabledVirtualInventory>,
+    ) -> Result<()> {
+        LeaveDisabledVirtualInventory::invoke_unchecked(ctx)
+    }
+
     /// Create [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps.
     #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
     pub fn create_virtual_inventory_for_swaps(

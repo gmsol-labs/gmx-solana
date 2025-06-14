@@ -11,6 +11,9 @@ pub const MAX_MARKET_CONFIG_FLAGS: usize = 128;
 /// Max number of market flags.
 pub const MAX_MARKET_FLAGS: usize = 8;
 
+/// Max number of virutal inventory flags.
+pub const MAX_VIRTUAL_INVENTORY_FLAGS: usize = 8;
+
 /// Market error.
 #[derive(Debug, thiserror::Error)]
 pub enum MarketError {
@@ -320,4 +323,13 @@ pub enum MarketFlag {
     /// Is GT minting enabled.
     GTEnabled,
     // CHECK: cannot have more than `MAX_MARKET_FLAGS` flags.
+}
+
+/// Virtual Inventory Flags.
+#[derive(num_enum::IntoPrimitive)]
+#[repr(u8)]
+pub enum VirtualInventoryFlag {
+    /// Is disabled.
+    Disabled,
+    // CHECK: cannot have more than `MAX_VIRTUAL_INVENTORY_FLAGS` flags.
 }

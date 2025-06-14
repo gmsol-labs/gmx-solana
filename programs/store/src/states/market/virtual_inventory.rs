@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use gmsol_model::{Delta, Pool};
+use gmsol_utils::market::{VirtualInventoryFlag, MAX_VIRTUAL_INVENTORY_FLAGS};
 
 use crate::{CoreError, ModelError};
 
@@ -13,6 +14,8 @@ pub const VIRTUAL_INVENTORY_FOR_SWAPS_SEED: &[u8] = b"vi_for_swaps";
 #[constant]
 pub const VIRTUAL_INVENTORY_FOR_POSITIONS_SEED: &[u8] = b"vi_for_positions";
 
+gmsol_utils::flags!(VirtualInventoryFlag, MAX_VIRTUAL_INVENTORY_FLAGS, u8);
+
 /// General purpose virtual inventory.
 #[account(zero_copy)]
 #[cfg_attr(feature = "debug", derive(derive_more::Debug))]
@@ -20,9 +23,10 @@ pub const VIRTUAL_INVENTORY_FOR_POSITIONS_SEED: &[u8] = b"vi_for_positions";
 pub struct VirtualInventory {
     version: u8,
     pub(crate) bump: u8,
+    flags: VirtualInventoryFlagContainer,
     #[cfg_attr(feature = "debug", debug(skip))]
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    padding_0: [u8; 6],
+    padding_0: [u8; 5],
     ref_count: u32,
     pub(crate) index: u32,
     rev: u64,
@@ -40,6 +44,16 @@ impl VirtualInventory {
         self.bump = bump;
         self.index = index;
         self.store = store;
+    }
+
+    pub(crate) fn is_disabled(&self) -> bool {
+        self.flags.get_flag(VirtualInventoryFlag::Disabled)
+    }
+
+    pub(crate) fn disable(&mut self) -> Result<()> {
+        require!(!self.is_disabled(), CoreError::PreconditionsAreNotMet);
+        self.flags.set_flag(VirtualInventoryFlag::Disabled, true);
+        Ok(())
     }
 
     pub(crate) fn ref_count(&self) -> u32 {

@@ -42,6 +42,10 @@ impl<'info> RevertibleVirtualInventory<'info> {
             buffer.pool_mut(pool)
         }))
     }
+
+    pub(crate) fn is_disabled(&self) -> Result<bool> {
+        Ok(self.virtual_inventory.load()?.is_disabled())
+    }
 }
 
 impl Revertible for RevertibleVirtualInventory<'_> {

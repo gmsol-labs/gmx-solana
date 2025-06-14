@@ -496,6 +496,28 @@ impl Market {
         Ok(())
     }
 
+    /// Leave a disabled virtual inventory.
+    ///
+    /// # CHECK
+    /// - The address and the provided [`VirtualInventory`] must match.
+    pub fn leave_disabled_virtual_inventory_unchecked(
+        &mut self,
+        address: &Pubkey,
+        virtual_inventory: &mut VirtualInventory,
+    ) -> Result<()> {
+        require!(
+            virtual_inventory.is_disabled(),
+            CoreError::PreconditionsAreNotMet
+        );
+        if self.virtual_inventory_for_swaps() == Some(address) {
+            self.virtual_inventory_for_swaps = DEFAULT_PUBKEY;
+        }
+        if self.virtual_inventory_for_positions() == Some(address) {
+            self.virtual_inventory_for_positions = DEFAULT_PUBKEY;
+        }
+        Ok(())
+    }
+
     /// Returns the address of virtual inventory for positions.
     pub fn virtual_inventory_for_positions(&self) -> Option<&Pubkey> {
         optional_address(&self.virtual_inventory_for_positions)

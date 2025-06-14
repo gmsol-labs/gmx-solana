@@ -54,6 +54,87 @@ impl<'info> internal::Authentication<'info> for CloseVirtualInventory<'info> {
     }
 }
 
+/// The accounts definitions of [`disable_virtual_inventory`](crate::gmsol_store::disable_virtual_inventory).
+#[derive(Accounts)]
+pub struct DisableVirtualInventory<'info> {
+    /// Authority.
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    /// Store account.
+    pub store: AccountLoader<'info, Store>,
+    /// The virutal inventory account to close.
+    #[account(
+        mut,
+        has_one = store,
+        constraint = !virtual_inventory.load()?.is_disabled() @ CoreError::PreconditionsAreNotMet,
+    )]
+    pub virtual_inventory: AccountLoader<'info, VirtualInventory>,
+}
+
+impl<'info> internal::Authentication<'info> for DisableVirtualInventory<'info> {
+    fn authority(&self) -> &Signer<'info> {
+        &self.authority
+    }
+
+    fn store(&self) -> &AccountLoader<'info, Store> {
+        &self.store
+    }
+}
+
+impl DisableVirtualInventory<'_> {
+    /// Disable the given [`VirtualInventory`] account.
+    ///
+    /// # CHECK
+    /// - Only MARKET_KEEPER is allowed to invoke.
+    pub(crate) fn invoke_unchecked(ctx: Context<Self>) -> Result<()> {
+        ctx.accounts.virtual_inventory.load_mut()?.disable()?;
+        Ok(())
+    }
+}
+
+/// The accounts definitions of [`leave_disabled_virtual_inventory`](crate::gmsol_store::leave_disabled_virtual_inventory).
+#[derive(Accounts)]
+pub struct LeaveDisabledVirtualInventory<'info> {
+    /// Authority.
+    pub authority: Signer<'info>,
+    /// Store account.
+    pub store: AccountLoader<'info, Store>,
+    /// The virtual inventory account to join.
+    #[account(
+        mut,
+        has_one = store,
+        constraint = virtual_inventory.load()?.is_disabled() @ CoreError::PreconditionsAreNotMet,
+    )]
+    pub virtual_inventory: AccountLoader<'info, VirtualInventory>,
+    /// The market to be added to the virtual inventory.
+    #[account(mut, has_one = store)]
+    pub market: AccountLoader<'info, Market>,
+}
+
+impl<'info> internal::Authentication<'info> for LeaveDisabledVirtualInventory<'info> {
+    fn authority(&self) -> &Signer<'info> {
+        &self.authority
+    }
+
+    fn store(&self) -> &AccountLoader<'info, Store> {
+        &self.store
+    }
+}
+
+impl LeaveDisabledVirtualInventory<'_> {
+    /// Leave a disabled [`VirtualInventory`] account.
+    ///
+    /// # CHECK
+    /// - Only MARKET_KEEPER is allowed to invoke.
+    pub(crate) fn invoke_unchecked(ctx: Context<Self>) -> Result<()> {
+        let address = ctx.accounts.virtual_inventory.key();
+        let mut market = ctx.accounts.market.load_mut()?;
+        let mut virtual_inventory = ctx.accounts.virtual_inventory.load_mut()?;
+        market.leave_disabled_virtual_inventory_unchecked(&address, &mut virtual_inventory)?;
+        Ok(())
+    }
+}
+
 /// The accounts definitions for [`create_virtual_inventory_for_swaps`](crate::gmsol_store::create_virtual_inventory_for_swaps).
 #[derive(Accounts)]
 #[instruction(index: u32)]
@@ -116,6 +197,7 @@ pub struct JoinOrLeaveVirtualInventoryForSwaps<'info> {
         seeds = [VIRTUAL_INVENTORY_FOR_SWAPS_SEED, store.key().as_ref(), &virtual_inventory.load()?.index.to_le_bytes()],
         bump = virtual_inventory.load()?.bump,
         has_one = store,
+        constraint = !virtual_inventory.load()?.is_disabled() @ CoreError::PreconditionsAreNotMet,
     )]
     pub virtual_inventory: AccountLoader<'info, VirtualInventory>,
     /// The market to be added to the virtual inventory.
@@ -233,6 +315,7 @@ pub struct JoinOrLeaveVirtualInventoryForPositions<'info> {
         seeds = [VIRTUAL_INVENTORY_FOR_POSITIONS_SEED, store.key().as_ref(), market.load()?.meta().index_token_mint.as_ref()],
         bump = virtual_inventory.load()?.bump,
         has_one = store,
+        constraint = !virtual_inventory.load()?.is_disabled() @ CoreError::PreconditionsAreNotMet,
     )]
     pub virtual_inventory: AccountLoader<'info, VirtualInventory>,
     /// The market to be added to the virtual inventory.
