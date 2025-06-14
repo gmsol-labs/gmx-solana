@@ -4997,6 +4997,84 @@
       ]
     },
     {
+<<<<<<< HEAD
+=======
+      "name": "close_virtual_inventory",
+      "docs": [
+        "Close an unused [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account."
+      ],
+      "discriminator": [
+        129,
+        32,
+        26,
+        3,
+        42,
+        164,
+        6,
+        210
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ],
+          "relations": [
+            "virtual_inventory"
+          ]
+        },
+        {
+          "name": "store_wallet",
+          "docs": [
+            "The store wallet."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  111,
+                  114,
+                  101,
+                  95,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              }
+            ]
+          }
+        },
+        {
+          "name": "virtual_inventory",
+          "docs": [
+            "The virtual inventory account to close."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+>>>>>>> beb65479 (chore: update IDLs)
       "name": "close_withdrawal",
       "docs": [
         "Close a withdrawal, either by the owner or by keepers.",
@@ -9595,6 +9673,176 @@
       ]
     },
     {
+<<<<<<< HEAD
+=======
+      "name": "create_virtual_inventory_for_positions",
+      "docs": [
+        "Create [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for positions."
+      ],
+      "discriminator": [
+        114,
+        86,
+        241,
+        91,
+        247,
+        80,
+        64,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ]
+        },
+        {
+          "name": "index_token",
+          "docs": [
+            "Index token address."
+          ]
+        },
+        {
+          "name": "virtual_inventory",
+          "docs": [
+            "The virtual inventory account to create."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  105,
+                  95,
+                  102,
+                  111,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "index_token"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "The system program."
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_virtual_inventory_for_swaps",
+      "docs": [
+        "Create [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps."
+      ],
+      "discriminator": [
+        5,
+        183,
+        166,
+        24,
+        116,
+        50,
+        47,
+        77
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ]
+        },
+        {
+          "name": "virtual_inventory",
+          "docs": [
+            "The virtual inventory account to create."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  105,
+                  95,
+                  102,
+                  111,
+                  114,
+                  95,
+                  115,
+                  119,
+                  97,
+                  112,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "arg",
+                "path": "index"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "The system program."
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+>>>>>>> beb65479 (chore: update IDLs)
       "name": "create_withdrawal",
       "docs": [
         "Create a withdrawal by the owner.",
@@ -10100,6 +10348,51 @@
       ]
     },
     {
+<<<<<<< HEAD
+=======
+      "name": "disable_virtual_inventory",
+      "docs": [
+        "Disable a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account."
+      ],
+      "discriminator": [
+        191,
+        145,
+        91,
+        168,
+        10,
+        209,
+        23,
+        100
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ],
+          "relations": [
+            "virtual_inventory"
+          ]
+        },
+        {
+          "name": "virtual_inventory",
+          "docs": [
+            "The virtual inventory account to close."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+>>>>>>> beb65479 (chore: update IDLs)
       "name": "enable_role",
       "docs": [
         "Insert or enable a role for the given store.",
@@ -18598,6 +18891,383 @@
       "returns": "bool"
     },
     {
+<<<<<<< HEAD
+=======
+      "name": "join_virtual_inventory_for_positions",
+      "docs": [
+        "Join a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for positions."
+      ],
+      "discriminator": [
+        49,
+        213,
+        202,
+        84,
+        201,
+        143,
+        157,
+        64
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ],
+          "relations": [
+            "virtual_inventory",
+            "market"
+          ]
+        },
+        {
+          "name": "virtual_inventory",
+          "docs": [
+            "The virtual inventory account to join."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  105,
+                  95,
+                  102,
+                  111,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "docs": [
+            "The market to be added to the virtual inventory."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "join_virtual_inventory_for_swaps",
+      "docs": [
+        "Join a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps."
+      ],
+      "discriminator": [
+        189,
+        94,
+        220,
+        120,
+        253,
+        123,
+        20,
+        134
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ],
+          "relations": [
+            "virtual_inventory",
+            "market"
+          ]
+        },
+        {
+          "name": "virtual_inventory",
+          "docs": [
+            "The virtual inventory account to join."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  105,
+                  95,
+                  102,
+                  111,
+                  114,
+                  95,
+                  115,
+                  119,
+                  97,
+                  112,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "virtual_inventory"
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "docs": [
+            "The market to be added to the virtual inventory."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "leave_disabled_virtual_inventory",
+      "docs": [
+        "Leave a disabled [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account."
+      ],
+      "discriminator": [
+        76,
+        215,
+        228,
+        106,
+        213,
+        138,
+        215,
+        146
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ],
+          "relations": [
+            "virtual_inventory",
+            "market"
+          ]
+        },
+        {
+          "name": "virtual_inventory",
+          "docs": [
+            "The virtual inventory account to join."
+          ],
+          "writable": true
+        },
+        {
+          "name": "market",
+          "docs": [
+            "The market to be added to the virtual inventory."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "leave_virtual_inventory_for_positions",
+      "docs": [
+        "Leave a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for positions."
+      ],
+      "discriminator": [
+        177,
+        100,
+        253,
+        94,
+        158,
+        199,
+        45,
+        16
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ],
+          "relations": [
+            "virtual_inventory",
+            "market"
+          ]
+        },
+        {
+          "name": "virtual_inventory",
+          "docs": [
+            "The virtual inventory account to join."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  105,
+                  95,
+                  102,
+                  111,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "docs": [
+            "The market to be added to the virtual inventory."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "leave_virtual_inventory_for_swaps",
+      "docs": [
+        "Leave a [`VirtualInventory`](crate::states::market::virtual_inventory::VirtualInventory) account for swaps."
+      ],
+      "discriminator": [
+        252,
+        205,
+        252,
+        13,
+        120,
+        253,
+        211,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ],
+          "relations": [
+            "virtual_inventory",
+            "market"
+          ]
+        },
+        {
+          "name": "virtual_inventory",
+          "docs": [
+            "The virtual inventory account to join."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  105,
+                  95,
+                  102,
+                  111,
+                  114,
+                  95,
+                  115,
+                  119,
+                  97,
+                  112,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "virtual_inventory"
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "docs": [
+            "The market to be added to the virtual inventory."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+>>>>>>> beb65479 (chore: update IDLs)
       "name": "liquidate",
       "docs": [
         "Perform a liquidation by keepers.",
