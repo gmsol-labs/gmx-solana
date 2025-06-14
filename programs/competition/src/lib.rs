@@ -14,6 +14,7 @@ pub mod gmsol_competition {
     use super::*;
 
     /// Initialize the global [`Competition`](crate::states::Competition) PDA.
+    #[allow(clippy::too_many_arguments)]
     pub fn initialize_competition(
         ctx: Context<InitializeCompetition>,
         start_time: i64,

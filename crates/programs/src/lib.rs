@@ -1,4 +1,5 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![allow(clippy::too_many_arguments)]
 
 #[cfg(feature = "store")]
 anchor_lang::declare_program!(gmsol_store);

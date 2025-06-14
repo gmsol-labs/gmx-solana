@@ -30,6 +30,7 @@ pub struct InitializeCompetition<'info> {
 }
 
 impl InitializeCompetition<'_> {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn invoke(
         ctx: Context<Self>,
         start_time: i64,

@@ -169,7 +169,10 @@ impl OnExecuted<'_> {
         // Calculate volume as the absolute difference between after and before size_in_usd.
         let volume = if comp.only_count_increase {
             // Only count volume from position increases
-            trade_event.after.size_in_usd.saturating_sub(trade_event.before.size_in_usd)
+            trade_event
+                .after
+                .size_in_usd
+                .saturating_sub(trade_event.before.size_in_usd)
         } else {
             // Count all volume changes
             trade_event
