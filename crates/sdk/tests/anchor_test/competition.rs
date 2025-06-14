@@ -85,7 +85,7 @@ async fn competition() -> eyre::Result<()> {
     tracing::info!(%signature, "initialized competition");
 
     // Wait for competition to start
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
     // Verify competition initialization
     let competition_account = client
