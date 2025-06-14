@@ -24,7 +24,7 @@ pub struct CloseVirtualInventory<'info> {
     /// The store wallet.
     #[account(mut, seeds = [Store::WALLET_SEED, store.key().as_ref()], bump)]
     pub store_wallet: SystemAccount<'info>,
-    /// The virutal inventory account to close.
+    /// The virtual inventory account to close.
     #[account(
         mut,
         close = store_wallet,
@@ -35,7 +35,7 @@ pub struct CloseVirtualInventory<'info> {
 }
 
 impl CloseVirtualInventory<'_> {
-    /// Close a unused [`VirtualInventory`] account.
+    /// Close an unused [`VirtualInventory`] account.
     ///
     /// # CHECK
     /// - Only MARKET_KEEPER is allowed to invoke.
@@ -61,7 +61,7 @@ pub struct DisableVirtualInventory<'info> {
     pub authority: Signer<'info>,
     /// Store account.
     pub store: AccountLoader<'info, Store>,
-    /// The virutal inventory account to close.
+    /// The virtual inventory account to close.
     #[account(
         mut,
         has_one = store,
@@ -143,7 +143,7 @@ pub struct CreateVirtualInventoryForSwaps<'info> {
     pub authority: Signer<'info>,
     /// Store account.
     pub store: AccountLoader<'info, Store>,
-    /// The virutal inventory account to create.
+    /// The virtual inventory account to create.
     #[account(
         init,
         payer = authority,
@@ -257,7 +257,7 @@ pub struct CreateVirtualInventoryForPositions<'info> {
     /// Index token address.
     /// CHECK: only the address of this account is used.
     pub index_token: UncheckedAccount<'info>,
-    /// The virutal inventory account to create.
+    /// The virtual inventory account to create.
     #[account(
         init,
         payer = authority,

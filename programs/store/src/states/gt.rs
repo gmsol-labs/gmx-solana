@@ -1,6 +1,6 @@
 //! # GT
 //!
-//! GT is designed to boost trading activity on GMX-Solana by offering a unique incentive mechanism
+//! GT is designed to boost trading activity on GMX-Solana by offering an unique incentive mechanism
 //! that provides traders with additional rewards to maximize rebates and minimize trading costs. GT
 //! is a highly customizable token obtainable through trading on GMX-Solana. The initial mint cost
 //! of GT is $0.05, equivalent to a trading volume of $100 with a 5 bps fee. As the total supply

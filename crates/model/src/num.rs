@@ -235,7 +235,7 @@ pub trait UnsignedAbs: Signed {
     /// Unsigned type.
     type Unsigned;
 
-    /// Computes the absolute value and returns as a unsigned value.
+    /// Computes the absolute value and returns as an unsigned value.
     fn unsigned_abs(&self) -> Self::Unsigned;
 }
 

@@ -11,7 +11,7 @@ pub const MAX_MARKET_CONFIG_FLAGS: usize = 128;
 /// Max number of market flags.
 pub const MAX_MARKET_FLAGS: usize = 8;
 
-/// Max number of virutal inventory flags.
+/// Max number of virtual inventory flags.
 pub const MAX_VIRTUAL_INVENTORY_FLAGS: usize = 8;
 
 /// Market error.
