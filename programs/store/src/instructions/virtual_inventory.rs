@@ -58,7 +58,6 @@ impl<'info> internal::Authentication<'info> for CloseVirtualInventory<'info> {
 #[derive(Accounts)]
 pub struct DisableVirtualInventory<'info> {
     /// Authority.
-    #[account(mut)]
     pub authority: Signer<'info>,
     /// Store account.
     pub store: AccountLoader<'info, Store>,
