@@ -14,6 +14,21 @@ pub trait VirtualInventoryOps<C> {
         virtual_inventory: &Pubkey,
     ) -> crate::Result<TransactionBuilder<C>>;
 
+    /// Disable a virtual inventory.
+    fn disable_virtual_inventory(
+        &self,
+        store: &Pubkey,
+        virtual_inventory: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>>;
+
+    /// Leave a disabled virtual inventory.
+    fn leave_disabled_virtual_inventory(
+        &self,
+        store: &Pubkey,
+        market: &Pubkey,
+        virtual_inventory: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>>;
+
     /// Create a virtual inventory for swaps account.
     fn create_virtual_inventory_for_swaps(
         &self,
@@ -77,6 +92,40 @@ impl<C: Deref<Target = impl Signer> + Clone> VirtualInventoryOps<C> for crate::C
             })
             .anchor_args(args::CloseVirtualInventory {});
 
+        Ok(txn)
+    }
+
+    fn disable_virtual_inventory(
+        &self,
+        store: &Pubkey,
+        virtual_inventory: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let txn = self
+            .store_transaction()
+            .anchor_accounts(accounts::DisableVirtualInventory {
+                authority: self.payer(),
+                store: *store,
+                virtual_inventory: *virtual_inventory,
+            })
+            .anchor_args(args::DisableVirtualInventory {});
+        Ok(txn)
+    }
+
+    fn leave_disabled_virtual_inventory(
+        &self,
+        store: &Pubkey,
+        market: &Pubkey,
+        virtual_inventory: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let txn = self
+            .store_transaction()
+            .anchor_accounts(accounts::LeaveDisabledVirtualInventory {
+                authority: self.payer(),
+                store: *store,
+                virtual_inventory: *virtual_inventory,
+                market: *market,
+            })
+            .anchor_args(args::LeaveDisabledVirtualInventory {});
         Ok(txn)
     }
 
