@@ -139,7 +139,7 @@ impl<'a> TryFrom<&'a Store> for PriceValidator {
 
     fn try_from(config: &'a Store) -> Result<Self> {
         let max_age = config.amount.oracle_max_age;
-        // Note: Ref price validation is not implemented currently.
+        // Note: Global ref price validation is not implemented currently.
         let _max_ref_price_deviation_factor = config.factor.oracle_ref_price_deviation;
         let max_oracle_timestamp_range = config.amount.oracle_max_timestamp_range;
         let max_future_timestamp_excess = config.amount.oracle_max_future_timestamp_excess;
