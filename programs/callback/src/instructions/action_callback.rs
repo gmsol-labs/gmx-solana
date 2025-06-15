@@ -52,6 +52,7 @@ impl OnCallback<'_> {
         extra_account_count: u8,
     ) -> Result<()> {
         debug_assert!(ctx.remaining_accounts.len() >= usize::from(extra_account_count));
+        ctx.accounts.config.calls += 1;
         match trigger {
             On::Created => ctx.accounts.handle_created(success),
             On::Updated => ctx.accounts.handle_updated(success),
@@ -61,7 +62,6 @@ impl OnCallback<'_> {
     }
 
     fn handle_created(&mut self, success: bool) -> Result<()> {
-        self.config.calls += 1;
         self.action_stats.total_created += 1;
         self.action_stats.last_created_at = Clock::get()?.unix_timestamp;
 
@@ -75,7 +75,6 @@ impl OnCallback<'_> {
     }
 
     fn handle_updated(&mut self, success: bool) -> Result<()> {
-        self.config.calls += 1;
         self.action_stats.update_count += 1;
         self.action_stats.last_updated_at = Clock::get()?.unix_timestamp;
 
@@ -89,7 +88,6 @@ impl OnCallback<'_> {
     }
 
     fn handle_executed(&mut self, success: bool) -> Result<()> {
-        self.config.calls += 1;
         self.action_stats.total_executed += 1;
         self.action_stats.last_executed_at = Clock::get()?.unix_timestamp;
 
@@ -103,7 +101,6 @@ impl OnCallback<'_> {
     }
 
     fn handle_closed(&mut self, success: bool) -> Result<()> {
-        self.config.calls += 1;
         self.action_stats.total_closed += 1;
         self.action_stats.last_closed_at = Clock::get()?.unix_timestamp;
 
