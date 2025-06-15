@@ -43,7 +43,7 @@ pub struct OnCallback<'info> {
 
 impl OnCallback<'_> {
     pub(crate) fn invoke(
-        kind: On,
+        trigger: On,
         ctx: Context<Self>,
         _authority_bump: u8,
         _action_kind: u8,
@@ -52,7 +52,7 @@ impl OnCallback<'_> {
         extra_account_count: u8,
     ) -> Result<()> {
         debug_assert!(ctx.remaining_accounts.len() >= usize::from(extra_account_count));
-        match kind {
+        match trigger {
             On::Created => ctx.accounts.handle_created(success),
             On::Updated => ctx.accounts.handle_updated(success),
             On::Executed => ctx.accounts.handle_executed(success),
@@ -117,7 +117,7 @@ impl OnCallback<'_> {
     }
 }
 
-/// Callback kind.
+/// Callback trigger.
 pub(crate) enum On {
     /// On created.
     Created,
