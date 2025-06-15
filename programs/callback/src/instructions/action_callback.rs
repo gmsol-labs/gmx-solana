@@ -51,10 +51,7 @@ impl OnCallback<'_> {
         success: bool,
         extra_account_count: u8,
     ) -> Result<()> {
-        require_gte!(
-            ctx.remaining_accounts.len(),
-            usize::from(extra_account_count)
-        );
+        debug_assert!(ctx.remaining_accounts.len() >= usize::from(extra_account_count));
         match kind {
             On::Created => ctx.accounts.handle_created(success),
             On::Updated => ctx.accounts.handle_updated(success),
