@@ -8,8 +8,6 @@ use gmsol_store::{accounts, instruction};
 use crate::store::token::TokenAccountOps;
 
 /// Claim fees builder.
-// TODO: implement this.
-#[allow(dead_code)]
 pub struct ClaimFeesBuilder<'a, C> {
     client: &'a crate::Client<C>,
     store: Pubkey,
@@ -56,7 +54,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ClaimFeesBuilder<'a, C> {
 
         let authority = self.client.payer();
         let vault = self.client.find_market_vault_address(&self.store, &token);
-        // FIXME: read program id from the market.
+        // Note: If possible, the program ID should be read from the market.
         let token_program = anchor_spl::token::ID;
         let target =
             get_associated_token_address_with_program_id(&authority, &token, &token_program);

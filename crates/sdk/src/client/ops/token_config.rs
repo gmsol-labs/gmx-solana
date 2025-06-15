@@ -28,7 +28,6 @@ pub trait TokenConfigOps<C> {
     ) -> TransactionBuilder<C>;
 
     /// Insert or update config the given synthetic token.
-    // FIXME: reduce the number of args.
     #[allow(clippy::too_many_arguments)]
     fn insert_synthetic_token_config(
         &self,
