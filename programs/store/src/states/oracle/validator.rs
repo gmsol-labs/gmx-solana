@@ -80,20 +80,24 @@ impl PriceValidator {
                 msg!("[Price Validator] failed to calculate max deviation for validation");
                 CoreError::InvalidArgument
             })?;
-            let max_deviation = price.max.with_unit_price(max_deviation, true).ok_or_else(|| {
+            if max_deviation > 0 {
+                let max_deviation = price.max.with_unit_price(max_deviation, true).ok_or_else(|| {
                 msg!("[Price Validator] failed to calculate rounded max deviation for validation");
                 CoreError::InvalidArgument
             })?.to_unit_price();
-            require_gte!(
-                max_deviation,
-                unit_prices.max.abs_diff(ref_price),
-                CoreError::InvalidPriceFeedPrice
-            );
-            require_gte!(
-                max_deviation,
-                unit_prices.min.abs_diff(ref_price),
-                CoreError::InvalidPriceFeedPrice
-            );
+                require_gte!(
+                    max_deviation,
+                    unit_prices.max.abs_diff(ref_price),
+                    CoreError::InvalidPriceFeedPrice
+                );
+                require_gte!(
+                    max_deviation,
+                    unit_prices.min.abs_diff(ref_price),
+                    CoreError::InvalidPriceFeedPrice
+                );
+            } else {
+                msg!("[Price Validator] the validation of max deviation is skipped when `max_deviation == 0`");
+            }
         }
 
         self.merge_range(Some(oracle_slot), ts, ts);
