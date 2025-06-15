@@ -29,6 +29,7 @@ use crate::{
 use anchor_lang::prelude::*;
 use gmsol_utils::{
     oracle::{OracleFlag, MAX_ORACLE_FLAGS},
+    price::Decimal,
     token_config::FeedConfig,
 };
 
@@ -124,12 +125,13 @@ impl Oracle {
             validator.validate_one(
                 token_config,
                 &oracle_price.provider,
-                oracle_price.oracle_ts,
-                oracle_price.oracle_slot,
-                &oracle_price.price,
+                oracle_price.parts.oracle_ts,
+                oracle_price.parts.oracle_slot,
+                &oracle_price.parts.price,
+                oracle_price.parts.ref_price.as_ref(),
             )?;
             self.primary
-                .set(token, oracle_price.price, token_config.is_synthetic())?;
+                .set(token, oracle_price.parts.price, token_config.is_synthetic())?;
         }
         self.update_oracle_ts_and_slot(validator)?;
         Ok(())
@@ -286,9 +288,14 @@ fn from_program_id(program_id: &Pubkey) -> Option<PriceProviderKind> {
 
 struct OraclePrice {
     provider: PriceProviderKind,
+    parts: OraclePriceParts,
+}
+
+pub(crate) struct OraclePriceParts {
     oracle_slot: u64,
     oracle_ts: i64,
     price: gmsol_utils::Price,
+    ref_price: Option<Decimal>,
 }
 
 impl OraclePrice {
@@ -318,14 +325,12 @@ impl OraclePrice {
             .map_err(CoreError::from)?;
         let feed_id = feed_config.feed();
 
-        let (oracle_slot, oracle_ts, mut price) = match provider {
+        let mut parts = match provider {
             PriceProviderKind::ChainlinkDataStreams => {
                 parsed.ok_or_else(|| error!(CoreError::Internal))?
             }
             PriceProviderKind::Pyth => {
-                let (oracle_slot, oracle_ts, price) =
-                    Pyth::check_and_get_price(clock, token_config, account, feed_id)?;
-                (oracle_slot, oracle_ts, price)
+                Pyth::check_and_get_price(clock, token_config, account, feed_id)?
             }
             PriceProviderKind::Chainlink => {
                 msg!("[Oracle] Chainlink Data Feeds are no longer supported as of this version");
@@ -342,25 +347,25 @@ impl OraclePrice {
         };
 
         if token_config.is_price_adjustment_allowed() {
-            let adjusted = try_adjust_price(feed_config, &mut price)?;
+            let adjusted = try_adjust_price(feed_config, &mut parts)?;
             if adjusted {
                 msg!("[Oracle] price is adjusted, feed_id = {}", feed_id);
             }
         }
 
-        Ok(Self {
-            provider,
-            oracle_slot,
-            oracle_ts,
-            price,
-        })
+        Ok(Self { provider, parts })
     }
 }
 
-fn try_adjust_price(feed_config: &FeedConfig, price: &mut gmsol_utils::Price) -> Result<bool> {
+fn try_adjust_price(feed_config: &FeedConfig, parts: &mut OraclePriceParts) -> Result<bool> {
     let mut adjusted = false;
     if let Some(factor) = feed_config.max_deviation_factor() {
-        adjusted = try_adjust_price_with_max_deviation_factor(&factor, price).unwrap_or(false);
+        adjusted = try_adjust_price_with_max_deviation_factor(
+            &factor,
+            &mut parts.price,
+            parts.ref_price.as_ref(),
+        )
+        .unwrap_or(false);
     }
     Ok(adjusted)
 }
@@ -368,24 +373,30 @@ fn try_adjust_price(feed_config: &FeedConfig, price: &mut gmsol_utils::Price) ->
 fn try_adjust_price_with_max_deviation_factor(
     factor: &u128,
     price: &mut gmsol_utils::Price,
+    ref_price: Option<&Decimal>,
 ) -> Option<bool> {
     use gmsol_model::utils::apply_factor;
 
     let mut adjusted = false;
 
     let unit_prices = gmsol_model::price::Price::<u128>::from(&*price);
-    let mid_price = unit_prices.checked_mid()?;
-    let max_deviation = apply_factor::<_, { constants::MARKET_DECIMALS }>(&mid_price, factor)?;
+    let ref_price = match ref_price {
+        Some(ref_price) => ref_price.to_unit_price(),
+        None => unit_prices.checked_mid()?,
+    };
+    let max_deviation = apply_factor::<_, { constants::MARKET_DECIMALS }>(&ref_price, factor)?;
 
-    if unit_prices.max.abs_diff(mid_price) > max_deviation
-        || unit_prices.min.abs_diff(mid_price) > max_deviation
-    {
+    if unit_prices.max.abs_diff(ref_price) > max_deviation {
         price.max = price
             .max
-            .with_unit_price(mid_price.checked_add(max_deviation)?, false)?;
+            .with_unit_price(ref_price.checked_add(max_deviation)?, false)?;
+        adjusted = true;
+    }
+
+    if unit_prices.min.abs_diff(ref_price) > max_deviation {
         price.min = price
             .min
-            .with_unit_price(mid_price.checked_sub(max_deviation)?, true)?;
+            .with_unit_price(ref_price.checked_sub(max_deviation)?, true)?;
         adjusted = true;
     }
 

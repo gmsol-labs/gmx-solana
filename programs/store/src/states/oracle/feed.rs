@@ -1,13 +1,13 @@
 use anchor_lang::prelude::*;
 use bytemuck::Zeroable;
-use gmsol_utils::InitSpace;
+use gmsol_utils::{price::Decimal, InitSpace};
 
 use crate::{
     states::{Seed, TokenConfig},
     CoreError,
 };
 
-use super::PriceProviderKind;
+use super::{OraclePriceParts, PriceProviderKind};
 
 pub use gmsol_utils::price::feed_price::PriceFeedPrice;
 
@@ -136,7 +136,7 @@ impl PriceFeed {
         &self,
         clock: &Clock,
         token_config: &TokenConfig,
-    ) -> Result<(u64, i64, gmsol_utils::Price)> {
+    ) -> Result<OraclePriceParts> {
         let provider = self.provider()?;
         require_eq!(
             token_config.expected_provider().map_err(CoreError::from)?,
@@ -154,13 +154,25 @@ impl PriceFeed {
         }
 
         let price = self.try_to_price(token_config)?;
+        let ref_price = self.try_to_ref_price(token_config)?;
 
-        Ok((self.last_published_at_slot(), timestamp, price))
+        Ok(OraclePriceParts {
+            oracle_slot: self.last_published_at_slot(),
+            oracle_ts: timestamp,
+            price,
+            ref_price: Some(ref_price),
+        })
     }
 
     fn try_to_price(&self, token_config: &TokenConfig) -> Result<gmsol_utils::Price> {
         self.price()
             .try_to_price(token_config)
+            .map_err(|_| error!(CoreError::InvalidPriceFeedPrice))
+    }
+
+    fn try_to_ref_price(&self, token_config: &TokenConfig) -> Result<Decimal> {
+        self.price()
+            .try_to_ref_price(token_config)
             .map_err(|_| error!(CoreError::InvalidPriceFeedPrice))
     }
 }

@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use gmsol_utils::price::Price;
+use gmsol_utils::price::{Decimal, Price};
 
 use crate::{
     constants,
@@ -35,6 +35,7 @@ impl PriceValidator {
         oracle_ts: i64,
         oracle_slot: u64,
         price: &Price,
+        ref_price: Option<&Decimal>,
     ) -> Result<()> {
         use gmsol_model::utils::apply_factor;
 
@@ -64,12 +65,15 @@ impl PriceValidator {
             .map_err(|err| error!(err))?
         {
             let unit_prices = gmsol_model::price::Price::<u128>::from(price);
-            let mid_price = unit_prices.checked_mid().ok_or_else(|| {
-                msg!("[Price Validator] failed to calculate mid price for validation");
-                CoreError::InvalidArgument
-            })?;
+            let ref_price = match ref_price {
+                Some(ref_price) => ref_price.to_unit_price(),
+                None => unit_prices.checked_mid().ok_or_else(|| {
+                    msg!("[Price Validator] failed to calculate mid price for validation");
+                    CoreError::InvalidArgument
+                })?,
+            };
             let max_deviation = apply_factor::<_, { constants::MARKET_DECIMALS }>(
-                &mid_price,
+                &ref_price,
                 &max_deviation_factor,
             )
             .ok_or_else(|| {
@@ -82,12 +86,12 @@ impl PriceValidator {
             })?.to_unit_price();
             require_gte!(
                 max_deviation,
-                unit_prices.max.abs_diff(mid_price),
+                unit_prices.max.abs_diff(ref_price),
                 CoreError::InvalidPriceFeedPrice
             );
             require_gte!(
                 max_deviation,
-                unit_prices.min.abs_diff(mid_price),
+                unit_prices.min.abs_diff(ref_price),
                 CoreError::InvalidPriceFeedPrice
             );
         }

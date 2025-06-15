@@ -9,6 +9,8 @@ use switchboard_on_demand::Discriminator as _;
 
 use crate::{states::TokenConfig, CoreError};
 
+use super::OraclePriceParts;
+
 mod id {
     use anchor_lang::prelude::Pubkey;
     use cfg_if::cfg_if;
@@ -63,20 +65,25 @@ impl Switchboard {
         clock: &Clock,
         token_config: &TokenConfig,
         feed: &'info AccountInfo<'info>,
-    ) -> Result<(u64, i64, Price)> {
+    ) -> Result<OraclePriceParts> {
         let feed = AccountLoader::<SbFeed>::try_from(feed)?;
         let feed = feed.load()?;
         let result_ts = feed.result_ts();
+        let ref_price = feed
+            .value(clock)
+            .map_err(|_| error!(CoreError::PriceIsStale))?;
+        let ref_price = from_rust_decimal_price(&ref_price, token_config)?;
         require_gte!(
             result_ts.saturating_add(token_config.heartbeat_duration().into()),
             clock.unix_timestamp,
             CoreError::PriceFeedNotUpdated
         );
-        Ok((
-            feed.result_land_slot(),
-            result_ts,
-            Self::price_from(&feed, token_config)?,
-        ))
+        Ok(OraclePriceParts {
+            oracle_slot: feed.result_land_slot(),
+            oracle_ts: result_ts,
+            price: Self::price_from(&feed, token_config)?,
+            ref_price: Some(ref_price),
+        })
     }
 
     fn price_from(feed: &SbFeed, token_config: &TokenConfig) -> Result<Price> {

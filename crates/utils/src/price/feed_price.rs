@@ -80,4 +80,11 @@ impl PriceFeedPrice {
 
         Ok(Price { min, max })
     }
+
+    /// Returns reference price in [`Decimal`].
+    pub fn try_to_ref_price(&self, token_config: &TokenConfig) -> Result<Decimal, DecimalError> {
+        let token_decimals = token_config.token_decimals();
+        let precision = token_config.precision();
+        Decimal::try_from_price(self.price, self.decimals, token_decimals, precision)
+    }
 }
