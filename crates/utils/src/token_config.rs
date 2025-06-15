@@ -46,6 +46,9 @@ pub enum TokenConfigError {
     /// Exceed max ratio.
     #[error("exceed max ratio")]
     ExceedMaxRatio,
+    /// Max deviation factor too small.
+    #[error("max deviation factor too small")]
+    MaxDeviationFactorTooSmall,
 }
 
 pub(crate) type TokenConfigResult<T> = std::result::Result<T, TokenConfigError>;
@@ -322,9 +325,15 @@ impl FeedConfig {
         max_deviation_factor: Option<u128>,
     ) -> TokenConfigResult<Self> {
         let ratio = match max_deviation_factor {
-            Some(factor) => (factor / Self::RATIO_MULTIPLIER)
-                .try_into()
-                .map_err(|_| TokenConfigError::ExceedMaxRatio)?,
+            Some(factor) => {
+                let ratio = (factor / Self::RATIO_MULTIPLIER)
+                    .try_into()
+                    .map_err(|_| TokenConfigError::ExceedMaxRatio)?;
+                if ratio == 0 {
+                    return Err(TokenConfigError::MaxDeviationFactorTooSmall);
+                }
+                ratio
+            }
             None => 0,
         };
         self.max_deviation_ratio = ratio;
