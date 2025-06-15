@@ -25,7 +25,6 @@ impl InitializeConfig<'_> {
     pub(crate) fn invoke(ctx: Context<Self>, prefix: String) -> Result<()> {
         require_gte!(usize::from(MAX_PREFIX_LEN), prefix.len());
         ctx.accounts.config.prefix = prefix;
-        ctx.accounts.config.calls = 0;
         Ok(())
     }
 }
