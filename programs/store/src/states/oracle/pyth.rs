@@ -1,10 +1,12 @@
 use anchor_lang::prelude::*;
-use gmsol_utils::{oracle::OracleError, price::Price};
+use gmsol_utils::oracle::OracleError;
 use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 
 use crate::{states::TokenConfig, CoreError};
 
 pub use gmsol_utils::oracle::pyth_price_with_confidence_to_price;
+
+use super::OraclePriceParts;
 
 /// The Pyth receiver program.
 pub struct Pyth;
@@ -25,7 +27,7 @@ impl Pyth {
         token_config: &TokenConfig,
         feed: &'info AccountInfo<'info>,
         feed_id: &Pubkey,
-    ) -> Result<(u64, i64, Price)> {
+    ) -> Result<OraclePriceParts> {
         let feed = Account::<PriceUpdateV2>::try_from(feed)?;
         let feed_id = feed_id.to_bytes();
         let max_age = token_config.heartbeat_duration().into();
@@ -49,7 +51,12 @@ impl Pyth {
         )
         .map_err(CoreError::from)
         .map_err(|err| error!(err))?;
-        Ok((feed.posted_slot, price.publish_time, parsed_price))
+        Ok(OraclePriceParts {
+            oracle_slot: feed.posted_slot,
+            oracle_ts: price.publish_time,
+            price: parsed_price,
+            ref_price: None,
+        })
     }
 }
 
