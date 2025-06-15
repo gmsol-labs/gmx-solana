@@ -91,6 +91,7 @@ pub struct OnExecuted<'info> {
     #[account(mut)]
     pub competition: Account<'info, Competition>,
     /// The participant PDA (created on demand).
+    /// CHECK: Validation is performed only during the competition.
     #[account(
         mut,
         seeds = [
@@ -98,11 +99,9 @@ pub struct OnExecuted<'info> {
             competition.key().as_ref(),
             trader.key().as_ref(),
         ],
-        bump = participant.bump,
-        has_one = competition,
-        has_one = trader,
+        bump
     )]
-    pub participant: Account<'info, Participant>,
+    pub participant: UncheckedAccount<'info>,
     /// The trader public key.
     /// CHECK: Only the address is required.
     pub trader: UncheckedAccount<'info>,
@@ -151,84 +150,122 @@ impl OnExecuted<'_> {
         }
 
         // Get volume from the trade event.
-        let Some(trade_event) = &ctx.accounts.trade_event else {
-            msg!("competition: no trade event");
-            return Ok(());
-        };
-        let trade_event = trade_event
-            .load()
-            .map_err(|_| CompetitionError::InvalidTradeEvent)?;
+        let volume = {
+            let Some(trade_event) = &ctx.accounts.trade_event else {
+                msg!("competition: no trade event");
+                return Ok(());
+            };
+            let trade_event = trade_event
+                .load()
+                .map_err(|_| CompetitionError::InvalidTradeEvent)?;
 
-        // Validate that the trade event belongs to the trader.
-        require_keys_eq!(
-            trade_event.user,
-            ctx.accounts.trader.key(),
-            CompetitionError::InvalidTradeEvent
-        );
+            // Validate that the trade event belongs to the trader.
+            require_keys_eq!(
+                trade_event.user,
+                ctx.accounts.trader.key(),
+                CompetitionError::InvalidTradeEvent
+            );
 
-        // Calculate volume as the absolute difference between after and before size_in_usd.
-        let volume = if comp.only_count_increase {
-            // Only count volume from position increases
-            trade_event
-                .after
-                .size_in_usd
-                .saturating_sub(trade_event.before.size_in_usd)
-        } else {
-            // Count all volume changes
-            trade_event
-                .after
-                .size_in_usd
-                .abs_diff(trade_event.before.size_in_usd)
-        };
-
-        // Skip trades with zero volume.
-        if volume == 0 {
-            msg!("competition: skipped trade with zero volume");
-            return Ok(());
-        }
-
-        let part = &mut ctx.accounts.participant;
-
-        part.volume = part.volume.saturating_add(volume);
-
-        // Determine if trade volume should be merged based on time window.
-        let time_diff = now.saturating_sub(part.last_updated_at);
-        part.last_updated_at = now;
-        if time_diff <= comp.volume_merge_window {
-            // Within the merge window, add to merged volume.
-            part.merged_volume = part.merged_volume.saturating_add(volume);
-
-            // Check if merged volume exceeds threshold.
-            if part.merged_volume >= comp.volume_threshold {
-                Self::extend_competition_time(comp, part, part.merged_volume)?;
-                // Reset merged volume after triggering extension.
-                part.merged_volume = 0;
-            }
-        } else {
-            // Outside the merge window, check single trade volume.
-            if volume >= comp.volume_threshold {
-                Self::extend_competition_time(comp, part, volume)?;
-                part.merged_volume = 0;
+            // Calculate volume as the absolute difference between after and before size_in_usd.
+            let volume = if comp.only_count_increase {
+                // Only count volume from position increases
+                trade_event
+                    .after
+                    .size_in_usd
+                    .saturating_sub(trade_event.before.size_in_usd)
             } else {
-                part.merged_volume = volume;
+                // Count all volume changes
+                trade_event
+                    .after
+                    .size_in_usd
+                    .abs_diff(trade_event.before.size_in_usd)
+            };
+
+            // Skip trades with zero volume.
+            if volume == 0 {
+                msg!("competition: skipped trade with zero volume");
+                return Ok(());
             }
-        }
+            volume
+        };
 
-        Self::update_leaderboard(comp, part);
+        ctx.accounts.with_participant(|comp, part| {
+            part.volume = part.volume.saturating_add(volume);
 
-        msg!(
-            "competition: trader={} new_volume={} volume_delta={} merged_volume={}",
-            part.trader,
-            part.volume,
-            volume,
-            part.merged_volume
-        );
+            // Determine if trade volume should be merged based on time window.
+            let time_diff = now.saturating_sub(part.last_updated_at);
+            part.last_updated_at = now;
+            if time_diff <= comp.volume_merge_window {
+                // Within the merge window, add to merged volume.
+                part.merged_volume = part.merged_volume.saturating_add(volume);
+
+                // Check if merged volume exceeds threshold.
+                if part.merged_volume >= comp.volume_threshold {
+                    Self::extend_competition_time(comp, part, part.merged_volume)?;
+                    // Reset merged volume after triggering extension.
+                    part.merged_volume = 0;
+                }
+            } else {
+                // Outside the merge window, check single trade volume.
+                if volume >= comp.volume_threshold {
+                    Self::extend_competition_time(comp, part, volume)?;
+                    part.merged_volume = 0;
+                } else {
+                    part.merged_volume = volume;
+                }
+            }
+
+            Self::update_leaderboard(comp, part);
+
+            msg!(
+                "competition: trader={} new_volume={} volume_delta={} merged_volume={}",
+                part.trader,
+                part.volume,
+                volume,
+                part.merged_volume
+            );
+
+            Ok(())
+        })?;
+
         Ok(())
+    }
+
+    fn with_participant(
+        &mut self,
+        f: impl FnOnce(&mut Competition, &mut Participant) -> Result<()>,
+    ) -> Result<()> {
+        let AccountInfo {
+            key,
+            lamports,
+            data,
+            owner,
+            rent_epoch,
+            is_signer,
+            is_writable,
+            executable,
+        } = self.participant.as_ref();
+        let mut lamports = lamports.borrow_mut();
+        let mut data = data.borrow_mut();
+        let info = AccountInfo::new(
+            key,
+            *is_signer,
+            *is_writable,
+            *lamports,
+            *data,
+            owner,
+            *executable,
+            *rent_epoch,
+        );
+        let mut participant = Account::<Participant>::try_from(&info)?;
+        require_keys_eq!(participant.trader, self.trader.key());
+        require_keys_eq!(participant.competition, self.competition.key());
+        (f)(&mut self.competition, &mut participant)
     }
 
     /// Extend competition time if volume exceeds threshold.
     fn extend_competition_time(
-        comp: &mut Account<Competition>,
+        comp: &mut Competition,
         part: &Participant,
         volume: u128,
     ) -> Result<()> {
@@ -254,7 +291,7 @@ impl OnExecuted<'_> {
         Ok(())
     }
 
-    fn update_leaderboard(comp: &mut Account<Competition>, part: &Participant) {
+    fn update_leaderboard(comp: &mut Competition, part: &Participant) {
         let entry = if let Some(pos) = comp
             .leaderboard
             .iter()
