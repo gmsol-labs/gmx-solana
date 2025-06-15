@@ -58,7 +58,7 @@ impl Closable for Deposit {
 }
 
 impl Deposit {
-    /// Fisrt Deposit Receiver Seed.
+    /// First Deposit Receiver Seed.
     pub const FIRST_DEPOSIT_RECEIVER_SEED: &'static [u8] = b"first_deposit_receiver";
 
     /// Get first deposit receiver.

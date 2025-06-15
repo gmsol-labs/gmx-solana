@@ -86,7 +86,7 @@ impl ShiftTokenAccounts {
 
     /// Get from market token account.
     pub fn from_market_token_account(&self) -> Pubkey {
-        self.from_market_token.account().expect("msut exist")
+        self.from_market_token.account().expect("must exist")
     }
 
     /// Get to market token.
@@ -96,7 +96,7 @@ impl ShiftTokenAccounts {
 
     /// Get to market token account.
     pub fn to_market_token_account(&self) -> Pubkey {
-        self.to_market_token.account().expect("msut exist")
+        self.to_market_token.account().expect("must exist")
     }
 
     /// Get long token.

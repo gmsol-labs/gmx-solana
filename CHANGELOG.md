@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Added callback-enabled instructions for order.
   - Added the `create_order_v2` instruction.
   - Added the `update_order_v2` instruction.
-  - Added the `close_order_v2` instrcution.
+  - Added the `close_order_v2` instruction.
   - Added the `execute_increase_or_swap_order_v2` instruction.
   - Added the `execute_decrease_order_v2` instruction.
 - programs(store): Added `InsufficientFundingFeePayment` CPI event to be emitted on insufficient funding fee payment.

@@ -1322,7 +1322,7 @@
         {
           "name": "market_token_escrow",
           "docs": [
-            "The escrow account for receving market tokens."
+            "The escrow account for receiving market tokens."
           ],
           "writable": true,
           "pda": {
@@ -1849,7 +1849,7 @@
         {
           "name": "receiver",
           "docs": [
-            "The recevier of the deposit."
+            "The receiver of the deposit."
           ],
           "writable": true
         },
@@ -4705,7 +4705,7 @@
         {
           "name": "owner",
           "docs": [
-            "The owenr of the shift."
+            "The owner of the shift."
           ],
           "writable": true
         },
@@ -5196,7 +5196,7 @@
         {
           "name": "market_token_escrow",
           "docs": [
-            "The escrow account for receving market tokens to burn."
+            "The escrow account for receiving market tokens to burn."
           ],
           "writable": true,
           "pda": {
@@ -5289,7 +5289,7 @@
         {
           "name": "final_long_token_escrow",
           "docs": [
-            "The escrow account for receiving withdrawed final long tokens."
+            "The escrow account for receiving withdrawn final long tokens."
           ],
           "writable": true,
           "pda": {
@@ -5382,7 +5382,7 @@
         {
           "name": "final_short_token_escrow",
           "docs": [
-            "The escrow account for receiving withdrawed final short tokens."
+            "The escrow account for receiving withdrawn final short tokens."
           ],
           "writable": true,
           "pda": {
@@ -5933,7 +5933,7 @@
         {
           "name": "market_token_escrow",
           "docs": [
-            "The escrow account for receving market tokens."
+            "The escrow account for receiving market tokens."
           ],
           "writable": true,
           "pda": {
@@ -6214,7 +6214,7 @@
         {
           "name": "market_token_ata",
           "docs": [
-            "The ATA of the owner for receving market tokens."
+            "The ATA of the owner for receiving market tokens."
           ],
           "writable": true,
           "pda": {
@@ -9971,7 +9971,7 @@
         {
           "name": "market_token_escrow",
           "docs": [
-            "The escrow account for receving market tokens to burn."
+            "The escrow account for receiving market tokens to burn."
           ],
           "writable": true,
           "pda": {
@@ -10064,7 +10064,7 @@
         {
           "name": "final_long_token_escrow",
           "docs": [
-            "The escrow account for receiving withdrawed final long tokens."
+            "The escrow account for receiving withdrawn final long tokens."
           ],
           "writable": true,
           "pda": {
@@ -10157,7 +10157,7 @@
         {
           "name": "final_short_token_escrow",
           "docs": [
-            "The escrow account for receiving withdrawed final short tokens."
+            "The escrow account for receiving withdrawn final short tokens."
           ],
           "writable": true,
           "pda": {
@@ -11898,7 +11898,7 @@
         {
           "name": "market_token_escrow",
           "docs": [
-            "The escrow account for receving market tokens."
+            "The escrow account for receiving market tokens."
           ],
           "writable": true,
           "pda": {
@@ -13970,7 +13970,7 @@
         {
           "name": "market_token_withdrawal_vault",
           "docs": [
-            "Market token wihtdrawal vault."
+            "Market token withdrawal vault."
           ],
           "writable": true,
           "pda": {
@@ -16394,7 +16394,7 @@
         {
           "name": "market_token_escrow",
           "docs": [
-            "The escrow account for receving market tokens to burn."
+            "The escrow account for receiving market tokens to burn."
           ],
           "writable": true,
           "pda": {
@@ -16487,7 +16487,7 @@
         {
           "name": "final_long_token_escrow",
           "docs": [
-            "The escrow account for receiving withdrawed final long tokens."
+            "The escrow account for receiving withdrawn final long tokens."
           ],
           "writable": true,
           "pda": {
@@ -16580,7 +16580,7 @@
         {
           "name": "final_short_token_escrow",
           "docs": [
-            "The escrow account for receiving withdrawed final short tokens."
+            "The escrow account for receiving withdrawn final short tokens."
           ],
           "writable": true,
           "pda": {
@@ -25569,7 +25569,7 @@
           {
             "name": "initial_short_token_amount",
             "docs": [
-              "Initial short otken amount to deposit."
+              "Initial short token amount to deposit."
             ],
             "type": "u64"
           },
@@ -25629,7 +25629,7 @@
           {
             "name": "initial_short_token_amount",
             "docs": [
-              "Initial short otken amount to deposit."
+              "Initial short token amount to deposit."
             ],
             "type": "u64"
           },
@@ -25643,7 +25643,7 @@
           {
             "name": "min_market_token_amount",
             "docs": [
-              "Minimum acceptable maount of market tokens to be minted."
+              "Minimum acceptable amount of market tokens to be minted."
             ],
             "type": "u64"
           },
@@ -27294,7 +27294,7 @@
           {
             "name": "short_token_for_claimable_account_of_user",
             "docs": [
-              "Short token amount for cliamable account of user."
+              "Short token amount for claimable account of user."
             ],
             "type": "u64"
           },
@@ -29996,7 +29996,7 @@
           {
             "name": "pool_value_without_pnl_for_short",
             "docs": [
-              "Pool avlue without pnl for short."
+              "Pool value without pnl for short."
             ],
             "type": "u128"
           }
@@ -30108,7 +30108,7 @@
             "name": "authority",
             "docs": [
               "This address is authorized to **directly** modify",
-              "the oracle through instrcutions."
+              "the oracle through instructions."
             ],
             "type": "pubkey"
           },
@@ -30609,7 +30609,7 @@
           {
             "name": "acceptable_price",
             "docs": [
-              "Accetpable price (in unit price)."
+              "Acceptable price (in unit price)."
             ],
             "type": "u128"
           },
@@ -32551,7 +32551,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "decimal_multipler",
+            "name": "decimal_multiplier",
             "type": "u8"
           },
           {
@@ -33937,7 +33937,7 @@
           {
             "name": "short_token_for_claimable_account_of_user",
             "docs": [
-              "Short token amount for cliamable account of user."
+              "Short token amount for claimable account of user."
             ],
             "type": "u64"
           },
@@ -34892,14 +34892,6 @@
       "value": "[103, 116]"
     },
     {
-      "name": "MAREKT_TOKEN_MINT_SEED",
-      "docs": [
-        "Market Token Mint Address Seed."
-      ],
-      "type": "bytes",
-      "value": "[109, 97, 114, 107, 101, 116, 95, 116, 111, 107, 101, 110, 95, 109, 105, 110, 116]"
-    },
-    {
       "name": "MARKET_DECIMALS",
       "docs": [
         "Decimals of usd values of factors."
@@ -34914,6 +34906,14 @@
       ],
       "type": "u8",
       "value": "9"
+    },
+    {
+      "name": "MARKET_TOKEN_MINT_SEED",
+      "docs": [
+        "Market Token Mint Address Seed."
+      ],
+      "type": "bytes",
+      "value": "[109, 97, 114, 107, 101, 116, 95, 116, 111, 107, 101, 110, 95, 109, 105, 110, 116]"
     },
     {
       "name": "MARKET_USD_TO_AMOUNT_DIVISOR",

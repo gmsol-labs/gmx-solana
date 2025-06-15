@@ -50,7 +50,7 @@ pub struct InitializeMarket<'info> {
         // We directly use the store as the authority.
         mint::authority = store.key(),
         seeds = [
-            constants::MAREKT_TOKEN_MINT_SEED,
+            constants::MARKET_TOKEN_MINT_SEED,
             store.key().as_ref(),
             index_token_mint.as_ref(),
             long_token_mint.key().as_ref(),
@@ -400,7 +400,7 @@ pub struct UpdateMarketConfigWithBuffer<'info> {
 /// Update market config with buffer.
 ///
 /// ## CHECK
-/// - Only MARKET_KEEPER can udpate the config of market.
+/// - Only MARKET_KEEPER can update the config of market.
 pub(crate) fn unchecked_update_market_config_with_buffer(
     ctx: Context<UpdateMarketConfigWithBuffer>,
 ) -> Result<()> {
@@ -612,7 +612,7 @@ pub(crate) fn unchecked_toggle_gt_minting(
     ctx.accounts
         .market
         .load_mut()?
-        .set_is_gt_minting_enbaled(enable);
+        .set_is_gt_minting_enabled(enable);
     Ok(())
 }
 

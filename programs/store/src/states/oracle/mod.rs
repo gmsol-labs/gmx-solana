@@ -59,7 +59,7 @@ pub struct Oracle {
     /// Store.
     pub store: Pubkey,
     /// This address is authorized to **directly** modify
-    /// the oracle through instrcutions.
+    /// the oracle through instructions.
     pub(crate) authority: Pubkey,
     min_oracle_ts: i64,
     max_oracle_ts: i64,

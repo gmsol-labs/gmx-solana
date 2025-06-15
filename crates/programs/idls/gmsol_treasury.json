@@ -4131,7 +4131,7 @@
             "name": "authority",
             "docs": [
               "This address is authorized to **directly** modify",
-              "the oracle through instrcutions."
+              "the oracle through instructions."
             ],
             "type": "pubkey"
           },
@@ -4425,7 +4425,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "decimal_multipler",
+            "name": "decimal_multiplier",
             "type": "u8"
           },
           {

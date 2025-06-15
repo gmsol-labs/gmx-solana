@@ -411,12 +411,12 @@ enum Command {
     },
     /// Update a limit or stop-loss order.
     UpdateOrder {
-        /// The address of the swap order to udpate.
+        /// The address of the swap order to update.
         address: Pubkey,
         /// New Tigger price.
         #[arg(long)]
         price: Option<Value>,
-        /// Accetable price.
+        /// Acceptable price.
         #[arg(long)]
         acceptable_price: Option<Value>,
         /// Min output amount or value.
@@ -482,7 +482,7 @@ enum Command {
     },
     /// Update a limit swap order.
     UpdateSwap {
-        /// The address of the swap order to udpate.
+        /// The address of the swap order to update.
         address: Pubkey,
         /// New limit price (`token_in` to `token_out` price).
         #[arg(long)]

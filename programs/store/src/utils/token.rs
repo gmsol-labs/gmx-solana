@@ -127,7 +127,7 @@ impl TransferAllFromEscrowToATA<'_, '_> {
     /// Transfer all tokens from the escrow account to ATA. Close the escrow account after
     /// the transfer is complete if `keep_escrow` is `false`, which is the default.
     ///
-    /// Return `false` if the transfer is required but the ATA is not initilaized.
+    /// Return `false` if the transfer is required but the ATA is not initialized.
     ///
     /// # CHECK
     /// - The `action` account must be owned by the store program and mutable.

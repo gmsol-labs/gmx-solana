@@ -7,7 +7,7 @@ use crate::{utils::pubkey::to_bytes, CoreError};
 #[zero_copy]
 #[cfg_attr(feature = "debug", derive(derive_more::Debug))]
 pub struct SmallPrices {
-    decimal_multipler: u8,
+    decimal_multiplier: u8,
     flags: u8,
     #[cfg_attr(feature = "debug", debug(skip))]
     padding_0: [u8; 2],
@@ -28,7 +28,7 @@ impl SmallPrices {
     pub fn min(&self) -> Decimal {
         Decimal {
             value: self.min,
-            decimal_multiplier: self.decimal_multipler,
+            decimal_multiplier: self.decimal_multiplier,
         }
     }
 
@@ -36,7 +36,7 @@ impl SmallPrices {
     pub fn max(&self) -> Decimal {
         Decimal {
             value: self.max,
-            decimal_multiplier: self.decimal_multipler,
+            decimal_multiplier: self.decimal_multiplier,
         }
     }
 
@@ -57,7 +57,7 @@ impl SmallPrices {
         };
 
         Ok(SmallPrices {
-            decimal_multipler: price.min.decimal_multiplier,
+            decimal_multiplier: price.min.decimal_multiplier,
             flags,
             padding_0: [0; 2],
             min: price.min.value,

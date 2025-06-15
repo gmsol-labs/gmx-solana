@@ -31,7 +31,7 @@ pub const STORE_WALLET_SEED: &[u8] = b"store_wallet";
 pub const MARKET_VAULT_SEED: &[u8] = b"market_vault";
 
 /// Seed for market token mint.
-pub const MAREKT_TOKEN_MINT_SEED: &[u8] = b"market_token_mint";
+pub const MARKET_TOKEN_MINT_SEED: &[u8] = b"market_token_mint";
 
 /// Seed for [`Market`](store_accounts::Market).
 pub const MARKET_SEED: &[u8] = b"market";
@@ -173,7 +173,7 @@ pub fn find_market_token_address(
 ) -> (Pubkey, u8) {
     Pubkey::find_program_address(
         &[
-            MAREKT_TOKEN_MINT_SEED,
+            MARKET_TOKEN_MINT_SEED,
             store.as_ref(),
             index_token.as_ref(),
             long_token.as_ref(),

@@ -330,7 +330,7 @@ pub mod utils {
         }
 
         fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let header = de::try_deserailize_unchecked::<InstructionHeader>(buf)?;
+            let header = de::try_deserialize_unchecked::<InstructionHeader>(buf)?;
             let (_disc, data) = buf.split_at(8);
             let (_header, remaining_data) = data.split_at(std::mem::size_of::<InstructionHeader>());
             let data_len = usize::from(header.data_len);

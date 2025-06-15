@@ -298,7 +298,7 @@ pub struct CloseGlvDeposit<'info> {
     /// CHECK: only use to validate and receive fund.
     #[account(mut)]
     pub owner: UncheckedAccount<'info>,
-    /// The recevier of the deposit.
+    /// The receiver of the deposit.
     /// CHECK: only use to validate and receive fund.
     #[account(mut)]
     pub receiver: UncheckedAccount<'info>,
@@ -823,11 +823,11 @@ impl<'info> ExecuteGlvDeposit<'info> {
 
     fn transfer_initial_tokens_in(
         &self,
-        sigenr: &ActionSigner,
+        signer: &ActionSigner,
         remaining_accounts: &'info [AccountInfo<'info>],
         event_emitter: &EventEmitter<'_, 'info>,
     ) -> Result<()> {
-        let seeds = sigenr.as_seeds();
+        let seeds = signer.as_seeds();
         let builder = MarketTransferInOperation::builder()
             .store(&self.store)
             .from_authority(self.glv_deposit.to_account_info())

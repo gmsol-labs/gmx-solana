@@ -876,7 +876,7 @@ impl GlvDepositTokenAccounts {
     pub fn market_token_account(&self) -> Pubkey {
         self.market_token
             .account()
-            .expect("uninitalized GLV Deposit account")
+            .expect("uninitialized GLV Deposit account")
     }
 
     /// Get GLV token.
@@ -890,7 +890,7 @@ impl GlvDepositTokenAccounts {
     pub fn glv_token_account(&self) -> Pubkey {
         self.glv_token
             .account()
-            .expect("uninitalized GLV Deposit account")
+            .expect("uninitialized GLV Deposit account")
     }
 }
 
@@ -1011,7 +1011,7 @@ impl GlvWithdrawalTokenAccounts {
     pub fn market_token_account(&self) -> Pubkey {
         self.market_token
             .account()
-            .expect("uninitalized GLV Withdrawal account")
+            .expect("uninitialized GLV Withdrawal account")
     }
 
     /// Get GLV token.
@@ -1025,7 +1025,7 @@ impl GlvWithdrawalTokenAccounts {
     pub fn glv_token_account(&self) -> Pubkey {
         self.glv_token
             .account()
-            .expect("uninitalized GLV Withdrawal account")
+            .expect("uninitialized GLV Withdrawal account")
     }
 
     /// Get final long token.
@@ -1039,7 +1039,7 @@ impl GlvWithdrawalTokenAccounts {
     pub fn final_long_token_account(&self) -> Pubkey {
         self.final_long_token
             .account()
-            .expect("uninitalized GLV Withdrawal account")
+            .expect("uninitialized GLV Withdrawal account")
     }
 
     /// Get final short token.
@@ -1053,7 +1053,7 @@ impl GlvWithdrawalTokenAccounts {
     pub fn final_short_token_account(&self) -> Pubkey {
         self.final_short_token
             .account()
-            .expect("uninitalized GLV Withdrawal account")
+            .expect("uninitialized GLV Withdrawal account")
     }
 }
 

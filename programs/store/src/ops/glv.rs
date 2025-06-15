@@ -39,11 +39,11 @@ pub struct CreateGlvDepositParams {
     pub short_token_swap_length: u8,
     /// Initial long token amount to deposit.
     pub initial_long_token_amount: u64,
-    /// Initial short otken amount to deposit.
+    /// Initial short token amount to deposit.
     pub initial_short_token_amount: u64,
     /// Market token amount.
     pub market_token_amount: u64,
-    /// Minimum acceptable maount of market tokens to be minted.
+    /// Minimum acceptable amount of market tokens to be minted.
     pub min_market_token_amount: u64,
     /// Minimum acceptable amount of glv tokens to receive.
     pub min_glv_token_amount: u64,
@@ -948,7 +948,7 @@ impl ExecuteGlvWithdrawalOperation<'_, '_> {
     /// Burn GLV tokens from the source account.
     ///
     /// # Panic
-    /// This is an invertbile operation that will panic on error.
+    /// This is an invertible operation that will panic on error.
     fn burn_glv_tokens(&self, signer: &ActionSigner, glv_token_amount: u64) {
         use anchor_spl::token_interface::{burn, Burn};
 

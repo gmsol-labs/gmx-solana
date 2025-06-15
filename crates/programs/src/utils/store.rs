@@ -615,7 +615,7 @@ mod utils {
             bytes_to_fixed_str(&self.name).map_err(crate::Error::custom)
         }
 
-        /// Is enbaled.
+        /// Is enabled.
         pub fn is_enabled(&self) -> bool {
             self.enabled == Self::ROLE_ENABLED
         }

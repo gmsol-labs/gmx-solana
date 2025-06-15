@@ -59,7 +59,7 @@ pub struct CreateDeposit<'info> {
     pub initial_long_token: Option<Box<Account<'info, Mint>>>,
     /// initial short token.
     pub initial_short_token: Option<Box<Account<'info, Mint>>>,
-    /// The escrow account for receving market tokens.
+    /// The escrow account for receiving market tokens.
     #[account(
         mut,
         associated_token::mint = market_token,
@@ -80,7 +80,7 @@ pub struct CreateDeposit<'info> {
         associated_token::authority = deposit,
     )]
     pub initial_short_token_escrow: Option<Box<Account<'info, TokenAccount>>>,
-    /// The ATA of the owner for receving market tokens.
+    /// The ATA of the owner for receiving market tokens.
     #[account(
         init_if_needed,
         payer = owner,
@@ -278,7 +278,7 @@ pub struct CloseDeposit<'info> {
         bump = deposit.load()?.header.bump,
     )]
     pub deposit: AccountLoader<'info, Deposit>,
-    /// The escrow account for receving market tokens.
+    /// The escrow account for receiving market tokens.
     #[account(
         mut,
         associated_token::mint = market_token,

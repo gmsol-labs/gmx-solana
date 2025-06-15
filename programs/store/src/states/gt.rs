@@ -98,7 +98,7 @@ impl GtState {
         let max_rank = ranks.len().min(MAX_RANK);
         let ranks = &ranks[0..max_rank];
 
-        // Ranks must be storted.
+        // Ranks must be sorted.
         require!(
             ranks.windows(2).all(|ab| {
                 if let [a, b] = &ab {
@@ -159,7 +159,7 @@ impl GtState {
             CoreError::InvalidArgument
         );
 
-        // Factors must be storted.
+        // Factors must be sorted.
         require!(
             factors.windows(2).all(|ab| {
                 if let [a, b] = &ab {
@@ -459,12 +459,12 @@ impl GtExchangeVault {
 
     /// Get whether the vault is initialized.
     pub fn is_initialized(&self) -> bool {
-        self.flags.get_flag(GtExchangeVaultFlag::Intiailized)
+        self.flags.get_flag(GtExchangeVaultFlag::Initialized)
     }
 
-    /// Get whether the vault is comfirmed.
+    /// Get whether the vault is confirmed.
     pub fn is_confirmed(&self) -> bool {
-        self.flags.get_flag(GtExchangeVaultFlag::Comfirmed)
+        self.flags.get_flag(GtExchangeVaultFlag::Confirmed)
     }
 
     pub(crate) fn init(&mut self, bump: u8, store: &Pubkey, time_window: u32) -> Result<()> {
@@ -477,7 +477,7 @@ impl GtExchangeVault {
         self.bump = bump;
         self.ts = clock.unix_timestamp;
         self.store = *store;
-        self.flags.set_flag(GtExchangeVaultFlag::Intiailized, true);
+        self.flags.set_flag(GtExchangeVaultFlag::Initialized, true);
         self.time_window = i64::from(time_window);
 
         Ok(())
@@ -518,7 +518,7 @@ impl GtExchangeVault {
     /// Confirm the vault.
     fn confirm(&mut self) -> Result<u64> {
         self.validate_confirmable()?;
-        self.flags.set_flag(GtExchangeVaultFlag::Comfirmed, true);
+        self.flags.set_flag(GtExchangeVaultFlag::Confirmed, true);
         Ok(self.amount)
     }
 
@@ -595,7 +595,7 @@ impl Default for GtExchange {
 impl GtExchange {
     /// Get whether the vault is initialized.
     pub fn is_initialized(&self) -> bool {
-        self.flags.get_flag(GtExchangeFlag::Intiailized)
+        self.flags.get_flag(GtExchangeFlag::Initialized)
     }
 
     pub(crate) fn init(
@@ -612,7 +612,7 @@ impl GtExchange {
         self.store = *store;
         self.vault = *vault;
 
-        self.flags.set_flag(GtExchangeFlag::Intiailized, true);
+        self.flags.set_flag(GtExchangeFlag::Initialized, true);
 
         Ok(())
     }

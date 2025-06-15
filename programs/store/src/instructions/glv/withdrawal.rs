@@ -37,7 +37,7 @@ use crate::{
     CoreError,
 };
 
-/// The accounts defintion for [`create_glv_withdrawal`](crate::create_glv_withdrawal) instruction.
+/// The accounts definition for [`create_glv_withdrawal`](crate::create_glv_withdrawal) instruction.
 #[derive(Accounts)]
 #[instruction(nonce: [u8; 32])]
 pub struct CreateGlvWithdrawal<'info> {
@@ -212,7 +212,7 @@ impl CreateGlvWithdrawal<'_> {
     }
 }
 
-/// The accounts defintion for [`close_glv_withdrawal`](crate::gmsol_store::close_glv_withdrawal) instruction.
+/// The accounts definition for [`close_glv_withdrawal`](crate::gmsol_store::close_glv_withdrawal) instruction.
 #[event_cpi]
 #[derive(Accounts)]
 pub struct CloseGlvWithdrawal<'info> {
@@ -593,7 +593,7 @@ pub struct ExecuteGlvWithdrawal<'info> {
         associated_token::authority = glv_withdrawal,
     )]
     pub final_short_token_escrow: Box<Account<'info, TokenAccount>>,
-    /// Market token wihtdrawal vault.
+    /// Market token withdrawal vault.
     #[account(
         mut,
         token::mint = market_token,

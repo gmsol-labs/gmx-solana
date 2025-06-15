@@ -243,7 +243,7 @@ impl<'info> TokenMapLoader<'info> for AccountLoader<'info, TokenMapHeader> {
     }
 
     fn load_token_map_mut(&self) -> Result<TokenMapMut> {
-        // Check the account for mutablely access.
+        // Check the account for mutably access.
         self.load_mut()?;
 
         let data = self.as_ref().try_borrow_mut_data()?;
@@ -386,7 +386,7 @@ pub mod utils {
         }
 
         fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let header = Arc::new(de::try_deserailize_unchecked::<TokenMapHeader>(buf)?);
+            let header = Arc::new(de::try_deserialize_unchecked::<TokenMapHeader>(buf)?);
             let (_disc, data) = buf.split_at(8);
             let (_header, configs) = data.split_at(std::mem::size_of::<TokenMapHeader>());
             Ok(Self {

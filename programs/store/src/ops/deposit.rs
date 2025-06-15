@@ -27,7 +27,7 @@ pub struct CreateDepositParams {
     pub short_token_swap_length: u8,
     /// Initial long token amount to deposit.
     pub initial_long_token_amount: u64,
-    /// Initial short otken amount to deposit.
+    /// Initial short token amount to deposit.
     pub initial_short_token_amount: u64,
     /// The minimum acceptable amount of market tokens to receive.
     pub min_market_token_amount: u64,
@@ -220,7 +220,7 @@ impl ExecuteDepositOperation<'_, '_> {
                 return Err(error!(err));
             }
         }
-        match self.perfrom_deposit() {
+        match self.perform_deposit() {
             Ok(()) => Ok(true),
             Err(err) if !throw_on_execution_error => {
                 msg!("Execute deposit error: {}", err);
@@ -241,7 +241,7 @@ impl ExecuteDepositOperation<'_, '_> {
     }
 
     #[inline(never)]
-    fn perfrom_deposit(self) -> Result<()> {
+    fn perform_deposit(self) -> Result<()> {
         self.validate_before_execution()?;
         {
             let deposit = self.deposit.load()?;

@@ -68,7 +68,7 @@ pub fn find_market_token_address(
 ) -> (Pubkey, u8) {
     Pubkey::find_program_address(
         &[
-            gmsol_store::constants::MAREKT_TOKEN_MINT_SEED,
+            gmsol_store::constants::MARKET_TOKEN_MINT_SEED,
             store.as_ref(),
             index_token.as_ref(),
             long_token.as_ref(),

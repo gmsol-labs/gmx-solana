@@ -177,7 +177,7 @@ enum Command {
     ToggleConfigFlag {
         /// The market token of the market to update.
         market_token: Pubkey,
-        /// The config key to udpate.
+        /// The config key to update.
         #[arg(long)]
         key: MarketConfigFlag,
         /// The boolean value that the flag to update to.
@@ -187,7 +187,7 @@ enum Command {
     /// Update Market Configs from file.
     UpdateConfigs {
         path: PathBuf,
-        /// Recevier for the buffer's lamports.
+        /// Receiver for the buffer's lamports.
         #[arg(long)]
         receiver: Option<Pubkey>,
         /// Whether to keep the used market config buffer accounts.

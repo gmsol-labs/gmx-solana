@@ -71,7 +71,7 @@ pub struct ExecuteDeposit<'info> {
         constraint = deposit.load()?.tokens.initial_short_token.token().map(|token| initial_short_token.key() == token).unwrap_or(true) @ CoreError::TokenMintMismatched
     )]
     pub initial_short_token: Option<Box<Account<'info, Mint>>>,
-    /// The escrow account for receving market tokens.
+    /// The escrow account for receiving market tokens.
     #[account(
         mut,
         associated_token::mint = market_token,

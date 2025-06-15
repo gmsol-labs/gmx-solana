@@ -178,7 +178,7 @@ pub struct CloseShift<'info> {
     /// The store wallet.
     #[account(mut, seeds = [Store::WALLET_SEED, store.key().as_ref()], bump)]
     pub store_wallet: SystemAccount<'info>,
-    /// The owenr of the shift.
+    /// The owner of the shift.
     /// CHECK: only use to validate and receive input funds.
     #[account(mut)]
     pub owner: UncheckedAccount<'info>,

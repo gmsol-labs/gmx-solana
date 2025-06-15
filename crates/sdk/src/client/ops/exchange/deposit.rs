@@ -93,7 +93,7 @@ impl<C> CreateDepositBuilder<'_, C> {
         self
     }
 
-    /// Set recevier.
+    /// Set receiver.
     /// Defaults to the payer.
     pub fn receiver(&mut self, receiver: Option<Pubkey>) -> &mut Self {
         self.receiver = receiver;

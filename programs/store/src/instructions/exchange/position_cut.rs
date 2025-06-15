@@ -222,7 +222,7 @@ pub struct PositionCut<'info> {
     pub chainlink_program: Option<Program<'info, Chainlink>>,
 }
 
-/// CHECK: only ORDER_KEEPER is allowed to use this instrcution.
+/// CHECK: only ORDER_KEEPER is allowed to use this instruction.
 pub(crate) fn unchecked_process_position_cut<'info>(
     mut ctx: Context<'_, '_, 'info, 'info, PositionCut<'info>>,
     nonce: &NonceBytes,

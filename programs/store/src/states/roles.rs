@@ -93,7 +93,7 @@ impl RoleMetadata {
         self.enabled = 0;
     }
 
-    /// Is enbaled.
+    /// Is enabled.
     pub fn is_enabled(&self) -> bool {
         self.enabled == Self::ROLE_ENABLED
     }

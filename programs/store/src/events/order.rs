@@ -241,7 +241,7 @@ pub struct OrderParamsForEvent {
     pub min_output: u128,
     /// Trigger price (in unit price).
     pub trigger_price: u128,
-    /// Accetpable price (in unit price).
+    /// Acceptable price (in unit price).
     pub acceptable_price: u128,
     /// Valid from this timestamp.
     pub valid_from_ts: i64,

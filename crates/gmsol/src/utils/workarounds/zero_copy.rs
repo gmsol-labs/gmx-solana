@@ -45,7 +45,7 @@ where
     }
 
     fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_client::anchor_lang::Result<Self> {
-        let account = gmsol_store::utils::de::try_deserailize_unchecked(buf)?;
+        let account = gmsol_store::utils::de::try_deserialize_unchecked(buf)?;
         Ok(Self(account))
     }
 }
@@ -133,7 +133,7 @@ where
     }
 
     fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_client::anchor_lang::Result<Self> {
-        let account = gmsol_store::utils::de::try_deserailize_unchecked(buf)?;
+        let account = gmsol_store::utils::de::try_deserialize_unchecked(buf)?;
         Ok(Self(Arc::new(account)))
     }
 }

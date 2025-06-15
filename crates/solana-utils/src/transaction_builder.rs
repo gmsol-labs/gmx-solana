@@ -242,7 +242,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         self
     }
 
-    /// Add a owned sigenr to the signer list.
+    /// Add a owned signer to the signer list.
     pub fn owned_signer(mut self, signer: impl Signer + Clone + 'static) -> Self {
         self.owned_signers.push(BoxClonableSigner::new(signer));
         self

@@ -21,7 +21,7 @@ use crate::{
     CoreError,
 };
 
-/// The accounts deifinition for the [`execute_withdrawal`](crate::gmsol_store::execute_withdrawal)
+/// The accounts definition for the [`execute_withdrawal`](crate::gmsol_store::execute_withdrawal)
 /// instruction.
 ///
 /// Remaining accounts expected by this instruction:
@@ -69,21 +69,21 @@ pub struct ExecuteWithdrawal<'info> {
     /// Final short token.
     #[account(constraint = withdrawal.load()?.tokens.final_short_token() == final_short_token.key() @ CoreError::TokenMintMismatched)]
     pub final_short_token: Box<Account<'info, Mint>>,
-    /// The escrow account for receving market tokens to burn.
+    /// The escrow account for receiving market tokens to burn.
     #[account(
         mut,
         associated_token::mint = market_token,
         associated_token::authority = withdrawal,
     )]
     pub market_token_escrow: Box<Account<'info, TokenAccount>>,
-    /// The escrow account for receiving withdrawed final long tokens.
+    /// The escrow account for receiving withdrawn final long tokens.
     #[account(
         mut,
         associated_token::mint = final_long_token,
         associated_token::authority = withdrawal,
     )]
     pub final_long_token_escrow: Box<Account<'info, TokenAccount>>,
-    /// The escrow account for receiving withdrawed final short tokens.
+    /// The escrow account for receiving withdrawn final short tokens.
     #[account(
         mut,
         associated_token::mint = final_short_token,

@@ -171,7 +171,7 @@ pub struct PriceUpdate {
 }
 
 impl PriceUpdate {
-    /// Get the parsed price udpate.
+    /// Get the parsed price update.
     pub fn parsed(&self) -> &[ParsedPriceUpdate] {
         &self.parsed
     }

@@ -86,7 +86,7 @@ pub trait TreasuryOps<C> {
     ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Deposit to treasury vault.
-    fn deposit_to_treasury_valut(
+    fn deposit_to_treasury_vault(
         &self,
         store: &Pubkey,
         treasury_vault_config_hint: Option<&Pubkey>,
@@ -357,7 +357,7 @@ where
             }))
     }
 
-    async fn deposit_to_treasury_valut(
+    async fn deposit_to_treasury_vault(
         &self,
         store: &Pubkey,
         treasury_vault_config_hint: Option<&Pubkey>,

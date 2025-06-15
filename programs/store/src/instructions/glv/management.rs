@@ -267,7 +267,7 @@ pub struct UpdateGlvConfig<'info> {
     pub glv: AccountLoader<'info, Glv>,
 }
 
-/// Update thte config of GLV.
+/// Update the config of GLV.
 ///
 /// # CHECK
 /// - Only MARKET_KEEPER can use.

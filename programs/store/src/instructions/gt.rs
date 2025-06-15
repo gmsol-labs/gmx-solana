@@ -12,7 +12,7 @@ use crate::{
     CoreError,
 };
 
-/// The accounts defintions for the [`initialize_gt`](crate::gmsol_store::initialize_gt) instruction.
+/// The accounts definitions for the [`initialize_gt`](crate::gmsol_store::initialize_gt) instruction.
 #[derive(Accounts)]
 pub struct InitializeGt<'info> {
     /// Authority
@@ -74,7 +74,7 @@ impl InitializeGt<'_> {
     }
 }
 
-/// The accounts defintions for GT configuration instructions.
+/// The accounts definitions for GT configuration instructions.
 #[derive(Accounts)]
 pub struct ConfigureGt<'info> {
     /// Authority.

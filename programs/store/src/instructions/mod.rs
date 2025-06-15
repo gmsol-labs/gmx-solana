@@ -1,7 +1,7 @@
 /// Instructions for [`Store`](crate::states::Store) account.
 pub mod store;
 
-/// Instructions for config magament.
+/// Instructions for config management.
 pub mod config;
 
 /// Instructions for roles management.
@@ -19,7 +19,7 @@ pub mod token;
 /// Instructions for [`Oracle`](crate::states::Oracle) account.
 pub mod oracle;
 
-/// Instructions for the exchange funtionality.
+/// Instructions for the exchange functionality.
 pub mod exchange;
 
 /// Instructions for GT.

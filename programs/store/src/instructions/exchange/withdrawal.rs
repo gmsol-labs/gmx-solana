@@ -60,21 +60,21 @@ pub struct CreateWithdrawal<'info> {
     pub final_long_token: Box<Account<'info, Mint>>,
     /// Final short token.
     pub final_short_token: Box<Account<'info, Mint>>,
-    /// The escrow account for receving market tokens to burn.
+    /// The escrow account for receiving market tokens to burn.
     #[account(
         mut,
         associated_token::mint = market_token,
         associated_token::authority = withdrawal,
     )]
     pub market_token_escrow: Box<Account<'info, TokenAccount>>,
-    /// The escrow account for receiving withdrawed final long tokens.
+    /// The escrow account for receiving withdrawn final long tokens.
     #[account(
         mut,
         associated_token::mint = final_long_token,
         associated_token::authority = withdrawal,
     )]
     pub final_long_token_escrow: Box<Account<'info, TokenAccount>>,
-    /// The escrow account for receiving withdrawed final short tokens.
+    /// The escrow account for receiving withdrawn final short tokens.
     #[account(
         mut,
         associated_token::mint = final_short_token,
@@ -224,21 +224,21 @@ pub struct CloseWithdrawal<'info> {
         constraint = withdrawal.load()?.tokens.final_short_token_account() == final_short_token_escrow.key() @ CoreError::MarketTokenAccountMismatched,
     )]
     pub withdrawal: AccountLoader<'info, Withdrawal>,
-    /// The escrow account for receving market tokens to burn.
+    /// The escrow account for receiving market tokens to burn.
     #[account(
         mut,
         associated_token::mint = market_token,
         associated_token::authority = withdrawal,
     )]
     pub market_token_escrow: Box<Account<'info, TokenAccount>>,
-    /// The escrow account for receiving withdrawed final long tokens.
+    /// The escrow account for receiving withdrawn final long tokens.
     #[account(
         mut,
         associated_token::mint = final_long_token,
         associated_token::authority = withdrawal,
     )]
     pub final_long_token_escrow: Box<Account<'info, TokenAccount>>,
-    /// The escrow account for receiving withdrawed final short tokens.
+    /// The escrow account for receiving withdrawn final short tokens.
     #[account(
         mut,
         associated_token::mint = final_short_token,

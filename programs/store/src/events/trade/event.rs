@@ -328,7 +328,7 @@ pub struct EventTransferOut {
     pub short_token: u64,
     /// Long token amount for claimable account of user.
     pub long_token_for_claimable_account_of_user: u64,
-    /// Short token amount for cliamable account of user.
+    /// Short token amount for claimable account of user.
     pub short_token_for_claimable_account_of_user: u64,
     /// Long token amount for claimable account of holding.
     pub long_token_for_claimable_account_of_holding: u64,

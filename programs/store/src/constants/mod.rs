@@ -17,7 +17,7 @@ pub const EVENT_AUTHORITY_SEED: &[u8] = b"__event_authority";
 
 /// Market Token Mint Address Seed.
 #[constant]
-pub const MAREKT_TOKEN_MINT_SEED: &[u8] = b"market_token_mint";
+pub const MARKET_TOKEN_MINT_SEED: &[u8] = b"market_token_mint";
 
 /// Market Vault Seed.
 #[constant]

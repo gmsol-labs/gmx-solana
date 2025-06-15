@@ -384,7 +384,7 @@ pub(crate) fn token_feed(
         .map_err(|err| error!(err))
 }
 
-/// Get timestamp adjustemnt of the given token.
+/// Get timestamp adjustment of the given token.
 pub(crate) fn token_timestamp_adjustment(
     ctx: Context<ReadTokenMap>,
     token: &Pubkey,

@@ -675,7 +675,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ExecuteGlvDepositBuilder<'a, C>
         self
     }
 
-    /// Parse feeds with the given price udpates map.
+    /// Parse feeds with the given price updates map.
     #[cfg(feature = "pyth-pull-oracle")]
     pub fn parse_with_pyth_price_updates(
         &mut self,

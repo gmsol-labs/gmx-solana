@@ -237,7 +237,7 @@ impl Args {
                     let store_account = client.store(store).await?;
                     let time_window = store_account.gt().exchange_time_window();
                     let (deposit, gt_exchange_vault) = client
-                        .deposit_to_treasury_valut(
+                        .deposit_to_treasury_vault(
                             store,
                             None,
                             &token_mint,
@@ -260,7 +260,7 @@ impl Args {
                 let time_window = store_account.gt().exchange_time_window();
 
                 let (rpc, gt_exchange_vault) = client
-                    .deposit_to_treasury_valut(
+                    .deposit_to_treasury_vault(
                         store,
                         None,
                         token_mint,

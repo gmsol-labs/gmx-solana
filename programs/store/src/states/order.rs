@@ -71,7 +71,7 @@ pub struct TransferOut {
     pub short_token: u64,
     /// Long token amount for claimable account of user.
     pub long_token_for_claimable_account_of_user: u64,
-    /// Short token amount for cliamable account of user.
+    /// Short token amount for claimable account of user.
     pub short_token_for_claimable_account_of_user: u64,
     /// Long token amount for claimable account of holding.
     pub long_token_for_claimable_account_of_holding: u64,
@@ -110,7 +110,7 @@ impl From<crate::events::EventTransferOut> for TransferOut {
     }
 }
 
-/// Recevier Kind.
+/// Receiver Kind.
 pub enum CollateralReceiver {
     Collateral,
     ClaimableForHolding,
@@ -444,7 +444,7 @@ impl Order {
             }
             OrderKind::LimitSwap => {
                 // NOTE: For limit swap orders, the trigger price can be substituted by the min output amount,
-                // so validatoin is not required. In fact, we should prohibit the creation of limit swap orders
+                // so validation is not required. In fact, we should prohibit the creation of limit swap orders
                 // with a trigger price.
             }
             OrderKind::MarketSwap
@@ -898,7 +898,7 @@ impl OrderActionParams {
         self.size_delta_value
     }
 
-    /// Get accetable price (unit price).
+    /// Get acceptable price (unit price).
     pub fn acceptable_price(&self) -> u128 {
         self.acceptable_price
     }

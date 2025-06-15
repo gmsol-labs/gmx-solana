@@ -19,9 +19,9 @@ pub fn get_time_window_index(ts: i64, time_window: i64) -> i64 {
 #[derive(num_enum::IntoPrimitive, num_enum::TryFromPrimitive)]
 pub enum GtExchangeVaultFlag {
     /// Initialized.
-    Intiailized,
+    Initialized,
     /// Confirmed.
-    Comfirmed,
+    Confirmed,
     // CHECK: should have no more than `MAX_GT_EXCHANGE_VAULT_FLAGS` of flags.
 }
 
@@ -31,7 +31,7 @@ pub enum GtExchangeVaultFlag {
 #[derive(num_enum::IntoPrimitive, num_enum::TryFromPrimitive)]
 pub enum GtExchangeFlag {
     /// Initialized.
-    Intiailized,
+    Initialized,
     // CHECK: should have no more than `MAX_GT_EXCHANGE_FLAGS` of flags.
 }
 

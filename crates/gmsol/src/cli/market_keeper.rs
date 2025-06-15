@@ -181,7 +181,7 @@ enum Command {
         /// The market token of the market to update.
         #[arg(requires = "config")]
         market_token: Pubkey,
-        /// The config key to udpate.
+        /// The config key to update.
         #[arg(long, short, group = "config", requires = "value")]
         key: Option<MarketConfigKey>,
         /// The value that the config to update to.
@@ -190,7 +190,7 @@ enum Command {
         /// Update market config with this buffer.
         #[arg(long, group = "config")]
         buffer: Option<Pubkey>,
-        /// Recevier for the buffer's lamports.
+        /// Receiver for the buffer's lamports.
         #[arg(long)]
         receiver: Option<Pubkey>,
         /// Whether to keep the used market config buffer account.
@@ -201,7 +201,7 @@ enum Command {
     UpdateConfigFlag {
         /// The market token of the market to update.
         market_token: Pubkey,
-        /// The config key to udpate.
+        /// The config key to update.
         #[arg(long, short)]
         key: MarketConfigFlag,
         /// The boolean value that the flag to update to.
@@ -215,7 +215,7 @@ enum Command {
         skip_preflight: bool,
         #[arg(long)]
         max_transaction_size: Option<usize>,
-        /// Recevier for the buffer's lamports.
+        /// Receiver for the buffer's lamports.
         #[arg(long)]
         receiver: Option<Pubkey>,
         /// Whether to keep the used market config buffer accounts.

@@ -14,7 +14,7 @@ pub mod error;
 /// Instructions for the store program.
 pub mod store;
 
-/// Instructions for the exchange funtionality.
+/// Instructions for the exchange functionality.
 pub mod exchange;
 
 /// Instructions for the treasury program.

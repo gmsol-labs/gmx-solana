@@ -86,7 +86,7 @@ impl<C> CreateDepositBuilder<'_, C> {
         self
     }
 
-    /// Set recevier.
+    /// Set receiver.
     /// Defaults to the payer.
     pub fn receiver(&mut self, receiver: Option<Pubkey>) -> &mut Self {
         self.receiver = receiver;
@@ -562,7 +562,7 @@ where
         Ok(self)
     }
 
-    /// Parse feeds with the given price udpates map.
+    /// Parse feeds with the given price updates map.
     #[cfg(feature = "pyth-pull-oracle")]
     pub fn parse_with_pyth_price_updates(&mut self, price_updates: Prices) -> &mut Self {
         self.feeds_parser.with_pyth_price_updates(price_updates);

@@ -261,7 +261,7 @@ impl Market {
     /// Set whether the GT minting is enabled.
     ///
     /// Return the previous value.
-    pub fn set_is_gt_minting_enbaled(&mut self, enabled: bool) -> bool {
+    pub fn set_is_gt_minting_enabled(&mut self, enabled: bool) -> bool {
         self.set_flag(MarketFlag::GTEnabled, enabled)
     }
 

@@ -113,7 +113,7 @@ pub trait TokenConfigOps<C> {
     /// Get the price precision for the given token.
     fn token_precision(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C>;
 
-    /// Check if the config of the given token is enbaled.
+    /// Check if the config of the given token is enabled.
     fn is_token_config_enabled(&self, token_map: &Pubkey, token: &Pubkey) -> TransactionBuilder<C>;
 
     /// Get expected provider for the given token.

@@ -24,7 +24,7 @@ pub struct MarketStatus {
     pub reserve_value_for_short: u128,
     /// Pool value without pnl for long.
     pub pool_value_without_pnl_for_long: u128,
-    /// Pool avlue without pnl for short.
+    /// Pool value without pnl for short.
     pub pool_value_without_pnl_for_short: u128,
 }
 

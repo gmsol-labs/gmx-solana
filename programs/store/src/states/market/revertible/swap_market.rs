@@ -21,7 +21,7 @@ pub struct SwapMarkets<'a, 'info> {
 }
 
 impl<'a, 'info> SwapMarkets<'a, 'info> {
-    /// Create a new [`SwapMarkets`] from loders.
+    /// Create a new [`SwapMarkets`] from loaders.
     pub(crate) fn new(
         store: &Pubkey,
         loaders: &'a [AccountLoader<'info, Market>],

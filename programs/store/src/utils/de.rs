@@ -25,13 +25,13 @@ where
     T: anchor_lang::ZeroCopy,
 {
     check_discriminator::<T>(data)?;
-    try_deserailize_unchecked(data)
+    try_deserialize_unchecked(data)
 }
 
 /// A workaround to deserialize "zero-copy" account data.
 ///
 /// See [anchort#2689](https://github.com/coral-xyz/anchor/issues/2689) for more information.
-pub fn try_deserailize_unchecked<T>(data: &[u8]) -> anchor_lang::prelude::Result<T>
+pub fn try_deserialize_unchecked<T>(data: &[u8]) -> anchor_lang::prelude::Result<T>
 where
     T: anchor_lang::ZeroCopy,
 {
