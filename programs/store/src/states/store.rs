@@ -234,6 +234,12 @@ impl Store {
     /// Get amount mutably
     pub fn get_amount_mut(&mut self, key: &str) -> Result<&mut Amount> {
         let key = AmountKey::from_str(key).map_err(|_| error!(CoreError::InvalidStoreConfigKey))?;
+        // Note: Changes to `claimable_time_window` are prohibited until a better
+        // design of claimable account is implemented.
+        require!(
+            !matches!(key, AmountKey::ClaimableTimeWindow),
+            CoreError::InvalidArgument,
+        );
         self.amount
             .get_mut(&key)
             .ok_or_else(|| error!(CoreError::Unimplemented))
