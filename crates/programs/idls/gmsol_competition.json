@@ -950,48 +950,48 @@
   "errors": [
     {
       "code": 6000,
-      "name": "CompetitionNotActive",
-      "msg": "Competition is not active"
-    },
-    {
-      "code": 6001,
       "name": "OutsideCompetitionTime",
       "msg": "Outside competition time"
     },
     {
-      "code": 6002,
+      "code": 6001,
       "name": "InvalidTradeEvent",
       "msg": "Invalid trade event"
     },
     {
-      "code": 6003,
+      "code": 6002,
       "name": "InvalidActionKind",
       "msg": "Invalid action kind"
     },
     {
-      "code": 6004,
+      "code": 6003,
       "name": "InvalidTimeRange",
       "msg": "Invalid time range"
     },
     {
-      "code": 6005,
+      "code": 6004,
       "name": "InvalidTimeExtension",
       "msg": "Invalid time extension"
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "InvalidVolumeThreshold",
       "msg": "Invalid volume threshold"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "InvalidMaxExtension",
       "msg": "Invalid max extension"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "CompetitionInProgress",
       "msg": "Competition is still in progress"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidVolumeMergeWindow",
+      "msg": "Invalid volume merge window"
     }
   ],
   "types": [
