@@ -32,8 +32,8 @@ pub mod gmsol_callback {
     use super::*;
 
     /// Initialize the [`Config`](crate::states::Config) account.
-    pub fn initialize_config(ctx: Context<InitializeConfig>, prefix: String) -> Result<()> {
-        InitializeConfig::invoke(ctx, prefix)
+    pub fn initialize_config(ctx: Context<InitializeConfig>) -> Result<()> {
+        InitializeConfig::invoke(ctx, "callback".to_string())
     }
 
     /// Create [`ActionStats`](crate::states::ActionStats) account idempotently.

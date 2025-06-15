@@ -1040,9 +1040,7 @@ impl Deployment {
             client
                 .store_transaction()
                 .program(ID)
-                .anchor_args(instruction::InitializeConfig {
-                    prefix: "anchor-test".to_string(),
-                })
+                .anchor_args(instruction::InitializeConfig {})
                 .anchor_accounts(accounts::InitializeConfig {
                     payer: client.payer(),
                     config: self.callback_config,
