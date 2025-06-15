@@ -190,10 +190,10 @@ impl OnExecuted<'_> {
         let part = &mut ctx.accounts.participant;
 
         part.volume = part.volume.saturating_add(volume);
-        part.last_updated_at = now;
 
         // Determine if trade volume should be merged based on time window.
         let time_diff = now.saturating_sub(part.last_updated_at);
+        part.last_updated_at = now;
         if time_diff <= comp.volume_merge_window {
             // Within the merge window, add to merged volume.
             part.merged_volume = part.merged_volume.saturating_add(volume);
