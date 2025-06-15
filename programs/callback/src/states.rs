@@ -18,6 +18,7 @@ pub const ACTION_STATS_SEED: &[u8] = b"action_stats";
 /// Config account.
 #[account]
 #[derive(InitSpace)]
+#[cfg_attr(feature = "debug", derive(Debug))]
 pub struct Config {
     /// Prefix.
     #[max_len(MAX_PREFIX_LEN)]
@@ -55,16 +56,4 @@ pub struct ActionStats {
     pub last_executed_at: i64,
     /// Timestamp of the last closed action.
     pub last_closed_at: i64,
-}
-
-/// Callback kind.
-pub(crate) enum On {
-    /// On created.
-    Created,
-    /// On updated.
-    Updated,
-    /// On executed.
-    Executed,
-    /// On closed.
-    Closed,
 }

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    states::{ActionStats, Config, On, ACTION_STATS_SEED, CALLER_PROGRAM_ID},
+    states::{ActionStats, Config, ACTION_STATS_SEED, CALLER_PROGRAM_ID},
     CALLBACK_AUTHORITY_SEED,
 };
 
@@ -118,4 +118,16 @@ impl OnCallback<'_> {
         );
         Ok(())
     }
+}
+
+/// Callback kind.
+pub(crate) enum On {
+    /// On created.
+    Created,
+    /// On updated.
+    Updated,
+    /// On executed.
+    Executed,
+    /// On closed.
+    Closed,
 }

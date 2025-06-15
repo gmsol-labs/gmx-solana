@@ -27,8 +27,6 @@ pub const CALLBACK_AUTHORITY_SEED: &[u8] = b"callback";
 
 #[program]
 pub mod gmsol_callback {
-    use states::On;
-
     use super::*;
 
     /// Initialize the [`Config`](crate::states::Config) account.
