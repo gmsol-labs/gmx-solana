@@ -2,22 +2,22 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum CompetitionError {
-    #[msg("Outside competition time")]
+    #[msg("outside competition time")]
     OutsideCompetitionTime,
-    #[msg("Invalid trade event")]
+    #[msg("invalid trade event")]
     InvalidTradeEvent,
-    #[msg("Invalid action kind")]
+    #[msg("invalid action kind")]
     InvalidActionKind,
-    #[msg("Invalid time range")]
+    #[msg("invalid time range")]
     InvalidTimeRange,
-    #[msg("Invalid time extension")]
+    #[msg("invalid time extension")]
     InvalidTimeExtension,
-    #[msg("Invalid volume threshold")]
+    #[msg("invalid volume threshold")]
     InvalidVolumeThreshold,
-    #[msg("Invalid max extension")]
+    #[msg("invalid max extension")]
     InvalidMaxExtension,
-    #[msg("Competition is still in progress")]
+    #[msg("competition is still in progress")]
     CompetitionInProgress,
-    #[msg("Invalid volume merge window")]
+    #[msg("invalid volume merge window")]
     InvalidVolumeMergeWindow,
 }

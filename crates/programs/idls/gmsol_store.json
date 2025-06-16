@@ -24999,7 +24999,7 @@
     {
       "code": 6117,
       "name": "EmptyGlvWithdrawal",
-      "msg": "Empty GLV withdrawal"
+      "msg": "empty GLV withdrawal"
     },
     {
       "code": 6118,
@@ -25029,12 +25029,12 @@
     {
       "code": 6123,
       "name": "TokenDecimalsChanged",
-      "msg": "The decimals of token is immutable"
+      "msg": "the decimals of token is immutable"
     },
     {
       "code": 6124,
       "name": "PriceIsStale",
-      "msg": "Price is stale"
+      "msg": "price is stale"
     },
     {
       "code": 6125,

@@ -945,47 +945,47 @@
     {
       "code": 6000,
       "name": "OutsideCompetitionTime",
-      "msg": "Outside competition time"
+      "msg": "outside competition time"
     },
     {
       "code": 6001,
       "name": "InvalidTradeEvent",
-      "msg": "Invalid trade event"
+      "msg": "invalid trade event"
     },
     {
       "code": 6002,
       "name": "InvalidActionKind",
-      "msg": "Invalid action kind"
+      "msg": "invalid action kind"
     },
     {
       "code": 6003,
       "name": "InvalidTimeRange",
-      "msg": "Invalid time range"
+      "msg": "invalid time range"
     },
     {
       "code": 6004,
       "name": "InvalidTimeExtension",
-      "msg": "Invalid time extension"
+      "msg": "invalid time extension"
     },
     {
       "code": 6005,
       "name": "InvalidVolumeThreshold",
-      "msg": "Invalid volume threshold"
+      "msg": "invalid volume threshold"
     },
     {
       "code": 6006,
       "name": "InvalidMaxExtension",
-      "msg": "Invalid max extension"
+      "msg": "invalid max extension"
     },
     {
       "code": 6007,
       "name": "CompetitionInProgress",
-      "msg": "Competition is still in progress"
+      "msg": "competition is still in progress"
     },
     {
       "code": 6008,
       "name": "InvalidVolumeMergeWindow",
-      "msg": "Invalid volume merge window"
+      "msg": "invalid volume merge window"
     }
   ],
   "types": [

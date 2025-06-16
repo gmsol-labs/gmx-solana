@@ -4207,7 +4207,7 @@ pub enum CoreError {
     #[msg("GLV max market token balance value exceeded")]
     ExceedMaxGlvMarketTokenBalanceValue,
     /// Empty GLV withdrawal.
-    #[msg("Empty GLV withdrawal")]
+    #[msg("empty GLV withdrawal")]
     EmptyGlvWithdrawal,
     /// Negative Market Pool Value.
     #[msg("GLV: negative market pool value")]
@@ -4228,10 +4228,10 @@ pub enum CoreError {
     //                Other Errors
     // ===========================================
     /// The decimals of token is immutable.
-    #[msg("The decimals of token is immutable")]
+    #[msg("the decimals of token is immutable")]
     TokenDecimalsChanged,
     /// Price is stale.
-    #[msg("Price is stale")]
+    #[msg("price is stale")]
     PriceIsStale,
     /// Deprecated.
     #[msg("deprecated")]
