@@ -20,7 +20,7 @@ use gmsol_sdk::{
             message::VersionedMessage,
             signature::{Keypair, Signature},
         },
-        utils::inspect_transaction,
+        utils::{inspect_transaction, WithSlot},
     },
     utils::instruction_serialization::{serialize_message, InstructionSerialization},
     Client,
@@ -242,7 +242,11 @@ impl CommandClient {
     pub(crate) async fn send_or_serialize_with_callback(
         &self,
         bundle: BundleBuilder<'_, LocalSignerRef>,
-        callback: impl FnOnce(Vec<Signature>, Option<gmsol_sdk::Error>) -> gmsol_sdk::Result<()>,
+        callback: impl FnOnce(
+            Vec<WithSlot<Signature>>,
+            Option<gmsol_sdk::Error>,
+            usize,
+        ) -> gmsol_sdk::Result<()>,
     ) -> gmsol_sdk::Result<()> {
         let options = self.send_bundle_options();
         let serialize_only = self.serialize_only;
@@ -312,11 +316,9 @@ impl CommandClient {
                             .swap_output(());
 
                         let txn_count = txn_idx + 1;
-                        tracing::info!(
-                            %transaction,
-                            %is_draft,
-                            "Adding a vault transaction {txn_idx}: {}",
-
+                        println!("Adding a vault transaction {txn_idx}: id = {}", transaction,);
+                        println!(
+                            "Inspector URL for transaction {txn_idx}: {}",
                             inspect_transaction(&message, Some(client.cluster()), false),
                         );
 
@@ -353,17 +355,20 @@ impl CommandClient {
 
             let mut idx = 0;
             let steps = bundle.len();
-            match bundle
+            let (signatures, err) = match bundle
                 .send_all_with_opts(options, |m| before_sign(&mut idx, steps, self.verbose, m))
                 .await
             {
                 Ok(signatures) => {
                     tracing::info!("successful transactions: {signatures:#?}");
+                    (signatures, None)
                 }
                 Err((signatures, error)) => {
                     tracing::error!(%error, "successful transactions: {signatures:#?}");
+                    (signatures, Some(error))
                 }
-            }
+            };
+            display_signatures(signatures, err.map(Into::into), steps)?;
         } else {
             let mut idx = 0;
             let steps = bundle.len();
@@ -371,14 +376,8 @@ impl CommandClient {
                 .send_all_with_opts(options, |m| before_sign(&mut idx, steps, self.verbose, m))
                 .await
             {
-                Ok(signatures) => (callback)(
-                    signatures.into_iter().map(|w| w.into_value()).collect(),
-                    None,
-                )?,
-                Err((signatures, error)) => (callback)(
-                    signatures.into_iter().map(|w| w.into_value()).collect(),
-                    Some(error.into()),
-                )?,
+                Ok(signatures) => (callback)(signatures, None, steps)?,
+                Err((signatures, error)) => (callback)(signatures, Some(error.into()), steps)?,
             }
         }
         Ok(())
@@ -388,16 +387,8 @@ impl CommandClient {
         &self,
         bundle: BundleBuilder<'_, LocalSignerRef>,
     ) -> gmsol_sdk::Result<()> {
-        self.send_or_serialize_with_callback(bundle, |signatures, err| {
-            signatures.iter().enumerate().for_each(|(idx, signature)| {
-                println!("Transaction {idx}: {signature}");
-            });
-            match err {
-                None => Ok(()),
-                Some(err) => Err(err),
-            }
-        })
-        .await
+        self.send_or_serialize_with_callback(bundle, display_signatures)
+            .await
     }
 }
 
@@ -429,4 +420,23 @@ fn before_sign(
     *idx += 1;
 
     Ok(())
+}
+
+fn display_signatures(
+    signatures: Vec<WithSlot<Signature>>,
+    err: Option<gmsol_sdk::Error>,
+    steps: usize,
+) -> gmsol_sdk::Result<()> {
+    let failed_start = signatures.len();
+    let failed = steps.saturating_sub(signatures.len());
+    for (idx, signature) in signatures.into_iter().enumerate() {
+        println!("Transaction {idx}: signature = {}", signature.value());
+    }
+    for idx in 0..failed {
+        println!("Transaction {}: failed", idx + failed_start);
+    }
+    match err {
+        None => Ok(()),
+        Some(err) => Err(err),
+    }
 }
