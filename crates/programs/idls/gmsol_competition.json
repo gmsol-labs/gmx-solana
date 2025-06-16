@@ -658,10 +658,7 @@
           "docs": [
             "The global competition account."
           ],
-          "writable": true,
-          "relations": [
-            "participant"
-          ]
+          "writable": true
         },
         {
           "name": "participant",
@@ -702,9 +699,6 @@
           "name": "trader",
           "docs": [
             "The trader public key."
-          ],
-          "relations": [
-            "participant"
           ]
         },
         {
