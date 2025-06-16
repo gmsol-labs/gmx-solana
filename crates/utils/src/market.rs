@@ -308,6 +308,7 @@ pub enum MarketConfigKey {
 /// Market Flags.
 #[derive(num_enum::IntoPrimitive)]
 #[repr(u8)]
+#[non_exhaustive]
 pub enum MarketFlag {
     /// Is enabled.
     Enabled,
