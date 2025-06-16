@@ -141,7 +141,7 @@ pub struct GlvPricing {
     /// The supply of the GLV tokens.
     pub supply: u64,
     /// Whether the `value` is maximized.
-    pub value_maximized: bool,
+    pub is_value_maximized: bool,
     /// Total value of the GLV.
     pub value: u128,
     /// Input amount.

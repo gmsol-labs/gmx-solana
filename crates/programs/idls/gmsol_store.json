@@ -28029,7 +28029,7 @@
             "type": "u64"
           },
           {
-            "name": "value_maximized",
+            "name": "is_value_maximized",
             "docs": [
               "Whether the `value` is maximized."
             ],
