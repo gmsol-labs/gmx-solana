@@ -453,7 +453,8 @@ impl ExecuteGlvDepositOperation<'_, '_> {
                     constants::MARKET_USD_TO_AMOUNT_DIVISOR,
                 )
                 .ok_or_else(|| error!(CoreError::FailedToCalculateGlvAmountToMint))?;
-                let output_amount = u64::try_from(glv_amount)
+                let output_amount = glv_amount
+                    .try_into()
                     .map_err(|_| error!(CoreError::TokenAmountOverflow))?;
 
                 self.event_emitter.emit_cpi(&GlvPricing {
