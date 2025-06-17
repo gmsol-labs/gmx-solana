@@ -258,7 +258,9 @@ impl OnExecuted<'_> {
         let mut participant = Account::<Participant>::try_from(&info)?;
         require_keys_eq!(participant.trader, self.trader.key());
         require_keys_eq!(participant.competition, self.competition.key());
-        (f)(&mut self.competition, &mut participant)
+        (f)(&mut self.competition, &mut participant)?;
+        participant.exit(&crate::ID)?;
+        Ok(())
     }
 
     /// Extend competition time if volume exceeds threshold.
