@@ -16,12 +16,12 @@ pub struct Callback {
     /// Callback program ID.
     #[builder(setter(into))]
     pub program: StringPubkey,
-    /// The address of config account.
+    /// The address of shared data account.
     #[builder(setter(into))]
-    pub config: StringPubkey,
-    /// The address of action stats account.
+    pub shared_data: StringPubkey,
+    /// The address of partitioned data account.
     #[builder(setter(into))]
-    pub action_stats: StringPubkey,
+    pub partitioned_data: StringPubkey,
 }
 
 impl Callback {
@@ -32,8 +32,8 @@ impl Callback {
             ActionCallbackKind::General => Some(Self {
                 version: header.callback_version,
                 program: header.callback_program_id.into(),
-                config: header.callback_config.into(),
-                action_stats: header.callback_action_stats.into(),
+                shared_data: header.callback_shared_data.into(),
+                partitioned_data: header.callback_partitioned_data.into(),
             }),
             _ => return Err(crate::Error::custom("unsupported callback kind")),
         };
@@ -47,6 +47,6 @@ pub(crate) struct CallbackParams {
     pub(crate) callback_version: Option<u8>,
     pub(crate) callback_authority: Option<Pubkey>,
     pub(crate) callback_program: Option<Pubkey>,
-    pub(crate) callback_config_account: Option<Pubkey>,
-    pub(crate) callback_action_stats_account: Option<Pubkey>,
+    pub(crate) callback_shared_data_account: Option<Pubkey>,
+    pub(crate) callback_partitioned_data_account: Option<Pubkey>,
 }

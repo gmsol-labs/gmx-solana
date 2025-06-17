@@ -759,8 +759,8 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
             callback_version,
             callback_authority,
             callback_program,
-            callback_config_account,
-            callback_action_stats_account,
+            callback_shared_data_account,
+            callback_partitioned_data_account,
         } = self.get_callback_params(options.callback.as_ref());
 
         let create = self
@@ -796,8 +796,8 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
                 event_authority: self.store_event_authority(),
                 callback_authority,
                 callback_program,
-                callback_config_account,
-                callback_action_stats_account,
+                callback_shared_data_account,
+                callback_partitioned_data_account,
             })
             .accounts(swap_path);
 

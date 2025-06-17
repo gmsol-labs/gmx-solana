@@ -4560,7 +4560,7 @@
           "optional": true
         },
         {
-          "name": "callback_config_account",
+          "name": "callback_shared_data_account",
           "docs": [
             "Config account for callback."
           ],
@@ -4568,7 +4568,7 @@
           "optional": true
         },
         {
-          "name": "callback_action_stats_account",
+          "name": "callback_partitioned_data_account",
           "docs": [
             "Action stats account for callback."
           ],
@@ -9137,7 +9137,7 @@
           "optional": true
         },
         {
-          "name": "callback_config_account",
+          "name": "callback_shared_data_account",
           "docs": [
             "Config account for callback."
           ],
@@ -9145,7 +9145,7 @@
           "optional": true
         },
         {
-          "name": "callback_action_stats_account",
+          "name": "callback_partitioned_data_account",
           "docs": [
             "Action stats account for callback."
           ],
@@ -11717,7 +11717,7 @@
           "optional": true
         },
         {
-          "name": "callback_config_account",
+          "name": "callback_shared_data_account",
           "docs": [
             "Config account for callback."
           ],
@@ -11725,7 +11725,7 @@
           "optional": true
         },
         {
-          "name": "callback_action_stats_account",
+          "name": "callback_partitioned_data_account",
           "docs": [
             "Action stats account for callback."
           ],
@@ -15810,7 +15810,7 @@
           "optional": true
         },
         {
-          "name": "callback_config_account",
+          "name": "callback_shared_data_account",
           "docs": [
             "Config account for callback."
           ],
@@ -15818,7 +15818,7 @@
           "optional": true
         },
         {
-          "name": "callback_action_stats_account",
+          "name": "callback_partitioned_data_account",
           "docs": [
             "Action stats account for callback."
           ],
@@ -23579,7 +23579,7 @@
           "optional": true
         },
         {
-          "name": "callback_config_account",
+          "name": "callback_shared_data_account",
           "docs": [
             "Config account for callback."
           ],
@@ -23587,7 +23587,7 @@
           "optional": true
         },
         {
-          "name": "callback_action_stats_account",
+          "name": "callback_partitioned_data_account",
           "docs": [
             "Action stats account for callback."
           ],
@@ -25207,16 +25207,16 @@
             "type": "pubkey"
           },
           {
-            "name": "callback_config",
+            "name": "callback_shared_data",
             "docs": [
-              "Callback config account."
+              "The account holding shared data for callback use."
             ],
             "type": "pubkey"
           },
           {
-            "name": "callback_action_stats",
+            "name": "callback_partitioned_data",
             "docs": [
-              "Callback action stats account."
+              "The account holding partitioned data for callback use."
             ],
             "type": "pubkey"
           },

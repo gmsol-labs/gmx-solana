@@ -387,8 +387,8 @@ impl IntoAtomicGroup for CreateOrder {
             callback_version,
             callback_authority,
             callback_program,
-            callback_config_account,
-            callback_action_stats_account,
+            callback_shared_data_account,
+            callback_partitioned_data_account,
         } = self.program.get_callback_params(self.callback.as_ref());
 
         let create = self
@@ -423,8 +423,8 @@ impl IntoAtomicGroup for CreateOrder {
                     program: self.program.id.0,
                     callback_authority,
                     callback_program,
-                    callback_config_account,
-                    callback_action_stats_account,
+                    callback_shared_data_account,
+                    callback_partitioned_data_account,
                 },
                 true,
             )

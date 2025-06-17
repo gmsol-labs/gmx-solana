@@ -52,10 +52,10 @@ pub struct ActionHeader {
     receiver: Pubkey,
     /// Callback program ID.
     pub callback_program_id: Pubkey,
-    /// Callback config account.
-    pub callback_config: Pubkey,
-    /// Callback action stats account.
-    pub callback_action_stats: Pubkey,
+    /// The account holding shared data for callback use.
+    pub callback_shared_data: Pubkey,
+    /// The account holding partitioned data for callback use.
+    pub callback_partitioned_data: Pubkey,
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
     reserved: [u8; 160],
 }
@@ -88,8 +88,8 @@ impl ActionHeader {
         &mut self,
         program_id: &Pubkey,
         callback_version: u8,
-        config: &Pubkey,
-        action_stats: &Pubkey,
+        shared_data: &Pubkey,
+        partitioned_data: &Pubkey,
     ) -> Result<()> {
         require_eq!(
             self.callback_kind()?,
@@ -99,8 +99,8 @@ impl ActionHeader {
         self.callback_version = callback_version;
         self.callback_kind = ActionCallbackKind::General.into();
         self.callback_program_id = *program_id;
-        self.callback_config = *config;
-        self.callback_action_stats = *action_stats;
+        self.callback_shared_data = *shared_data;
+        self.callback_partitioned_data = *partitioned_data;
         Ok(())
     }
 
@@ -108,8 +108,8 @@ impl ActionHeader {
     pub(crate) fn validate_general_callback(
         &self,
         program_id: &Pubkey,
-        config: &Pubkey,
-        action_stats: &Pubkey,
+        shared_data: &Pubkey,
+        partitioned_data: &Pubkey,
     ) -> Result<()> {
         require_eq!(
             self.callback_kind()?,
@@ -121,10 +121,14 @@ impl ActionHeader {
             self.callback_program_id,
             CoreError::InvalidArgument
         );
-        require_keys_eq!(*config, self.callback_config, CoreError::InvalidArgument);
         require_keys_eq!(
-            *action_stats,
-            self.callback_action_stats,
+            *shared_data,
+            self.callback_shared_data,
+            CoreError::InvalidArgument
+        );
+        require_keys_eq!(
+            *partitioned_data,
+            self.callback_partitioned_data,
             CoreError::InvalidArgument
         );
 
@@ -139,8 +143,8 @@ impl ActionHeader {
         kind: On,
         authority: &Account<'info, CallbackAuthority>,
         program: &AccountInfo<'info>,
-        config: &AccountInfo<'info>,
-        action_stats: &AccountInfo<'info>,
+        shared_data: &AccountInfo<'info>,
+        partitioned_data: &AccountInfo<'info>,
         owner: &AccountInfo<'info>,
         action: &AccountInfo<'info>,
         remaining_accounts: &[AccountInfo<'info>],
@@ -148,14 +152,14 @@ impl ActionHeader {
         use gmsol_callback::interface::{on_closed, on_created, on_executed, OnCallback};
 
         let callback_version = self.callback_version;
-        self.validate_general_callback(program.key, config.key, action_stats.key)?;
+        self.validate_general_callback(program.key, shared_data.key, partitioned_data.key)?;
 
         let ctx = CpiContext::new(
             program.clone(),
             OnCallback {
                 authority: authority.to_account_info(),
-                config: config.clone(),
-                action_stats: action_stats.clone(),
+                shared_data: shared_data.clone(),
+                partitioned_data: partitioned_data.clone(),
                 owner: owner.clone(),
                 action: action.clone(),
             },

@@ -72,8 +72,8 @@ async fn callback() -> eyre::Result<()> {
         .callback(Some(
             Callback::builder()
                 .version(0)
-                .action_stats(action_stats)
-                .config(deployment.callback_config)
+                .partitioned_data(action_stats)
+                .shared_data(deployment.callback_shared_data)
                 .program(deployment.callback_program)
                 .build(),
         ))
@@ -119,8 +119,8 @@ async fn callback() -> eyre::Result<()> {
         .callback(Some(
             Callback::builder()
                 .version(0)
-                .action_stats(action_stats)
-                .config(deployment.callback_config)
+                .partitioned_data(action_stats)
+                .shared_data(deployment.callback_shared_data)
                 .program(deployment.callback_program)
                 .build(),
         ))
@@ -192,8 +192,8 @@ async fn callback() -> eyre::Result<()> {
         .callback(Some(
             Callback::builder()
                 .version(0)
-                .action_stats(action_stats)
-                .config(deployment.callback_config)
+                .partitioned_data(action_stats)
+                .shared_data(deployment.callback_shared_data)
                 .program(deployment.callback_program)
                 .build(),
         ))
@@ -249,8 +249,8 @@ async fn callback() -> eyre::Result<()> {
         .callback(Some(
             Callback::builder()
                 .version(0)
-                .action_stats(action_stats)
-                .config(deployment.callback_config)
+                .partitioned_data(action_stats)
+                .shared_data(deployment.callback_shared_data)
                 .program(deployment.callback_program)
                 .build(),
         ))
@@ -299,8 +299,8 @@ async fn callback() -> eyre::Result<()> {
         .callback(Some(
             Callback::builder()
                 .version(0)
-                .action_stats(action_stats)
-                .config(deployment.callback_config)
+                .partitioned_data(action_stats)
+                .shared_data(deployment.callback_shared_data)
                 .program(deployment.callback_program)
                 .build(),
         ))
@@ -349,8 +349,8 @@ async fn callback() -> eyre::Result<()> {
         .callback(Some(
             Callback::builder()
                 .version(0)
-                .action_stats(action_stats)
-                .config(deployment.callback_config)
+                .partitioned_data(action_stats)
+                .shared_data(deployment.callback_shared_data)
                 .program(deployment.callback_program)
                 .build(),
         ))

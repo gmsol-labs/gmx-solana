@@ -128,8 +128,8 @@ pub(crate) struct CreateOrderOperation<'a, 'info> {
     callback_version: Option<u8>,
     callback_authority: Option<&'a Account<'info, CallbackAuthority>>,
     callback_program: Option<&'a AccountInfo<'info>>,
-    callback_config_account: Option<&'a AccountInfo<'info>>,
-    callback_action_stats_account: Option<&'a AccountInfo<'info>>,
+    callback_shared_data_account: Option<&'a AccountInfo<'info>>,
+    callback_partitioned_data_account: Option<&'a AccountInfo<'info>>,
     #[builder(setter(into))]
     event_emitter: Option<EventEmitter<'a, 'info>>,
 }
@@ -245,12 +245,12 @@ impl<'a, 'info> CreateOrderOperation<'a, 'info> {
                 .callback_program
                 .as_ref()
                 .ok_or_else(|| error!(CoreError::InvalidArgument))?;
-            let config = self
-                .callback_config_account
+            let shared_data = self
+                .callback_shared_data_account
                 .as_ref()
                 .ok_or_else(|| error!(CoreError::InvalidArgument))?;
-            let action_stats = self
-                .callback_action_stats_account
+            let partitioned_data = self
+                .callback_partitioned_data_account
                 .as_ref()
                 .ok_or_else(|| error!(CoreError::InvalidArgument))?;
             let position = position.unwrap_or(program);
@@ -258,16 +258,16 @@ impl<'a, 'info> CreateOrderOperation<'a, 'info> {
             self.order.load_mut()?.header.set_general_callback(
                 program.key,
                 *version,
-                config.key,
-                action_stats.key,
+                shared_data.key,
+                partitioned_data.key,
             )?;
 
             self.order.load()?.header.invoke_general_callback(
                 On::Created(ActionKind::Order),
                 authority,
                 program,
-                config,
-                action_stats,
+                shared_data,
+                partitioned_data,
                 &self.owner,
                 self.order.as_ref(),
                 &[position.clone()],
@@ -851,8 +851,8 @@ pub(crate) struct ExecuteOrderOperation<'a, 'info> {
     event_emitter: EventEmitter<'a, 'info>,
     callback_authority: Option<&'a Account<'info, CallbackAuthority>>,
     callback_program: Option<&'a AccountInfo<'info>>,
-    callback_config_account: Option<&'a AccountInfo<'info>>,
-    callback_action_stats_account: Option<&'a AccountInfo<'info>>,
+    callback_shared_data_account: Option<&'a AccountInfo<'info>>,
+    callback_partitioned_data_account: Option<&'a AccountInfo<'info>>,
 }
 
 pub(crate) type RemovePosition = bool;
@@ -1295,11 +1295,11 @@ impl ExecuteOrderOperation<'_, '_> {
                 let program = self
                     .callback_program
                     .ok_or_else(|| error!(CoreError::InvalidArgument))?;
-                let config = self
-                    .callback_config_account
+                let shared_data = self
+                    .callback_shared_data_account
                     .ok_or_else(|| error!(CoreError::InvalidArgument))?;
-                let action_stats = self
-                    .callback_action_stats_account
+                let partitioned_data = self
+                    .callback_partitioned_data_account
                     .ok_or_else(|| error!(CoreError::InvalidArgument))?;
                 let position = (may_have_position)
                     .then_some(())
@@ -1314,8 +1314,8 @@ impl ExecuteOrderOperation<'_, '_> {
                     On::Executed(ActionKind::Order, success),
                     authority,
                     program,
-                    config,
-                    action_stats,
+                    shared_data,
+                    partitioned_data,
                     &self.owner,
                     self.order.as_ref(),
                     &[position.clone(), trade_event.clone()],
@@ -1896,8 +1896,8 @@ impl PositionCutOperation<'_, '_> {
             .callback_version(None)
             .callback_authority(None)
             .callback_program(None)
-            .callback_config_account(None)
-            .callback_action_stats_account(None)
+            .callback_shared_data_account(None)
+            .callback_partitioned_data_account(None)
             .event_emitter(self.event_emitter)
             .build()
             .decrease()
@@ -1930,8 +1930,8 @@ impl PositionCutOperation<'_, '_> {
             .event_emitter(self.event_emitter)
             .callback_authority(None)
             .callback_program(None)
-            .callback_config_account(None)
-            .callback_action_stats_account(None)
+            .callback_shared_data_account(None)
+            .callback_partitioned_data_account(None)
             .build()
             .execute()
     }

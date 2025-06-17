@@ -16,10 +16,10 @@ pub struct OnCallback<'info> {
         seeds::program = CALLER_PROGRAM_ID,
     )]
     pub authority: Signer<'info>,
-    /// The config account.
+    /// The account used for storing shared data.
     #[account(mut)]
-    pub config: Account<'info, Config>,
-    /// the action stats account.
+    pub shared_data: Account<'info, Config>,
+    /// The account used for storing partitioned data.
     #[account(
         mut,
         seeds = [
@@ -27,12 +27,12 @@ pub struct OnCallback<'info> {
             owner.key.as_ref(),
             &[action_kind],
         ],
-        bump = action_stats.bump,
-        constraint = action_stats.initialized,
-        constraint = action_stats.action_kind == action_kind,
+        bump = partitioned_data.bump,
+        constraint = partitioned_data.initialized,
+        constraint = partitioned_data.action_kind == action_kind,
         has_one = owner,
     )]
-    pub action_stats: Account<'info, ActionStats>,
+    pub partitioned_data: Account<'info, ActionStats>,
     /// The owner of the action account.
     /// CHECK: This account is unchecked because only its address is used.
     pub owner: UncheckedAccount<'info>,
@@ -52,7 +52,7 @@ impl OnCallback<'_> {
         extra_account_count: u8,
     ) -> Result<()> {
         debug_assert!(ctx.remaining_accounts.len() >= usize::from(extra_account_count));
-        ctx.accounts.config.calls += 1;
+        ctx.accounts.shared_data.calls += 1;
         match trigger {
             On::Created => ctx.accounts.handle_created(success),
             On::Updated => ctx.accounts.handle_updated(success),
@@ -62,53 +62,53 @@ impl OnCallback<'_> {
     }
 
     fn handle_created(&mut self, success: bool) -> Result<()> {
-        self.action_stats.total_created += 1;
-        self.action_stats.last_created_at = Clock::get()?.unix_timestamp;
+        self.partitioned_data.total_created += 1;
+        self.partitioned_data.last_created_at = Clock::get()?.unix_timestamp;
 
         msg!(
             "{}: on_created, success={} calls={}",
-            self.config.prefix,
+            self.shared_data.prefix,
             success,
-            self.config.calls
+            self.shared_data.calls
         );
         Ok(())
     }
 
     fn handle_updated(&mut self, success: bool) -> Result<()> {
-        self.action_stats.update_count += 1;
-        self.action_stats.last_updated_at = Clock::get()?.unix_timestamp;
+        self.partitioned_data.update_count += 1;
+        self.partitioned_data.last_updated_at = Clock::get()?.unix_timestamp;
 
         msg!(
             "{}: on_updated, success={} calls={}",
-            self.config.prefix,
+            self.shared_data.prefix,
             success,
-            self.config.calls
+            self.shared_data.calls
         );
         Ok(())
     }
 
     fn handle_executed(&mut self, success: bool) -> Result<()> {
-        self.action_stats.total_executed += 1;
-        self.action_stats.last_executed_at = Clock::get()?.unix_timestamp;
+        self.partitioned_data.total_executed += 1;
+        self.partitioned_data.last_executed_at = Clock::get()?.unix_timestamp;
 
         msg!(
             "{}: on_executed, success={} calls={}",
-            self.config.prefix,
+            self.shared_data.prefix,
             success,
-            self.config.calls
+            self.shared_data.calls
         );
         Ok(())
     }
 
     fn handle_closed(&mut self, success: bool) -> Result<()> {
-        self.action_stats.total_closed += 1;
-        self.action_stats.last_closed_at = Clock::get()?.unix_timestamp;
+        self.partitioned_data.total_closed += 1;
+        self.partitioned_data.last_closed_at = Clock::get()?.unix_timestamp;
 
         msg!(
             "{}: on_closed, success={} calls={}",
-            self.config.prefix,
+            self.shared_data.prefix,
             success,
-            self.config.calls
+            self.shared_data.calls
         );
         Ok(())
     }

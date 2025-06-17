@@ -337,63 +337,21 @@
           }
         },
         {
-          "name": "competition",
-          "docs": [
-            "The global competition account."
-          ],
-          "writable": true,
-          "relations": [
-            "participant"
-          ]
+          "name": "competition"
         },
         {
-          "name": "participant",
-          "docs": [
-            "The participant PDA (created on demand)."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  114,
-                  116,
-                  105,
-                  99,
-                  105,
-                  112,
-                  97,
-                  110,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "competition"
-              },
-              {
-                "kind": "account",
-                "path": "trader"
-              }
-            ]
-          }
+          "name": "participant"
         },
         {
           "name": "trader",
           "docs": [
             "The trader public key."
-          ],
-          "relations": [
-            "participant"
           ]
         },
         {
-          "name": "shared_data",
+          "name": "action",
           "docs": [
-            "The shared data account."
+            "The action account."
           ]
         }
       ],
@@ -500,7 +458,6 @@
           "docs": [
             "The global competition account."
           ],
-          "writable": true,
           "relations": [
             "participant"
           ]
@@ -510,7 +467,6 @@
           "docs": [
             "The participant PDA (created on demand)."
           ],
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -550,9 +506,9 @@
           ]
         },
         {
-          "name": "shared_data",
+          "name": "action",
           "docs": [
-            "The shared data account."
+            "The action account."
           ]
         }
       ],
@@ -820,63 +776,21 @@
           }
         },
         {
-          "name": "competition",
-          "docs": [
-            "The global competition account."
-          ],
-          "writable": true,
-          "relations": [
-            "participant"
-          ]
+          "name": "competition"
         },
         {
-          "name": "participant",
-          "docs": [
-            "The participant PDA (created on demand)."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  114,
-                  116,
-                  105,
-                  99,
-                  105,
-                  112,
-                  97,
-                  110,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "competition"
-              },
-              {
-                "kind": "account",
-                "path": "trader"
-              }
-            ]
-          }
+          "name": "participant"
         },
         {
           "name": "trader",
           "docs": [
             "The trader public key."
-          ],
-          "relations": [
-            "participant"
           ]
         },
         {
-          "name": "shared_data",
+          "name": "action",
           "docs": [
-            "The shared data account."
+            "The action account."
           ]
         }
       ],

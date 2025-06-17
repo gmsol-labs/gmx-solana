@@ -95,8 +95,8 @@ impl IntoAtomicGroup for UpdateOrder {
         let CallbackParams {
             callback_authority,
             callback_program,
-            callback_config_account,
-            callback_action_stats_account,
+            callback_shared_data_account,
+            callback_partitioned_data_account,
             ..
         } = self.program.get_callback_params(hint.callback.as_ref());
 
@@ -115,8 +115,8 @@ impl IntoAtomicGroup for UpdateOrder {
                     program: self.program.id.0,
                     callback_authority,
                     callback_program,
-                    callback_config_account,
-                    callback_action_stats_account,
+                    callback_shared_data_account,
+                    callback_partitioned_data_account,
                 },
                 true,
             )

@@ -138,8 +138,8 @@ async fn competition() -> eyre::Result<()> {
             Callback::builder()
                 .version(0)
                 .program(COMPETITION_PROGRAM_ID)
-                .config(competition)
-                .action_stats(participant)
+                .shared_data(competition)
+                .partitioned_data(participant)
                 .build(),
         ))
         .build_with_address()
@@ -243,8 +243,8 @@ async fn competition() -> eyre::Result<()> {
                 Callback::builder()
                     .version(0)
                     .program(COMPETITION_PROGRAM_ID)
-                    .config(competition)
-                    .action_stats(participant)
+                    .shared_data(competition)
+                    .partitioned_data(participant)
                     .build(),
             ))
             .build_with_address()
@@ -274,8 +274,8 @@ async fn competition() -> eyre::Result<()> {
                 Callback::builder()
                     .version(0)
                     .program(COMPETITION_PROGRAM_ID)
-                    .config(competition)
-                    .action_stats(participant)
+                    .shared_data(competition)
+                    .partitioned_data(participant)
                     .build(),
             ))
             .build_with_address()
