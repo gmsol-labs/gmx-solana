@@ -50,13 +50,13 @@ pub mod gmsol_competition {
     /// The competition logic is unaffected, so this is a no‑op kept only
     /// for interface compatibility.
     pub fn on_created(
-        ctx: Context<OnCallback>,
+        ctx: Context<OnCreated>,
         authority_bump: u8,
         action_kind: u8,
         callback_version: u8,
         extra_account_count: u8,
     ) -> Result<()> {
-        OnCallback::invoke_on_created(
+        OnCreated::invoke(
             ctx,
             authority_bump,
             action_kind,

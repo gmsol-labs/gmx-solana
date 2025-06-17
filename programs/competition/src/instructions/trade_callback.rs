@@ -9,10 +9,10 @@ use anchor_lang::prelude::*;
 use gmsol_callback::{interface::ActionKind, CALLBACK_AUTHORITY_SEED};
 use gmsol_programs::gmsol_store::accounts::TradeData;
 
-/// Generic callback accounts.
+/// Accounts for `on_created`.
 #[derive(Accounts)]
 #[instruction(authority_bump: u8)]
-pub struct OnCallback<'info> {
+pub struct OnCreated<'info> {
     /// The callback‑authority PDA (must be a signer).
     #[account(
         seeds = [CALLBACK_AUTHORITY_SEED],
@@ -21,11 +21,9 @@ pub struct OnCallback<'info> {
     )]
     pub authority: Signer<'info>,
     /// The global competition account.
-    #[account(mut)]
     pub competition: Account<'info, Competition>,
     /// The participant PDA (created on demand).
     #[account(
-        mut,
         seeds = [
             PARTICIPANT_SEED,
             competition.key().as_ref(),
@@ -44,8 +42,8 @@ pub struct OnCallback<'info> {
     pub shared_data: UncheckedAccount<'info>,
 }
 
-impl OnCallback<'_> {
-    pub(crate) fn invoke_on_created(
+impl OnCreated<'_> {
+    pub(crate) fn invoke(
         ctx: Context<Self>,
         _authority_bump: u8,
         action_kind: u8,
@@ -69,7 +67,7 @@ impl OnCallback<'_> {
         let now = Clock::get()?.unix_timestamp;
         let comp = &self.competition;
         require!(
-            now >= comp.start_time && now <= comp.end_time,
+            comp.is_ongoing(now),
             CompetitionError::OutsideCompetitionTime
         );
         Ok(())
@@ -144,7 +142,7 @@ impl OnExecuted<'_> {
 
         let comp = &mut ctx.accounts.competition;
 
-        if !(now >= comp.start_time && now <= comp.end_time) {
+        if !comp.is_ongoing(now) {
             msg!("competition: outside of the competition time");
             return Ok(());
         }
@@ -321,4 +319,27 @@ impl OnExecuted<'_> {
             }
         }
     }
+}
+
+/// Accounts for other callbacks.
+#[derive(Accounts)]
+#[instruction(authority_bump: u8)]
+pub struct OnCallback<'info> {
+    /// The callback‑authority PDA (must be a signer).
+    #[account(
+        seeds = [CALLBACK_AUTHORITY_SEED],
+        bump = authority_bump,
+        seeds::program = EXPECTED_STORE_PROGRAM_ID,
+    )]
+    pub authority: Signer<'info>,
+    /// CHECK: No need to validate the competition account.
+    pub competition: UncheckedAccount<'info>,
+    /// CHECK: No need to validate the participant account.
+    pub participant: UncheckedAccount<'info>,
+    /// The trader public key.
+    /// CHECK: Only the address is required.
+    pub trader: UncheckedAccount<'info>,
+    /// The shared data account.
+    /// CHECK: this is just a placeholder.
+    pub shared_data: UncheckedAccount<'info>,
 }

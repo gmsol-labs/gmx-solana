@@ -55,6 +55,13 @@ pub struct Competition {
     pub volume_merge_window: i64,
 }
 
+impl Competition {
+    /// Returns whether the competition is ongoing at the given time.
+    pub fn is_ongoing(&self, now: i64) -> bool {
+        now >= self.start_time && now <= self.end_time
+    }
+}
+
 /// The per-trader statistics.
 #[account]
 #[derive(InitSpace)]
