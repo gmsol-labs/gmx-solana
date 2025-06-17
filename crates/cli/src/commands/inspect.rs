@@ -1,8 +1,11 @@
-use std::num::NonZeroUsize;
+use std::{num::NonZeroUsize, ops::Deref};
 
 use eyre::OptionExt;
 use futures_util::StreamExt;
-use gmsol_sdk::programs::anchor_lang::prelude::Pubkey;
+use gmsol_sdk::{
+    programs::anchor_lang::{idl::IdlAccount, prelude::Pubkey, AccountDeserialize},
+    solana_utils::solana_sdk::signer::Signer,
+};
 
 /// Inspects protocol data.
 #[derive(Debug, clap::Args)]
@@ -14,7 +17,10 @@ pub struct Inspect {
 #[derive(Debug, clap::Subcommand)]
 enum Command {
     /// Print protocol addresses.
-    Address { kind: AddressKind },
+    Address {
+        #[command(subcommand)]
+        kind: AddressKind,
+    },
     /// Inspect an account.
     Account { address: Pubkey },
     /// Inspect events that related to the given account.
@@ -58,10 +64,53 @@ enum Command {
     },
 }
 
-#[derive(Debug, Clone, clap::ValueEnum)]
+#[derive(Debug, clap::Subcommand)]
 enum AddressKind {
     /// Event authority.
     EventAuthority,
+    /// Idl account.
+    IdlAccount {
+        #[command(flatten)]
+        select_program: SelectProgram,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+#[group(required = true, multiple = false)]
+struct SelectProgram {
+    #[arg(long, group = "idl-program")]
+    store_program: bool,
+    #[arg(long, group = "idl-program")]
+    treasury_program: bool,
+    #[arg(long, group = "idl-program")]
+    timelock_program: bool,
+    #[arg(long, group = "idl-program")]
+    custom_program: Option<Pubkey>,
+}
+
+impl SelectProgram {
+    fn id<'a, C: Deref<Target = impl Signer> + Clone>(
+        &'a self,
+        client: &'a gmsol_sdk::Client<C>,
+    ) -> &'a Pubkey {
+        let Self {
+            store_program,
+            treasury_program,
+            timelock_program,
+            custom_program,
+        } = self;
+        if *store_program {
+            client.store_program_id()
+        } else if *treasury_program {
+            client.treasury_program_id()
+        } else if *timelock_program {
+            client.timelock_program_id()
+        } else if let Some(program_id) = custom_program {
+            program_id
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 impl super::Command for Inspect {
@@ -77,6 +126,10 @@ impl super::Command for Inspect {
             Command::Address { kind } => {
                 let address = match kind {
                     AddressKind::EventAuthority => client.store_event_authority(),
+                    AddressKind::IdlAccount { select_program } => {
+                        let program_id = select_program.id(client);
+                        IdlAccount::address(program_id)
+                    }
                 };
                 println!("{address}");
             }
@@ -101,6 +154,10 @@ impl super::Command for Inspect {
                     .await?;
                 let slot = res.slot();
                 let account = res.into_value().ok_or_eyre("account does not exist")?;
+                if let Ok(idl_account) = IdlAccount::try_deserialize(&mut account.data.as_slice()) {
+                    println!("{idl_account:#?}");
+                    return Ok(());
+                }
                 if account.owner == *client.store_program_id() {
                     let account = KeyedAccount {
                         pubkey: *address,
