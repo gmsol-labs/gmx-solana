@@ -69,8 +69,8 @@ impl StoreProgram {
                 callback_version: Some(callback.version),
                 callback_authority: Some(self.find_callback_authority_address()),
                 callback_program: Some(callback.program.0),
-                callback_config_account: Some(callback.config.0),
-                callback_action_stats_account: Some(callback.action_stats.0),
+                callback_shared_data_account: Some(callback.shared_data.0),
+                callback_partitioned_data_account: Some(callback.partitioned_data.0),
             },
             None => CallbackParams::default(),
         }

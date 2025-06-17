@@ -303,11 +303,11 @@ pub struct ExecuteIncreaseOrSwapOrderV2<'info> {
     /// Config account for callback.
     /// CHECK: expected to be checked by the callback program.
     #[account(mut)]
-    pub callback_config_account: Option<UncheckedAccount<'info>>,
+    pub callback_shared_data_account: Option<UncheckedAccount<'info>>,
     /// Action stats account for callback.
     /// CHECK: expected to be checked by the callback program.
     #[account(mut)]
-    pub callback_action_stats_account: Option<UncheckedAccount<'info>>,
+    pub callback_partitioned_data_account: Option<UncheckedAccount<'info>>,
 }
 
 impl<'info> internal::Authentication<'info> for ExecuteIncreaseOrSwapOrderV2<'info> {
@@ -488,8 +488,8 @@ impl<'info> ExecuteIncreaseOrSwapOrderV2<'info> {
             .event_emitter(*event_emitter)
             .callback_authority(self.callback_authority.as_ref())
             .callback_program(self.callback_program.as_deref())
-            .callback_config_account(self.callback_config_account.as_deref())
-            .callback_action_stats_account(self.callback_action_stats_account.as_deref());
+            .callback_shared_data_account(self.callback_shared_data_account.as_deref())
+            .callback_partitioned_data_account(self.callback_partitioned_data_account.as_deref());
 
         self.oracle.load_mut()?.with_prices(
             &self.store,
@@ -763,11 +763,11 @@ pub struct ExecuteDecreaseOrderV2<'info> {
     /// Config account for callback.
     /// CHECK: expected to be checked by the callback program.
     #[account(mut)]
-    pub callback_config_account: Option<UncheckedAccount<'info>>,
+    pub callback_shared_data_account: Option<UncheckedAccount<'info>>,
     /// Action stats account for callback.
     /// CHECK: expected to be checked by the callback program.
     #[account(mut)]
-    pub callback_action_stats_account: Option<UncheckedAccount<'info>>,
+    pub callback_partitioned_data_account: Option<UncheckedAccount<'info>>,
 }
 
 impl<'info> internal::Authentication<'info> for ExecuteDecreaseOrderV2<'info> {
@@ -861,8 +861,8 @@ impl<'info> ExecuteDecreaseOrderV2<'info> {
             .event_emitter(*event_emitter)
             .callback_authority(self.callback_authority.as_ref())
             .callback_program(self.callback_program.as_deref())
-            .callback_config_account(self.callback_config_account.as_deref())
-            .callback_action_stats_account(self.callback_action_stats_account.as_deref());
+            .callback_shared_data_account(self.callback_shared_data_account.as_deref())
+            .callback_partitioned_data_account(self.callback_partitioned_data_account.as_deref());
 
         self.oracle.load_mut()?.with_prices(
             &self.store,
@@ -1288,8 +1288,8 @@ mod deprecated {
                 .event_emitter(*event_emitter)
                 .callback_authority(None)
                 .callback_program(None)
-                .callback_config_account(None)
-                .callback_action_stats_account(None);
+                .callback_shared_data_account(None)
+                .callback_partitioned_data_account(None);
 
             self.oracle.load_mut()?.with_prices(
                 &self.store,
@@ -1645,8 +1645,8 @@ mod deprecated {
                 .event_emitter(*event_emitter)
                 .callback_authority(None)
                 .callback_program(None)
-                .callback_config_account(None)
-                .callback_action_stats_account(None);
+                .callback_shared_data_account(None)
+                .callback_partitioned_data_account(None);
 
             self.oracle.load_mut()?.with_prices(
                 &self.store,

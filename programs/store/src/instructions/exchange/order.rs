@@ -309,11 +309,11 @@ pub struct CreateOrderV2<'info> {
     /// Config account for callback.
     /// CHECK: expected to be checked by the callback program.
     #[account(mut)]
-    pub callback_config_account: Option<UncheckedAccount<'info>>,
+    pub callback_shared_data_account: Option<UncheckedAccount<'info>>,
     /// Action stats account for callback.
     /// CHECK: expected to be checked by the callback program.
     #[account(mut)]
-    pub callback_action_stats_account: Option<UncheckedAccount<'info>>,
+    pub callback_partitioned_data_account: Option<UncheckedAccount<'info>>,
 }
 
 impl<'info> internal::Create<'info, Order> for CreateOrderV2<'info> {
@@ -369,8 +369,8 @@ impl<'info> internal::Create<'info, Order> for CreateOrderV2<'info> {
             .callback_version(callback_version)
             .callback_authority(self.callback_authority.as_ref())
             .callback_program(self.callback_program.as_deref())
-            .callback_config_account(self.callback_config_account.as_deref())
-            .callback_action_stats_account(self.callback_action_stats_account.as_deref())
+            .callback_shared_data_account(self.callback_shared_data_account.as_deref())
+            .callback_partitioned_data_account(self.callback_partitioned_data_account.as_deref())
             .event_emitter(Some(EventEmitter::new(
                 &self.event_authority,
                 bumps.event_authority,
@@ -644,11 +644,11 @@ pub struct CloseOrderV2<'info> {
     /// Config account for callback.
     /// CHECK: expected to be checked by the callback program.
     #[account(mut)]
-    pub callback_config_account: Option<UncheckedAccount<'info>>,
+    pub callback_shared_data_account: Option<UncheckedAccount<'info>>,
     /// Action stats account for callback.
     /// CHECK: expected to be checked by the callback program.
     #[account(mut)]
-    pub callback_action_stats_account: Option<UncheckedAccount<'info>>,
+    pub callback_partitioned_data_account: Option<UncheckedAccount<'info>>,
 }
 
 impl<'info> internal::Authentication<'info> for CloseOrderV2<'info> {
@@ -928,12 +928,12 @@ impl<'info> CloseOrderV2<'info> {
                         .callback_program
                         .as_ref()
                         .ok_or_else(|| error!(CoreError::InvalidArgument))?;
-                    let config = self
-                        .callback_config_account
+                    let shared_data = self
+                        .callback_shared_data_account
                         .as_ref()
                         .ok_or_else(|| error!(CoreError::InvalidArgument))?;
-                    let action_stats = self
-                        .callback_action_stats_account
+                    let partitioned_data = self
+                        .callback_partitioned_data_account
                         .as_ref()
                         .ok_or_else(|| error!(CoreError::InvalidArgument))?;
 
@@ -941,8 +941,8 @@ impl<'info> CloseOrderV2<'info> {
                         On::Closed(ActionKind::Order),
                         authority,
                         program,
-                        config,
-                        action_stats,
+                        shared_data,
+                        partitioned_data,
                         &self.owner,
                         self.order.as_ref(),
                         &[],
@@ -990,11 +990,11 @@ pub struct UpdateOrderV2<'info> {
     /// Config account for callback.
     /// CHECK: expected to be checked by the callback program.
     #[account(mut)]
-    pub callback_config_account: Option<UncheckedAccount<'info>>,
+    pub callback_shared_data_account: Option<UncheckedAccount<'info>>,
     /// Action stats account for callback.
     /// CHECK: expected to be checked by the callback program.
     #[account(mut)]
-    pub callback_action_stats_account: Option<UncheckedAccount<'info>>,
+    pub callback_partitioned_data_account: Option<UncheckedAccount<'info>>,
 }
 
 impl UpdateOrderV2<'_> {
@@ -1047,12 +1047,12 @@ impl UpdateOrderV2<'_> {
                         .callback_program
                         .as_ref()
                         .ok_or_else(|| error!(CoreError::InvalidArgument))?;
-                    let config = self
-                        .callback_config_account
+                    let shared_data = self
+                        .callback_shared_data_account
                         .as_ref()
                         .ok_or_else(|| error!(CoreError::InvalidArgument))?;
-                    let action_stats = self
-                        .callback_action_stats_account
+                    let partitioned_data = self
+                        .callback_partitioned_data_account
                         .as_ref()
                         .ok_or_else(|| error!(CoreError::InvalidArgument))?;
 
@@ -1060,8 +1060,8 @@ impl UpdateOrderV2<'_> {
                         On::Updated(ActionKind::Order),
                         authority,
                         program,
-                        config,
-                        action_stats,
+                        shared_data,
+                        partitioned_data,
                         &self.owner,
                         self.order.as_ref(),
                         &[],
@@ -1301,8 +1301,8 @@ mod deprecated {
                 .callback_version(None)
                 .callback_authority(None)
                 .callback_program(None)
-                .callback_config_account(None)
-                .callback_action_stats_account(None)
+                .callback_shared_data_account(None)
+                .callback_partitioned_data_account(None)
                 .event_emitter(None)
                 .build();
 

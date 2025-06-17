@@ -265,8 +265,8 @@ where
         self.callback(Some(Callback {
             version: 0,
             program: ID.into(),
-            config: (*competition).into(),
-            action_stats: participant.into(),
+            shared_data: (*competition).into(),
+            partitioned_data: participant.into(),
         }))
     }
 
@@ -605,8 +605,8 @@ where
             callback_version,
             callback_authority,
             callback_program,
-            callback_config_account,
-            callback_action_stats_account,
+            callback_shared_data_account,
+            callback_partitioned_data_account,
         } = self.client.get_callback_params(self.callback.as_ref());
 
         #[cfg(competition)]
@@ -615,9 +615,9 @@ where
             if callback.program.0 == crate::programs::gmsol_competition::ID {
                 let (prepare_participant, participant) = self
                     .client
-                    .create_participant_idempotent(&callback.config, None)
+                    .create_participant_idempotent(&callback.shared_data, None)
                     .swap_output(());
-                if participant != callback.action_stats.0 {
+                if participant != callback.partitioned_data.0 {
                     return Err(crate::Error::custom("invalid participant account"));
                 }
                 prepare = prepare.merge(prepare_participant);
@@ -651,8 +651,8 @@ where
                     associated_token_program: anchor_spl::associated_token::ID,
                     callback_authority,
                     callback_program,
-                    callback_config_account,
-                    callback_action_stats_account,
+                    callback_shared_data_account,
+                    callback_partitioned_data_account,
                     event_authority: self.client.store_event_authority(),
                     program: *self.client.store_program_id(),
                 },
@@ -998,8 +998,8 @@ where
         let CallbackParams {
             callback_authority,
             callback_program,
-            callback_config_account,
-            callback_action_stats_account,
+            callback_shared_data_account,
+            callback_partitioned_data_account,
             ..
         } = self.client.get_callback_params(hint.callback.as_ref());
 
@@ -1071,8 +1071,8 @@ where
                             program: *self.client.store_program_id(),
                             callback_authority,
                             callback_program,
-                            callback_config_account,
-                            callback_action_stats_account,
+                            callback_shared_data_account,
+                            callback_partitioned_data_account,
                         },
                         &ID,
                         self.client.store_program_id(),
@@ -1134,8 +1134,8 @@ where
                         program: *self.client.store_program_id(),
                         callback_authority,
                         callback_program,
-                        callback_config_account,
-                        callback_action_stats_account,
+                        callback_shared_data_account,
+                        callback_partitioned_data_account,
                     },
                     &ID,
                     self.client.store_program_id(),
@@ -1411,8 +1411,8 @@ where
         let CallbackParams {
             callback_authority,
             callback_program,
-            callback_config_account,
-            callback_action_stats_account,
+            callback_shared_data_account,
+            callback_partitioned_data_account,
             ..
         } = self.client.get_callback_params(
             (!self.skip_callback)
@@ -1471,8 +1471,8 @@ where
                     program: *self.client.store_program_id(),
                     callback_authority,
                     callback_program,
-                    callback_config_account,
-                    callback_action_stats_account,
+                    callback_shared_data_account,
+                    callback_partitioned_data_account,
                 },
                 &ID,
                 self.client.store_program_id(),

@@ -1133,14 +1133,14 @@
           "optional": true
         },
         {
-          "name": "callback_config_account",
+          "name": "callback_shared_data_account",
           "docs": [
             "Callback config account."
           ],
           "optional": true
         },
         {
-          "name": "callback_action_stats_account",
+          "name": "callback_partitioned_data_account",
           "docs": [
             "Callback action stats account."
           ],

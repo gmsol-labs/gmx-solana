@@ -112,7 +112,7 @@ pub struct Deployment {
     /// Callback program.
     pub callback_program: Pubkey,
     /// Callback config.
-    pub callback_config: Pubkey,
+    pub callback_shared_data: Pubkey,
 }
 
 impl fmt::Debug for Deployment {
@@ -223,7 +223,7 @@ impl Deployment {
             chainlink_access_controller: Default::default(),
             chainlink_feed_index: 42,
             callback_program: Default::default(),
-            callback_config: Default::default(),
+            callback_shared_data: Default::default(),
         })
     }
 
@@ -1044,7 +1044,7 @@ impl Deployment {
     async fn initialize_callback(&mut self) -> eyre::Result<()> {
         use gmsol_callback::{accounts, instruction, states::CONFIG_SEED, ID};
         self.callback_program = ID;
-        self.callback_config = Pubkey::find_program_address(&[CONFIG_SEED], &ID).0;
+        self.callback_shared_data = Pubkey::find_program_address(&[CONFIG_SEED], &ID).0;
 
         let client = self.user_client(Self::DEFAULT_KEEPER)?;
         let init = client
@@ -1063,7 +1063,7 @@ impl Deployment {
                 .anchor_args(instruction::InitializeConfig {})
                 .anchor_accounts(accounts::InitializeConfig {
                     payer: client.payer(),
-                    config: self.callback_config,
+                    config: self.callback_shared_data,
                     system_program: system_program::ID,
                 }),
         )?;

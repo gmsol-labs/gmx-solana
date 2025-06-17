@@ -531,8 +531,8 @@ impl<C: Deref<Target = impl Signer> + Clone> ExchangeOps<C> for Client<C> {
         let CallbackParams {
             callback_authority,
             callback_program,
-            callback_config_account,
-            callback_action_stats_account,
+            callback_shared_data_account,
+            callback_partitioned_data_account,
             ..
         } = self.get_callback_params(callback.as_ref());
         Ok(self
@@ -546,8 +546,8 @@ impl<C: Deref<Target = impl Signer> + Clone> ExchangeOps<C> for Client<C> {
                 program: *self.store_program_id(),
                 callback_authority,
                 callback_program,
-                callback_config_account,
-                callback_action_stats_account,
+                callback_shared_data_account,
+                callback_partitioned_data_account,
             })
             .anchor_args(args::UpdateOrderV2 { params }))
     }

@@ -104,10 +104,10 @@ pub struct CreateSwapV2<'info> {
     pub callback_program: Option<UncheckedAccount<'info>>,
     /// Callback config account.
     /// CHECK: check by CPI.
-    pub callback_config_account: Option<UncheckedAccount<'info>>,
+    pub callback_shared_data_account: Option<UncheckedAccount<'info>>,
     /// Callback action stats account.
     /// CHECK: check by CPI.
-    pub callback_action_stats_account: Option<UncheckedAccount<'info>>,
+    pub callback_partitioned_data_account: Option<UncheckedAccount<'info>>,
 }
 
 impl<'info> WithStore<'info> for CreateSwapV2<'info> {
@@ -215,9 +215,9 @@ impl<'info> CreateSwapV2<'info> {
                 associated_token_program: self.associated_token_program.to_account_info(),
                 callback_authority: self.callback_authority.as_deref().cloned(),
                 callback_program: self.callback_program.as_deref().cloned(),
-                callback_config_account: self.callback_config_account.as_deref().cloned(),
-                callback_action_stats_account: self
-                    .callback_action_stats_account
+                callback_shared_data_account: self.callback_shared_data_account.as_deref().cloned(),
+                callback_partitioned_data_account: self
+                    .callback_partitioned_data_account
                     .as_deref()
                     .cloned(),
                 event_authority: self.event_authority.to_account_info(),
@@ -363,8 +363,8 @@ impl<'info> CancelSwap<'info> {
                 program: self.store_program.to_account_info(),
                 callback_authority: None,
                 callback_program: None,
-                callback_config_account: None,
-                callback_action_stats_account: None,
+                callback_shared_data_account: None,
+                callback_partitioned_data_account: None,
             },
         )
     }
