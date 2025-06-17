@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 /// The expected program ID of the caller.
-pub const EXPECTED_STORE_PROGRAM_ID: Pubkey = gmsol_programs::gmsol_store::ID_CONST;
+pub const CALLER_PROGRAM_ID: Pubkey = gmsol_programs::gmsol_store::ID_CONST;
 
 /// The seed for [`Competition`] account.
 #[constant]

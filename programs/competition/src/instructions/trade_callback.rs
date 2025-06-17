@@ -1,6 +1,6 @@
 use crate::{
     states::{
-        Competition, LeaderEntry, Participant, EXPECTED_STORE_PROGRAM_ID, MAX_LEADERBOARD_LEN,
+        Competition, LeaderEntry, Participant, CALLER_PROGRAM_ID, MAX_LEADERBOARD_LEN,
         PARTICIPANT_SEED,
     },
     CompetitionError,
@@ -17,7 +17,7 @@ pub struct OnCreated<'info> {
     #[account(
         seeds = [CALLBACK_AUTHORITY_SEED],
         bump = authority_bump,
-        seeds::program = EXPECTED_STORE_PROGRAM_ID,
+        seeds::program = CALLER_PROGRAM_ID,
     )]
     pub authority: Signer<'info>,
     /// The global competition account.
@@ -37,9 +37,9 @@ pub struct OnCreated<'info> {
     /// The trader public key.
     /// CHECK: Only the address is required.
     pub trader: UncheckedAccount<'info>,
-    /// The shared data account.
+    /// The action account.
     /// CHECK: this is just a placeholder.
-    pub shared_data: UncheckedAccount<'info>,
+    pub action: UncheckedAccount<'info>,
 }
 
 impl OnCreated<'_> {
@@ -82,7 +82,7 @@ pub struct OnExecuted<'info> {
     #[account(
         seeds = [CALLBACK_AUTHORITY_SEED],
         bump = authority_bump,
-        seeds::program = EXPECTED_STORE_PROGRAM_ID,
+        seeds::program = CALLER_PROGRAM_ID,
     )]
     pub authority: Signer<'info>,
     /// The global competition account.
@@ -329,7 +329,7 @@ pub struct OnCallback<'info> {
     #[account(
         seeds = [CALLBACK_AUTHORITY_SEED],
         bump = authority_bump,
-        seeds::program = EXPECTED_STORE_PROGRAM_ID,
+        seeds::program = CALLER_PROGRAM_ID,
     )]
     pub authority: Signer<'info>,
     /// CHECK: No need to validate the competition account.
@@ -339,7 +339,7 @@ pub struct OnCallback<'info> {
     /// The trader public key.
     /// CHECK: Only the address is required.
     pub trader: UncheckedAccount<'info>,
-    /// The shared data account.
+    /// The action account.
     /// CHECK: this is just a placeholder.
-    pub shared_data: UncheckedAccount<'info>,
+    pub action: UncheckedAccount<'info>,
 }
