@@ -358,47 +358,49 @@ impl OraclePrice {
 }
 
 fn try_adjust_price(feed_config: &FeedConfig, parts: &mut OraclePriceParts) -> Result<bool> {
-    let mut adjusted = false;
-    if let Some(factor) = feed_config.max_deviation_factor() {
-        adjusted = try_adjust_price_with_max_deviation_factor(
-            &factor,
-            &mut parts.price,
-            parts.ref_price.as_ref(),
-        )
-        .unwrap_or(false);
+    let Some(factor) = feed_config.max_deviation_factor() else {
+        return Ok(false);
+    };
+    match try_adjust_price_with_max_deviation_factor(
+        &factor,
+        &parts.price,
+        parts.ref_price.as_ref(),
+    ) {
+        Some(price) => {
+            parts.price = price;
+            Ok(true)
+        }
+        None => Ok(false),
     }
-    Ok(adjusted)
 }
 
 fn try_adjust_price_with_max_deviation_factor(
     factor: &u128,
-    price: &mut gmsol_utils::Price,
+    price: &gmsol_utils::Price,
     ref_price: Option<&Decimal>,
-) -> Option<bool> {
+) -> Option<gmsol_utils::Price> {
     use gmsol_model::utils::apply_factor;
 
-    let mut adjusted = false;
-
-    let unit_prices = gmsol_model::price::Price::<u128>::from(&*price);
+    let unit_prices = gmsol_model::price::Price::<u128>::from(price);
     let ref_price = match ref_price {
         Some(ref_price) => ref_price.to_unit_price(),
         None => unit_prices.checked_mid()?,
     };
     let max_deviation = apply_factor::<_, { constants::MARKET_DECIMALS }>(&ref_price, factor)?;
 
+    let mut adjusted_price = None;
+
     if unit_prices.max.abs_diff(ref_price) > max_deviation {
-        price.max = price
+        adjusted_price.get_or_insert(*price).max = price
             .max
             .with_unit_price(ref_price.checked_add(max_deviation)?, false)?;
-        adjusted = true;
     }
 
     if unit_prices.min.abs_diff(ref_price) > max_deviation {
-        price.min = price
+        adjusted_price.get_or_insert(*price).min = price
             .min
             .with_unit_price(ref_price.checked_sub(max_deviation)?, true)?;
-        adjusted = true;
     }
 
-    Some(adjusted)
+    adjusted_price
 }
