@@ -2293,7 +2293,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-client",
  "anchor-lang",
@@ -2369,7 +2369,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-callback"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-lang",
  "num_enum",
@@ -2379,7 +2379,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-chainlink-datastreams"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-lang",
  "chainlink-data-streams-report",
@@ -2394,7 +2394,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-cli"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-spl",
  "anyhow",
@@ -2432,7 +2432,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-competition"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-lang",
  "gmsol-callback",
@@ -2441,7 +2441,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-decode"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-lang",
  "base64 0.22.1",
@@ -2459,7 +2459,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-examples"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-spl",
  "gmsol-sdk",
@@ -2471,7 +2471,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-mock-chainlink-verifier"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-lang",
  "cfg-if",
@@ -2481,7 +2481,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-model"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-lang",
  "borsh 0.10.4",
@@ -2501,7 +2501,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-programs"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-lang",
  "bitmaps",
@@ -2515,7 +2515,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-sdk"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
@@ -2584,7 +2584,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-solana-utils"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-client",
  "anchor-lang",
@@ -2608,7 +2608,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-store"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
@@ -2638,7 +2638,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-timelock"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-lang",
  "bytemuck",
@@ -2651,7 +2651,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-treasury"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
@@ -2667,7 +2667,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-utils"
-version = "0.6.0"
+version = "0.6.0-beta.2"
 dependencies = [
  "anchor-lang",
  "bitmaps",
