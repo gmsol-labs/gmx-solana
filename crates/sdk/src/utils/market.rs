@@ -19,15 +19,15 @@ impl MarketDecimals {
     pub fn new(meta: &MarketMeta, token_map: &impl TokenMapAccess) -> crate::Result<Self> {
         let index_token_decimals = token_map
             .get(&meta.index_token_mint)
-            .ok_or_else(|| crate::Error::NotFound)?
+            .ok_or(crate::Error::NotFound)?
             .token_decimals;
         let long_token_decimals = token_map
             .get(&meta.long_token_mint)
-            .ok_or_else(|| crate::Error::NotFound)?
+            .ok_or(crate::Error::NotFound)?
             .token_decimals;
         let short_token_decimals = token_map
             .get(&meta.short_token_mint)
-            .ok_or_else(|| crate::Error::NotFound)?
+            .ok_or(crate::Error::NotFound)?
             .token_decimals;
 
         Ok(Self {
