@@ -254,6 +254,9 @@ enum Command {
         /// Provide this to participate in a competition.
         #[arg(long)]
         competition: Option<Pubkey>,
+        /// Provide to only prepare position for the order.
+        #[arg(long)]
+        prepare_position_only: bool,
     },
     /// Create a limit increase order.
     LimitIncrease {
@@ -1183,6 +1186,7 @@ impl super::Command for Exchange {
                 competition,
                 min_collateral_amount,
                 acceptable_price,
+                prepare_position_only,
             } => {
                 let market_address = client.find_market_address(store, market_token);
                 let market = client.market(&market_address).await?;
@@ -1236,37 +1240,41 @@ impl super::Command for Exchange {
                     builder.competition(competition);
                 }
 
-                for alt in ctx.config().alts() {
-                    let alt = client.alt(alt).await?.ok_or(gmsol_sdk::Error::NotFound)?;
-                    builder.add_alt(alt);
-                }
-
-                let (rpc, order) = builder.build_with_address().await?;
-
-                let rpc = rpc.pre_instructions(
-                    collector
-                        .as_ref()
-                        .map(|c| c.to_instructions(owner))
-                        .transpose()?
-                        .unwrap_or_default(),
-                    false,
-                );
-
-                println!("Order: {order}");
-
-                let tx = if *wait {
-                    ctx.require_not_serialize_only_mode()?;
-                    ctx.require_not_ix_buffer_mode()?;
-
-                    let signature = rpc.send_without_preflight().await?;
-                    tracing::info!("created a market increase order {order} at tx {signature}");
-
-                    wait_for_order(client, &order).await?;
-                    return Ok(());
+                if *prepare_position_only {
+                    let (rpc, position) = builder.build_prepare_position().await?.swap_output(());
+                    println!("Position: {position}");
+                    rpc.into_bundle_with_options(options)?
                 } else {
-                    rpc
-                };
-                tx.into_bundle_with_options(options)?
+                    for alt in ctx.config().alts() {
+                        let alt = client.alt(alt).await?.ok_or(gmsol_sdk::Error::NotFound)?;
+                        builder.add_alt(alt);
+                    }
+
+                    let (rpc, order) = builder.build_with_address().await?;
+
+                    let rpc = rpc.pre_instructions(
+                        collector
+                            .as_ref()
+                            .map(|c| c.to_instructions(owner))
+                            .transpose()?
+                            .unwrap_or_default(),
+                        false,
+                    );
+                    println!("Order: {order}");
+                    let tx = if *wait {
+                        ctx.require_not_serialize_only_mode()?;
+                        ctx.require_not_ix_buffer_mode()?;
+
+                        let signature = rpc.send_without_preflight().await?;
+                        tracing::info!("created a market increase order {order} at tx {signature}");
+
+                        wait_for_order(client, &order).await?;
+                        return Ok(());
+                    } else {
+                        rpc
+                    };
+                    tx.into_bundle_with_options(options)?
+                }
             }
             Command::LimitIncrease {
                 market_token,
