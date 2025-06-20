@@ -19,7 +19,10 @@ use gmsol_sdk::{
     },
     programs::{
         anchor_lang::prelude::Pubkey,
-        gmsol_store::{accounts::Market, types::UpdateOrderParams},
+        gmsol_store::{
+            accounts::Market,
+            types::{DecreasePositionSwapType, UpdateOrderParams},
+        },
     },
     serde::{serde_market::SerdeMarket, serde_position::SerdePosition, StringPubkey},
     solana_utils::{
@@ -1423,7 +1426,12 @@ impl super::Command for Exchange {
                     )?);
                 }
 
-                let (rpc, order) = builder.build_with_address().await?;
+                let (rpc, order) = builder
+                    .decrease_position_swap_type(Some(
+                        DecreasePositionSwapType::PnlTokenToCollateralToken,
+                    ))
+                    .build_with_address()
+                    .await?;
 
                 println!("Order: {order}");
 
@@ -1523,7 +1531,13 @@ impl super::Command for Exchange {
                     builder.valid_from_ts(to_unix_timestamp(ts)?);
                 }
 
-                let (rpc, order) = builder.swap_path(swap.clone()).build_with_address().await?;
+                let (rpc, order) = builder
+                    .swap_path(swap.clone())
+                    .decrease_position_swap_type(Some(
+                        DecreasePositionSwapType::PnlTokenToCollateralToken,
+                    ))
+                    .build_with_address()
+                    .await?;
                 println!("Order: {order}");
 
                 let tx = if *wait {
