@@ -387,6 +387,52 @@ where
         Ok((rpc, order))
     }
 
+    /// Get [`CreateOrderParams`].
+    pub fn create_order_params(&self) -> crate::Result<CreateOrderParams> {
+        let params = CreateOrderParams {
+            execution_lamports: self.execution_fee,
+            swap_path_length: self
+                .swap_path
+                .len()
+                .try_into()
+                .map_err(|_| crate::Error::custom("number out of range"))?,
+            kind: self.params.kind.try_into()?,
+            decrease_position_swap_type: self.params.decrease_position_swap_type,
+            initial_collateral_delta_amount: self.params.initial_collateral_delta_amount,
+            size_delta_value: self.params.size_delta_usd,
+            is_long: self.params.is_long,
+            is_collateral_long: self.is_output_token_long,
+            min_output: Some(self.params.min_output_amount),
+            trigger_price: self.params.trigger_price,
+            acceptable_price: self.params.acceptable_price,
+            should_unwrap_native_token: self.should_unwrap_native_token,
+            valid_from_ts: self.params.valid_from_ts,
+        };
+        Ok(params)
+    }
+
+    /// Create [`TransactionBuilder`] to prepare account.
+    pub async fn build_prepare_position(
+        &mut self,
+    ) -> crate::Result<TransactionBuilder<'a, C, Pubkey>> {
+        let Some(position) = self.position().await? else {
+            return Err(crate::Error::custom("invalid order kind"));
+        };
+        let params = self.create_order_params()?;
+        let prepare_position = self
+            .client
+            .store_transaction()
+            .anchor_accounts(accounts::PreparePosition {
+                owner: self.client.payer(),
+                store: self.store,
+                market: self.market(),
+                position,
+                system_program: system_program::ID,
+            })
+            .anchor_args(args::PreparePosition { params });
+        Ok(prepare_position.output(position))
+    }
+
     /// Create [`TransactionBuilder`] and return order address and optional position address.
     pub async fn build_with_addresses(
         &mut self,
@@ -442,25 +488,7 @@ where
         let user = self.client.find_user_address(&self.store, owner);
 
         let kind = self.params.kind;
-        let params = CreateOrderParams {
-            execution_lamports: self.execution_fee,
-            swap_path_length: self
-                .swap_path
-                .len()
-                .try_into()
-                .map_err(|_| crate::Error::custom("number out of range"))?,
-            kind: kind.try_into()?,
-            decrease_position_swap_type: self.params.decrease_position_swap_type,
-            initial_collateral_delta_amount: self.params.initial_collateral_delta_amount,
-            size_delta_value: self.params.size_delta_usd,
-            is_long: self.params.is_long,
-            is_collateral_long: self.is_output_token_long,
-            min_output: Some(self.params.min_output_amount),
-            trigger_price: self.params.trigger_price,
-            acceptable_price: self.params.acceptable_price,
-            should_unwrap_native_token: self.should_unwrap_native_token,
-            valid_from_ts: self.params.valid_from_ts,
-        };
+        let params = self.create_order_params()?;
 
         let mut prepare = match kind {
             OrderKind::MarketSwap | OrderKind::LimitSwap => {
