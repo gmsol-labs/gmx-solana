@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- model: Changed trait definitions to support virtual inventories.
+
+### Added
+
+- model: Added support for virtual inventories and virtual price impact.
+- program(store): Introduced virtual inventory mechanism and related instructions.
+
+## [0.6.0] - 2025-06-23
+
+### Breaking Changes
+
 - programs: Upgraded to `anchor v0.31.1` and `solana v2.1.21`.
 - programs(store): Removed support for Chainlink data feeds.
 - programs(store): Refactored `TradeFlag` into the `gmsol-utils` crate.
@@ -251,7 +262,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provided SDK (`gmsol`) and other utility crates.
 - Provided a command-line interface (`gmsol`).
 
-[unreleased]: https://github.com/gmsol-labs/gmx-solana/compare/v0.5.0...HEAD
+[unreleased]: https://github.com/gmsol-labs/gmx-solana/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.6.0
 [0.5.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.5.0
 [0.4.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.4.0
 [0.3.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.3.0
