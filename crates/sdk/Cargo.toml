@@ -41,8 +41,6 @@ serde = [
 ]
 market-graph = ["petgraph", "rust_decimal/maths"]
 client = [
-    "gmsol-programs/utils",
-    "gmsol-programs/gmsol-utils",
     "gmsol-solana-utils/make-bundle-builder",
     "gmsol-solana-utils/anchor",
     "gmsol-utils/debug",
@@ -88,7 +86,7 @@ anchor-test = ["client", "chainlink", "pyth", "decode"]
 
 [dependencies]
 gmsol-utils = { workspace = true, features = ["enum-iter", "debug"] }
-gmsol-programs = { workspace = true, features = ["model"] }
+gmsol-programs = { workspace = true, features = ["model", "utils", "gmsol-utils"] }
 gmsol-model = { workspace = true, features = ["u128", "strum"] }
 gmsol-solana-utils = { workspace = true }
 gmsol-decode = { workspace = true, optional = true, features = [
