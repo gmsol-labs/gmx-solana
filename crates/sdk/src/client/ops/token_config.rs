@@ -5,6 +5,8 @@ use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_utils::{oracle::PriceProviderKind, token_config::UpdateTokenConfigParams};
 use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
 
+use crate::{serde::StringPubkey, utils::Value};
+
 /// Operations for token config.
 pub trait TokenConfigOps<C> {
     /// Initialize a  `TokenMap` account.
@@ -76,7 +78,7 @@ pub trait TokenConfigOps<C> {
         token: &Pubkey,
         provider: PriceProviderKind,
         update: UpdateFeedConfig,
-    ) -> TransactionBuilder<C>;
+    ) -> crate::Result<TransactionBuilder<C>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> TokenConfigOps<C> for crate::Client<C> {
@@ -221,9 +223,10 @@ impl<C: Deref<Target = impl Signer> + Clone> TokenConfigOps<C> for crate::Client
         token: &Pubkey,
         provider: PriceProviderKind,
         update: UpdateFeedConfig,
-    ) -> TransactionBuilder<C> {
+    ) -> crate::Result<TransactionBuilder<C>> {
         let authority = self.payer();
-        self.store_transaction()
+        let txn = self
+            .store_transaction()
             .anchor_accounts(accounts::SetFeedConfigV2 {
                 authority,
                 store: *store,
@@ -232,23 +235,31 @@ impl<C: Deref<Target = impl Signer> + Clone> TokenConfigOps<C> for crate::Client
             .anchor_args(args::SetFeedConfigV2 {
                 token: *token,
                 provider: provider.into(),
-                feed: update.feed_id,
+                feed: update.feed_id.map(|k| k.0),
                 timestamp_adjustment: update.timestamp_adjustment,
-                max_deviation_factor: update.max_deviation_factor,
-            })
+                max_deviation_factor: update
+                    .max_deviation_factor
+                    .map(|f| f.to_u128())
+                    .transpose()?,
+            });
+        Ok(txn)
     }
 }
 
 /// Contains updated parameters for the feed config.
 #[derive(typed_builder::TypedBuilder)]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 pub struct UpdateFeedConfig {
     /// Feed id.
     #[builder(default)]
-    pub feed_id: Option<Pubkey>,
+    #[cfg_attr(serde, serde(default))]
+    pub feed_id: Option<StringPubkey>,
     /// Timestamp adjustment.
     #[builder(default)]
+    #[cfg_attr(serde, serde(default))]
     pub timestamp_adjustment: Option<u32>,
     /// Max deviation factor.
     #[builder(default)]
-    pub max_deviation_factor: Option<u128>,
+    #[cfg_attr(serde, serde(default))]
+    pub max_deviation_factor: Option<Value>,
 }

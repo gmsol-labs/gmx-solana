@@ -5,6 +5,8 @@ use gmsol_utils::{
 use indexmap::IndexMap;
 use strum::IntoEnumIterator;
 
+use crate::utils::Value;
+
 /// Serializable version of [`TokenConfig`].
 #[derive(Debug, Clone)]
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
@@ -73,21 +75,27 @@ pub struct SerdeFeedConfig {
     pub feed_id_encoding: Encoding,
     /// Timestamp adjustment.
     pub timestamp_adjustment: u32,
+    /// Max deviation factor.
+    #[cfg_attr(serde, serde(default))]
+    pub max_deviation_factor: Option<Value>,
 }
 
 impl SerdeFeedConfig {
     /// Create from [`FeedConfig`].
     pub fn from_feed_config(kind: PriceProviderKind, config: &FeedConfig) -> Self {
+        let max_deviation_factor = config.max_deviation_factor().map(Value::from_u128);
         match kind {
             PriceProviderKind::Pyth | PriceProviderKind::ChainlinkDataStreams => Self {
                 feed_id_encoding: Encoding::Hex,
                 feed_id: format!("0x{}", hex::encode(config.feed())),
                 timestamp_adjustment: config.timestamp_adjustment(),
+                max_deviation_factor,
             },
             _ => Self {
                 feed_id_encoding: Encoding::Base58,
                 feed_id: config.feed().to_string(),
                 timestamp_adjustment: config.timestamp_adjustment(),
+                max_deviation_factor,
             },
         }
     }

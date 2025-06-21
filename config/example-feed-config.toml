@@ -1,0 +1,5 @@
+["So11111111111111111111111111111111111111112"."chainlink_data_streams"]
+max_deviation_factor = "0.00001"
+
+["UsdsBvJe6sPKBzZhEo9bDDVg6d3695gJonz9eVSAUpP"."chainlink_data_streams"]
+max_deviation_factor = "0.00005"

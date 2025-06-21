@@ -192,3 +192,9 @@ impl Value {
         self.0.is_zero()
     }
 }
+
+impl From<u128> for Value {
+    fn from(value: u128) -> Self {
+        Self::from_u128(value)
+    }
+}

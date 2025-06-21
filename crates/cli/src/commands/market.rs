@@ -13,7 +13,10 @@ use gmsol_sdk::{
             DEFAULT_TIMESTAMP_ADJUSTMENT,
         },
     },
-    ops::{ConfigOps, GtOps, MarketOps, OracleOps, StoreOps, TokenConfigOps},
+    ops::{
+        token_config::UpdateFeedConfig, ConfigOps, GtOps, MarketOps, OracleOps, StoreOps,
+        TokenConfigOps,
+    },
     programs::{anchor_lang::prelude::Pubkey, gmsol_store::accounts::MarketConfigBuffer},
     serde::{serde_market::SerdeMarketConfig, serde_token_map::SerdeTokenConfig, StringPubkey},
     solana_utils::{
@@ -72,6 +75,12 @@ enum Command {
         token_map: Option<Pubkey>,
         #[arg(long)]
         set_token_map: bool,
+        path: PathBuf,
+    },
+    /// Update feed configs from file.
+    UpdateFeedConfig {
+        #[arg(long)]
+        token_map: Option<Pubkey>,
         path: PathBuf,
     },
     /// Toggle the token config for the given token.
@@ -355,6 +364,20 @@ impl super::Command for Market {
                 let configs: IndexMap<String, TokenConfig> = toml_from_file(path)?;
                 let token_map = token_map_address(client, token_map.as_ref()).await?;
                 insert_token_configs(client, &token_map, *set_token_map, &configs, options)?
+            }
+            Command::UpdateFeedConfig { token_map, path } => {
+                let token_map = token_map_address(client, token_map.as_ref()).await?;
+                let configs: IndexMap<StringPubkey, IndexMap<PriceProviderKind, UpdateFeedConfig>> =
+                    toml_from_file(path)?;
+                let mut bundle = client.bundle_with_options(options);
+                for (token, feeds) in configs {
+                    for (provider, config) in feeds {
+                        let rpc = client
+                            .update_feed_config(store, &token_map, &token, provider, config)?;
+                        bundle.push(rpc)?;
+                    }
+                }
+                bundle
             }
             Command::ToggleTokenConfig {
                 token,

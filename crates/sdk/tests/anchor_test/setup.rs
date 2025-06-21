@@ -709,9 +709,11 @@ impl Deployment {
                             &token.address,
                             token.config.provider,
                             UpdateFeedConfig::builder()
-                                .max_deviation_factor(token.config.max_deviation_factor)
+                                .max_deviation_factor(
+                                    token.config.max_deviation_factor.map(Into::into),
+                                )
                                 .build(),
-                        );
+                        )?;
 
                         let enable_price_adjustment = client.toggle_token_price_adjustment(
                             store,
