@@ -134,8 +134,6 @@ enum Command {
     ConfirmGtBuyback {
         #[clap(flatten)]
         gt_exchange_vault: SelectGtExchangeVault,
-        #[arg(long)]
-        oracle: Pubkey,
         #[command(flatten)]
         args: executor::ExecutorArgs,
     },
@@ -835,9 +833,9 @@ impl super::Command for Treasury {
             #[cfg(feature = "execute")]
             Command::ConfirmGtBuyback {
                 gt_exchange_vault,
-                oracle,
                 args,
             } => {
+                let oracle = ctx.config().oracle()?;
                 let gt_exchange_vault = gt_exchange_vault.get(store, client).await?;
                 let builder = client.confirm_gt_buyback(store, &gt_exchange_vault, oracle);
                 let executor = args.build(client).await?;
