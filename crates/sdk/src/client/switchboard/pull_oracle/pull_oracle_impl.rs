@@ -8,12 +8,7 @@ use rand::Rng;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{instruction::AccountMeta, system_program};
 use solana_sdk::{pubkey::Pubkey, signer::Signer};
-use std::{
-    collections::HashMap,
-    num::NonZeroUsize,
-    ops::Deref,
-    sync::{Arc, LazyLock},
-};
+use std::{collections::HashMap, num::NonZeroUsize, ops::Deref, sync::Arc};
 use switchboard_on_demand_client::{
     fetch_and_cache_luts, oracle_job::OracleJob, prost::Message, CrossbarClient, FeedConfig,
     FetchSignaturesMultiParams, Gateway, MultiSubmission, OracleAccountData, PullFeed,
@@ -30,15 +25,15 @@ use crate::client::pull_oracle::{
 
 const DEFAULT_BATCH_SIZE: usize = 5;
 
+const DEVNET_QUEUE: Pubkey = solana_sdk::pubkey!("EYiAmGSdsQTuCw413V5BzaruWuCCSDgTPtBGvLkXHbe7");
+#[cfg(not(feature = "devnet"))]
+const MAINNET_QUEUE: Pubkey = solana_sdk::pubkey!("A43DyUGA7s8eXPxqEjJY6EBu1KKbNgfxF8h17VAHn13w");
+
 cfg_if::cfg_if! {
     if #[cfg(feature = "devnet")] {
-        /// Switchboard Default Queue.
-        static QUEUE: LazyLock<Pubkey> =
-        LazyLock::new(|| "EYiAmGSdsQTuCw413V5BzaruWuCCSDgTPtBGvLkXHbe7".parse().unwrap());
+        const QUEUE: Pubkey = DEVNET_QUEUE;
     } else {
-        /// Switchboard Default Queue.
-        static QUEUE: LazyLock<Pubkey> =
-        LazyLock::new(|| "A43DyUGA7s8eXPxqEjJY6EBu1KKbNgfxF8h17VAHn13w".parse().unwrap());
+        const QUEUE: Pubkey = MAINNET_QUEUE;
     }
 }
 
@@ -82,8 +77,9 @@ impl SwitchcboardPullOracleFactory {
     }
 
     /// Create from default queue.
-    pub async fn from_default_queue(client: &RpcClient) -> crate::Result<Self> {
-        Self::from_queue(client, &QUEUE).await
+    pub async fn from_default_queue(client: &RpcClient, testnet: bool) -> crate::Result<Self> {
+        let queue = if testnet { DEVNET_QUEUE } else { QUEUE };
+        Self::from_queue(client, &queue).await
     }
 
     /// Create from queue.

@@ -74,7 +74,7 @@ impl<'a> Executor<'a> {
         .map(|client| {
             (
                 client,
-                ChainlinkPullOracleFactory::new(store, feed_index).arced(),
+                ChainlinkPullOracleFactory::new(store, feed_index, testnet).arced(),
             )
         });
 
@@ -84,6 +84,7 @@ impl<'a> Executor<'a> {
                 Err(_) => Some(
                     SwitchcboardPullOracleFactory::from_default_queue(
                         &client.store_program().rpc(),
+                        testnet,
                     )
                     .await?,
                 ),
