@@ -161,7 +161,9 @@ impl GtBank {
     }
 
     pub(crate) fn record_all_transferred_out(&mut self) -> Result<()> {
-        self.balances.clear();
+        for (_key, balance) in self.balances.entries_mut() {
+            balance.amount = 0;
+        }
         Ok(())
     }
 
