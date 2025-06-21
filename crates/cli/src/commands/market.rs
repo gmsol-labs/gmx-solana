@@ -91,6 +91,14 @@ enum Command {
         #[command(flatten)]
         toggle: ToggleValue,
     },
+    /// Toggle the token price adjustment for the given token.
+    ToggleTokenPriceAdjustment {
+        #[arg(long)]
+        token_map: Option<Pubkey>,
+        token: Pubkey,
+        #[command(flatten)]
+        toggle: ToggleValue,
+    },
     /// Set expected provider of token.
     SetExpectedProvider {
         #[arg(long)]
@@ -387,6 +395,21 @@ impl super::Command for Market {
                 let token_map_address = token_map_address(client, token_map.as_ref()).await?;
                 client
                     .toggle_token_config(store, &token_map_address, token, toggle.is_enable())
+                    .into_bundle_with_options(options)?
+            }
+            Command::ToggleTokenPriceAdjustment {
+                token,
+                token_map,
+                toggle,
+            } => {
+                let token_map_address = token_map_address(client, token_map.as_ref()).await?;
+                client
+                    .toggle_token_price_adjustment(
+                        store,
+                        &token_map_address,
+                        token,
+                        toggle.is_enable(),
+                    )
                     .into_bundle_with_options(options)?
             }
             Command::SetExpectedProvider {
