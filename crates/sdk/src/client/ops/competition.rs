@@ -18,6 +18,9 @@ pub trait CompetitionOps<C> {
         competition: &Pubkey,
         trader: Option<&Pubkey>,
     ) -> TransactionBuilder<C, Pubkey>;
+
+    /// Close a participant account.
+    fn close_participant(&self, competition: &Pubkey) -> TransactionBuilder<C>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> CompetitionOps<C> for crate::Client<C> {
@@ -53,6 +56,19 @@ impl<C: Deref<Target = impl Signer> + Clone> CompetitionOps<C> for crate::Client
                 participant,
                 trader,
                 system_program: system_program::ID,
+            })
+    }
+
+    fn close_participant(&self, competition: &Pubkey) -> TransactionBuilder<C> {
+        let trader = self.payer();
+        let participant = crate::pda::find_participant_address(competition, &trader, &ID).0;
+        self.program(ID)
+            .transaction()
+            .anchor_args(args::CloseParticipant {})
+            .anchor_accounts(accounts::CloseParticipant {
+                trader,
+                competition: *competition,
+                participant,
             })
     }
 }
