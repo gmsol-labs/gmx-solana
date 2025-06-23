@@ -36,6 +36,11 @@ enum Command {
     },
     /// Fetch a competition.
     Get { address: Pubkey },
+    /// Close the participant account associated to the given competition.
+    CloseParticipant {
+        #[arg(long)]
+        competition: Pubkey,
+    },
 }
 
 fn parse_datetime(s: &str) -> Result<OffsetDateTime, time::error::Parse> {
@@ -89,6 +94,9 @@ impl super::Command for Competition {
                 println!("{competition:#?}");
                 return Ok(());
             }
+            Command::CloseParticipant { competition } => client
+                .close_participant(competition)
+                .into_bundle_with_options(options)?,
         };
 
         client.send_or_serialize(bundle).await?;
