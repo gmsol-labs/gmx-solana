@@ -134,7 +134,7 @@ impl<T> FeeParams<T> {
     {
         let order_fees = self.order_fees(collateral_token_price, size_delta_usd, balance_change)?;
         Ok(PositionFees {
-            paid_order_fee_value: order_fees.fee_value.clone(),
+            paid_order_and_borrowing_fee_value: order_fees.fee_value.clone(),
             order: order_fees,
             borrowing: Default::default(),
             funding: Default::default(),
@@ -681,7 +681,7 @@ impl<T> LiquidationFees<T> {
 )]
 #[derive(Debug, Clone, Copy)]
 pub struct PositionFees<T> {
-    paid_order_fee_value: T,
+    paid_order_and_borrowing_fee_value: T,
     order: OrderFees<T>,
     borrowing: BorrowingFees<T>,
     funding: FundingFees<T>,
@@ -741,9 +741,9 @@ impl<T> PositionFees<T> {
         Ok(amount)
     }
 
-    /// Get paid order fee value.
-    pub fn paid_order_fee_value(&self) -> &T {
-        &self.paid_order_fee_value
+    /// Get paid order and borrowing fee value.
+    pub fn paid_order_and_borrowing_fee_value(&self) -> &T {
+        &self.paid_order_and_borrowing_fee_value
     }
 
     /// Get order fees.
@@ -798,9 +798,12 @@ impl<T> PositionFees<T> {
             ))
     }
 
-    /// Set paid order fee value.
-    pub(crate) fn set_paid_order_fee_value(&mut self, paid_order_fee_value: T) {
-        self.paid_order_fee_value = paid_order_fee_value;
+    /// Set paid order and borrwing fee value.
+    pub(crate) fn set_paid_order_and_borrowing_fee_value(
+        &mut self,
+        paid_order_and_borrowing_fee_value: T,
+    ) {
+        self.paid_order_and_borrowing_fee_value = paid_order_and_borrowing_fee_value;
     }
 
     /// Clear fees excluding funding fee.
@@ -828,11 +831,16 @@ impl<T> PositionFees<T> {
         let amount = value
             .checked_div(price)
             .ok_or(crate::Error::Computation("calculating borrowing amount"))?;
+        let paid_fee_value = self
+            .paid_order_and_borrowing_fee_value
+            .checked_add(&value)
+            .ok_or(crate::Error::Computation("adding borrowing fee value"))?;
         self.borrowing.fee_amount_for_receiver =
             crate::utils::apply_factor(&amount, receiver_factor).ok_or(
                 crate::Error::Computation("calculating borrowing fee amount for receiver"),
             )?;
         self.borrowing.fee_amount = amount;
+        self.paid_order_and_borrowing_fee_value = paid_fee_value;
         Ok(self)
     }
 
@@ -852,7 +860,7 @@ impl<T> PositionFees<T> {
 impl<T: Zero> Default for PositionFees<T> {
     fn default() -> Self {
         Self {
-            paid_order_fee_value: Zero::zero(),
+            paid_order_and_borrowing_fee_value: Zero::zero(),
             order: Default::default(),
             borrowing: Default::default(),
             funding: Default::default(),

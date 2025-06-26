@@ -559,8 +559,8 @@ where
                         // as long as the remaining_cost is still zero.
                         fees.clear_fees_excluding_funding();
 
-                        // Also, clear the `paid_order_fee_value` for the same reason.
-                        fees.set_paid_order_fee_value(Zero::zero());
+                        // Also, clear the `paid_order_and_borrowing_fee_value` for the same reason.
+                        fees.set_paid_order_and_borrowing_fee_value(Zero::zero());
                     }
                     Ok(())
                 },

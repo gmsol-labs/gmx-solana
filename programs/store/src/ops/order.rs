@@ -1533,7 +1533,7 @@ fn execute_increase_position(
             .map_err(ModelError::from)?;
 
         let (&long_amount, &short_amount) = report.claimable_funding_amounts();
-        let paid_order_fee_value = *report.fees().paid_order_fee_value();
+        let paid_fee_value = *report.fees().paid_order_and_borrowing_fee_value();
         event.update_with_increase_report(&report)?;
 
         position
@@ -1545,7 +1545,7 @@ fn execute_increase_position(
             ))?;
         msg!("[Position] increased");
 
-        (long_amount, short_amount, paid_order_fee_value)
+        (long_amount, short_amount, paid_fee_value)
     };
 
     // Process output amount.
@@ -1774,7 +1774,7 @@ fn execute_decrease_position(
         .market()
         .validate_market_balances(long_transfer_out, short_transfer_out)?;
 
-    let paid_order_fee_value = *report.fees().paid_order_fee_value();
+    let paid_fee_value = *report.fees().paid_order_and_borrowing_fee_value();
 
     msg!("[Position] decreased");
     position
@@ -1785,7 +1785,7 @@ fn execute_decrease_position(
             report,
         ))?;
 
-    Ok((should_remove_position, paid_order_fee_value))
+    Ok((should_remove_position, paid_fee_value))
 }
 
 /// Position Cut Operation.
