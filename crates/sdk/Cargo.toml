@@ -100,6 +100,7 @@ anchor-spl = { workspace = true, default-features = false, features = [
     "token",
     "token_2022",
     "associated_token",
+    "metadata",
 ] }
 anchor-lang = { workspace = true, features = ["derive"] }
 borsh = { workspace = true }

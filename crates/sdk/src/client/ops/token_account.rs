@@ -36,6 +36,39 @@ pub trait TokenAccountOps<C> {
         token_program_id: &Pubkey,
         owner: Option<&Pubkey>,
     ) -> TransactionBuilder<C>;
+
+    /// Create token metadata for a token whose mint authority is `store`.
+    fn create_token_metadata(
+        &self,
+        store: &Pubkey,
+        mint: &Pubkey,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> TransactionBuilder<C, Pubkey>;
+
+    /// Update a token metadata whose update authority is `store`.
+    fn update_token_metadata(
+        &self,
+        store: &Pubkey,
+        metadata: &Pubkey,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> TransactionBuilder<C>;
+
+    /// Update a token metadata whose update authority is `store` for the give mint.
+    fn update_token_metadata_by_mint(
+        &self,
+        store: &Pubkey,
+        mint: &Pubkey,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> TransactionBuilder<C> {
+        let metadata = find_token_metadata_address(mint);
+        self.update_token_metadata(store, &metadata, name, symbol, uri)
+    }
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> TokenAccountOps<C> for Client<C> {
@@ -105,4 +138,58 @@ impl<C: Deref<Target = impl Signer> + Clone> TokenAccountOps<C> for Client<C> {
             .program(spl_associated_token_account::ID)
             .pre_instruction(ix, true)
     }
+
+    fn create_token_metadata(
+        &self,
+        store: &Pubkey,
+        mint: &Pubkey,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> TransactionBuilder<C, Pubkey> {
+        let authority = self.payer();
+        let metadata = find_token_metadata_address(mint);
+        self.store_transaction()
+            .anchor_accounts(accounts::CreateTokenMetadata {
+                authority,
+                store: *store,
+                mint: *mint,
+                metadata,
+                system_program: system_program::ID,
+                sysvar_instructions: solana_sdk::sysvar::instructions::ID,
+                metadata_program: anchor_spl::metadata::ID,
+            })
+            .anchor_args(args::CreateTokenMetadata { name, symbol, uri })
+            .output(metadata)
+    }
+
+    fn update_token_metadata(
+        &self,
+        store: &Pubkey,
+        metadata: &Pubkey,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> TransactionBuilder<C> {
+        let authority = self.payer();
+        self.store_transaction()
+            .anchor_accounts(accounts::UpdateTokenMetadata {
+                authority,
+                store: *store,
+                metadata: *metadata,
+                metadata_program: anchor_spl::metadata::ID,
+            })
+            .anchor_args(args::UpdateTokenMetadata { name, symbol, uri })
+    }
+}
+
+const TOKEN_METADATA_SEED: &[u8] = b"metadata";
+
+fn find_token_metadata_address(mint: &Pubkey) -> Pubkey {
+    let program_id = &anchor_spl::metadata::ID;
+    Pubkey::find_program_address(
+        &[TOKEN_METADATA_SEED, program_id.as_ref(), mint.as_ref()],
+        program_id,
+    )
+    .0
 }
