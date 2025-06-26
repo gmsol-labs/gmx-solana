@@ -106,6 +106,7 @@ color-eyre = "0.6.5"
 etcetera = "0.10.0"
 enum_dispatch = "0.3.13"
 vergen-git2 = "1.0.0"
+mpl-token-metadata = "5"
 
 [workspace.dependencies.chainlink-data-streams-report]
 version = "1.0.0"

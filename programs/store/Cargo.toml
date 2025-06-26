@@ -52,6 +52,7 @@ anchor-spl = { workspace = true, default-features = false, features = [
     "token_2022",
     "token_2022_extensions",
     "associated_token",
+    "metadata",
 ] }
 # chainlink_solana = { workspace = true }
 num_enum = { workspace = true }
@@ -72,6 +73,7 @@ bs58 = { workspace = true, optional = true }
 derive_more = { workspace = true, optional = true }
 rust_decimal = { workspace = true }
 cfg-if = { workspace = true }
+mpl-token-metadata = { workspace = true }
 
 [package.metadata.docs.rs]
 features = ["doc"]

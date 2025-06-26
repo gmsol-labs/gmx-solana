@@ -1771,6 +1771,34 @@ pub mod gmsol_store {
         instructions::prepare_associated_token_account(ctx)
     }
 
+    /// Create token metadata for a token whose mint authority is `store`.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](CreateTokenMetadata)*
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn create_token_metadata(
+        ctx: Context<CreateTokenMetadata>,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> Result<()> {
+        CreateTokenMetadata::invoke_unchecked(ctx, name, symbol, uri)
+    }
+
+    /// Update a token metadata whose update authority is `store`.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](UpdateTokenMetadata)*
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn update_token_metadata(
+        ctx: Context<UpdateTokenMetadata>,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> Result<()> {
+        UpdateTokenMetadata::invoke_unchecked(ctx, name, symbol, uri)
+    }
+
     // ===========================================
     //                  Deposit
     // ===========================================

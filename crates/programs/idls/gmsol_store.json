@@ -2,7 +2,7 @@
   "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo",
   "metadata": {
     "name": "gmsol_store",
-    "version": "0.6.0",
+    "version": "0.7.0",
     "spec": "0.1.0",
     "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
     "repository": "https://github.com/gmsol-labs/gmx-solana"
@@ -9666,6 +9666,89 @@
               "name": "CreateShiftParams"
             }
           }
+        }
+      ]
+    },
+    {
+      "name": "create_token_metadata",
+      "docs": [
+        "Create token metadata for a token whose mint authority is `store`.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](CreateTokenMetadata)*"
+      ],
+      "discriminator": [
+        221,
+        80,
+        176,
+        37,
+        153,
+        188,
+        160,
+        68
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority account."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ]
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The mint account for the token account."
+          ],
+          "writable": true
+        },
+        {
+          "name": "metadata",
+          "docs": [
+            "The metadata account to create."
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "The [`System`] program."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "sysvar_instructions",
+          "docs": [
+            "The sysvar instructions."
+          ]
+        },
+        {
+          "name": "metadata_program",
+          "docs": [
+            "The metadata program."
+          ],
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "uri",
+          "type": "string"
         }
       ]
     },
@@ -23725,6 +23808,68 @@
         {
           "name": "compressed_report",
           "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "update_token_metadata",
+      "docs": [
+        "Update a token metadata whose update authority is `store`.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](UpdateTokenMetadata)*"
+      ],
+      "discriminator": [
+        243,
+        6,
+        8,
+        23,
+        126,
+        181,
+        251,
+        158
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority account."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store account."
+          ]
+        },
+        {
+          "name": "metadata",
+          "docs": [
+            "The metadata account to create."
+          ],
+          "writable": true
+        },
+        {
+          "name": "metadata_program",
+          "docs": [
+            "The metadata program."
+          ],
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "uri",
+          "type": "string"
         }
       ]
     },

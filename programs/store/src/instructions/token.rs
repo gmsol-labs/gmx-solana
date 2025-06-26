@@ -239,3 +239,155 @@ pub(crate) fn prepare_associated_token_account(
 ) -> Result<()> {
     Ok(())
 }
+
+/// The accounts definition for [`create_token_metadata`](crate::gmsol_store::create_token_metadata).
+#[derive(Accounts)]
+pub struct CreateTokenMetadata<'info> {
+    /// Authority account.
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    /// Store account.
+    pub store: AccountLoader<'info, Store>,
+    /// The mint account for the token account.
+    #[account(mut)]
+    pub mint: InterfaceAccount<'info, token_interface::Mint>,
+    /// The metadata account to create.
+    /// CHECK: check by CPI.
+    #[account(mut)]
+    pub metadata: UncheckedAccount<'info>,
+    /// The [`System`] program.
+    pub system_program: Program<'info, System>,
+    /// The sysvar instructions.
+    /// CHECK: check by CPI.
+    pub sysvar_instructions: UncheckedAccount<'info>,
+    /// The metadata program.
+    pub metadata_program: Program<'info, anchor_spl::metadata::Metadata>,
+}
+
+impl CreateTokenMetadata<'_> {
+    /// Create token metadata for a token whose mint authority is `store`.
+    ///
+    /// # CHECK
+    /// - Only MARKET_KEEPER is allowed to invoke.
+    pub(crate) fn invoke_unchecked(
+        ctx: Context<Self>,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> Result<()> {
+        ctx.accounts.create_token_metadata(name, symbol, uri)?;
+        Ok(())
+    }
+
+    fn create_token_metadata(&self, name: String, symbol: String, uri: String) -> Result<()> {
+        use mpl_token_metadata::{instructions::CreateV1CpiBuilder, types::TokenStandard};
+
+        let store = self.store.load()?;
+        let signer_seeds = store.signer_seeds();
+
+        CreateV1CpiBuilder::new(&self.metadata_program)
+            .metadata(&self.metadata)
+            .mint(self.mint.as_ref(), false)
+            .authority(self.store.as_ref())
+            .payer(&self.authority)
+            .update_authority(self.store.as_ref(), true)
+            .system_program(&self.system_program)
+            .sysvar_instructions(&self.sysvar_instructions)
+            .name(name)
+            .symbol(symbol)
+            .uri(uri)
+            .seller_fee_basis_points(0)
+            .token_standard(TokenStandard::Fungible)
+            .invoke_signed(&[&signer_seeds])?;
+
+        Ok(())
+    }
+}
+
+impl<'info> internal::Authentication<'info> for CreateTokenMetadata<'info> {
+    fn authority(&self) -> &Signer<'info> {
+        &self.authority
+    }
+
+    fn store(&self) -> &AccountLoader<'info, Store> {
+        &self.store
+    }
+}
+
+/// The accounts definition for [`update_token_metadata`](crate::gmsol_store::update_token_metadata).
+#[derive(Accounts)]
+pub struct UpdateTokenMetadata<'info> {
+    /// Authority account.
+    pub authority: Signer<'info>,
+    /// Store account.
+    pub store: AccountLoader<'info, Store>,
+    /// The metadata account to create.
+    /// CHECK: check by CPI.
+    #[account(mut)]
+    pub metadata: UncheckedAccount<'info>,
+    /// The metadata program.
+    pub metadata_program: Program<'info, anchor_spl::metadata::Metadata>,
+}
+
+impl UpdateTokenMetadata<'_> {
+    /// Update a token metadata whose update authority is `store`.
+    ///
+    /// # CHECK
+    /// - Only MARKET_KEEPER is allowed to invoke.
+    pub(crate) fn invoke_unchecked(
+        ctx: Context<Self>,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> Result<()> {
+        use anchor_spl::metadata::mpl_token_metadata::types::DataV2;
+
+        ctx.accounts.update_token_metadata(DataV2 {
+            name,
+            symbol,
+            uri,
+            seller_fee_basis_points: 0,
+            creators: None,
+            collection: None,
+            uses: None,
+        })?;
+        Ok(())
+    }
+
+    fn update_token_metadata(
+        &self,
+        data: anchor_spl::metadata::mpl_token_metadata::types::DataV2,
+    ) -> Result<()> {
+        use anchor_spl::metadata;
+
+        let store = self.store.load()?;
+        let signer_seeds = store.signer_seeds();
+
+        let ctx = CpiContext::new(
+            self.metadata_program.to_account_info(),
+            metadata::UpdateMetadataAccountsV2 {
+                metadata: self.metadata.to_account_info(),
+                update_authority: self.store.to_account_info(),
+            },
+        );
+
+        metadata::update_metadata_accounts_v2(
+            ctx.with_signer(&[&signer_seeds]),
+            None,
+            Some(data),
+            None,
+            None,
+        )?;
+        Ok(())
+    }
+}
+
+impl<'info> internal::Authentication<'info> for UpdateTokenMetadata<'info> {
+    fn authority(&self) -> &Signer<'info> {
+        &self.authority
+    }
+
+    fn store(&self) -> &AccountLoader<'info, Store> {
+        &self.store
+    }
+}
