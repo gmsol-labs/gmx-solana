@@ -1,4 +1,4 @@
-use gmsol_sdk::{client::ops::ExchangeOps, constants::MARKET_USD_UNIT};
+use gmsol_sdk::{client::ops::ExchangeOps, constants::MARKET_USD_UNIT, ops::TokenAccountOps};
 use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
@@ -87,6 +87,81 @@ async fn unwrap_native_token_with_swap_path() -> eyre::Result<()> {
         )
         .instrument(tracing::info_span!("execute", order=%order))
         .await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn token_metadata() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("token_metadata");
+    let _enter = span.enter();
+
+    let client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let store = &deployment.store;
+
+    let market_token = deployment
+        .market_token("SOL", "fBTC", "USDG")
+        .expect("must exist");
+
+    let glv_token = &deployment.glv_token;
+
+    // Create metadata for a market token.
+    let (rpc, metadata) = client
+        .create_token_metadata(
+            store,
+            market_token,
+            "Market Token 1".to_string(),
+            "GM1".to_string(),
+            "metadata-uri".to_string(),
+        )
+        .swap_output(());
+    tracing::info!(%market_token, "creating token metadata: {metadata}");
+    let signature = rpc.send_without_preflight().await?;
+
+    tracing::info!(%signature, %market_token, "created token metadata: {metadata}");
+
+    let signature = client
+        .update_token_metadata_by_mint(
+            store,
+            market_token,
+            "Market Token 1".to_string(),
+            "GM1".to_string(),
+            "metadata-uri-2".to_string(),
+        )
+        .send_without_preflight()
+        .await?;
+
+    tracing::info!(%signature, %market_token, "updated token metadata: {metadata}");
+
+    // Create metadata for a glv token.
+    let (rpc, metadata) = client
+        .create_token_metadata(
+            store,
+            glv_token,
+            "GLV Token 1".to_string(),
+            "GLV1".to_string(),
+            "metadata-uri".to_string(),
+        )
+        .swap_output(());
+    tracing::info!(%glv_token, "creating token metadata: {metadata}");
+    let signature = rpc.send_without_preflight().await?;
+
+    tracing::info!(%signature, %glv_token, "created token metadata: {metadata}");
+
+    let signature = client
+        .update_token_metadata_by_mint(
+            store,
+            glv_token,
+            "GLV Token 1".to_string(),
+            "GLV1".to_string(),
+            "metadata-uri-2".to_string(),
+        )
+        .send_without_preflight()
+        .await?;
+
+    tracing::info!(%signature, %glv_token, "updated token metadata: {metadata}");
 
     Ok(())
 }

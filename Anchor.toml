@@ -72,6 +72,10 @@ address = "2k3DsgwBoqrnvXKVvd7jX7aptNxdcRBdcd5HkYsGgbrb"
 # [[test.validator.clone]]
 # address = "B7uYzGctUxQhNKhmKEkQVq4w7Bh5qizHQECqWb87SbFe"
 
+# Token Metadata Program.
+[[test.validator.clone]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+
 # WBTC Token Mint
 [[test.validator.clone]]
 address = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh"
