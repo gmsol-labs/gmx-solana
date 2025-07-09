@@ -33,6 +33,9 @@ pub trait StoreOps<C> {
 
     /// Initialize callback authority.
     fn initialize_callback_authority(&self) -> TransactionBuilder<C>;
+
+    /// Update last restarted slot.
+    fn update_last_restarted_slot(&self, store: &Pubkey) -> TransactionBuilder<C>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> StoreOps<C> for crate::Client<C> {
@@ -119,5 +122,10 @@ impl<C: Deref<Target = impl Signer> + Clone> StoreOps<C> for crate::Client<C> {
                 callback_authority: self.find_callback_authority_address(),
                 system_program: system_program::ID,
             })
+    }
+
+    fn update_last_restarted_slot(&self, store: &Pubkey) -> TransactionBuilder<C> {
+        let authority = self.payer();
+        self.store_transaction().anchor_args(args::UpdateLastRestartedSlot {}).anchor_accounts(accounts::UpdateLastRestartedSlot { authority, store: *store })
     }
 }
