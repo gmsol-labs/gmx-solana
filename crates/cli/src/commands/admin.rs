@@ -70,6 +70,8 @@ enum Command {
     InitRoles(Box<InitializeRoles>),
     /// Initialize callback authority.
     InitCallbackAuthority,
+    /// Update last restarted slot.
+    UpdateLastRestartedSlot,
 }
 
 impl super::Command for Admin {
@@ -257,6 +259,7 @@ impl super::Command for Admin {
             Command::InitCallbackAuthority => client
                 .initialize_callback_authority()
                 .into_bundle_with_options(options)?,
+            Command::UpdateLastRestartedSlot => client.update_last_restarted_slot(store).into_bundle_with_options(options)?,
         };
 
         client.send_or_serialize(bundle).await?;
