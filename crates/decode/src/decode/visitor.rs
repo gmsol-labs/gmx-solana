@@ -1,7 +1,10 @@
 use anchor_lang::solana_program::pubkey::Pubkey;
 
 use crate::{
-    decoder::{account_access::AccountAccess, cpi_event_access::AnchorCPIEventsAccess},
+    decoder::{
+        account_access::AccountAccess, cpi_event_access::AnchorCPIEventsAccess,
+        transaction_access::TransactionAccess,
+    },
     error::DecodeError,
 };
 
@@ -15,6 +18,17 @@ pub trait Visitor: Sized {
         _ = account;
         Err(DecodeError::InvalidType(
             "Unexpected type `Account`".to_string(),
+        ))
+    }
+
+    /// Visit a transaction.
+    fn visit_transaction(
+        self,
+        transaction: impl TransactionAccess,
+    ) -> Result<Self::Value, DecodeError> {
+        _ = transaction;
+        Err(DecodeError::InvalidType(
+            "Unexpected type `Transaction`".to_string(),
         ))
     }
 

@@ -1,9 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
-use anchor_lang::prelude::event::EVENT_IX_TAG_LE;
-use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use anchor_lang::prelude::{event::EVENT_IX_TAG_LE, AccountMeta};
+use solana_sdk::{
+    instruction::CompiledInstruction, message::v0::MessageAddressTableLookup, pubkey::Pubkey,
+    signature::Signature, transaction::VersionedTransaction,
+};
 use solana_transaction_status::{
-    EncodedTransactionWithStatusMeta, UiInstruction, UiLoadedAddresses,
+    option_serializer::OptionSerializer, EncodedTransactionWithStatusMeta, UiInstruction,
+    UiTransactionStatusMeta,
 };
 
 use crate::{Decode, DecodeError, Decoder, Visitor};
@@ -76,8 +80,8 @@ impl<'a> TransactionDecoder<'a> {
         self.transaction
     }
 
-    /// Extract CPI events.
-    pub fn extract_cpi_events(&self) -> Result<CPIEvents, DecodeError> {
+    /// Decode transaction.
+    pub fn decoded_transaction(&self) -> Result<DecodedTransaction, DecodeError> {
         let tx = self.transaction;
         let slot_index = (self.slot, None);
         let Some(decoded) = tx.transaction.decode() else {
@@ -86,65 +90,38 @@ impl<'a> TransactionDecoder<'a> {
         let Some(meta) = &tx.meta else {
             return Err(DecodeError::custom("missing meta"));
         };
-        let accounts = decoded.message.static_account_keys();
-        let loaded_addresses = Option::from(meta.loaded_addresses.clone())
-            .map(|mut loaded: UiLoadedAddresses| {
-                loaded.writable.append(&mut loaded.readonly);
-                loaded.writable
-            })
-            .unwrap_or_default();
-        let mut accounts = accounts.to_vec();
-        for address in loaded_addresses {
-            accounts.push(address.parse().map_err(DecodeError::custom)?);
-        }
-        tracing::debug!("accounts: {accounts:#?}");
-        let mut event_authority_indices = HashMap::<_, HashSet<u8>>::default();
-        let map = &self.cpi_event_filter.map;
-        for res in accounts
-            .iter()
-            .enumerate()
-            .filter(|(_, key)| map.contains_key(key))
-            .map(|(idx, key)| u8::try_from(idx).map(|idx| (map.get(key).unwrap(), idx)))
-        {
-            let (pubkey, idx) = res.map_err(|_| DecodeError::custom("invalid account keys"))?;
-            event_authority_indices
-                .entry(pubkey)
-                .or_default()
-                .insert(idx);
-        }
-        tracing::debug!("event_authorities: {event_authority_indices:#?}");
-        let Some(ixs) = Option::<&Vec<_>>::from(meta.inner_instructions.as_ref()) else {
-            return Err(DecodeError::custom("missing inner instructions"));
+
+        let (dynamic_writable_accounts, dynamic_readonly_accounts) = match &meta.loaded_addresses {
+            OptionSerializer::Some(loaded) => {
+                let dynamic_writable_accounts = loaded
+                    .writable
+                    .iter()
+                    .map(|address| address.parse().map_err(DecodeError::custom))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let dynamic_readonly_accounts = loaded
+                    .readonly
+                    .iter()
+                    .map(|address| address.parse().map_err(DecodeError::custom))
+                    .collect::<Result<Vec<_>, _>>()?;
+                (dynamic_writable_accounts, dynamic_readonly_accounts)
+            }
+            OptionSerializer::None | OptionSerializer::Skip => Default::default(),
         };
-        let mut events = Vec::default();
-        for ix in ixs.iter().flat_map(|ixs| &ixs.instructions) {
-            let UiInstruction::Compiled(ix) = ix else {
-                tracing::warn!("only compiled instruction is currently supported");
-                continue;
-            };
-            // NOTE: we are currently assuming that the Event CPI has only the event authority in the account list.
-            if ix.accounts.len() != 1 {
-                continue;
-            }
-            if let Some(program_id) = accounts.get(ix.program_id_index as usize) {
-                let Some(indexes) = event_authority_indices.get(program_id) else {
-                    continue;
-                };
-                let data = bs58::decode(&ix.data)
-                    .into_vec()
-                    .map_err(|err| {
-                        DecodeError::custom(format!("decode ix data error, err={err}. Note that currently only Base58 is supported"))
-                    })?;
-                if indexes.contains(&ix.accounts[0]) && data.starts_with(EVENT_IX_TAG_LE) {
-                    events.push(CPIEvent::new(*program_id, data));
-                }
-            }
-        }
-        Ok(CPIEvents {
+
+        Ok(DecodedTransaction {
             signature: self.signature,
             slot_index,
-            events,
+            transaction: decoded,
+            dynamic_writable_accounts,
+            dynamic_readonly_accounts,
+            transaction_status_meta: meta,
         })
+    }
+
+    /// Extract CPI events.
+    pub fn extract_cpi_events(&self) -> Result<CPIEvents, DecodeError> {
+        self.decoded_transaction()?
+            .extract_cpi_events(&self.cpi_event_filter)
     }
 }
 
@@ -158,13 +135,11 @@ impl Decoder for TransactionDecoder<'_> {
         ))
     }
 
-    fn decode_transaction<V>(&self, _visitor: V) -> Result<V::Value, DecodeError>
+    fn decode_transaction<V>(&self, visitor: V) -> Result<V::Value, DecodeError>
     where
         V: Visitor,
     {
-        Err(DecodeError::custom(
-            "decode transaction is currently not supported",
-        ))
+        visitor.visit_transaction(self.decoded_transaction()?)
     }
 
     fn decode_anchor_cpi_events<V>(&self, visitor: V) -> Result<V::Value, DecodeError>
@@ -365,4 +340,198 @@ const EVENT_AUTHORITY_SEED: &[u8] = b"__event_authority";
 
 fn find_event_authority_address(program_id: &Pubkey) -> Pubkey {
     Pubkey::find_program_address(&[EVENT_AUTHORITY_SEED], program_id).0
+}
+
+/// Decoded Transaction.
+pub struct DecodedTransaction<'a> {
+    /// Signature.
+    pub signature: Signature,
+    /// Slot and index.
+    pub slot_index: SlotAndIndex,
+    /// Transaction.
+    pub transaction: VersionedTransaction,
+    /// Dynamic writable accounts.
+    pub dynamic_writable_accounts: Vec<Pubkey>,
+    /// Dynamic read-only accounts.
+    pub dynamic_readonly_accounts: Vec<Pubkey>,
+    /// Transaction status meta.
+    pub transaction_status_meta: &'a UiTransactionStatusMeta,
+}
+
+impl DecodedTransaction<'_> {
+    /// Extract Anchor CPI events.
+    pub fn extract_cpi_events(
+        &self,
+        cpi_event_filter: &CPIEventFilter,
+    ) -> Result<CPIEvents, DecodeError> {
+        let mut event_authority_indices = HashMap::<_, HashSet<u8>>::default();
+        let mut accounts = self.transaction.message.static_account_keys().to_vec();
+        accounts.extend_from_slice(&self.dynamic_writable_accounts);
+        accounts.extend_from_slice(&self.dynamic_readonly_accounts);
+        tracing::debug!("accounts: {accounts:#?}");
+        let map = &cpi_event_filter.map;
+        for res in accounts
+            .iter()
+            .enumerate()
+            .filter(|(_, key)| map.contains_key(key))
+            .map(|(idx, key)| u8::try_from(idx).map(|idx| (map.get(key).unwrap(), idx)))
+        {
+            let (pubkey, idx) = res.map_err(|_| DecodeError::custom("invalid account keys"))?;
+            event_authority_indices
+                .entry(pubkey)
+                .or_default()
+                .insert(idx);
+        }
+        tracing::debug!("event_authorities: {event_authority_indices:#?}");
+        let Some(ixs) =
+            Option::<&Vec<_>>::from(self.transaction_status_meta.inner_instructions.as_ref())
+        else {
+            return Err(DecodeError::custom("missing inner instructions"));
+        };
+        let mut events = Vec::default();
+        for ix in ixs.iter().flat_map(|ixs| &ixs.instructions) {
+            let UiInstruction::Compiled(ix) = ix else {
+                tracing::warn!("only compiled instruction is currently supported");
+                continue;
+            };
+            // NOTE: we are currently assuming that the Event CPI has only the event authority in the account list.
+            if ix.accounts.len() != 1 {
+                continue;
+            }
+            if let Some(program_id) = accounts.get(ix.program_id_index as usize) {
+                let Some(indexes) = event_authority_indices.get(program_id) else {
+                    continue;
+                };
+                let data = bs58::decode(&ix.data)
+                    .into_vec()
+                    .map_err(|err| {
+                        DecodeError::custom(format!("decode ix data error, err={err}. Note that currently only Base58 is supported"))
+                    })?;
+                if indexes.contains(&ix.accounts[0]) && data.starts_with(EVENT_IX_TAG_LE) {
+                    events.push(CPIEvent::new(*program_id, data));
+                }
+            }
+        }
+        Ok(CPIEvents {
+            signature: self.signature,
+            slot_index: self.slot_index,
+            events,
+        })
+    }
+}
+
+impl<'a> crate::TransactionAccess for DecodedTransaction<'a> {
+    fn slot(&self) -> Result<u64, DecodeError> {
+        Ok(self.slot_index.0)
+    }
+
+    fn index(&self) -> Result<Option<usize>, DecodeError> {
+        Ok(self.slot_index.1)
+    }
+
+    fn signature(&self) -> Result<&Signature, DecodeError> {
+        Ok(&self.signature)
+    }
+
+    fn num_signers(&self, is_writable: bool) -> Result<usize, DecodeError> {
+        let header = self.transaction.message.header();
+        if is_writable {
+            (header.num_required_signatures as usize)
+                .checked_sub(self.num_signers(false)?)
+                .ok_or_else(|| {
+                    DecodeError::custom(
+                        "invalid transaction message header: num_signed < num_readonly_signed",
+                    )
+                })
+        } else {
+            Ok(header.num_readonly_signed_accounts as usize)
+        }
+    }
+
+    fn num_accounts(&self) -> usize {
+        self.transaction.message.static_account_keys().len()
+            + self.dynamic_writable_accounts.len()
+            + self.dynamic_readonly_accounts.len()
+    }
+
+    fn message_signature(&self, idx: usize) -> Option<&Signature> {
+        self.transaction.signatures.get(idx)
+    }
+
+    fn account_meta(&self, idx: usize) -> Result<Option<AccountMeta>, DecodeError> {
+        let static_accounts = self.transaction.message.static_account_keys();
+        let static_end = static_accounts.len();
+        let dynamic_writable_length = self.dynamic_writable_accounts.len();
+        let dynamic_readonly_length = self.dynamic_readonly_accounts.len();
+        let dynamic_writable_end = static_end + dynamic_writable_length;
+        let dynamic_end = dynamic_writable_end + dynamic_readonly_length;
+        let meta = if idx >= dynamic_end {
+            None
+        } else if idx >= dynamic_writable_end {
+            let idx = idx - dynamic_writable_end;
+            Some(AccountMeta {
+                pubkey: self.dynamic_readonly_accounts[idx],
+                is_signer: false,
+                is_writable: false,
+            })
+        } else if idx >= static_end {
+            let idx = idx - static_end;
+            Some(AccountMeta {
+                pubkey: self.dynamic_writable_accounts[idx],
+                is_signer: false,
+                is_writable: true,
+            })
+        } else {
+            let num_readonly_signed = self.num_signers(false)?;
+            let num_readonly_unsigned = self
+                .transaction
+                .message
+                .header()
+                .num_readonly_unsigned_accounts as usize;
+            let writable_signed_end = self.num_signers(true)?;
+            let readonly_signed_end = writable_signed_end + num_readonly_signed;
+            let writable_unsigend_end = static_end.checked_sub(num_readonly_unsigned).ok_or_else(|| {
+               DecodeError::custom("invalid transaction message header: static_end < num_sigend + num_readonly_signed") 
+            })?;
+            let (is_signer, is_writable) = if idx >= writable_unsigend_end {
+                (false, false)
+            } else if idx >= readonly_signed_end {
+                (false, true)
+            } else if idx >= writable_signed_end {
+                (true, false)
+            } else {
+                (true, true)
+            };
+            Some(AccountMeta {
+                pubkey: static_accounts[idx],
+                is_signer,
+                is_writable,
+            })
+        };
+        Ok(meta)
+    }
+
+    fn num_address_table_lookups(&self) -> usize {
+        self.transaction
+            .message
+            .address_table_lookups()
+            .map(|atls| atls.len())
+            .unwrap_or_default()
+    }
+
+    fn address_table_lookup(&self, idx: usize) -> Option<&MessageAddressTableLookup> {
+        self.transaction.message.address_table_lookups()?.get(idx)
+    }
+
+    fn num_instructions(&self) -> usize {
+        self.transaction.message.instructions().len()
+    }
+
+    fn instruction(&self, idx: usize) -> Option<&CompiledInstruction> {
+        self.transaction.message.instructions().get(idx)
+    }
+
+    fn transaction_status_meta(&self) -> Option<&UiTransactionStatusMeta> {
+        Some(&self.transaction_status_meta)
+    }
 }

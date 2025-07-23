@@ -3,6 +3,9 @@ use crate::{decode::visitor::Visitor, error::DecodeError};
 /// Account Access.
 pub mod account_access;
 
+/// Transaction Access.
+pub mod transaction_access;
+
 /// CPI Event Access.
 pub mod cpi_event_access;
 

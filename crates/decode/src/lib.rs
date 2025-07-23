@@ -21,7 +21,10 @@ pub mod gmsol;
 
 pub use self::{
     decode::{visitor::Visitor, Decode},
-    decoder::{account_access::AccountAccess, cpi_event_access::AnchorCPIEventsAccess, Decoder},
+    decoder::{
+        account_access::AccountAccess, cpi_event_access::AnchorCPIEventsAccess,
+        transaction_access::TransactionAccess, Decoder,
+    },
     error::DecodeError,
 };
 

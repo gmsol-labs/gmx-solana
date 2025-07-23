@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - model: Included borrowing fee in `paid_order_fee_value` and rename it to `paid_order_and_borrowing_fee_value`.
 - sdk(solana-utils): Remiplemented the `BundleBuilder`A to support the new transaction group API.
 - sdk(sdk): Updated `SquadsOps` methods to support ephemeral signers.
+- sdk(decode): Added `Visitor::visit_transaction` to support transaction decoding.
 - cli: Changed the `market push-to-buffer` command to accept only input in the `MarketConfigs` format.
 
 ### Added
@@ -26,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(chainlink-datastreams): Added support for the report schema v2 and the RWA report schemas (v4, v8) for Chainlink Data Streams.
 - sdk(solana-utils): Added `luts` and `luts_mut` methods for `BundleBuilder`.
 - sdk(sdk): Added `SerdeMarketConfigBuffer`.
+- sdk(decode): Added `TransactionAccess` trait to abstract transaction decoding logic.
 - cli: Added `market buffer` command to display the content of given buffer account.
 - cli: Added TOML as output format.
 
