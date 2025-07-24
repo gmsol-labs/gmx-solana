@@ -2370,6 +2370,7 @@ name = "gmsol-examples"
 version = "0.7.0"
 dependencies = [
  "anchor-spl",
+ "futures-util",
  "gmsol-sdk",
  "shellexpand",
  "tokio",

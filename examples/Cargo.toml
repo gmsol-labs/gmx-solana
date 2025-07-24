@@ -20,6 +20,8 @@ gmsol-sdk = { workspace = true, features = [
     # The `pyth` feature is enabled to make it easier to fetch prices.
     # You may omit it if you're using an alternative price source.
     "pyth",
+    # The `decode` feature is enabled to add support for `gmsol-decode`.
+    "decode",
 ] }
 
 anchor-spl = { workspace = true }
@@ -27,7 +29,13 @@ tokio = { workspace = true, features = ["full"] }
 shellexpand = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+futures-util = { workspace = true }
 
 [[example]]
 name = "market"
 path = "market.rs"
+
+[[example]]
+name = "decode-transaction"
+path = "decode_transaction.rs"
+
