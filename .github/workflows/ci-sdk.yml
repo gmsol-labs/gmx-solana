@@ -1,0 +1,133 @@
+on:
+  push:
+    branches:
+      - main
+      - v*
+  pull_request:
+    branches:
+      - main
+      - v*
+
+name: CI for SDK
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  RUSTFLAGS: -Dwarnings
+  RUST_BACKTRACE: 1
+  RUSTUP_WINDOWS_PATH_ADD_BIN: 1
+  rust_stable: stable
+  rust_clippy: "1.88"
+  rust_min: "1.86"
+  libudev: "1.0"
+  exclude_packages: "--exclude gmsol-store --exclude gmsol-treasury --exclude gmsol-timelock --exclude gmsol-competition --exclude gmsol-callback --exclude gmsol-mock-chainlink-verifier --exclude gmsol-tests"
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  # Depends on all actions that are required for a "successful" CI run.
+  tests-pass:
+    name: all systems go
+    runs-on: ubuntu-latest
+    needs:
+      - clippy
+      - fmt
+      - minrust
+      - features
+    steps:
+      - run: exit 0
+
+  # Basic actions that must pass before we kick off more expensive tests.
+  basics:
+    name: basic checks
+    runs-on: ubuntu-latest
+    needs:
+      - clippy
+      - fmt
+      - minrust
+    steps:
+      - run: exit 0
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: libudev-dev
+          version: ${{ env.libudev }}
+      - name: Install Rust ${{ env.rust_clippy }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_clippy }}
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # Run clippy
+      - name: "clippy --workspace"
+        run: cargo clippy --workspace ${{ env.exclude_packages }} --tests --all-features --no-deps
+
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      # Check fmt
+      - name: "fmt --check"
+        run: cargo fmt --all -- --check
+
+  minrust:
+    name: minrust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: libudev-dev
+          version: ${{ env.libudev }}
+      - name: Install Rust ${{ env.rust_min }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_min }}
+      - uses: Swatinem/rust-cache@v2
+      - name: "check --workspace --all-features"
+        run: cargo check --workspace ${{ env.exclude_packages }} --all-features
+        env:
+          RUSTFLAGS: "" # remove -Dwarnings
+
+  features:
+    name: features
+    needs: basics
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: libudev-dev
+          version: ${{ env.libudev }}
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+
+      - uses: Swatinem/rust-cache@v2
+      - name: check --feature-powerset
+        run: cargo hack check --workspace ${{ env.exclude_packages }} --feature-powerset --depth 2 --keep-going
