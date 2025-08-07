@@ -10,7 +10,10 @@ use anchor_spl::{
 use eyre::OptionExt;
 use gmsol_sdk::{
     client::ops::treasury::CreateTreasurySwapOptions,
-    core::token_config::{TokenFlag, TokenMapAccess},
+    core::{
+        market::MarketFlag,
+        token_config::{TokenFlag, TokenMapAccess},
+    },
     model::{BalanceExt, BaseMarket, MarketModel},
     ops::{system::SystemProgramOps, token_account::TokenAccountOps, treasury::TreasuryOps},
     programs::anchor_lang::prelude::Pubkey,
@@ -279,6 +282,12 @@ impl super::Command for Treasury {
                     let side = side.ok_or_eyre("side is required for single market mode")?;
                     let market = client.find_market_address(store, market_token);
                     let market = client.market(&market).await?;
+
+                    // Check if market is enabled
+                    if !market.flags.get_flag(MarketFlag::Enabled) {
+                        return Err(eyre::eyre!("market is disabled"));
+                    }
+
                     let market_model = MarketModel::from_parts(market.clone(), 1);
                     let amount = market_model.claimable_fee_pool()?.amount(side.is_long())?;
                     if amount == 0 {
@@ -337,6 +346,11 @@ impl super::Command for Treasury {
 
                         // Step 1: Collect all market claimable fees
                         for (_, market) in markets {
+                            // Skip disabled markets
+                            if !market.flags.get_flag(MarketFlag::Enabled) {
+                                continue;
+                            }
+
                             let market_model = MarketModel::from_parts(market.clone(), 1);
                             if let Ok(fee_pool) = market_model.claimable_fee_pool() {
                                 if side.is_none() || side.unwrap().is_long() {
