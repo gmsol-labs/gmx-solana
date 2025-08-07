@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+- program(chainlink-datastreams): Record last update diff in seconds instead of nanoseconds.
+
 ### Changes
 
 - programs(utils): Supported `last_update_diff` in seconds in `PriceFeedPrice`.
