@@ -18,7 +18,7 @@ env:
   RUSTFLAGS: -Dwarnings
   RUST_BACKTRACE: 1
   RUSTUP_WINDOWS_PATH_ADD_BIN: 1
-  rust_stable: stable
+  rust_stable: "1.88"
   rust_clippy: "1.88"
   rust_min: "1.86"
   libudev: "1.0"
