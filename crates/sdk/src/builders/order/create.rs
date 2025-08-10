@@ -98,6 +98,18 @@ impl From<DecreasePositionSwapType>
     }
 }
 
+impl From<DecreasePositionSwapType>
+    for gmsol_model::action::decrease_position::DecreasePositionSwapType
+{
+    fn from(ty: DecreasePositionSwapType) -> Self {
+        match ty {
+            DecreasePositionSwapType::NoSwap => Self::NoSwap,
+            DecreasePositionSwapType::PnlTokenToCollateralToken => Self::PnlTokenToCollateralToken,
+            DecreasePositionSwapType::CollateralToPnlToken => Self::CollateralToPnlToken,
+        }
+    }
+}
+
 /// Parameters for creating an order.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]
