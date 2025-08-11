@@ -16,10 +16,11 @@ pub struct PositionModel {
     position: Arc<Position>,
     is_long: bool,
     is_collateral_token_long: bool,
+    swap_history: Vec<Arc<SwapReport<u128, i128>>>,
 }
 
 #[repr(u8)]
-enum PositionKind {
+pub(super) enum PositionKind {
     #[allow(dead_code)]
     Uninitialized,
     Long,
@@ -51,6 +52,7 @@ impl PositionModel {
             position,
             is_long,
             is_collateral_token_long,
+            swap_history: vec![],
         })
     }
 
@@ -61,6 +63,21 @@ impl PositionModel {
     /// Get position.
     pub fn position(&self) -> &Position {
         &self.position
+    }
+
+    /// Returns a reference to the position wrapped in an `Arc`.
+    pub fn position_arc(&self) -> &Arc<Position> {
+        &self.position
+    }
+
+    /// Returns the swap history.
+    pub fn swap_history(&self) -> &[Arc<SwapReport<u128, i128>>] {
+        &self.swap_history
+    }
+
+    /// Clear the swap history.
+    pub fn clear(&mut self) {
+        self.swap_history.clear();
     }
 }
 
@@ -209,8 +226,9 @@ impl gmsol_model::PositionMut<{ constants::MARKET_DECIMALS }> for PositionModel 
     fn on_swapped(
         &mut self,
         _ty: DecreasePositionSwapType,
-        _report: &SwapReport<Self::Num, <Self::Num as gmsol_model::num::Unsigned>::Signed>,
+        report: &SwapReport<Self::Num, <Self::Num as gmsol_model::num::Unsigned>::Signed>,
     ) -> gmsol_model::Result<()> {
+        self.swap_history.push(Arc::new(report.clone()));
         Ok(())
     }
 

@@ -6,6 +6,7 @@ use std::{
 
 use anchor_lang::prelude::Pubkey;
 use bitmaps::Bitmap;
+use bytemuck::Zeroable;
 use gmsol_model::{
     params::{
         fee::{
@@ -21,9 +22,10 @@ use gmsol_model::{
 use crate::{
     constants,
     gmsol_store::{
-        accounts::Market,
+        accounts::{Market, Position},
         types::{MarketConfig, MarketMeta, Pool, PoolStorage, Pools},
     },
+    model::{position::PositionKind, PositionModel},
 };
 
 use super::clock::{AsClock, AsClockMut};
@@ -237,6 +239,36 @@ impl MarketModel {
     /// Returns the time in seconds since last funding fee state update.
     pub fn passed_in_seconds_for_funding(&self) -> gmsol_model::Result<u64> {
         AsClock::from(&self.state.clocks.funding).passed_in_seconds()
+    }
+
+    /// Convert into an empty position model.
+    ///
+    /// # Notes
+    /// - All position parameters unrelated to the model,
+    ///   such as `owner` and `trade_id`, use zeroed values.
+    pub fn into_empty_position(
+        self,
+        is_long: bool,
+        collateral_token: Pubkey,
+    ) -> gmsol_model::Result<PositionModel> {
+        let kind = if is_long {
+            PositionKind::Long
+        } else {
+            PositionKind::Short
+        } as u8;
+        let position = Position {
+            version: 0,
+            bump: 0,
+            store: self.store,
+            kind,
+            padding_0: Zeroable::zeroed(),
+            owner: Pubkey::default(),
+            market_token: self.meta.market_token_mint,
+            collateral_token,
+            state: Zeroable::zeroed(),
+            reserved: Zeroable::zeroed(),
+        };
+        PositionModel::new(self, Arc::new(position))
     }
 }
 

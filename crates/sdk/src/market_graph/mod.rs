@@ -4,7 +4,11 @@ use std::{
 };
 
 use either::Either;
-use gmsol_model::price::{Price, Prices};
+use gmsol_model::{
+    action::swap::SwapReport,
+    price::{Price, Prices},
+    MarketAction, SwapMarketMutExt,
+};
 use gmsol_programs::{gmsol_store::types::MarketMeta, model::MarketModel};
 use petgraph::{
     graph::{EdgeIndex, NodeIndex},
@@ -13,6 +17,11 @@ use petgraph::{
 };
 use rust_decimal::{Decimal, MathematicalOps};
 use solana_sdk::pubkey::Pubkey;
+
+use crate::{
+    builders::order::{CreateOrderKind, CreateOrderParams},
+    market_graph::simulation::order::{OrderSimulation, OrderSimulationBuilder},
+};
 
 use self::estimation::SwapEstimation;
 
@@ -29,7 +38,25 @@ pub mod config;
 /// Error type.
 pub mod error;
 
+/// Execution simulation.
+pub mod simulation;
+
 type Graph = StableDiGraph<Node, Edge>;
+
+/// Order Simulation Builder.
+pub type OrderSimulationBuilderForGraph<'a> = OrderSimulationBuilder<
+    'a,
+    (
+        (&'a MarketGraph,),
+        (CreateOrderKind,),
+        (&'a CreateOrderParams,),
+        (&'a Pubkey,),
+        (),
+        (),
+        (),
+        (),
+    ),
+>;
 
 #[derive(Debug)]
 struct Node {
@@ -63,16 +90,19 @@ impl Edge {
     }
 }
 
+#[derive(Debug)]
 struct IndexTokenState {
     node: Node,
     markets: HashSet<Pubkey>,
 }
 
+#[derive(Debug)]
 struct CollateralTokenState {
     ix: NodeIndex,
     markets: HashSet<Pubkey>,
 }
 
+#[derive(Debug)]
 struct MarketState {
     market: MarketModel,
     long_edge: EdgeIndex,
@@ -90,6 +120,7 @@ impl MarketState {
 }
 
 /// Market Graph.
+#[derive(Debug)]
 pub struct MarketGraph {
     index_tokens: HashMap<Pubkey, IndexTokenState>,
     collateral_tokens: HashMap<Pubkey, CollateralTokenState>,
@@ -496,6 +527,83 @@ impl MarketGraph {
             arbitrage_exists,
         })
     }
+
+    /// Swap along the provided path with the given price updater.
+    pub fn swap_along_path_with_price_updater(
+        &self,
+        path: &[Pubkey],
+        source_token: &Pubkey,
+        mut amount: u128,
+        mut price_updater: impl FnMut(&MarketMeta, &mut Prices<u128>) -> crate::Result<()>,
+    ) -> crate::Result<SwapOutput> {
+        let mut current_token = *source_token;
+
+        let mut reports = Vec::with_capacity(path.len());
+        for market_token in path {
+            let mut market = self
+                .get_market(market_token)
+                .ok_or_else(|| {
+                    crate::Error::custom(format!(
+                        "[swap] market `{market_token}` not found in the graph"
+                    ))
+                })?
+                .clone();
+            let meta = &market.meta;
+            if meta.long_token_mint == meta.short_token_mint {
+                return Err(crate::Error::custom(format!(
+                    "[swap] `{market_token} is not a swappable market"
+                )));
+            }
+            let is_token_in_long = if meta.long_token_mint == current_token {
+                current_token = meta.short_token_mint;
+                true
+            } else if meta.short_token_mint == current_token {
+                current_token = meta.long_token_mint;
+                false
+            } else {
+                return Err(crate::Error::custom(format!(
+                    "[swap] invalid swap step. Current step: {market_token}"
+                )));
+            };
+            let mut prices = self.get_prices(meta).ok_or_else(|| {
+                crate::Error::custom(format!("[swap] prices for {market_token} are not ready"))
+            })?;
+            (price_updater)(meta, &mut prices)?;
+            let report = market.swap(is_token_in_long, amount, prices)?.execute()?;
+            amount = *report.token_out_amount();
+            reports.push(report);
+        }
+
+        Ok(SwapOutput {
+            output_token: current_token,
+            amount,
+            reports,
+        })
+    }
+
+    /// Swap along the provided path.
+    pub fn swap_along_path(
+        &self,
+        path: &[Pubkey],
+        source_token: &Pubkey,
+        amount: u128,
+    ) -> crate::Result<SwapOutput> {
+        self.swap_along_path_with_price_updater(path, source_token, amount, |_meta, _prices| Ok(()))
+    }
+
+    /// Create a builder for order simulation.
+    pub fn simulate_order<'a>(
+        &'a self,
+        kind: CreateOrderKind,
+        params: &'a CreateOrderParams,
+        collateral_or_swap_out_token: &'a Pubkey,
+    ) -> OrderSimulationBuilderForGraph<'a> {
+        OrderSimulation::builder()
+            .graph(self)
+            .kind(kind)
+            .params(params)
+            .collateral_or_swap_out_token(collateral_or_swap_out_token)
+    }
 }
 
 /// Best Swap Paths.
@@ -585,6 +693,31 @@ impl BestSwapPaths<'_> {
     }
 }
 
+/// Swap output.
+#[derive(Debug, Clone)]
+pub struct SwapOutput {
+    output_token: Pubkey,
+    amount: u128,
+    reports: Vec<SwapReport<u128, i128>>,
+}
+
+impl SwapOutput {
+    /// Returns the output token.
+    pub fn output_token(&self) -> &Pubkey {
+        &self.output_token
+    }
+
+    /// Returns the output amount.
+    pub fn amount(&self) -> u128 {
+        self.amount
+    }
+
+    /// Returns the swap reports.
+    pub fn reports(&self) -> &[SwapReport<u128, i128>] {
+        &self.reports
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -594,10 +727,15 @@ mod tests {
 
     use crate::{
         constants,
+        market_graph::simulation::order::OrderSimulationOutput,
         utils::{test::setup_fmt_tracing, zero_copy::try_deserialize_zero_copy_from_base64},
     };
 
     use super::*;
+
+    const USDC: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    const WSOL: &str = "So11111111111111111111111111111111111111112";
+    const BOME: &str = "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82";
 
     fn get_market_updates() -> Vec<(String, u64)> {
         const DATA: &str = include_str!("test_data/markets.csv");
@@ -705,15 +843,11 @@ mod tests {
 
     #[test]
     fn best_swap_path() -> crate::Result<()> {
-        const USDC: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-        const WSOL: &str = "So11111111111111111111111111111111111111112";
-        const BOME: &str = "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82";
+        let _tracing = setup_fmt_tracing("info");
 
         let usdc: Pubkey = USDC.parse().unwrap();
         let wsol: Pubkey = WSOL.parse().unwrap();
         let bome: Pubkey = BOME.parse().unwrap();
-
-        let _tracing = setup_fmt_tracing("info");
 
         let (mut g, _) = create_and_update_market_graph()?;
 
@@ -735,6 +869,131 @@ mod tests {
             assert_eq!(rate, dfs_rate);
             assert_eq!(best_path, dfs_best_path);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn position_order_simulation() -> crate::Result<()> {
+        let _tracing = setup_fmt_tracing("info");
+
+        let bome: Pubkey = BOME.parse().unwrap();
+        let wsol: Pubkey = WSOL.parse().unwrap();
+        let market_token: Pubkey = "BwN2FWixP5JyKjJNyD1YcRKN1XhgvFtnzrPrkfyb4DkW"
+            .parse()
+            .unwrap();
+
+        let (mut g, _) = create_and_update_market_graph()?;
+
+        g.update_value(constants::MARKET_USD_UNIT * 6);
+        g.update_max_steps(5);
+
+        let paths = g.best_swap_paths(&bome, false)?;
+        let (_, best_path) = paths.to(&wsol);
+
+        println!("{best_path:?}");
+
+        let bome_price = 101468850000;
+        let sol_price = 10821227000000;
+        let amount = 5 * constants::MARKET_USD_UNIT / bome_price;
+        let size = 100 * constants::MARKET_USD_UNIT;
+        let params = CreateOrderParams::builder()
+            .amount(amount)
+            .is_long(true)
+            .size(size)
+            .market_token(market_token)
+            .build();
+        let output = g
+            .simulate_order(CreateOrderKind::MarketIncrease, &params, &wsol)
+            .pay_token(Some(&bome))
+            .swap_path(&best_path)
+            .build()
+            .execute_with_options(Default::default())?;
+
+        println!("{output:?}");
+
+        g.update_value(constants::MARKET_USD_UNIT * 5);
+        let paths = g.best_swap_paths(&wsol, false)?;
+        let (_, best_path) = paths.to(&bome);
+        println!("{best_path:?}");
+        let size = 50 * constants::MARKET_USD_UNIT;
+        let params = CreateOrderParams::builder()
+            .amount(amount)
+            .is_long(true)
+            .size(size)
+            .market_token(market_token)
+            .trigger_price(sol_price * 101 / 100)
+            .build();
+        let OrderSimulationOutput::Increase { position, .. } = output else {
+            unreachable!()
+        };
+        let output = g
+            .simulate_order(CreateOrderKind::LimitDecrease, &params, &wsol)
+            .receive_token(Some(&bome))
+            .swap_path(&best_path)
+            .position(Some(position.position_arc()))
+            .build()
+            .execute_with_options(Default::default());
+
+        println!("{output:?}");
+
+        Ok(())
+    }
+
+    #[test]
+    fn swap_order_simulation() -> crate::Result<()> {
+        let _tracing = setup_fmt_tracing("info");
+
+        let bome: Pubkey = BOME.parse().unwrap();
+        let wsol: Pubkey = WSOL.parse().unwrap();
+        let market_token: Pubkey = "BwN2FWixP5JyKjJNyD1YcRKN1XhgvFtnzrPrkfyb4DkW"
+            .parse()
+            .unwrap();
+
+        let (mut g, _) = create_and_update_market_graph()?;
+
+        g.update_value(constants::MARKET_USD_UNIT * 6);
+        g.update_max_steps(5);
+
+        let paths = g.best_swap_paths(&bome, false)?;
+        let (_, best_path) = paths.to(&wsol);
+
+        println!("{best_path:?}");
+
+        let bome_price = 101468850000;
+        let sol_price = 10821227000000;
+        let amount = 5 * constants::MARKET_USD_UNIT / bome_price;
+        let params = CreateOrderParams::builder()
+            .amount(amount)
+            .is_long(true)
+            .size(0)
+            .market_token(market_token)
+            .build();
+        let output = g
+            .simulate_order(CreateOrderKind::MarketSwap, &params, &wsol)
+            .pay_token(Some(&bome))
+            .swap_path(&best_path)
+            .build()
+            .execute_with_options(Default::default())?;
+
+        println!("{output:?}");
+
+        let amount = 5 * constants::MARKET_USD_UNIT / bome_price;
+        let params = CreateOrderParams::builder()
+            .amount(amount)
+            .is_long(true)
+            .size(0)
+            .market_token(market_token)
+            .min_output(amount * bome_price / sol_price * 102 / 100)
+            .build();
+        let output = g
+            .simulate_order(CreateOrderKind::LimitSwap, &params, &wsol)
+            .pay_token(Some(&bome))
+            .swap_path(&best_path)
+            .build()
+            .execute_with_options(Default::default())?;
+
+        println!("{output:?}");
 
         Ok(())
     }

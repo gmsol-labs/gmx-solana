@@ -14,7 +14,7 @@ use super::{market::JsMarketModel, price::Prices};
 /// JS version of [`Position`].
 #[wasm_bindgen(js_name = Position)]
 pub struct JsPosition {
-    position: Arc<Position>,
+    pub(crate) position: Arc<Position>,
 }
 
 #[wasm_bindgen(js_class = Position)]
@@ -63,5 +63,12 @@ impl JsPositionModel {
     /// Get collateral amount.
     pub fn collateral_amount(&self) -> u128 {
         *self.model.collateral_amount()
+    }
+
+    /// Returns the inner [`JsPosition`].
+    pub fn position(&self) -> JsPosition {
+        JsPosition {
+            position: self.model.position_arc().clone(),
+        }
     }
 }
