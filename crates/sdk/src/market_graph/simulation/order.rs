@@ -29,7 +29,7 @@ pub enum OrderSimulationOutput {
     /// Increase output.
     Increase {
         swaps: Vec<SwapReport<u128, i128>>,
-        report: IncreasePositionReport<u128, i128>,
+        report: Box<IncreasePositionReport<u128, i128>>,
         position: PositionModel,
     },
     /// Decrease output.
@@ -141,7 +141,7 @@ impl OrderSimulation<'_> {
 
         Ok(OrderSimulationOutput::Increase {
             swaps: swap_output.reports,
-            report,
+            report: Box::new(report),
             position,
         })
     }
