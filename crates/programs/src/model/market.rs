@@ -18,7 +18,6 @@ use gmsol_model::{
     },
     PoolKind,
 };
-use gmsol_utils::order::PositionKind;
 
 use crate::{
     constants,
@@ -26,7 +25,7 @@ use crate::{
         accounts::{Market, Position},
         types::{MarketConfig, MarketMeta, Pool, PoolStorage, Pools},
     },
-    model::PositionModel,
+    model::{position::PositionKind, PositionModel},
 };
 
 use super::clock::{AsClock, AsClockMut};

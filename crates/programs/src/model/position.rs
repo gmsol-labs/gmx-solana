@@ -20,7 +20,7 @@ pub struct PositionModel {
 }
 
 #[repr(u8)]
-enum PositionKind {
+pub(super) enum PositionKind {
     #[allow(dead_code)]
     Uninitialized,
     Long,
