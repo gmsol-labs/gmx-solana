@@ -100,10 +100,22 @@ console.log("size_in_tokens:", positionModel.size_in_tokens());
 console.log("collateral amount:", positionModel.collateral_amount());
 console.log("status:", positionModel.status(prices));
 
-const recentBlockhash = "3KarAamyLd6dFFmMsh79fXjrdAWp5DB6dxF3BgLK3SuM";
-const payer = "11111111111111111111111111111112";
+// Simulate order.
+const simulationOutput = graph.simulate_order({
+  kind: "MarketIncrease",
+  params: {
+    market_token: "E6kfBQcdHL3fdWNaydrWViXVtQLTgpxzZicLy98ZNc5v",
+    is_long: true,
+    size: 100_000_000_000_000_000_000_000n,
+    amount: 10_000_000n,
+  },
+  collateral_or_swap_out_token: wsol,
+}, position);
+console.log("simulation:", simulationOutput.increase());
 
 // Create order.
+const recentBlockhash = "3KarAamyLd6dFFmMsh79fXjrdAWp5DB6dxF3BgLK3SuM";
+const payer = "11111111111111111111111111111112";
 const marketToken = "BwN2FWixP5JyKjJNyD1YcRKN1XhgvFtnzrPrkfyb4DkW";
 const transactions = create_orders(
   "MarketIncrease",

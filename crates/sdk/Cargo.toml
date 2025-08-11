@@ -28,6 +28,7 @@ js = [
     "gmsol-programs/gmsol-utils",
     "tsify-next/wasm-bindgen",
     "gmsol-model/js",
+    "gmsol-model/solana",
     "bincode",
 ]
 serde = [
