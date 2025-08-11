@@ -2,7 +2,7 @@
   "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo",
   "metadata": {
     "name": "gmsol_store",
-    "version": "0.7.0",
+    "version": "0.7.1",
     "spec": "0.1.0",
     "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
     "repository": "https://github.com/gmsol-labs/gmx-solana"
@@ -32035,7 +32035,7 @@
             }
           },
           {
-            "name": "last_update_diff_nanos",
+            "name": "last_update_diff",
             "type": "u32"
           },
           {
