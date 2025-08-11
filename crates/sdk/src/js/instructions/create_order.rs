@@ -79,6 +79,10 @@ pub fn create_orders(
         tokens.insert(receive_token);
     }
 
+    if wrap_native {
+        tokens.insert(WrapNative::NATIVE_MINT.into());
+    }
+
     let hints = &options.hints;
     let create = orders
         .into_iter()
