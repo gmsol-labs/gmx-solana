@@ -8,6 +8,9 @@ repository.workspace = true
 readme.workspace = true
 keywords.workspace = true
 
+[features]
+anchor-test = []
+
 [dev-dependencies]
 gmsol-sdk = { workspace = true, features = [
     "client",
