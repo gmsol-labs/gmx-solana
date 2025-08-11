@@ -34,7 +34,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-gmsol-sdk = { version = "0.7.0", features = ["client"] }
+gmsol-sdk = { version = "0.7", features = ["client"] }
 ```
 
 Create a `Client` and start using the core APIs:
