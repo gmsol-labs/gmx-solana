@@ -10,7 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.7.1] - 2025-08-15
 
 ### Breaking Changes
+
 - program(chainlink-datastreams): Record last update diff in seconds instead of nanoseconds.
+
+### Added
+
+- sdk(sdk): Implemented off-chain order simulation.
 
 ### Fixed
 
