@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - sdk(sdk): Ensured pay token account is prepared for wrap native.
+- sdk(chainlink-datastreams): Used `ReportDataV7` to decode version 7 reports.
 
 ### Changes
 

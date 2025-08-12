@@ -110,7 +110,7 @@ mpl-token-metadata = "5"
 solana-security-txt = "1.1.1"
 
 [workspace.dependencies.chainlink-data-streams-report]
-version = "1.0.1"
+version = "1.0.3"
 
 [workspace.dependencies.gmsol-model]
 version = "0.8.0"
