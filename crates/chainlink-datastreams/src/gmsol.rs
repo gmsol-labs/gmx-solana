@@ -92,11 +92,11 @@ impl super::FromChainlinkReport for PriceFeedPrice {
         );
 
         price.set_flag(PriceFlag::Open, is_open);
-        price.set_flag(
-            PriceFlag::LastUpdateDiffEnabled,
-            last_update_diff_secs.is_some(),
-        );
-        price.set_flag(PriceFlag::LastUpdateDiffSecs, true);
+
+        if last_update_diff_secs.is_some() {
+            price.set_flag(PriceFlag::LastUpdateDiffEnabled, true);
+            price.set_flag(PriceFlag::LastUpdateDiffSecs, true);
+        }
 
         Ok(price)
     }
