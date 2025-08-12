@@ -2,7 +2,7 @@
   "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo",
   "metadata": {
     "name": "gmsol_store",
-    "version": "0.7.0",
+    "version": "0.8.0",
     "spec": "0.1.0",
     "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
     "repository": "https://github.com/gmsol-labs/gmx-solana"
@@ -23235,6 +23235,47 @@
       ]
     },
     {
+      "name": "update_gt_cumulative_inv_cost_factor",
+      "docs": [
+        "Update the GT cumulative inverse cost factor.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](UpdateGtCumulativeInvCostFactor)*",
+        "",
+        "# Errors",
+        "- The [`authority`](UpdateGtCumulativeInvCostFactor::authority) must be a signer and have the GT_CONTROLLER role in the `store`.",
+        "- The [`store`](UpdateGtCumulativeInvCostFactor::store) must be properly initialized with an initialized GT state."
+      ],
+      "discriminator": [
+        35,
+        119,
+        183,
+        140,
+        253,
+        186,
+        152,
+        125
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The authority for this instruction."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "The store account to update."
+          ],
+          "writable": true
+        }
+      ],
+      "args": [],
+      "returns": "u128"
+    },
+    {
       "name": "update_last_restarted_slot",
       "docs": [
         "Update last restarted slot.",
@@ -28869,13 +28910,11 @@
             "type": "u64"
           },
           {
-            "name": "padding_1",
-            "type": {
-              "array": [
-                "u8",
-                8
-              ]
-            }
+            "name": "last_cumulative_inv_cost_factor_ts",
+            "docs": [
+              "Timestamp of the last update to `cumulative_inv_cost_factor`."
+            ],
+            "type": "i64"
           },
           {
             "name": "gt_vault",
@@ -28885,13 +28924,11 @@
             "type": "u64"
           },
           {
-            "name": "padding_2",
-            "type": {
-              "array": [
-                "u8",
-                16
-              ]
-            }
+            "name": "cumulative_inv_cost_factor",
+            "docs": [
+              "Cumulative `1 / minting_cost` factor."
+            ],
+            "type": "u128"
           },
           {
             "name": "minting_cost_grow_factor",
@@ -32035,7 +32072,7 @@
             }
           },
           {
-            "name": "last_update_diff_nanos",
+            "name": "last_update_diff",
             "type": "u32"
           },
           {

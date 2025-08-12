@@ -2,7 +2,7 @@
   "address": "TimeBQ7gQyWyQMD3bTteAdy7hTVDNWSwELdSVZHfSXL",
   "metadata": {
     "name": "gmsol_timelock",
-    "version": "0.7.0",
+    "version": "0.8.0",
     "spec": "0.1.0",
     "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
     "repository": "https://github.com/gmsol-labs/gmx-solana"
@@ -1242,13 +1242,11 @@
             "type": "u64"
           },
           {
-            "name": "padding_1",
-            "type": {
-              "array": [
-                "u8",
-                8
-              ]
-            }
+            "name": "last_cumulative_inv_cost_factor_ts",
+            "docs": [
+              "Timestamp of the last update to `cumulative_inv_cost_factor`."
+            ],
+            "type": "i64"
           },
           {
             "name": "gt_vault",
@@ -1258,13 +1256,11 @@
             "type": "u64"
           },
           {
-            "name": "padding_2",
-            "type": {
-              "array": [
-                "u8",
-                16
-              ]
-            }
+            "name": "cumulative_inv_cost_factor",
+            "docs": [
+              "Cumulative `1 / minting_cost` factor."
+            ],
+            "type": "u128"
           },
           {
             "name": "minting_cost_grow_factor",

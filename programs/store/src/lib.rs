@@ -3056,6 +3056,21 @@ pub mod gmsol_store {
         instructions::unchecked_close_gt_exchange(ctx)
     }
 
+    /// Update the GT cumulative inverse cost factor.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](UpdateGtCumulativeInvCostFactor)*
+    ///
+    /// # Errors
+    /// - The [`authority`](UpdateGtCumulativeInvCostFactor::authority) must be a signer and have the GT_CONTROLLER role in the `store`.
+    /// - The [`store`](UpdateGtCumulativeInvCostFactor::store) must be properly initialized with an initialized GT state.
+    #[access_control(internal::Authenticate::only_gt_controller(&ctx))]
+    pub fn update_gt_cumulative_inv_cost_factor(
+        ctx: Context<UpdateGtCumulativeInvCostFactor>,
+    ) -> Result<u128> {
+        UpdateGtCumulativeInvCostFactor::invoke_unchecked(ctx)
+    }
+
     // ===========================================
     //              User & Referral
     // ===========================================

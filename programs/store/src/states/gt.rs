@@ -32,7 +32,7 @@ use gmsol_utils::gt::{
     GtExchangeFlag, GtExchangeVaultFlag, MAX_GT_EXCHANGE_FLAGS, MAX_GT_EXCHANGE_VAULT_FLAGS,
 };
 
-use crate::{constants, CoreError};
+use crate::{constants, instructions::ModelError, CoreError};
 
 use super::{user::UserHeader, Seed};
 
@@ -54,12 +54,12 @@ pub struct GtState {
     grow_steps: u64,
     /// Supply of buybackable GT.
     supply: u64,
-    #[cfg_attr(feature = "debug", debug(skip))]
-    padding_1: [u8; 8],
+    /// Timestamp of the last update to `cumulative_inv_cost_factor`.
+    last_cumulative_inv_cost_factor_ts: i64,
     /// Vault for non-buybackable GT.
     gt_vault: u64,
-    #[cfg_attr(feature = "debug", debug(skip))]
-    padding_2: [u8; 16],
+    /// Cumulative `1 / minting_cost` factor.
+    cumulative_inv_cost_factor: u128,
     /* Configs */
     minting_cost_grow_factor: u128,
     minting_cost: u128,
@@ -265,6 +265,44 @@ impl GtState {
         }
     }
 
+    /// Updates the cumulative inverse cost factor.
+    /// # Note
+    /// This function is idempotent.
+    #[inline(never)]
+    pub(crate) fn update_cumulative_inv_cost_factor(&mut self) -> Result<()> {
+        use crate::states::market::clock::AsClock;
+        use gmsol_model::utils;
+
+        let now = Clock::get()?.unix_timestamp;
+        let duration_value = u128::from(
+            AsClock::from(&self.last_cumulative_inv_cost_factor_ts)
+                .passed_in_seconds()
+                .map_err(ModelError::from)?,
+        );
+        let delta = utils::div_to_factor::<_, { constants::MARKET_DECIMALS }>(
+            &duration_value,
+            &self.minting_cost,
+            false,
+        )
+        .ok_or_else(|| error!(CoreError::ValueOverflow))?;
+        let next_factor = self
+            .cumulative_inv_cost_factor
+            .checked_add(delta)
+            .ok_or_else(|| error!(CoreError::ValueOverflow))?;
+
+        /* The following steps should be infallible. */
+
+        self.last_cumulative_inv_cost_factor_ts = now;
+        self.cumulative_inv_cost_factor = next_factor;
+
+        Ok(())
+    }
+
+    /// Returns cumulative inverse cost factor.
+    pub(crate) fn cumulative_inv_cost_factor(&self) -> u128 {
+        self.cumulative_inv_cost_factor
+    }
+
     #[inline(never)]
     pub(crate) fn mint_to(&mut self, user: &mut UserHeader, amount: u64) -> Result<()> {
         if amount != 0 {
@@ -292,6 +330,9 @@ impl GtState {
                 .supply
                 .checked_add(amount)
                 .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+
+            // Update `cumulative_inv_cost_factor` before updating `minting_cost`.
+            self.update_cumulative_inv_cost_factor()?;
 
             /* The following steps should be infallible. */
 
