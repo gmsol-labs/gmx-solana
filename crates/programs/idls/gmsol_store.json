@@ -20115,6 +20115,115 @@
       "args": []
     },
     {
+      "name": "mint_gt_reward",
+      "docs": [
+        "Mint GT directly to the given user account.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](MintGtReward)*",
+        "",
+        "# Errors",
+        "- The [`authority`](MintGtReward::authority) must be a signer and have the GT_CONTROLLER role in the `store`.",
+        "- The [`store`](MintGtReward::store) must be properly initialized with an initialized GT state.",
+        "- The [`user`](MintGtReward::user) must be properly initialized and belong to the store."
+      ],
+      "discriminator": [
+        121,
+        142,
+        223,
+        13,
+        130,
+        88,
+        94,
+        236
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The authority for this instruction."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "The store account to update."
+          ],
+          "writable": true,
+          "relations": [
+            "user"
+          ]
+        },
+        {
+          "name": "user",
+          "docs": [
+            "User Account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "prepare_associated_token_account",
       "docs": [
         "Prepare an associated token account.",
