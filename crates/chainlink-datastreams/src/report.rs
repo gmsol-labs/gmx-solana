@@ -6,7 +6,8 @@ use ruint::aliases::U192;
 use chainlink_data_streams_report::{
     feed_id::ID,
     report::{
-        base::ReportError, v2::ReportDataV2, v3::ReportDataV3, v4::ReportDataV4, v8::ReportDataV8,
+        base::ReportError, v2::ReportDataV2, v3::ReportDataV3, v4::ReportDataV4, v7::ReportDataV7,
+        v8::ReportDataV8,
     },
 };
 
@@ -142,8 +143,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
     let version = decode_version(&feed_id);
 
     match version {
-        // NOTE: According to internal discussions with Chainlink, version 7 also uses the v2 schema.
-        2 | 7 => {
+        2 => {
             let report = ReportDataV2::decode(data)?;
             let price = bigint_to_signed(report.benchmark_price)?;
             Ok(Report {
@@ -194,6 +194,24 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 bid: price,
                 ask: price,
                 market_status: decode_market_status(report.market_status)?,
+            })
+        }
+        7 => {
+            let report = ReportDataV7::decode(data)?;
+            let price = bigint_to_signed(report.exchange_rate)?;
+            Ok(Report {
+                feed_id: report.feed_id,
+                valid_from_timestamp: report.valid_from_timestamp,
+                observations_timestamp: report.observations_timestamp,
+                last_update_timestamp: None,
+                native_fee: bigint_to_u192(report.native_fee)?,
+                link_fee: bigint_to_u192(report.link_fee)?,
+                expires_at: report.expires_at,
+                price,
+                // Bid and ask values are not available for the report schema v7.
+                bid: price,
+                ask: price,
+                market_status: MarketStatus::Open,
             })
         }
         8 => {
