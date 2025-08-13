@@ -150,6 +150,38 @@ impl OutputFormat {
 
         Ok(table.to_string())
     }
+
+    pub fn display_value_with_label(
+        &self,
+        label: impl ToString,
+        value: impl Serialize,
+    ) -> eyre::Result<String> {
+        let mut map = Map::new();
+        map.insert(label.to_string(), serde_json::to_value(value)?);
+        match self {
+            Self::Table => Self::display_table_one(&map),
+            Self::Json => Self::display_json_one(&map),
+            Self::Toml => Self::display_toml_one(&map),
+        }
+    }
+
+    pub fn display_list_with_header<
+        I: IntoIterator<Item = V>,
+        V: Serialize,
+    >(
+        &self,
+        items: I,
+        header: impl ToString,
+    ) -> eyre::Result<String> {
+        let header = header.to_string();
+        let items = items
+            .into_iter()
+            .map(|v| serde_json::json!({ header.clone(): v }));
+        self.display_many(
+            items,
+            DisplayOptions::table_projection([(header.as_str(), header.as_str())]),
+        )
+    }
 }
 
 /// Display options.

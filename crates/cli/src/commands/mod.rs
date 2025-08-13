@@ -18,8 +18,7 @@ use gmsol_sdk::{
         instruction_group::{ComputeBudgetOptions, GetInstructionsOptions},
         signer::LocalSignerRef,
         solana_client::rpc_config::RpcSendTransactionConfig,
-        solana_sdk::{
-            message::VersionedMessage,
+                    solana_sdk::{
             signature::{Keypair, NullSigner, Signature},
             transaction::VersionedTransaction,
         },
@@ -42,6 +41,7 @@ use treasury::Treasury;
 use user::User;
 
 use crate::config::{Config, InstructionBuffer, Payer};
+use crate::config::{DisplayOptions, OutputFormat};
 
 mod admin;
 mod alt;
@@ -196,6 +196,7 @@ pub(crate) struct CommandClient {
     priority_lamports: u64,
     skip_preflight: bool,
     luts: BTreeSet<Pubkey>,
+    output_format: OutputFormat,
 }
 
 impl CommandClient {
@@ -235,6 +236,7 @@ impl CommandClient {
             priority_lamports: config.priority_lamports()?,
             skip_preflight: config.skip_preflight(),
             luts: config.alts().copied().collect(),
+            output_format: config.output(),
         })
     }
 
@@ -269,11 +271,28 @@ impl CommandClient {
         }
         let cache = luts.clone();
         if let Some(format) = serialize_only {
-            println!("\n[Transactions]");
             let txns = to_transactions(bundle.build()?)?;
-            for (idx, rpc) in txns.into_iter().enumerate() {
-                println!("TXN[{idx}]: {}", serialize_message(&rpc.message, format)?);
-            }
+            let items = txns
+                .into_iter()
+                .enumerate()
+                .map(|(idx, rpc)| {
+                    Ok(serde_json::json!({
+                        "index": idx,
+                        "message": serialize_message(&rpc.message, format)?,
+                    }))
+                })
+                .collect::<gmsol_sdk::Result<Vec<_>>>()?;
+            let out = self
+                .output_format
+                .display_many(
+                    items,
+                    DisplayOptions::table_projection([
+                        ("index", "Index"),
+                        ("message", "Message"),
+                    ]),
+                )
+                .map_err(gmsol_sdk::Error::custom)?;
+            println!("{}", out);
         } else if let Some(IxBufferCtx {
             buffer,
             client,
@@ -318,7 +337,20 @@ impl CommandClient {
                                 )?
                                 .swap_output(());
                             bundle.push(rpc)?;
-                            println!("ix[{idx}]: {buffer}");
+                            let out = self
+                                .output_format
+                                .display_many(
+                                    [serde_json::json!({
+                                        "index": idx,
+                                        "buffer": buffer,
+                                    })],
+                                    DisplayOptions::table_projection([
+                                        ("index", "Index"),
+                                        ("buffer", "Buffer"),
+                                    ]),
+                                )
+                                .map_err(gmsol_sdk::Error::custom)?;
+                            println!("{}", out);
                         }
                     }
                     #[cfg(feature = "squads")]
@@ -357,11 +389,19 @@ impl CommandClient {
                             .swap_output(());
 
                         let txn_count = txn_idx + 1;
-                        println!("Adding a vault transaction {txn_idx}: id = {transaction}");
-                        println!(
-                            "Inspector URL for transaction {txn_idx}: {}",
-                            inspect_transaction(&message, Some(client.cluster()), false),
-                        );
+                        let out = self.output_format.display_many(
+                            [serde_json::json!({
+                                "index": txn_idx,
+                                "transaction": transaction,
+                                "inspector_url": inspect_transaction(&message, Some(client.cluster()), false),
+                            })],
+                            DisplayOptions::table_projection([
+                                ("index", "Index"),
+                                ("transaction", "Transaction"),
+                                ("inspector_url", "Inspector URL"),
+                            ]),
+                        )?;
+                        println!("{}", out);
 
                         let confirmation = dialoguer::Confirm::new()
                             .with_prompt(format!(
@@ -404,7 +444,10 @@ impl CommandClient {
         &self,
         bundle: BundleBuilder<'_, LocalSignerRef>,
     ) -> gmsol_sdk::Result<()> {
-        self.send_or_serialize_with_callback(bundle, display_signatures)
+        self
+            .send_or_serialize_with_callback(bundle, |s, e, steps| {
+                self.display_signatures(s, e, steps)
+            })
             .await
     }
 
@@ -444,8 +487,33 @@ impl CommandClient {
         let bundle = bundle.build()?;
         let steps = bundle.len();
         match bundle
-            .send_all_with_opts(self.send_bundle_options(), |m| {
-                before_sign(&mut idx, steps, self.verbose, m)
+            .send_all_with_opts(self.send_bundle_options(), |message| {
+                use gmsol_sdk::solana_utils::solana_sdk::hash::hash;
+                let message_str = if self.verbose {
+                    Some(inspect_transaction(message, None, true))
+                } else {
+                    None
+                };
+                if let Ok(out) = self.output_format.display_many(
+                    [serde_json::json!({
+                        "step": idx + 1,
+                        "steps": steps,
+                        "index": idx,
+                        "hash": hash(&message.serialize()).to_string(),
+                        "message": message_str,
+                    })],
+                    DisplayOptions::table_projection([
+                        ("step", "Step"),
+                        ("steps", "Steps"),
+                        ("index", "Index"),
+                        ("hash", "Hash"),
+                        ("message", "Message"),
+                    ]),
+                ) {
+                    println!("{}", out);
+                }
+                idx += 1;
+                Ok(())
             })
             .await
         {
@@ -460,8 +528,51 @@ impl CommandClient {
         &self,
         bundle: BundleBuilder<'_, LocalSignerRef>,
     ) -> gmsol_sdk::Result<()> {
-        self.send_bundle_with_callback(bundle, display_signatures)
+        self
+            .send_bundle_with_callback(bundle, |s, e, steps| {
+                self.display_signatures(s, e, steps)
+            })
             .await
+    }
+
+    fn display_signatures(
+        &self,
+        signatures: Vec<WithSlot<Signature>>,
+        err: Option<gmsol_sdk::Error>,
+        steps: usize,
+    ) -> gmsol_sdk::Result<()> {
+        let failed_start = signatures.len();
+        let failed = steps.saturating_sub(signatures.len());
+        let mut items = Vec::new();
+        for (idx, signature) in signatures.into_iter().enumerate() {
+            items.push(serde_json::json!({
+                "index": idx,
+                "signature": signature.value(),
+                "status": "ok",
+            }));
+        }
+        for idx in 0..failed {
+            items.push(serde_json::json!({
+                "index": idx + failed_start,
+                "status": "failed",
+            }));
+        }
+        let out = self
+            .output_format
+            .display_many(
+                items,
+                DisplayOptions::table_projection([
+                    ("index", "Index"),
+                    ("signature", "Signature"),
+                    ("status", "Status"),
+                ]),
+            )
+            .map_err(gmsol_sdk::Error::custom)?;
+        println!("{}", out);
+        match err {
+            None => Ok(()),
+            Some(err) => Err(err),
+        }
     }
 }
 
@@ -473,46 +584,6 @@ impl Deref for CommandClient {
     }
 }
 
-fn before_sign(
-    idx: &mut usize,
-    steps: usize,
-    verbose: bool,
-    message: &VersionedMessage,
-) -> Result<(), gmsol_sdk::SolanaUtilsError> {
-    use gmsol_sdk::solana_utils::solana_sdk::hash::hash;
-    println!(
-        "[{}/{steps}] Signing transaction {idx}: hash = {}{}",
-        *idx + 1,
-        hash(&message.serialize()),
-        if verbose {
-            format!(", message = {}", inspect_transaction(message, None, true))
-        } else {
-            String::new()
-        }
-    );
-    *idx += 1;
-
-    Ok(())
-}
-
-fn display_signatures(
-    signatures: Vec<WithSlot<Signature>>,
-    err: Option<gmsol_sdk::Error>,
-    steps: usize,
-) -> gmsol_sdk::Result<()> {
-    let failed_start = signatures.len();
-    let failed = steps.saturating_sub(signatures.len());
-    for (idx, signature) in signatures.into_iter().enumerate() {
-        println!("Transaction {idx}: signature = {}", signature.value());
-    }
-    for idx in 0..failed {
-        println!("Transaction {}: failed", idx + failed_start);
-    }
-    match err {
-        None => Ok(()),
-        Some(err) => Err(err),
-    }
-}
 
 fn to_transactions(
     bundle: Bundle<'_, LocalSignerRef>,

@@ -9,7 +9,8 @@ impl super::Command for GetPubkey {
 
     async fn execute(&self, ctx: super::Context<'_>) -> eyre::Result<()> {
         let payer = ctx.client()?.payer();
-        println!("{payer}");
+        let output = ctx.config().output();
+        println!("{}", output.display_value_with_label("payer", payer)?);
         Ok(())
     }
 }

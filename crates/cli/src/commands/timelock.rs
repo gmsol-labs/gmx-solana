@@ -17,6 +17,8 @@ use gmsol_sdk::{
     utils::{base64::decode_base64, zero_copy::ZeroCopy},
 };
 
+use crate::config::DisplayOptions;
+
 /// Timelock commands.
 #[derive(Debug, clap::Args)]
 pub struct Timelock {
@@ -111,11 +113,24 @@ impl super::Command for Timelock {
                 match config {
                     Some(config) => {
                         let config = config.0;
-                        println!("Address: {config_address}");
-                        println!("Delay: {}s", config.delay);
+                        let out = ctx.config().output().display_many(
+                            [serde_json::json!({
+                                "address": config_address,
+                                "delay_seconds": config.delay,
+                            })],
+                            DisplayOptions::table_projection([
+                                ("address", "Address"),
+                                ("delay_seconds", "Delay (s)"),
+                            ]),
+                        )?;
+                        println!("{}", out);
                     }
                     None => {
-                        println!("Not initialized");
+                        let out = ctx
+                            .config()
+                            .output()
+                            .display_value_with_label("status", "Not initialized")?;
+                        println!("{}", out);
                     }
                 }
                 return Ok(());
@@ -123,21 +138,38 @@ impl super::Command for Timelock {
             Command::Executor { role } => {
                 let executor = get_and_validate_executor_address(client, store, role).await?;
                 let wallet = client.find_executor_wallet_address(&executor);
-                println!("Executor: {executor}");
-                println!("Wallet: {wallet}");
+                let out = ctx.config().output().display_many(
+                    [serde_json::json!({
+                        "executor": executor,
+                        "wallet": wallet,
+                    })],
+                    DisplayOptions::table_projection([
+                        ("executor", "Executor"),
+                        ("wallet", "Wallet"),
+                    ]),
+                )?;
+                println!("{}", out);
                 return Ok(());
             }
             Command::ExecutorWallet { role } => {
                 let executor = get_and_validate_executor_address(client, store, role).await?;
                 let wallet = client.find_executor_wallet_address(&executor);
-                println!("{wallet}");
+                let out = ctx
+                    .config()
+                    .output()
+                    .display_value_with_label("wallet", wallet)?;
+                println!("{}", out);
                 return Ok(());
             }
             Command::InitConfig { initial_delay } => {
                 let (rpc, config) = client
                     .initialize_timelock_config(store, initial_delay.as_secs().try_into()?)
                     .swap_output(());
-                println!("{config}");
+                let out = ctx
+                    .config()
+                    .output()
+                    .display_value_with_label("config", config)?;
+                println!("{}", out);
                 rpc.into_bundle_with_options(options)?
             }
             Command::IncreaseDelay { delta } => client
@@ -145,7 +177,11 @@ impl super::Command for Timelock {
                 .into_bundle_with_options(options)?,
             Command::InitExecutor { role } => {
                 let (rpc, executor) = client.initialize_executor(store, role)?.swap_output(());
-                println!("{executor}");
+                let out = ctx
+                    .config()
+                    .output()
+                    .display_value_with_label("executor", executor)?;
+                println!("{}", out);
                 rpc.into_bundle_with_options(options)?
             }
             Command::Approve { buffers, role } => client
@@ -253,7 +289,17 @@ impl super::Command for Timelock {
                                             )?
                                             .swap_output(())
                                             .0;
-                                        println!("ix[{idx}]: {buffer}");
+                                        let out = ctx.config().output().display_many(
+                                            [serde_json::json!({
+                                                "index": idx,
+                                                "buffer": buffer,
+                                            })],
+                                            DisplayOptions::table_projection([
+                                                ("index", "Index"),
+                                                ("buffer", "Buffer"),
+                                            ]),
+                                        )?;
+                                        println!("{}", out);
                                         message = rpc.message_with_blockhash_and_options(
                                             Default::default(),
                                             true,
@@ -323,7 +369,17 @@ impl super::Command for Timelock {
                     let (rpc, buffer) = client
                         .create_timelocked_instruction(store, role, buffer, ix)?
                         .swap_output(());
-                    println!("ix[{idx}]: {buffer}");
+                    let out = ctx.config().output().display_many(
+                        [serde_json::json!({
+                            "index": idx,
+                            "buffer": buffer,
+                        })],
+                        DisplayOptions::table_projection([
+                            ("index", "Index"),
+                            ("buffer", "Buffer"),
+                        ]),
+                    )?;
+                    println!("{}", out);
                     bundle.push(rpc)?;
                 }
                 bundle
