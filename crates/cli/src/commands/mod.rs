@@ -289,7 +289,7 @@ impl CommandClient {
                     DisplayOptions::table_projection([("index", "Index"), ("message", "Message")]),
                 )
                 .map_err(gmsol_sdk::Error::custom)?;
-            println!("{}", out);
+            println!("{out}");
         } else if let Some(IxBufferCtx {
             buffer,
             client,
@@ -347,7 +347,7 @@ impl CommandClient {
                                     ]),
                                 )
                                 .map_err(gmsol_sdk::Error::custom)?;
-                            println!("{}", out);
+                            println!("{out}");
                         }
                     }
                     #[cfg(feature = "squads")]
@@ -400,7 +400,7 @@ impl CommandClient {
                                 ]),
                             )
                             .map_err(gmsol_sdk::Error::custom)?;
-                        println!("{}", out);
+                        println!("{out}");
 
                         let confirmation = dialoguer::Confirm::new()
                             .with_prompt(format!(
@@ -508,7 +508,7 @@ impl CommandClient {
                         ("message", "Message"),
                     ]),
                 ) {
-                    println!("{}", out);
+                    println!("{out}");
                 }
                 idx += 1;
                 Ok(())
@@ -563,7 +563,7 @@ impl CommandClient {
                 ]),
             )
             .map_err(gmsol_sdk::Error::custom)?;
-        println!("{}", out);
+        println!("{out}");
         match err {
             None => Ok(()),
             Some(err) => Err(err),

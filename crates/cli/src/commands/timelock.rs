@@ -123,14 +123,14 @@ impl super::Command for Timelock {
                                 ("delay_seconds", "Delay (s)"),
                             ]),
                         )?;
-                        println!("{}", out);
+                        println!("{out}");
                     }
                     None => {
                         let out = ctx
                             .config()
                             .output()
                             .display_value_with_label("status", "Not initialized")?;
-                        println!("{}", out);
+                        println!("{out}");
                     }
                 }
                 return Ok(());
@@ -148,7 +148,7 @@ impl super::Command for Timelock {
                         ("wallet", "Wallet"),
                     ]),
                 )?;
-                println!("{}", out);
+                println!("{out}");
                 return Ok(());
             }
             Command::ExecutorWallet { role } => {
@@ -158,7 +158,7 @@ impl super::Command for Timelock {
                     .config()
                     .output()
                     .display_value_with_label("wallet", wallet)?;
-                println!("{}", out);
+                println!("{out}");
                 return Ok(());
             }
             Command::InitConfig { initial_delay } => {
@@ -169,7 +169,7 @@ impl super::Command for Timelock {
                     .config()
                     .output()
                     .display_value_with_label("config", config)?;
-                println!("{}", out);
+                println!("{out}");
                 rpc.into_bundle_with_options(options)?
             }
             Command::IncreaseDelay { delta } => client
@@ -181,7 +181,7 @@ impl super::Command for Timelock {
                     .config()
                     .output()
                     .display_value_with_label("executor", executor)?;
-                println!("{}", out);
+                println!("{out}");
                 rpc.into_bundle_with_options(options)?
             }
             Command::Approve { buffers, role } => client
@@ -303,7 +303,7 @@ impl super::Command for Timelock {
                                                 ]),
                                             )
                                             .map_err(gmsol_sdk::Error::custom)?;
-                                        println!("{}", out);
+                                        println!("{out}");
                                         message = rpc.message_with_blockhash_and_options(
                                             Default::default(),
                                             true,
@@ -387,7 +387,7 @@ impl super::Command for Timelock {
                             ]),
                         )
                         .map_err(gmsol_sdk::Error::custom)?;
-                    println!("{}", out);
+                    println!("{out}");
                     bundle.push(rpc)?;
                 }
                 bundle
