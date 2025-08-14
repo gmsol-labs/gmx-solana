@@ -386,18 +386,20 @@ impl CommandClient {
                             .swap_output(());
 
                         let txn_count = txn_idx + 1;
-                        let out = self.output_format.display_many(
-                            [serde_json::json!({
-                                "index": txn_idx,
-                                "transaction": transaction,
-                                "inspector_url": inspect_transaction(&message, Some(client.cluster()), false),
-                            })],
-                            DisplayOptions::table_projection([
-                                ("index", "Index"),
-                                ("transaction", "Transaction"),
-                                ("inspector_url", "Inspector URL"),
-                            ]),
-                        )?;
+                        let out = self.output_format
+                            .display_many(
+                                [serde_json::json!({
+                                    "index": txn_idx,
+                                    "transaction": transaction,
+                                    "inspector_url": inspect_transaction(&message, Some(client.cluster()), false),
+                                })],
+                                DisplayOptions::table_projection([
+                                    ("index", "Index"),
+                                    ("transaction", "Transaction"),
+                                    ("inspector_url", "Inspector URL"),
+                                ]),
+                            )
+                            .map_err(gmsol_sdk::Error::custom)?;
                         println!("{}", out);
 
                         let confirmation = dialoguer::Confirm::new()
