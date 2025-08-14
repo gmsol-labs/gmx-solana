@@ -165,10 +165,7 @@ impl OutputFormat {
         }
     }
 
-    pub fn display_list_with_header<
-        I: IntoIterator<Item = V>,
-        V: Serialize,
-    >(
+    pub fn display_list_with_header<I: IntoIterator<Item = V>, V: Serialize>(
         &self,
         items: I,
         header: impl ToString,

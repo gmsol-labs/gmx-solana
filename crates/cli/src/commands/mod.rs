@@ -18,7 +18,7 @@ use gmsol_sdk::{
         instruction_group::{ComputeBudgetOptions, GetInstructionsOptions},
         signer::LocalSignerRef,
         solana_client::rpc_config::RpcSendTransactionConfig,
-                    solana_sdk::{
+        solana_sdk::{
             signature::{Keypair, NullSigner, Signature},
             transaction::VersionedTransaction,
         },
@@ -286,10 +286,7 @@ impl CommandClient {
                 .output_format
                 .display_many(
                     items,
-                    DisplayOptions::table_projection([
-                        ("index", "Index"),
-                        ("message", "Message"),
-                    ]),
+                    DisplayOptions::table_projection([("index", "Index"), ("message", "Message")]),
                 )
                 .map_err(gmsol_sdk::Error::custom)?;
             println!("{}", out);
@@ -444,11 +441,10 @@ impl CommandClient {
         &self,
         bundle: BundleBuilder<'_, LocalSignerRef>,
     ) -> gmsol_sdk::Result<()> {
-        self
-            .send_or_serialize_with_callback(bundle, |s, e, steps| {
-                self.display_signatures(s, e, steps)
-            })
-            .await
+        self.send_or_serialize_with_callback(bundle, |s, e, steps| {
+            self.display_signatures(s, e, steps)
+        })
+        .await
     }
 
     #[cfg(feature = "squads")]
@@ -528,10 +524,7 @@ impl CommandClient {
         &self,
         bundle: BundleBuilder<'_, LocalSignerRef>,
     ) -> gmsol_sdk::Result<()> {
-        self
-            .send_bundle_with_callback(bundle, |s, e, steps| {
-                self.display_signatures(s, e, steps)
-            })
+        self.send_bundle_with_callback(bundle, |s, e, steps| self.display_signatures(s, e, steps))
             .await
     }
 
@@ -583,7 +576,6 @@ impl Deref for CommandClient {
         &self.client
     }
 }
-
 
 fn to_transactions(
     bundle: Bundle<'_, LocalSignerRef>,
