@@ -289,16 +289,20 @@ impl super::Command for Timelock {
                                             )?
                                             .swap_output(())
                                             .0;
-                                        let out = ctx.config().output().display_many(
-                                            [serde_json::json!({
-                                                "index": idx,
-                                                "buffer": buffer,
-                                            })],
-                                            DisplayOptions::table_projection([
-                                                ("index", "Index"),
-                                                ("buffer", "Buffer"),
-                                            ]),
-                                        )?;
+                                        let out = ctx
+                                            .config()
+                                            .output()
+                                            .display_many(
+                                                [serde_json::json!({
+                                                    "index": idx,
+                                                    "buffer": buffer,
+                                                })],
+                                                DisplayOptions::table_projection([
+                                                    ("index", "Index"),
+                                                    ("buffer", "Buffer"),
+                                                ]),
+                                            )
+                                            .map_err(gmsol_sdk::Error::custom)?;
                                         println!("{}", out);
                                         message = rpc.message_with_blockhash_and_options(
                                             Default::default(),
