@@ -104,10 +104,22 @@ pub fn try_deserialize_zero_copy<T: anchor_lang::ZeroCopy>(
 }
 
 /// Deserialize a [`ZeroCopy`](anchor_lang::ZeroCopy) structure from base64.
+pub fn try_deserialize_zero_copy_from_base64_with_options<T: anchor_lang::ZeroCopy>(
+    data: &str,
+    no_discriminator: bool,
+) -> crate::Result<ZeroCopy<T>> {
+    let mut data = crate::utils::base64::decode_base64(data)?;
+    if no_discriminator {
+        data = [T::DISCRIMINATOR, &data].concat();
+    }
+    try_deserialize_zero_copy(&data)
+}
+
+/// Deserialize a [`ZeroCopy`](anchor_lang::ZeroCopy) structure from base64.
 pub fn try_deserialize_zero_copy_from_base64<T: anchor_lang::ZeroCopy>(
     data: &str,
 ) -> crate::Result<ZeroCopy<T>> {
-    try_deserialize_zero_copy(&crate::utils::base64::decode_base64(data)?)
+    try_deserialize_zero_copy_from_base64_with_options(data, false)
 }
 
 /// Workaround for deserializing zero-copy accounts and wrapping the result into Arc.
