@@ -8,7 +8,9 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     market::{MarketCalculations, MarketStatus},
-    utils::zero_copy::{try_deserialize_zero_copy, try_deserialize_zero_copy_from_base64},
+    utils::zero_copy::{
+        try_deserialize_zero_copy, try_deserialize_zero_copy_from_base64_with_options,
+    },
 };
 
 use super::price::Prices;
@@ -21,13 +23,24 @@ pub struct JsMarket {
 
 #[wasm_bindgen(js_class = Market)]
 impl JsMarket {
-    /// Create from base64 encoded account data.
-    pub fn decode_from_base64(data: &str) -> crate::Result<Self> {
-        let market = try_deserialize_zero_copy_from_base64(data)?;
+    /// Create from base64 encoded account data with options.
+    pub fn decode_from_base64_with_options(
+        data: &str,
+        no_discriminator: Option<bool>,
+    ) -> crate::Result<Self> {
+        let market = try_deserialize_zero_copy_from_base64_with_options(
+            data,
+            no_discriminator.unwrap_or(false),
+        )?;
 
         Ok(Self {
             market: Arc::new(market.0),
         })
+    }
+
+    /// Create from base64 encoded account data.
+    pub fn decode_from_base64(data: &str) -> crate::Result<Self> {
+        Self::decode_from_base64_with_options(data, None)
     }
 
     /// Create from account data.
