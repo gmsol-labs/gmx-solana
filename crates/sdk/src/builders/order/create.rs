@@ -431,7 +431,7 @@ impl IntoAtomicGroup for CreateOrder {
                     system_program: system_program::ID,
                     token_program: token_program_id,
                     associated_token_program: associated_token::ID,
-                    event_authority: self.program.find_callback_authority_address(),
+                    event_authority: self.program.find_event_authority_address(),
                     program: self.program.id.0,
                     callback_authority,
                     callback_program,
