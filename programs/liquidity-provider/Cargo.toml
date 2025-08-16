@@ -24,5 +24,6 @@ test-only = []
 migration = []
 
 [dependencies]
-anchor-lang = "0.31.1"
-
+anchor-lang = { workspace = true }
+gmsol-programs = { workspace = true }
+gmsol-model = { workspace = true }

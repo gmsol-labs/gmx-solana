@@ -2382,6 +2382,8 @@ name = "gmsol-liquidity-provider"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "gmsol-model",
+ "gmsol-programs",
 ]
 
 [[package]]
