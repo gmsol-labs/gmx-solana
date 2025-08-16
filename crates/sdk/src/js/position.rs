@@ -6,7 +6,9 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     position::{status::PositionStatus, PositionCalculations},
-    utils::zero_copy::try_deserialize_zero_copy_from_base64,
+    utils::zero_copy::{
+        try_deserialize_zero_copy, try_deserialize_zero_copy_from_base64_with_options,
+    },
 };
 
 use super::{market::JsMarketModel, price::Prices};
@@ -19,9 +21,29 @@ pub struct JsPosition {
 
 #[wasm_bindgen(js_class = Position)]
 impl JsPosition {
+    /// Create from base64 encoded account data with options.
+    pub fn decode_from_base64_with_options(
+        data: &str,
+        no_discriminator: Option<bool>,
+    ) -> crate::Result<Self> {
+        let position = try_deserialize_zero_copy_from_base64_with_options(
+            data,
+            no_discriminator.unwrap_or(false),
+        )?;
+
+        Ok(Self {
+            position: Arc::new(position.0),
+        })
+    }
+
     /// Create from base64 encoded account data.
     pub fn decode_from_base64(data: &str) -> crate::Result<Self> {
-        let position = try_deserialize_zero_copy_from_base64(data)?;
+        Self::decode_from_base64_with_options(data, None)
+    }
+
+    /// Create from account data.
+    pub fn decode(data: &[u8]) -> crate::Result<Self> {
+        let position = try_deserialize_zero_copy(data)?;
 
         Ok(Self {
             position: Arc::new(position.0),

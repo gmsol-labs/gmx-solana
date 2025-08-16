@@ -112,6 +112,8 @@ const simulationOutput = graph.simulate_order({
   collateral_or_swap_out_token: wsol,
 }, position);
 console.log("simulation:", simulationOutput.increase());
+let outputPosition = Position.decode_from_base64_with_options(simulationOutput.increase()!.position, true);
+console.log("output position:", outputPosition.to_model(model).size());
 
 // Create order.
 const recentBlockhash = "3KarAamyLd6dFFmMsh79fXjrdAWp5DB6dxF3BgLK3SuM";
