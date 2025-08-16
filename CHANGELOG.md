@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - programs(store): Added `cumulative_inv_cost_factor` as a new global metric for GT, along with an instruction to update it.
 - programs(store): Added `mint_gt_reward` instruction.
+- sdk(sdk): Added `try_deserialize_zero_copy_from_base64_with_options` utility function.
 
 ### Fixed
 
