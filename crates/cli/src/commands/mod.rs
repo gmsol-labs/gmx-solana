@@ -288,6 +288,18 @@ impl CommandClient {
             let len = tg.len();
             let steps = len + 1;
             for (txn_idx, txn) in ags.enumerate() {
+                let luts = tg.luts();
+                let message = txn.message_with_blockhash_and_options(
+                    Default::default(),
+                    GetInstructionsOptions {
+                        compute_budget: ComputeBudgetOptions {
+                            without_compute_budget: true,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                    Some(luts),
+                )?;
                 match buffer {
                     InstructionBuffer::Timelock { role } => {
                         if *is_draft {
@@ -296,7 +308,25 @@ impl CommandClient {
                             );
                         }
 
-                        tracing::info!("Creating instruction buffers for transaction {txn_idx}");
+                        let txn_count = txn_idx + 1;
+                        println!("Creating instruction buffers for transaction {txn_idx}");
+                        println!(
+                            "Inspector URL for transaction {txn_idx}: {}",
+                            inspect_transaction(&message, Some(client.cluster()), false),
+                        );
+
+                        let confirmation = dialoguer::Confirm::new()
+                                .with_prompt(format!(
+                                    "[{txn_count}/{steps}] Confirm to create instruction buffers for transaction {txn_idx} ?"
+                                ))
+                                .default(false)
+                                .interact()
+                                .map_err(gmsol_sdk::Error::custom)?;
+
+                        if !confirmation {
+                            tracing::info!("Cancelled");
+                            return Ok(());
+                        }
 
                         for (idx, ix) in txn
                             .instructions_with_options(GetInstructionsOptions {
@@ -317,8 +347,9 @@ impl CommandClient {
                                     (*ix).clone(),
                                 )?
                                 .swap_output(());
+
                             bundle.push(rpc)?;
-                            println!("ix[{idx}]: {buffer}");
+                            println!("ix[{txn_idx}.{idx}]: {buffer}");
                         }
                     }
                     #[cfg(feature = "squads")]
@@ -328,19 +359,6 @@ impl CommandClient {
                     } => {
                         use gmsol_sdk::client::squads::{SquadsOps, VaultTransactionOptions};
                         use gmsol_sdk::solana_utils::utils::inspect_transaction;
-
-                        let luts = tg.luts();
-                        let message = txn.message_with_blockhash_and_options(
-                            Default::default(),
-                            GetInstructionsOptions {
-                                compute_budget: ComputeBudgetOptions {
-                                    without_compute_budget: true,
-                                    ..Default::default()
-                                },
-                                ..Default::default()
-                            },
-                            Some(luts),
-                        )?;
 
                         let (rpc, transaction) = client
                             .squads_create_vault_transaction_with_message(
@@ -383,7 +401,7 @@ impl CommandClient {
 
             let confirmation = dialoguer::Confirm::new()
                 .with_prompt(format!(
-                    "[{steps}/{steps}] Confirm creation of {len} vault transactions?"
+                    "[{steps}/{steps}] Confirm creation of {len} vault/timelocked transactions?"
                 ))
                 .default(false)
                 .interact()
