@@ -24,9 +24,7 @@ use gmsol_programs::gmsol_store::{
 };
 
 const SECONDS_PER_YEAR: u128 = 31_557_600; // 365.25 * 24 * 3600
-const PERCENT_DIVISOR: u64 = 100;
-const GT_APY_PER_SEC: u128 =
-    15u128 * MARKET_USD_UNIT as u128 / PERCENT_DIVISOR as u128 / SECONDS_PER_YEAR as u128;
+const SECONDS_PER_WEEK: u128 = 7 * 24 * 3600;
 
 declare_id!("BGDJg2u2NWwUE5q4Q4masGCFBVAhJ5pKrMbVSwjVwo8m");
 
@@ -35,18 +33,21 @@ pub mod gmsol_liquidity_provider {
     use super::*;
 
     /// Initialize LP staking program
-    pub fn initialize(ctx: Context<Initialize>, min_stake_value: u128) -> Result<()> {
+    pub fn initialize(
+        ctx: Context<Initialize>,
+        min_stake_value: u128,
+        apy_gradient: [u128; 53], // each item is 1e20-scaled APR for week buckets [0-1), [1-2), ..., [52, +inf)
+    ) -> Result<()> {
         let global_state = &mut ctx.accounts.global_state;
         global_state.authority = ctx.accounts.authority.key();
         global_state.pending_authority = Pubkey::default();
         global_state.gt_mint = ctx.accounts.gt_mint.key();
-        // APY per-second (scaled by 1e20): 15% APR -> (15 * 1e20) / (100 * SECONDS_PER_YEAR)
-        global_state.gt_apy_per_sec = GT_APY_PER_SEC;
+        global_state.apy_gradient = apy_gradient;
         global_state.lp_token_price = MARKET_USD_UNIT; // $1.00 in 1e20 units
         global_state.min_stake_value = min_stake_value;
         global_state.bump = ctx.bumps.global_state;
         msg!(
-            "LP staking program initialized, GT APY: 15%%, GT price: $1.00, min_stake_value(1e20)={}",
+            "LP staking program initialized, min_stake_value(1e20)={}",
             min_stake_value
         );
         Ok(())
@@ -148,23 +149,6 @@ pub mod gmsol_liquidity_provider {
             ctx.accounts.position.cum_inv_cost,
             cum_now,
             inv_cost_integral
-        );
-        msg!(
-            "Staked amount (raw): {}",
-            ctx.accounts.position.staked_amount
-        );
-        msg!(
-            "Staked value (USD, 1e20): {}",
-            ctx.accounts.position.staked_value_usd
-        );
-        msg!(
-            "GT APY per-second (1e20): {}",
-            ctx.accounts.global_state.gt_apy_per_sec
-        );
-        msg!(
-            "Calculated GT reward (raw, decimals={}): {}",
-            gt_decimals,
-            gt_reward_raw
         );
         msg!("Calculated GT reward (whole GT, floored): {} GT", gt_whole);
         Ok(())
@@ -372,17 +356,6 @@ pub mod gmsol_liquidity_provider {
         Ok(())
     }
 
-    /// Update GT APY parameter (per-second 1e20-scaled)
-    pub fn update_gt_apy_per_sec(
-        ctx: Context<UpdateGtApy>,
-        new_apy_per_sec: u128, // scaled by 1e20
-    ) -> Result<()> {
-        let global_state = &mut ctx.accounts.global_state;
-        global_state.gt_apy_per_sec = new_apy_per_sec;
-        msg!("GT APY per-second (1e20) updated to: {}", new_apy_per_sec);
-        Ok(())
-    }
-
     /// Update the minimum stake value (1e20 scaled)
     pub fn update_min_stake_value(
         ctx: Context<UpdateMinStakeValue>,
@@ -391,6 +364,17 @@ pub mod gmsol_liquidity_provider {
         let gs = &mut ctx.accounts.global_state;
         gs.min_stake_value = new_min_stake_value;
         msg!("min_stake_value updated to (1e20): {}", new_min_stake_value);
+        Ok(())
+    }
+
+    /// Update APY gradient array (53 buckets)
+    pub fn update_apy_gradient(
+        ctx: Context<UpdateApyGradient>,
+        new_apy_gradient: [u128; 53],
+    ) -> Result<()> {
+        let gs = &mut ctx.accounts.global_state;
+        gs.apy_gradient = new_apy_gradient;
+        msg!("apy_gradient updated (53 buckets)");
         Ok(())
     }
 
@@ -486,15 +470,25 @@ fn compute_reward_with_cpi<'info>(
     require!(cum_now >= prev_cum, ErrorCode::InvalidArgument);
     let inv_cost_integral = cum_now - prev_cum;
 
-    // 3) Duration for logging / APY-per-sec pipeline
+    // 3) Duration and time-weighted APY
     let current_time = Clock::get()?.unix_timestamp;
     let duration_seconds = current_time.saturating_sub(position.stake_start_time);
+    let avg_apy = compute_time_weighted_apy(
+        position.stake_start_time,
+        current_time,
+        &global_state.apy_gradient,
+    );
+    let avg_apy_per_sec = if SECONDS_PER_YEAR > 0 {
+        avg_apy / SECONDS_PER_YEAR
+    } else {
+        0
+    };
 
     // 4) Reward in GT base units
     let gt_reward_raw = calculate_gt_reward_amount(
         position.staked_value_usd,
         duration_seconds,
-        global_state.gt_apy_per_sec,
+        avg_apy_per_sec,
         inv_cost_integral,
     )?;
 
@@ -505,6 +499,43 @@ fn compute_reward_with_cpi<'info>(
         inv_cost_integral,
         duration_seconds,
     })
+}
+
+/// Compute time-weighted average APR over [start, now] using 53-bucket weekly gradient (1e20-scaled).
+fn compute_time_weighted_apy(stake_start_time: i64, now: i64, apy_gradient: &[u128; 53]) -> u128 {
+    if now <= stake_start_time {
+        return apy_gradient[0];
+    }
+    let mut remaining: u128 = (now - stake_start_time) as u128;
+    let mut current_start: i64 = stake_start_time;
+    let mut acc: u128 = 0;
+    let mut week_index: usize = 0;
+
+    while remaining > 0 {
+        let week_end = current_start.saturating_add(SECONDS_PER_WEEK as i64);
+        let segment_seconds: u128 = if (now as i128) < (week_end as i128) {
+            remaining
+        } else {
+            SECONDS_PER_WEEK.min(remaining)
+        };
+        let apy = if week_index < 52 {
+            apy_gradient[week_index]
+        } else {
+            apy_gradient[52]
+        };
+        // accumulate apy * seconds
+        acc = acc.saturating_add(apy.saturating_mul(segment_seconds));
+        remaining = remaining.saturating_sub(segment_seconds);
+        current_start = week_end;
+        week_index = week_index.saturating_add(1);
+    }
+
+    let total_seconds: u128 = (now - stake_start_time) as u128;
+    if total_seconds == 0 {
+        apy_gradient[0]
+    } else {
+        acc / total_seconds
+    }
 }
 
 #[derive(Accounts)]
@@ -743,7 +774,7 @@ pub struct UnstakeLp<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateGtApy<'info> {
+pub struct UpdateMinStakeValue<'info> {
     /// Global config (PDA). The `authority` signer must match `global_state.authority`.
     #[account(mut, seeds = [GLOBAL_STATE_SEED], bump = global_state.bump, has_one = authority)]
     pub global_state: Account<'info, GlobalState>,
@@ -752,7 +783,7 @@ pub struct UpdateGtApy<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateMinStakeValue<'info> {
+pub struct UpdateApyGradient<'info> {
     /// Global config (PDA). The `authority` signer must match `global_state.authority`.
     #[account(mut, seeds = [GLOBAL_STATE_SEED], bump = global_state.bump, has_one = authority)]
     pub global_state: Account<'info, GlobalState>,
@@ -787,9 +818,8 @@ pub struct GlobalState {
     pub pending_authority: Pubkey,
     /// GT token mint address
     pub gt_mint: Pubkey,
-    /// Per-second APY factor scaled by 1e20 (MARKET_USD_UNIT).
-    /// Example: for 15% APR, set to (15 * 1e20) / (100 * SECONDS_PER_YEAR).
-    pub gt_apy_per_sec: u128,
+    /// APY gradient buckets (53), each is 1e20-scaled APR for week buckets [0-1), [1-2), ..., [52, +inf)
+    pub apy_gradient: [u128; 53],
     /// LP token price in USD scaled by 1e20
     pub lp_token_price: u128,
     /// Minimum stake value in USD scaled by 1e20
