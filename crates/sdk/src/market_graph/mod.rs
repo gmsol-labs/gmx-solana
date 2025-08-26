@@ -664,7 +664,7 @@ impl BestSwapPaths<'_> {
         let distance = distances[target_ix];
 
         if *source == *target {
-            return (distance, vec![]);
+            return (distance.map(distance_to_exchange_rate), vec![]);
         }
 
         let mut path = vec![];
@@ -686,11 +686,15 @@ impl BestSwapPaths<'_> {
                 // Since `target != source`, an empty path means there's no valid distance.
                 None
             } else {
-                distance.map(|d| (-d).exp())
+                distance.map(distance_to_exchange_rate)
             },
             path,
         )
     }
+}
+
+fn distance_to_exchange_rate(d: Decimal) -> Decimal {
+    (-d).exp()
 }
 
 /// Swap output.
@@ -868,6 +872,10 @@ mod tests {
             let (dfs_rate, dfs_best_path) = dfs_paths.to(&usdc);
             assert_eq!(rate, dfs_rate);
             assert_eq!(best_path, dfs_best_path);
+
+            for target in [&usdc, &wsol, &bome] {
+                println!("[{steps}] path to {target}: {:?}", paths.to(target));
+            }
         }
 
         Ok(())
