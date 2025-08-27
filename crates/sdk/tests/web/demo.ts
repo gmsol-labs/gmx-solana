@@ -2,6 +2,7 @@ import {
   apply_factor,
   close_orders,
   create_orders,
+  create_orders_builder,
   default_store_program,
   Market,
   MarketGraph,
@@ -9,6 +10,8 @@ import {
   Pubkey,
   update_orders,
 } from "../../pkg/index.js";
+
+import { clusterApiUrl, Connection, PublicKey } from "@solana/web3.js";
 
 function toBase64(data: number[]): string {
   const uint8 = new Uint8Array(data);
@@ -151,6 +154,101 @@ const transactions = create_orders(
 
 console.log("create orders");
 for (const batch of transactions.serialize()) {
+  for (const txn of batch) {
+    console.log(toBase64(txn));
+  }
+}
+
+// Create multiple orders.
+const multipleBuilder = create_orders_builder(
+  "MarketIncrease",
+  [
+    {
+      market_token: marketToken,
+      is_long: true,
+      size: 100_000_000_000_000_000_000_000n,
+      amount: 10_000_000n,
+    },
+  ],
+  {
+    recent_blockhash: recentBlockhash,
+    payer,
+    collateral_or_swap_out_token: wsol,
+    hints: new Map([
+      [
+        marketToken,
+        {
+          long_token: wsol,
+          short_token: usdc,
+        },
+      ],
+    ]),
+  }
+);
+const tpBuilder = create_orders_builder(
+  "LimitDecrease",
+  [
+    {
+      market_token: marketToken,
+      is_long: true,
+      size: 100_000_000_000_000_000_000_000n,
+      amount: 10_000_000n,
+      trigger_price: 23_000_000_000_000n,
+    },
+  ],
+  {
+    recent_blockhash: recentBlockhash,
+    payer,
+    collateral_or_swap_out_token: wsol,
+    hints: new Map([
+      [
+        marketToken,
+        {
+          long_token: wsol,
+          short_token: usdc,
+        },
+      ],
+    ]),
+  }
+);
+const slBuilder = create_orders_builder(
+  "StopLossDecrease",
+  [
+    {
+      market_token: marketToken,
+      is_long: true,
+      size: 100_000_000_000_000_000_000_000n,
+      amount: 10_000_000n,
+      trigger_price: 10_000_000_000_000n,
+    },
+  ],
+  {
+    recent_blockhash: recentBlockhash,
+    payer,
+    collateral_or_swap_out_token: wsol,
+    hints: new Map([
+      [
+        marketToken,
+        {
+          long_token: wsol,
+          short_token: usdc,
+        },
+      ],
+    ]),
+  }
+);
+
+multipleBuilder.merge(tpBuilder);
+multipleBuilder.merge(slBuilder);
+
+const multipleTransactions = multipleBuilder.build_with_options({}, {
+  recent_blockhash: recentBlockhash,
+  compute_unit_price_micro_lamports: 2000000,
+});
+
+console.log("create multiple orders");
+
+for (const batch of multipleTransactions.serialize()) {
   for (const txn of batch) {
     console.log(toBase64(txn));
   }
