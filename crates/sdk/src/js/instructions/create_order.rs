@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use gmsol_solana_utils::{IntoAtomicGroup, ParallelGroup};
+use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup, ParallelGroup};
 use serde::{Deserialize, Serialize};
 
 use tsify_next::Tsify;
@@ -14,6 +14,7 @@ use crate::{
         user::PrepareUser,
         StoreProgram,
     },
+    js::instructions::BuildTransactionOptions,
     serde::StringPubkey,
 };
 
@@ -49,20 +50,13 @@ pub struct CreateOrderOptions {
     transaction_group: TransactionGroupOptions,
 }
 
-/// Build transactions for creating orders.
+/// Create transaction builder for create-order ixs.
 #[wasm_bindgen]
-pub fn create_orders(
+pub fn create_orders_builder(
     kind: CreateOrderKind,
     orders: Vec<CreateOrderParams>,
     options: CreateOrderOptions,
-) -> crate::Result<TransactionGroup> {
-    let mut group = options.transaction_group.build();
-
-    let prepare_user = PrepareUser::builder()
-        .payer(options.payer)
-        .build()
-        .into_atomic_group(&())?;
-
+) -> crate::Result<CreateOrdersBuilder> {
     let pay_token = options
         .pay_token
         .unwrap_or(options.collateral_or_swap_out_token);
@@ -128,23 +122,88 @@ pub fn create_orders(
 
             Ok(ag)
         })
-        .collect::<crate::Result<ParallelGroup>>()?;
+        .collect::<crate::Result<Vec<_>>>()?;
 
-    let prepare = PrepareTokenAccounts::builder()
-        .owner(options.payer)
-        .payer(options.payer)
-        .tokens(tokens)
-        .build()
-        .into_atomic_group(&())?;
+    Ok(CreateOrdersBuilder {
+        payer: options.payer,
+        tokens,
+        create,
+        transaction_group: options.transaction_group,
+        build: BuildTransactionOptions {
+            recent_blockhash: options.recent_blockhash,
+            compute_unit_price_micro_lamports: options.compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports: options.compute_unit_min_priority_lamports,
+        },
+    })
+}
 
-    TransactionGroup::new(
-        group
-            .add(prepare_user)?
-            .add(prepare)?
-            .add(create)?
-            .optimize(false),
-        &options.recent_blockhash,
-        options.compute_unit_price_micro_lamports,
-        options.compute_unit_min_priority_lamports,
-    )
+/// Builder for create-order ixs.
+#[wasm_bindgen]
+pub struct CreateOrdersBuilder {
+    payer: StringPubkey,
+    tokens: HashSet<StringPubkey>,
+    create: Vec<AtomicGroup>,
+    transaction_group: TransactionGroupOptions,
+    build: BuildTransactionOptions,
+}
+
+#[wasm_bindgen]
+impl CreateOrdersBuilder {
+    /// Build transactions.
+    pub fn build_with_options(
+        self,
+        transaction_group: Option<TransactionGroupOptions>,
+        build: Option<BuildTransactionOptions>,
+    ) -> crate::Result<TransactionGroup> {
+        let mut group = transaction_group.unwrap_or(self.transaction_group).build();
+
+        let prepare_user = PrepareUser::builder()
+            .payer(self.payer)
+            .build()
+            .into_atomic_group(&())?;
+
+        let prepare = PrepareTokenAccounts::builder()
+            .owner(self.payer)
+            .payer(self.payer)
+            .tokens(self.tokens)
+            .build()
+            .into_atomic_group(&())?;
+
+        let build = build.unwrap_or(self.build);
+        TransactionGroup::new(
+            group
+                .add(prepare_user)?
+                .add(prepare)?
+                .add(self.create.into_iter().collect::<ParallelGroup>())?
+                .optimize(false),
+            &build.recent_blockhash,
+            build.compute_unit_price_micro_lamports,
+            build.compute_unit_min_priority_lamports,
+        )
+    }
+
+    /// Merge with the other [`CreateOrderBuilder`].
+    pub fn merge(&mut self, other: &mut Self) -> crate::Result<()> {
+        if self.payer != other.payer {
+            return Err(crate::Error::custom(format!(
+                "payer mismatch: this = {}, other = {}",
+                self.payer, other.payer
+            )));
+        }
+        for token in other.tokens.iter() {
+            self.tokens.insert(*token);
+        }
+        self.create.append(&mut other.create);
+        Ok(())
+    }
+}
+
+/// Build transactions for creating orders.
+#[wasm_bindgen]
+pub fn create_orders(
+    kind: CreateOrderKind,
+    orders: Vec<CreateOrderParams>,
+    options: CreateOrderOptions,
+) -> crate::Result<TransactionGroup> {
+    create_orders_builder(kind, orders, options)?.build_with_options(None, None)
 }

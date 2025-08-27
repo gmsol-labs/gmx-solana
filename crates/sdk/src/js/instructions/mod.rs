@@ -64,7 +64,7 @@ impl TransactionGroupOptions {
     }
 }
 
-/// A JS binding for transaction group.
+/// A JS binding for compiled transaction group.
 #[wasm_bindgen]
 pub struct TransactionGroup(Vec<Vec<VersionedTransaction>>);
 
@@ -89,6 +89,17 @@ impl TransactionGroup {
             .collect::<crate::Result<Vec<_>>>()?;
         Ok(SerializedTransactionGroup(serialized))
     }
+}
+
+/// Build transaction options.
+#[derive(Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct BuildTransactionOptions {
+    recent_blockhash: String,
+    #[serde(default)]
+    compute_unit_price_micro_lamports: Option<u64>,
+    #[serde(default)]
+    compute_unit_min_priority_lamports: Option<u64>,
 }
 
 impl TransactionGroup {
