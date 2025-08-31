@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - sdk(sdk): Fixed wrong event authority address in `CreateOrder`.
-- sdk(sdk): Added `openssl-vendored` feature to avoid link errors
+- sdk(sdk): Added `openssl-vendored` feature to avoid link errors.
+- sdk(sdk): Forwarded `js` feature to `rand/wasm-bindgen`.
 
 ## [0.7.1] - 2025-08-15
 

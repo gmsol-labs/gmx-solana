@@ -30,6 +30,7 @@ js = [
     "gmsol-model/js",
     "gmsol-model/solana",
     "bincode",
+    "rand/wasm-bindgen",
 ]
 serde = [
     "dep:serde",
