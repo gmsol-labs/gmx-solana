@@ -82,6 +82,7 @@ switchboard = ["switchboard-on-demand-client"]
 squads = []
 discover = ["client", "tower/discover", "tokio/time", "pin-project-lite"]
 clap = ["dep:clap", "gmsol-utils/clap"]
+openssl-vendored = ["solana-sdk/openssl-vendored"]
 
 [dependencies]
 gmsol-utils = { workspace = true, features = ["enum-iter", "debug"] }

@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - sdk(sdk): Fixed wrong event authority address in `CreateOrder`.
+- sdk(sdk): Added `openssl-vendored` feature to avoid link errors
 
 ## [0.7.1] - 2025-08-15
 
@@ -45,7 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Deprecated
 
 - programs(utils): Deprecated `PriceFeedPrice::last_update_diff_nanos` function.
-
 
 ## [0.7.0] - 2025-08-05
 
