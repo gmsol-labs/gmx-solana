@@ -5,14 +5,14 @@ use solana_sdk::{
     instruction::CompiledInstruction, message::v0::MessageAddressTableLookup, pubkey::Pubkey,
     signature::Signature, transaction::VersionedTransaction,
 };
-use solana_transaction_status::{
+use solana_transaction_status_client_types::{
     option_serializer::OptionSerializer, EncodedTransactionWithStatusMeta, UiInstruction,
     UiTransactionStatusMeta,
 };
 
 use crate::{Decode, DecodeError, Decoder, Visitor};
 
-pub use solana_transaction_status;
+pub use solana_transaction_status_client_types as solana_transaction_status;
 
 /// Transaction Decoder.
 pub struct TransactionDecoder<'a> {

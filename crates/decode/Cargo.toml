@@ -25,7 +25,7 @@ base64 = { workspace = true }
 bytemuck = { workspace = true }
 paste = { workspace = true }
 cfg-if = { workspace = true }
-solana-transaction-status = { workspace = true }
+solana-transaction-status-client-types = { workspace = true }
 
 bs58 = { workspace = true, optional = true }
 

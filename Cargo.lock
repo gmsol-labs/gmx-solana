@@ -2359,7 +2359,7 @@ dependencies = [
  "gmsol-programs",
  "paste",
  "solana-sdk",
- "solana-transaction-status",
+ "solana-transaction-status-client-types",
  "thiserror 1.0.69",
  "tracing",
 ]

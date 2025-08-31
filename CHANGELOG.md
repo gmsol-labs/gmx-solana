@@ -18,11 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - cli: Improved prompt when creating timelock instruction buffers.
+- sdk(decode): Replaced `solana-transaction-status` with `solana-transaction-status-client-types` to simplify dependency.
 
 ### Fixed
 
 - sdk(sdk): Fixed wrong event authority address in `CreateOrder`.
-- sdk(sdk): Added `openssl-vendored` feature to avoid link errors
+- sdk(sdk): Added `openssl-vendored` feature to avoid link errors.
 
 ## [0.7.1] - 2025-08-15
 

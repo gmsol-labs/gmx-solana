@@ -1,7 +1,7 @@
 pub use anchor_lang::prelude::AccountMeta;
 use solana_sdk::instruction::CompiledInstruction;
 pub use solana_sdk::{message::v0::MessageAddressTableLookup, signature::Signature};
-pub use solana_transaction_status::UiTransactionStatusMeta;
+pub use solana_transaction_status_client_types::UiTransactionStatusMeta;
 
 use crate::DecodeError;
 
