@@ -1,4 +1,4 @@
-use std::{future::Future, ops::Deref};
+use std::{collections::BTreeSet, future::Future, ops::Deref};
 
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use gmsol_model::{price::Prices, PnlFactorKind};
@@ -6,13 +6,29 @@ use gmsol_programs::gmsol_store::{
     client::{accounts, args},
     types::EntryArgs,
 };
-use gmsol_solana_utils::transaction_builder::TransactionBuilder;
-use gmsol_utils::market::{MarketConfigFlag, MarketConfigKey, MarketMeta};
+use gmsol_solana_utils::{
+    make_bundle_builder::MakeBundleBuilder, transaction_builder::TransactionBuilder,
+};
+use gmsol_utils::{
+    market::{MarketConfigFlag, MarketConfigKey, MarketMeta},
+    oracle::PriceProviderKind,
+    token_config::{token_records, TokensWithFeed},
+};
 use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
+
+use crate::{
+    client::{
+        feeds_parser::{FeedAddressMap, FeedsParser},
+        pull_oracle::{FeedIds, PullOraclePriceConsumer},
+    },
+    Client,
+};
 
 use super::token_account::TokenAccountOps;
 
 type Factor = u128;
+
+const DEFAULT_MAX_AGE: u32 = 120;
 
 /// Market operations.
 pub trait MarketOps<C> {
@@ -73,6 +89,15 @@ pub trait MarketOps<C> {
         pnl_factor: PnlFactorKind,
         maximize: bool,
     ) -> TransactionBuilder<C>;
+
+    /// Get market token value.
+    fn get_market_token_value(
+        &self,
+        store: &Pubkey,
+        oracle: &Pubkey,
+        market_token: &Pubkey,
+        amount: u64,
+    ) -> GetMarketTokenValueBuilder<'_, C>;
 
     /// Update market config.
     fn update_market_config(
@@ -330,6 +355,16 @@ impl<C: Deref<Target = impl Signer> + Clone> MarketOps<C> for crate::Client<C> {
             })
     }
 
+    fn get_market_token_value(
+        &self,
+        store: &Pubkey,
+        oracle: &Pubkey,
+        market_token: &Pubkey,
+        amount: u64,
+    ) -> GetMarketTokenValueBuilder<'_, C> {
+        GetMarketTokenValueBuilder::new(self, *store, *oracle, *market_token, amount)
+    }
+
     fn update_market_config(
         &self,
         store: &Pubkey,
@@ -561,4 +596,185 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> ClaimFeesBuilder<'a, C> {
 
         Ok(prepare.merge(rpc))
     }
+}
+
+/// Builder for `get_market_token_value` instruction.
+pub struct GetMarketTokenValueBuilder<'a, C> {
+    client: &'a Client<C>,
+    store: Pubkey,
+    oracle: Pubkey,
+    market_token: Pubkey,
+    amount: u64,
+    pnl_factor: PnlFactorKind,
+    maximize: bool,
+    max_age: u32,
+    feeds_parser: FeedsParser,
+    hint: Option<GetMarketTokenValueHint>,
+}
+
+/// Hint for [`GetMarketTokenValue`].
+#[derive(Debug, Clone)]
+pub struct GetMarketTokenValueHint {
+    /// Token map address.
+    pub token_map: Pubkey,
+    /// Feeds.
+    pub feeds: TokensWithFeed,
+}
+
+impl<C> GetMarketTokenValueBuilder<'_, C> {
+    /// Set PnL factor kind.
+    pub fn pnl_factor(&mut self, kind: PnlFactorKind) -> &mut Self {
+        self.pnl_factor = kind;
+        self
+    }
+
+    /// Set maximize flag.
+    pub fn maximize(&mut self, maximize: bool) -> &mut Self {
+        self.maximize = maximize;
+        self
+    }
+
+    /// Set max age.
+    pub fn max_age(&mut self, max_age: u32) -> &mut Self {
+        self.max_age = max_age;
+        self
+    }
+
+    /// Set hint.
+    pub fn hint(&mut self, hint: Option<GetMarketTokenValueHint>) -> &mut Self {
+        self.hint = hint;
+        self
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> GetMarketTokenValueBuilder<'a, C> {
+    fn new(
+        client: &'a Client<C>,
+        store: Pubkey,
+        oracle: Pubkey,
+        market_token: Pubkey,
+        amount: u64,
+    ) -> Self {
+        Self {
+            client,
+            store,
+            oracle,
+            market_token,
+            amount,
+            pnl_factor: PnlFactorKind::MaxAfterDeposit,
+            maximize: false,
+            max_age: DEFAULT_MAX_AGE,
+            feeds_parser: Default::default(),
+            hint: None,
+        }
+    }
+
+    /// Prepare hint.
+    pub async fn prepare_hint(&mut self) -> crate::Result<GetMarketTokenValueHint> {
+        if let Some(hint) = self.hint.as_ref() {
+            return Ok(hint.clone());
+        }
+
+        let store = self.client.store(&self.store).await?;
+        let token_map_address = store.token_map;
+        let market = self
+            .client
+            .market_by_token(&self.store, &self.market_token)
+            .await?;
+        let token_map = self.client.token_map(&token_map_address).await?;
+        let tokens = ordered_tokens(&market.meta.into());
+        let records = token_records(&token_map, &tokens).map_err(crate::Error::custom)?;
+        let feeds = TokensWithFeed::try_from_records(records).map_err(crate::Error::custom)?;
+        let hint = GetMarketTokenValueHint {
+            token_map: token_map_address,
+            feeds,
+        };
+        self.hint = Some(hint.clone());
+        Ok(hint)
+    }
+
+    async fn build_txn(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+        let hint = self.prepare_hint().await?;
+        let Self {
+            client,
+            store,
+            oracle,
+            market_token,
+            amount,
+            pnl_factor,
+            maximize,
+            max_age,
+            feeds_parser,
+            ..
+        } = self;
+        let authority = client.payer();
+        let feeds = feeds_parser
+            .parse(&hint.feeds)
+            .collect::<Result<Vec<_>, _>>()?;
+        let market = client.find_market_address(store, market_token);
+        let txn = client
+            .store_transaction()
+            .anchor_args(args::GetMarketTokenValue {
+                amount: *amount,
+                pnl_factor: pnl_factor.to_string(),
+                maximize: *maximize,
+                max_age: *max_age,
+            })
+            .anchor_accounts(accounts::GetMarketTokenValue {
+                authority,
+                store: *store,
+                token_map: hint.token_map,
+                oracle: *oracle,
+                market,
+                market_token: *market_token,
+            })
+            .accounts(feeds);
+        Ok(txn)
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
+    for GetMarketTokenValueBuilder<'a, C>
+{
+    async fn build_with_options(
+        &mut self,
+        options: gmsol_solana_utils::bundle_builder::BundleOptions,
+    ) -> gmsol_solana_utils::Result<gmsol_solana_utils::bundle_builder::BundleBuilder<'a, C>> {
+        let mut tx = self.client.bundle_with_options(options);
+
+        tx.try_push(
+            self.build_txn()
+                .await
+                .map_err(gmsol_solana_utils::Error::custom)?,
+        )?;
+
+        Ok(tx)
+    }
+}
+
+impl<C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
+    for GetMarketTokenValueBuilder<'_, C>
+{
+    async fn feed_ids(&mut self) -> crate::Result<FeedIds> {
+        let hint = self.prepare_hint().await?;
+        Ok(FeedIds::new(self.store, hint.feeds))
+    }
+
+    fn process_feeds(
+        &mut self,
+        provider: PriceProviderKind,
+        map: FeedAddressMap,
+    ) -> crate::Result<()> {
+        self.feeds_parser
+            .insert_pull_oracle_feed_parser(provider, map);
+        Ok(())
+    }
+}
+
+fn ordered_tokens(meta: &MarketMeta) -> BTreeSet<Pubkey> {
+    BTreeSet::from([
+        meta.index_token_mint,
+        meta.long_token_mint,
+        meta.short_token_mint,
+    ])
 }
