@@ -17163,6 +17163,38 @@
           "docs": [
             "Market token."
           ]
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -17181,6 +17213,10 @@
         {
           "name": "max_age",
           "type": "u32"
+        },
+        {
+          "name": "emit_event",
+          "type": "bool"
         }
       ],
       "returns": "u128"
@@ -24688,6 +24724,19 @@
       ]
     },
     {
+      "name": "MarketTokenValue",
+      "discriminator": [
+        192,
+        52,
+        115,
+        189,
+        105,
+        44,
+        254,
+        121
+      ]
+    },
+    {
       "name": "OrderCreated",
       "discriminator": [
         224,
@@ -30426,6 +30475,59 @@
             "name": "pool_value_without_pnl_for_short",
             "docs": [
               "Pool value without pnl for short."
+            ],
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketTokenValue",
+      "docs": [
+        "Event emitted when a market token amount is evaluated into its value."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_token",
+            "docs": [
+              "Market token."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "supply",
+            "docs": [
+              "The supply of the market token."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "is_value_maximized",
+            "docs": [
+              "Whether the `pool_value` is maximized."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "pool_value",
+            "docs": [
+              "Total value of the pool."
+            ],
+            "type": "i128"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "market token amount being evaluated."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "value",
+            "docs": [
+              "Computed value of the given amount."
             ],
             "type": "u128"
           }

@@ -1,5 +1,5 @@
 use crate::{
-    events::EventEmitter,
+    events::{EventEmitter, MarketTokenValue},
     ops::market::MarketTransferOutOperation,
     states::{
         market::{
@@ -770,6 +770,7 @@ pub(crate) fn claim_fees_from_market(ctx: Context<ClaimFeesFromMarket>) -> Resul
 /// Remaining accounts expected by this instruction:
 ///   - 0..N. `[]` N feed accounts, where N represents the total number of unique tokens associated with the market,
 ///     sorted by token address.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct GetMarketTokenValue<'info> {
     /// Authority.
@@ -800,15 +801,19 @@ impl<'info> GetMarketTokenValue<'info> {
         pnl_factor: PnlFactorKind,
         maximize: bool,
         max_age: u32,
+        emit_event: bool,
     ) -> Result<u128> {
         let accounts = ctx.accounts;
+        let event_authority_bump = ctx.bumps.event_authority;
         accounts.validate()?;
         accounts.evaluate(
             amount,
             pnl_factor,
             maximize,
             max_age,
+            emit_event,
             ctx.remaining_accounts,
+            event_authority_bump,
         )
     }
 
@@ -822,7 +827,9 @@ impl<'info> GetMarketTokenValue<'info> {
         pnl_factor: PnlFactorKind,
         maximize: bool,
         max_age: u32,
+        emit_event: bool,
         remaining_accounts: &'info [AccountInfo<'info>],
+        event_authority_bump: u8,
     ) -> Result<u128> {
         let mut oracle = self.oracle.load_mut()?;
         let market = self.market.load()?;
@@ -842,10 +849,26 @@ impl<'info> GetMarketTokenValue<'info> {
                 let prices = oracle.market_prices(&*market)?;
                 let liquidity_market = market.as_liquidity_market(market_token);
                 oracle.validate_time(&max_age_validator)?;
-                let value = liquidity_market
+                let result = liquidity_market
                     .market_token_value(&u128::from(amount), &prices, pnl_factor, maximize)
-                    .map_err(ModelError::from)?;
-                Ok(value)
+                    .map_err(ModelError::from)?
+                    .ok_or_else(|| {
+                        msg!("evluation was not performed");
+                        error!(CoreError::InvalidArgument)
+                    })?;
+                if emit_event {
+                    let event_emitter =
+                        EventEmitter::new(&self.event_authority, event_authority_bump);
+                    event_emitter.emit_cpi(&MarketTokenValue {
+                        market_token: market_token.key(),
+                        supply: result.supply,
+                        is_value_maximized: maximize,
+                        pool_value: result.pool_value,
+                        amount,
+                        value: result.value,
+                    })?;
+                }
+                Ok(result.value)
             },
         )
     }

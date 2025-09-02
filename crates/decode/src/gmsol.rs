@@ -11,9 +11,9 @@ pub mod programs {
         events::{
             BorrowingFeesUpdated, DepositExecuted, DepositRemoved, GlvDepositRemoved, GlvPricing,
             GlvWithdrawalRemoved, GtBuyback, GtUpdated, InsufficientFundingFeePayment,
-            MarketFeesUpdated, MarketStateUpdated, OrderRemoved, OrderUpdated, PositionDecreased,
-            PositionIncreased, ShiftRemoved, SwapExecuted, TradeEvent, WithdrawalExecuted,
-            WithdrawalRemoved,
+            MarketFeesUpdated, MarketStateUpdated, MarketTokenValue, OrderRemoved, OrderUpdated,
+            PositionDecreased, PositionIncreased, ShiftRemoved, SwapExecuted, TradeEvent,
+            WithdrawalExecuted, WithdrawalRemoved,
         },
     };
 
@@ -49,6 +49,7 @@ pub mod programs {
     impl_decode_for_cpi_event!(SwapExecuted);
     impl_decode_for_cpi_event!(GtUpdated);
     impl_decode_for_cpi_event!(GtBuyback);
+    impl_decode_for_cpi_event!(MarketTokenValue);
 
     untagged!(
         GMSOLAccountData,
@@ -93,6 +94,7 @@ pub mod programs {
             SwapExecuted,
             GtUpdated,
             GtBuyback,
+            MarketTokenValue,
             UnknownOwnedData
         ]
     );

@@ -1567,6 +1567,7 @@ pub mod gmsol_store {
         pnl_factor: String,
         maximize: bool,
         max_age: u32,
+        emit_event: bool,
     ) -> Result<u128> {
         GetMarketTokenValue::invoke(
             ctx,
@@ -1576,6 +1577,7 @@ pub mod gmsol_store {
                 .map_err(|_| error!(CoreError::InvalidArgument))?,
             maximize,
             max_age,
+            emit_event,
         )
     }
 

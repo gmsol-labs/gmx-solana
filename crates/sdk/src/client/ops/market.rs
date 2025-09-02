@@ -608,6 +608,7 @@ pub struct GetMarketTokenValueBuilder<'a, C> {
     pnl_factor: PnlFactorKind,
     maximize: bool,
     max_age: u32,
+    emit_event: bool,
     feeds_parser: FeedsParser,
     hint: Option<GetMarketTokenValueHint>,
 }
@@ -622,21 +623,27 @@ pub struct GetMarketTokenValueHint {
 }
 
 impl<C> GetMarketTokenValueBuilder<'_, C> {
-    /// Set PnL factor kind.
+    /// Set PnL factor kind. Defaults to [`MaxAfterDeposit`](PnlFactorKind::MaxAfterDeposit).
     pub fn pnl_factor(&mut self, kind: PnlFactorKind) -> &mut Self {
         self.pnl_factor = kind;
         self
     }
 
-    /// Set maximize flag.
+    /// Set whether to maximize the computed value. Defaults to `false`.
     pub fn maximize(&mut self, maximize: bool) -> &mut Self {
         self.maximize = maximize;
         self
     }
 
-    /// Set max age.
+    /// Set max age (seconds). Defaults to `120`.
     pub fn max_age(&mut self, max_age: u32) -> &mut Self {
         self.max_age = max_age;
+        self
+    }
+
+    /// Set whether to emit event. Defaults to `true`
+    pub fn emit_event(&mut self, emit: bool) -> &mut Self {
+        self.emit_event = emit;
         self
     }
 
@@ -664,6 +671,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> GetMarketTokenValueBuilder<'a, 
             pnl_factor: PnlFactorKind::MaxAfterDeposit,
             maximize: false,
             max_age: DEFAULT_MAX_AGE,
+            emit_event: true,
             feeds_parser: Default::default(),
             hint: None,
         }
@@ -705,6 +713,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> GetMarketTokenValueBuilder<'a, 
             maximize,
             max_age,
             feeds_parser,
+            emit_event,
             ..
         } = self;
         let authority = client.payer();
@@ -719,6 +728,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> GetMarketTokenValueBuilder<'a, 
                 pnl_factor: pnl_factor.to_string(),
                 maximize: *maximize,
                 max_age: *max_age,
+                emit_event: *emit_event,
             })
             .anchor_accounts(accounts::GetMarketTokenValue {
                 authority,
@@ -727,6 +737,8 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> GetMarketTokenValueBuilder<'a, 
                 oracle: *oracle,
                 market,
                 market_token: *market_token,
+                event_authority: client.store_event_authority(),
+                program: *client.store_program_id(),
             })
             .accounts(feeds);
         Ok(txn)

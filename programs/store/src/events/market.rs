@@ -262,3 +262,28 @@ impl anchor_lang::Discriminator for MarketStateUpdatedRef<'_> {
 }
 
 impl Event for MarketStateUpdatedRef<'_> {}
+
+/// Event emitted when a market token amount is evaluated into its value.
+#[event]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[derive(Clone, InitSpace)]
+pub struct MarketTokenValue {
+    /// Market token.
+    pub market_token: Pubkey,
+    /// The supply of the market token.
+    pub supply: u128,
+    /// Whether the `pool_value` is maximized.
+    pub is_value_maximized: bool,
+    /// Total value of the pool.
+    pub pool_value: i128,
+    /// market token amount being evaluated.
+    pub amount: u64,
+    /// Computed value of the given amount.
+    pub value: u128,
+}
+
+impl gmsol_utils::InitSpace for MarketTokenValue {
+    const INIT_SPACE: usize = <Self as Space>::INIT_SPACE;
+}
+
+impl Event for MarketTokenValue {}

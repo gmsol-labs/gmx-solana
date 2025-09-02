@@ -148,24 +148,31 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
         Ok(pool_value)
     }
 
-    /// Returns market token value.
+    /// Returns the market token value if evaluated, otherwise `None`.
     fn market_token_value(
         &self,
         amount: &Self::Num,
         prices: &Prices<Self::Num>,
         pnl_factor: PnlFactorKind,
         maximize: bool,
-    ) -> crate::Result<Self::Num> {
+    ) -> crate::Result<Option<MarketTokenValue<Self::Num>>> {
         let supply = self.total_supply();
         if supply.is_zero() {
-            return Ok(Self::Num::UNIT);
+            return Ok(None);
         }
         let pool_value = self.pool_value(prices, pnl_factor, maximize)?;
         if pool_value.is_negative() {
             return Err(crate::Error::InvalidPoolValue("the pool value is negative. Calculation of the market token price is currently unsupported when the pool value is negative."));
         }
-        crate::utils::market_token_amount_to_usd(amount, &pool_value.unsigned_abs(), &supply)
-            .ok_or(crate::Error::Computation("calculating market token price"))
+        let value =
+            crate::utils::market_token_amount_to_usd(amount, &pool_value.unsigned_abs(), &supply)
+                .ok_or(crate::Error::Computation("calculating market token price"))?;
+
+        Ok(Some(MarketTokenValue {
+            supply,
+            pool_value,
+            value,
+        }))
     }
 
     /// Get market token price.
@@ -178,7 +185,10 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
         let one = Self::Num::UNIT
             .checked_div(&self.usd_to_amount_divisor())
             .ok_or(crate::Error::Computation("calculating one market token"))?;
-        self.market_token_value(&one, prices, pnl_factor, maximize)
+        match self.market_token_value(&one, prices, pnl_factor, maximize)? {
+            Some(result) => Ok(result.value),
+            None => Ok(Self::Num::UNIT),
+        }
     }
 }
 
@@ -213,3 +223,14 @@ pub trait LiquidityMarketMutExt<const DECIMALS: u8>: LiquidityMarketMut<DECIMALS
 }
 
 impl<M: LiquidityMarketMut<DECIMALS>, const DECIMALS: u8> LiquidityMarketMutExt<DECIMALS> for M {}
+
+/// Result of a market token valuation.
+#[derive(Debug, Clone)]
+pub struct MarketTokenValue<T: Unsigned> {
+    /// Total supply of the market token.
+    pub supply: T,
+    /// Total value of the pool.
+    pub pool_value: T::Signed,
+    /// Computed value of the given amount.
+    pub value: T,
+}
