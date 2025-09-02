@@ -1,5 +1,6 @@
 use gmsol_sdk::client::ops::MarketOps;
 use gmsol_utils::market::MarketConfigFlag;
+use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
 
@@ -55,6 +56,43 @@ async fn set_market_config_flag() -> eyre::Result<()> {
         .await?;
 
     tracing::info!(%signature, "update market config flag");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_market_token_value() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("get_market_token_value");
+    let _enter = span.enter();
+
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+
+    let long_token_amount = 1_000_011;
+    let short_token_amount = 6_000_000_000_009;
+
+    let market_token_amount = 1_234_567_890;
+
+    let market_token = deployment
+        .prepare_market(
+            ["SOL", "fBTC", "USDG"],
+            long_token_amount,
+            short_token_amount,
+            true,
+        )
+        .await?;
+
+    let mut builder =
+        keeper.get_market_token_value(store, oracle, market_token, market_token_amount);
+    deployment
+        .execute_with_pyth(&mut builder, None, true, true)
+        .instrument(
+            tracing::info_span!("get market token value", %market_token, %market_token_amount),
+        )
+        .await?;
 
     Ok(())
 }
