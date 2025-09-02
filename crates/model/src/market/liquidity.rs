@@ -148,9 +148,10 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
         Ok(pool_value)
     }
 
-    /// Get market token price.
-    fn market_token_price(
+    /// Returns market token value.
+    fn market_token_value(
         &self,
+        amount: &Self::Num,
         prices: &Prices<Self::Num>,
         pnl_factor: PnlFactorKind,
         maximize: bool,
@@ -163,11 +164,21 @@ pub trait LiquidityMarketExt<const DECIMALS: u8>: LiquidityMarket<DECIMALS> {
         if pool_value.is_negative() {
             return Err(crate::Error::InvalidPoolValue("the pool value is negative. Calculation of the market token price is currently unsupported when the pool value is negative."));
         }
+        crate::utils::market_token_amount_to_usd(amount, &pool_value.unsigned_abs(), &supply)
+            .ok_or(crate::Error::Computation("calculating market token price"))
+    }
+
+    /// Get market token price.
+    fn market_token_price(
+        &self,
+        prices: &Prices<Self::Num>,
+        pnl_factor: PnlFactorKind,
+        maximize: bool,
+    ) -> crate::Result<Self::Num> {
         let one = Self::Num::UNIT
             .checked_div(&self.usd_to_amount_divisor())
             .ok_or(crate::Error::Computation("calculating one market token"))?;
-        crate::utils::market_token_amount_to_usd(&one, &pool_value.unsigned_abs(), &supply)
-            .ok_or(crate::Error::Computation("calculating market token price"))
+        self.market_token_value(&one, prices, pnl_factor, maximize)
     }
 }
 

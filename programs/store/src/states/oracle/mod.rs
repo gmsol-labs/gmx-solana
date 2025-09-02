@@ -404,3 +404,42 @@ fn try_adjust_price_with_max_deviation_factor(
 
     adjusted_price
 }
+
+pub(crate) struct MaxAgeValidator {
+    max_age: u32,
+}
+
+impl MaxAgeValidator {
+    pub(crate) fn new(max_age: u32) -> Self {
+        Self { max_age }
+    }
+}
+
+impl ValidateOracleTime for MaxAgeValidator {
+    fn oracle_updated_after(&self) -> CoreResult<Option<i64>> {
+        let current = Clock::get()
+            .map_err(|err| {
+                msg!("Failed to get `Clock`. Error Message: {}", err);
+                CoreError::Internal
+            })?
+            .unix_timestamp;
+        let max_age = self.max_age;
+        let min_timestamp = current.checked_sub(i64::from(max_age)).ok_or_else(|| {
+            msg!(
+                "Failed to calculate min timestamp: current = {}, max_age = {}",
+                current,
+                max_age
+            );
+            CoreError::ValueOverflow
+        })?;
+        Ok(Some(min_timestamp))
+    }
+
+    fn oracle_updated_before(&self) -> CoreResult<Option<i64>> {
+        Ok(None)
+    }
+
+    fn oracle_updated_after_slot(&self) -> CoreResult<Option<u64>> {
+        Ok(None)
+    }
+}

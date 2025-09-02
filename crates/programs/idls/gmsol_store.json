@@ -17077,6 +17077,115 @@
       "returns": "u128"
     },
     {
+      "name": "get_market_token_value",
+      "docs": [
+        "Returns the USD value for the given market token amount.",
+        "",
+        "# Accounts",
+        "[*See the documentation for the accounts.*](GetMarketTokenValue)",
+        "",
+        "# Arguments",
+        "- `amount`: Amount of the market tokens to evaluate.",
+        "- `pnl_factor`: The PnL factor key to use for price calculations, must be a valid",
+        "[`PnlFactorKind`](gmsol_model::PnlFactorKind).",
+        "- `maximize`: If true, uses the maximum possible values in calculations.",
+        "If false, uses minimum values.",
+        "",
+        "# Errors",
+        "- The [`authority`](GetMarketTokenValue::authority) must be a signer and be the authority of the `oracle` buffer account.",
+        "- The [`store`](GetMarketTokenValue::store) must be initialized.",
+        "- The [`token_map`](GetMarketTokenValue::token_map) must be initialized and authorized by the `store`.",
+        "- The [`oracle`](GetMarketTokenValue::oracle) must be initialized and cleared.",
+        "- The [`market`](GetMarketTokenValue::market) must be initialized and enabled.",
+        "- The [`market_token`](GetMarketTokenValue::market_token) must be associated with the `market`.",
+        "- The remaining accounts must include a specified number of valid feed accounts,",
+        "in the required order.",
+        "- The `pnl_factor` must be a valid [`PnlFactorKind`](gmsol_model::PnlFactorKind).",
+        "- The earliest oracle timestamp must be within `max_age`.",
+        "- Any calculation errors."
+      ],
+      "discriminator": [
+        57,
+        185,
+        85,
+        22,
+        135,
+        73,
+        211,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "signer": true,
+          "relations": [
+            "oracle"
+          ]
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "token_map",
+            "oracle",
+            "market"
+          ]
+        },
+        {
+          "name": "token_map",
+          "docs": [
+            "Token Map."
+          ],
+          "relations": [
+            "store"
+          ]
+        },
+        {
+          "name": "oracle",
+          "docs": [
+            "Oracle buffer to use."
+          ],
+          "writable": true
+        },
+        {
+          "name": "market",
+          "docs": [
+            "Market."
+          ]
+        },
+        {
+          "name": "market_token",
+          "docs": [
+            "Market token."
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "pnl_factor",
+          "type": "string"
+        },
+        {
+          "name": "maximize",
+          "type": "bool"
+        },
+        {
+          "name": "max_age",
+          "type": "u32"
+        }
+      ],
+      "returns": "u128"
+    },
+    {
       "name": "grant_role",
       "docs": [
         "Grant a role to the given user in the given store.",

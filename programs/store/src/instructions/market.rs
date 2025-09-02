@@ -7,7 +7,7 @@ use crate::{
             status::MarketStatus,
             utils::ValidateMarketBalances,
         },
-        Factor, HasMarketMeta,
+        Factor, HasMarketMeta, MaxAgeValidator, Oracle,
     },
     ModelError,
 };
@@ -763,4 +763,90 @@ pub(crate) fn claim_fees_from_market(ctx: Context<ClaimFeesFromMarket>) -> Resul
         ctx.accounts.market.load()?.meta.market_token_mint
     );
     Ok(amount)
+}
+
+/// The accounts definition for [`get_market_token_value`](crate::gmsol_store::get_market_token_value).
+///
+/// Remaining accounts expected by this instruction:
+///   - 0..N. `[]` N feed accounts, where N represents the total number of unique tokens associated with the market,
+///     sorted by token address.
+#[derive(Accounts)]
+pub struct GetMarketTokenValue<'info> {
+    /// Authority.
+    pub authority: Signer<'info>,
+    /// Store.
+    #[account(has_one = token_map)]
+    pub store: AccountLoader<'info, Store>,
+    /// Token Map.
+    #[account(has_one = store)]
+    pub token_map: AccountLoader<'info, TokenMapHeader>,
+    /// Oracle buffer to use.
+    #[account(mut, has_one = store, has_one = authority)]
+    pub oracle: AccountLoader<'info, Oracle>,
+    /// Market.
+    #[account(
+        has_one = store,
+        constraint = market.load()?.meta.market_token_mint == market_token.key() @ CoreError::InvalidArgument,
+    )]
+    pub market: AccountLoader<'info, Market>,
+    /// Market token.
+    pub market_token: Account<'info, Mint>,
+}
+
+impl<'info> GetMarketTokenValue<'info> {
+    pub(crate) fn invoke(
+        ctx: Context<'_, '_, 'info, 'info, Self>,
+        amount: u64,
+        pnl_factor: PnlFactorKind,
+        maximize: bool,
+        max_age: u32,
+    ) -> Result<u128> {
+        let accounts = ctx.accounts;
+        accounts.validate()?;
+        accounts.evaluate(
+            amount,
+            pnl_factor,
+            maximize,
+            max_age,
+            ctx.remaining_accounts,
+        )
+    }
+
+    fn validate(&self) -> Result<()> {
+        self.market.load()?.validate(&self.store.key())
+    }
+
+    fn evaluate(
+        &self,
+        amount: u64,
+        pnl_factor: PnlFactorKind,
+        maximize: bool,
+        max_age: u32,
+        remaining_accounts: &'info [AccountInfo<'info>],
+    ) -> Result<u128> {
+        let mut oracle = self.oracle.load_mut()?;
+        let market = self.market.load()?;
+        let tokens = market
+            .meta()
+            .ordered_tokens()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let market_token = &self.market_token;
+        let max_age_validator = MaxAgeValidator::new(max_age);
+        oracle.with_prices(
+            &self.store,
+            &self.token_map,
+            &tokens,
+            remaining_accounts,
+            |oracle, _remaining_accounts| {
+                let prices = oracle.market_prices(&*market)?;
+                let liquidity_market = market.as_liquidity_market(market_token);
+                oracle.validate_time(&max_age_validator)?;
+                let value = liquidity_market
+                    .market_token_value(&u128::from(amount), &prices, pnl_factor, maximize)
+                    .map_err(ModelError::from)?;
+                Ok(value)
+            },
+        )
+    }
 }

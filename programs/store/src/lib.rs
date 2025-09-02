@@ -1537,6 +1537,48 @@ pub mod gmsol_store {
         )
     }
 
+    /// Returns the USD value for the given market token amount.
+    ///
+    /// # Accounts
+    /// [*See the documentation for the accounts.*](GetMarketTokenValue)
+    ///
+    /// # Arguments
+    /// - `amount`: Amount of the market tokens to evaluate.
+    /// - `pnl_factor`: The PnL factor key to use for price calculations, must be a valid
+    ///   [`PnlFactorKind`](gmsol_model::PnlFactorKind).
+    /// - `maximize`: If true, uses the maximum possible values in calculations.
+    ///   If false, uses minimum values.
+    ///
+    /// # Errors
+    /// - The [`authority`](GetMarketTokenValue::authority) must be a signer and be the authority of the `oracle` buffer account.
+    /// - The [`store`](GetMarketTokenValue::store) must be initialized.
+    /// - The [`token_map`](GetMarketTokenValue::token_map) must be initialized and authorized by the `store`.
+    /// - The [`oracle`](GetMarketTokenValue::oracle) must be initialized and cleared.
+    /// - The [`market`](GetMarketTokenValue::market) must be initialized and enabled.
+    /// - The [`market_token`](GetMarketTokenValue::market_token) must be associated with the `market`.
+    /// - The remaining accounts must include a specified number of valid feed accounts,
+    ///   in the required order.
+    /// - The `pnl_factor` must be a valid [`PnlFactorKind`](gmsol_model::PnlFactorKind).
+    /// - The earliest oracle timestamp must be within `max_age`.
+    /// - Any calculation errors.
+    pub fn get_market_token_value<'info>(
+        ctx: Context<'_, '_, 'info, 'info, GetMarketTokenValue<'info>>,
+        amount: u64,
+        pnl_factor: String,
+        maximize: bool,
+        max_age: u32,
+    ) -> Result<u128> {
+        GetMarketTokenValue::invoke(
+            ctx,
+            amount,
+            pnl_factor
+                .parse()
+                .map_err(|_| error!(CoreError::InvalidArgument))?,
+            maximize,
+            max_age,
+        )
+    }
+
     /// Initialize a market config buffer account.
     ///
     /// This instruction creates a new market config buffer account that can be used to stage market
