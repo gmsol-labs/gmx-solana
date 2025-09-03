@@ -1,3 +1,4 @@
+use gmsol_programs::anchor_lang;
 use gmsol_sdk::client::ops::{ExchangeOps, GlvOps};
 use gmsol_store::CoreError;
 use tracing::Instrument;
@@ -420,6 +421,18 @@ async fn get_glv_token_value() -> eyre::Result<()> {
         .execute_with_pyth(&mut builder, None, true, true)
         .instrument(tracing::info_span!("get GLV token value", %glv_token, %glv_amount))
         .await?;
+
+    let mut builder = user.get_glv_token_value(store, oracle, glv_token, glv_amount);
+    let err = deployment
+        .execute_with_pyth(&mut builder, None, false, false)
+        .await
+        .expect_err(
+            "should throw error when the authority of the oracle buffer account is not signed",
+        );
+    assert_eq!(
+        err.anchor_error_code(),
+        Some(anchor_lang::error::ErrorCode::ConstraintHasOne.into())
+    );
 
     Ok(())
 }

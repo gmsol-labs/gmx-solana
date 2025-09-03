@@ -1,3 +1,4 @@
+use gmsol_programs::anchor_lang;
 use gmsol_sdk::client::ops::MarketOps;
 use gmsol_utils::market::MarketConfigFlag;
 use tracing::Instrument;
@@ -67,6 +68,7 @@ async fn get_market_token_value() -> eyre::Result<()> {
     let span = tracing::info_span!("get_market_token_value");
     let _enter = span.enter();
 
+    let user = deployment.user_client(Deployment::DEFAULT_USER)?;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let store = &deployment.store;
     let oracle = &deployment.oracle();
@@ -93,6 +95,18 @@ async fn get_market_token_value() -> eyre::Result<()> {
             tracing::info_span!("get market token value", %market_token, %market_token_amount),
         )
         .await?;
+
+    let mut builder = user.get_market_token_value(store, oracle, market_token, market_token_amount);
+    let err = deployment
+        .execute_with_pyth(&mut builder, None, false, false)
+        .await
+        .expect_err(
+            "should throw error when the authority of the oracle buffer account is not signed",
+        );
+    assert_eq!(
+        err.anchor_error_code(),
+        Some(anchor_lang::error::ErrorCode::ConstraintHasOne.into())
+    );
 
     Ok(())
 }
