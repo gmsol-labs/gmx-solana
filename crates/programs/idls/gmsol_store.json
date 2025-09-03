@@ -25953,11 +25953,15 @@
             "type": "u64"
           },
           {
+            "name": "min_position_age_for_manual_close",
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u64",
-                126
+                125
               ]
             }
           }
