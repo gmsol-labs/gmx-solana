@@ -550,8 +550,9 @@ pub struct Amounts {
     pub(crate) oracle_max_timestamp_range: Amount,
     pub(crate) oracle_max_future_timestamp_excess: Amount,
     pub(crate) adl_prices_max_staleness: Amount,
+    pub(crate) min_position_age_for_manual_close: Amount,
     #[cfg_attr(feature = "debug", debug(skip))]
-    reserved: [Amount; 126],
+    reserved: [Amount; 125],
 }
 
 impl Amounts {
@@ -564,6 +565,8 @@ impl Amounts {
         self.oracle_max_future_timestamp_excess =
             constants::DEFAULT_ORACLE_MAX_FUTURE_TIMESTAMP_EXCESS;
         self.adl_prices_max_staleness = constants::DEFAULT_ADL_PRICES_MAX_STALENESS;
+        self.min_position_age_for_manual_close =
+            constants::DEFAULT_MIN_POSITION_AGE_FOR_MANUAL_CLOSE;
     }
 
     /// Get.
@@ -576,6 +579,7 @@ impl Amounts {
             AmountKey::OracleMaxTimestampRange => &self.oracle_max_timestamp_range,
             AmountKey::OracleMaxFutureTimestampExcess => &self.oracle_max_future_timestamp_excess,
             AmountKey::AdlPricesMaxStaleness => &self.adl_prices_max_staleness,
+            AmountKey::MinPositionAgeForManualClose => &self.min_position_age_for_manual_close,
             _ => return None,
         };
         Some(value)
@@ -593,6 +597,7 @@ impl Amounts {
                 &mut self.oracle_max_future_timestamp_excess
             }
             AmountKey::AdlPricesMaxStaleness => &mut self.adl_prices_max_staleness,
+            AmountKey::MinPositionAgeForManualClose => &mut self.min_position_age_for_manual_close,
             _ => return None,
         };
         Some(value)
