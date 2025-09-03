@@ -432,12 +432,16 @@ impl ExecuteGlvDepositOperation<'_, '_> {
                         balance,
                         false,
                     )?
-                    .0;
+                    .market_token_value_in_glv;
 
-                    let (_, market_pool_value, market_token_supply) =
+                    let maximized_value =
                         get_glv_value_for_market(&prices, op.market(), balance, true)?;
 
-                    (received_value, market_pool_value, market_token_supply)
+                    (
+                        received_value,
+                        maximized_value.pool_value,
+                        maximized_value.supply,
+                    )
                 };
 
                 // Validate market token balance.
@@ -1068,7 +1072,7 @@ fn unchecked_get_glv_value<'info>(
                 balance,
                 maximize,
             )?
-            .0
+            .market_token_value_in_glv
         } else if let Some(market) = swap_markets.get(&key) {
             let mint = Account::<Mint>::try_from(market_token)?;
             let market = AsLiquidityMarket::new(market, &mint);
@@ -1079,7 +1083,7 @@ fn unchecked_get_glv_value<'info>(
                 balance,
                 maximize,
             )?
-            .0
+            .market_token_value_in_glv
         } else {
             let market = AccountLoader::<Market>::try_from(market)?;
             let mint = Account::<Mint>::try_from(market_token)?;
@@ -1092,7 +1096,7 @@ fn unchecked_get_glv_value<'info>(
                 balance,
                 maximize,
             )?
-            .0
+            .market_token_value_in_glv
         };
 
         value = value
@@ -1103,21 +1107,19 @@ fn unchecked_get_glv_value<'info>(
     Ok(value)
 }
 
-fn get_glv_value_for_market_with_new_index_price<M>(
+pub(crate) fn get_glv_value_for_market_with_new_index_price<M>(
     oracle: &Oracle,
     prices: &mut Prices<u128>,
     market: &M,
     balance: u128,
     maximize: bool,
-) -> Result<(u128, i128, u128)>
+) -> Result<GlvValueForMarket>
 where
     M: gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }, Num = u128, Signed = i128>,
     M: HasMarketMeta,
 {
     let index_token_mint = market.market_meta().index_token_mint;
-    prices.index_token_price = oracle
-        .get_primary_price(&index_token_mint, true)
-        .expect("must exist");
+    prices.index_token_price = oracle.get_primary_price(&index_token_mint, true)?;
 
     get_glv_value_for_market(prices, market, balance, maximize)
 }
@@ -1127,7 +1129,7 @@ fn get_glv_value_for_market<M>(
     market: &M,
     balance: u128,
     maximize: bool,
-) -> Result<(u128, i128, u128)>
+) -> Result<GlvValueForMarket>
 where
     M: gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }, Num = u128, Signed = i128>,
 {
@@ -1140,7 +1142,7 @@ where
     let supply = market.total_supply();
 
     if balance == 0 {
-        return Ok((0, value, supply));
+        return Ok(GlvValueForMarket::new(0, value, supply));
     }
 
     if value.is_negative() {
@@ -1150,7 +1152,23 @@ where
     let glv_value = utils::market_token_amount_to_usd(&balance, &value.unsigned_abs(), &supply)
         .ok_or_else(|| error!(CoreError::FailedToCalculateGlvValueForMarket))?;
 
-    Ok((glv_value, value, supply))
+    Ok(GlvValueForMarket::new(glv_value, value, supply))
+}
+
+pub(crate) struct GlvValueForMarket {
+    pub(crate) market_token_value_in_glv: u128,
+    pub(crate) pool_value: i128,
+    pub(crate) supply: u128,
+}
+
+impl GlvValueForMarket {
+    pub(crate) fn new(glv_value: u128, pool_value: i128, supply: u128) -> Self {
+        Self {
+            market_token_value_in_glv: glv_value,
+            pool_value,
+            supply,
+        }
+    }
 }
 
 fn get_market_token_amount_for_glv_value<M>(
@@ -1369,15 +1387,16 @@ impl ExecuteGlvShiftOperation<'_, '_> {
 
         // Validate to market token balance.
         let next_to_market_token_balance = {
-            let (_, market_pool_value, market_token_supply) = {
+            let (market_pool_value, market_token_supply) = {
                 let mut prices = self.oracle.market_prices(to_market.market())?;
-                get_glv_value_for_market_with_new_index_price(
+                let value = get_glv_value_for_market_with_new_index_price(
                     self.oracle,
                     &mut prices,
                     to_market.market(),
                     0,
                     true,
-                )?
+                )?;
+                (value.pool_value, value.supply)
             };
             let current_balance = self
                 .glv
@@ -1402,25 +1421,27 @@ impl ExecuteGlvShiftOperation<'_, '_> {
         {
             let mut prices = self.oracle.market_prices(from_market.market())?;
 
-            let (from_market_token_value, _, _) = get_glv_value_for_market_with_new_index_price(
+            let from_market_token_value = get_glv_value_for_market_with_new_index_price(
                 self.oracle,
                 &mut prices,
                 from_market.market(),
                 shift.params.from_market_token_amount().into(),
                 true,
-            )?;
+            )?
+            .market_token_value_in_glv;
 
             self.glv
                 .load()?
                 .validate_shift_value(from_market_token_value)?;
 
-            let (to_market_token_value, _, _) = get_glv_value_for_market_with_new_index_price(
+            let to_market_token_value = get_glv_value_for_market_with_new_index_price(
                 self.oracle,
                 &mut prices,
                 to_market.market(),
                 received.into(),
                 true,
-            )?;
+            )?
+            .market_token_value_in_glv;
 
             self.glv
                 .load()?
