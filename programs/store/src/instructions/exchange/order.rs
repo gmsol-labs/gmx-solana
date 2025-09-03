@@ -9,8 +9,8 @@ use gmsol_callback::{
     interface::{ActionKind, CallbackInterface},
     CALLBACK_AUTHORITY_SEED,
 };
-use gmsol_model::utils::apply_factor;
-use gmsol_utils::{action::ActionCallbackKind, InitSpace};
+use gmsol_model::{utils::apply_factor, PositionStateExt};
+use gmsol_utils::{action::ActionCallbackKind, config::AmountKey, InitSpace};
 
 use crate::{
     constants,
@@ -1115,6 +1115,48 @@ impl<'info> internal::Authentication<'info> for CancelOrderIfNoPosition<'info> {
 
     fn store(&self) -> &AccountLoader<'info, Store> {
         &self.store
+    }
+}
+
+/// The accounts definition for [`close_empty_position`](crate::gmsol_store::close_empty_position).
+#[derive(Accounts)]
+pub struct CloseEmptyPosition<'info> {
+    /// Owner.
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    /// Store.
+    pub store: AccountLoader<'info, Store>,
+    /// Position account to close.
+    #[account(
+        mut,
+        close = owner,
+        has_one = store,
+        has_one = owner,
+    )]
+    pub position: AccountLoader<'info, Position>,
+}
+
+impl CloseEmptyPosition<'_> {
+    pub(crate) fn invoke(ctx: Context<Self>) -> Result<()> {
+        ctx.accounts.validate()
+    }
+
+    fn validate(&self) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let position = self.position.load()?;
+        require!(position.state.is_empty(), CoreError::PreconditionsAreNotMet);
+        let min_age = *self
+            .store
+            .load()?
+            .validate_not_restarted()?
+            .get_amount_by_key(AmountKey::MinPositionAgeForManualClose)
+            .ok_or_else(|| error!(CoreError::Internal))?;
+        let min_age = min_age
+            .try_into()
+            .map_err(|_| error!(CoreError::ValueOverflow))?;
+        let closable_after = position.created_at.saturating_add(min_age);
+        require_gte!(now, closable_after, CoreError::PreconditionsAreNotMet);
+        Ok(())
     }
 }
 

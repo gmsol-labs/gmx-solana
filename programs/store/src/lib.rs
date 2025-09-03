@@ -2272,6 +2272,20 @@ pub mod gmsol_store {
         instructions::unchecked_cancel_order_if_no_position(ctx)
     }
 
+    /// Close an empty position account.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](CloseEmptyPosition)*
+    ///
+    /// # Errors
+    /// - [`owner`](CloseEmptyPosition::owner) must sign the transaction and own the `position`.
+    /// - [`store`](CloseEmptyPosition::store) must be initialized.
+    /// - [`position`](CloseEmptyPosition::position) must be empty and older than
+    ///   [`MinPositionAgeForManualClose`](crate::states::store::AmountKey::MinPositionAgeForManualClose).
+    pub fn close_empty_position(ctx: Context<CloseEmptyPosition>) -> Result<()> {
+        CloseEmptyPosition::invoke(ctx)
+    }
+
     /// Prepare a trade event buffer.
     ///
     /// # Accounts
