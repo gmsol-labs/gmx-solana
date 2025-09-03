@@ -613,7 +613,7 @@ pub struct GetMarketTokenValueBuilder<'a, C> {
     hint: Option<GetMarketTokenValueHint>,
 }
 
-/// Hint for [`GetMarketTokenValue`].
+/// Hint for [`GetMarketTokenValueBuilder`].
 #[derive(Debug, Clone)]
 pub struct GetMarketTokenValueHint {
     /// Token map address.

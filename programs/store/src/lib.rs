@@ -1548,6 +1548,8 @@ pub mod gmsol_store {
     ///   [`PnlFactorKind`](gmsol_model::PnlFactorKind).
     /// - `maximize`: If true, uses the maximum possible values in calculations.
     ///   If false, uses minimum values.
+    /// - `max_age`: Maximum allowed age of the earliest oracle timestamp.
+    /// - `emit_event`: Whether to emit a [`GlvTokenValue`](crate::events::GlvTokenValue) event.
     ///
     /// # Errors
     /// - The [`authority`](GetMarketTokenValue::authority) must be a signer and be the authority of the `oracle` buffer account.
@@ -4413,7 +4415,7 @@ pub enum CoreError {
     #[msg("failed to calculate GLV amount to mint")]
     FailedToCalculateGlvAmountToMint,
     /// Failed to calculate market token amount to burn.
-    FailedTOCalculateMarketTokenAmountToBurn,
+    FailedToCalculateMarketTokenAmountToBurn,
     /// Exceed max market token balance amount of GLV.
     #[msg("GLV max market token balance amount exceeded")]
     ExceedMaxGlvMarketTokenBalanceAmount,

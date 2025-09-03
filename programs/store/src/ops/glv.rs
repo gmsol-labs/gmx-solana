@@ -1201,7 +1201,7 @@ where
         supply,
         constants::MARKET_USD_TO_AMOUNT_DIVISOR,
     )
-    .ok_or_else(|| error!(CoreError::FailedTOCalculateMarketTokenAmountToBurn))?;
+    .ok_or_else(|| error!(CoreError::FailedToCalculateMarketTokenAmountToBurn))?;
 
     Ok(market_token_amount)
 }
