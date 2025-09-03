@@ -35,7 +35,7 @@ use gmsol_programs::gmsol_store::{
     client::{accounts, args},
     types::UpdateOrderParams,
 };
-use gmsol_solana_utils::transaction_builder::TransactionBuilder;
+use gmsol_solana_utils::{transaction_builder::TransactionBuilder, IntoAtomicGroup};
 use gmsol_utils::{
     order::{OrderKind, PositionCutKind},
     pubkey::optional_address,
@@ -50,7 +50,10 @@ use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use withdrawal::{CloseWithdrawalBuilder, CreateWithdrawalBuilder, ExecuteWithdrawalBuilder};
 
 use crate::{
-    builders::callback::{Callback, CallbackParams},
+    builders::{
+        callback::{Callback, CallbackParams},
+        position::CloseEmptyPosition,
+    },
     client::Client,
 };
 
@@ -349,6 +352,13 @@ pub trait ExchangeOps<C> {
         position_hint: Option<&Pubkey>,
     ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
+    /// Close empty position.
+    fn close_empty_position(
+        &self,
+        store: &Pubkey,
+        position: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>>;
+
     /// Liquidate a position.
     fn liquidate(&self, oracle: &Pubkey, position: &Pubkey)
         -> crate::Result<PositionCutBuilder<C>>;
@@ -595,6 +605,21 @@ impl<C: Deref<Target = impl Signer> + Clone> ExchangeOps<C> for Client<C> {
                 order: *order,
                 position,
             }))
+    }
+
+    fn close_empty_position(
+        &self,
+        store: &Pubkey,
+        position: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let ag = CloseEmptyPosition::builder()
+            .payer(self.payer())
+            .program(self.store_program_for_builders(store))
+            .position(*position)
+            .build()
+            .into_atomic_group(&())?;
+        let txn = self.store_transaction().pre_atomic_group(ag, true);
+        Ok(txn)
     }
 
     fn liquidate(
