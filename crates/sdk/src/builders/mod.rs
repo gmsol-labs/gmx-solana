@@ -12,6 +12,9 @@ pub mod order;
 /// Instruction builders related to user.
 pub mod user;
 
+/// Instruction builders related to position.
+pub mod position;
+
 pub(crate) mod utils;
 
 /// Definitions for callback mechanism.
