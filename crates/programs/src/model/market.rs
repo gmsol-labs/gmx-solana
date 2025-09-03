@@ -262,6 +262,7 @@ impl MarketModel {
             store: self.store,
             kind,
             padding_0: Zeroable::zeroed(),
+            created_at: 0,
             owner: Pubkey::default(),
             market_token: self.meta.market_token_mint,
             collateral_token,

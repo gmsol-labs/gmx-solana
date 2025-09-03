@@ -21,7 +21,9 @@ pub struct Position {
     pub kind: u8,
     /// Padding.
     #[cfg_attr(feature = "debug", debug(skip))]
-    pub padding_0: [u8; 13],
+    pub padding_0: [u8; 5],
+    /// Created at.
+    pub created_at: i64,
     /// Owner.
     pub owner: Pubkey,
     /// The market token of the position market.
@@ -96,9 +98,11 @@ impl Position {
         if matches!(kind, PositionKind::Uninitialized) {
             return err!(CoreError::InvalidPosition);
         }
+        let clock = Clock::get()?;
         self.kind = kind as u8;
         self.bump = bump;
         self.store = store;
+        self.created_at = clock.unix_timestamp;
         self.owner = *owner;
         self.market_token = *market_token;
         self.collateral_token = *collateral_token;

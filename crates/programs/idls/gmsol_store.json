@@ -32115,9 +32115,16 @@
             "type": {
               "array": [
                 "u8",
-                13
+                5
               ]
             }
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Created at."
+            ],
+            "type": "i64"
           },
           {
             "name": "owner",
