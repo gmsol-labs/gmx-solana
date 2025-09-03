@@ -127,6 +127,8 @@ pub enum AmountKey {
     OracleMaxFutureTimestampExcess,
     /// Max ADL prices staleness (seconds).
     AdlPricesMaxStaleness,
+    /// Minimum position age required for manual closure (in seconds).
+    MinPositionAgeForManualClose,
 }
 
 /// Factor keys.

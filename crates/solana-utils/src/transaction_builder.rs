@@ -27,7 +27,7 @@ use crate::{
     address_lookup_table::AddressLookupTables,
     cluster::Cluster,
     compute_budget::ComputeBudget,
-    instruction_group::AtomicGroupOptions,
+    instruction_group::{AtomicGroupOptions, ComputeBudgetOptions, GetInstructionsOptions},
     signer::{BoxClonableSigner, TransactionSigners},
     AtomicGroup,
 };
@@ -446,6 +446,21 @@ impl<'a, C: Deref<Target = impl Signer> + Clone, T> TransactionBuilder<'a, C, T>
         }
 
         self
+    }
+
+    /// Insert an [`AtomicGroup`] before the "main" instruction.
+    pub fn pre_atomic_group(self, ag: AtomicGroup, append: bool) -> Self {
+        let ixs = ag
+            .instructions_with_options(GetInstructionsOptions {
+                compute_budget: ComputeBudgetOptions {
+                    without_compute_budget: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .map(|ix| (*ix).clone())
+            .collect();
+        self.pre_instructions(ixs, append)
     }
 
     /// Insert an address lookup table account.

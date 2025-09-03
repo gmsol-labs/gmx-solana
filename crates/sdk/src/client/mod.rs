@@ -90,7 +90,10 @@ use tokio::sync::OnceCell;
 use typed_builder::TypedBuilder;
 
 use crate::{
-    builders::callback::{Callback, CallbackParams},
+    builders::{
+        callback::{Callback, CallbackParams},
+        StoreProgram,
+    },
     pda::{NonceBytes, ReferralCodeBytes},
     utils::{
         optional::optional_address,
@@ -244,6 +247,14 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     /// Get store program.
     pub fn store_program(&self) -> &Program<C> {
         &self.store_program
+    }
+
+    /// Creates a [`StoreProgram`].
+    pub fn store_program_for_builders(&self, store: &Pubkey) -> StoreProgram {
+        StoreProgram::builder()
+            .id(*self.store_program_id())
+            .store(*store)
+            .build()
     }
 
     /// Get treasury program.

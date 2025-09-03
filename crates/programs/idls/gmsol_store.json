@@ -1753,6 +1753,61 @@
       ]
     },
     {
+      "name": "close_empty_position",
+      "docs": [
+        "Close an empty position account.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](CloseEmptyPosition)*",
+        "",
+        "# Errors",
+        "- [`owner`](CloseEmptyPosition::owner) must sign the transaction and own the `position`.",
+        "- [`store`](CloseEmptyPosition::store) must be initialized.",
+        "- [`position`](CloseEmptyPosition::position) must be empty and older than",
+        "[`MinPositionAgeForManualClose`](crate::states::store::AmountKey::MinPositionAgeForManualClose)."
+      ],
+      "discriminator": [
+        175,
+        105,
+        138,
+        38,
+        237,
+        235,
+        250,
+        59
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "Owner."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "position"
+          ]
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "position"
+          ]
+        },
+        {
+          "name": "position",
+          "docs": [
+            "Position account to close."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "close_glv_deposit",
       "docs": [
         "Close GLV deposit.",
@@ -25953,11 +26008,15 @@
             "type": "u64"
           },
           {
+            "name": "min_position_age_for_manual_close",
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u64",
-                126
+                125
               ]
             }
           }
@@ -32115,9 +32174,16 @@
             "type": {
               "array": [
                 "u8",
-                13
+                5
               ]
             }
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Created at."
+            ],
+            "type": "i64"
           },
           {
             "name": "owner",
