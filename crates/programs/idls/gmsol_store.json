@@ -16930,6 +16930,146 @@
       ]
     },
     {
+      "name": "get_glv_token_value",
+      "docs": [
+        "Returns the USD value for the given GLV token amount.",
+        "",
+        "# Accounts",
+        "[*See the documentation for the accounts.*](GetGlvTokenValue)",
+        "",
+        "# Arguments",
+        "- `amount`: Amount of the market tokens to evaluate.",
+        "- `maximize`: If true, uses the maximum possible values in calculations.",
+        "If false, uses minimum values.",
+        "- `max_age`: Maximum allowed age of the earliest oracle timestamp.",
+        "- `emit_event`: Whether to emit a [`GlvTokenValue`](crate::events::GlvTokenValue) event.",
+        "",
+        "# Errors",
+        "- The [`authority`](GetGlvTokenValue::authority) must be a signer and be the authority of the `oracle` buffer account.",
+        "- The [`store`](GetGlvTokenValue::store) must be initialized.",
+        "- The [`token_map`](GetGlvTokenValue::token_map) must be initialized and authorized by the `store`.",
+        "- The [`oracle`](GetGlvTokenValue::oracle) must be initialized and cleared.",
+        "- The [`glv`](GetGlvTokenValue::glv) must be initialized and enabled.",
+        "- The [`glv_token`](GetGlvTokenValue::glv_token) must be associated with the `glv`.",
+        "- The remaining accounts must be valid according to the accounts documentation.",
+        "in the required order.",
+        "- The earliest oracle timestamp must be within `max_age`.",
+        "- Any calculation errors."
+      ],
+      "discriminator": [
+        23,
+        29,
+        231,
+        196,
+        220,
+        59,
+        166,
+        117
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "signer": true,
+          "relations": [
+            "oracle"
+          ]
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "token_map",
+            "oracle",
+            "glv"
+          ]
+        },
+        {
+          "name": "token_map",
+          "docs": [
+            "Token Map."
+          ],
+          "relations": [
+            "store"
+          ]
+        },
+        {
+          "name": "oracle",
+          "docs": [
+            "Oracle buffer to use."
+          ],
+          "writable": true
+        },
+        {
+          "name": "glv",
+          "docs": [
+            "GLV account."
+          ]
+        },
+        {
+          "name": "glv_token",
+          "docs": [
+            "GLV token mint."
+          ]
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "maximize",
+          "type": "bool"
+        },
+        {
+          "name": "max_age",
+          "type": "u32"
+        },
+        {
+          "name": "emit_event",
+          "type": "bool"
+        }
+      ],
+      "returns": "u128"
+    },
+    {
       "name": "get_market_status",
       "docs": [
         "Calculate the current market status.",
@@ -24646,6 +24786,19 @@
       ]
     },
     {
+      "name": "GlvTokenValue",
+      "discriminator": [
+        150,
+        87,
+        192,
+        246,
+        243,
+        37,
+        86,
+        148
+      ]
+    },
+    {
       "name": "GlvWithdrawalRemoved",
       "discriminator": [
         152,
@@ -28600,6 +28753,59 @@
                 128
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GlvTokenValue",
+      "docs": [
+        "Event emitted when a glv token amount is evaluated into its value."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "glv_token",
+            "docs": [
+              "GLV token."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "supply",
+            "docs": [
+              "The supply of the GLV token."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_value_maximized",
+            "docs": [
+              "Whether the `glv_value` is maximized."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "glv_value",
+            "docs": [
+              "Total value of the GLV."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "GLV token amount being evaluated."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "value",
+            "docs": [
+              "Computed value of the given amount."
+            ],
+            "type": "u128"
           }
         ]
       }

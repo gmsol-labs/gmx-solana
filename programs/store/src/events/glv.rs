@@ -174,3 +174,28 @@ pub enum GlvPricingKind {
     /// Withdrawal.
     Withdrawal,
 }
+
+/// Event emitted when a glv token amount is evaluated into its value.
+#[event]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[derive(Clone, InitSpace)]
+pub struct GlvTokenValue {
+    /// GLV token.
+    pub glv_token: Pubkey,
+    /// The supply of the GLV token.
+    pub supply: u64,
+    /// Whether the `glv_value` is maximized.
+    pub is_value_maximized: bool,
+    /// Total value of the GLV.
+    pub glv_value: u128,
+    /// GLV token amount being evaluated.
+    pub amount: u64,
+    /// Computed value of the given amount.
+    pub value: u128,
+}
+
+impl gmsol_utils::InitSpace for GlvTokenValue {
+    const INIT_SPACE: usize = <Self as Space>::INIT_SPACE;
+}
+
+impl Event for GlvTokenValue {}

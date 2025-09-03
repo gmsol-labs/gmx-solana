@@ -535,7 +535,12 @@ mod utils {
 
         /// Create a new [`TokensCollector`].
         pub fn tokens_collector(&self, action: Option<&impl HasSwapParams>) -> TokensCollector {
-            TokensCollector::new(action, self.num_markets())
+            let mut collector = TokensCollector::new(action, self.num_markets());
+            if action.is_none() {
+                collector.insert_token(&self.long_token);
+                collector.insert_token(&self.short_token);
+            }
+            collector
         }
     }
 

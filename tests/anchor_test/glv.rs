@@ -364,3 +364,62 @@ async fn glv_shift() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn get_glv_token_value() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("get_glv_token_value");
+    let _enter = span.enter();
+
+    let user = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+    let glv_token = &deployment.glv_token;
+    let market_token = deployment.market_token("fBTC", "fBTC", "USDG").unwrap();
+
+    let short_token_amount = 1_000 * 100_000_000;
+
+    deployment
+        .mint_or_transfer_to_user(
+            "USDG",
+            Deployment::DEFAULT_USER,
+            3 * short_token_amount + 19,
+        )
+        .await?;
+
+    // GLV deposit.
+    let (rpc, deposit) = user
+        .create_glv_deposit(store, glv_token, market_token)
+        .short_token_deposit(short_token_amount, None, None)
+        .build_with_address()
+        .await?;
+    let signature = rpc.send_without_preflight().await?;
+    tracing::info!(%signature, %deposit, "created a glv deposit");
+
+    // GLV deposit.
+    let mut execute = keeper.execute_glv_deposit(oracle, &deposit, false);
+    deployment
+        .execute_with_pyth(
+            execute
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone()),
+            None,
+            false,
+            true,
+        )
+        .instrument(tracing::info_span!("executing glv deposit", glv_deposit=%deposit))
+        .await?;
+
+    let glv_amount = 500 * 1_000_000_000;
+
+    let mut builder = keeper.get_glv_token_value(store, oracle, glv_token, glv_amount);
+    deployment
+        .execute_with_pyth(&mut builder, None, true, true)
+        .instrument(tracing::info_span!("get GLV token value", %glv_token, %glv_amount))
+        .await?;
+
+    Ok(())
+}

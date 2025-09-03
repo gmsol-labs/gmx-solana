@@ -20,6 +20,11 @@ pub enum SwapActionParamsError {
 type SwapActionParamsResult<T> = std::result::Result<T, SwapActionParamsError>;
 
 /// Swap params.
+/// # CHECK
+/// The creator must ensure that:
+/// - `primary_length + secondary_length <= MAX_STEPS`.
+/// - `num_tokens <= MAX_TOKENS`.
+/// - `tokens[0..num_tokens]` is sorted by `Pubkey`.
 #[zero_copy]
 #[derive(Default)]
 #[cfg_attr(feature = "debug", derive(Debug))]

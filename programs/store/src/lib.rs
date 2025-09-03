@@ -3899,6 +3899,43 @@ pub mod gmsol_store {
         instructions::unchecked_execute_glv_shift(ctx, execution_lamports, throw_on_execution_error)
     }
 
+    /// Returns the USD value for the given GLV token amount.
+    ///
+    /// # Accounts
+    /// [*See the documentation for the accounts.*](GetGlvTokenValue)
+    ///
+    /// # Arguments
+    /// - `amount`: Amount of the market tokens to evaluate.
+    /// - `maximize`: If true, uses the maximum possible values in calculations.
+    ///   If false, uses minimum values.
+    /// - `max_age`: Maximum allowed age of the earliest oracle timestamp.
+    /// - `emit_event`: Whether to emit a [`GlvTokenValue`](crate::events::GlvTokenValue) event.
+    ///
+    /// # Errors
+    /// - The [`authority`](GetGlvTokenValue::authority) must be a signer and be the authority of the `oracle` buffer account.
+    /// - The [`store`](GetGlvTokenValue::store) must be initialized.
+    /// - The [`token_map`](GetGlvTokenValue::token_map) must be initialized and authorized by the `store`.
+    /// - The [`oracle`](GetGlvTokenValue::oracle) must be initialized and cleared.
+    /// - The [`glv`](GetGlvTokenValue::glv) must be initialized and enabled.
+    /// - The [`glv_token`](GetGlvTokenValue::glv_token) must be associated with the `glv`.
+    /// - The remaining accounts must be valid according to the accounts documentation.
+    ///   in the required order.
+    /// - The earliest oracle timestamp must be within `max_age`.
+    /// - Any calculation errors.
+    pub fn get_glv_token_value<'info>(
+        ctx: Context<'_, '_, 'info, 'info, GetGlvTokenValue<'info>>,
+        amount: u64,
+        maximize: bool,
+        max_age: u32,
+        emit_event: bool,
+    ) -> Result<u128> {
+        GetGlvTokenValue::invoke(ctx, amount, maximize, max_age, emit_event)
+    }
+
+    // ===========================================
+    //             Other Instructions
+    // ===========================================
+
     #[access_control(internal::Authenticate::only_migration_keeper(&ctx))]
     pub fn migrate_referral_code<'info>(
         ctx: Context<'_, '_, 'info, 'info, MigrateReferralCode<'info>>,
