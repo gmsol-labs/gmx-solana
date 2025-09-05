@@ -42,6 +42,10 @@ pub mod make_bundle_builder;
 #[cfg(client)]
 pub mod client;
 
+/// Client traits.
+#[cfg(client_traits)]
+pub mod client_traits;
+
 /// Utils.
 pub mod utils;
 
@@ -59,3 +63,9 @@ pub use anchor_lang;
 #[cfg(client)]
 pub use solana_client;
 pub use solana_sdk;
+
+#[cfg(feature = "solana-rpc-client-api")]
+pub use solana_rpc_client_api;
+
+#[cfg(feature = "solana-account-decoder-client-types")]
+pub use solana_account_decoder_client_types;
