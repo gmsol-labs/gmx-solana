@@ -1,7 +1,6 @@
 use crate::anchor_test::setup::{current_deployment, Deployment};
 use anchor_spl::token::spl_token;
 use gmsol_liquidity_provider as lp;
-use gmsol_programs::gmsol_store;
 use gmsol_sdk::ops::UserOps;
 use solana_sdk::{
     pubkey::Pubkey, signer::keypair::Keypair, signer::Signer, system_instruction, system_program,
