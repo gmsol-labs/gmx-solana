@@ -11,7 +11,8 @@ keywords.workspace = true
 
 [features]
 serde = ["dep:serde", "smallvec/serde"]
-anchor = ["dep:anchor-lang", "dep:anchor-client"]
+anchor-lang = ["dep:anchor-lang"]
+anchor = ["anchor-lang", "dep:anchor-client"]
 client = [
     "tracing",
     "solana-client",
@@ -21,6 +22,13 @@ client = [
     "futures-util",
 ]
 make-bundle-builder = ["client"]
+client-traits = [
+    "solana-rpc-client-api",
+    "solana-account-decoder-client-types",
+    "tracing",
+    "serde",
+    "serde_json",
+]
 
 [dependencies]
 solana-sdk = { workspace = true }
@@ -42,6 +50,10 @@ futures-util = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 anchor-lang = { workspace = true, optional = true }
 anchor-client = { workspace = true, optional = true }
+
+# feat:client-traits
+solana-rpc-client-api = { workspace = true, optional = true }
+solana-account-decoder-client-types = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases = { workspace = true }

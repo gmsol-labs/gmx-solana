@@ -26,6 +26,18 @@ pub enum Error {
     /// Custom error.
     #[error("custom: {0}")]
     Custom(String),
+    /// RPC client error.
+    #[cfg(feature = "solana-rpc-client-api")]
+    #[error("rpc-client-api: {0}")]
+    RpcClientApi(Box<solana_rpc_client_api::client_error::Error>),
+    /// JSON error.
+    #[cfg(feature = "serde_json")]
+    #[error("json: {0}")]
+    Json(#[from] serde_json::Error),
+    /// Anchor error.
+    #[cfg(feature = "anchor-lang")]
+    #[error("anchor: {0}")]
+    Anchor(#[from] anchor_lang::error::Error),
 }
 
 impl<T> From<(T, Error)> for Error {
@@ -38,5 +50,12 @@ impl Error {
     /// Create a custom error.
     pub fn custom(msg: impl ToString) -> Self {
         Self::Custom(msg.to_string())
+    }
+}
+
+#[cfg(feature = "solana-rpc-client-api")]
+impl From<solana_rpc_client_api::client_error::Error> for Error {
+    fn from(err: solana_rpc_client_api::client_error::Error) -> Self {
+        Self::RpcClientApi(Box::new(err))
     }
 }
