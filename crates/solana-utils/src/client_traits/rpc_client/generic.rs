@@ -10,6 +10,9 @@ use crate::client_traits::RpcSender;
 
 use super::RpcClient;
 
+#[cfg(http_rpc_sender)]
+use crate::client_traits::rpc_sender::HttpRpcSender;
+
 /// Generic RPC client configuration.
 #[derive(Debug, Default, Clone)]
 pub struct GenericRpcClientConfig {
@@ -24,6 +27,32 @@ pub struct GenericRpcClientConfig {
 pub struct GenericRpcClient<S> {
     sender: S,
     config: GenericRpcClientConfig,
+}
+
+impl<S> GenericRpcClient<S> {
+    /// Create a RPC client with sender and config.
+    pub fn new_with_sender_and_config(sender: S, config: GenericRpcClientConfig) -> Self {
+        Self { sender, config }
+    }
+}
+
+#[cfg(http_rpc_sender)]
+impl GenericRpcClient<HttpRpcSender> {
+    /// Create a RPC client with the given url and commitment config.
+    pub fn new_with_commitment(url: impl ToString, commitment: CommitmentConfig) -> Self {
+        Self::new_with_sender_and_config(
+            HttpRpcSender::new(url),
+            GenericRpcClientConfig {
+                commitment_config: commitment,
+                ..Default::default()
+            },
+        )
+    }
+
+    /// Create a RPC client.
+    pub fn new(url: impl ToString) -> Self {
+        Self::new_with_commitment(url, Default::default())
+    }
 }
 
 impl<S: RpcSender> RpcClient for GenericRpcClient<S> {

@@ -86,6 +86,7 @@ openssl-vendored = [
     "solana-sdk/openssl-vendored",
     "gmsol-solana-utils/openssl-vendored",
 ]
+http-rpc-sender = ["gmsol-solana-utils/http-rpc-sender"]
 
 [dependencies]
 gmsol-utils = { workspace = true, features = ["enum-iter", "debug"] }
@@ -95,7 +96,10 @@ gmsol-programs = { workspace = true, features = [
     "gmsol-utils",
 ] }
 gmsol-model = { workspace = true, features = ["u128", "strum"] }
-gmsol-solana-utils = { workspace = true }
+gmsol-solana-utils = { workspace = true, features = [
+    "client-traits",
+    "anchor-lang",
+] }
 gmsol-decode = { workspace = true, optional = true, features = [
     "gmsol-programs",
     "solana-decoder",
@@ -178,14 +182,30 @@ pin-project-lite = { workspace = true, optional = true }
 cfg_aliases = { workspace = true }
 
 [dev-dependencies]
+gmsol-solana-utils = { workspace = true, features = ["http-rpc-sender"] }
+
 rust_decimal_macros = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 wasm-bindgen-test = { workspace = true }
 serde_json = { workspace = true }
-# event-listener = { workspace = true }
-# shellexpand = { workspace = true }
 eyre = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+tokio = { workspace = true, features = [
+    "macros",
+    "rt",
+    "sync",
+], default-features = false }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { workspace = true, features = [
+    "time",
+    "rt",
+    "macros",
+    "sync",
+    "rt-multi-thread",
+] }
 
 [package.metadata.docs.rs]
 all-features = true

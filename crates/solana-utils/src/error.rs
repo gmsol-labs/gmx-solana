@@ -1,6 +1,11 @@
+use solana_sdk::pubkey::Pubkey;
+
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Account Not Found.
+    #[error("account not found: {0}")]
+    AccountNotFound(Pubkey),
     /// Parse url error.
     #[error("parse url: {0}")]
     ParseUrl(#[from] url::ParseError),
