@@ -231,3 +231,12 @@ pub trait FromRpcClientWith<B: ?Sized>: Sized {
         client: &'a impl RpcClient,
     ) -> impl Future<Output = crate::Result<Self>> + 'a;
 }
+
+impl<B> FromRpcClientWith<B> for () {
+    async fn from_rpc_client_with<'a>(
+        _builder: &'a B,
+        _client: &'a impl RpcClient,
+    ) -> crate::Result<Self> {
+        Ok(())
+    }
+}
