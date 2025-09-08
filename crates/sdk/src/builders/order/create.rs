@@ -2,6 +2,7 @@ use anchor_spl::associated_token::{self, get_associated_token_address_with_progr
 use gmsol_programs::gmsol_store::client::args;
 use gmsol_programs::gmsol_store::types::CreateOrderParams as StoreCreateOrderParams;
 use gmsol_programs::gmsol_store::{client::accounts, types::OrderKind};
+use gmsol_solana_utils::client_traits::FromRpcClientWith;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::system_program;
 use typed_builder::TypedBuilder;
@@ -449,10 +450,43 @@ impl IntoAtomicGroup for CreateOrder {
     }
 }
 
+impl FromRpcClientWith<CreateOrder> for CreateOrderHint {
+    async fn from_rpc_client_with<'a>(
+        builder: &'a CreateOrder,
+        client: &'a impl gmsol_solana_utils::client_traits::RpcClient,
+    ) -> gmsol_solana_utils::Result<Self> {
+        use crate::{programs::gmsol_store::accounts::Market, utils::zero_copy::ZeroCopy};
+        use gmsol_solana_utils::client_traits::RpcClientExt;
+
+        let market_address = builder
+            .program
+            .find_market_address(&builder.params.market_token);
+        let market = client
+            .get_anchor_account_with_slot::<ZeroCopy<Market>>(&market_address, Default::default())
+            .await?
+            .into_value()
+            .ok_or_else(|| gmsol_solana_utils::Error::AccountNotFound(market_address))?
+            .0;
+
+        Ok(Self {
+            long_token: market.meta.long_token_mint.into(),
+            short_token: market.meta.short_token_mint.into(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
-    use gmsol_solana_utils::transaction_builder::default_before_sign;
+    #[cfg(not(target_arch = "wasm32"))]
+    use tokio::test as async_test;
+
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as async_test;
+
+    use gmsol_solana_utils::{
+        client_traits::GenericRpcClient, cluster::Cluster, transaction_builder::default_before_sign,
+    };
     use solana_sdk::pubkey::Pubkey;
 
     use super::*;
@@ -485,6 +519,38 @@ mod tests {
                 None,
                 default_before_sign,
             )?;
+        Ok(())
+    }
+
+    #[async_test]
+    async fn create_order_with_rpc() -> crate::Result<()> {
+        let market_token: Pubkey = "5sdFW7wrKsxxYHMXoqDmNHkGyCWsbLEFb1x1gzBBm4Hx".parse()?;
+        let wsol: Pubkey = "So11111111111111111111111111111111111111112".parse()?;
+
+        let cluster = Cluster::Devnet;
+        let client = GenericRpcClient::new(cluster.url());
+
+        let params = CreateOrderParams::builder()
+            .market_token(market_token)
+            .is_long(true)
+            .size(1_000 * crate::constants::MARKET_USD_UNIT)
+            .build();
+        CreateOrder::builder()
+            .payer(Pubkey::new_unique())
+            .kind(CreateOrderKind::MarketIncrease)
+            .collateral_or_swap_out_token(wsol)
+            .params(params)
+            .swap_path([Pubkey::new_unique().into()])
+            .build()
+            .into_atomic_group_with_rpc_client(&client)
+            .await?
+            .partially_signed_transaction_with_blockhash_and_options(
+                Default::default(),
+                Default::default(),
+                None,
+                default_before_sign,
+            )?;
+
         Ok(())
     }
 }
