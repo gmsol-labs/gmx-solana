@@ -38,6 +38,10 @@ pub enum Error {
     #[cfg(feature = "anchor-lang")]
     #[error("anchor: {0}")]
     Anchor(#[from] anchor_lang::error::Error),
+    /// Reqwest error.
+    #[cfg(feature = "reqwest")]
+    #[error("reqwest: {0}")]
+    Reqwest(#[from] reqwest::Error),
 }
 
 impl<T> From<(T, Error)> for Error {

@@ -7,5 +7,6 @@ fn main() {
         client: { feature = "client" },
         anchor: { feature = "anchor" },
         client_traits: { feature = "client-traits" },
+        http_rpc_sender: { feature = "http-rpc-sender" },
     }
 }

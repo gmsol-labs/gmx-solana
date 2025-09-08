@@ -29,6 +29,8 @@ client-traits = [
     "serde",
     "serde_json",
 ]
+http-rpc-sender = ["client-traits", "reqwest/json", "backon"]
+openssl-vendored = ["reqwest?/native-tls-vendored"]
 
 [dependencies]
 solana-sdk = { workspace = true }
@@ -55,11 +57,32 @@ anchor-client = { workspace = true, optional = true }
 solana-rpc-client-api = { workspace = true, optional = true }
 solana-account-decoder-client-types = { workspace = true, optional = true }
 
+# feat:http-sender
+reqwest = { workspace = true, optional = true }
+backon = { workspace = true, optional = true }
+
 [build-dependencies]
 cfg_aliases = { workspace = true }
 
 [dev-dependencies]
 bincode = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+tokio = { workspace = true, features = [
+    "macros",
+    "rt",
+    "sync",
+], default-features = false }
+wasm-bindgen-test = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { workspace = true, features = [
+    "time",
+    "rt",
+    "macros",
+    "sync",
+    "rt-multi-thread",
+] }
 
 [package.metadata.docs.rs]
 all-features = true

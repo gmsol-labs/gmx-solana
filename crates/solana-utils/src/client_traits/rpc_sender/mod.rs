@@ -2,8 +2,14 @@
 // Inspired by solana-rpc-client v2.1.21 (Apache-2.0).
 // Reimplemented here to avoid dependency on `tokio`.
 
+#[cfg(http_rpc_sender)]
+pub mod http_rpc_sender;
+
 use solana_rpc_client_api::request::RpcRequest;
 use std::{future::Future, time::Duration};
+
+#[cfg(http_rpc_sender)]
+pub use http_rpc_sender::HttpRpcSender;
 
 /// Type describing the status of RPC transport.
 #[derive(Default, Clone)]
