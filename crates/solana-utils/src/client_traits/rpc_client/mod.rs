@@ -1,6 +1,6 @@
 //! Generic RPC client implementation.
 
-use std::time::Duration;
+use std::future::Future;
 
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::json;
@@ -15,88 +15,72 @@ use solana_sdk::{account::Account, commitment_config::CommitmentConfig, pubkey::
 
 use crate::utils::WithSlot;
 
-use super::RpcSender;
+pub mod generic;
 
-/// RPC client configuration.
-#[derive(Debug, Default, Clone)]
-pub struct RpcClientConfig {
-    /// Commitment level for RPC queries. See [`CommitmentConfig`].
-    pub commitment_config: CommitmentConfig,
-    /// Initial timeout for transaction confirmation; `None` uses the client default.
-    pub confirm_transaction_initial_timeout: Option<Duration>,
-}
-
-/// Generic RPC client implementation.
-#[derive(Debug, Clone)]
-pub struct RpcClient<S> {
-    sender: S,
-    config: RpcClientConfig,
-}
-
-impl<S: RpcSender> RpcClient<S> {
+/// A RPC client.
+pub trait RpcClient {
     /// Returns the configured default commitment level.
-    pub fn commitment(&self) -> CommitmentConfig {
-        self.config.commitment_config
-    }
+    fn commitment(&self) -> CommitmentConfig;
 
     /// Send an [`RpcRequest`] with parameters.
-    pub async fn send<T>(&self, request: RpcRequest, params: impl Serialize) -> crate::Result<T>
+    fn send<T>(
+        &self,
+        request: RpcRequest,
+        params: impl Serialize,
+    ) -> impl Future<Output = crate::Result<T>>
     where
-        T: DeserializeOwned,
-    {
-        let params = serde_json::to_value(params)?;
-        if !params.is_array() && !params.is_null() {
-            return Err(crate::Error::custom(
-                "`params` is neither an array nor null",
-            ));
-        }
+        T: DeserializeOwned;
+}
 
-        let response = self.sender.send(request, params).await?;
-        Ok(serde_json::from_value(response)?)
-    }
-
+/// A trait that extends [`RpcClient`] with RPC methods.
+pub trait RpcClientExt: RpcClient {
     /// Get account info for `pubkey`, including the context slot.
-    pub async fn get_account_with_slot(
+    fn get_account_with_slot(
         &self,
         address: &Pubkey,
         mut config: config::RpcAccountInfoConfig,
-    ) -> crate::Result<WithSlot<Option<Account>>> {
+    ) -> impl Future<Output = crate::Result<WithSlot<Option<Account>>>> {
         config.encoding = Some(config.encoding.unwrap_or(UiAccountEncoding::Base64));
         let commitment = config.commitment.unwrap_or_else(|| self.commitment());
         config.commitment = Some(commitment);
         tracing::trace!(%address, ?config, "fetching account with config");
-        let res = self
-            .send::<Response<Option<UiAccount>>>(
-                RpcRequest::GetAccountInfo,
-                json!([address.to_string(), config]),
-            )
-            .await
-            .map_err(crate::Error::custom)?;
-        Ok(WithSlot::new(res.context.slot, res.value).map(|value| value.and_then(|a| a.decode())))
+        async move {
+            let res = self
+                .send::<Response<Option<UiAccount>>>(
+                    RpcRequest::GetAccountInfo,
+                    json!([address.to_string(), config]),
+                )
+                .await
+                .map_err(crate::Error::custom)?;
+            Ok(WithSlot::new(res.context.slot, res.value)
+                .map(|value| value.and_then(|a| a.decode())))
+        }
     }
 
     /// Get account for `pubkey` and decode with [`AccountDeserialize`](anchor_lang::AccountDeserialize).
     #[cfg(feature = "anchor-lang")]
-    pub async fn get_anchor_account_with_slot<T: anchor_lang::AccountDeserialize>(
+    fn get_anchor_account_with_slot<T: anchor_lang::AccountDeserialize>(
         &self,
         address: &Pubkey,
         config: config::RpcAccountInfoConfig,
-    ) -> crate::Result<WithSlot<Option<T>>> {
-        let res = self.get_account_with_slot(address, config).await?;
-        Ok(res
-            .map(|a| {
-                a.map(|account| T::try_deserialize(&mut (&account.data as &[u8])))
-                    .transpose()
-            })
-            .transpose()?)
+    ) -> impl Future<Output = crate::Result<WithSlot<Option<T>>>> {
+        async move {
+            let res = self.get_account_with_slot(address, config).await?;
+            Ok(res
+                .map(|a| {
+                    a.map(|account| T::try_deserialize(&mut (&account.data as &[u8])))
+                        .transpose()
+                })
+                .transpose()?)
+        }
     }
 
     /// Get program accounts with slot.
-    pub async fn get_program_accounts_with_slot(
+    fn get_program_accounts_with_slot(
         &self,
         program: &Pubkey,
         mut config: RpcProgramAccountsConfig,
-    ) -> crate::Result<WithSlot<Vec<(Pubkey, Account)>>> {
+    ) -> impl Future<Output = crate::Result<WithSlot<Vec<(Pubkey, Account)>>>> {
         let commitment = config
             .account_config
             .commitment
@@ -109,26 +93,28 @@ impl<S: RpcSender> RpcClient<S> {
             sort_results: None,
         };
         tracing::trace!(%program, ?config, "fetching program accounts");
-        let res = self
-            .send::<Response<Vec<response::RpcKeyedAccount>>>(
-                RpcRequest::GetProgramAccounts,
-                json!([program.to_string(), config]),
-            )
-            .await
-            .map_err(crate::Error::custom)?;
-        WithSlot::new(res.context.slot, res.value)
-            .map(|accounts| parse_keyed_accounts(accounts, RpcRequest::GetProgramAccounts))
-            .transpose()
+        async move {
+            let res = self
+                .send::<Response<Vec<response::RpcKeyedAccount>>>(
+                    RpcRequest::GetProgramAccounts,
+                    json!([program.to_string(), config]),
+                )
+                .await
+                .map_err(crate::Error::custom)?;
+            WithSlot::new(res.context.slot, res.value)
+                .map(|accounts| parse_keyed_accounts(accounts, RpcRequest::GetProgramAccounts))
+                .transpose()
+        }
     }
 
     /// Get programs accounts and decode with [`AccountDeserialize`](anchor_lang::AccountDeserialize).
     #[cfg(feature = "anchor-lang")]
-    pub async fn get_anchor_accounts_with_slot<T>(
+    fn get_anchor_accounts_with_slot<T>(
         &self,
         program: &Pubkey,
         filters: impl IntoIterator<Item = filter::RpcFilterType>,
         config: AnchorAccountsConfig,
-    ) -> crate::Result<WithSlot<impl Iterator<Item = crate::Result<(Pubkey, T)>>>>
+    ) -> impl Future<Output = crate::Result<WithSlot<impl Iterator<Item = crate::Result<(Pubkey, T)>>>>>
     where
         T: anchor_lang::AccountDeserialize + anchor_lang::Discriminator,
     {
@@ -156,14 +142,18 @@ impl<S: RpcSender> RpcClient<S> {
                 ..Default::default()
             },
         };
-        let res = self.get_program_accounts_with_slot(program, config).await?;
-        Ok(res.map(|accounts| {
-            accounts
-                .into_iter()
-                .map(|(key, account)| Ok((key, T::try_deserialize(&mut (&account.data as &[u8]))?)))
-        }))
+        async move {
+            let res = self.get_program_accounts_with_slot(program, config).await?;
+            Ok(res.map(|accounts| {
+                accounts.into_iter().map(|(key, account)| {
+                    Ok((key, T::try_deserialize(&mut (&account.data as &[u8]))?))
+                })
+            }))
+        }
     }
 }
+
+impl<C: RpcClient + ?Sized> RpcClientExt for C {}
 
 /// Configuration for program accounts.
 #[derive(Debug, Default)]
@@ -215,4 +205,29 @@ fn parse_keyed_accounts(
         ));
     }
     Ok(pubkey_accounts)
+}
+
+#[cfg(client)]
+impl RpcClient for solana_client::nonblocking::rpc_client::RpcClient {
+    fn commitment(&self) -> CommitmentConfig {
+        self.commitment()
+    }
+
+    async fn send<T>(&self, request: RpcRequest, params: impl Serialize) -> crate::Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        self.send(request, serde_json::to_value(params)?)
+            .await
+            .map_err(crate::Error::custom)
+    }
+}
+
+/// Types that can be created from an [`RpcClient`] with the given builder.
+pub trait FromRpcClientWith<B: ?Sized>: Sized {
+    /// Create from [`RpcClient`].
+    fn from_rpc_client_with<'a>(
+        builder: &'a B,
+        client: &'a impl RpcClient,
+    ) -> impl Future<Output = crate::Result<Self>> + 'a;
 }
