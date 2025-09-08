@@ -28,8 +28,26 @@ pub trait IntoAtomicGroup {
     /// Hint.
     type Hint;
 
-    /// Convert into [`AtomicGroup`]s.
+    /// Convert into an [`AtomicGroup`].
     fn into_atomic_group(self, hint: &Self::Hint) -> crate::Result<AtomicGroup>;
+
+    /// Convert into an [`AtomicGroup`] with RPC client.
+    #[cfg(client_traits)]
+    fn into_atomic_group_with_rpc_client(
+        self,
+        client: &impl crate::client_traits::RpcClient,
+    ) -> impl std::future::Future<Output = crate::Result<AtomicGroup>>
+    where
+        Self: Sized,
+        Self::Hint: crate::client_traits::FromRpcClientWith<Self>,
+    {
+        use crate::client_traits::FromRpcClientWith;
+
+        async move {
+            let hint = Self::Hint::from_rpc_client_with(&self, client).await?;
+            self.into_atomic_group(&hint)
+        }
+    }
 }
 
 /// Options for getting instructions.

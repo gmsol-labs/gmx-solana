@@ -3,7 +3,7 @@ pub mod rpc_sender;
 
 pub use rpc_client::{
     generic::{GenericRpcClient, GenericRpcClientConfig},
-    RpcClient, RpcClientExt,
+    FromRpcClientWith, RpcClient, RpcClientExt,
 };
 pub use rpc_sender::{RpcSender, RpcTransportStats};
 
