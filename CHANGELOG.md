@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added support for `close_empty_position` instruction.
 - sdk(solana-utils): Added generic RPC client behind `client-traits` feature.
 - sdk(solana-utils): Added cross-platform `HttpRpcSender` implementation for `RpcSender`.
+- sdk(solana-utils): Added `RpcClient` trait and `FromRpcClientWith` trait.
 
 ### Changed
 
