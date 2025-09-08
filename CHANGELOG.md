@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(js): Added `add_create_orders_builder` function.
 - sdk(sdk): Added support for `get_market_token_value` instruction.
 - sdk(sdk): Added support for `close_empty_position` instruction.
+- sdk(solana-utils): Added generic RPC client behind `client-traits` feature.
 
 ### Changed
 

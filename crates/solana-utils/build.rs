@@ -6,5 +6,6 @@ fn main() {
         serde: { feature = "serde" },
         client: { feature = "client" },
         anchor: { feature = "anchor" },
+        client_traits: { feature = "client-traits" },
     }
 }
