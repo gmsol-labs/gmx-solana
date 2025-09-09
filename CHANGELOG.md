@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(solana-utils): Added cross-platform `HttpRpcSender` implementation for `RpcSender`.
 - sdk(solana-utils): Added `RpcClient` trait and `FromRpcClientWith` trait.
 - sdk(solana-utils): Added `IntoAtomicGroup::into_atomic_group_with_rpc_client` method with hint fetch support.
+- sdk(solana-utils): Added `Program` trait and `InstructionBuilder`.
 
 ### Changed
 

@@ -1,11 +1,10 @@
-use gmsol_programs::anchor_lang::{InstructionData, ToAccountMetas};
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-};
+use anchor_lang::InstructionData;
+use gmsol_programs::anchor_lang::ToAccountMetas;
+use gmsol_solana_utils::{Program, ProgramExt};
+use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
 use typed_builder::TypedBuilder;
 
-use crate::{pda, serde::StringPubkey, utils::optional::fix_optional_account_metas};
+use crate::{pda, serde::StringPubkey};
 
 use super::callback::{Callback, CallbackParams};
 
@@ -26,6 +25,12 @@ pub struct StoreProgram {
     pub store: StringPubkey,
 }
 
+impl anchor_lang::Id for StoreProgram {
+    fn id() -> Pubkey {
+        gmsol_programs::gmsol_store::ID
+    }
+}
+
 impl Default for StoreProgram {
     fn default() -> Self {
         use gmsol_programs::gmsol_store::ID;
@@ -36,31 +41,21 @@ impl Default for StoreProgram {
     }
 }
 
-impl StoreProgram {
-    /// Convert to account metas.
-    ///
-    /// If `convert_optional` is `true`, read-only non-signer accounts with
-    /// the default program ID as pubkey will be replaced with the current
-    /// program ID.
-    pub fn accounts(
-        &self,
-        accounts: impl ToAccountMetas,
-        convert_optional: bool,
-    ) -> Vec<AccountMeta> {
-        if convert_optional {
-            fix_optional_account_metas(accounts, &gmsol_programs::gmsol_store::ID, &self.id)
-        } else {
-            accounts.to_account_metas(None)
-        }
+impl Program for StoreProgram {
+    fn id(&self) -> &Pubkey {
+        &self.id
     }
+}
 
+impl StoreProgram {
     /// Create an instruction builder.
-    pub fn instruction(&self, args: impl InstructionData) -> InstructionBuilder<'_> {
-        InstructionBuilder {
-            program: self,
-            data: args.data(),
-            accounts: vec![],
-        }
+    #[deprecated(
+        since = "0.8.0",
+        note = "Use `ProgramExt::anchor_instruction` instead."
+    )]
+    #[allow(deprecated)]
+    pub fn instruction(&self, args: impl InstructionData) -> InstructionBuilder {
+        InstructionBuilder(self.anchor_instruction(args))
     }
 
     pub(crate) fn get_callback_params(&self, callback: Option<&Callback>) -> CallbackParams {
@@ -127,27 +122,22 @@ impl StoreProgram {
 }
 
 /// Buidler for Store Program Instruction.
-pub struct InstructionBuilder<'a> {
-    program: &'a StoreProgram,
-    data: Vec<u8>,
-    accounts: Vec<AccountMeta>,
-}
+#[deprecated(
+    since = "0.8.0",
+    note = "Use `gmsol_sdk::solana_utils::InstructionBuilder` instead."
+)]
+pub struct InstructionBuilder<'a>(gmsol_solana_utils::InstructionBuilder<'a, StoreProgram>);
 
+#[allow(deprecated)]
 impl InstructionBuilder<'_> {
     /// Append accounts.
-    pub fn accounts(mut self, accounts: impl ToAccountMetas, convert_optional: bool) -> Self {
-        let mut accounts = self.program.accounts(accounts, convert_optional);
-        self.accounts.append(&mut accounts);
-        self
+    pub fn accounts(self, accounts: impl ToAccountMetas, convert_optional: bool) -> Self {
+        Self(self.0.anchor_accounts(accounts, convert_optional))
     }
 
     /// Build.
     pub fn build(self) -> Instruction {
-        Instruction {
-            program_id: self.program.id.0,
-            accounts: self.accounts,
-            data: self.data,
-        }
+        self.0.build()
     }
 }
 

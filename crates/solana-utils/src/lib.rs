@@ -24,6 +24,9 @@ pub mod address_lookup_table;
 /// Program.
 pub mod program;
 
+/// Program trait.
+pub mod program_trait;
+
 /// Compute budget.
 pub mod compute_budget;
 
@@ -52,6 +55,7 @@ pub mod utils;
 pub use crate::{
     error::Error,
     instruction_group::{AtomicGroup, IntoAtomicGroup, ParallelGroup},
+    program_trait::{InstructionBuilder, Program, ProgramExt},
     transaction_group::TransactionGroup,
 };
 

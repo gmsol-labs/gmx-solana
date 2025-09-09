@@ -2,7 +2,7 @@ use gmsol_programs::gmsol_store::{
     client::{accounts, args},
     types,
 };
-use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup};
+use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup, ProgramExt};
 use typed_builder::TypedBuilder;
 
 use crate::{
@@ -102,10 +102,10 @@ impl IntoAtomicGroup for UpdateOrder {
 
         let update = self
             .program
-            .instruction(args::UpdateOrderV2 {
+            .anchor_instruction(args::UpdateOrderV2 {
                 params: self.params.into(),
             })
-            .accounts(
+            .anchor_accounts(
                 accounts::UpdateOrderV2 {
                     owner: payer,
                     store: self.program.store.0,
