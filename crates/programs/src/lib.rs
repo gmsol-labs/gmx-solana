@@ -9,6 +9,8 @@ anchor_lang::declare_program!(gmsol_treasury);
 anchor_lang::declare_program!(gmsol_timelock);
 #[cfg(feature = "competition")]
 anchor_lang::declare_program!(gmsol_competition);
+#[cfg(feature = "liquidity-provider")]
+anchor_lang::declare_program!(gmsol_liquidity_provider);
 
 /// Constants.
 pub mod constants;
