@@ -54,6 +54,7 @@ build-idls:
   anchor idl build -p gmsol_treasury -t {{IDL_OUT_DIR}}/gmsol_treasury.ts -o {{IDL_OUT_DIR}}/gmsol_treasury.json
   anchor idl build -p gmsol_timelock -t {{IDL_OUT_DIR}}/gmsol_timelock.ts -o {{IDL_OUT_DIR}}/gmsol_timelock.json
   anchor idl build -p gmsol_competition -t {{IDL_OUT_DIR}}/gmsol_competition.ts -o {{IDL_OUT_DIR}}/gmsol_competition.json
+  anchor idl build -p gmsol_liquidity_provider -t {{IDL_OUT_DIR}}/gmsol_liquidity_provider.ts -o {{IDL_OUT_DIR}}/gmsol_liquidity_provider.json
 
 check-verifiable:
   @if [ -f {{STORE_PROGRAM}} ] && [ -f {{TREASURY_PROGRAM}} ] && [ -f {{TIMELOCK_PROGRAM}} ] && [ -f {{MOCK_CHAINLINK_PROGRAM}} ]; then \

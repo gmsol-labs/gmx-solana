@@ -17,6 +17,7 @@ default = ["market-graph"]
 treasury = ["gmsol-programs/treasury", "gmsol-utils/treasury"]
 timelock = ["gmsol-programs/timelock", "gmsol-utils/instruction"]
 competition = ["gmsol-programs/competition"]
+liquidity-provider = ["gmsol-programs/liquidity-provider"]
 devnet = ["gmsol-utils/devnet", "switchboard-on-demand-client?/devnet"]
 js = [
     "market-graph",
