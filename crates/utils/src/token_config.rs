@@ -524,6 +524,24 @@ impl TokenRecord {
             config.expected_provider()?,
         ))
     }
+
+    /// Get token address.
+    pub fn token(&self) -> &Pubkey {
+        &self.token
+    }
+
+    /// Get feed id.
+    pub fn feed(&self) -> &Pubkey {
+        &self.feed
+    }
+
+    /// Get provider kind.
+    pub fn provider_kind(
+        &self,
+    ) -> std::result::Result<PriceProviderKind, num_enum::TryFromPrimitiveError<PriceProviderKind>>
+    {
+        PriceProviderKind::try_from(self.provider)
+    }
 }
 
 impl TokensWithFeed {
@@ -605,6 +623,11 @@ impl TokensCollector {
             .sort_tokens_by_provider(&mut self.tokens)
             .map_err(|_| TokenConfigError::NotFound)?;
         Ok(self.tokens)
+    }
+
+    /// Get unique tokens.
+    pub fn unique_tokens(&self) -> BTreeSet<Pubkey> {
+        self.tokens.iter().copied().collect()
     }
 
     /// Convert to [`TokensWithFeed`].

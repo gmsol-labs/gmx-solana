@@ -8,5 +8,6 @@ fn main() {
         treasury: { feature = "treasury" },
         timelock: { feature = "timelock" },
         competition: { feature = "competition" },
+        liquidity_provider: { feature = "liquidity-provider" },
     }
 }

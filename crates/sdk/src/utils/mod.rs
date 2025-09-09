@@ -22,9 +22,15 @@ pub mod amount;
 /// Utils for market.
 pub mod market;
 
+/// Utils for GLV.
+pub mod glv;
+
 /// Utils for `gmsol-decode`.
 #[cfg(feature = "decode")]
 pub mod decode;
+
+/// Utils for token map.
+pub mod token_map;
 
 /// Test utils.
 #[cfg(test)]

@@ -1,5 +1,8 @@
+use std::collections::BTreeSet;
+
 use gmsol_programs::constants::{MARKET_DECIMALS, MARKET_TOKEN_DECIMALS};
 use gmsol_utils::market::MarketConfigKey;
+use solana_sdk::pubkey::Pubkey;
 
 use crate::core::{market::MarketMeta, token_config::TokenMapAccess};
 
@@ -112,4 +115,13 @@ impl MarketDecimals {
         };
         Ok(decimals)
     }
+}
+
+/// Returns tokens associated to the [`MarketMeta`] in order.
+pub fn ordered_tokens(meta: &MarketMeta) -> BTreeSet<Pubkey> {
+    BTreeSet::from([
+        meta.index_token_mint,
+        meta.long_token_mint,
+        meta.short_token_mint,
+    ])
 }

@@ -32,11 +32,11 @@ use crate::{
     builders::utils::{generate_nonce, get_ata_or_owner_with_program_id},
     client::{
         feeds_parser::{FeedAddressMap, FeedsParser},
-        ops::{glv::split_to_accounts, token_account::TokenAccountOps},
+        ops::token_account::TokenAccountOps,
         pull_oracle::{FeedIds, PullOraclePriceConsumer},
     },
     pda::NonceBytes,
-    utils::{optional::fix_optional_account_metas, zero_copy::ZeroCopy},
+    utils::{glv::split_to_accounts, optional::fix_optional_account_metas, zero_copy::ZeroCopy},
 };
 
 use super::{ExchangeOps, VirtualInventoryCollector};
