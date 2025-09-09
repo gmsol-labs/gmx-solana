@@ -12,6 +12,10 @@ use gmsol_programs::gmsol_treasury::accounts as treasury_accounts;
 #[allow(unused_imports)]
 use gmsol_programs::gmsol_timelock::accounts as timelock_accounts;
 
+#[cfg(liquidity_provider)]
+#[allow(unused_imports)]
+use gmsol_programs::gmsol_liquidity_provider::accounts as liquidity_provider_accounts;
+
 pub use gmsol_programs::gmsol_store::constants::{
     VIRTUAL_INVENTORY_FOR_POSITIONS_SEED, VIRTUAL_INVENTORY_FOR_SWAPS_SEED,
 };
@@ -586,5 +590,64 @@ pub fn find_participant_address(
     Pubkey::find_program_address(
         &[PARTICIPANT_SEED, competition.as_ref(), trader.as_ref()],
         competition_program_id,
+    )
+}
+
+/// Find PDA for global state account for the LP program.
+#[cfg(liquidity_provider)]
+pub fn find_lp_global_state_address(lp_program_id: &Pubkey) -> (Pubkey, u8) {
+    use gmsol_programs::gmsol_liquidity_provider::constants::GLOBAL_STATE_SEED;
+
+    Pubkey::find_program_address(&[GLOBAL_STATE_SEED], lp_program_id)
+}
+
+/// Find PDA for stake position account.
+#[cfg(liquidity_provider)]
+pub fn find_lp_stake_position_address(
+    owner: &Pubkey,
+    position_id: u64,
+    global_state: Option<&Pubkey>,
+    lp_program_id: &Pubkey,
+) -> (Pubkey, u8) {
+    use gmsol_programs::gmsol_liquidity_provider::constants::POSITION_SEED;
+
+    let global_state = global_state
+        .copied()
+        .unwrap_or_else(|| find_lp_global_state_address(lp_program_id).0);
+
+    Pubkey::find_program_address(
+        &[
+            POSITION_SEED,
+            global_state.as_ref(),
+            owner.as_ref(),
+            &position_id.to_le_bytes(),
+        ],
+        lp_program_id,
+    )
+}
+
+/// Find PDA for stake position vault.
+#[cfg(liquidity_provider)]
+pub fn find_lp_stake_position_vault_address(
+    owner: &Pubkey,
+    position_id: u64,
+    global_state: Option<&Pubkey>,
+    lp_program_id: &Pubkey,
+) -> (Pubkey, u8) {
+    use gmsol_programs::gmsol_liquidity_provider::constants::{POSITION_SEED, VAULT_SEED};
+
+    let global_state = global_state
+        .copied()
+        .unwrap_or_else(|| find_lp_global_state_address(lp_program_id).0);
+
+    Pubkey::find_program_address(
+        &[
+            POSITION_SEED,
+            global_state.as_ref(),
+            owner.as_ref(),
+            &position_id.to_le_bytes(),
+            VAULT_SEED,
+        ],
+        lp_program_id,
     )
 }

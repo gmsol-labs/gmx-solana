@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, future::Future, ops::Deref};
+use std::{future::Future, ops::Deref};
 
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use gmsol_model::{price::Prices, PnlFactorKind};
@@ -21,6 +21,7 @@ use crate::{
         feeds_parser::{FeedAddressMap, FeedsParser},
         pull_oracle::{FeedIds, PullOraclePriceConsumer},
     },
+    utils::market::ordered_tokens,
     Client,
 };
 
@@ -781,12 +782,4 @@ impl<C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
             .insert_pull_oracle_feed_parser(provider, map);
         Ok(())
     }
-}
-
-fn ordered_tokens(meta: &MarketMeta) -> BTreeSet<Pubkey> {
-    BTreeSet::from([
-        meta.index_token_mint,
-        meta.long_token_mint,
-        meta.short_token_mint,
-    ])
 }

@@ -13,6 +13,9 @@ pub mod serde_token_map;
 /// GLV serialization.
 pub mod serde_glv;
 
+/// Price feed serialization.
+pub mod serde_price_feed;
+
 /// Treasury serialization.
 #[cfg(feature = "treasury")]
 pub mod treasury;

@@ -53,6 +53,10 @@ pub mod idl;
 /// Operations for virtual inventory accounts.
 pub mod virtual_inventory;
 
+/// Operations for liquidity-provider program.
+#[cfg(liquidity_provider)]
+pub mod liquidity_provider;
+
 pub use alt::AddressLookupTableOps;
 pub use config::ConfigOps;
 pub use exchange::ExchangeOps;

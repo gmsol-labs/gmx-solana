@@ -119,6 +119,11 @@ impl StoreProgram {
     pub fn find_callback_authority_address(&self) -> Pubkey {
         crate::pda::find_callback_authority(&self.id).0
     }
+
+    /// Find the PDA for GLV account.
+    pub fn find_glv_address(&self, glv_token: &Pubkey) -> Pubkey {
+        crate::pda::find_glv_address(glv_token, &self.id).0
+    }
 }
 
 /// Buidler for Store Program Instruction.
