@@ -11,8 +11,6 @@ import {
   update_orders,
 } from "../../pkg/index.js";
 
-import { clusterApiUrl, Connection, PublicKey } from "@solana/web3.js";
-
 function toBase64(data: number[]): string {
   const uint8 = new Uint8Array(data);
 
@@ -104,18 +102,24 @@ console.log("collateral amount:", positionModel.collateral_amount());
 console.log("status:", positionModel.status(prices));
 
 // Simulate order.
-const simulationOutput = graph.simulate_order({
-  kind: "MarketIncrease",
-  params: {
-    market_token: "E6kfBQcdHL3fdWNaydrWViXVtQLTgpxzZicLy98ZNc5v",
-    is_long: true,
-    size: 100_000_000_000_000_000_000_000n,
-    amount: 10_000_000n,
+const simulationOutput = graph.simulate_order(
+  {
+    kind: "MarketIncrease",
+    params: {
+      market_token: "E6kfBQcdHL3fdWNaydrWViXVtQLTgpxzZicLy98ZNc5v",
+      is_long: true,
+      size: 100_000_000_000_000_000_000_000n,
+      amount: 10_000_000n,
+    },
+    collateral_or_swap_out_token: wsol,
   },
-  collateral_or_swap_out_token: wsol,
-}, position);
+  position
+);
 console.log("simulation:", simulationOutput.increase());
-let outputPosition = Position.decode_from_base64_with_options(simulationOutput.increase()!.position, true);
+let outputPosition = Position.decode_from_base64_with_options(
+  simulationOutput.increase()!.position,
+  true
+);
 console.log("output position:", outputPosition.to_model(model).size());
 
 // Create order.
@@ -241,10 +245,13 @@ const slBuilder = create_orders_builder(
 multipleBuilder.merge(tpBuilder);
 multipleBuilder.merge(slBuilder);
 
-const multipleTransactions = multipleBuilder.build_with_options({}, {
-  recent_blockhash: recentBlockhash,
-  compute_unit_price_micro_lamports: 2000000,
-});
+const multipleTransactions = multipleBuilder.build_with_options(
+  {},
+  {
+    recent_blockhash: recentBlockhash,
+    compute_unit_price_micro_lamports: 2000000,
+  }
+);
 
 console.log("create multiple orders");
 
