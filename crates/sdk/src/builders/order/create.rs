@@ -3,6 +3,7 @@ use gmsol_programs::gmsol_store::client::args;
 use gmsol_programs::gmsol_store::types::CreateOrderParams as StoreCreateOrderParams;
 use gmsol_programs::gmsol_store::{client::accounts, types::OrderKind};
 use gmsol_solana_utils::client_traits::FromRpcClientWith;
+use gmsol_solana_utils::ProgramExt;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::system_program;
 use typed_builder::TypedBuilder;
@@ -381,8 +382,8 @@ impl IntoAtomicGroup for CreateOrder {
         if self.kind.is_increase() {
             insts.add(
                 self.program
-                    .instruction(args::PreparePosition { params })
-                    .accounts(
+                    .anchor_instruction(args::PreparePosition { params })
+                    .anchor_accounts(
                         accounts::PreparePosition {
                             owner,
                             store: self.program.store.0,
@@ -406,12 +407,12 @@ impl IntoAtomicGroup for CreateOrder {
 
         let create = self
             .program
-            .instruction(args::CreateOrderV2 {
+            .anchor_instruction(args::CreateOrderV2 {
                 nonce: nonce.to_bytes(),
                 params,
                 callback_version,
             })
-            .accounts(
+            .anchor_accounts(
                 accounts::CreateOrderV2 {
                     owner,
                     receiver,
@@ -441,7 +442,7 @@ impl IntoAtomicGroup for CreateOrder {
                 },
                 true,
             )
-            .accounts(swap_markets, false)
+            .anchor_accounts(swap_markets, false)
             .build();
 
         insts.add(create);

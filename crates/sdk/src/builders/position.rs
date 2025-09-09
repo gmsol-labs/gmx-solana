@@ -1,5 +1,5 @@
 use gmsol_programs::gmsol_store::client::{accounts, args};
-use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup};
+use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup, ProgramExt};
 use typed_builder::TypedBuilder;
 
 use crate::serde::StringPubkey;
@@ -35,8 +35,8 @@ impl IntoAtomicGroup for CloseEmptyPosition {
 
         let ix = self
             .program
-            .instruction(args::CloseEmptyPosition {})
-            .accounts(
+            .anchor_instruction(args::CloseEmptyPosition {})
+            .anchor_accounts(
                 accounts::CloseEmptyPosition {
                     owner,
                     store: self.program.store.0,

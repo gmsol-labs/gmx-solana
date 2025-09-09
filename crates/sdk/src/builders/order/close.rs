@@ -3,7 +3,7 @@ use gmsol_programs::{
     anchor_lang::system_program,
     gmsol_store::client::{accounts, args},
 };
-use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup};
+use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup, ProgramExt};
 use typed_builder::TypedBuilder;
 
 use crate::{
@@ -101,10 +101,10 @@ impl IntoAtomicGroup for CloseOrder {
 
         let close = self
             .program
-            .instruction(args::CloseOrderV2 {
+            .anchor_instruction(args::CloseOrderV2 {
                 reason: self.reason,
             })
-            .accounts(
+            .anchor_accounts(
                 accounts::CloseOrderV2 {
                     executor: payer,
                     store: self.program.store.0,
