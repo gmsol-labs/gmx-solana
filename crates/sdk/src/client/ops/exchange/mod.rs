@@ -19,6 +19,9 @@ pub mod glv_withdrawal;
 /// Builders for transactions related to GLV shifts.
 pub mod glv_shift;
 
+/// Buidlers for transactions related to market state.
+pub mod market_state;
+
 use std::{
     collections::{BTreeSet, HashSet},
     future::Future,
@@ -41,6 +44,7 @@ use gmsol_utils::{
     pubkey::optional_address,
     swap::SwapActionParams,
 };
+use market_state::UpdateClosedStateBuilder;
 use order::{
     CloseOrderBuilder, CreateOrderBuilder, ExecuteOrderBuilder, OrderParams, PositionCutBuilder,
     UpdateAdlBuilder,
@@ -52,6 +56,7 @@ use withdrawal::{CloseWithdrawalBuilder, CreateWithdrawalBuilder, ExecuteWithdra
 use crate::{
     builders::{
         callback::{Callback, CallbackParams},
+        market_state::UpdateClosedState,
         position::CloseEmptyPosition,
     },
     client::Client,
@@ -436,6 +441,13 @@ pub trait ExchangeOps<C> {
         glv_shift: &Pubkey,
         cancel_on_execution_error: bool,
     ) -> ExecuteGlvShiftBuilder<C>;
+
+    fn update_closed_state(
+        &self,
+        store: &Pubkey,
+        oracle: &Pubkey,
+        market_token: &Pubkey,
+    ) -> UpdateClosedStateBuilder<C>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> ExchangeOps<C> for Client<C> {
@@ -731,6 +743,23 @@ impl<C: Deref<Target = impl Signer> + Clone> ExchangeOps<C> for Client<C> {
         let mut builder = ExecuteGlvShiftBuilder::new(self, oracle, glv_shift);
         builder.cancel_on_execution_error(cancel_on_execution_error);
         builder
+    }
+
+    fn update_closed_state(
+        &self,
+        store: &Pubkey,
+        oracle: &Pubkey,
+        market_token: &Pubkey,
+    ) -> UpdateClosedStateBuilder<C> {
+        UpdateClosedStateBuilder::new(
+            self,
+            UpdateClosedState::builder()
+                .payer(self.payer())
+                .market_token(*market_token)
+                .store_program(self.store_program_for_builders(store))
+                .oracle(*oracle)
+                .build(),
+        )
     }
 }
 
