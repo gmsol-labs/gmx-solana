@@ -354,10 +354,8 @@ impl FromRpcClientWith<StakeLpToken> for StakeLpTokenHint {
         let store_program = &builder.store_program;
         let store_address = &store_program.store.0;
         let store = client
-            .get_anchor_account_with_slot::<ZeroCopy<Store>>(store_address, Default::default())
+            .get_anchor_account::<ZeroCopy<Store>>(store_address, Default::default())
             .await?
-            .into_value()
-            .ok_or_else(|| gmsol_solana_utils::Error::AccountNotFound(*store_address))?
             .0;
         let token_map_address = optional_address(&store.token_map)
             .ok_or_else(|| gmsol_solana_utils::Error::custom("token map is not set"))?;
@@ -366,35 +364,23 @@ impl FromRpcClientWith<StakeLpToken> for StakeLpTokenHint {
             LpTokenKind::Gm => {
                 let market_address = store_program.find_market_address(&builder.lp_token_mint);
                 let market = client
-                    .get_anchor_account_with_slot::<ZeroCopy<Market>>(
-                        &market_address,
-                        Default::default(),
-                    )
+                    .get_anchor_account::<ZeroCopy<Market>>(&market_address, Default::default())
                     .await?
-                    .into_value()
-                    .ok_or_else(|| gmsol_solana_utils::Error::AccountNotFound(*store_address))?
                     .0;
                 (ordered_tokens(&market.meta.into()), None)
             }
             LpTokenKind::Glv => {
                 let glv_address = store_program.find_glv_address(&builder.lp_token_mint);
                 let glv = client
-                    .get_anchor_account_with_slot::<ZeroCopy<Glv>>(&glv_address, Default::default())
+                    .get_anchor_account::<ZeroCopy<Glv>>(&glv_address, Default::default())
                     .await?
-                    .into_value()
-                    .ok_or_else(|| gmsol_solana_utils::Error::AccountNotFound(*store_address))?
                     .0;
                 let mut collector = glv.tokens_collector(None::<&SwapActionParams>);
                 for token in glv.market_tokens() {
                     let market_address = store_program.find_market_address(&token);
                     let market = client
-                        .get_anchor_account_with_slot::<ZeroCopy<Market>>(
-                            &market_address,
-                            Default::default(),
-                        )
+                        .get_anchor_account::<ZeroCopy<Market>>(&market_address, Default::default())
                         .await?
-                        .into_value()
-                        .ok_or_else(|| gmsol_solana_utils::Error::AccountNotFound(*store_address))?
                         .0;
                     collector.insert_token(&market.meta.index_token_mint);
                 }
@@ -404,10 +390,8 @@ impl FromRpcClientWith<StakeLpToken> for StakeLpTokenHint {
         };
 
         let token_map = client
-            .get_anchor_account_with_slot::<TokenMap>(store_address, Default::default())
-            .await?
-            .into_value()
-            .ok_or_else(|| gmsol_solana_utils::Error::AccountNotFound(*store_address))?;
+            .get_anchor_account::<TokenMap>(token_map_address, Default::default())
+            .await?;
         let feeds = token_records(&token_map, &tokens)
             .map_err(gmsol_solana_utils::Error::custom)?
             .into_iter()
