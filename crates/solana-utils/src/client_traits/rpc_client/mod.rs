@@ -35,7 +35,8 @@ pub trait RpcClient {
 /// A trait that extends [`RpcClient`] with RPC methods.
 pub trait RpcClientExt: RpcClient {
     /// Get account info for `pubkey`, including the context slot.
-    fn get_account_with_slot(
+    /// Returns `None` if the account does not exist.
+    fn get_optional_account_with_slot(
         &self,
         address: &Pubkey,
         mut config: config::RpcAccountInfoConfig,
@@ -57,21 +58,57 @@ pub trait RpcClientExt: RpcClient {
         }
     }
 
-    /// Get account for `pubkey` and decode with [`AccountDeserialize`](anchor_lang::AccountDeserialize).
-    #[cfg(feature = "anchor-lang")]
-    fn get_anchor_account_with_slot<T: anchor_lang::AccountDeserialize>(
+    /// Get account for `pubkey` and decode with [`AccountDeserialize`](anchor_lang::AccountDeserialize), including the context slot.
+    /// Returns `None` if the account does not exist.
+    #[cfg(anchor_lang)]
+    fn get_optional_anchor_account_with_slot<T: anchor_lang::AccountDeserialize>(
         &self,
         address: &Pubkey,
         config: config::RpcAccountInfoConfig,
     ) -> impl Future<Output = crate::Result<WithSlot<Option<T>>>> {
         async move {
-            let res = self.get_account_with_slot(address, config).await?;
+            let res = self.get_optional_account_with_slot(address, config).await?;
             Ok(res
                 .map(|a| {
                     a.map(|account| T::try_deserialize(&mut (&account.data as &[u8])))
                         .transpose()
                 })
                 .transpose()?)
+        }
+    }
+
+    /// Get account for `pubkey` and decode with [`AccountDeserialize`](anchor_lang::AccountDeserialize), including the context slot.
+    /// Returns `Err` if the account does not exist.
+    #[cfg(anchor_lang)]
+    fn get_anchor_account_with_slot<T: anchor_lang::AccountDeserialize>(
+        &self,
+        address: &Pubkey,
+        config: config::RpcAccountInfoConfig,
+    ) -> impl Future<Output = crate::Result<WithSlot<T>>> {
+        async move {
+            let res = self
+                .get_optional_anchor_account_with_slot(address, config)
+                .await?;
+            res.map(|a| a.ok_or_else(|| crate::Error::AccountNotFound(*address)))
+                .transpose()
+        }
+    }
+
+    /// Get account for `pubkey` and decode with [`AccountDeserialize`](anchor_lang::AccountDeserialize).
+    /// Returns `Err` if the account does not exist.
+    #[cfg(anchor_lang)]
+    fn get_anchor_account<T: anchor_lang::AccountDeserialize>(
+        &self,
+        address: &Pubkey,
+        config: config::RpcAccountInfoConfig,
+    ) -> impl Future<Output = crate::Result<T>> {
+        async move {
+            let res = self
+                .get_optional_anchor_account_with_slot(address, config)
+                .await?;
+            res.map(|a| a.ok_or_else(|| crate::Error::AccountNotFound(*address)))
+                .transpose()
+                .map(|w| w.into_value())
         }
     }
 
@@ -108,7 +145,7 @@ pub trait RpcClientExt: RpcClient {
     }
 
     /// Get programs accounts and decode with [`AccountDeserialize`](anchor_lang::AccountDeserialize).
-    #[cfg(feature = "anchor-lang")]
+    #[cfg(anchor_lang)]
     fn get_anchor_accounts_with_slot<T>(
         &self,
         program: &Pubkey,
@@ -165,7 +202,7 @@ pub struct RpcProgramAccountsConfig {
 }
 
 /// Configuagtion for anchor accounts.
-#[cfg(feature = "anchor-lang")]
+#[cfg(anchor_lang)]
 #[derive(Debug, Default)]
 pub struct AnchorAccountsConfig {
     /// Whether to skip the account type filter.

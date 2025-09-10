@@ -463,10 +463,8 @@ impl FromRpcClientWith<CreateOrder> for CreateOrderHint {
             .program
             .find_market_address(&builder.params.market_token);
         let market = client
-            .get_anchor_account_with_slot::<ZeroCopy<Market>>(&market_address, Default::default())
+            .get_anchor_account::<ZeroCopy<Market>>(&market_address, Default::default())
             .await?
-            .into_value()
-            .ok_or_else(|| gmsol_solana_utils::Error::AccountNotFound(market_address))?
             .0;
 
         Ok(Self {
