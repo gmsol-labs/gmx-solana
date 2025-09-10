@@ -321,7 +321,7 @@ impl Oracle {
             short_token_price: self.get_primary_price_with_options(
                 &meta.short_token_mint,
                 false,
-                options.allow_short_closd,
+                options.allow_short_closed,
             )?,
         };
         Ok(prices)
@@ -527,5 +527,5 @@ impl ValidateOracleTime for MaxAgeValidator {
 pub(crate) struct MarketPriceOptions {
     pub(crate) allow_index_closed: bool,
     pub(crate) allow_long_closed: bool,
-    pub(crate) allow_short_closd: bool,
+    pub(crate) allow_short_closed: bool,
 }
