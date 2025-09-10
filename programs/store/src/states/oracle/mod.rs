@@ -130,8 +130,12 @@ impl Oracle {
                 &oracle_price.parts.price,
                 oracle_price.parts.ref_price.as_ref(),
             )?;
-            self.primary
-                .set(token, oracle_price.parts.price, token_config.is_synthetic())?;
+            self.primary.set(
+                token,
+                oracle_price.parts.price,
+                token_config.is_synthetic(),
+                oracle_price.parts.is_open,
+            )?;
         }
         self.update_oracle_ts_and_slot(validator)?;
         Ok(())
@@ -226,11 +230,12 @@ impl Oracle {
         Ok(())
     }
 
-    /// Get primary price for the given token.
-    pub fn get_primary_price(
+    /// Get primary price for the given token with options.
+    pub(crate) fn get_primary_price_with_options(
         &self,
         token: &Pubkey,
         allow_synthetic: bool,
+        allow_closed: bool,
     ) -> Result<gmsol_model::price::Price<u128>> {
         let price = self
             .primary
@@ -252,10 +257,24 @@ impl Oracle {
                 CoreError::SyntheticTokenPriceIsNotAllowed
             );
         }
+
+        if !allow_closed {
+            require!(price.is_open(), CoreError::MarketNotOpen);
+        }
+
         Ok(gmsol_model::price::Price {
             min: price.min().to_unit_price(),
             max: price.max().to_unit_price(),
         })
+    }
+
+    /// Get primary price for the given token.
+    pub fn get_primary_price(
+        &self,
+        token: &Pubkey,
+        allow_synthetic: bool,
+    ) -> Result<gmsol_model::price::Price<u128>> {
+        self.get_primary_price_with_options(token, allow_synthetic, false)
     }
 
     /// Get prices for the market
@@ -296,6 +315,7 @@ pub(crate) struct OraclePriceParts {
     oracle_ts: i64,
     price: gmsol_utils::Price,
     ref_price: Option<Decimal>,
+    is_open: bool,
 }
 
 impl OraclePrice {

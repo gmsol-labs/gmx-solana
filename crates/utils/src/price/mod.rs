@@ -15,8 +15,11 @@ pub use ruint::aliases::U192;
 /// [`U192`] number 10.
 pub const TEN: U192 = U192::from_limbs([10, 0, 0]);
 
-/// Max number of price flags.
+/// Max number of price feed flags.
 pub const MAX_PRICE_FLAG: usize = 8;
+
+/// Max number of oracle price flags.
+pub const MAX_ORACLE_PRICE_FLAG: usize = 8;
 
 /// Price type.
 #[derive(Debug, AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace)]
@@ -103,6 +106,20 @@ pub enum PriceFlag {
     LastUpdateDiffSecs,
     // CHECK: should have no more than `MAX_PRICE_FLAG` of flags.
 }
+
+/// Flags for oracle price.
+#[repr(u8)]
+#[non_exhaustive]
+#[derive(num_enum::IntoPrimitive, num_enum::TryFromPrimitive)]
+pub enum OraclePriceFlag {
+    /// Is synthetic.
+    Synthetic,
+    /// Is Market Opened.
+    Open,
+    // CHECK: should have no more than `MAX_ORACLE_PRICE_FLAG` of flags.
+}
+
+crate::flags!(OraclePriceFlag, MAX_ORACLE_PRICE_FLAG, u8);
 
 #[cfg(test)]
 mod tests {

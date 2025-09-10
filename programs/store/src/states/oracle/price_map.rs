@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use gmsol_utils::price::Decimal;
+use gmsol_utils::price::{Decimal, OraclePriceFlag, OraclePriceFlagContainer};
 
 use crate::{utils::pubkey::to_bytes, CoreError};
 
@@ -8,7 +8,7 @@ use crate::{utils::pubkey::to_bytes, CoreError};
 #[cfg_attr(feature = "debug", derive(derive_more::Debug))]
 pub struct SmallPrices {
     decimal_multiplier: u8,
-    flags: u8,
+    flags: OraclePriceFlagContainer,
     #[cfg_attr(feature = "debug", debug(skip))]
     padding_0: [u8; 2],
     min: u32,
@@ -22,8 +22,6 @@ impl Default for SmallPrices {
 }
 
 impl SmallPrices {
-    const SYNTHETIC_FLAGS: u8 = u8::MAX;
-
     /// Get min price.
     pub fn min(&self) -> Decimal {
         Decimal {
@@ -40,7 +38,11 @@ impl SmallPrices {
         }
     }
 
-    pub(crate) fn from_price(price: &gmsol_utils::Price, is_synthetic: bool) -> Result<Self> {
+    pub(crate) fn from_price(
+        price: &gmsol_utils::Price,
+        is_synthetic: bool,
+        is_open: bool,
+    ) -> Result<Self> {
         // Validate price data.
         require_eq!(
             price.min.decimal_multiplier,
@@ -50,11 +52,15 @@ impl SmallPrices {
         require_neq!(price.min.value, 0, CoreError::InvalidArgument);
         require_gte!(price.max.value, price.min.value, CoreError::InvalidArgument);
 
-        let flags = if is_synthetic {
-            Self::SYNTHETIC_FLAGS
-        } else {
-            0
-        };
+        let mut flags = OraclePriceFlagContainer::default();
+
+        if is_synthetic {
+            flags.set_flag(OraclePriceFlag::Synthetic, true);
+        }
+
+        if is_open {
+            flags.set_flag(OraclePriceFlag::Open, true);
+        }
 
         Ok(SmallPrices {
             decimal_multiplier: price.min.decimal_multiplier,
@@ -67,7 +73,12 @@ impl SmallPrices {
 
     /// Returns whether the token is synthetic.
     pub fn is_synthetic(&self) -> bool {
-        self.flags == Self::SYNTHETIC_FLAGS
+        self.flags.get_flag(OraclePriceFlag::Synthetic)
+    }
+
+    /// Returns whether the market of the token is open.
+    pub fn is_open(&self) -> bool {
+        self.flags.get_flag(OraclePriceFlag::Open)
     }
 
     /// Convert to [`Price`](gmsol_utils::Price).
@@ -92,8 +103,12 @@ impl PriceMap {
         token: &Pubkey,
         price: gmsol_utils::Price,
         is_synthetic: bool,
+        is_open: bool,
     ) -> Result<()> {
-        self.insert(token, SmallPrices::from_price(&price, is_synthetic)?);
+        self.insert(
+            token,
+            SmallPrices::from_price(&price, is_synthetic, is_open)?,
+        );
         Ok(())
     }
 }

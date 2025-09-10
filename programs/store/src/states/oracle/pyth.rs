@@ -56,6 +56,7 @@ impl Pyth {
             oracle_ts: price.publish_time,
             price: parsed_price,
             ref_price: None,
+            is_open: true,
         })
     }
 }

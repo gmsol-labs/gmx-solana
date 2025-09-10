@@ -148,10 +148,8 @@ impl PriceFeed {
 
         let current = clock.unix_timestamp;
         let heartbeat_duration = token_config.heartbeat_duration();
-        require!(
-            self.price.is_market_open(current, heartbeat_duration),
-            CoreError::MarketNotOpen
-        );
+        let is_open = self.price.is_market_open(current, heartbeat_duration);
+        require!(is_open, CoreError::MarketNotOpen);
 
         let timestamp = self.price.ts();
         if current > timestamp && current - timestamp > heartbeat_duration.into() {
@@ -166,6 +164,7 @@ impl PriceFeed {
             oracle_ts: timestamp,
             price,
             ref_price: Some(ref_price),
+            is_open,
         })
     }
 
