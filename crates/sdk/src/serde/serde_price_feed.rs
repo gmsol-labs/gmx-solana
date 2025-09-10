@@ -1,4 +1,7 @@
-use gmsol_utils::{oracle::PriceProviderKind, token_config::TokenRecord};
+use gmsol_utils::{
+    oracle::PriceProviderKind,
+    token_config::{TokenConfigError, TokenRecord, TokensWithFeed},
+};
 
 use super::StringPubkey;
 
@@ -30,4 +33,16 @@ impl TryFrom<TokenRecord> for SerdeTokenRecord {
             provider: value.provider_kind().map_err(crate::Error::custom)?,
         })
     }
+}
+
+/// Convert an iterator of [`SerdeTokenRecord`] to [`TokensWithFeed`].
+pub fn to_tokens_with_feeds<'a>(
+    records: impl IntoIterator<Item = &'a SerdeTokenRecord>,
+) -> Result<TokensWithFeed, TokenConfigError> {
+    let feeds = records
+        .into_iter()
+        .map(|record| TokenRecord::from(record.clone()))
+        .collect();
+    let feeds = TokensWithFeed::try_from_records(feeds)?;
+    Ok(feeds)
 }

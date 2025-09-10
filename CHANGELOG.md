@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Added `min_position_age_for_manual_close` config.
 - programs(store): Added `close_empty_position` instruction.
 - programs(store): Added flag to indicate whether the token's market is open in oracle price map.
+- programs(store): Added `update_closed_state` instruction.
 - sdk(sdk): Added `try_deserialize_zero_copy_from_base64_with_options` utility function.
 - sdk(js): Added decode methods with `no_discriminator` option for JsMarket and JsPosition.
 - sdk(js): Added `add_create_orders_builder` function.
@@ -32,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(solana-utils): Added `Program` trait and `InstructionBuilder`.
 - sdk(sdk): Added support for LP token staking instructions.
 - sdk(decode): Added `UserHeader` to `GMSOLAccountData`.
+- sdk(sdk): Added support for `update_closed_state` instruction.
 
 ### Changed
 
@@ -239,7 +241,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `SquadsOps::squads_approve_proposal`: Approves a proposal.
   - `SquadsOps::squads_execute_vault_transaction`: Executes a vault transaction.
   - `SquadsOps::squads_from_bundle`: Creates a bundle of vault transactions for proposing transactions.
-- sdk: Implemented the `MakeBundleBuidler` trait for `TransactionBuilder`.
+- sdk: Implemented the `MakeBundleBuilder` trait for `TransactionBuilder`.
 - sdk: Introduced `OnceMakeBundleBuilder`, which implements `MakeBundleBuilder` and can be created directly from `BundleBuilder`.
 - sdk: Added the `gmsol-programs` crate.
 - sdk: Added the `gmsol-sdk` crate: unlike the `gmsol` crate, this crate is built on top of the `gmsol-programs` crate and includes WASM support.

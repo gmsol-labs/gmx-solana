@@ -23537,6 +23537,79 @@
       ]
     },
     {
+      "name": "update_closed_state",
+      "docs": [
+        "Update the closed state for the market.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](UpdateClosedState)*",
+        "",
+        "# Errors",
+        "- The [`authority`](UpdateClosedState::authority) must be a signer and have the ORDER_KEEPER",
+        "role in the store.",
+        "- The [`store`](UpdateClosedState::store) must be an initialized [`Store`](states::Store)",
+        "account owned by the store program.",
+        "- The [`oracle`](UpdateClosedState::oracle) must be an initialized [`Oracle`](states::Oracle)",
+        "account that is owned by the store.",
+        "- The [`market`](UpdateClosedState::market) must be enabled and owned by the store.",
+        "- Price feed accounts must be valid and provided in the market's sorted token list order."
+      ],
+      "discriminator": [
+        147,
+        215,
+        88,
+        75,
+        233,
+        117,
+        74,
+        144
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The address authorized to execute this instruction."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "The store that owns the market."
+          ],
+          "relations": [
+            "token_map",
+            "oracle",
+            "market"
+          ]
+        },
+        {
+          "name": "token_map",
+          "docs": [
+            "Token map."
+          ],
+          "relations": [
+            "store"
+          ]
+        },
+        {
+          "name": "oracle",
+          "docs": [
+            "The oracle buffer to use."
+          ],
+          "writable": true
+        },
+        {
+          "name": "market",
+          "docs": [
+            "The market to update the ADL state."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "update_glv_config",
       "docs": [
         "Update GLV config.",
@@ -30031,9 +30104,13 @@
             "type": {
               "array": [
                 "u8",
-                13
+                5
               ]
             }
+          },
+          {
+            "name": "closed_state_updated_at",
+            "type": "i64"
           },
           {
             "name": "name",

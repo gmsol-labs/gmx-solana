@@ -13,7 +13,7 @@ use gmsol_utils::{
     oracle::PriceProviderKind,
     pubkey::optional_address,
     swap::SwapActionParams,
-    token_config::{token_records, TokenRecord, TokensWithFeed},
+    token_config::{token_records, TokensWithFeed},
 };
 use rand::Rng;
 use solana_sdk::{
@@ -23,7 +23,10 @@ use solana_sdk::{
 use typed_builder::TypedBuilder;
 
 use crate::{
-    serde::{serde_price_feed::SerdeTokenRecord, StringPubkey},
+    serde::{
+        serde_price_feed::{to_tokens_with_feeds, SerdeTokenRecord},
+        StringPubkey,
+    },
     utils::{
         glv::split_to_accounts,
         market::ordered_tokens,
@@ -331,16 +334,9 @@ pub struct StakeLpTokenHint {
 }
 
 impl StakeLpTokenHint {
-    /// Create [`TokensWithFeeds`]
+    /// Create [`TokensWithFeed`].
     pub fn to_tokens_with_feeds(&self) -> gmsol_solana_utils::Result<TokensWithFeed> {
-        let feeds = self
-            .feeds
-            .iter()
-            .map(|record| TokenRecord::from(record.clone()))
-            .collect();
-        let feeds =
-            TokensWithFeed::try_from_records(feeds).map_err(gmsol_solana_utils::Error::custom)?;
-        Ok(feeds)
+        to_tokens_with_feeds(&self.feeds).map_err(gmsol_solana_utils::Error::custom)
     }
 }
 

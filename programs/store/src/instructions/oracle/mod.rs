@@ -109,7 +109,13 @@ pub(crate) fn unchecked_set_prices_from_price_feed<'info>(
     ctx.accounts
         .oracle
         .load_mut()?
-        .set_prices_from_remaining_accounts(validator, &token_map, &tokens, ctx.remaining_accounts)
+        .set_prices_from_remaining_accounts(
+            validator,
+            &token_map,
+            &tokens,
+            ctx.remaining_accounts,
+            false,
+        )
 }
 
 impl<'info> internal::Authentication<'info> for SetPricesFromPriceFeed<'info> {

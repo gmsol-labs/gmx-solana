@@ -2771,6 +2771,27 @@ pub mod gmsol_store {
         )
     }
 
+    /// Update the closed state for the market.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](UpdateClosedState)*
+    ///
+    /// # Errors
+    /// - The [`authority`](UpdateClosedState::authority) must be a signer and have the ORDER_KEEPER
+    ///   role in the store.
+    /// - The [`store`](UpdateClosedState::store) must be an initialized [`Store`](states::Store)
+    ///   account owned by the store program.
+    /// - The [`oracle`](UpdateClosedState::oracle) must be an initialized [`Oracle`](states::Oracle)
+    ///   account that is owned by the store.
+    /// - The [`market`](UpdateClosedState::market) must be enabled and owned by the store.
+    /// - Price feed accounts must be valid and provided in the market's sorted token list order.
+    #[access_control(internal::Authenticate::only_order_keeper(&ctx))]
+    pub fn update_closed_state<'info>(
+        ctx: Context<'_, '_, 'info, 'info, UpdateClosedState<'info>>,
+    ) -> Result<()> {
+        UpdateClosedState::invoke_unchecked(ctx)
+    }
+
     // ===========================================
     //                  Shift
     // ===========================================

@@ -93,7 +93,8 @@ pub struct Market {
     /// Bump Seed.
     pub(crate) bump: u8,
     flags: MarketFlagContainer,
-    padding: [u8; 13],
+    padding: [u8; 5],
+    closed_state_updated_at: i64,
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
     name: [u8; MAX_NAME_LEN],
     pub(crate) meta: MarketMeta,
@@ -277,6 +278,20 @@ impl Market {
     /// Return the previous value.
     pub fn set_is_gt_minting_enabled(&mut self, enabled: bool) -> bool {
         self.set_flag(MarketFlag::GTEnabled, enabled)
+    }
+
+    /// Returns whether the market is closed.
+    pub fn is_closed(&self) -> bool {
+        self.flag(MarketFlag::Closed)
+    }
+
+    /// Set whether the market is closed.
+    ///
+    /// Return previous value.
+    pub(crate) fn set_closed(&mut self, closed: bool) -> Result<bool> {
+        let clock = Clock::get()?;
+        self.closed_state_updated_at = clock.unix_timestamp;
+        Ok(self.set_flag(MarketFlag::Closed, closed))
     }
 
     /// Get pool of the given kind.

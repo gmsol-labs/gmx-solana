@@ -15,6 +15,9 @@ pub mod user;
 /// Instruction builders related to position.
 pub mod position;
 
+/// Instruction builders related to market state.
+pub mod market_state;
+
 /// Instruction builders related to liquidity provider program.
 #[cfg(liquidity_provider)]
 pub mod liquidity_provider;
