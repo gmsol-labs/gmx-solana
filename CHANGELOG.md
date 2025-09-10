@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(solana-utils): Added `IntoAtomicGroup::into_atomic_group_with_rpc_client` method with hint fetch support.
 - sdk(solana-utils): Added `Program` trait and `InstructionBuilder`.
 - sdk(sdk): Added support for LP token staking instructions.
+- sdk(decode): Added `UserHeader` to `GMSOLAccountData`.
 
 ### Changed
 
