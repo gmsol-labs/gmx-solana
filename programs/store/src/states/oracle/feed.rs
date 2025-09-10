@@ -136,6 +136,7 @@ impl PriceFeed {
         &self,
         clock: &Clock,
         token_config: &TokenConfig,
+        allow_closed: bool,
     ) -> Result<OraclePriceParts> {
         let provider = self.provider()?;
         require_eq!(
@@ -149,7 +150,10 @@ impl PriceFeed {
         let current = clock.unix_timestamp;
         let heartbeat_duration = token_config.heartbeat_duration();
         let is_open = self.price.is_market_open(current, heartbeat_duration);
-        require!(is_open, CoreError::MarketNotOpen);
+
+        if !allow_closed {
+            require!(is_open, CoreError::MarketNotOpen);
+        }
 
         let timestamp = self.price.ts();
         if current > timestamp && current - timestamp > heartbeat_duration.into() {

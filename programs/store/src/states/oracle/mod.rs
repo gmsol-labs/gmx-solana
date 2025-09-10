@@ -100,6 +100,7 @@ impl Oracle {
         map: &TokenMapRef,
         tokens: &[Pubkey],
         remaining_accounts: &'info [AccountInfo<'info>],
+        allow_closed: bool,
     ) -> Result<()> {
         require!(self.is_cleared(), CoreError::PricesAreAlreadySet);
         require!(self.primary.is_empty(), CoreError::PricesAreAlreadySet);
@@ -119,8 +120,12 @@ impl Oracle {
 
             require!(token_config.is_enabled(), CoreError::TokenConfigDisabled);
 
-            let oracle_price =
-                OraclePrice::parse_from_feed_account(validator.clock(), token_config, feed)?;
+            let oracle_price = OraclePrice::parse_from_feed_account(
+                validator.clock(),
+                token_config,
+                feed,
+                allow_closed,
+            )?;
 
             validator.validate_one(
                 token_config,
@@ -185,13 +190,14 @@ impl Oracle {
     }
 
     #[inline(never)]
-    pub(crate) fn with_prices<'info, T>(
+    pub(crate) fn with_prices_opts<'info, T>(
         &mut self,
         store: &AccountLoader<'info, Store>,
         token_map: &AccountLoader<'info, TokenMapHeader>,
         tokens: &[Pubkey],
         remaining_accounts: &'info [AccountInfo<'info>],
         f: impl FnOnce(&mut Self, &'info [AccountInfo<'info>]) -> Result<T>,
+        allow_closed: bool,
     ) -> Result<T> {
         let validator = PriceValidator::try_from(store.load()?.deref())?;
         require_gte!(
@@ -203,7 +209,13 @@ impl Oracle {
         let remaining_accounts = &remaining_accounts[tokens.len()..];
         let res = {
             let token_map = token_map.load_token_map()?;
-            self.set_prices_from_remaining_accounts(validator, &token_map, tokens, feeds)
+            self.set_prices_from_remaining_accounts(
+                validator,
+                &token_map,
+                tokens,
+                feeds,
+                allow_closed,
+            )
         };
         match res {
             Ok(()) => {
@@ -216,6 +228,17 @@ impl Oracle {
                 Err(err)
             }
         }
+    }
+
+    pub(crate) fn with_prices<'info, T>(
+        &mut self,
+        store: &AccountLoader<'info, Store>,
+        token_map: &AccountLoader<'info, TokenMapHeader>,
+        tokens: &[Pubkey],
+        remaining_accounts: &'info [AccountInfo<'info>],
+        f: impl FnOnce(&mut Self, &'info [AccountInfo<'info>]) -> Result<T>,
+    ) -> Result<T> {
+        self.with_prices_opts(store, token_map, tokens, remaining_accounts, f, false)
     }
 
     /// Validate oracle time.
@@ -277,18 +300,39 @@ impl Oracle {
         self.get_primary_price_with_options(token, allow_synthetic, false)
     }
 
+    /// Get prices for the market with options.
+    pub(crate) fn market_prices_with_options(
+        &self,
+        market: &impl HasMarketMeta,
+        options: MarketPriceOptions,
+    ) -> Result<gmsol_model::price::Prices<u128>> {
+        let meta = market.market_meta();
+        let prices = gmsol_model::price::Prices {
+            index_token_price: self.get_primary_price_with_options(
+                &meta.index_token_mint,
+                true,
+                options.allow_index_closed,
+            )?,
+            long_token_price: self.get_primary_price_with_options(
+                &meta.long_token_mint,
+                false,
+                options.allow_long_closed,
+            )?,
+            short_token_price: self.get_primary_price_with_options(
+                &meta.short_token_mint,
+                false,
+                options.allow_short_closd,
+            )?,
+        };
+        Ok(prices)
+    }
+
     /// Get prices for the market
     pub(crate) fn market_prices(
         &self,
         market: &impl HasMarketMeta,
     ) -> Result<gmsol_model::price::Prices<u128>> {
-        let meta = market.market_meta();
-        let prices = gmsol_model::price::Prices {
-            index_token_price: self.get_primary_price(&meta.index_token_mint, true)?,
-            long_token_price: self.get_primary_price(&meta.long_token_mint, false)?,
-            short_token_price: self.get_primary_price(&meta.short_token_mint, false)?,
-        };
-        Ok(prices)
+        self.market_prices_with_options(market, Default::default())
     }
 }
 
@@ -323,6 +367,7 @@ impl OraclePrice {
         clock: &Clock,
         token_config: &TokenConfig,
         account: &'info AccountInfo<'info>,
+        allow_closed: bool,
     ) -> Result<Self> {
         let (provider, parsed) = match from_program_id(account.owner) {
             Some(provider) => (provider, None),
@@ -330,7 +375,10 @@ impl OraclePrice {
                 let loader = AccountLoader::<'info, PriceFeed>::try_from(account)?;
                 let feed = loader.load()?;
                 let kind = feed.provider()?;
-                (kind, Some(feed.check_and_get_price(clock, token_config)?))
+                (
+                    kind,
+                    Some(feed.check_and_get_price(clock, token_config, allow_closed)?),
+                )
             }
             None => return Err(error!(CoreError::InvalidPriceFeedAccount)),
         };
@@ -350,6 +398,7 @@ impl OraclePrice {
                 parsed.ok_or_else(|| error!(CoreError::Internal))?
             }
             PriceProviderKind::Pyth => {
+                // `allow_closed` is not used for Pyth, since all Pyth feeds are considered open.
                 Pyth::check_and_get_price(clock, token_config, account, feed_id)?
             }
             PriceProviderKind::Chainlink => {
@@ -357,6 +406,7 @@ impl OraclePrice {
                 return err!(CoreError::Deprecated);
             }
             PriceProviderKind::Switchboard => {
+                // `allow_closed` is not used for Switchboard, since all Switchboard feeds are considered open.
                 require_keys_eq!(*feed_id, account.key(), CoreError::InvalidPriceFeedAccount);
                 Switchboard::check_and_get_price(clock, token_config, account)?
             }
@@ -462,4 +512,11 @@ impl ValidateOracleTime for MaxAgeValidator {
     fn oracle_updated_after_slot(&self) -> CoreResult<Option<u64>> {
         Ok(None)
     }
+}
+
+#[derive(Default)]
+pub(crate) struct MarketPriceOptions {
+    pub(crate) allow_index_closed: bool,
+    pub(crate) allow_long_closed: bool,
+    pub(crate) allow_short_closd: bool,
 }
