@@ -1,5 +1,6 @@
 use gmsol_programs::anchor_lang;
-use gmsol_sdk::client::ops::MarketOps;
+use gmsol_sdk::{client::ops::MarketOps, ops::ExchangeOps};
+use gmsol_store::CoreError;
 use gmsol_utils::market::MarketConfigFlag;
 use tracing::Instrument;
 
@@ -106,6 +107,47 @@ async fn get_market_token_value() -> eyre::Result<()> {
     assert_eq!(
         err.anchor_error_code(),
         Some(anchor_lang::error::ErrorCode::ConstraintHasOne.into())
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn update_closed_state() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("update_closed_state");
+    let _enter = span.enter();
+
+    let user = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+
+    let market_token = deployment
+        .market_token("SOL", "fBTC", "USDG")
+        .expect("must exist");
+
+    let mut builder = keeper.update_closed_state(store, oracle, market_token);
+    deployment
+        .execute_with_pyth(&mut builder, None, false, true)
+        .instrument(
+            tracing::info_span!("update market closed state by ORDER_KEEPER", %market_token),
+        )
+        .await?;
+
+    let mut builder = user.update_closed_state(store, oracle, market_token);
+    let err = deployment
+        .execute_with_pyth(&mut builder, None, false, false)
+        .instrument(
+            tracing::info_span!("update market closed state by ORDER_KEEPER", %market_token),
+        )
+        .await
+        .expect_err("should throw error when the payer is not an ORDER_KEEPER");
+
+    assert_eq!(
+        err.anchor_error_code(),
+        Some(CoreError::PermissionDenied.into())
     );
 
     Ok(())
