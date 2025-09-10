@@ -17,6 +17,7 @@ gmsol-sdk = { workspace = true, features = [
     "chainlink",
     "pyth",
     "decode",
+    "liquidity-provider",
 ] }
 gmsol-programs = { workspace = true, features = [
     "model",
