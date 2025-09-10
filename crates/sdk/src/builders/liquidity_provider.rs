@@ -225,13 +225,12 @@ impl StakeLpToken {
                     gt_program,
                     owner,
                     user_lp_token: self.lp_token_account(&token_program_id),
-                    pricing_store: gt_store,
                     token_map: hint.token_map.0,
                     oracle: self.oracle.0,
                     market,
-                    market_token: lp_mint,
                     system_program: system_program::ID,
                     token_program: token_program_id,
+                    event_authority: self.store_program.find_event_authority_address(),
                 },
                 false,
             )
@@ -280,18 +279,17 @@ impl StakeLpToken {
                     gt_program,
                     owner,
                     user_lp_token: self.lp_token_account(&token_program_id),
-                    pricing_store: gt_store,
                     token_map: hint.token_map.0,
                     oracle: self.oracle.0,
                     glv,
-                    glv_token: lp_mint,
                     system_program: system_program::ID,
                     token_program: token_program_id,
+                    event_authority: self.store_program.find_event_authority_address(),
                 },
                 false,
             )
-            .accounts(self.feeds(hint)?)
             .accounts(glv_accounts)
+            .accounts(self.feeds(hint)?)
             .build())
     }
 }

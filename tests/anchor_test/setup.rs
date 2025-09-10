@@ -123,6 +123,8 @@ pub struct Deployment {
     pub liquidity_provider_global_state: Pubkey,
     /// Liquidity provider GT mint.
     pub liquidity_provider_gt_mint: Keypair,
+    /// Liquidity provider oracle.
+    liquidity_provider_oracle: Keypair,
 }
 
 impl fmt::Debug for Deployment {
@@ -212,6 +214,7 @@ impl Deployment {
             &liquidity_provider_program,
         );
         let liquidity_provider_gt_mint = Keypair::generate(&mut rng);
+        let liquidity_provider_oracle = Keypair::generate(&mut rng);
 
         Ok(Self {
             users: Users::new(&mut rng),
@@ -245,6 +248,7 @@ impl Deployment {
             liquidity_provider_program,
             liquidity_provider_global_state,
             liquidity_provider_gt_mint,
+            liquidity_provider_oracle,
         })
     }
 
@@ -457,6 +461,28 @@ impl Deployment {
 
         let signature = grant_role_ix.send().await?;
         tracing::info!(%signature, "granted GT_CONTROLLER role to liquidity provider GlobalState");
+
+        // Create a dedicated oracle for liquidity provider with GlobalState as authority
+        // (Oracle keypair was already generated in connect method)
+
+        // Initialize the LP oracle with GlobalState PDA as authority
+        let init_lp_oracle_ix = self
+            .client
+            .initialize_oracle(
+                &self.store,
+                &self.liquidity_provider_oracle,
+                Some(&self.liquidity_provider_global_state),
+            )
+            .await?
+            .0;
+
+        let signature = init_lp_oracle_ix.send().await?;
+        tracing::info!(
+            %signature,
+            oracle=%self.liquidity_provider_oracle.pubkey(),
+            authority=%self.liquidity_provider_global_state,
+            "initialized liquidity provider oracle with GlobalState authority"
+        );
 
         Ok(())
     }
@@ -1695,6 +1721,10 @@ impl Deployment {
 
     pub(crate) fn oracle(&self) -> Pubkey {
         self.oracle.pubkey()
+    }
+
+    pub(crate) fn liquidity_provider_oracle(&self) -> Pubkey {
+        self.liquidity_provider_oracle.pubkey()
     }
 
     pub(crate) async fn chainlink_pull_oracle(

@@ -650,12 +650,6 @@
           "writable": true
         },
         {
-          "name": "pricing_store",
-          "docs": [
-            "Pricing accounts for GLV token valuation"
-          ]
-        },
-        {
           "name": "token_map"
         },
         {
@@ -666,7 +660,7 @@
           "name": "glv"
         },
         {
-          "name": "glv_token"
+          "name": "event_authority"
         },
         {
           "name": "system_program",
@@ -848,12 +842,6 @@
           "writable": true
         },
         {
-          "name": "pricing_store",
-          "docs": [
-            "Pricing accounts for GM token valuation"
-          ]
-        },
-        {
           "name": "token_map"
         },
         {
@@ -864,7 +852,7 @@
           "name": "market"
         },
         {
-          "name": "market_token"
+          "name": "event_authority"
         },
         {
           "name": "system_program",
