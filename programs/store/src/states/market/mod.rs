@@ -279,6 +279,18 @@ impl Market {
         self.set_flag(MarketFlag::GTEnabled, enabled)
     }
 
+    /// Returns whether the market is closed.
+    pub fn is_closed(&self) -> bool {
+        self.flag(MarketFlag::Closed)
+    }
+
+    /// Set whether the market is closed.
+    ///
+    /// Return previous value.
+    pub fn set_closed(&mut self, closed: bool) -> bool {
+        self.set_flag(MarketFlag::Closed, closed)
+    }
+
     /// Get pool of the given kind.
     #[inline]
     pub fn pool(&self, kind: PoolKind) -> Option<Pool> {

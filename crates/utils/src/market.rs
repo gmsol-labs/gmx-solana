@@ -323,6 +323,8 @@ pub enum MarketFlag {
     AutoDeleveragingEnabledForShort,
     /// Is GT minting enabled.
     GTEnabled,
+    /// Indicates whether the market is closed.
+    Closed,
     // CHECK: cannot have more than `MAX_MARKET_FLAGS` flags.
 }
 
