@@ -2,7 +2,11 @@ use anchor_lang::prelude::*;
 
 use gmsol_model::{BaseMarketExt, ClockKind, PnlFactorKind};
 
-use crate::{constants, states::Oracle, CoreError, CoreResult, ModelError};
+use crate::{
+    constants,
+    states::{MarketPriceOptions, Oracle},
+    CoreError, CoreResult, ModelError,
+};
 
 use super::{HasMarketMeta, Market};
 
@@ -229,6 +233,40 @@ impl Adl for Market {
             .get_mut(kind)
             .ok_or_else(|| error!(CoreError::NotFound))?;
         *clock = Clock::get()?.unix_timestamp;
+        Ok(())
+    }
+}
+
+/// Marker trait for markets that can be closed.
+pub(crate) trait ClosableMarket {
+    fn closed_state_updated_at(&self) -> CoreResult<i64>;
+
+    fn update_closed_state(&mut self, oracle: &Oracle) -> Result<()>;
+}
+
+impl ClosableMarket for Market {
+    fn closed_state_updated_at(&self) -> CoreResult<i64> {
+        Ok(self.closed_state_updated_at)
+    }
+
+    fn update_closed_state(&mut self, oracle: &Oracle) -> Result<()> {
+        if oracle.max_oracle_ts() < self.closed_state_updated_at()? {
+            return err!(CoreError::OracleTimestampsAreSmallerThanRequired);
+        }
+        require!(self.is_enabled(), CoreError::DisabledMarket);
+
+        // Ensure that only the market state of the index token price can be closed.
+        oracle.market_prices_with_options(
+            self,
+            MarketPriceOptions {
+                allow_index_closed: true,
+                ..Default::default()
+            },
+        )?;
+
+        let is_closed = !oracle.is_open(&self.meta.index_token_mint)?;
+        self.set_closed(is_closed)?;
+
         Ok(())
     }
 }

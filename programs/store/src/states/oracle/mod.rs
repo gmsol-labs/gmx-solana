@@ -334,6 +334,15 @@ impl Oracle {
     ) -> Result<gmsol_model::price::Prices<u128>> {
         self.market_prices_with_options(market, Default::default())
     }
+
+    /// Returns whether the market state of the given token price is open.
+    pub(crate) fn is_open(&self, token: &Pubkey) -> Result<bool> {
+        let price = self
+            .primary
+            .get(token)
+            .ok_or_else(|| error!(CoreError::MissingOraclePrice))?;
+        Ok(price.is_open())
+    }
 }
 
 /// Create from program id.
