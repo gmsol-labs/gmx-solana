@@ -20,11 +20,11 @@ use gmsol_programs::gmsol_store::{
 };
 
 #[constant]
-pub const POSITION_SEED: &'static [u8] = b"position";
+pub const POSITION_SEED: &[u8] = b"position";
 #[constant]
-pub const GLOBAL_STATE_SEED: &'static [u8] = b"global_state";
+pub const GLOBAL_STATE_SEED: &[u8] = b"global_state";
 #[constant]
-pub const VAULT_SEED: &'static [u8] = b"vault";
+pub const VAULT_SEED: &[u8] = b"vault";
 #[constant]
 pub const DEFAULT_PRICING_STALENESS_SECONDS: u32 = 300; // Default 5 minutes
                                                         // IDL-safe constants (u8) exposed via #[constant]
@@ -160,7 +160,6 @@ pub mod gmsol_liquidity_provider {
         );
         Ok(())
     }
-
 
     /// Stake GM tokens with automatic pricing via CPI
     pub fn stake_gm<'info>(
@@ -642,8 +641,8 @@ fn compute_time_weighted_apy(
     // Sum full-week contributions
     let mut acc: u128 = 0;
     let capped_full: u128 = full_weeks.min(APY_LAST_INDEX as u128);
-    for i in 0..(capped_full as usize) {
-        acc = acc.saturating_add(apy_gradient[i].saturating_mul(SECONDS_PER_WEEK));
+    for &apy_value in apy_gradient.iter().take(capped_full as usize) {
+        acc = acc.saturating_add(apy_value.saturating_mul(SECONDS_PER_WEEK));
     }
     if full_weeks > (APY_LAST_INDEX as u128) {
         let extra = full_weeks - (APY_LAST_INDEX as u128); // weeks APY_LAST_INDEX+ use bucket APY_LAST_INDEX
@@ -680,7 +679,6 @@ pub struct Initialize<'info> {
 
     pub system_program: Program<'info, System>,
 }
-
 
 /// Accounts context for staking GM tokens with automatic pricing
 #[derive(Accounts)]
@@ -1098,6 +1096,7 @@ pub enum ErrorCode {
 }
 
 /// Shared core stake logic for all stake types
+#[allow(clippy::too_many_arguments)]
 fn execute_stake<'info>(
     global_state: &Account<'info, GlobalState>,
     lp_mint: &InterfaceAccount<'info, Mint>,
@@ -1175,6 +1174,7 @@ fn execute_stake<'info>(
 }
 
 /// Get GM token value via CPI to gmsol_store
+#[allow(clippy::too_many_arguments)]
 fn get_gm_token_value_via_cpi<'info>(
     global_state: &Account<'info, GlobalState>,
     pricing_store: &AccountLoader<'info, Store>,
@@ -1219,6 +1219,7 @@ fn get_gm_token_value_via_cpi<'info>(
 }
 
 /// Get GLV token value via CPI to gmsol_store
+#[allow(clippy::too_many_arguments)]
 fn get_glv_token_value_via_cpi<'info>(
     global_state: &Account<'info, GlobalState>,
     pricing_store: &AccountLoader<'info, Store>,

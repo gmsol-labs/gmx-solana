@@ -266,7 +266,6 @@ async fn liquidity_provider_tests() -> eyre::Result<()> {
     Ok(())
 }
 
-
 /// Comprehensive GM staking flow with real pricing: deposit → value check → stake
 #[tokio::test]
 async fn comprehensive_gm_flow() -> eyre::Result<()> {
