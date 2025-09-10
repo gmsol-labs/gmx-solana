@@ -6,7 +6,7 @@ pub mod programs {
     use gmsol_programs::gmsol_store::{
         accounts::{
             Deposit, GlvDeposit, GlvShift, GlvWithdrawal, Market, Order, Position, Shift, Store,
-            VirtualInventory, Withdrawal,
+            UserHeader, VirtualInventory, Withdrawal,
         },
         events::{
             BorrowingFeesUpdated, DepositExecuted, DepositRemoved, GlvDepositRemoved, GlvPricing,
@@ -28,6 +28,7 @@ pub mod programs {
     impl_decode_for_zero_copy!(GlvDeposit);
     impl_decode_for_zero_copy!(GlvWithdrawal);
     impl_decode_for_zero_copy!(GlvShift);
+    impl_decode_for_zero_copy!(UserHeader);
 
     impl_decode_for_cpi_event!(DepositRemoved);
     impl_decode_for_cpi_event!(DepositExecuted);
@@ -66,6 +67,7 @@ pub mod programs {
             Market,
             VirtualInventory,
             Position,
+            UserHeader,
             UnknownOwnedData
         ]
     );
