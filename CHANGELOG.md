@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- programs(store): Replaced `u8::MAX` synthetic flag in oracle price map with `OraclePriceFlag` bitmap.
+
 ### Added
 
 - programs(store): Added `cumulative_inv_cost_factor` as a new global metric for GT, along with an instruction to update it.
@@ -15,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Added `created_at` field for `Position` account.
 - programs(store): Added `min_position_age_for_manual_close` config.
 - programs(store): Added `close_empty_position` instruction.
+- programs(store): Added flag to indicate whether the token's market is open in oracle price map.
 - sdk(sdk): Added `try_deserialize_zero_copy_from_base64_with_options` utility function.
 - sdk(js): Added decode methods with `no_discriminator` option for JsMarket and JsPosition.
 - sdk(js): Added `add_create_orders_builder` function.
@@ -29,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- programs(store): Refactored price flag in oracle price map into `OraclePriceFlag`
 - cli: Improved prompt when creating timelock instruction buffers.
 - sdk(decode): Replaced `solana-transaction-status` with `solana-transaction-status-client-types` to simplify dependency.
 

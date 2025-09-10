@@ -83,6 +83,7 @@ impl Switchboard {
             oracle_ts: result_ts,
             price: Self::price_from(&feed, token_config)?,
             ref_price: Some(ref_price),
+            is_open: true,
         })
     }
 
