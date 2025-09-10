@@ -126,7 +126,7 @@ impl StoreProgram {
     }
 }
 
-/// Buidler for Store Program Instruction.
+/// Builder for Store Program Instruction.
 #[deprecated(
     since = "0.8.0",
     note = "Use `gmsol_sdk::solana_utils::InstructionBuilder` instead."

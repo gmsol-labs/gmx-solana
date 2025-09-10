@@ -241,7 +241,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `SquadsOps::squads_approve_proposal`: Approves a proposal.
   - `SquadsOps::squads_execute_vault_transaction`: Executes a vault transaction.
   - `SquadsOps::squads_from_bundle`: Creates a bundle of vault transactions for proposing transactions.
-- sdk: Implemented the `MakeBundleBuidler` trait for `TransactionBuilder`.
+- sdk: Implemented the `MakeBundleBuilder` trait for `TransactionBuilder`.
 - sdk: Introduced `OnceMakeBundleBuilder`, which implements `MakeBundleBuilder` and can be created directly from `BundleBuilder`.
 - sdk: Added the `gmsol-programs` crate.
 - sdk: Added the `gmsol-sdk` crate: unlike the `gmsol` crate, this crate is built on top of the `gmsol-programs` crate and includes WASM support.

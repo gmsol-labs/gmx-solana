@@ -75,7 +75,7 @@ pub struct SendBundleOptions {
     pub inspector_cluster: Option<Cluster>,
 }
 
-/// Buidler for transaction bundle.
+/// Builder for transaction bundle.
 pub struct BundleBuilder<'a, C> {
     ctx: Ctx<'a, C>,
     options: BundleOptions,

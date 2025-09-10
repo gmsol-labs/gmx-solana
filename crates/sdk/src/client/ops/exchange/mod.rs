@@ -19,7 +19,7 @@ pub mod glv_withdrawal;
 /// Builders for transactions related to GLV shifts.
 pub mod glv_shift;
 
-/// Buidlers for transactions related to market state.
+/// Builders for transactions related to market state.
 pub mod market_state;
 
 use std::{
