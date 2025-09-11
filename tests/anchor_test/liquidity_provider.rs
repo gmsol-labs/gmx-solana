@@ -326,6 +326,7 @@ async fn comprehensive_gm_flow() -> eyre::Result<()> {
     );
 
     // Step 4: Stake GM tokens using the SDK builder with real pricing
+    // Note: GM controller should already be created during deployment setup
     let mut stake_builder = user.stake_lp_token(
         store,
         LpTokenKind::Gm,
@@ -409,6 +410,7 @@ async fn comprehensive_glv_flow() -> eyre::Result<()> {
     );
 
     // Step 4: Stake GLV tokens using the SDK builder with real pricing
+    // Note: GLV controller should already be created during deployment setup
     let mut stake_builder = user.stake_lp_token(
         store,
         LpTokenKind::Glv,

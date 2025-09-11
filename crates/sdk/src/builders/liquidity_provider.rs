@@ -212,6 +212,15 @@ impl StakeLpToken {
         } = self.shared_args();
         let token_program_id = anchor_spl::token::ID;
         let market = self.store_program.find_market_address(&lp_mint);
+
+        // Find controller PDA
+        let controller_seeds = &[
+            b"lp_token_controller",
+            global_state.as_ref(),
+            lp_mint.as_ref(),
+        ];
+        let (controller, _) = Pubkey::find_program_address(controller_seeds, self.lp_program.id());
+
         Ok(self
             .lp_program
             .anchor_instruction(args::StakeGm {
@@ -221,6 +230,7 @@ impl StakeLpToken {
             .anchor_accounts(
                 accounts::StakeGm {
                     global_state,
+                    controller,
                     lp_mint,
                     position,
                     position_vault,
@@ -266,6 +276,15 @@ impl StakeLpToken {
             false,
         )
         .0;
+
+        // Find controller PDA
+        let controller_seeds = &[
+            b"lp_token_controller",
+            global_state.as_ref(),
+            lp_mint.as_ref(),
+        ];
+        let (controller, _) = Pubkey::find_program_address(controller_seeds, self.lp_program.id());
+
         Ok(self
             .lp_program
             .anchor_instruction(args::StakeGlv {
@@ -275,6 +294,7 @@ impl StakeLpToken {
             .anchor_accounts(
                 accounts::StakeGlv {
                     global_state,
+                    controller,
                     lp_mint,
                     position,
                     position_vault,
