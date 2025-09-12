@@ -6,7 +6,7 @@ use anchor_spl::token_interface::{
 };
 use gmsol_model::num::MulDiv;
 use gmsol_model::utils::apply_factor;
-use gmsol_programs::gmsol_store::constants::{MARKET_DECIMALS, MARKET_USD_UNIT};
+use gmsol_programs::gmsol_store::constants::MARKET_DECIMALS;
 use gmsol_programs::gmsol_store::{
     accounts::{Glv, Market, Oracle, Store, TokenMapHeader, UserHeader},
     cpi as gt_cpi,
@@ -25,6 +25,8 @@ pub const POSITION_SEED: &[u8] = b"position";
 pub const GLOBAL_STATE_SEED: &[u8] = b"global_state";
 #[constant]
 pub const VAULT_SEED: &[u8] = b"vault";
+#[constant]
+pub const LP_TOKEN_CONTROLLER_SEED: &[u8] = b"lp_token_controller";
 #[constant]
 pub const DEFAULT_PRICING_STALENESS_SECONDS: u32 = 300; // Default 5 minutes
                                                         // IDL-safe constants (u8) exposed via #[constant]
@@ -63,7 +65,6 @@ pub mod gmsol_liquidity_provider {
         require!(initial_apy <= APY_MAX, ErrorCode::ApyTooLarge);
         global_state.apy_gradient = [initial_apy; APY_BUCKETS];
 
-        global_state.lp_token_price = MARKET_USD_UNIT; // $1.00 in 1e20 units
         global_state.min_stake_value = min_stake_value;
         global_state.claim_enabled = false;
         global_state.pricing_staleness_seconds = DEFAULT_PRICING_STALENESS_SECONDS;
@@ -167,6 +168,12 @@ pub mod gmsol_liquidity_provider {
         position_id: u64,
         gm_staked_amount: u64,
     ) -> Result<()> {
+        // Check that controller exists and is enabled
+        require!(
+            ctx.accounts.controller.is_enabled,
+            ErrorCode::StakingDisabled
+        );
+
         // Get GM token value using pricing CPI
         let gm_value = get_gm_token_value_via_cpi(
             &ctx.accounts.global_state,
@@ -184,6 +191,7 @@ pub mod gmsol_liquidity_provider {
         // Call shared stake logic
         execute_stake(
             &ctx.accounts.global_state,
+            &mut ctx.accounts.controller,
             &ctx.accounts.lp_mint,
             &mut ctx.accounts.position,
             &ctx.accounts.position_vault,
@@ -212,6 +220,12 @@ pub mod gmsol_liquidity_provider {
         position_id: u64,
         glv_staked_amount: u64,
     ) -> Result<()> {
+        // Check that controller exists and is enabled
+        require!(
+            ctx.accounts.controller.is_enabled,
+            ErrorCode::StakingDisabled
+        );
+
         // Get GLV token value using pricing CPI
         let glv_value = get_glv_token_value_via_cpi(
             &ctx.accounts.global_state,
@@ -229,6 +243,7 @@ pub mod gmsol_liquidity_provider {
         // Call shared stake logic
         execute_stake(
             &ctx.accounts.global_state,
+            &mut ctx.accounts.controller,
             &ctx.accounts.lp_mint,
             &mut ctx.accounts.position,
             &ctx.accounts.position_vault,
@@ -256,6 +271,7 @@ pub mod gmsol_liquidity_provider {
         // Refresh C(t) via CPI and compute reward using shared helper
         let out = compute_reward_with_cpi(
             &ctx.accounts.global_state,
+            &ctx.accounts.controller,
             &ctx.accounts.gt_store,
             &ctx.accounts.gt_program,
             &ctx.accounts.position,
@@ -292,6 +308,7 @@ pub mod gmsol_liquidity_provider {
         // Refresh C(t) via CPI and compute reward using shared helper
         let out = compute_reward_with_cpi(
             &ctx.accounts.global_state,
+            &ctx.accounts.controller,
             &ctx.accounts.store,
             &ctx.accounts.gt_program,
             &ctx.accounts.position,
@@ -355,6 +372,7 @@ pub mod gmsol_liquidity_provider {
         // 1) Claim-like flow: refresh C(t), compute reward, mint, and snapshot
         let out = compute_reward_with_cpi(
             &ctx.accounts.global_state,
+            &ctx.accounts.controller,
             &ctx.accounts.store,
             &ctx.accounts.gt_program,
             &ctx.accounts.position,
@@ -462,6 +480,14 @@ pub mod gmsol_liquidity_provider {
             );
             token_if::close_account(close_ctx)?;
 
+            // Update controller statistics
+            ctx.accounts.controller.total_positions = ctx
+                .accounts
+                .controller
+                .total_positions
+                .checked_sub(1)
+                .ok_or(ErrorCode::MathOverflow)?;
+
             ctx.accounts
                 .position
                 .close(ctx.accounts.owner.to_account_info())?;
@@ -527,6 +553,63 @@ pub mod gmsol_liquidity_provider {
         );
         Ok(())
     }
+
+    /// Create a new LP token controller for a specific token mint
+    pub fn create_lp_token_controller(
+        ctx: Context<CreateLpTokenController>,
+        lp_token_mint: Pubkey,
+    ) -> Result<()> {
+        let controller = &mut ctx.accounts.controller;
+        controller.global_state = ctx.accounts.global_state.key();
+        controller.lp_token_mint = lp_token_mint;
+        controller.total_positions = 0;
+        controller.is_enabled = true;
+        controller.disabled_at = 0;
+        controller.disabled_cum_inv_cost = 0;
+        controller.bump = ctx.bumps.controller;
+
+        msg!(
+            "LP token controller created: mint={}, global_state={}",
+            lp_token_mint,
+            controller.global_state
+        );
+        Ok(())
+    }
+
+    /// Disable LP token controller (irreversible)
+    pub fn disable_lp_token_controller(ctx: Context<DisableLpTokenController>) -> Result<()> {
+        let controller = &mut ctx.accounts.controller;
+        require!(controller.is_enabled, ErrorCode::AlreadyDisabled);
+
+        // Get current cumulative inverse cost factor
+        let gs_seeds: &[&[u8]] = &[GLOBAL_STATE_SEED, &[ctx.accounts.global_state.bump]];
+        let signer_seeds: &[&[&[u8]]] = &[gs_seeds];
+
+        let update_ctx = CpiContext::new_with_signer(
+            ctx.accounts.gt_program.to_account_info(),
+            GtUpdateCtx {
+                authority: ctx.accounts.global_state.to_account_info(),
+                store: ctx.accounts.gt_store.to_account_info(),
+            },
+            signer_seeds,
+        );
+
+        let r: GtReturn<u128> = gt_cpi::update_gt_cumulative_inv_cost_factor(update_ctx)?;
+
+        // Record disabled state and snapshot
+        controller.is_enabled = false;
+        controller.disabled_at = Clock::get()?.unix_timestamp;
+        controller.disabled_cum_inv_cost = r.get();
+
+        msg!(
+            "LP token controller disabled: mint={}, disabled_at={}, cum_inv_cost={}",
+            controller.lp_token_mint,
+            controller.disabled_at,
+            controller.disabled_cum_inv_cost
+        );
+
+        Ok(())
+    }
 }
 
 /// Calculate GT reward amount (returns raw amount in base units, respecting token decimals)
@@ -564,38 +647,43 @@ struct ComputeRewardOut {
 /// Compute reward by (a) refreshing C(t) via GT CPI and (b) applying APY-per-sec and integral.
 fn compute_reward_with_cpi<'info>(
     global_state: &Account<'info, GlobalState>,
+    controller: &Account<'info, LpTokenController>,
     store: &AccountLoader<'info, Store>,
     gt_program: &Program<'info, GmsolStore>,
     position: &Account<'info, Position>,
 ) -> Result<ComputeRewardOut> {
-    // Use GlobalState PDA as controller for GT CPI
-    let gs_seeds: &[&[u8]] = &[GLOBAL_STATE_SEED, &[global_state.bump]];
-    let signer_seeds: &[&[&[u8]]] = &[gs_seeds];
+    // If controller is disabled, use disabled snapshot as end time
+    let (cum_now, effective_end_time) = if !controller.is_enabled {
+        (controller.disabled_cum_inv_cost, controller.disabled_at)
+    } else {
+        // Normal case: refresh and get current value
+        let gs_seeds: &[&[u8]] = &[GLOBAL_STATE_SEED, &[global_state.bump]];
+        let signer_seeds: &[&[&[u8]]] = &[gs_seeds];
 
-    let update_ctx = CpiContext::new_with_signer(
-        gt_program.to_account_info(),
-        GtUpdateCtx {
-            authority: global_state.to_account_info(),
-            store: store.to_account_info(),
-        },
-        signer_seeds,
-    );
+        let update_ctx = CpiContext::new_with_signer(
+            gt_program.to_account_info(),
+            GtUpdateCtx {
+                authority: global_state.to_account_info(),
+                store: store.to_account_info(),
+            },
+            signer_seeds,
+        );
 
-    // 1) Refresh cumulative inverse cost and read C(now)
-    let r: GtReturn<u128> = gt_cpi::update_gt_cumulative_inv_cost_factor(update_ctx)?;
-    let cum_now: u128 = r.get();
+        let r: GtReturn<u128> = gt_cpi::update_gt_cumulative_inv_cost_factor(update_ctx)?;
+        (r.get(), Clock::get()?.unix_timestamp)
+    };
+
     let prev_cum: u128 = position.cum_inv_cost;
 
-    // 2) Compute integral over [last_snapshot, now]
+    // Compute integral over [last_snapshot, effective_end]
     require!(cum_now >= prev_cum, ErrorCode::InvalidArgument);
     let inv_cost_integral = cum_now - prev_cum;
 
-    // 3) Duration and time-weighted APY
-    let current_time = Clock::get()?.unix_timestamp;
-    let duration_seconds = current_time.saturating_sub(position.stake_start_time);
+    // Duration and time-weighted APY (use effective end time)
+    let duration_seconds = effective_end_time.saturating_sub(position.stake_start_time);
     let avg_apy = compute_time_weighted_apy(
         position.stake_start_time,
-        current_time,
+        effective_end_time,
         &global_state.apy_gradient,
     );
     let avg_apy_per_sec = if SECONDS_PER_YEAR > 0 {
@@ -604,7 +692,7 @@ fn compute_reward_with_cpi<'info>(
         0
     };
 
-    // 4) Reward in GT base units
+    // Reward in GT base units
     let gt_reward_raw = calculate_gt_reward_amount(
         position.staked_value_usd,
         duration_seconds,
@@ -688,6 +776,20 @@ pub struct StakeGm<'info> {
     #[account(seeds = [GLOBAL_STATE_SEED], bump = global_state.bump)]
     pub global_state: Box<Account<'info, GlobalState>>,
 
+    /// LP token controller for this mint
+    #[account(
+        mut,
+        seeds = [
+            LP_TOKEN_CONTROLLER_SEED,
+            global_state.key().as_ref(),
+            lp_mint.key().as_ref()
+        ],
+        bump = controller.bump,
+        has_one = global_state,
+        constraint = controller.lp_token_mint == lp_mint.key()
+    )]
+    pub controller: Account<'info, LpTokenController>,
+
     /// GM token mint to be staked (market token)
     pub lp_mint: InterfaceAccount<'info, Mint>,
 
@@ -698,7 +800,7 @@ pub struct StakeGm<'info> {
         space = 8 + Position::INIT_SPACE,
         seeds = [
             POSITION_SEED,
-            global_state.key().as_ref(),
+            controller.key().as_ref(),
             owner.key().as_ref(),
             &position_id.to_le_bytes(),
         ],
@@ -711,11 +813,8 @@ pub struct StakeGm<'info> {
         init,
         payer = owner,
         seeds = [
-            POSITION_SEED,
-            global_state.key().as_ref(),
-            owner.key().as_ref(),
-            &position_id.to_le_bytes(),
             VAULT_SEED,
+            position.key().as_ref(),
         ],
         bump,
         token::mint = lp_mint,
@@ -762,6 +861,20 @@ pub struct StakeGlv<'info> {
     #[account(seeds = [GLOBAL_STATE_SEED], bump = global_state.bump)]
     pub global_state: Box<Account<'info, GlobalState>>,
 
+    /// LP token controller for this mint
+    #[account(
+        mut,
+        seeds = [
+            LP_TOKEN_CONTROLLER_SEED,
+            global_state.key().as_ref(),
+            lp_mint.key().as_ref()
+        ],
+        bump = controller.bump,
+        has_one = global_state,
+        constraint = controller.lp_token_mint == lp_mint.key()
+    )]
+    pub controller: Account<'info, LpTokenController>,
+
     /// GLV token mint to be staked
     pub lp_mint: InterfaceAccount<'info, Mint>,
 
@@ -772,7 +885,7 @@ pub struct StakeGlv<'info> {
         space = 8 + Position::INIT_SPACE,
         seeds = [
             POSITION_SEED,
-            global_state.key().as_ref(),
+            controller.key().as_ref(),
             owner.key().as_ref(),
             &position_id.to_le_bytes(),
         ],
@@ -785,11 +898,8 @@ pub struct StakeGlv<'info> {
         init,
         payer = owner,
         seeds = [
-            POSITION_SEED,
-            global_state.key().as_ref(),
-            owner.key().as_ref(),
-            &position_id.to_le_bytes(),
             VAULT_SEED,
+            position.key().as_ref(),
         ],
         bump,
         token::mint = lp_mint,
@@ -835,22 +945,34 @@ pub struct CalculateGtReward<'info> {
     /// Global config (PDA)
     #[account(seeds = [GLOBAL_STATE_SEED], bump = global_state.bump)]
     pub global_state: Account<'info, GlobalState>,
+    /// LP token controller for this position's mint
+    #[account(
+        seeds = [
+            LP_TOKEN_CONTROLLER_SEED,
+            global_state.key().as_ref(),
+            position.lp_mint.as_ref()
+        ],
+        bump = controller.bump,
+        has_one = global_state,
+        constraint = controller.lp_token_mint == position.lp_mint
+    )]
+    pub controller: Account<'info, LpTokenController>,
     /// The GT Store account (loaded & mutated by CPI)
     #[account(mut)]
     pub gt_store: AccountLoader<'info, Store>,
     /// The GT program
     pub gt_program: Program<'info, GmsolStore>,
-    /// Position tied to (global_state, owner, position_id)
+    /// Position tied to (controller, owner, position_id)
     #[account(
         seeds = [
             POSITION_SEED,
-            global_state.key().as_ref(),
+            controller.key().as_ref(),
             owner.key().as_ref(),
             &position_id.to_le_bytes(),
         ],
         bump = position.bump,
         has_one = owner,
-        has_one = global_state
+        has_one = controller
     )]
     pub position: Account<'info, Position>,
     /// Owner of the position (not required to sign for read-only calc)
@@ -866,6 +988,19 @@ pub struct ClaimGt<'info> {
     #[account(seeds = [GLOBAL_STATE_SEED], bump = global_state.bump)]
     pub global_state: Account<'info, GlobalState>,
 
+    /// LP token controller for this position's mint
+    #[account(
+        seeds = [
+            LP_TOKEN_CONTROLLER_SEED,
+            global_state.key().as_ref(),
+            position.lp_mint.as_ref()
+        ],
+        bump = controller.bump,
+        has_one = global_state,
+        constraint = controller.lp_token_mint == position.lp_mint
+    )]
+    pub controller: Account<'info, LpTokenController>,
+
     /// The GT Store account (mutated by CPI)
     #[account(mut)]
     pub store: AccountLoader<'info, Store>,
@@ -873,18 +1008,18 @@ pub struct ClaimGt<'info> {
     /// The GT program
     pub gt_program: Program<'info, GmsolStore>,
 
-    /// Position tied to (global_state, owner, position_id)
+    /// Position tied to (controller, owner, position_id)
     #[account(
         mut,
         seeds = [
             POSITION_SEED,
-            global_state.key().as_ref(),
+            controller.key().as_ref(),
             owner.key().as_ref(),
             &position_id.to_le_bytes(),
         ],
         bump = position.bump,
         has_one = owner,
-        has_one = global_state
+        has_one = controller
     )]
     pub position: Account<'info, Position>,
 
@@ -911,6 +1046,20 @@ pub struct UnstakeLp<'info> {
     #[account(seeds = [GLOBAL_STATE_SEED], bump = global_state.bump)]
     pub global_state: Account<'info, GlobalState>,
 
+    /// LP token controller for this position's mint
+    #[account(
+        mut,
+        seeds = [
+            LP_TOKEN_CONTROLLER_SEED,
+            global_state.key().as_ref(),
+            lp_mint.key().as_ref()
+        ],
+        bump = controller.bump,
+        has_one = global_state,
+        constraint = controller.lp_token_mint == lp_mint.key()
+    )]
+    pub controller: Account<'info, LpTokenController>,
+
     /// LP token mint for this position (must match position.lp_mint)
     pub lp_mint: InterfaceAccount<'info, Mint>,
 
@@ -921,18 +1070,18 @@ pub struct UnstakeLp<'info> {
     /// The GT program
     pub gt_program: Program<'info, GmsolStore>,
 
-    /// Position tied to (global_state, owner, position_id)
+    /// Position tied to (controller, owner, position_id)
     #[account(
         mut,
         seeds = [
             POSITION_SEED,
-            global_state.key().as_ref(),
+            controller.key().as_ref(),
             owner.key().as_ref(),
             &position_id.to_le_bytes(),
         ],
         bump = position.bump,
         has_one = owner,
-        has_one = global_state
+        has_one = controller
     )]
     pub position: Account<'info, Position>,
 
@@ -940,11 +1089,8 @@ pub struct UnstakeLp<'info> {
     #[account(
         mut,
         seeds = [
-            POSITION_SEED,
-            global_state.key().as_ref(),
-            owner.key().as_ref(),
-            &position_id.to_le_bytes(),
             VAULT_SEED,
+            position.key().as_ref(),
         ],
         bump,
         token::mint = lp_mint,
@@ -1032,6 +1178,57 @@ pub struct SetPricingStaleness<'info> {
     pub authority: Signer<'info>,
 }
 
+#[derive(Accounts)]
+#[instruction(lp_token_mint: Pubkey)]
+pub struct CreateLpTokenController<'info> {
+    /// Global config (PDA). The `authority` signer must match `global_state.authority`.
+    #[account(seeds = [GLOBAL_STATE_SEED], bump = global_state.bump, has_one = authority)]
+    pub global_state: Account<'info, GlobalState>,
+    /// LP token controller to initialize
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + LpTokenController::INIT_SPACE,
+        seeds = [
+            LP_TOKEN_CONTROLLER_SEED,
+            global_state.key().as_ref(),
+            lp_token_mint.as_ref()
+        ],
+        bump
+    )]
+    pub controller: Account<'info, LpTokenController>,
+    /// Current authority
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct DisableLpTokenController<'info> {
+    /// Global config (PDA). The `authority` signer must match `global_state.authority`.
+    #[account(seeds = [GLOBAL_STATE_SEED], bump = global_state.bump, has_one = authority)]
+    pub global_state: Account<'info, GlobalState>,
+    /// LP token controller to disable
+    #[account(
+        mut,
+        seeds = [
+            LP_TOKEN_CONTROLLER_SEED,
+            global_state.key().as_ref(),
+            controller.lp_token_mint.as_ref()
+        ],
+        bump = controller.bump,
+        has_one = global_state
+    )]
+    pub controller: Account<'info, LpTokenController>,
+    /// The GT Store account (mutated by CPI)
+    #[account(mut)]
+    pub gt_store: AccountLoader<'info, Store>,
+    /// GT program
+    pub gt_program: Program<'info, GmsolStore>,
+    /// Current authority
+    pub authority: Signer<'info>,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct GlobalState {
@@ -1043,8 +1240,6 @@ pub struct GlobalState {
     pub gt_mint: Pubkey,
     /// APY gradient buckets (APY_BUCKETS), each is 1e20-scaled APR for week buckets [0-1), [1-2), ..., [APY_BUCKETS, +inf)
     pub apy_gradient: [u128; APY_BUCKETS],
-    /// LP token price in USD scaled by 1e20
-    pub lp_token_price: u128,
     /// Minimum stake value in USD scaled by 1e20
     pub min_stake_value: u128,
     /// If true, LPs may call `claim_gt` at any time without unstaking
@@ -1055,14 +1250,34 @@ pub struct GlobalState {
     pub pricing_staleness_seconds: u32,
 }
 
+/// LP Token Controller for managing specific LP token staking
+#[account]
+#[derive(InitSpace)]
+pub struct LpTokenController {
+    /// Associated global_state
+    pub global_state: Pubkey,
+    /// Corresponding LP token mint
+    pub lp_token_mint: Pubkey,
+    /// Current number of active positions
+    pub total_positions: u64,
+    /// Whether staking is enabled (default true, irreversible when set to false)
+    pub is_enabled: bool,
+    /// Timestamp when disabled (only valid when is_enabled = false)
+    pub disabled_at: i64,
+    /// Cumulative inverse cost factor snapshot when disabled (only valid when is_enabled = false)
+    pub disabled_cum_inv_cost: u128,
+    /// PDA bump
+    pub bump: u8,
+}
+
 /// Position account to persist LP stake data and snapshot stake-time values
 #[account]
 #[derive(InitSpace)]
 pub struct Position {
     /// Owner of this LP position
     pub owner: Pubkey,
-    /// Ties position to a specific GlobalState
-    pub global_state: Pubkey,
+    /// LP token controller that manages this position
+    pub controller: Pubkey,
     /// LP token mint for this position
     pub lp_mint: Pubkey,
     /// PDA token account that escrows staked LP tokens
@@ -1093,12 +1308,19 @@ pub enum ErrorCode {
     ApyTooLarge,
     #[msg("Claim is disabled by protocol policy")]
     ClaimDisabled,
+    #[msg("LP token controller not found")]
+    ControllerNotFound,
+    #[msg("Staking is disabled for this LP token")]
+    StakingDisabled,
+    #[msg("Controller is already disabled")]
+    AlreadyDisabled,
 }
 
 /// Shared core stake logic for all stake types
 #[allow(clippy::too_many_arguments)]
 fn execute_stake<'info>(
     global_state: &Account<'info, GlobalState>,
+    controller: &mut Account<'info, LpTokenController>,
     lp_mint: &InterfaceAccount<'info, Mint>,
     position: &mut Account<'info, Position>,
     position_vault: &InterfaceAccount<'info, TokenAccount>,
@@ -1150,7 +1372,7 @@ fn execute_stake<'info>(
 
     // Initialize position
     position.owner = owner.key();
-    position.global_state = global_state.key();
+    position.controller = controller.key();
     position.lp_mint = lp_mint.key();
     position.vault = position_vault.key();
     position.position_id = position_id;
@@ -1159,6 +1381,12 @@ fn execute_stake<'info>(
     position.stake_start_time = now;
     position.cum_inv_cost = c_start;
     position.bump = position_bump;
+
+    // Update controller statistics
+    controller.total_positions = controller
+        .total_positions
+        .checked_add(1)
+        .ok_or(ErrorCode::MathOverflow)?;
 
     msg!(
         "Stake executed: owner={}, amount={}, value(1e20)={}, start_ts={}, C_start={}, pos_id={}",

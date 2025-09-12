@@ -354,6 +354,8 @@ impl Deployment {
 
         self.initialize_liquidity_provider().await?;
 
+        self.initialize_lp_token_controllers().await?;
+
         self.initialize_claim_fees_sleep().await?;
 
         self.initialize_callback().await?;
@@ -483,6 +485,90 @@ impl Deployment {
             authority=%self.liquidity_provider_global_state,
             "initialized liquidity provider oracle with GlobalState authority"
         );
+
+        Ok(())
+    }
+
+    async fn initialize_lp_token_controllers(&mut self) -> eyre::Result<()> {
+        use gmsol_liquidity_provider as lp;
+
+        let client = self.user_client(Self::DEFAULT_KEEPER)?;
+        let global_state = self.liquidity_provider_global_state;
+
+        // Create controllers for GM tokens (market tokens)
+        let mut builder = client.bundle();
+
+        for (market_name, market_token) in &self.market_tokens {
+            let controller_seeds = &[
+                lp::LP_TOKEN_CONTROLLER_SEED,
+                global_state.as_ref(),
+                market_token.as_ref(),
+            ];
+            let (controller, _) = Pubkey::find_program_address(controller_seeds, &lp::ID);
+
+            let create_controller_ix = client
+                .store_transaction()
+                .program(lp::id())
+                .anchor_args(lp::instruction::CreateLpTokenController {
+                    lp_token_mint: *market_token,
+                })
+                .anchor_accounts(lp::accounts::CreateLpTokenController {
+                    global_state,
+                    controller,
+                    authority: client.payer(),
+                    system_program: solana_sdk::system_program::ID,
+                });
+
+            builder.try_push(create_controller_ix).map_err(|(_, e)| e)?;
+
+            tracing::info!(
+                "Creating LP token controller for GM market {:?}: controller={}, token={}",
+                market_name,
+                controller,
+                market_token
+            );
+        }
+
+        // Create controller for GLV token
+        if self.glv_token != Pubkey::default() {
+            let controller_seeds = &[
+                lp::LP_TOKEN_CONTROLLER_SEED,
+                global_state.as_ref(),
+                self.glv_token.as_ref(),
+            ];
+            let (controller, _) = Pubkey::find_program_address(controller_seeds, &lp::ID);
+
+            let create_controller_ix = client
+                .store_transaction()
+                .program(lp::id())
+                .anchor_args(lp::instruction::CreateLpTokenController {
+                    lp_token_mint: self.glv_token,
+                })
+                .anchor_accounts(lp::accounts::CreateLpTokenController {
+                    global_state,
+                    controller,
+                    authority: client.payer(),
+                    system_program: solana_sdk::system_program::ID,
+                });
+
+            builder.try_push(create_controller_ix).map_err(|(_, e)| e)?;
+
+            tracing::info!(
+                "Creating LP token controller for GLV: controller={}, token={}",
+                controller,
+                self.glv_token
+            );
+        }
+
+        match builder.build()?.send_all(false).await {
+            Ok(signatures) => {
+                tracing::info!("Created LP token controllers with signatures: {signatures:#?}");
+            }
+            Err((signatures, err)) => {
+                tracing::error!(%err, "Failed to create LP token controllers, successful txns: {signatures:#?}");
+                return Err(err.into());
+            }
+        }
 
         Ok(())
     }

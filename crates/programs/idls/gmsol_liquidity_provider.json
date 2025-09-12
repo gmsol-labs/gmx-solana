@@ -108,6 +108,52 @@
             ]
           },
           "relations": [
+            "controller"
+          ]
+        },
+        {
+          "name": "controller",
+          "docs": [
+            "LP token controller for this position's mint"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "global_state"
+              },
+              {
+                "kind": "account",
+                "path": "position.lp_mint",
+                "account": "Position"
+              }
+            ]
+          },
+          "relations": [
             "position"
           ]
         },
@@ -128,7 +174,7 @@
         {
           "name": "position",
           "docs": [
-            "Position tied to (global_state, owner, position_id)"
+            "Position tied to (controller, owner, position_id)"
           ],
           "pda": {
             "seeds": [
@@ -147,7 +193,7 @@
               },
               {
                 "kind": "account",
-                "path": "global_state"
+                "path": "controller"
               },
               {
                 "kind": "account",
@@ -215,6 +261,52 @@
             ]
           },
           "relations": [
+            "controller"
+          ]
+        },
+        {
+          "name": "controller",
+          "docs": [
+            "LP token controller for this position's mint"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "global_state"
+              },
+              {
+                "kind": "account",
+                "path": "position.lp_mint",
+                "account": "Position"
+              }
+            ]
+          },
+          "relations": [
             "position"
           ]
         },
@@ -238,7 +330,7 @@
         {
           "name": "position",
           "docs": [
-            "Position tied to (global_state, owner, position_id)"
+            "Position tied to (controller, owner, position_id)"
           ],
           "writable": true,
           "pda": {
@@ -258,7 +350,7 @@
               },
               {
                 "kind": "account",
-                "path": "global_state"
+                "path": "controller"
               },
               {
                 "kind": "account",
@@ -299,6 +391,232 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "create_lp_token_controller",
+      "docs": [
+        "Create a new LP token controller for a specific token mint"
+      ],
+      "discriminator": [
+        192,
+        171,
+        199,
+        177,
+        191,
+        214,
+        186,
+        8
+      ],
+      "accounts": [
+        {
+          "name": "global_state",
+          "docs": [
+            "Global config (PDA). The `authority` signer must match `global_state.authority`."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "controller",
+          "docs": [
+            "LP token controller to initialize"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "global_state"
+              },
+              {
+                "kind": "arg",
+                "path": "lp_token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Current authority"
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "global_state"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "lp_token_mint",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "disable_lp_token_controller",
+      "docs": [
+        "Disable LP token controller (irreversible)"
+      ],
+      "discriminator": [
+        234,
+        244,
+        255,
+        11,
+        164,
+        136,
+        159,
+        144
+      ],
+      "accounts": [
+        {
+          "name": "global_state",
+          "docs": [
+            "Global config (PDA). The `authority` signer must match `global_state.authority`."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "controller"
+          ]
+        },
+        {
+          "name": "controller",
+          "docs": [
+            "LP token controller to disable"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "global_state"
+              },
+              {
+                "kind": "account",
+                "path": "controller.lp_token_mint",
+                "account": "LpTokenController"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gt_store",
+          "docs": [
+            "The GT Store account (mutated by CPI)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "gt_program",
+          "docs": [
+            "GT program"
+          ],
+          "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Current authority"
+          ],
+          "signer": true,
+          "relations": [
+            "global_state"
+          ]
+        }
+      ],
+      "args": []
     },
     {
       "name": "initialize",
@@ -530,6 +848,52 @@
                 ]
               }
             ]
+          },
+          "relations": [
+            "controller"
+          ]
+        },
+        {
+          "name": "controller",
+          "docs": [
+            "LP token controller for this mint"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "global_state"
+              },
+              {
+                "kind": "account",
+                "path": "lp_mint"
+              }
+            ]
           }
         },
         {
@@ -561,7 +925,7 @@
               },
               {
                 "kind": "account",
-                "path": "global_state"
+                "path": "controller"
               },
               {
                 "kind": "account",
@@ -585,37 +949,16 @@
               {
                 "kind": "const",
                 "value": [
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "arg",
-                "path": "position_id"
-              },
-              {
-                "kind": "const",
-                "value": [
                   118,
                   97,
                   117,
                   108,
                   116
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "position"
               }
             ]
           }
@@ -722,6 +1065,52 @@
                 ]
               }
             ]
+          },
+          "relations": [
+            "controller"
+          ]
+        },
+        {
+          "name": "controller",
+          "docs": [
+            "LP token controller for this mint"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "global_state"
+              },
+              {
+                "kind": "account",
+                "path": "lp_mint"
+              }
+            ]
           }
         },
         {
@@ -753,7 +1142,7 @@
               },
               {
                 "kind": "account",
-                "path": "global_state"
+                "path": "controller"
               },
               {
                 "kind": "account",
@@ -777,37 +1166,16 @@
               {
                 "kind": "const",
                 "value": [
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "arg",
-                "path": "position_id"
-              },
-              {
-                "kind": "const",
-                "value": [
                   118,
                   97,
                   117,
                   108,
                   116
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "position"
               }
             ]
           }
@@ -870,189 +1238,6 @@
         {
           "name": "gm_staked_amount",
           "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "stake_lp",
-      "docs": [
-        "Create a new LP position with manual pricing (for generic LP tokens)"
-      ],
-      "discriminator": [
-        48,
-        168,
-        125,
-        78,
-        82,
-        71,
-        152,
-        117
-      ],
-      "accounts": [
-        {
-          "name": "global_state",
-          "docs": [
-            "Global config (PDA)"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108,
-                  95,
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "lp_mint",
-          "docs": [
-            "LP token mint to be staked"
-          ]
-        },
-        {
-          "name": "position",
-          "docs": [
-            "Position PDA to initialize for (global_state, owner, position_id)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "arg",
-                "path": "position_id"
-              }
-            ]
-          }
-        },
-        {
-          "name": "position_vault",
-          "docs": [
-            "Vault token account (PDA) to hold staked LP tokens for this position"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "arg",
-                "path": "position_id"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "gt_store",
-          "docs": [
-            "The GT Store account (mutated by CPI)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "gt_program",
-          "docs": [
-            "GT program"
-          ],
-          "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
-        },
-        {
-          "name": "owner",
-          "docs": [
-            "Owner paying rent and recorded as position owner"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "user_lp_token",
-          "docs": [
-            "User's LP token account (must match lp_mint and owner)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "token_program"
-        }
-      ],
-      "args": [
-        {
-          "name": "position_id",
-          "type": "u64"
-        },
-        {
-          "name": "lp_staked_amount",
-          "type": "u64"
-        },
-        {
-          "name": "lp_staked_value",
-          "type": "u128"
         }
       ]
     },
@@ -1161,6 +1346,52 @@
             ]
           },
           "relations": [
+            "controller"
+          ]
+        },
+        {
+          "name": "controller",
+          "docs": [
+            "LP token controller for this position's mint"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "global_state"
+              },
+              {
+                "kind": "account",
+                "path": "lp_mint"
+              }
+            ]
+          },
+          "relations": [
             "position"
           ]
         },
@@ -1190,7 +1421,7 @@
         {
           "name": "position",
           "docs": [
-            "Position tied to (global_state, owner, position_id)"
+            "Position tied to (controller, owner, position_id)"
           ],
           "writable": true,
           "pda": {
@@ -1210,7 +1441,7 @@
               },
               {
                 "kind": "account",
-                "path": "global_state"
+                "path": "controller"
               },
               {
                 "kind": "account",
@@ -1234,37 +1465,16 @@
               {
                 "kind": "const",
                 "value": [
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "arg",
-                "path": "position_id"
-              },
-              {
-                "kind": "const",
-                "value": [
                   118,
                   97,
                   117,
                   108,
                   116
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "position"
               }
             ]
           }
@@ -1543,6 +1753,19 @@
       ]
     },
     {
+      "name": "LpTokenController",
+      "discriminator": [
+        210,
+        163,
+        6,
+        69,
+        215,
+        217,
+        239,
+        57
+      ]
+    },
+    {
       "name": "Market",
       "discriminator": [
         219,
@@ -1646,6 +1869,21 @@
       "code": 6004,
       "name": "ClaimDisabled",
       "msg": "Claim is disabled by protocol policy"
+    },
+    {
+      "code": 6005,
+      "name": "ControllerNotFound",
+      "msg": "LP token controller not found"
+    },
+    {
+      "code": 6006,
+      "name": "StakingDisabled",
+      "msg": "Staking is disabled for this LP token"
+    },
+    {
+      "code": 6007,
+      "name": "AlreadyDisabled",
+      "msg": "Controller is already disabled"
     }
   ],
   "types": [
@@ -1951,13 +2189,6 @@
                 53
               ]
             }
-          },
-          {
-            "name": "lp_token_price",
-            "docs": [
-              "LP token price in USD scaled by 1e20"
-            ],
-            "type": "u128"
           },
           {
             "name": "min_stake_value",
@@ -2440,6 +2671,66 @@
       }
     },
     {
+      "name": "LpTokenController",
+      "docs": [
+        "LP Token Controller for managing specific LP token staking"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "global_state",
+            "docs": [
+              "Associated global_state"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_token_mint",
+            "docs": [
+              "Corresponding LP token mint"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "total_positions",
+            "docs": [
+              "Current number of active positions"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_enabled",
+            "docs": [
+              "Whether staking is enabled (default true, irreversible when set to false)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "disabled_at",
+            "docs": [
+              "Timestamp when disabled (only valid when is_enabled = false)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "disabled_cum_inv_cost",
+            "docs": [
+              "Cumulative inverse cost factor snapshot when disabled (only valid when is_enabled = false)"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "Market",
       "docs": [
         "Market."
@@ -2472,9 +2763,13 @@
             "type": {
               "array": [
                 "u8",
-                13
+                5
               ]
             }
+          },
+          {
+            "name": "closed_state_updated_at",
+            "type": "i64"
           },
           {
             "name": "name",
@@ -3069,6 +3364,25 @@
       }
     },
     {
+      "name": "OraclePriceFlagContainer",
+      "docs": [
+        "Flags container generated by the macro."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "value",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "OtherState",
       "docs": [
         "Market State."
@@ -3365,9 +3679,9 @@
             "type": "pubkey"
           },
           {
-            "name": "global_state",
+            "name": "controller",
             "docs": [
-              "Ties position to a specific GlobalState"
+              "LP token controller that manages this position"
             ],
             "type": "pubkey"
           },
@@ -3726,7 +4040,11 @@
           },
           {
             "name": "flags",
-            "type": "u8"
+            "type": {
+              "defined": {
+                "name": "OraclePriceFlagContainer"
+              }
+            }
           },
           {
             "name": "padding_0",
@@ -4281,6 +4599,11 @@
       "name": "GLOBAL_STATE_SEED",
       "type": "bytes",
       "value": "[103, 108, 111, 98, 97, 108, 95, 115, 116, 97, 116, 101]"
+    },
+    {
+      "name": "LP_TOKEN_CONTROLLER_SEED",
+      "type": "bytes",
+      "value": "[108, 112, 95, 116, 111, 107, 101, 110, 95, 99, 111, 110, 116, 114, 111, 108, 108, 101, 114]"
     },
     {
       "name": "POSITION_SEED",

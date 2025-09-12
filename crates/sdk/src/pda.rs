@@ -606,19 +606,15 @@ pub fn find_lp_global_state_address(lp_program_id: &Pubkey) -> (Pubkey, u8) {
 pub fn find_lp_stake_position_address(
     owner: &Pubkey,
     position_id: u64,
-    global_state: Option<&Pubkey>,
+    controller: &Pubkey,
     lp_program_id: &Pubkey,
 ) -> (Pubkey, u8) {
     use gmsol_programs::gmsol_liquidity_provider::constants::POSITION_SEED;
 
-    let global_state = global_state
-        .copied()
-        .unwrap_or_else(|| find_lp_global_state_address(lp_program_id).0);
-
     Pubkey::find_program_address(
         &[
             POSITION_SEED,
-            global_state.as_ref(),
+            controller.as_ref(),
             owner.as_ref(),
             &position_id.to_le_bytes(),
         ],
@@ -629,24 +625,28 @@ pub fn find_lp_stake_position_address(
 /// Find PDA for stake position vault.
 #[cfg(liquidity_provider)]
 pub fn find_lp_stake_position_vault_address(
-    owner: &Pubkey,
-    position_id: u64,
-    global_state: Option<&Pubkey>,
+    position: &Pubkey,
     lp_program_id: &Pubkey,
 ) -> (Pubkey, u8) {
-    use gmsol_programs::gmsol_liquidity_provider::constants::{POSITION_SEED, VAULT_SEED};
+    use gmsol_programs::gmsol_liquidity_provider::constants::VAULT_SEED;
 
-    let global_state = global_state
-        .copied()
-        .unwrap_or_else(|| find_lp_global_state_address(lp_program_id).0);
+    Pubkey::find_program_address(&[VAULT_SEED, position.as_ref()], lp_program_id)
+}
+
+/// Find PDA for LP token controller account.
+#[cfg(liquidity_provider)]
+pub fn find_lp_token_controller_address(
+    global_state: &Pubkey,
+    lp_token_mint: &Pubkey,
+    lp_program_id: &Pubkey,
+) -> (Pubkey, u8) {
+    use gmsol_programs::gmsol_liquidity_provider::constants::LP_TOKEN_CONTROLLER_SEED;
 
     Pubkey::find_program_address(
         &[
-            POSITION_SEED,
+            LP_TOKEN_CONTROLLER_SEED,
             global_state.as_ref(),
-            owner.as_ref(),
-            &position_id.to_le_bytes(),
-            VAULT_SEED,
+            lp_token_mint.as_ref(),
         ],
         lp_program_id,
     )
