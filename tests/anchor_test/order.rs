@@ -645,7 +645,7 @@ async fn liquidation() -> eyre::Result<()> {
             .update_market_config_by_key(
                 store,
                 market_token,
-                MarketConfigKey::MinCollateralFactor,
+                MarketConfigKey::MinCollateralFactorForLiquidation,
                 &MARKET_USD_UNIT,
             )?
             .send_without_preflight()
@@ -682,8 +682,8 @@ async fn liquidation() -> eyre::Result<()> {
             .update_market_config_by_key(
                 store,
                 market_token,
-                MarketConfigKey::MinCollateralFactor,
-                &(MARKET_USD_UNIT / 100),
+                MarketConfigKey::MinCollateralFactorForLiquidation,
+                &(MARKET_USD_UNIT / 200),
             )?
             .send_without_preflight()
             .await?;
