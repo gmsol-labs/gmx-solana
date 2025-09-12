@@ -239,12 +239,36 @@ impl Adl for Market {
 
 /// Marker trait for markets that can be closed.
 pub(crate) trait ClosableMarket {
+    /// Validate that the market is open, or if closed, that it is not stale.
+    fn validate_open_or_nonstale_closed(
+        &self,
+        oracle: &Oracle,
+        max_staleness: u64,
+    ) -> CoreResult<()>;
+
     fn closed_state_updated_at(&self) -> CoreResult<i64>;
 
     fn update_closed_state(&mut self, oracle: &Oracle) -> Result<()>;
 }
 
 impl ClosableMarket for Market {
+    fn validate_open_or_nonstale_closed(
+        &self,
+        oracle: &Oracle,
+        max_staleness: u64,
+    ) -> CoreResult<()> {
+        if self.is_closed()
+            && oracle
+                .max_oracle_ts()
+                .saturating_add_unsigned(max_staleness)
+                < self.closed_state_updated_at()?
+        {
+            Err(CoreError::OracleTimestampsAreSmallerThanRequired)
+        } else {
+            Ok(())
+        }
+    }
+
     fn closed_state_updated_at(&self) -> CoreResult<i64> {
         Ok(self.closed_state_updated_at)
     }

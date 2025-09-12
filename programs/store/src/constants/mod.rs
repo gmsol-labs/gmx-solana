@@ -76,6 +76,9 @@ pub const DEFAULT_ADL_PRICES_MAX_STALENESS: Amount = 0;
 /// Default min position age for manual close (in seconds).
 pub const DEFAULT_MIN_POSITION_AGE_FOR_MANUAL_CLOSE: Amount = 0;
 
+/// Default max prices staleness allowed when the market is closed (in seconds).
+pub const DEFAULT_MARKET_CLOSED_PRICES_MAX_STALENESS: Amount = 0;
+
 /// Default oracle ref price deviation.
 pub const DEFAULT_ORACLE_REF_PRICE_DEVIATION: Factor = 1_000_000_000_000_000;
 

@@ -307,6 +307,7 @@ impl<'info> ExecuteWithdrawal<'info> {
                 .amount(final_long_token_amount)
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
+                .allow_closed(false)
                 .build()
                 .execute()?;
         }
@@ -328,6 +329,7 @@ impl<'info> ExecuteWithdrawal<'info> {
                 .amount(final_short_token_amount)
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
+                .allow_closed(false)
                 .build()
                 .execute()?;
         }

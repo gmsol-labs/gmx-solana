@@ -30,12 +30,13 @@ use crate::{
                 swap_market::{SwapDirection, SwapMarkets},
                 Revertible, Revision,
             },
-            utils::{Adl, ValidateMarketBalances},
+            utils::{Adl, ClosableMarket, ValidateMarketBalances},
         },
         order::{Order, OrderActionParams, OrderKind, OrderTokenAccounts, TransferOut},
         position::PositionKind,
         user::UserHeader,
-        AmountKey, HasMarketMeta, Market, NonceBytes, Oracle, Position, Store, ValidateOracleTime,
+        AmountKey, HasMarketMeta, Market, MarketPriceOptions, NonceBytes, Oracle, Position, Store,
+        ValidateOracleTime,
     },
     CoreError, ModelError,
 };
@@ -133,6 +134,8 @@ pub(crate) struct CreateOrderOperation<'a, 'info> {
     callback_program: Option<&'a AccountInfo<'info>>,
     callback_shared_data_account: Option<&'a AccountInfo<'info>>,
     callback_partitioned_data_account: Option<&'a AccountInfo<'info>>,
+    #[builder(default)]
+    allow_closed: bool,
     #[builder(setter(into))]
     event_emitter: Option<EventEmitter<'a, 'info>>,
 }
@@ -166,7 +169,9 @@ impl<'a, 'info> CreateOrderOperation<'a, 'info> {
     }
 
     fn validate(&self) -> Result<()> {
-        self.market.load()?.validate(&self.store.key())?;
+        self.market
+            .load()?
+            .validate_with_options(&self.store.key(), self.allow_closed)?;
         ActionExt::validate_balance(&self.order, self.params.execution_lamports)?;
         Ok(())
     }
@@ -421,7 +426,7 @@ impl CreateIncreaseOrderOperation<'_, '_> {
             );
             self.position
                 .load()?
-                .validate_for_market(&market)
+                .validate_for_market(&market, self.common.allow_closed)
                 .map_err(ModelError::from)?;
         }
 
@@ -504,7 +509,7 @@ impl CreateDecreaseOrderOperation<'_, '_> {
             );
             self.position
                 .load()?
-                .validate_for_market(&market)
+                .validate_for_market(&market, self.common.allow_closed)
                 .map_err(ModelError::from)?;
         }
         Ok(())
@@ -533,6 +538,7 @@ pub(crate) struct ProcessTransferOutOperation<'a, 'info> {
     pub(crate) claimable_short_token_account_for_user: Option<AccountInfo<'info>>,
     pub(crate) claimable_pnl_token_account_for_holding: Option<AccountInfo<'info>>,
     transfer_out: &'a TransferOut,
+    allow_closed: bool,
     #[builder(setter(into))]
     event_emitter: EventEmitter<'a, 'info>,
 }
@@ -562,6 +568,7 @@ impl<'info> ProcessTransferOutOperation<'_, 'info> {
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
                 .token_program(self.token_program.clone())
+                .allow_closed(self.allow_closed)
                 .event_emitter(self.event_emitter)
                 .build()
                 .execute()?;
@@ -594,6 +601,7 @@ impl<'info> ProcessTransferOutOperation<'_, 'info> {
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
                 .to(account.clone())
+                .allow_closed(self.allow_closed)
                 .event_emitter(self.event_emitter)
                 .build()
                 .execute()?;
@@ -610,6 +618,7 @@ impl<'info> ProcessTransferOutOperation<'_, 'info> {
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
                 .to(account.clone())
+                .allow_closed(self.allow_closed)
                 .event_emitter(self.event_emitter)
                 .build()
                 .execute()?;
@@ -626,6 +635,7 @@ impl<'info> ProcessTransferOutOperation<'_, 'info> {
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
                 .to(account.clone())
+                .allow_closed(self.allow_closed)
                 .event_emitter(self.event_emitter)
                 .build()
                 .execute()?;
@@ -642,6 +652,7 @@ impl<'info> ProcessTransferOutOperation<'_, 'info> {
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
                 .to(account.clone())
+                .allow_closed(self.allow_closed)
                 .event_emitter(self.event_emitter)
                 .build()
                 .execute()?;
@@ -658,6 +669,7 @@ impl<'info> ProcessTransferOutOperation<'_, 'info> {
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
                 .to(account.clone())
+                .allow_closed(self.allow_closed)
                 .event_emitter(self.event_emitter)
                 .build()
                 .execute()?;
@@ -675,6 +687,7 @@ impl<'info> ProcessTransferOutOperation<'_, 'info> {
                 .token_mint(token.to_account_info())
                 .to(account.clone())
                 .event_emitter(self.event_emitter)
+                .allow_closed(self.allow_closed)
                 .build()
                 .execute()?;
         }
@@ -856,6 +869,8 @@ pub(crate) struct ExecuteOrderOperation<'a, 'info> {
     callback_program: Option<&'a AccountInfo<'info>>,
     callback_shared_data_account: Option<&'a AccountInfo<'info>>,
     callback_partitioned_data_account: Option<&'a AccountInfo<'info>>,
+    #[builder(default)]
+    allow_closed: bool,
 }
 
 pub(crate) type RemovePosition = bool;
@@ -867,6 +882,19 @@ enum SecondaryOrderType {
 }
 
 impl ExecuteOrderOperation<'_, '_> {
+    fn price_options(&self) -> MarketPriceOptions {
+        MarketPriceOptions {
+            allow_index_closed: self.allow_closed,
+            allow_long_closed: false,
+            allow_short_closed: false,
+        }
+    }
+
+    fn prices(&self) -> Result<Prices<u128>> {
+        self.oracle
+            .market_prices_with_options(&*self.market.load()?, self.price_options())
+    }
+
     #[inline(never)]
     pub(crate) fn execute(
         self,
@@ -875,7 +903,7 @@ impl ExecuteOrderOperation<'_, '_> {
 
         self.order.load()?.validate_valid_from_ts()?;
 
-        match self.validate_oracle_and_adl() {
+        match self.validate_oracle_and_position_cut() {
             Ok(()) => {}
             Err(CoreError::OracleTimestampsAreLargerThanRequired)
                 if !self.throw_on_execution_error =>
@@ -895,7 +923,7 @@ impl ExecuteOrderOperation<'_, '_> {
         }
 
         let mut should_throw_error = false;
-        let prices = self.market.load()?.prices(self.oracle)?;
+        let prices = self.prices()?;
         let discount = self.validate_and_get_order_fee_discount()?;
         let res = match self.perform_execution(&mut should_throw_error, prices, discount) {
             Ok((should_remove_position, mut transfer_out, should_send_trade_event)) => {
@@ -1073,7 +1101,8 @@ impl ExecuteOrderOperation<'_, '_> {
                     )?;
                     should_send_trade_event = true;
                 }
-                let mut position = RevertiblePosition::new(market, position_loader)?;
+                let mut position =
+                    RevertiblePosition::new(market, position_loader, self.allow_closed)?;
 
                 position.on_validate().map_err(ModelError::from)?;
 
@@ -1203,7 +1232,7 @@ impl ExecuteOrderOperation<'_, '_> {
         Ok(())
     }
 
-    fn validate_oracle_and_adl(&self) -> crate::CoreResult<()> {
+    fn validate_oracle_and_position_cut(&self) -> crate::CoreResult<()> {
         self.oracle.validate_time(self)?;
         let (kind, is_long) = {
             let order = self.order.load().map_err(|_| CoreError::LoadAccountError)?;
@@ -1219,7 +1248,6 @@ impl ExecuteOrderOperation<'_, '_> {
                     .is_long(),
             )
         };
-        #[allow(clippy::single_match)]
         match kind {
             OrderKind::AutoDeleveraging => {
                 let max_staleness = *self
@@ -1233,13 +1261,29 @@ impl ExecuteOrderOperation<'_, '_> {
                     .map_err(|_| CoreError::LoadAccountError)?
                     .validate_adl(self.oracle, is_long, max_staleness)?;
             }
+            OrderKind::Liquidation => {
+                if self.allow_closed {
+                    let max_staleness = *self
+                        .store
+                        .load()
+                        .map_err(|_| CoreError::LoadAccountError)?
+                        .get_amount_by_key(AmountKey::MarketClosedPricesMaxStaleness)
+                        .ok_or(CoreError::Unimplemented)?;
+                    self.market
+                        .load()
+                        .map_err(|_| CoreError::LoadAccountError)?
+                        .validate_open_or_nonstale_closed(self.oracle, max_staleness)?;
+                }
+            }
             _ => {}
         }
         Ok(())
     }
 
     fn validate_market(&self) -> Result<()> {
-        self.market.load()?.validate(&self.store.key())?;
+        self.market
+            .load()?
+            .validate_with_options(&self.store.key(), self.allow_closed)?;
         Ok(())
     }
 
@@ -1819,6 +1863,7 @@ pub struct PositionCutOperation<'a, 'info> {
     system_program: AccountInfo<'info>,
     refund: u64,
     should_unwrap_native_token: bool,
+    allow_closed: bool,
     #[builder(setter(into))]
     event_emitter: EventEmitter<'a, 'info>,
     remaining_accounts: &'info [AccountInfo<'info>],
@@ -1908,6 +1953,7 @@ impl PositionCutOperation<'_, '_> {
             .callback_program(None)
             .callback_shared_data_account(None)
             .callback_partitioned_data_account(None)
+            .allow_closed(self.allow_closed)
             .event_emitter(self.event_emitter)
             .build()
             .decrease()
@@ -1942,6 +1988,7 @@ impl PositionCutOperation<'_, '_> {
             .callback_program(None)
             .callback_shared_data_account(None)
             .callback_partitioned_data_account(None)
+            .allow_closed(self.allow_closed)
             .build()
             .execute()
     }
@@ -1991,6 +2038,7 @@ impl PositionCutOperation<'_, '_> {
                 self.claimable_pnl_token_account_for_holding.clone(),
             ))
             .transfer_out(transfer_out)
+            .allow_closed(self.allow_closed)
             .event_emitter(self.event_emitter)
             .build()
             .execute()?;
