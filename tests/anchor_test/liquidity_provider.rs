@@ -811,9 +811,10 @@ async fn position_controller_relationship_tests() -> eyre::Result<()> {
     let (test_position, _) = Pubkey::find_program_address(position_seeds, &lp::ID);
 
     // Test claim GT rewards on existing position with disabled controller
-    let (gt_user, _) = gmsol_sdk::pda::find_user_address(&deployment.store, &user.payer(), &gmsol_store::ID);
+    let (gt_user, _) =
+        gmsol_sdk::pda::find_user_address(&deployment.store, &user.payer(), &gmsol_store::ID);
     let (event_authority, _) = gmsol_sdk::pda::find_event_authority_address(&gmsol_store::ID);
-    
+
     // Create GT user account if it doesn't exist
     let create_gt_user_ix = user
         .store_transaction()
@@ -825,9 +826,9 @@ async fn position_controller_relationship_tests() -> eyre::Result<()> {
             owner: user.payer(),
             system_program: solana_sdk::system_program::ID,
         });
-    
+
     let _create_result = create_gt_user_ix.send().await;
-    
+
     let claim_gt_ix = user
         .store_transaction()
         .program(lp::id())
@@ -857,26 +858,24 @@ async fn position_controller_relationship_tests() -> eyre::Result<()> {
 
     // Test 2.3: Test full unstake after claim
     tracing::info!("Test 2.3: Testing full unstake after claim with disabled controller");
-    
+
     // Sleep a bit more to accumulate additional rewards
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-    
+
     // Get position vault address
-    let position_vault_seeds = &[
-        lp::VAULT_SEED,
-        test_position.as_ref(),
-    ];
+    let position_vault_seeds = &[lp::VAULT_SEED, test_position.as_ref()];
     let (position_vault, _) = Pubkey::find_program_address(position_vault_seeds, &lp::ID);
-    
+
     // Get position data for unstake amount
-    let pos = keeper.account::<lp::Position>(&test_position).await?.expect("Position must exist");
-    
+    let pos = keeper
+        .account::<lp::Position>(&test_position)
+        .await?
+        .expect("Position must exist");
+
     // Get user's LP token account
-    let user_lp_token = anchor_spl::associated_token::get_associated_token_address(
-        &user.payer(),
-        &gm_token,
-    );
-    
+    let user_lp_token =
+        anchor_spl::associated_token::get_associated_token_address(&user.payer(), &gm_token);
+
     let unstake_ix = user
         .store_transaction()
         .program(lp::id())
@@ -910,11 +909,16 @@ async fn position_controller_relationship_tests() -> eyre::Result<()> {
     }
 
     // Test 2.4: Verify controller state after full unstake
-    let controller_after_unstake = keeper.account::<lp::LpTokenController>(&controller).await?.expect("Controller must exist");
-    
+    let controller_after_unstake = keeper
+        .account::<lp::LpTokenController>(&controller)
+        .await?
+        .expect("Controller must exist");
+
     // Verify total_positions decreased by 1 (position was closed)
-    assert_eq!(controller_after_unstake.total_positions, 0, 
-               "Total positions should decrease by 1 after full unstake");
+    assert_eq!(
+        controller_after_unstake.total_positions, 0,
+        "Total positions should decrease by 1 after full unstake"
+    );
 
     tracing::info!("✓ Disabled controller behavior tests completed");
 
