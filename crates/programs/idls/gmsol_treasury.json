@@ -3413,11 +3413,15 @@
             "type": "u64"
           },
           {
+            "name": "market_closed_prices_max_staleness",
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u64",
-                125
+                124
               ]
             }
           }
