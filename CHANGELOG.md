@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Added flag to indicate whether the token's market is open in oracle price map.
 - programs(store): Added `update_closed_state` instruction.
 - programs(store): Added new market config: `min_collatereal_factor_for_liquidation`.
+- programs(store): Introduced new config parameters for closed markets:
+  - `market_closed_min_collateral_factor_for_liquidation`
+- programs(store): Introduced flag `enable_market_closed_params` to control activation of closed-market configs
 - sdk(sdk): Added `try_deserialize_zero_copy_from_base64_with_options` utility function.
 - sdk(js): Added decode methods with `no_discriminator` option for JsMarket and JsPosition.
 - sdk(js): Added `add_create_orders_builder` function.

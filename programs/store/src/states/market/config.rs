@@ -86,7 +86,8 @@ pub struct MarketConfig {
     pub(super) max_open_interest_for_short: Factor,
     pub(super) min_tokens_for_first_deposit: Factor,
     pub(super) min_collateral_factor_for_liquidation: Factor,
-    reserved: [Factor; 31],
+    pub(super) market_closed_min_collateral_factor_for_liquidation: Factor,
+    reserved: [Factor; 30],
 }
 
 impl MarketConfig {
@@ -195,6 +196,8 @@ impl MarketConfig {
         self.min_tokens_for_first_deposit = constants::DEFAULT_MIN_TOKENS_FOR_FIRST_DEPOSIT;
 
         self.min_collateral_factor_for_liquidation =
+            constants::DEFAULT_MIN_COLLATERAL_FACTOR_FOR_LIQUIDATION;
+        self.market_closed_min_collateral_factor_for_liquidation =
             constants::DEFAULT_MIN_COLLATERAL_FACTOR_FOR_LIQUIDATION;
 
         self.set_flag(
@@ -325,6 +328,9 @@ impl MarketConfig {
             MarketConfigKey::MinTokensForFirstDeposit => &self.min_tokens_for_first_deposit,
             MarketConfigKey::MinCollateralFactorForLiquidation => {
                 &self.min_collateral_factor_for_liquidation
+            }
+            MarketConfigKey::MarketClosedMinCollateralFactorForLiquidation => {
+                &self.market_closed_min_collateral_factor_for_liquidation
             }
             _ => return None,
         };
@@ -470,6 +476,9 @@ impl MarketConfig {
             MarketConfigKey::MinCollateralFactorForLiquidation => {
                 &mut self.min_collateral_factor_for_liquidation
             }
+            MarketConfigKey::MarketClosedMinCollateralFactorForLiquidation => {
+                &mut self.market_closed_min_collateral_factor_for_liquidation
+            }
             _ => return None,
         };
         Some(value)
@@ -487,9 +496,20 @@ impl MarketConfig {
         self.flag.set_flag(flag, value)
     }
 
+    fn use_market_closed_params(&self, is_market_closed: bool) -> bool {
+        is_market_closed && self.flag(MarketConfigFlag::EnableMarketClosedParams)
+    }
+
     /// Returns min collateral factor for liquidation.
-    pub(super) fn min_collateral_factor_for_liquidation(&self) -> Option<Factor> {
-        let factor = self.min_collateral_factor_for_liquidation;
+    pub(super) fn min_collateral_factor_for_liquidation(
+        &self,
+        is_market_closed: bool,
+    ) -> Option<Factor> {
+        let factor = if self.use_market_closed_params(is_market_closed) {
+            self.market_closed_min_collateral_factor_for_liquidation
+        } else {
+            self.min_collateral_factor_for_liquidation
+        };
         if factor == 0 {
             None
         } else {

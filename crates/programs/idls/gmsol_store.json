@@ -30473,11 +30473,15 @@
             "type": "u128"
           },
           {
+            "name": "market_closed_min_collateral_factor_for_liquidation",
+            "type": "u128"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u128",
-                31
+                30
               ]
             }
           }

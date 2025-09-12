@@ -155,6 +155,8 @@ pub enum MarketConfigFlag {
     SkipBorrowingFeeForSmallerSide,
     /// Ignore open interest for usage factor.
     IgnoreOpenInterestForUsageFactor,
+    /// Indicates whether the market closed parameters is enabled.
+    EnableMarketClosedParams,
     // CHECK: cannot have more than `MAX_CONFIG_FLAGS` flags.
 }
 
@@ -308,6 +310,8 @@ pub enum MarketConfigKey {
     MinTokensForFirstDeposit,
     /// Min collateral factor for liquidation.
     MinCollateralFactorForLiquidation,
+    /// Min collateral factor for liquidation when market is closed.
+    MarketClosedMinCollateralFactorForLiquidation,
 }
 
 /// Market Flags.

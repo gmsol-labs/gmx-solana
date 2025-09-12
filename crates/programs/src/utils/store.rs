@@ -154,7 +154,7 @@ impl From<EventPositionState> for PositionState {
 mod model {
     use gmsol_model::ClockKind;
 
-    use crate::gmsol_store::types::{Clocks, MarketConfig};
+    use crate::gmsol_store::types::Clocks;
 
     impl Clocks {
         /// Get clock value by [`ClockKind`].
@@ -168,18 +168,6 @@ mod model {
                 _ => return None,
             };
             Some(clock)
-        }
-    }
-
-    impl MarketConfig {
-        /// Returns min collateral factor for liquidation.
-        pub(crate) fn min_collateral_factor_for_liquidation(&self) -> Option<u128> {
-            let factor = self.min_collateral_factor_for_liquidation;
-            if factor == 0 {
-                None
-            } else {
-                Some(factor)
-            }
         }
     }
 }

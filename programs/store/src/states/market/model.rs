@@ -308,7 +308,8 @@ impl gmsol_model::PerpMarket<{ constants::MARKET_DECIMALS }> for Market {
                 self.config.max_position_impact_factor_for_liquidations,
             )
             .min_collateral_factor_for_liquidation(
-                self.config.min_collateral_factor_for_liquidation(),
+                self.config
+                    .min_collateral_factor_for_liquidation(self.is_closed()),
             )
             .build())
     }
