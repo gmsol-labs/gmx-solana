@@ -201,7 +201,16 @@ impl Market {
 
     /// Get validated meta.
     pub fn validated_meta(&self, store: &Pubkey) -> Result<&MarketMeta> {
-        self.validate(store)?;
+        self.validated_meta_with_options(store, false)
+    }
+
+    /// Get validated meta with options.
+    pub(crate) fn validated_meta_with_options(
+        &self,
+        store: &Pubkey,
+        allow_closed: bool,
+    ) -> Result<&MarketMeta> {
+        self.validate_with_options(store, allow_closed)?;
         Ok(self.meta())
     }
 
@@ -321,8 +330,16 @@ impl Market {
 
     /// Validate the market.
     pub fn validate(&self, store: &Pubkey) -> Result<()> {
+        self.validate_with_options(store, false)
+    }
+
+    /// Validate the market with options.
+    pub(crate) fn validate_with_options(&self, store: &Pubkey, allow_closed: bool) -> Result<()> {
         require_keys_eq!(*store, self.store, CoreError::StoreMismatched);
         require!(self.is_enabled(), CoreError::DisabledMarket);
+        if !allow_closed {
+            require!(!self.is_closed(), CoreError::MarketClosed);
+        }
         Ok(())
     }
 
