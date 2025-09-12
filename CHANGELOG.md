@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- model: Updated the params and logic for `PositionExt::check_liquidatable`: use `min_collateral_factor_for_liquidation` as min factor when `for_liquidation=true`.
 - programs(store): Replaced `u8::MAX` synthetic flag in oracle price map with `OraclePriceFlag` bitmap.
 
 ### Added
 
+- model: Added `min_collatereal_factor_for_liquidation` to `PositionParams`.
 - programs(store): Added `cumulative_inv_cost_factor` as a new global metric for GT, along with an instruction to update it.
 - programs(store): Added `mint_gt_reward` instruction.
 - programs(store): Added `get_market_token_value` instruction for market token pricing.

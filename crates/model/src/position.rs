@@ -443,7 +443,9 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
             return Err(crate::Error::InvalidPosition("size in usd too small"));
         }
 
-        if let Some(reason) = self.check_liquidatable(prices, should_validate_min_collateral_usd)? {
+        if let Some(reason) =
+            self.check_liquidatable(prices, should_validate_min_collateral_usd, false)?
+        {
             return Err(crate::Error::Liquidatable(reason));
         }
 
@@ -457,6 +459,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         &self,
         prices: &Prices<Self::Num>,
         should_validate_min_collateral_usd: bool,
+        for_liquidation: bool,
     ) -> crate::Result<Option<LiquidatableReason>> {
         use num_traits::{CheckedAdd, CheckedMul, CheckedSub};
 
@@ -512,9 +515,15 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
 
         let params = self.market().position_params()?;
 
+        let collateral_factor = if for_liquidation {
+            params.max_position_impact_factor_for_liquidations()
+        } else {
+            params.min_collateral_factor()
+        };
+
         match check_collateral(
             size_in_usd,
-            params.min_collateral_factor(),
+            collateral_factor,
             should_validate_min_collateral_usd.then(|| params.min_collateral_value()),
             false,
             &remaining_collateral_value,

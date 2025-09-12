@@ -314,9 +314,9 @@ where
 
     fn check_liquidation(&self) -> crate::Result<()> {
         if self.params.is_liquidation_order() {
-            let Some(_reason) = self
-                .position
-                .check_liquidatable(&self.params.prices, true)?
+            let Some(_reason) =
+                self.position
+                    .check_liquidatable(&self.params.prices, true, true)?
             else {
                 return Err(crate::Error::NotLiquidatable);
             };
