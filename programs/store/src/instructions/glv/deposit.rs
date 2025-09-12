@@ -943,6 +943,7 @@ impl<'info> ExecuteGlvDeposit<'info> {
                 .amount(amount)
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
+                .allow_closed(false)
                 .build()
                 .execute()?;
         }

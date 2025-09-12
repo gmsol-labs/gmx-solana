@@ -289,6 +289,7 @@ impl<'info> ExecuteDeposit<'info> {
                 .amount(self.deposit.load()?.params.initial_long_token_amount)
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
+                .allow_closed(false)
                 .build()
                 .execute()?;
         }
@@ -315,6 +316,7 @@ impl<'info> ExecuteDeposit<'info> {
                 .amount(self.deposit.load()?.params.initial_short_token_amount)
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
+                .allow_closed(false)
                 .build()
                 .execute()?;
         }

@@ -19,12 +19,14 @@ pub struct RevertiblePosition<'a, 'info> {
     state: PositionState,
     is_collateral_token_long: bool,
     is_long: bool,
+    allow_market_closed: bool,
 }
 
 impl<'a, 'info> RevertiblePosition<'a, 'info> {
     pub(crate) fn new(
         market: RevertibleMarket<'a, 'info>,
         loader: &'a AccountLoader<'info, Position>,
+        allow_market_closed: bool,
     ) -> Result<Self> {
         let storage = loader.load_mut()?;
         let meta = market.market_meta();
@@ -46,6 +48,7 @@ impl<'a, 'info> RevertiblePosition<'a, 'info> {
             state: storage.state,
             market,
             storage,
+            allow_market_closed,
         })
     }
 
@@ -122,7 +125,8 @@ impl<'a, 'info> gmsol_model::Position<{ constants::MARKET_DECIMALS }>
     }
 
     fn on_validate(&self) -> gmsol_model::Result<()> {
-        self.storage.validate_for_market(&self.market.market)
+        self.storage
+            .validate_for_market(&self.market.market, self.allow_market_closed)
     }
 }
 

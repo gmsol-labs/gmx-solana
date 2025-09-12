@@ -236,15 +236,17 @@ pub(crate) fn unchecked_process_position_cut<'info>(
     let accounts = &mut ctx.accounts;
 
     // Validate feature enabled.
-    {
+    let allow_closed = {
         let store = accounts.store.load()?;
-        let domain = match kind {
-            PositionCutKind::Liquidate => DomainDisabledFlag::Liquidation,
-            PositionCutKind::AutoDeleverage(_) => DomainDisabledFlag::AutoDeleveraging,
+        let (domain, allow_closed) = match kind {
+            PositionCutKind::Liquidate => (DomainDisabledFlag::Liquidation, true),
+            PositionCutKind::AutoDeleverage(_) => (DomainDisabledFlag::AutoDeleveraging, false),
         };
         store.validate_feature_enabled(domain, ActionDisabledFlag::Create)?;
         store.validate_feature_enabled(domain, ActionDisabledFlag::Execute)?;
-    }
+
+        allow_closed
+    };
 
     let remaining_accounts = ctx.remaining_accounts;
 
@@ -303,9 +305,10 @@ pub(crate) fn unchecked_process_position_cut<'info>(
         .executor(accounts.authority.to_account_info())
         .refund(refund)
         .should_unwrap_native_token(should_unwrap_native_token)
+        .allow_closed(allow_closed)
         .event_emitter(event_emitter);
 
-    let should_send_trade_event = accounts.oracle.load_mut()?.with_prices(
+    let should_send_trade_event = accounts.oracle.load_mut()?.with_prices_opts(
         &accounts.store,
         &accounts.token_map,
         &tokens,
@@ -316,6 +319,7 @@ pub(crate) fn unchecked_process_position_cut<'info>(
                 .build()
                 .execute()
         },
+        allow_closed,
     )?;
 
     if should_send_trade_event {

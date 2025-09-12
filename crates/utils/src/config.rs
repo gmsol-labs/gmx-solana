@@ -129,6 +129,8 @@ pub enum AmountKey {
     AdlPricesMaxStaleness,
     /// Minimum position age required for manual closure (in seconds).
     MinPositionAgeForManualClose,
+    /// Maximum prices staleness allowed when the market is closed (in seconds).
+    MarketClosedPricesMaxStaleness,
 }
 
 /// Factor keys.

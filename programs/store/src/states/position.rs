@@ -114,9 +114,13 @@ impl Position {
         AsPosition::try_new(self, market)
     }
 
-    pub(crate) fn validate_for_market(&self, market: &Market) -> gmsol_model::Result<()> {
+    pub(crate) fn validate_for_market(
+        &self,
+        market: &Market,
+        allow_closed: bool,
+    ) -> gmsol_model::Result<()> {
         let meta = market
-            .validated_meta(&self.store)
+            .validated_meta_with_options(&self.store, allow_closed)
             .map_err(|_| gmsol_model::Error::InvalidPosition("invalid or disabled market"))?;
 
         if meta.market_token_mint != self.market_token {
@@ -352,6 +356,6 @@ impl gmsol_model::Position<{ constants::MARKET_DECIMALS }> for AsPosition<'_> {
     }
 
     fn on_validate(&self) -> gmsol_model::Result<()> {
-        self.position.validate_for_market(self.market)
+        self.position.validate_for_market(self.market, false)
     }
 }

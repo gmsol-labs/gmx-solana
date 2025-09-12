@@ -454,6 +454,7 @@ impl<'info> ExecuteIncreaseOrSwapOrderV2<'info> {
                 .amount(amount)
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
+                .allow_closed(false)
                 .event_emitter(*event_emitter)
                 .build()
                 .execute()?;
@@ -546,6 +547,7 @@ impl<'info> ExecuteIncreaseOrSwapOrderV2<'info> {
             .claimable_short_token_account_for_user(None)
             .claimable_pnl_token_account_for_holding(None)
             .transfer_out(transfer_out)
+            .allow_closed(false)
             .event_emitter(*event_emitter)
             .build()
             .execute()?;
@@ -920,6 +922,7 @@ impl<'info> ExecuteDecreaseOrderV2<'info> {
                     .to_account_info(),
             ))
             .transfer_out(transfer_out)
+            .allow_closed(false)
             .event_emitter(*event_emitter)
             .build()
             .execute()?;
@@ -1254,6 +1257,7 @@ mod deprecated {
                     .amount(amount)
                     .decimals(token.decimals)
                     .token_mint(token.to_account_info())
+                    .allow_closed(false)
                     .event_emitter(*event_emitter)
                     .build()
                     .execute()?;
@@ -1346,6 +1350,7 @@ mod deprecated {
                 .claimable_short_token_account_for_user(None)
                 .claimable_pnl_token_account_for_holding(None)
                 .transfer_out(transfer_out)
+                .allow_closed(false)
                 .event_emitter(*event_emitter)
                 .build()
                 .execute()?;
@@ -1704,6 +1709,7 @@ mod deprecated {
                         .to_account_info(),
                 ))
                 .transfer_out(transfer_out)
+                .allow_closed(false)
                 .event_emitter(*event_emitter)
                 .build()
                 .execute()?;

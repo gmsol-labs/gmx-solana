@@ -90,7 +90,9 @@ impl MarketTransferInOperation<'_, '_> {
     pub(crate) fn execute(self) -> Result<()> {
         use anchor_spl::token;
 
-        self.market.load()?.validate(&self.store.key())?;
+        self.market
+            .load()?
+            .validate_with_options(&self.store.key(), true)?;
 
         let amount = self.amount;
         if amount != 0 {
@@ -134,6 +136,7 @@ pub(crate) struct MarketTransferOutOperation<'a, 'info> {
     token_mint: AccountInfo<'info>,
     vault: AccountInfo<'info>,
     token_program: AccountInfo<'info>,
+    allow_closed: bool,
     #[builder(setter(into))]
     event_emitter: EventEmitter<'a, 'info>,
 }
@@ -144,7 +147,7 @@ impl MarketTransferOutOperation<'_, '_> {
 
         {
             let market = self.market.load()?;
-            let meta = market.validated_meta(&self.store.key())?;
+            let meta = market.validated_meta_with_options(&self.store.key(), self.allow_closed)?;
             require!(
                 meta.is_collateral_token(&self.token_mint.key()),
                 CoreError::InvalidCollateralToken

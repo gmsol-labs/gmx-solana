@@ -274,7 +274,7 @@ pub(crate) fn unchecked_market_transfer_in(
             .accounts
             .market
             .load()?
-            .validated_meta(&ctx.accounts.store.key())?
+            .validated_meta_with_options(&ctx.accounts.store.key(), true)?
             .is_collateral_token(&ctx.accounts.from.mint);
         require!(is_collateral_token, CoreError::InvalidArgument);
     }
@@ -752,6 +752,7 @@ pub(crate) fn claim_fees_from_market(ctx: Context<ClaimFeesFromMarket>) -> Resul
         .token_mint(token.to_account_info())
         .vault(ctx.accounts.vault.to_account_info())
         .token_program(ctx.accounts.token_program.to_account_info())
+        .allow_closed(true)
         .event_emitter(event_emitter)
         .build()
         .execute()?;
