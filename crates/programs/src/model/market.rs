@@ -138,6 +138,27 @@ impl MarketConfig {
             self.flag(MarketConfigFlag::SkipBorrowingFeeForSmallerSide)
         }
     }
+
+    fn borrowing_fee_base_factor(&self, for_long: bool, is_market_closed: bool) -> u128 {
+        match (self.use_market_closed_params(is_market_closed), for_long) {
+            (true, _) => self.market_closed_borrowing_fee_base_factor,
+            (false, true) => self.borrowing_fee_base_factor_for_long,
+            (false, false) => self.borrowing_fee_base_factor_for_short,
+        }
+    }
+
+    /// Returns above optimal usage borrowing fee factor.
+    fn borrowing_fee_above_optimal_usage_factor(
+        &self,
+        for_long: bool,
+        is_market_closed: bool,
+    ) -> u128 {
+        match (self.use_market_closed_params(is_market_closed), for_long) {
+            (true, _) => self.market_closed_borrowing_fee_above_optimal_usage_factor,
+            (false, true) => self.borrowing_fee_above_optimal_usage_factor_for_long,
+            (false, false) => self.borrowing_fee_above_optimal_usage_factor_for_short,
+        }
+    }
 }
 
 #[repr(u8)]
@@ -503,24 +524,25 @@ impl gmsol_model::BorrowingFeeMarket<{ constants::MARKET_DECIMALS }> for MarketM
     fn borrowing_fee_kink_model_params(
         &self,
     ) -> gmsol_model::Result<BorrowingFeeKinkModelParams<Self::Num>> {
+        let is_closed = self.is_closed();
         Ok(BorrowingFeeKinkModelParams::builder()
             .long(
                 BorrowingFeeKinkModelParamsForOneSide::builder()
                     .optimal_usage_factor(self.config.borrowing_fee_optimal_usage_factor_for_long)
-                    .base_borrowing_factor(self.config.borrowing_fee_base_factor_for_long)
+                    .base_borrowing_factor(self.config.borrowing_fee_base_factor(true, is_closed))
                     .above_optimal_usage_borrowing_factor(
                         self.config
-                            .borrowing_fee_above_optimal_usage_factor_for_long,
+                            .borrowing_fee_above_optimal_usage_factor(true, is_closed),
                     )
                     .build(),
             )
             .short(
                 BorrowingFeeKinkModelParamsForOneSide::builder()
                     .optimal_usage_factor(self.config.borrowing_fee_optimal_usage_factor_for_short)
-                    .base_borrowing_factor(self.config.borrowing_fee_base_factor_for_short)
+                    .base_borrowing_factor(self.config.borrowing_fee_base_factor(false, is_closed))
                     .above_optimal_usage_borrowing_factor(
                         self.config
-                            .borrowing_fee_above_optimal_usage_factor_for_short,
+                            .borrowing_fee_above_optimal_usage_factor(false, is_closed),
                     )
                     .build(),
             )

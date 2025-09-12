@@ -314,6 +314,10 @@ pub enum MarketConfigKey {
     MinCollateralFactorForLiquidation,
     /// Min collateral factor for liquidation when market is closed.
     MarketClosedMinCollateralFactorForLiquidation,
+    /// Borrowing fee base factor when market is closed.
+    MarketClosedBorrowingFeeBaseFactor,
+    /// Borrowing fee above optimal usage factor when market is closed.
+    MarketClosedBorrowingFeeAboveOptimalUsageFactor,
 }
 
 /// Market Flags.

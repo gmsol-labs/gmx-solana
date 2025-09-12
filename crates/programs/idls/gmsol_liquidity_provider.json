@@ -1960,11 +1960,15 @@
             "type": "u64"
           },
           {
+            "name": "market_closed_prices_max_staleness",
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u64",
-                125
+                124
               ]
             }
           }
@@ -3121,11 +3125,19 @@
             "type": "u128"
           },
           {
+            "name": "min_collateral_factor_for_liquidation",
+            "type": "u128"
+          },
+          {
+            "name": "market_closed_min_collateral_factor_for_liquidation",
+            "type": "u128"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u128",
-                32
+                30
               ]
             }
           }
