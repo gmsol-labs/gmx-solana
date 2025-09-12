@@ -4490,6 +4490,12 @@ pub enum CoreError {
     /// Index overflow.
     #[msg("index overflow")]
     IndexOverflow,
+    // ===========================================
+    //              Market Errors (2)
+    // ===========================================
+    /// Market is closed.
+    #[msg("market is closed")]
+    MarketClosed,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]
