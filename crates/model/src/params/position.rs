@@ -6,6 +6,8 @@ pub struct PositionParams<T> {
     min_position_size_usd: T,
     min_collateral_value: T,
     min_collateral_factor: T,
+    #[builder(default)]
+    min_collateral_factor_for_liquidation: Option<T>,
     max_positive_position_impact_factor: T,
     max_negative_position_impact_factor: T,
     max_position_impact_factor_for_liquidations: T,
@@ -25,6 +27,7 @@ impl<T> PositionParams<T> {
             min_position_size_usd,
             min_collateral_value,
             min_collateral_factor,
+            min_collateral_factor_for_liquidation: None,
             max_positive_position_impact_factor,
             max_negative_position_impact_factor,
             max_position_impact_factor_for_liquidations,
@@ -44,6 +47,13 @@ impl<T> PositionParams<T> {
     /// Get min collateral factor.
     pub fn min_collateral_factor(&self) -> &T {
         &self.min_collateral_factor
+    }
+
+    /// Get min collateral factor for liquidation.
+    pub fn min_collateral_factor_for_liquidation(&self) -> &T {
+        self.min_collateral_factor_for_liquidation
+            .as_ref()
+            .unwrap_or_else(|| self.min_collateral_factor())
     }
 
     /// Get max positive position impact factor.
