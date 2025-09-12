@@ -30477,11 +30477,19 @@
             "type": "u128"
           },
           {
+            "name": "market_closed_borrowing_fee_base_factor",
+            "type": "u128"
+          },
+          {
+            "name": "market_closed_borrowing_fee_above_optimal_usage_factor",
+            "type": "u128"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u128",
-                30
+                28
               ]
             }
           }

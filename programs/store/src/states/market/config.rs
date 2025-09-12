@@ -87,7 +87,9 @@ pub struct MarketConfig {
     pub(super) min_tokens_for_first_deposit: Factor,
     pub(super) min_collateral_factor_for_liquidation: Factor,
     pub(super) market_closed_min_collateral_factor_for_liquidation: Factor,
-    reserved: [Factor; 30],
+    pub(super) market_closed_borrowing_fee_base_factor: Factor,
+    pub(super) market_closed_borrowing_fee_above_optimal_usage_factor: Factor,
+    reserved: [Factor; 28],
 }
 
 impl MarketConfig {
@@ -197,8 +199,13 @@ impl MarketConfig {
 
         self.min_collateral_factor_for_liquidation =
             constants::DEFAULT_MIN_COLLATERAL_FACTOR_FOR_LIQUIDATION;
+
         self.market_closed_min_collateral_factor_for_liquidation =
             constants::DEFAULT_MIN_COLLATERAL_FACTOR_FOR_LIQUIDATION;
+        self.market_closed_borrowing_fee_base_factor =
+            constants::DEFAULT_BORROWING_FEE_BASE_FACTOR_FOR_LONG;
+        self.market_closed_borrowing_fee_above_optimal_usage_factor =
+            constants::DEFAULT_BORROWING_FEE_ABOVE_OPTIMAL_USAGE_FACTOR_FOR_LONG;
 
         self.set_flag(
             MarketConfigFlag::SkipBorrowingFeeForSmallerSide,
@@ -335,6 +342,12 @@ impl MarketConfig {
             }
             MarketConfigKey::MarketClosedMinCollateralFactorForLiquidation => {
                 &self.market_closed_min_collateral_factor_for_liquidation
+            }
+            MarketConfigKey::MarketClosedBorrowingFeeBaseFactor => {
+                &self.market_closed_borrowing_fee_base_factor
+            }
+            MarketConfigKey::MarketClosedBorrowingFeeAboveOptimalUsageFactor => {
+                &self.market_closed_borrowing_fee_above_optimal_usage_factor
             }
             _ => return None,
         };
@@ -483,6 +496,12 @@ impl MarketConfig {
             MarketConfigKey::MarketClosedMinCollateralFactorForLiquidation => {
                 &mut self.market_closed_min_collateral_factor_for_liquidation
             }
+            MarketConfigKey::MarketClosedBorrowingFeeBaseFactor => {
+                &mut self.market_closed_borrowing_fee_base_factor
+            }
+            MarketConfigKey::MarketClosedBorrowingFeeAboveOptimalUsageFactor => {
+                &mut self.market_closed_borrowing_fee_above_optimal_usage_factor
+            }
             _ => return None,
         };
         Some(value)
@@ -527,6 +546,28 @@ impl MarketConfig {
             self.flag(MarketConfigFlag::MarketClosedSkipBorrowingFeeForSmallerSide)
         } else {
             self.flag(MarketConfigFlag::SkipBorrowingFeeForSmallerSide)
+        }
+    }
+
+    /// Returns base borrowing fee factor.
+    pub(super) fn borrowing_fee_base_factor(&self, for_long: bool, is_market_closed: bool) -> u128 {
+        match (self.use_market_closed_params(is_market_closed), for_long) {
+            (true, _) => self.market_closed_borrowing_fee_base_factor,
+            (false, true) => self.borrowing_fee_base_factor_for_long,
+            (false, false) => self.borrowing_fee_base_factor_for_short,
+        }
+    }
+
+    /// Returns above optimal usage borrowing fee factor.
+    pub(super) fn borrowing_fee_above_optimal_usage_factor(
+        &self,
+        for_long: bool,
+        is_market_closed: bool,
+    ) -> u128 {
+        match (self.use_market_closed_params(is_market_closed), for_long) {
+            (true, _) => self.market_closed_borrowing_fee_above_optimal_usage_factor,
+            (false, true) => self.borrowing_fee_above_optimal_usage_factor_for_long,
+            (false, false) => self.borrowing_fee_above_optimal_usage_factor_for_short,
         }
     }
 }

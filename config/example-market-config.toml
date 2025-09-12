@@ -65,3 +65,6 @@ max_pool_value_for_deposit_for_short_token = "750000"
 max_open_interest_for_long = "450000"                                             # `450,000` for most indexs on [USDC-USDC]
 max_open_interest_for_short = "450000"
 min_tokens_for_first_deposit = "0"
+
+market_closed_borrowing_fee_base_factor = "0.00000001902587519025"                # `60%` per year
+market_closed_borrowing_fee_above_optimal_usage_factor = "0.00000004756468797564" # `150%` per year

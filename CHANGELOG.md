@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Introduced new config parameters for closed markets:
   - `market_closed_min_collateral_factor_for_liquidation`
   - `market_closed_skip_borrowing_fee_for_smaller_side`
+  - `market_closed_borrowing_fee_base_factor`
+  - `market_closed_borrowing_fee_above_optimal_usage_factor`
 - programs(store): Introduced flag `enable_market_closed_params` to control activation of closed-market configs.
 - sdk(sdk): Added `try_deserialize_zero_copy_from_base64_with_options` utility function.
 - sdk(js): Added decode methods with `no_discriminator` option for JsMarket and JsPosition.
