@@ -540,14 +540,19 @@ impl gmsol_model::PerpMarket<{ constants::MARKET_DECIMALS }> for MarketModel {
     }
 
     fn position_params(&self) -> gmsol_model::Result<PositionParams<Self::Num>> {
-        Ok(PositionParams::new(
-            self.config.min_position_size_usd,
-            self.config.min_collateral_value,
-            self.config.min_collateral_factor,
-            self.config.max_positive_position_impact_factor,
-            self.config.max_negative_position_impact_factor,
-            self.config.max_position_impact_factor_for_liquidations,
-        ))
+        Ok(PositionParams::builder()
+            .min_position_size_usd(self.config.min_position_size_usd)
+            .min_collateral_value(self.config.min_collateral_value)
+            .min_collateral_factor(self.config.min_collateral_factor)
+            .max_positive_position_impact_factor(self.config.max_positive_position_impact_factor)
+            .max_negative_position_impact_factor(self.config.max_negative_position_impact_factor)
+            .max_position_impact_factor_for_liquidations(
+                self.config.max_position_impact_factor_for_liquidations,
+            )
+            .min_collateral_factor_for_liquidation(
+                self.config.min_collateral_factor_for_liquidation(),
+            )
+            .build())
     }
 
     fn order_fee_params(&self) -> gmsol_model::Result<FeeParams<Self::Num>> {
