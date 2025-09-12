@@ -103,6 +103,7 @@ impl Pools {
 enum MarketConfigFlag {
     SkipBorrowingFeeForSmallerSide,
     IgnoreOpenInterestForUsageFactor,
+    EnableMarketClosedParams,
 }
 
 type MarketConfigFlags = Bitmap<{ constants::NUM_MARKET_CONFIG_FLAGS }>;
@@ -110,6 +111,23 @@ type MarketConfigFlags = Bitmap<{ constants::NUM_MARKET_CONFIG_FLAGS }>;
 impl MarketConfig {
     fn flag(&self, flag: MarketConfigFlag) -> bool {
         MarketConfigFlags::from_value(self.flag.value).get(flag as usize)
+    }
+
+    fn use_market_closed_params(&self, is_market_closed: bool) -> bool {
+        is_market_closed && self.flag(MarketConfigFlag::EnableMarketClosedParams)
+    }
+
+    fn min_collateral_factor_for_liquidation(&self, is_market_closed: bool) -> Option<u128> {
+        let factor = if self.use_market_closed_params(is_market_closed) {
+            self.market_closed_min_collateral_factor_for_liquidation
+        } else {
+            self.min_collateral_factor_for_liquidation
+        };
+        if factor == 0 {
+            None
+        } else {
+            Some(factor)
+        }
     }
 }
 
@@ -121,6 +139,7 @@ enum MarketFlag {
     AutoDeleveragingEnabledForLong,
     AutoDeleveragingEnabledForShort,
     GTEnabled,
+    Closed,
 }
 
 type MarketFlags = Bitmap<{ constants::NUM_MARKET_FLAGS }>;
@@ -550,7 +569,8 @@ impl gmsol_model::PerpMarket<{ constants::MARKET_DECIMALS }> for MarketModel {
                 self.config.max_position_impact_factor_for_liquidations,
             )
             .min_collateral_factor_for_liquidation(
-                self.config.min_collateral_factor_for_liquidation(),
+                self.config
+                    .min_collateral_factor_for_liquidation(self.flag(MarketFlag::Closed)),
             )
             .build())
     }
