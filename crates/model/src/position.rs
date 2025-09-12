@@ -516,7 +516,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         let params = self.market().position_params()?;
 
         let collateral_factor = if for_liquidation {
-            params.max_position_impact_factor_for_liquidations()
+            params.min_collateral_factor_for_liquidation()
         } else {
             params.min_collateral_factor()
         };
