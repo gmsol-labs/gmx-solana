@@ -481,8 +481,12 @@ pub mod gmsol_liquidity_provider {
             token_if::close_account(close_ctx)?;
 
             // Update controller statistics
-            ctx.accounts.controller.total_positions =
-                ctx.accounts.controller.total_positions.saturating_sub(1);
+            ctx.accounts.controller.total_positions = ctx
+                .accounts
+                .controller
+                .total_positions
+                .checked_sub(1)
+                .ok_or(ErrorCode::MathOverflow)?;
 
             ctx.accounts
                 .position
@@ -796,7 +800,7 @@ pub struct StakeGm<'info> {
         space = 8 + Position::INIT_SPACE,
         seeds = [
             POSITION_SEED,
-            global_state.key().as_ref(),
+            controller.key().as_ref(),
             owner.key().as_ref(),
             &position_id.to_le_bytes(),
         ],
@@ -809,11 +813,8 @@ pub struct StakeGm<'info> {
         init,
         payer = owner,
         seeds = [
-            POSITION_SEED,
-            global_state.key().as_ref(),
-            owner.key().as_ref(),
-            &position_id.to_le_bytes(),
             VAULT_SEED,
+            position.key().as_ref(),
         ],
         bump,
         token::mint = lp_mint,
@@ -884,7 +885,7 @@ pub struct StakeGlv<'info> {
         space = 8 + Position::INIT_SPACE,
         seeds = [
             POSITION_SEED,
-            global_state.key().as_ref(),
+            controller.key().as_ref(),
             owner.key().as_ref(),
             &position_id.to_le_bytes(),
         ],
@@ -897,11 +898,8 @@ pub struct StakeGlv<'info> {
         init,
         payer = owner,
         seeds = [
-            POSITION_SEED,
-            global_state.key().as_ref(),
-            owner.key().as_ref(),
-            &position_id.to_le_bytes(),
             VAULT_SEED,
+            position.key().as_ref(),
         ],
         bump,
         token::mint = lp_mint,
@@ -964,17 +962,17 @@ pub struct CalculateGtReward<'info> {
     pub gt_store: AccountLoader<'info, Store>,
     /// The GT program
     pub gt_program: Program<'info, GmsolStore>,
-    /// Position tied to (global_state, owner, position_id)
+    /// Position tied to (controller, owner, position_id)
     #[account(
         seeds = [
             POSITION_SEED,
-            global_state.key().as_ref(),
+            controller.key().as_ref(),
             owner.key().as_ref(),
             &position_id.to_le_bytes(),
         ],
         bump = position.bump,
         has_one = owner,
-        has_one = global_state
+        has_one = controller
     )]
     pub position: Account<'info, Position>,
     /// Owner of the position (not required to sign for read-only calc)
@@ -1010,18 +1008,18 @@ pub struct ClaimGt<'info> {
     /// The GT program
     pub gt_program: Program<'info, GmsolStore>,
 
-    /// Position tied to (global_state, owner, position_id)
+    /// Position tied to (controller, owner, position_id)
     #[account(
         mut,
         seeds = [
             POSITION_SEED,
-            global_state.key().as_ref(),
+            controller.key().as_ref(),
             owner.key().as_ref(),
             &position_id.to_le_bytes(),
         ],
         bump = position.bump,
         has_one = owner,
-        has_one = global_state
+        has_one = controller
     )]
     pub position: Account<'info, Position>,
 
@@ -1072,18 +1070,18 @@ pub struct UnstakeLp<'info> {
     /// The GT program
     pub gt_program: Program<'info, GmsolStore>,
 
-    /// Position tied to (global_state, owner, position_id)
+    /// Position tied to (controller, owner, position_id)
     #[account(
         mut,
         seeds = [
             POSITION_SEED,
-            global_state.key().as_ref(),
+            controller.key().as_ref(),
             owner.key().as_ref(),
             &position_id.to_le_bytes(),
         ],
         bump = position.bump,
         has_one = owner,
-        has_one = global_state
+        has_one = controller
     )]
     pub position: Account<'info, Position>,
 
@@ -1091,11 +1089,8 @@ pub struct UnstakeLp<'info> {
     #[account(
         mut,
         seeds = [
-            POSITION_SEED,
-            global_state.key().as_ref(),
-            owner.key().as_ref(),
-            &position_id.to_le_bytes(),
             VAULT_SEED,
+            position.key().as_ref(),
         ],
         bump,
         token::mint = lp_mint,
@@ -1281,8 +1276,8 @@ pub struct LpTokenController {
 pub struct Position {
     /// Owner of this LP position
     pub owner: Pubkey,
-    /// Ties position to a specific GlobalState
-    pub global_state: Pubkey,
+    /// LP token controller that manages this position
+    pub controller: Pubkey,
     /// LP token mint for this position
     pub lp_mint: Pubkey,
     /// PDA token account that escrows staked LP tokens
@@ -1377,7 +1372,7 @@ fn execute_stake<'info>(
 
     // Initialize position
     position.owner = owner.key();
-    position.global_state = global_state.key();
+    position.controller = controller.key();
     position.lp_mint = lp_mint.key();
     position.vault = position_vault.key();
     position.position_id = position_id;
@@ -1388,7 +1383,10 @@ fn execute_stake<'info>(
     position.bump = position_bump;
 
     // Update controller statistics
-    controller.total_positions = controller.total_positions.saturating_add(1);
+    controller.total_positions = controller
+        .total_positions
+        .checked_add(1)
+        .ok_or(ErrorCode::MathOverflow)?;
 
     msg!(
         "Stake executed: owner={}, amount={}, value(1e20)={}, start_ts={}, C_start={}, pos_id={}",

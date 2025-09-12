@@ -108,8 +108,7 @@
             ]
           },
           "relations": [
-            "controller",
-            "position"
+            "controller"
           ]
         },
         {
@@ -153,7 +152,10 @@
                 "account": "Position"
               }
             ]
-          }
+          },
+          "relations": [
+            "position"
+          ]
         },
         {
           "name": "gt_store",
@@ -172,7 +174,7 @@
         {
           "name": "position",
           "docs": [
-            "Position tied to (global_state, owner, position_id)"
+            "Position tied to (controller, owner, position_id)"
           ],
           "pda": {
             "seeds": [
@@ -191,7 +193,7 @@
               },
               {
                 "kind": "account",
-                "path": "global_state"
+                "path": "controller"
               },
               {
                 "kind": "account",
@@ -259,8 +261,7 @@
             ]
           },
           "relations": [
-            "controller",
-            "position"
+            "controller"
           ]
         },
         {
@@ -304,7 +305,10 @@
                 "account": "Position"
               }
             ]
-          }
+          },
+          "relations": [
+            "position"
+          ]
         },
         {
           "name": "store",
@@ -326,7 +330,7 @@
         {
           "name": "position",
           "docs": [
-            "Position tied to (global_state, owner, position_id)"
+            "Position tied to (controller, owner, position_id)"
           ],
           "writable": true,
           "pda": {
@@ -346,7 +350,7 @@
               },
               {
                 "kind": "account",
-                "path": "global_state"
+                "path": "controller"
               },
               {
                 "kind": "account",
@@ -921,7 +925,7 @@
               },
               {
                 "kind": "account",
-                "path": "global_state"
+                "path": "controller"
               },
               {
                 "kind": "account",
@@ -945,37 +949,16 @@
               {
                 "kind": "const",
                 "value": [
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "arg",
-                "path": "position_id"
-              },
-              {
-                "kind": "const",
-                "value": [
                   118,
                   97,
                   117,
                   108,
                   116
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "position"
               }
             ]
           }
@@ -1159,7 +1142,7 @@
               },
               {
                 "kind": "account",
-                "path": "global_state"
+                "path": "controller"
               },
               {
                 "kind": "account",
@@ -1183,37 +1166,16 @@
               {
                 "kind": "const",
                 "value": [
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "arg",
-                "path": "position_id"
-              },
-              {
-                "kind": "const",
-                "value": [
                   118,
                   97,
                   117,
                   108,
                   116
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "position"
               }
             ]
           }
@@ -1384,8 +1346,7 @@
             ]
           },
           "relations": [
-            "controller",
-            "position"
+            "controller"
           ]
         },
         {
@@ -1429,7 +1390,10 @@
                 "path": "lp_mint"
               }
             ]
-          }
+          },
+          "relations": [
+            "position"
+          ]
         },
         {
           "name": "lp_mint",
@@ -1457,7 +1421,7 @@
         {
           "name": "position",
           "docs": [
-            "Position tied to (global_state, owner, position_id)"
+            "Position tied to (controller, owner, position_id)"
           ],
           "writable": true,
           "pda": {
@@ -1477,7 +1441,7 @@
               },
               {
                 "kind": "account",
-                "path": "global_state"
+                "path": "controller"
               },
               {
                 "kind": "account",
@@ -1501,37 +1465,16 @@
               {
                 "kind": "const",
                 "value": [
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "arg",
-                "path": "position_id"
-              },
-              {
-                "kind": "const",
-                "value": [
                   118,
                   97,
                   117,
                   108,
                   116
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "position"
               }
             ]
           }
@@ -2820,9 +2763,13 @@
             "type": {
               "array": [
                 "u8",
-                13
+                5
               ]
             }
+          },
+          {
+            "name": "closed_state_updated_at",
+            "type": "i64"
           },
           {
             "name": "name",
@@ -3417,6 +3364,25 @@
       }
     },
     {
+      "name": "OraclePriceFlagContainer",
+      "docs": [
+        "Flags container generated by the macro."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "value",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "OtherState",
       "docs": [
         "Market State."
@@ -3713,9 +3679,9 @@
             "type": "pubkey"
           },
           {
-            "name": "global_state",
+            "name": "controller",
             "docs": [
-              "Ties position to a specific GlobalState"
+              "LP token controller that manages this position"
             ],
             "type": "pubkey"
           },
@@ -4074,7 +4040,11 @@
           },
           {
             "name": "flags",
-            "type": "u8"
+            "type": {
+              "defined": {
+                "name": "OraclePriceFlagContainer"
+              }
+            }
           },
           {
             "name": "padding_0",

@@ -79,20 +79,23 @@ impl LiquidityProviderProgram {
         &self,
         owner: &Pubkey,
         position_id: u64,
-        global_state: Option<&Pubkey>,
+        controller: &Pubkey,
     ) -> Pubkey {
-        crate::pda::find_lp_stake_position_address(owner, position_id, global_state, &self.id).0
+        crate::pda::find_lp_stake_position_address(owner, position_id, controller, &self.id).0
     }
 
-    /// Find PDA for stake position valut.
-    pub fn find_stake_position_vault_address(
+    /// Find PDA for stake position vault.
+    pub fn find_stake_position_vault_address(&self, position: &Pubkey) -> Pubkey {
+        crate::pda::find_lp_stake_position_vault_address(position, &self.id).0
+    }
+
+    /// Find PDA for LP token controller account.
+    pub fn find_lp_token_controller_address(
         &self,
-        owner: &Pubkey,
-        position_id: u64,
-        global_state: Option<&Pubkey>,
+        global_state: &Pubkey,
+        lp_token_mint: &Pubkey,
     ) -> Pubkey {
-        crate::pda::find_lp_stake_position_vault_address(owner, position_id, global_state, &self.id)
-            .0
+        crate::pda::find_lp_token_controller_address(global_state, lp_token_mint, &self.id).0
     }
 }
 
@@ -171,14 +174,15 @@ impl StakeLpToken {
         let position_id = self.position_id();
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
+
+        let controller = self
+            .lp_program
+            .find_lp_token_controller_address(&global_state, &lp_mint);
+
         let position =
             self.lp_program
-                .find_stake_position_address(&owner, position_id, Some(&global_state));
-        let position_vault = self.lp_program.find_stake_position_vault_address(
-            &owner,
-            position_id,
-            Some(&global_state),
-        );
+                .find_stake_position_address(&owner, position_id, &controller);
+        let position_vault = self.lp_program.find_stake_position_vault_address(&position);
 
         SharedArgs {
             owner,
@@ -212,14 +216,9 @@ impl StakeLpToken {
         } = self.shared_args();
         let token_program_id = anchor_spl::token::ID;
         let market = self.store_program.find_market_address(&lp_mint);
-
-        // Find controller PDA
-        let controller_seeds = &[
-            b"lp_token_controller",
-            global_state.as_ref(),
-            lp_mint.as_ref(),
-        ];
-        let (controller, _) = Pubkey::find_program_address(controller_seeds, self.lp_program.id());
+        let controller = self
+            .lp_program
+            .find_lp_token_controller_address(&global_state, &lp_mint);
 
         Ok(self
             .lp_program
@@ -277,13 +276,9 @@ impl StakeLpToken {
         )
         .0;
 
-        // Find controller PDA
-        let controller_seeds = &[
-            b"lp_token_controller",
-            global_state.as_ref(),
-            lp_mint.as_ref(),
-        ];
-        let (controller, _) = Pubkey::find_program_address(controller_seeds, self.lp_program.id());
+        let controller = self
+            .lp_program
+            .find_lp_token_controller_address(&global_state, &lp_mint);
 
         Ok(self
             .lp_program
