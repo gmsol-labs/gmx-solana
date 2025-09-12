@@ -2217,6 +2217,10 @@
               "Price staleness configuration in seconds"
             ],
             "type": "u32"
+          },
+          {
+            "name": "reserved",
+            "type": "bytes"
           }
         ]
       }
@@ -2726,6 +2730,10 @@
               "PDA bump"
             ],
             "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "type": "bytes"
           }
         ]
       }
@@ -3740,6 +3748,10 @@
               "PDA bump"
             ],
             "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "type": "bytes"
           }
         ]
       }
@@ -4596,14 +4608,29 @@
       "value": "300"
     },
     {
+      "name": "GLOBAL_STATE_RESERVED_LEN",
+      "type": "u32",
+      "value": "256"
+    },
+    {
       "name": "GLOBAL_STATE_SEED",
       "type": "bytes",
       "value": "[103, 108, 111, 98, 97, 108, 95, 115, 116, 97, 116, 101]"
     },
     {
+      "name": "LP_TOKEN_CONTROLLER_RESERVED_LEN",
+      "type": "u32",
+      "value": "256"
+    },
+    {
       "name": "LP_TOKEN_CONTROLLER_SEED",
       "type": "bytes",
       "value": "[108, 112, 95, 116, 111, 107, 101, 110, 95, 99, 111, 110, 116, 114, 111, 108, 108, 101, 114]"
+    },
+    {
+      "name": "POSITION_RESERVED_LEN",
+      "type": "u32",
+      "value": "64"
     },
     {
       "name": "POSITION_SEED",

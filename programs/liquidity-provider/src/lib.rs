@@ -22,11 +22,21 @@ use gmsol_programs::gmsol_store::{
 #[constant]
 pub const POSITION_SEED: &[u8] = b"position";
 #[constant]
+pub const POSITION_RESERVED_LEN: u32 = 64;
+
+#[constant]
 pub const GLOBAL_STATE_SEED: &[u8] = b"global_state";
 #[constant]
+pub const GLOBAL_STATE_RESERVED_LEN: u32 = 256;
+
+#[constant]
 pub const VAULT_SEED: &[u8] = b"vault";
+
 #[constant]
 pub const LP_TOKEN_CONTROLLER_SEED: &[u8] = b"lp_token_controller";
+#[constant]
+pub const LP_TOKEN_CONTROLLER_RESERVED_LEN: u32 = 256;
+
 #[constant]
 pub const DEFAULT_PRICING_STALENESS_SECONDS: u32 = 300; // Default 5 minutes
                                                         // IDL-safe constants (u8) exposed via #[constant]
@@ -36,8 +46,9 @@ pub const APY_BUCKETS_U8: u8 = 53;
 pub const APY_LAST_INDEX_U8: u8 = APY_BUCKETS_U8 - 1; // 52
 
 // Internal mirrors as usize for array lengths and indexing
-pub const APY_BUCKETS: usize = APY_BUCKETS_U8 as usize;
-pub const APY_LAST_INDEX: usize = APY_LAST_INDEX_U8 as usize;
+const APY_BUCKETS: usize = APY_BUCKETS_U8 as usize;
+const APY_LAST_INDEX: usize = APY_LAST_INDEX_U8 as usize;
+
 #[constant]
 pub const APY_MAX: u128 = 200_000_000_000_000_000_000u128; // 200% at 1e20 scale
 
@@ -1248,6 +1259,8 @@ pub struct GlobalState {
     pub bump: u8,
     /// Price staleness configuration in seconds
     pub pricing_staleness_seconds: u32,
+    #[max_len(GLOBAL_STATE_RESERVED_LEN)]
+    reserved: Vec<u8>,
 }
 
 /// LP Token Controller for managing specific LP token staking
@@ -1268,6 +1281,8 @@ pub struct LpTokenController {
     pub disabled_cum_inv_cost: u128,
     /// PDA bump
     pub bump: u8,
+    #[max_len(LP_TOKEN_CONTROLLER_RESERVED_LEN)]
+    reserved: Vec<u8>,
 }
 
 /// Position account to persist LP stake data and snapshot stake-time values
@@ -1294,6 +1309,8 @@ pub struct Position {
     pub cum_inv_cost: u128,
     /// PDA bump
     pub bump: u8,
+    #[max_len(POSITION_RESERVED_LEN)]
+    reserved: Vec<u8>,
 }
 
 #[error_code]
