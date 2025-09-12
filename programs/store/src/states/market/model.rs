@@ -217,7 +217,7 @@ impl gmsol_model::BorrowingFeeMarket<{ constants::MARKET_DECIMALS }> for Market 
             .exponent_for_short(self.config.borrowing_fee_exponent_for_short)
             .skip_borrowing_fee_for_smaller_side(
                 self.config
-                    .flag(MarketConfigFlag::SkipBorrowingFeeForSmallerSide),
+                    .skip_borrowing_fee_for_smaller_side(self.is_closed()),
             )
             .build())
     }

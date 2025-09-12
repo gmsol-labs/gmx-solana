@@ -205,6 +205,10 @@ impl MarketConfig {
             constants::DEFAULT_SKIP_BORROWING_FEE_FOR_SMALLER_SIDE,
         );
         self.set_flag(
+            MarketConfigFlag::MarketClosedSkipBorrowingFeeForSmallerSide,
+            constants::DEFAULT_SKIP_BORROWING_FEE_FOR_SMALLER_SIDE,
+        );
+        self.set_flag(
             MarketConfigFlag::IgnoreOpenInterestForUsageFactor,
             constants::DEFAULT_IGNORE_OPEN_INTEREST_FOR_USAGE_FACTOR,
         );
@@ -514,6 +518,15 @@ impl MarketConfig {
             None
         } else {
             Some(factor)
+        }
+    }
+
+    /// Returns whether to skip borrowing fee for smaller side.
+    pub(super) fn skip_borrowing_fee_for_smaller_side(&self, is_market_closed: bool) -> bool {
+        if self.use_market_closed_params(is_market_closed) {
+            self.flag(MarketConfigFlag::MarketClosedSkipBorrowingFeeForSmallerSide)
+        } else {
+            self.flag(MarketConfigFlag::SkipBorrowingFeeForSmallerSide)
         }
     }
 }
