@@ -416,9 +416,22 @@ mod utils {
                 MarketConfigKey::MaxOpenInterestForLong => &self.max_open_interest_for_long,
                 MarketConfigKey::MaxOpenInterestForShort => &self.max_open_interest_for_short,
                 MarketConfigKey::MinTokensForFirstDeposit => &self.min_tokens_for_first_deposit,
+                MarketConfigKey::MinCollateralFactorForLiquidation => {
+                    &self.min_collateral_factor_for_liquidation
+                }
                 _ => return None,
             };
             Some(value)
+        }
+
+        /// Returns min collateral factor for liquidation.
+        pub(crate) fn min_collateral_factor_for_liquidation(&self) -> Option<u128> {
+            let factor = self.min_collateral_factor_for_liquidation;
+            if factor == 0 {
+                None
+            } else {
+                Some(factor)
+            }
         }
     }
 
