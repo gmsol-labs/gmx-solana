@@ -23,6 +23,8 @@ pub const DEFAULT_MIN_POSITION_SIZE_USD: Factor = super::MARKET_USD_UNIT;
 pub const DEFAULT_MIN_COLLATERAL_VALUE: Factor = super::MARKET_USD_UNIT;
 /// Default min collateral factor.
 pub const DEFAULT_MIN_COLLATERAL_FACTOR: Factor = super::MARKET_USD_UNIT / 100;
+/// Default min collateral factor for liquidation.
+pub const DEFAULT_MIN_COLLATERAL_FACTOR_FOR_LIQUIDATION: Factor = DEFAULT_MIN_COLLATERAL_FACTOR / 2;
 /// Default min collateral factor for open interest for long
 pub const DEFAULT_MIN_COLLATERAL_FACTOR_FOR_OPEN_INTEREST_FOR_LONG: Factor = 380_000_000_000;
 /// Default min collateral factor for open interest for short

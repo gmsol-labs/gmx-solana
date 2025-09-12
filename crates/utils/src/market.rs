@@ -306,6 +306,8 @@ pub enum MarketConfigKey {
     MaxOpenInterestForShort,
     /// Min tokens for first deposit.
     MinTokensForFirstDeposit,
+    /// Min collateral factor for liquidation.
+    MinCollateralFactorForLiquidation,
 }
 
 /// Market Flags.

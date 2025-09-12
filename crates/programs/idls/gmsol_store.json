@@ -25797,6 +25797,11 @@
       "code": 6126,
       "name": "IndexOverflow",
       "msg": "index overflow"
+    },
+    {
+      "code": 6127,
+      "name": "MarketClosed",
+      "msg": "market is closed"
     }
   ],
   "types": [
@@ -26085,11 +26090,15 @@
             "type": "u64"
           },
           {
+            "name": "market_closed_prices_max_staleness",
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u64",
-                125
+                124
               ]
             }
           }
@@ -30460,11 +30469,15 @@
             "type": "u128"
           },
           {
+            "name": "min_collateral_factor_for_liquidation",
+            "type": "u128"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u128",
-                32
+                31
               ]
             }
           }

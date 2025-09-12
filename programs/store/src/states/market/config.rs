@@ -85,7 +85,8 @@ pub struct MarketConfig {
     pub(super) max_open_interest_for_long: Factor,
     pub(super) max_open_interest_for_short: Factor,
     pub(super) min_tokens_for_first_deposit: Factor,
-    reserved: [Factor; 32],
+    pub(super) min_collateral_factor_for_liquidation: Factor,
+    reserved: [Factor; 31],
 }
 
 impl MarketConfig {
@@ -192,6 +193,9 @@ impl MarketConfig {
         self.max_open_interest_for_short = constants::DEFAULT_MAX_OPEN_INTEREST_FOR_SHORT;
 
         self.min_tokens_for_first_deposit = constants::DEFAULT_MIN_TOKENS_FOR_FIRST_DEPOSIT;
+
+        self.min_collateral_factor_for_liquidation =
+            constants::DEFAULT_MIN_COLLATERAL_FACTOR_FOR_LIQUIDATION;
 
         self.set_flag(
             MarketConfigFlag::SkipBorrowingFeeForSmallerSide,
@@ -319,6 +323,9 @@ impl MarketConfig {
             MarketConfigKey::MaxOpenInterestForLong => &self.max_open_interest_for_long,
             MarketConfigKey::MaxOpenInterestForShort => &self.max_open_interest_for_short,
             MarketConfigKey::MinTokensForFirstDeposit => &self.min_tokens_for_first_deposit,
+            MarketConfigKey::MinCollateralFactorForLiquidation => {
+                &self.min_collateral_factor_for_liquidation
+            }
             _ => return None,
         };
         Some(value)
@@ -460,6 +467,9 @@ impl MarketConfig {
             MarketConfigKey::MaxOpenInterestForLong => &mut self.max_open_interest_for_long,
             MarketConfigKey::MaxOpenInterestForShort => &mut self.max_open_interest_for_short,
             MarketConfigKey::MinTokensForFirstDeposit => &mut self.min_tokens_for_first_deposit,
+            MarketConfigKey::MinCollateralFactorForLiquidation => {
+                &mut self.min_collateral_factor_for_liquidation
+            }
             _ => return None,
         };
         Some(value)
@@ -475,6 +485,16 @@ impl MarketConfig {
     /// Return the previous value.
     pub(crate) fn set_flag(&mut self, flag: MarketConfigFlag, value: bool) -> bool {
         self.flag.set_flag(flag, value)
+    }
+
+    /// Returns min collateral factor for liquidation.
+    pub(super) fn min_collateral_factor_for_liquidation(&self) -> Option<Factor> {
+        let factor = self.min_collateral_factor_for_liquidation;
+        if factor == 0 {
+            None
+        } else {
+            Some(factor)
+        }
     }
 }
 
