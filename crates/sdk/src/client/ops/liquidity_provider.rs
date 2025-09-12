@@ -18,7 +18,7 @@ use crate::{
 
 /// Operations for liquidity-provider program.
 pub trait LiquidityProviderOps<C> {
-    /// Stake GM.
+    /// Stake LP token.
     fn stake_lp_token(
         &self,
         store: &Pubkey,
@@ -66,6 +66,12 @@ pub struct StakeLpTokenBuilder<'a, C> {
 }
 
 impl<'a, C: Deref<Target = impl Signer> + Clone> StakeLpTokenBuilder<'a, C> {
+    /// Set a specific position ID instead of using random generation.
+    pub fn with_position_id(mut self, position_id: u64) -> Self {
+        self.builder = self.builder.with_position_id(position_id);
+        self
+    }
+
     /// Prepare hint.
     pub async fn prepare_hint(&mut self) -> crate::Result<StakeLpTokenHint> {
         if let Some(hint) = self.hint.as_ref() {
