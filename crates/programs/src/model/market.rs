@@ -104,6 +104,7 @@ enum MarketConfigFlag {
     SkipBorrowingFeeForSmallerSide,
     IgnoreOpenInterestForUsageFactor,
     EnableMarketClosedParams,
+    MarketClosedSkipBorrowingFeeForSmallerSide,
 }
 
 type MarketConfigFlags = Bitmap<{ constants::NUM_MARKET_CONFIG_FLAGS }>;
@@ -127,6 +128,14 @@ impl MarketConfig {
             None
         } else {
             Some(factor)
+        }
+    }
+
+    fn skip_borrowing_fee_for_smaller_side(&self, is_market_closed: bool) -> bool {
+        if self.use_market_closed_params(is_market_closed) {
+            self.flag(MarketConfigFlag::MarketClosedSkipBorrowingFeeForSmallerSide)
+        } else {
+            self.flag(MarketConfigFlag::SkipBorrowingFeeForSmallerSide)
         }
     }
 }
@@ -165,6 +174,10 @@ impl Market {
 
     fn flag(&self, flag: MarketFlag) -> bool {
         MarketFlags::from_value(self.flags.value).get(flag as usize)
+    }
+
+    fn is_closed(&self) -> bool {
+        self.flag(MarketFlag::Closed)
     }
 }
 
@@ -478,7 +491,7 @@ impl gmsol_model::BorrowingFeeMarket<{ constants::MARKET_DECIMALS }> for MarketM
             .exponent_for_short(self.config.borrowing_fee_exponent_for_short)
             .skip_borrowing_fee_for_smaller_side(
                 self.config
-                    .flag(MarketConfigFlag::SkipBorrowingFeeForSmallerSide),
+                    .skip_borrowing_fee_for_smaller_side(self.is_closed()),
             )
             .build())
     }
@@ -570,7 +583,7 @@ impl gmsol_model::PerpMarket<{ constants::MARKET_DECIMALS }> for MarketModel {
             )
             .min_collateral_factor_for_liquidation(
                 self.config
-                    .min_collateral_factor_for_liquidation(self.flag(MarketFlag::Closed)),
+                    .min_collateral_factor_for_liquidation(self.is_closed()),
             )
             .build())
     }

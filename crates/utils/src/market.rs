@@ -157,6 +157,8 @@ pub enum MarketConfigFlag {
     IgnoreOpenInterestForUsageFactor,
     /// Indicates whether the market closed parameters is enabled.
     EnableMarketClosedParams,
+    /// Indicates whether to skip borrowing fee for smaller side when market is closed.
+    MarketClosedSkipBorrowingFeeForSmallerSide,
     // CHECK: cannot have more than `MAX_CONFIG_FLAGS` flags.
 }
 
