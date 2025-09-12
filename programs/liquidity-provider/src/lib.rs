@@ -997,7 +997,7 @@ pub struct CalculateGtReward<'info> {
 pub struct ClaimGt<'info> {
     /// Global config (PDA)
     #[account(seeds = [GLOBAL_STATE_SEED], bump = global_state.bump)]
-    pub global_state: Account<'info, GlobalState>,
+    pub global_state: Box<Account<'info, GlobalState>>,
 
     /// LP token controller for this position's mint
     #[account(
@@ -1055,7 +1055,7 @@ pub struct ClaimGt<'info> {
 pub struct UnstakeLp<'info> {
     /// Global config (PDA)
     #[account(seeds = [GLOBAL_STATE_SEED], bump = global_state.bump)]
-    pub global_state: Account<'info, GlobalState>,
+    pub global_state: Box<Account<'info, GlobalState>>,
 
     /// LP token controller for this position's mint
     #[account(

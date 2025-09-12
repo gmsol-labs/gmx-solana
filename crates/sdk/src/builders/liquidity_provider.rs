@@ -152,6 +152,12 @@ impl StakeLpToken {
         Ok(())
     }
 
+    /// Set a specific position ID instead of using random generation.
+    pub fn with_position_id(mut self, position_id: u64) -> Self {
+        self.position_id = Some(position_id);
+        self
+    }
+
     fn position_id(&self) -> u64 {
         self.position_id.unwrap_or_else(|| rand::thread_rng().gen())
     }
