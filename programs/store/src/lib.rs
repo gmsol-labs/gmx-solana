@@ -1680,6 +1680,33 @@ pub mod gmsol_store {
         instructions::push_to_market_config_buffer(ctx, new_configs)
     }
 
+    /// Updates the allow list of market configs that can be modified by a
+    /// `MARKET_CONFIG_KEEPER`.
+    ///
+    /// # Accounts
+    /// See the documentation for the accounts in [`SetMarketConfigUpdatable`].
+    ///
+    /// # Arguments
+    /// - `is_flag`: Indicates whether the `key` refers to a market config flag.
+    /// - `key`: The market config key for which update permission is being set.
+    /// - `updatable`: Indicates whether the market config is updatable.
+    ///
+    /// # Errors
+    /// - The [`authority`](SetMarketConfigUpdatable::authority) must be a signer
+    ///   and a `MARKET_KEEPER` in the given `store`.
+    /// - The [`store`](SetMarketConfigUpdatable::store) must be initialized.
+    /// - The provided `key` must be valid.
+    /// - The permission flag must change from its previous value.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn set_market_config_updatable(
+        ctx: Context<SetMarketConfigUpdatable>,
+        is_flag: bool,
+        key: String,
+        updatable: bool,
+    ) -> Result<()> {
+        SetMarketConfigUpdatable::invoke_unchecked(ctx, is_flag, &key, updatable)
+    }
+
     /// Enable or disable GT minting for the given market.
     ///
     /// This instruction allows a MARKET_KEEPER to control whether GT minting is enabled for the

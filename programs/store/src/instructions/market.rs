@@ -633,6 +633,63 @@ pub(crate) fn push_to_market_config_buffer(
     Ok(())
 }
 
+/// The accounts definition for [`set_market_config_update_permission`](crate::gmsol_store::set_market_config_update_permission).
+#[derive(Accounts)]
+pub struct SetMarketConfigUpdatable<'info> {
+    /// The caller.
+    pub authority: Signer<'info>,
+    /// Store.
+    pub store: AccountLoader<'info, Store>,
+}
+
+impl SetMarketConfigUpdatable<'_> {
+    /// # CHECK
+    /// - The [`authority`](Self::authority) must be a MARKET_KEEPER.
+    pub(crate) fn invoke_unchecked(
+        ctx: Context<Self>,
+        is_flag: bool,
+        key: &str,
+        updatable: bool,
+    ) -> Result<()> {
+        let accounts = ctx.accounts;
+        if is_flag {
+            accounts.set_market_config_flag_updatable(key, updatable)
+        } else {
+            accounts.set_market_config_factor_updatable(key, updatable)
+        }
+    }
+
+    fn set_market_config_flag_updatable(&mut self, key: &str, updatable: bool) -> Result<()> {
+        let flag = key
+            .parse()
+            .map_err(|_| error!(CoreError::InvalidMarketConfigKey))?;
+        self.store
+            .load_mut()?
+            .market_config_permissions
+            .set_flag_updatable(flag, updatable)
+    }
+
+    fn set_market_config_factor_updatable(&mut self, key: &str, updatable: bool) -> Result<()> {
+        let key = key
+            .parse()
+            .map_err(|_| error!(CoreError::InvalidMarketConfigKey))?;
+        self.store
+            .load_mut()?
+            .market_config_permissions
+            .set_factor_updatable(key, updatable)
+    }
+}
+
+impl<'info> internal::Authentication<'info> for SetMarketConfigUpdatable<'info> {
+    fn authority(&self) -> &Signer<'info> {
+        &self.authority
+    }
+
+    fn store(&self) -> &AccountLoader<'info, Store> {
+        &self.store
+    }
+}
+
 /// The accounts definition for [`toggle_gt_minting`](crate::gmsol_store::toggle_gt_minting).
 ///
 /// *[See also the documentation for the instruction.](crate::gmsol_store::toggle_gt_minting)*

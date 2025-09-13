@@ -22214,6 +22214,67 @@
       ]
     },
     {
+      "name": "set_market_config_updatable",
+      "docs": [
+        "Updates the allow list of market configs that can be modified by a",
+        "`MARKET_CONFIG_KEEPER`.",
+        "",
+        "# Accounts",
+        "See the documentation for the accounts in [`SetMarketConfigUpdatable`].",
+        "",
+        "# Arguments",
+        "- `is_flag`: Indicates whether the `key` refers to a market config flag.",
+        "- `key`: The market config key for which update permission is being set.",
+        "- `updatable`: Indicates whether the market config is updatable.",
+        "",
+        "# Errors",
+        "- The [`authority`](SetMarketConfigUpdatable::authority) must be a signer",
+        "and a `MARKET_KEEPER` in the given `store`.",
+        "- The [`store`](SetMarketConfigUpdatable::store) must be initialized.",
+        "- The provided `key` must be valid.",
+        "- The permission flag must change from its previous value."
+      ],
+      "discriminator": [
+        85,
+        97,
+        14,
+        102,
+        6,
+        109,
+        65,
+        187
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The caller."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "is_flag",
+          "type": "bool"
+        },
+        {
+          "name": "key",
+          "type": "string"
+        },
+        {
+          "name": "updatable",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "set_prices_from_price_feed",
       "docs": [
         "Set prices from the provided price feeds.",
@@ -23846,7 +23907,7 @@
       "docs": [
         "Update an item in the market config.",
         "",
-        "This instruction allows a MARKET_KEEPER to update a single configuration value in the market's",
+        "This instruction allows the `authority` to update a single configuration value in the market's",
         "configuration. The key must be one of the predefined market config keys.",
         "",
         "# Accounts",
@@ -23858,8 +23919,8 @@
         "- `value`: The new value to set for this configuration key.",
         "",
         "# Errors",
-        "- The [`authority`](UpdateMarketConfig::authority) must be a signer and have the MARKET_KEEPER",
-        "role in the store.",
+        "- The [`authority`](UpdateMarketConfig::authority) must be a signer and have permission to update",
+        "market config.",
         "- The [`store`](UpdateMarketConfig::store) must be an initialized store account owned by this program.",
         "- The [`market`](UpdateMarketConfig::market) must be an initialized market account owned by the store.",
         "- The provided `key` must be defined in [`MarketConfigKey`](states::market::config::MarketConfigKey)."
@@ -23915,7 +23976,7 @@
       "docs": [
         "Update a flag in the market config.",
         "",
-        "This instruction allows a MARKET_KEEPER to update a single flag in the market's",
+        "This instruction allows the `authority` to update a single flag in the market's",
         "configuration. The key must be one of the predefined market config flags.",
         "",
         "# Accounts",
@@ -23927,8 +23988,8 @@
         "- `value`: The new boolean value to set for this flag.",
         "",
         "# Errors",
-        "- The [`authority`](UpdateMarketConfig::authority) must be a signer and have the MARKET_KEEPER",
-        "role in the store.",
+        "- The [`authority`](UpdateMarketConfig::authority) must be a signer and have permission to update",
+        "market config.",
         "- The [`store`](UpdateMarketConfig::store) must be an initialized store account owned by this program.",
         "- The [`market`](UpdateMarketConfig::market) must be an initialized market account owned by the store.",
         "- The provided `key` must be defined in [`MarketConfigFlag`](states::market::config::MarketConfigFlag)."
@@ -23985,7 +24046,7 @@
         "Update the market configuration using a pre-populated",
         "[`MarketConfigBuffer`](crate::states::market::config::MarketConfigBuffer) account.",
         "",
-        "This instruction allows a MARKET_KEEPER to update multiple market configuration values at once",
+        "This instruction allows the `authority` to update multiple market configuration values at once",
         "by applying the changes stored in a buffer account. The buffer must contain valid configuration",
         "keys and values.",
         "",
@@ -23993,8 +24054,8 @@
         "[*See the documentation for the accounts.*](UpdateMarketConfigWithBuffer)",
         "",
         "# Errors",
-        "- The [`authority`](UpdateMarketConfigWithBuffer::authority) must be a signer and have the",
-        "MARKET_KEEPER role in the store.",
+        "- The [`authority`](UpdateMarketConfigWithBuffer::authority) must be a signer and have permission to update",
+        "market config.",
         "- The [`store`](UpdateMarketConfigWithBuffer::store) must be an initialized store account",
         "owned by this program.",
         "- The [`market`](UpdateMarketConfigWithBuffer::market) must be an initialized market account",
@@ -30539,6 +30600,25 @@
       }
     },
     {
+      "name": "MarketConfigFactorContainer",
+      "docs": [
+        "Flags container generated by the macro."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "value",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
       "name": "MarketConfigFlagContainer",
       "docs": [
         "Flags container generated by the macro."
@@ -30553,6 +30633,43 @@
           {
             "name": "value",
             "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketConfigPermissions",
+      "docs": [
+        "Permission store related to market config."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "updatable_market_config_flags",
+            "docs": [
+              "Market config flags updatable by a [`MARKET_CONFIG_KEEPER`](`gmsol_utils::role::RoleKey::MARKET_CONFIG_KEEPER`)."
+            ],
+            "type": {
+              "defined": {
+                "name": "MarketConfigFlagContainer"
+              }
+            }
+          },
+          {
+            "name": "updatable_market_config_factors",
+            "docs": [
+              "Market config factors updatable by a [`MARKET_CONFIG_KEEPER`](`gmsol_utils::role::RoleKey::MARKET_CONFIG_KEEPER`)."
+            ],
+            "type": {
+              "defined": {
+                "name": "MarketConfigFactorContainer"
+              }
+            }
           }
         ]
       }
@@ -33763,11 +33880,19 @@
             }
           },
           {
+            "name": "market_config_permissions",
+            "type": {
+              "defined": {
+                "name": "MarketConfigPermissions"
+              }
+            }
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                1024
+                992
               ]
             }
           }
