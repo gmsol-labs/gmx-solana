@@ -345,14 +345,27 @@ impl<'info> internal::Authentication<'info> for UpdateMarketConfig<'info> {
 /// Update market config by key.
 ///
 /// # CHECK
-/// - The [`authority`](UpdateMarketConfigWithBuffer::authority) must have
+/// - The [`authority`](UpdateMarketConfig::authority) must have
 ///   permission to update market config.
 pub(crate) fn unchecked_update_market_config(
     ctx: Context<UpdateMarketConfig>,
     key: &str,
     value: Factor,
 ) -> Result<()> {
-    *ctx.accounts.market.load_mut()?.get_config_mut(key)? = value;
+    let key = key
+        .parse()
+        .map_err(|_| error!(CoreError::InvalidMarketConfigKey))?;
+    if !ctx
+        .accounts
+        .store
+        .load()?
+        .market_config_permissions
+        .is_factor_updatable(key)?
+    {
+        msg!("[CHECK] checking permissions for updating `{}`", key);
+        internal::Authenticate::only_market_keeper(&ctx)?;
+    }
+    *ctx.accounts.market.load_mut()?.get_config_by_key_mut(key)? = value;
     msg!(
         "{}: set {} = {}",
         ctx.accounts.market.load()?.meta.market_token_mint,
@@ -365,18 +378,31 @@ pub(crate) fn unchecked_update_market_config(
 /// Update market config flag by key.
 ///
 /// # CHECK
-/// - The [`authority`](UpdateMarketConfigWithBuffer::authority) must have
+/// - The [`authority`](UpdateMarketConfig::authority) must have
 ///   permission to update market config.
 pub(crate) fn unchecked_update_market_config_flag(
     ctx: Context<UpdateMarketConfig>,
     key: &str,
     value: bool,
 ) -> Result<()> {
+    let key = key
+        .parse()
+        .map_err(|_| error!(CoreError::InvalidMarketConfigKey))?;
+    if !ctx
+        .accounts
+        .store
+        .load()?
+        .market_config_permissions
+        .is_flag_updatable(key)
+    {
+        msg!("[CHECK] checking permissions for updating `{}`", key);
+        internal::Authenticate::only_market_keeper(&ctx)?;
+    }
     let previous = ctx
         .accounts
         .market
         .load_mut()?
-        .set_config_flag(key, value)?;
+        .set_config_flag_by_key(key, value);
     msg!(
         "{}: set {} = {}, previous = {}",
         ctx.accounts.market.load()?.meta.market_token_mint,
@@ -418,6 +444,18 @@ pub(crate) fn unchecked_update_market_config_with_buffer(
         Clock::get()?.unix_timestamp,
         CoreError::InvalidArgument
     );
+
+    if let Err(err) = internal::Authenticate::only_market_keeper(&ctx) {
+        let store = ctx.accounts.store.load()?;
+        for entry in buffer.iter() {
+            let key = entry.key()?;
+            if !store.market_config_permissions.is_factor_updatable(key)? {
+                msg!("[CHECK] insufficient permissions to update `{}`", key);
+                return Err(err);
+            }
+        }
+    }
+
     ctx.accounts
         .market
         .load_mut()?

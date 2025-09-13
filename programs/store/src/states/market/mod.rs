@@ -361,6 +361,11 @@ impl Market {
     pub fn get_config_mut(&mut self, key: &str) -> Result<&mut Factor> {
         let key = MarketConfigKey::from_str(key)
             .map_err(|_| error!(CoreError::InvalidMarketConfigKey))?;
+        self.get_config_by_key_mut(key)
+    }
+
+    /// Get config mutably by key.
+    pub(crate) fn get_config_by_key_mut(&mut self, key: MarketConfigKey) -> Result<&mut Factor> {
         self.config
             .get_mut(key)
             .ok_or_else(|| error!(CoreError::Unimplemented))
@@ -385,7 +390,14 @@ impl Market {
     pub fn set_config_flag(&mut self, key: &str, value: bool) -> Result<bool> {
         let key = MarketConfigFlag::from_str(key)
             .map_err(|_| error!(CoreError::InvalidMarketConfigKey))?;
-        Ok(self.config.set_flag(key, value))
+        Ok(self.set_config_flag_by_key(key, value))
+    }
+
+    /// Set config flag by key.
+    ///
+    /// Returns previous value.
+    pub(crate) fn set_config_flag_by_key(&mut self, key: MarketConfigFlag, value: bool) -> bool {
+        self.config.set_flag(key, value)
     }
 
     /// Get other market state.
@@ -885,6 +897,7 @@ impl From<MarketError> for CoreError {
         msg!("Market Error: {}", err);
         match err {
             MarketError::NotACollateralToken => Self::InvalidArgument,
+            MarketError::ExceedMaxMarketConfigFactor => Self::InvalidArgument,
         }
     }
 }

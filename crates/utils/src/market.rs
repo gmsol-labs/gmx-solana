@@ -8,6 +8,9 @@ use anchor_lang::prelude::{
 /// Max number of config flags.
 pub const MAX_MARKET_CONFIG_FLAGS: usize = 128;
 
+/// Max number of core config factors.
+pub const MAX_MARKET_CONFIG_FACTORS: usize = 128;
+
 /// Max number of market flags.
 pub const MAX_MARKET_FLAGS: usize = 8;
 
@@ -20,6 +23,9 @@ pub enum MarketError {
     /// Not a collateral token.
     #[error("not a collateral token")]
     NotACollateralToken,
+    /// Market config key is out of the allowed range of factors.
+    #[error("market config key out of range")]
+    ExceedMaxMarketConfigFactor,
 }
 
 type MarketResult<T> = std::result::Result<T, MarketError>;
@@ -318,6 +324,32 @@ pub enum MarketConfigKey {
     MarketClosedBorrowingFeeBaseFactor,
     /// Borrowing fee above optimal usage factor when market is closed.
     MarketClosedBorrowingFeeAboveOptimalUsageFactor,
+}
+
+/// Market Config Factors.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct MarketConfigFactor(MarketConfigKey);
+
+impl From<MarketConfigFactor> for u8 {
+    fn from(value: MarketConfigFactor) -> Self {
+        u16::from(value.0).try_into().expect("must success")
+    }
+}
+
+impl TryFrom<MarketConfigKey> for MarketConfigFactor {
+    type Error = MarketError;
+
+    fn try_from(value: MarketConfigKey) -> std::result::Result<Self, Self::Error> {
+        let index = usize::from(u16::from(value));
+        if index > MAX_MARKET_CONFIG_FACTORS - 1 {
+            Err(MarketError::ExceedMaxMarketConfigFactor)
+        } else {
+            Ok(Self(value))
+        }
+    }
 }
 
 /// Market Flags.
