@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added support for LP token staking instructions.
 - sdk(decode): Added `UserHeader` to `GMSOLAccountData`.
 - sdk(sdk): Added support for `update_closed_state` instruction.
+- sdk(sdk): Added support for `set_market_config_updatable` instruction.
 
 ### Changed
 
