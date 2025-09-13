@@ -1,7 +1,7 @@
 use gmsol_programs::anchor_lang;
-use gmsol_sdk::{client::ops::MarketOps, ops::ExchangeOps};
+use gmsol_sdk::{client::ops::MarketOps, constants::MARKET_USD_UNIT, ops::ExchangeOps};
 use gmsol_store::CoreError;
-use gmsol_utils::market::MarketConfigFlag;
+use gmsol_utils::market::{MarketConfigFlag, MarketConfigKey};
 use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
@@ -147,6 +147,135 @@ async fn update_closed_state() -> eyre::Result<()> {
 
     assert_eq!(
         err.anchor_error_code(),
+        Some(CoreError::PermissionDenied.into())
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn set_market_config_updatable() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("set_market_config_updatable");
+    let _enter = span.enter();
+
+    let store = &deployment.store;
+    let market_token = deployment
+        .market_token("fBTC", "fBTC", "USDG")
+        .expect("must exist");
+
+    let client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let market_config_keeper = deployment.user_client(Deployment::USER_1)?;
+
+    // 1. Should throw permission denied error.
+    let err = market_config_keeper
+        .update_market_config_flag_by_key(
+            store,
+            market_token,
+            MarketConfigFlag::SkipBorrowingFeeForSmallerSide,
+            true,
+        )?
+        .send()
+        .await
+        .expect_err("this flag should not be updatable by a MARKET_CONFIG_KEEPER");
+
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::PermissionDenied.into())
+    );
+
+    let err = market_config_keeper
+        .update_market_config_by_key(
+            store,
+            market_token,
+            MarketConfigKey::MinPositionSizeUsd,
+            &MARKET_USD_UNIT,
+        )?
+        .send()
+        .await
+        .expect_err("this factor should not be updatable by a MARKET_CONFIG_KEEPER");
+
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::PermissionDenied.into())
+    );
+
+    // 2. Should set market config updatable to true successfully.
+    let signature = client
+        .set_market_config_updatable(
+            store,
+            [(MarketConfigFlag::SkipBorrowingFeeForSmallerSide, true)],
+            [(MarketConfigKey::MinPositionSizeUsd.try_into()?, true)],
+        )?
+        .send_without_preflight()
+        .await?;
+    tracing::info!("set market config updatable at {signature}");
+
+    // 3. Should update market configs successfully.
+    let signature = market_config_keeper
+        .update_market_config_flag_by_key(
+            store,
+            market_token,
+            MarketConfigFlag::SkipBorrowingFeeForSmallerSide,
+            true,
+        )?
+        .send()
+        .await?;
+    tracing::info!("updated flag at {signature}");
+
+    let signature = market_config_keeper
+        .update_market_config_by_key(
+            store,
+            market_token,
+            MarketConfigKey::MinPositionSizeUsd,
+            &MARKET_USD_UNIT,
+        )?
+        .send()
+        .await?;
+    tracing::info!("updated flag at {signature}");
+
+    // 4. Should set market config updatable to false successfully.
+    let signature = client
+        .set_market_config_updatable(
+            store,
+            [(MarketConfigFlag::SkipBorrowingFeeForSmallerSide, false)],
+            [(MarketConfigKey::MinPositionSizeUsd.try_into()?, false)],
+        )?
+        .send_without_preflight()
+        .await?;
+    tracing::info!("set market config updatable at {signature}");
+
+    // 5. Should throw permission denied error.
+    let err = market_config_keeper
+        .update_market_config_flag_by_key(
+            store,
+            market_token,
+            MarketConfigFlag::SkipBorrowingFeeForSmallerSide,
+            true,
+        )?
+        .send()
+        .await
+        .expect_err("this flag should not be updatable by a MARKET_CONFIG_KEEPER");
+
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::PermissionDenied.into())
+    );
+
+    let err = market_config_keeper
+        .update_market_config_by_key(
+            store,
+            market_token,
+            MarketConfigKey::MinPositionSizeUsd,
+            &MARKET_USD_UNIT,
+        )?
+        .send()
+        .await
+        .expect_err("this factor should not be updatable by a MARKET_CONFIG_KEEPER");
+
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
         Some(CoreError::PermissionDenied.into())
     );
 

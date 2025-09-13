@@ -856,6 +856,7 @@ impl Deployment {
             .user_keypair(Self::DEFAULT_KEEPER)
             .ok_or_eyre("the default keeper is not initialized")?;
         let keeper = keeper_keypair.pubkey();
+        let user_1 = self.user(Self::USER_1)?;
 
         let mut builder = client.bundle();
 
@@ -869,6 +870,7 @@ impl Deployment {
                     RoleKey::PRICE_KEEPER,
                     RoleKey::FEATURE_KEEPER,
                     RoleKey::CONFIG_KEEPER,
+                    RoleKey::MARKET_CONFIG_KEEPER,
                 ]
                 .iter()
                 .map(|role| client.enable_role(store, role)),
@@ -879,7 +881,8 @@ impl Deployment {
             .push(client.grant_role(store, &keeper, RoleKey::PRICE_KEEPER))?
             .push(client.grant_role(store, &keeper, RoleKey::FEATURE_KEEPER))?
             .push(client.grant_role(store, &keeper, RoleKey::CONFIG_KEEPER))?
-            .push(client.grant_role(store, &keeper, RoleKey::GT_CONTROLLER))?;
+            .push(client.grant_role(store, &keeper, RoleKey::GT_CONTROLLER))?
+            .push(client.grant_role(store, &user_1, RoleKey::MARKET_CONFIG_KEEPER))?;
 
         _ = builder.build()?
             .send_all(false)
