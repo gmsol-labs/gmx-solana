@@ -639,6 +639,7 @@ pub struct SetMarketConfigUpdatable<'info> {
     /// The caller.
     pub authority: Signer<'info>,
     /// Store.
+    #[account(mut)]
     pub store: AccountLoader<'info, Store>,
 }
 
