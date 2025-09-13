@@ -344,8 +344,9 @@ impl<'info> internal::Authentication<'info> for UpdateMarketConfig<'info> {
 
 /// Update market config by key.
 ///
-/// ## CHECK
-/// - Only MARKET_KEEPER can update the config of market.
+/// # CHECK
+/// - The [`authority`](UpdateMarketConfigWithBuffer::authority) must have
+///   permission to update market config.
 pub(crate) fn unchecked_update_market_config(
     ctx: Context<UpdateMarketConfig>,
     key: &str,
@@ -363,8 +364,9 @@ pub(crate) fn unchecked_update_market_config(
 
 /// Update market config flag by key.
 ///
-/// ## CHECK
-/// - Only MARKET_KEEPER can update the config of market.
+/// # CHECK
+/// - The [`authority`](UpdateMarketConfigWithBuffer::authority) must have
+///   permission to update market config.
 pub(crate) fn unchecked_update_market_config_flag(
     ctx: Context<UpdateMarketConfig>,
     key: &str,
@@ -404,8 +406,9 @@ pub struct UpdateMarketConfigWithBuffer<'info> {
 
 /// Update market config with buffer.
 ///
-/// ## CHECK
-/// - Only MARKET_KEEPER can update the config of market.
+/// # CHECK
+/// - The [`authority`](UpdateMarketConfigWithBuffer::authority) must have
+///   permission to update market config.
 pub(crate) fn unchecked_update_market_config_with_buffer(
     ctx: Context<UpdateMarketConfigWithBuffer>,
 ) -> Result<()> {

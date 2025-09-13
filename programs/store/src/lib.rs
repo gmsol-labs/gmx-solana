@@ -1387,7 +1387,7 @@ pub mod gmsol_store {
 
     /// Update an item in the market config.
     ///
-    /// This instruction allows a MARKET_KEEPER to update a single configuration value in the market's
+    /// This instruction allows the `authority` to update a single configuration value in the market's
     /// configuration. The key must be one of the predefined market config keys.
     ///
     /// # Accounts
@@ -1399,12 +1399,12 @@ pub mod gmsol_store {
     /// - `value`: The new value to set for this configuration key.
     ///
     /// # Errors
-    /// - The [`authority`](UpdateMarketConfig::authority) must be a signer and have the MARKET_KEEPER
-    ///   role in the store.
+    /// - The [`authority`](UpdateMarketConfig::authority) must be a signer and have permission to update
+    ///   market config.
     /// - The [`store`](UpdateMarketConfig::store) must be an initialized store account owned by this program.
     /// - The [`market`](UpdateMarketConfig::market) must be an initialized market account owned by the store.
     /// - The provided `key` must be defined in [`MarketConfigKey`](states::market::config::MarketConfigKey).
-    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    #[access_control(internal::Authenticate::ensure_can_update_market_config(&ctx))]
     pub fn update_market_config(
         ctx: Context<UpdateMarketConfig>,
         key: String,
@@ -1415,7 +1415,7 @@ pub mod gmsol_store {
 
     /// Update a flag in the market config.
     ///
-    /// This instruction allows a MARKET_KEEPER to update a single flag in the market's
+    /// This instruction allows the `authority` to update a single flag in the market's
     /// configuration. The key must be one of the predefined market config flags.
     ///
     /// # Accounts
@@ -1427,12 +1427,12 @@ pub mod gmsol_store {
     /// - `value`: The new boolean value to set for this flag.
     ///
     /// # Errors
-    /// - The [`authority`](UpdateMarketConfig::authority) must be a signer and have the MARKET_KEEPER
-    ///   role in the store.
+    /// - The [`authority`](UpdateMarketConfig::authority) must be a signer and have permission to update
+    ///   market config.
     /// - The [`store`](UpdateMarketConfig::store) must be an initialized store account owned by this program.
     /// - The [`market`](UpdateMarketConfig::market) must be an initialized market account owned by the store.
     /// - The provided `key` must be defined in [`MarketConfigFlag`](states::market::config::MarketConfigFlag).
-    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    #[access_control(internal::Authenticate::ensure_can_update_market_config(&ctx))]
     pub fn update_market_config_flag(
         ctx: Context<UpdateMarketConfig>,
         key: String,
@@ -1444,7 +1444,7 @@ pub mod gmsol_store {
     /// Update the market configuration using a pre-populated
     /// [`MarketConfigBuffer`](crate::states::market::config::MarketConfigBuffer) account.
     ///
-    /// This instruction allows a MARKET_KEEPER to update multiple market configuration values at once
+    /// This instruction allows the `authority` to update multiple market configuration values at once
     /// by applying the changes stored in a buffer account. The buffer must contain valid configuration
     /// keys and values.
     ///
@@ -1452,8 +1452,8 @@ pub mod gmsol_store {
     /// [*See the documentation for the accounts.*](UpdateMarketConfigWithBuffer)
     ///
     /// # Errors
-    /// - The [`authority`](UpdateMarketConfigWithBuffer::authority) must be a signer and have the
-    ///   MARKET_KEEPER role in the store.
+    /// - The [`authority`](UpdateMarketConfigWithBuffer::authority) must be a signer and have permission to update
+    ///   market config.
     /// - The [`store`](UpdateMarketConfigWithBuffer::store) must be an initialized store account
     ///   owned by this program.
     /// - The [`market`](UpdateMarketConfigWithBuffer::market) must be an initialized market account
@@ -1464,7 +1464,7 @@ pub mod gmsol_store {
     ///   - Not expired
     /// - All configuration keys in the buffer must be valid keys defined in
     ///   [`MarketConfigKey`](states::market::config::MarketConfigKey).
-    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    #[access_control(internal::Authenticate::ensure_can_update_market_config(&ctx))]
     pub fn update_market_config_with_buffer(
         ctx: Context<UpdateMarketConfigWithBuffer>,
     ) -> Result<()> {

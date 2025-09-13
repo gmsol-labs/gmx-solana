@@ -40,6 +40,9 @@ impl RoleKey {
 
     /// Migration Keeper.
     pub const MIGRATION_KEEPER: &'static str = "MIGRATION_KEEPER";
+
+    /// Addresses with this role can update the restricted list's market config.
+    pub const MARKET_CONFIG_KEEPER: &'static str = "MARKET_CONFIG_KEEPER";
 }
 
 impl Borrow<str> for RoleKey {
