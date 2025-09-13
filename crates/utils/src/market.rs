@@ -330,7 +330,7 @@ pub enum MarketConfigKey {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(transparent))]
+#[cfg_attr(feature = "serde", serde(try_from = "MarketConfigKey"))]
 pub struct MarketConfigFactor(MarketConfigKey);
 
 impl From<MarketConfigFactor> for u8 {
@@ -349,6 +349,13 @@ impl TryFrom<MarketConfigKey> for MarketConfigFactor {
         } else {
             Ok(Self(value))
         }
+    }
+}
+
+#[cfg(feature = "display")]
+impl std::fmt::Display for MarketConfigFactor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.0)
     }
 }
 
