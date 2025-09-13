@@ -89,7 +89,7 @@ openssl-vendored = [
 http-rpc-sender = ["gmsol-solana-utils/http-rpc-sender"]
 
 [dependencies]
-gmsol-utils = { workspace = true, features = ["enum-iter", "debug"] }
+gmsol-utils = { workspace = true, features = ["enum-iter", "debug", "display"] }
 gmsol-programs = { workspace = true, features = [
     "model",
     "utils",

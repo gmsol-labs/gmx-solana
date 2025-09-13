@@ -8,15 +8,18 @@ use gmsol_programs::gmsol_store::{
 };
 use gmsol_solana_utils::{
     make_bundle_builder::MakeBundleBuilder, transaction_builder::TransactionBuilder,
+    IntoAtomicGroup,
 };
 use gmsol_utils::{
-    market::{MarketConfigFlag, MarketConfigKey, MarketMeta},
+    market::{MarketConfigFactor, MarketConfigFlag, MarketConfigKey, MarketMeta},
     oracle::PriceProviderKind,
     token_config::{token_records, TokensWithFeed},
 };
+use indexmap::IndexMap;
 use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
 
 use crate::{
+    builders::market::SetMarketConfigUpdatable,
     client::{
         feeds_parser::{FeedAddressMap, FeedsParser},
         pull_oracle::{FeedIds, PullOraclePriceConsumer},
@@ -194,6 +197,14 @@ pub trait MarketOps<C> {
         market_token: &Pubkey,
         buffer: &Pubkey,
     ) -> TransactionBuilder<C>;
+
+    /// Set market config updatable.
+    fn set_market_config_updatable(
+        &self,
+        store: &Pubkey,
+        flags: impl Into<IndexMap<MarketConfigFlag, bool>>,
+        factors: impl Into<IndexMap<MarketConfigFactor, bool>>,
+    ) -> crate::Result<TransactionBuilder<C>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> MarketOps<C> for crate::Client<C> {
@@ -520,6 +531,22 @@ impl<C: Deref<Target = impl Signer> + Clone> MarketOps<C> for crate::Client<C> {
                 market: self.find_market_address(store, market_token),
                 buffer: *buffer,
             })
+    }
+
+    fn set_market_config_updatable(
+        &self,
+        store: &Pubkey,
+        flags: impl Into<IndexMap<MarketConfigFlag, bool>>,
+        factors: impl Into<IndexMap<MarketConfigFactor, bool>>,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let ag = SetMarketConfigUpdatable::builder()
+            .payer(self.payer())
+            .store_program(self.store_program_for_builders(store))
+            .flags(flags)
+            .factors(factors)
+            .build()
+            .into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
     }
 }
 
