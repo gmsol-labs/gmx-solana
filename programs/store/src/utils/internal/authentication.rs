@@ -30,6 +30,18 @@ pub(crate) trait Authentication<'info> {
         );
         Ok(())
     }
+
+    /// Check that the `authority` has any of the given roles.
+    fn ensure_has_any_role<'a>(&self, roles: impl IntoIterator<Item = &'a str> + 'a) -> Result<()> {
+        let store = self.store().load()?;
+        let authority = self.authority().key;
+        for role in roles {
+            if store.has_role(authority, role)? {
+                return Ok(());
+            }
+        }
+        err!(CoreError::PermissionDenied)
+    }
 }
 
 /// Provides access control utils for [`Authentication`]s.
@@ -37,6 +49,14 @@ pub(crate) trait Authenticate<'info>: Authentication<'info> + Bumps + Sized {
     /// Check that the `authority` has the given `role`.
     fn only(ctx: &Context<Self>, role: &str) -> Result<()> {
         ctx.accounts.only_role(role)
+    }
+
+    /// Check that the `authority` has any of the given roles.
+    fn ensure_has_any_role_with_ctx<'a>(
+        ctx: &Context<Self>,
+        roles: impl IntoIterator<Item = &'a str> + 'a,
+    ) -> Result<()> {
+        ctx.accounts.ensure_has_any_role(roles)
     }
 
     /// Check that the `authority` is an admin.
@@ -57,6 +77,14 @@ pub(crate) trait Authenticate<'info>: Authentication<'info> + Bumps + Sized {
     /// Check that the `authority` has the [`MARKET_KEEPER`](`RoleKey::MARKET_KEEPER`) role.
     fn only_market_keeper(ctx: &Context<Self>) -> Result<()> {
         Self::only(ctx, RoleKey::MARKET_KEEPER)
+    }
+
+    /// Check that the `authority` is allowed to update the market config.
+    fn ensure_can_update_market_config(ctx: &Context<Self>) -> Result<()> {
+        Self::ensure_has_any_role_with_ctx(
+            ctx,
+            [RoleKey::MARKET_KEEPER, RoleKey::MARKET_CONFIG_KEEPER],
+        )
     }
 
     /// Check that the `authority` has the [`ORDER_KEEPER`](`RoleKey::ORDER_KEEPER`) role.
