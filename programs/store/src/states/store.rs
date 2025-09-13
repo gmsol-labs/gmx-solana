@@ -9,6 +9,7 @@ use crate::{constants, states::feature::display_feature, CoreError, CoreResult};
 use super::{
     feature::{ActionDisabledFlag, DisabledFeatures, DomainDisabledFlag},
     gt::GtState,
+    permissions::MarketConfigPermissions,
     Amount, Factor, InitSpace, RoleKey, RoleStore, Seed,
 };
 
@@ -51,8 +52,9 @@ pub struct Store {
     pub(crate) address: Addresses,
     /// GT State.
     gt: GtState,
+    pub(crate) market_config_permissions: MarketConfigPermissions,
     #[cfg_attr(feature = "debug", debug(skip))]
-    reserved: [u8; 1024],
+    reserved: [u8; 992],
 }
 
 static_assertions::const_assert!(Store::INIT_SPACE + 8 <= 10240);

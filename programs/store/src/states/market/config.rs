@@ -2,7 +2,9 @@ use anchor_lang::prelude::*;
 
 use crate::{constants, states::Factor, CoreError};
 
-pub use gmsol_utils::market::{MarketConfigFlag, MarketConfigKey, MAX_MARKET_CONFIG_FLAGS};
+pub use gmsol_utils::market::{
+    MarketConfigFlag, MarketConfigKey, MAX_MARKET_CONFIG_FACTORS, MAX_MARKET_CONFIG_FLAGS,
+};
 
 /// Market Config.
 #[zero_copy]
@@ -90,6 +92,7 @@ pub struct MarketConfig {
     pub(super) market_closed_borrowing_fee_base_factor: Factor,
     pub(super) market_closed_borrowing_fee_above_optimal_usage_factor: Factor,
     reserved: [Factor; 28],
+    // CHECK: at most `MAX_MARKET_CONFIG_FACTORS` factors.
 }
 
 impl MarketConfig {
