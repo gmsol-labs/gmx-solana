@@ -73,6 +73,10 @@ pub struct Config {
     #[arg(long)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     timelock_program: Option<StringPubkey>,
+    /// Liquidity Provider Program ID.
+    #[arg(long)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    liquidity_provider_program: Option<StringPubkey>,
     /// Print the serialized instructions,
     /// instead of sending the transaction.
     #[arg(long, global = true, default_missing_value = "base64", num_args=0..=1, group = "tx-opts")]
@@ -217,6 +221,7 @@ impl Config {
             .store_program_id(Some(*self.store_program_id()))
             .treasury_program_id(Some(*self.treasury_program_id()))
             .timelock_program_id(Some(*self.timelock_program_id()))
+            .liquidity_provider_program_id(Some(*self.liquidity_provider_program_id()))
             .build()
     }
 
@@ -239,6 +244,13 @@ impl Config {
         self.timelock_program
             .as_deref()
             .unwrap_or(&gmsol_sdk::programs::gmsol_timelock::ID)
+    }
+
+    /// Returns the program ID of liquidity provider program.
+    pub fn liquidity_provider_program_id(&self) -> &Pubkey {
+        self.liquidity_provider_program
+            .as_deref()
+            .unwrap_or(&gmsol_sdk::programs::gmsol_liquidity_provider::ID)
     }
 
     /// Returns the address of the store account.

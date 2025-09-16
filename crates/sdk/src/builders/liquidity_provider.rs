@@ -443,3 +443,56 @@ struct SharedArgs {
     gt_store: Pubkey,
     gt_program: Pubkey,
 }
+
+/// Builder for LP program initialization instruction.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct InitializeLp {
+    /// Payer (a.k.a. authority).
+    #[builder(setter(into))]
+    pub payer: StringPubkey,
+    /// Liquidity provider program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub lp_program: LiquidityProviderProgram,
+    /// GT token mint address.
+    #[builder(setter(into))]
+    pub gt_mint: StringPubkey,
+    /// Minimum stake value in USD scaled by 1e20.
+    pub min_stake_value: u128,
+    /// Initial APY for all buckets (1e20-scaled).
+    pub initial_apy: u128,
+}
+
+impl IntoAtomicGroup for InitializeLp {
+    type Hint = ();
+
+    fn into_atomic_group(self, _hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let payer = self.payer.0;
+        let mut insts = AtomicGroup::new(&payer);
+
+        let global_state = self.lp_program.find_global_state_address();
+
+        let instruction = self
+            .lp_program
+            .anchor_instruction(args::Initialize {
+                min_stake_value: self.min_stake_value,
+                initial_apy: self.initial_apy,
+            })
+            .anchor_accounts(
+                accounts::Initialize {
+                    global_state,
+                    authority: payer,
+                    gt_mint: self.gt_mint.0,
+                    system_program: system_program::ID,
+                },
+                false,
+            )
+            .build();
+
+        insts.add(instruction);
+        Ok(insts)
+    }
+}
