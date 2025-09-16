@@ -73,6 +73,10 @@ pub struct Config {
     #[arg(long)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     timelock_program: Option<StringPubkey>,
+    /// Liquidity Provider Program ID.
+    #[arg(long)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    liquidity_provider_program: Option<StringPubkey>,
     /// Print the serialized instructions,
     /// instead of sending the transaction.
     #[arg(long, global = true, default_missing_value = "base64", num_args=0..=1, group = "tx-opts")]

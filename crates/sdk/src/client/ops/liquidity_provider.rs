@@ -46,6 +46,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
     ) -> crate::Result<TransactionBuilder<'_, C>> {
         let builder = InitializeLp::builder()
             .payer(self.payer())
+            .lp_program(self.lp_program_for_builders().clone())
             .gt_mint(*gt_mint)
             .min_stake_value(min_stake_value)
             .initial_apy(initial_apy)
@@ -71,6 +72,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
                 .oracle(*oracle)
                 .lp_token_kind(lp_token_kind)
                 .lp_token_mint(*lp_token_mint)
+                .lp_program(self.lp_program_for_builders().clone())
                 .store_program(
                     StoreProgram::builder()
                         .id(*self.store_program_id())

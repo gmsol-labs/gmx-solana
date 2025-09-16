@@ -101,6 +101,12 @@ use crate::{
     },
 };
 
+#[cfg(liquidity_provider)]
+use gmsol_solana_utils::Program as ProgramTrait;
+
+#[cfg(liquidity_provider)]
+use crate::builders::liquidity_provider::LiquidityProviderProgram;
+
 #[cfg(feature = "decode")]
 use gmsol_decode::{gmsol::programs::GMSOLCPIEvent, Decode};
 
@@ -117,6 +123,9 @@ pub struct ClientOptions {
     store_program_id: Option<Pubkey>,
     #[builder(default)]
     treasury_program_id: Option<Pubkey>,
+    #[cfg(liquidity_provider)]
+    #[builder(default)]
+    liquidity_provider_program_id: Option<Pubkey>,
     #[builder(default)]
     timelock_program_id: Option<Pubkey>,
     #[builder(default)]
@@ -136,6 +145,8 @@ pub struct Client<C> {
     cfg: Config<C>,
     store_program: Program<C>,
     treasury_program: Program<C>,
+    #[cfg(liquidity_provider)]
+    liquidity_provider_program: LiquidityProviderProgram,
     timelock_program: Program<C>,
     rpc: OnceLock<RpcClient>,
     pub_sub: OnceCell<PubsubClient>,
@@ -152,6 +163,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         let ClientOptions {
             store_program_id,
             treasury_program_id,
+            #[cfg(liquidity_provider)]
+            liquidity_provider_program_id,
             timelock_program_id,
             commitment,
             subscription,
@@ -166,6 +179,10 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                 treasury_program_id.unwrap_or(gmsol_programs::gmsol_treasury::ID),
                 cfg.clone(),
             ),
+            #[cfg(liquidity_provider)]
+            liquidity_provider_program: LiquidityProviderProgram::builder()
+                .id(liquidity_provider_program_id.unwrap_or(gmsol_programs::gmsol_liquidity_provider::ID))
+                .build(),
             timelock_program: Program::new(
                 timelock_program_id.unwrap_or(gmsol_programs::gmsol_timelock::ID),
                 cfg.clone(),
@@ -193,6 +210,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             ClientOptions {
                 store_program_id: Some(*self.store_program_id()),
                 treasury_program_id: Some(*self.treasury_program_id()),
+                #[cfg(liquidity_provider)]
+                liquidity_provider_program_id: Some(*self.liquidity_provider_program.id()),
                 timelock_program_id: Some(*self.timelock_program_id()),
                 commitment: self.commitment(),
                 subscription: self.subscription_config.clone(),
@@ -206,6 +225,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             cfg: self.cfg.clone(),
             store_program: self.program(*self.store_program_id()),
             treasury_program: self.program(*self.treasury_program_id()),
+            #[cfg(liquidity_provider)]
+            liquidity_provider_program: self.liquidity_provider_program.clone(),
             timelock_program: self.program(*self.timelock_program_id()),
             pub_sub: OnceCell::default(),
             rpc: Default::default(),
@@ -257,6 +278,12 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             .build()
     }
 
+    /// Get [`LiquidityProviderProgram`] for builders.
+    #[cfg(liquidity_provider)]
+    pub fn lp_program_for_builders(&self) -> &LiquidityProviderProgram {
+        &self.liquidity_provider_program
+    }
+
     /// Get treasury program.
     pub fn treasury_program(&self) -> &Program<C> {
         &self.treasury_program
@@ -290,6 +317,12 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     /// Get the program id of the timelock program.
     pub fn timelock_program_id(&self) -> &Pubkey {
         self.timelock_program().id()
+    }
+
+    /// Get the program id of the liquidity provider program.
+    #[cfg(liquidity_provider)]
+    pub fn liquidity_provider_program_id(&self) -> &Pubkey {
+        self.liquidity_provider_program.id()
     }
 
     /// Create a [`TransactionBuilder`] for the store program.
