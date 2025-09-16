@@ -33,6 +33,7 @@ use gt::Gt;
 use init_config::InitConfig;
 
 use inspect::Inspect;
+use lp::Lp;
 use market::Market;
 use other::Other;
 #[cfg(feature = "remote-wallet")]
@@ -53,6 +54,7 @@ mod glv;
 mod gt;
 mod init_config;
 mod inspect;
+mod lp;
 mod market;
 mod other;
 mod timelock;
@@ -92,6 +94,8 @@ pub enum Commands {
     Configuration(Configuration),
     /// Competition management commands.
     Competition(Competition),
+    /// Liquidity Provider management commands.
+    Lp(Lp),
     /// Inspect protocol data.
     Inspect(Inspect),
     /// Miscellaneous useful commands.

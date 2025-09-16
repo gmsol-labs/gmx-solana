@@ -181,7 +181,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             ),
             #[cfg(liquidity_provider)]
             liquidity_provider_program: LiquidityProviderProgram::builder()
-                .id(liquidity_provider_program_id.unwrap_or(gmsol_programs::gmsol_liquidity_provider::ID))
+                .id(liquidity_provider_program_id
+                    .unwrap_or(gmsol_programs::gmsol_liquidity_provider::ID))
                 .build(),
             timelock_program: Program::new(
                 timelock_program_id.unwrap_or(gmsol_programs::gmsol_timelock::ID),
