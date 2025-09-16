@@ -70,7 +70,6 @@ pub mod gmsol_liquidity_provider {
         let global_state = &mut ctx.accounts.global_state;
         global_state.authority = ctx.accounts.authority.key();
         global_state.pending_authority = Pubkey::default();
-        global_state.gt_mint = ctx.accounts.gt_mint.key();
 
         // Cap-check and initialize all buckets with the same initial APY
         require!(initial_apy <= APY_MAX, ErrorCode::ApyTooLarge);
@@ -773,9 +772,6 @@ pub struct Initialize<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
 
-    /// CHECK: GT token mint address
-    pub gt_mint: UncheckedAccount<'info>,
-
     pub system_program: Program<'info, System>,
 }
 
@@ -1247,8 +1243,6 @@ pub struct GlobalState {
     pub authority: Pubkey,
     /// Pending authority awaiting acceptance (Pubkey::default() if none)
     pub pending_authority: Pubkey,
-    /// GT token mint address
-    pub gt_mint: Pubkey,
     /// APY gradient buckets (APY_BUCKETS), each is 1e20-scaled APR for week buckets [0-1), [1-2), ..., [APY_BUCKETS, +inf)
     pub apy_gradient: [u128; APY_BUCKETS],
     /// Minimum stake value in USD scaled by 1e20
