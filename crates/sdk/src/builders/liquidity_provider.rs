@@ -604,3 +604,145 @@ impl IntoAtomicGroup for DisableLpTokenController {
         Ok(insts)
     }
 }
+
+/// Builder for LP token unstaking instruction.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct UnstakeLpToken {
+    /// Payer (a.k.a. owner).
+    #[builder(setter(into))]
+    pub payer: StringPubkey,
+    /// Store program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub store_program: StoreProgram,
+    /// Liquidity provider program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub lp_program: LiquidityProviderProgram,
+    /// LP token kind.
+    pub lp_token_kind: LpTokenKind,
+    /// LP token mint address.
+    #[builder(setter(into))]
+    pub lp_token_mint: StringPubkey,
+    /// LP token account.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default, setter(into))]
+    pub lp_token_account: Option<StringPubkey>,
+    /// Position ID.
+    pub position_id: u64,
+    /// Unstake amount.
+    pub unstake_amount: u64,
+}
+
+impl UnstakeLpToken {
+    fn lp_token_account(&self, token_program_id: &Pubkey) -> Pubkey {
+        self.lp_token_account
+            .as_deref()
+            .copied()
+            .unwrap_or_else(|| {
+                anchor_spl::associated_token::get_associated_token_address_with_program_id(
+                    &self.payer,
+                    &self.lp_token_mint,
+                    token_program_id,
+                )
+            })
+    }
+
+    fn shared_unstake_args(&self) -> SharedUnstakeArgs {
+        let owner = self.payer.0;
+        let global_state = self.lp_program.find_global_state_address();
+        let lp_mint = self.lp_token_mint.0;
+
+        let controller = self
+            .lp_program
+            .find_lp_token_controller_address(&global_state, &lp_mint);
+
+        let position =
+            self.lp_program
+                .find_stake_position_address(&owner, self.position_id, &controller);
+        let position_vault = self.lp_program.find_stake_position_vault_address(&position);
+
+        SharedUnstakeArgs {
+            owner,
+            global_state,
+            lp_mint,
+            controller,
+            position,
+            position_vault,
+            gt_store: self.store_program.store.0,
+            gt_program: *self.store_program.id(),
+        }
+    }
+}
+
+impl IntoAtomicGroup for UnstakeLpToken {
+    type Hint = ();
+
+    fn into_atomic_group(self, _hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let owner = self.payer.0;
+        let mut insts = AtomicGroup::new(&owner);
+
+        let SharedUnstakeArgs {
+            owner,
+            global_state,
+            lp_mint,
+            controller,
+            position,
+            position_vault,
+            gt_store,
+            gt_program,
+        } = self.shared_unstake_args();
+
+        // Use GT program's find_user_address for gt_user
+        let gt_user = crate::pda::find_user_address(&gt_store, &owner, &gt_program).0;
+        let event_authority = self.store_program.find_event_authority_address();
+
+        // Token program depends on LP token kind: GM uses token::ID, GLV uses token_2022::ID
+        let token_program_id = match self.lp_token_kind {
+            LpTokenKind::Gm => anchor_spl::token::ID,
+            LpTokenKind::Glv => anchor_spl::token_2022::ID,
+        };
+
+        let instruction = self
+            .lp_program
+            .anchor_instruction(args::UnstakeLp {
+                _position_id: self.position_id,
+                unstake_amount: self.unstake_amount,
+            })
+            .anchor_accounts(
+                accounts::UnstakeLp {
+                    global_state,
+                    controller,
+                    lp_mint,
+                    store: gt_store,
+                    gt_program,
+                    position,
+                    position_vault,
+                    owner,
+                    gt_user,
+                    user_lp_token: self.lp_token_account(&token_program_id),
+                    event_authority,
+                    token_program: token_program_id,
+                },
+                false,
+            )
+            .build();
+
+        insts.add(instruction);
+        Ok(insts)
+    }
+}
+
+struct SharedUnstakeArgs {
+    owner: Pubkey,
+    global_state: Pubkey,
+    lp_mint: Pubkey,
+    controller: Pubkey,
+    position: Pubkey,
+    position_vault: Pubkey,
+    gt_store: Pubkey,
+    gt_program: Pubkey,
+}
