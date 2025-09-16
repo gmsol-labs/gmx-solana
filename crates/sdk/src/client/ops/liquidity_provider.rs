@@ -9,7 +9,7 @@ use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
 use crate::{
     builders::{
-        liquidity_provider::{LpTokenKind, StakeLpToken, StakeLpTokenHint},
+        liquidity_provider::{InitializeLp, LpTokenKind, StakeLpToken, StakeLpTokenHint},
         StoreProgram,
     },
     client::pull_oracle::{FeedIds, PullOraclePriceConsumer},
@@ -18,6 +18,14 @@ use crate::{
 
 /// Operations for liquidity-provider program.
 pub trait LiquidityProviderOps<C> {
+    /// Initialize LP staking program.
+    fn initialize_lp(
+        &self,
+        gt_mint: &Pubkey,
+        min_stake_value: u128,
+        initial_apy: u128,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
+
     /// Stake LP token.
     fn stake_lp_token(
         &self,
@@ -30,6 +38,23 @@ pub trait LiquidityProviderOps<C> {
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::Client<C> {
+    fn initialize_lp(
+        &self,
+        gt_mint: &Pubkey,
+        min_stake_value: u128,
+        initial_apy: u128,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let builder = InitializeLp::builder()
+            .payer(self.payer())
+            .gt_mint(*gt_mint)
+            .min_stake_value(min_stake_value)
+            .initial_apy(initial_apy)
+            .build();
+
+        let ag = builder.into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
     fn stake_lp_token(
         &self,
         store: &Pubkey,
