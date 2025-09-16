@@ -499,3 +499,54 @@ impl IntoAtomicGroup for InitializeLp {
         Ok(insts)
     }
 }
+
+/// Builder for LP token controller creation instruction.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct CreateLpTokenController {
+    /// Authority (must match GlobalState authority).
+    #[builder(setter(into))]
+    pub authority: StringPubkey,
+    /// Liquidity provider program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub lp_program: LiquidityProviderProgram,
+    /// LP token mint address.
+    #[builder(setter(into))]
+    pub lp_token_mint: StringPubkey,
+}
+
+impl IntoAtomicGroup for CreateLpTokenController {
+    type Hint = ();
+
+    fn into_atomic_group(self, _hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let authority = self.authority.0;
+        let mut insts = AtomicGroup::new(&authority);
+
+        let global_state = self.lp_program.find_global_state_address();
+        let controller = self
+            .lp_program
+            .find_lp_token_controller_address(&global_state, &self.lp_token_mint.0);
+
+        let instruction = self
+            .lp_program
+            .anchor_instruction(args::CreateLpTokenController {
+                lp_token_mint: self.lp_token_mint.0,
+            })
+            .anchor_accounts(
+                accounts::CreateLpTokenController {
+                    global_state,
+                    controller,
+                    authority,
+                    system_program: system_program::ID,
+                },
+                false,
+            )
+            .build();
+
+        insts.add(instruction);
+        Ok(insts)
+    }
+}
