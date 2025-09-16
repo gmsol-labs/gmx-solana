@@ -23,6 +23,11 @@ enum Command {
         /// LP token mint address.
         lp_token_mint: Pubkey,
     },
+    /// Disable LP token controller for a specific token mint.
+    DisableController {
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+    },
 }
 
 impl super::Command for Lp {
@@ -51,6 +56,13 @@ impl super::Command for Lp {
 
                 client
                     .create_lp_token_controller(lp_token_mint)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::DisableController { lp_token_mint } => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                client
+                    .disable_lp_token_controller(ctx.store(), lp_token_mint)?
                     .into_bundle_with_options(options)?
             }
         };

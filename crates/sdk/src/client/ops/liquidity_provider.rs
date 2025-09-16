@@ -10,7 +10,8 @@ use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use crate::{
     builders::{
         liquidity_provider::{
-            CreateLpTokenController, InitializeLp, LpTokenKind, StakeLpToken, StakeLpTokenHint,
+            CreateLpTokenController, DisableLpTokenController, InitializeLp, LpTokenKind,
+            StakeLpToken, StakeLpTokenHint,
         },
         StoreProgram,
     },
@@ -30,6 +31,13 @@ pub trait LiquidityProviderOps<C> {
     /// Create LP token controller for a specific token mint.
     fn create_lp_token_controller(
         &self,
+        lp_token_mint: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
+
+    /// Disable LP token controller for a specific token mint.
+    fn disable_lp_token_controller(
+        &self,
+        store: &Pubkey,
         lp_token_mint: &Pubkey,
     ) -> crate::Result<TransactionBuilder<'_, C>>;
 
@@ -67,6 +75,22 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
     ) -> crate::Result<TransactionBuilder<'_, C>> {
         let builder = CreateLpTokenController::builder()
             .authority(self.payer())
+            .lp_program(self.lp_program_for_builders().clone())
+            .lp_token_mint(*lp_token_mint)
+            .build();
+
+        let ag = builder.into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
+    fn disable_lp_token_controller(
+        &self,
+        store: &Pubkey,
+        lp_token_mint: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let builder = DisableLpTokenController::builder()
+            .authority(self.payer())
+            .store_program(self.store_program_for_builders(store))
             .lp_program(self.lp_program_for_builders().clone())
             .lp_token_mint(*lp_token_mint)
             .build();
