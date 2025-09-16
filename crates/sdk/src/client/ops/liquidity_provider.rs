@@ -9,7 +9,9 @@ use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
 use crate::{
     builders::{
-        liquidity_provider::{InitializeLp, LpTokenKind, StakeLpToken, StakeLpTokenHint},
+        liquidity_provider::{
+            CreateLpTokenController, InitializeLp, LpTokenKind, StakeLpToken, StakeLpTokenHint,
+        },
         StoreProgram,
     },
     client::pull_oracle::{FeedIds, PullOraclePriceConsumer},
@@ -23,6 +25,12 @@ pub trait LiquidityProviderOps<C> {
         &self,
         min_stake_value: u128,
         initial_apy: u128,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
+
+    /// Create LP token controller for a specific token mint.
+    fn create_lp_token_controller(
+        &self,
+        lp_token_mint: &Pubkey,
     ) -> crate::Result<TransactionBuilder<'_, C>>;
 
     /// Stake LP token.
@@ -47,6 +55,20 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             .lp_program(self.lp_program_for_builders().clone())
             .min_stake_value(min_stake_value)
             .initial_apy(initial_apy)
+            .build();
+
+        let ag = builder.into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
+    fn create_lp_token_controller(
+        &self,
+        lp_token_mint: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let builder = CreateLpTokenController::builder()
+            .authority(self.payer())
+            .lp_program(self.lp_program_for_builders().clone())
+            .lp_token_mint(*lp_token_mint)
             .build();
 
         let ag = builder.into_atomic_group(&())?;

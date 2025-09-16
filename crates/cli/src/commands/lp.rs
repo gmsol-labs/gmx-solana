@@ -18,6 +18,11 @@ enum Command {
         #[arg(long)]
         initial_apy: Value,
     },
+    /// Create LP token controller for a specific token mint.
+    CreateController {
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+    },
 }
 
 impl super::Command for Lp {
@@ -39,6 +44,13 @@ impl super::Command for Lp {
 
                 client
                     .initialize_lp(min_stake_value.to_u128()?, initial_apy.to_u128()?)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::CreateController { lp_token_mint } => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                client
+                    .create_lp_token_controller(lp_token_mint)?
                     .into_bundle_with_options(options)?
             }
         };
