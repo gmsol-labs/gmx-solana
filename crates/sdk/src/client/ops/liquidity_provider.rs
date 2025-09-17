@@ -13,7 +13,7 @@ use crate::{
             AcceptAuthority, CalculateGtReward, CreateLpTokenController, DisableLpTokenController,
             InitializeLp, LpTokenKind, SetClaimEnabled, SetPricingStaleness, StakeLpToken,
             StakeLpTokenHint, TransferAuthority, UnstakeLpToken, UpdateApyGradientRange,
-            UpdateApyGradientSparse,
+            UpdateApyGradientSparse, UpdateMinStakeValue,
         },
         StoreProgram,
     },
@@ -103,6 +103,12 @@ pub trait LiquidityProviderOps<C> {
         start_bucket: u8,
         end_bucket: u8,
         apy_values: Vec<u128>,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
+
+    /// Update minimum stake value.
+    fn update_min_stake_value(
+        &self,
+        new_min_stake_value: u128,
     ) -> crate::Result<TransactionBuilder<'_, C>>;
 }
 
@@ -299,6 +305,20 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             .start_bucket(start_bucket)
             .end_bucket(end_bucket)
             .apy_values(apy_values)
+            .build();
+
+        let ag = builder.into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
+    fn update_min_stake_value(
+        &self,
+        new_min_stake_value: u128,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let builder = UpdateMinStakeValue::builder()
+            .authority(self.payer())
+            .lp_program(self.lp_program_for_builders().clone())
+            .new_min_stake_value(new_min_stake_value)
             .build();
 
         let ag = builder.into_atomic_group(&())?;

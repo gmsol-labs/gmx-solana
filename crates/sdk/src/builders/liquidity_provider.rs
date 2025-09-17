@@ -1024,6 +1024,51 @@ impl IntoAtomicGroup for UpdateApyGradientRange {
     }
 }
 
+/// Builder for updating minimum stake value instruction.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct UpdateMinStakeValue {
+    /// Authority (must match GlobalState authority).
+    #[builder(setter(into))]
+    pub authority: StringPubkey,
+    /// Liquidity provider program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub lp_program: LiquidityProviderProgram,
+    /// New minimum stake value (1e20-scaled).
+    pub new_min_stake_value: u128,
+}
+
+impl IntoAtomicGroup for UpdateMinStakeValue {
+    type Hint = ();
+
+    fn into_atomic_group(self, _hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let authority = self.authority.0;
+        let mut insts = AtomicGroup::new(&authority);
+
+        let global_state = self.lp_program.find_global_state_address();
+
+        let instruction = self
+            .lp_program
+            .anchor_instruction(args::UpdateMinStakeValue {
+                new_min_stake_value: self.new_min_stake_value,
+            })
+            .anchor_accounts(
+                accounts::UpdateMinStakeValue {
+                    global_state,
+                    authority,
+                },
+                false,
+            )
+            .build();
+
+        insts.add(instruction);
+        Ok(insts)
+    }
+}
+
 /// Builder for LP token GT reward calculation instruction.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]
