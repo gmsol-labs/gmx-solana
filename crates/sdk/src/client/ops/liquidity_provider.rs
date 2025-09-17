@@ -11,8 +11,8 @@ use crate::{
     builders::{
         liquidity_provider::{
             AcceptAuthority, CalculateGtReward, CreateLpTokenController, DisableLpTokenController,
-            InitializeLp, LpTokenKind, StakeLpToken, StakeLpTokenHint, TransferAuthority,
-            UnstakeLpToken,
+            InitializeLp, LpTokenKind, SetClaimEnabled, StakeLpToken, StakeLpTokenHint,
+            TransferAuthority, UnstakeLpToken,
         },
         StoreProgram,
     },
@@ -79,6 +79,9 @@ pub trait LiquidityProviderOps<C> {
 
     /// Accept LP program authority transfer.
     fn accept_lp_authority(&self) -> crate::Result<TransactionBuilder<'_, C>>;
+
+    /// Set whether claiming GT at any time is allowed.
+    fn set_claim_enabled(&self, enabled: bool) -> crate::Result<TransactionBuilder<'_, C>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::Client<C> {
@@ -215,6 +218,17 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         let builder = AcceptAuthority::builder()
             .pending_authority(self.payer())
             .lp_program(self.lp_program_for_builders().clone())
+            .build();
+
+        let ag = builder.into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
+    fn set_claim_enabled(&self, enabled: bool) -> crate::Result<TransactionBuilder<'_, C>> {
+        let builder = SetClaimEnabled::builder()
+            .authority(self.payer())
+            .lp_program(self.lp_program_for_builders().clone())
+            .enabled(enabled)
             .build();
 
         let ag = builder.into_atomic_group(&())?;
