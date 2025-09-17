@@ -77,6 +77,13 @@ enum Command {
         #[arg(long)]
         owner: Option<Pubkey>,
     },
+    /// Transfer LP program authority to a new authority.
+    TransferAuthority {
+        /// New authority address.
+        new_authority: Pubkey,
+    },
+    /// Accept LP program authority transfer.
+    AcceptAuthority,
 }
 
 impl super::Command for Lp {
@@ -186,6 +193,22 @@ impl super::Command for Lp {
                 // Create calculate GT reward transaction using SDK
                 client
                     .calculate_gt_reward(store, lp_token_mint, &position_owner, *position_id)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::TransferAuthority { new_authority } => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                // Transfer LP program authority
+                client
+                    .transfer_lp_authority(new_authority)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::AcceptAuthority => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                // Accept LP program authority transfer
+                client
+                    .accept_lp_authority()?
                     .into_bundle_with_options(options)?
             }
         };

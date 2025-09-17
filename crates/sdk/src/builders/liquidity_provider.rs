@@ -748,6 +748,93 @@ struct SharedUnstakeArgs {
     gt_program: Pubkey,
 }
 
+/// Builder for transferring LP program authority instruction.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct TransferAuthority {
+    /// Current authority.
+    #[builder(setter(into))]
+    pub authority: StringPubkey,
+    /// Liquidity provider program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub lp_program: LiquidityProviderProgram,
+    /// New authority.
+    #[builder(setter(into))]
+    pub new_authority: StringPubkey,
+}
+
+impl IntoAtomicGroup for TransferAuthority {
+    type Hint = ();
+
+    fn into_atomic_group(self, _hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let authority = self.authority.0;
+        let mut insts = AtomicGroup::new(&authority);
+
+        let global_state = self.lp_program.find_global_state_address();
+
+        let instruction = self
+            .lp_program
+            .anchor_instruction(args::TransferAuthority {
+                new_authority: self.new_authority.0,
+            })
+            .anchor_accounts(
+                accounts::TransferAuthority {
+                    global_state,
+                    authority,
+                },
+                false,
+            )
+            .build();
+
+        insts.add(instruction);
+        Ok(insts)
+    }
+}
+
+/// Builder for accepting LP program authority instruction.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct AcceptAuthority {
+    /// Pending authority.
+    #[builder(setter(into))]
+    pub pending_authority: StringPubkey,
+    /// Liquidity provider program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub lp_program: LiquidityProviderProgram,
+}
+
+impl IntoAtomicGroup for AcceptAuthority {
+    type Hint = ();
+
+    fn into_atomic_group(self, _hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let pending_authority = self.pending_authority.0;
+        let mut insts = AtomicGroup::new(&pending_authority);
+
+        let global_state = self.lp_program.find_global_state_address();
+
+        let instruction = self
+            .lp_program
+            .anchor_instruction(args::AcceptAuthority {})
+            .anchor_accounts(
+                accounts::AcceptAuthority {
+                    global_state,
+                    pending_authority,
+                },
+                false,
+            )
+            .build();
+
+        insts.add(instruction);
+        Ok(insts)
+    }
+}
+
 /// Builder for LP token GT reward calculation instruction.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]
