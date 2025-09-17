@@ -8,9 +8,6 @@ use gmsol_sdk::{
 };
 
 #[cfg(feature = "execute")]
-use crate::commands::exchange::executor::ExecutorArgs;
-
-#[cfg(feature = "execute")]
 use std::num::NonZeroU64;
 
 /// Liquidity Provider management commands.
@@ -42,6 +39,7 @@ enum Command {
         lp_token_mint: Pubkey,
     },
     /// Stake LP tokens (GM or GLV).
+    #[cfg(feature = "execute")]
     Stake {
         /// LP token kind (GM or GLV).
         #[arg(long, value_enum)]
@@ -54,6 +52,9 @@ enum Command {
         /// Optional position ID (if not provided, will generate randomly).
         #[arg(long)]
         position_id: Option<u64>,
+        /// Executor arguments for oracle handling.
+        #[command(flatten)]
+        args: crate::commands::exchange::executor::ExecutorArgs,
     },
     /// Unstake LP tokens (GM or GLV).
     Unstake {
@@ -165,6 +166,7 @@ impl super::Command for Lp {
                 lp_token_mint,
                 amount,
                 position_id,
+                args,
             } => {
                 // Ensure we're not in instruction buffer mode since executor needs to send transactions
                 ctx.require_not_ix_buffer_mode()?;
@@ -186,21 +188,10 @@ impl super::Command for Lp {
                     }
                 };
 
-                // Create executor with default args and execute
-                let executor_args = ExecutorArgs {
-                    oracle_testnet: cfg!(feature = "devnet"),
-                    disable_switchboard: false,
-                    feed_index: 0,
-                };
-                let executor = executor_args.build(client).await?;
+                // Use ExecutorArgs to build executor (same pattern as ConfirmGtBuyback in treasury)
+                let executor = args.build(client).await?;
                 executor.execute(builder, options).await?;
                 return Ok(());
-            }
-            #[cfg(not(feature = "execute"))]
-            Command::Stake { .. } => {
-                return Err(eyre::eyre!(
-                    "Stake operation requires execute feature to handle price feeds"
-                ));
             }
             Command::Unstake {
                 kind,
