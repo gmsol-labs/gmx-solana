@@ -74,6 +74,14 @@ enum Command {
         #[arg(long)]
         owner: Option<Pubkey>,
     },
+    /// Claim GT rewards for a position.
+    ClaimGt {
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+        /// Position ID to claim rewards for.
+        #[arg(long)]
+        position_id: u64,
+    },
     /// Transfer LP program authority to a new authority.
     TransferAuthority {
         /// New authority address.
@@ -227,6 +235,17 @@ impl super::Command for Lp {
                 // Create calculate GT reward transaction using SDK
                 client
                     .calculate_gt_reward(store, lp_token_mint, &position_owner, *position_id)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::ClaimGt {
+                lp_token_mint,
+                position_id,
+            } => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                // Create claim GT reward transaction using SDK
+                client
+                    .claim_gt_reward(store, lp_token_mint, *position_id)?
                     .into_bundle_with_options(options)?
             }
             Command::TransferAuthority { new_authority } => {
