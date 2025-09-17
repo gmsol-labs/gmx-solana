@@ -1,10 +1,16 @@
 use gmsol_sdk::{
     builders::liquidity_provider::LpTokenKind,
-    ops::{token_account::TokenAccountOps, user::UserOps},
+    ops::{
+        liquidity_provider::LiquidityProviderOps, token_account::TokenAccountOps, user::UserOps,
+    },
     programs::anchor_lang::prelude::Pubkey,
-    solana_utils::make_bundle_builder::MakeBundleBuilder,
     utils::Value,
 };
+
+#[cfg(feature = "execute")]
+use crate::commands::exchange::executor::ExecutorArgs;
+
+#[cfg(feature = "execute")]
 use std::num::NonZeroU64;
 
 /// Liquidity Provider management commands.
@@ -141,33 +147,27 @@ impl super::Command for Lp {
                 min_stake_value,
                 initial_apy,
             } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
-
+                // Use a placeholder for gt_mint since it's not actually used in the program logic
+                let placeholder_gt_mint = Pubkey::default();
                 client
                     .initialize_lp(min_stake_value.to_u128()?, initial_apy.to_u128()?)?
                     .into_bundle_with_options(options)?
             }
-            Command::CreateController { lp_token_mint } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
-
-                client
-                    .create_lp_token_controller(lp_token_mint)?
-                    .into_bundle_with_options(options)?
-            }
-            Command::DisableController { lp_token_mint } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
-
-                client
-                    .disable_lp_token_controller(store, lp_token_mint)?
-                    .into_bundle_with_options(options)?
-            }
+            Command::CreateController { lp_token_mint } => client
+                .create_lp_token_controller(lp_token_mint)?
+                .into_bundle_with_options(options)?,
+            Command::DisableController { lp_token_mint } => client
+                .disable_lp_token_controller(store, lp_token_mint)?
+                .into_bundle_with_options(options)?,
+            #[cfg(feature = "execute")]
             Command::Stake {
                 kind,
                 lp_token_mint,
                 amount,
                 position_id,
             } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+                // Ensure we're not in instruction buffer mode since executor needs to send transactions
+                ctx.require_not_ix_buffer_mode()?;
 
                 // Get oracle from global config
                 let oracle = ctx.config().oracle()?;
@@ -176,17 +176,31 @@ impl super::Command for Lp {
                 let stake_amount = NonZeroU64::new(*amount)
                     .ok_or_else(|| eyre::eyre!("Stake amount must be greater than zero"))?;
 
-                // Create stake builder
-                let mut stake_builder =
-                    client.stake_lp_token(store, *kind, lp_token_mint, oracle, stake_amount);
+                // Create stake builder with position ID if provided
+                let builder = match position_id {
+                    Some(pos_id) => client
+                        .stake_lp_token(store, *kind, lp_token_mint, oracle, stake_amount)
+                        .with_position_id(*pos_id),
+                    None => {
+                        client.stake_lp_token(store, *kind, lp_token_mint, oracle, stake_amount)
+                    }
+                };
 
-                // Set position ID if provided
-                if let Some(pos_id) = position_id {
-                    stake_builder = stake_builder.with_position_id(*pos_id);
-                }
-
-                // Build the bundle
-                stake_builder.build_with_options(options).await?
+                // Create executor with default args and execute
+                let executor_args = ExecutorArgs {
+                    oracle_testnet: cfg!(feature = "devnet"),
+                    disable_switchboard: false,
+                    feed_index: 0,
+                };
+                let executor = executor_args.build(client).await?;
+                executor.execute(builder, options).await?;
+                return Ok(());
+            }
+            #[cfg(not(feature = "execute"))]
+            Command::Stake { .. } => {
+                return Err(eyre::eyre!(
+                    "Stake operation requires execute feature to handle price feeds"
+                ));
             }
             Command::Unstake {
                 kind,
@@ -194,8 +208,6 @@ impl super::Command for Lp {
                 position_id,
                 amount,
             } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
-
                 // Prepare GT user account (idempotent operation)
                 let prepare_user = client.prepare_user(store)?;
 
@@ -227,8 +239,6 @@ impl super::Command for Lp {
                 position_id,
                 owner,
             } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
-
                 // Use provided owner or default to current payer
                 let position_owner = owner.unwrap_or_else(|| client.payer());
 
@@ -241,40 +251,36 @@ impl super::Command for Lp {
                 lp_token_mint,
                 position_id,
             } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+                // Prepare GT user account (idempotent operation) - same as Unstake
+                let prepare_user = client.prepare_user(store)?;
 
                 // Create claim GT reward transaction using SDK
-                client
-                    .claim_gt_reward(store, lp_token_mint, *position_id)?
+                let claim_tx = client.claim_gt_reward(store, lp_token_mint, *position_id)?;
+
+                // Merge prepare user and claim transactions
+                prepare_user
+                    .merge(claim_tx)
                     .into_bundle_with_options(options)?
             }
             Command::TransferAuthority { new_authority } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
-
                 // Transfer LP program authority
                 client
                     .transfer_lp_authority(new_authority)?
                     .into_bundle_with_options(options)?
             }
             Command::AcceptAuthority => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
-
                 // Accept LP program authority transfer
                 client
                     .accept_lp_authority()?
                     .into_bundle_with_options(options)?
             }
             Command::SetClaimEnabled { enable } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
-
                 // Set claim enabled status
                 client
                     .set_claim_enabled(*enable)?
                     .into_bundle_with_options(options)?
             }
             Command::SetPricingStaleness { staleness_seconds } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
-
                 // Set pricing staleness configuration
                 client
                     .set_pricing_staleness(*staleness_seconds)?
@@ -284,8 +290,6 @@ impl super::Command for Lp {
                 bucket_indices,
                 apy_values,
             } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
-
                 // Validate input lengths match
                 if bucket_indices.len() != apy_values.len() {
                     return Err(eyre::eyre!(
@@ -309,8 +313,6 @@ impl super::Command for Lp {
                 end_bucket,
                 apy_values,
             } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
-
                 // Validate range
                 if start_bucket > end_bucket {
                     return Err(eyre::eyre!("start_bucket must be <= end_bucket"));
@@ -339,8 +341,6 @@ impl super::Command for Lp {
             Command::UpdateMinStakeValue {
                 new_min_stake_value,
             } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
-
                 // Convert the value to 1e20-scaled u128
                 let min_stake_value_scaled =
                     new_min_stake_value.to_u128().map_err(eyre::Error::from)?;

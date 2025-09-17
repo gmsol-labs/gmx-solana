@@ -1175,7 +1175,12 @@ impl IntoAtomicGroup for ClaimGtReward {
                 .find_stake_position_address(&owner, self.position_id, &controller);
 
         // Use GT program's find_user_address for gt_user
-        let gt_user = crate::pda::find_user_address(&self.store_program.store.0, &owner, self.store_program.id()).0;
+        let gt_user = crate::pda::find_user_address(
+            &self.store_program.store.0,
+            &owner,
+            self.store_program.id(),
+        )
+        .0;
         let event_authority = self.store_program.find_event_authority_address();
 
         let instruction = self
