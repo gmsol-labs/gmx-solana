@@ -1,8 +1,10 @@
 use std::{num::NonZeroU64, ops::Deref};
 
 use gmsol_solana_utils::{
-    client_traits::FromRpcClientWith, make_bundle_builder::MakeBundleBuilder,
-    transaction_builder::TransactionBuilder, IntoAtomicGroup,
+    client_traits::FromRpcClientWith,
+    make_bundle_builder::{MakeBundleBuilder, SetExecutionFee},
+    transaction_builder::TransactionBuilder,
+    IntoAtomicGroup,
 };
 use gmsol_utils::oracle::PriceProviderKind;
 use solana_sdk::{pubkey::Pubkey, signer::Signer};
@@ -10,10 +12,10 @@ use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use crate::{
     builders::{
         liquidity_provider::{
-            AcceptAuthority, CalculateGtReward, ClaimGtReward, CreateLpTokenController, DisableLpTokenController,
-            InitializeLp, LpTokenKind, SetClaimEnabled, SetPricingStaleness, StakeLpToken,
-            StakeLpTokenHint, TransferAuthority, UnstakeLpToken, UpdateApyGradientRange,
-            UpdateApyGradientSparse, UpdateMinStakeValue,
+            AcceptAuthority, CalculateGtReward, ClaimGtReward, CreateLpTokenController,
+            DisableLpTokenController, InitializeLp, LpTokenKind, SetClaimEnabled,
+            SetPricingStaleness, StakeLpToken, StakeLpTokenHint, TransferAuthority, UnstakeLpToken,
+            UpdateApyGradientRange, UpdateApyGradientSparse, UpdateMinStakeValue,
         },
         StoreProgram,
     },
@@ -421,5 +423,12 @@ impl<C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
     ) -> crate::Result<()> {
         self.builder.insert_feed_parser(provider, map)?;
         Ok(())
+    }
+}
+
+impl<C> SetExecutionFee for StakeLpTokenBuilder<'_, C> {
+    fn set_execution_fee(&mut self, _lamports: u64) -> &mut Self {
+        // LP staking doesn't require execution fees, so this is a no-op
+        self
     }
 }
