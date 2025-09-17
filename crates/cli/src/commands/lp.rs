@@ -1,6 +1,9 @@
 use gmsol_sdk::{
-    builders::liquidity_provider::LpTokenKind, programs::anchor_lang::prelude::Pubkey,
-    solana_utils::make_bundle_builder::MakeBundleBuilder, utils::Value,
+    builders::liquidity_provider::LpTokenKind,
+    ops::{token_account::TokenAccountOps, user::UserOps},
+    programs::anchor_lang::prelude::Pubkey,
+    solana_utils::make_bundle_builder::MakeBundleBuilder,
+    utils::Value,
 };
 use std::num::NonZeroU64;
 
@@ -48,6 +51,20 @@ enum Command {
         /// Optional position ID (if not provided, will generate randomly).
         #[arg(long)]
         position_id: Option<u64>,
+    },
+    /// Unstake LP tokens (GM or GLV).
+    Unstake {
+        /// LP token kind (GM or GLV).
+        #[arg(long, value_enum)]
+        kind: LpTokenKind,
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+        /// Position ID to unstake from.
+        #[arg(long)]
+        position_id: u64,
+        /// Amount to unstake (in raw token units).
+        #[arg(long)]
+        amount: u64,
     },
 }
 
@@ -110,6 +127,40 @@ impl super::Command for Lp {
 
                 // Build the bundle
                 stake_builder.build_with_options(options).await?
+            }
+            Command::Unstake {
+                kind,
+                lp_token_mint,
+                position_id,
+                amount,
+            } => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                // Prepare GT user account (idempotent operation)
+                let prepare_user = client.prepare_user(store)?;
+
+                // Determine correct token program ID (GM uses token::ID, GLV uses token_2022::ID)
+                let token_program_id = match kind {
+                    LpTokenKind::Gm => anchor_spl::token::ID,
+                    LpTokenKind::Glv => anchor_spl::token_2022::ID,
+                };
+
+                // Prepare destination ATA (idempotent operation)
+                let prepare_ata = client.prepare_associated_token_account(
+                    lp_token_mint,
+                    &token_program_id,
+                    None, // Use current payer as owner
+                );
+
+                // Create unstake transaction
+                let unstake_tx =
+                    client.unstake_lp_token(store, *kind, lp_token_mint, *position_id, *amount)?;
+
+                // Merge all transactions and build bundle
+                prepare_user
+                    .merge(prepare_ata)
+                    .merge(unstake_tx)
+                    .into_bundle_with_options(options)?
             }
         };
 
