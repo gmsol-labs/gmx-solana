@@ -432,6 +432,7 @@ impl FromRpcClientWith<StakeLpToken> for StakeLpTokenHint {
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 #[derive(Debug, Clone, Copy)]
 pub enum LpTokenKind {
     /// GM.

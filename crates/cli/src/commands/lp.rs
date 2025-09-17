@@ -1,4 +1,8 @@
-use gmsol_sdk::utils::Value;
+use gmsol_sdk::{
+    builders::liquidity_provider::LpTokenKind, programs::anchor_lang::prelude::Pubkey,
+    solana_utils::make_bundle_builder::MakeBundleBuilder, utils::Value,
+};
+use std::num::NonZeroU64;
 
 /// Liquidity Provider management commands.
 #[derive(Debug, clap::Args)]
@@ -28,6 +32,23 @@ enum Command {
         /// LP token mint address.
         lp_token_mint: Pubkey,
     },
+    /// Stake LP tokens (GM or GLV).
+    Stake {
+        /// LP token kind (GM or GLV).
+        #[arg(long, value_enum)]
+        kind: LpTokenKind,
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+        /// Oracle buffer account address.
+        #[arg(long)]
+        oracle: Pubkey,
+        /// Amount to stake (in raw token units).
+        #[arg(long)]
+        amount: u64,
+        /// Optional position ID (if not provided, will generate randomly).
+        #[arg(long)]
+        position_id: Option<u64>,
+    },
 }
 
 impl super::Command for Lp {
@@ -37,7 +58,7 @@ impl super::Command for Lp {
 
     async fn execute(&self, ctx: super::Context<'_>) -> eyre::Result<()> {
         let client = ctx.client()?;
-        let _store = ctx.store();
+        let store = ctx.store();
         let options = ctx.bundle_options();
 
         let bundle = match &self.command {
@@ -62,8 +83,33 @@ impl super::Command for Lp {
                 use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
 
                 client
-                    .disable_lp_token_controller(ctx.store(), lp_token_mint)?
+                    .disable_lp_token_controller(store, lp_token_mint)?
                     .into_bundle_with_options(options)?
+            }
+            Command::Stake {
+                kind,
+                lp_token_mint,
+                oracle,
+                amount,
+                position_id,
+            } => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                // Convert amount to NonZeroU64
+                let stake_amount = NonZeroU64::new(*amount)
+                    .ok_or_else(|| eyre::eyre!("Stake amount must be greater than zero"))?;
+
+                // Create stake builder
+                let mut stake_builder =
+                    client.stake_lp_token(store, *kind, lp_token_mint, oracle, stake_amount);
+
+                // Set position ID if provided
+                if let Some(pos_id) = position_id {
+                    stake_builder = stake_builder.with_position_id(*pos_id);
+                }
+
+                // Build the bundle
+                stake_builder.build_with_options(options).await?
             }
         };
 
