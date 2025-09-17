@@ -81,6 +81,12 @@ enum Command {
     },
     /// Accept LP program authority transfer.
     AcceptAuthority,
+    /// Set whether claiming GT at any time is allowed.
+    SetClaimEnabled {
+        /// Whether to enable claiming.
+        #[arg(long)]
+        enable: bool,
+    },
 }
 
 impl super::Command for Lp {
@@ -208,6 +214,14 @@ impl super::Command for Lp {
                 // Accept LP program authority transfer
                 client
                     .accept_lp_authority()?
+                    .into_bundle_with_options(options)?
+            }
+            Command::SetClaimEnabled { enable } => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                // Set claim enabled status
+                client
+                    .set_claim_enabled(*enable)?
                     .into_bundle_with_options(options)?
             }
         };
