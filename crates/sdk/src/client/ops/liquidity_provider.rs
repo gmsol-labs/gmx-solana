@@ -10,7 +10,7 @@ use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use crate::{
     builders::{
         liquidity_provider::{
-            AcceptAuthority, CalculateGtReward, CreateLpTokenController, DisableLpTokenController,
+            AcceptAuthority, CalculateGtReward, ClaimGtReward, CreateLpTokenController, DisableLpTokenController,
             InitializeLp, LpTokenKind, SetClaimEnabled, SetPricingStaleness, StakeLpToken,
             StakeLpTokenHint, TransferAuthority, UnstakeLpToken, UpdateApyGradientRange,
             UpdateApyGradientSparse, UpdateMinStakeValue,
@@ -69,6 +69,14 @@ pub trait LiquidityProviderOps<C> {
         store: &Pubkey,
         lp_token_mint: &Pubkey,
         owner: &Pubkey,
+        position_id: u64,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
+
+    /// Claim GT rewards for a position.
+    fn claim_gt_reward(
+        &self,
+        store: &Pubkey,
+        lp_token_mint: &Pubkey,
         position_id: u64,
     ) -> crate::Result<TransactionBuilder<'_, C>>;
 
@@ -218,6 +226,24 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
     ) -> crate::Result<TransactionBuilder<'_, C>> {
         let builder = CalculateGtReward::builder()
             .owner(*owner)
+            .store_program(self.store_program_for_builders(store))
+            .lp_program(self.lp_program_for_builders().clone())
+            .lp_token_mint(*lp_token_mint)
+            .position_id(position_id)
+            .build();
+
+        let ag = builder.into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
+    fn claim_gt_reward(
+        &self,
+        store: &Pubkey,
+        lp_token_mint: &Pubkey,
+        position_id: u64,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let builder = ClaimGtReward::builder()
+            .owner(self.payer())
             .store_program(self.store_program_for_builders(store))
             .lp_program(self.lp_program_for_builders().clone())
             .lp_token_mint(*lp_token_mint)
