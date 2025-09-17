@@ -42,9 +42,6 @@ enum Command {
         kind: LpTokenKind,
         /// LP token mint address.
         lp_token_mint: Pubkey,
-        /// Oracle buffer account address.
-        #[arg(long)]
-        oracle: Pubkey,
         /// Amount to stake (in raw token units).
         #[arg(long)]
         amount: u64,
@@ -124,11 +121,13 @@ impl super::Command for Lp {
             Command::Stake {
                 kind,
                 lp_token_mint,
-                oracle,
                 amount,
                 position_id,
             } => {
                 use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                // Get oracle from global config
+                let oracle = ctx.config().oracle()?;
 
                 // Convert amount to NonZeroU64
                 let stake_amount = NonZeroU64::new(*amount)
