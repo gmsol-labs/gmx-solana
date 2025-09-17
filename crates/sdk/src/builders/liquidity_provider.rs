@@ -747,3 +747,66 @@ struct SharedUnstakeArgs {
     gt_store: Pubkey,
     gt_program: Pubkey,
 }
+
+/// Builder for LP token GT reward calculation instruction.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct CalculateGtReward {
+    /// Owner of the position.
+    #[builder(setter(into))]
+    pub owner: StringPubkey,
+    /// Store program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub store_program: StoreProgram,
+    /// Liquidity provider program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub lp_program: LiquidityProviderProgram,
+    /// LP token mint address.
+    #[builder(setter(into))]
+    pub lp_token_mint: StringPubkey,
+    /// Position ID.
+    pub position_id: u64,
+}
+
+impl IntoAtomicGroup for CalculateGtReward {
+    type Hint = ();
+
+    fn into_atomic_group(self, _hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let owner = self.owner.0;
+        let mut insts = AtomicGroup::new(&owner);
+
+        let global_state = self.lp_program.find_global_state_address();
+        let lp_mint = self.lp_token_mint.0;
+
+        let controller = self
+            .lp_program
+            .find_lp_token_controller_address(&global_state, &lp_mint);
+
+        let position =
+            self.lp_program
+                .find_stake_position_address(&owner, self.position_id, &controller);
+
+        let instruction = self
+            .lp_program
+            .anchor_instruction(args::CalculateGtReward {})
+            .anchor_accounts(
+                accounts::CalculateGtReward {
+                    global_state,
+                    controller,
+                    gt_store: self.store_program.store.0,
+                    gt_program: *self.store_program.id(),
+                    position,
+                    owner,
+                },
+                false,
+            )
+            .build();
+
+        insts.add(instruction);
+        Ok(insts)
+    }
+}

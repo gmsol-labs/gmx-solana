@@ -66,6 +66,17 @@ enum Command {
         #[arg(long)]
         amount: u64,
     },
+    /// Calculate GT reward for a position.
+    CalculateReward {
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+        /// Position ID to calculate reward for.
+        #[arg(long)]
+        position_id: u64,
+        /// Owner of the position (optional, defaults to current payer).
+        #[arg(long)]
+        owner: Option<Pubkey>,
+    },
 }
 
 impl super::Command for Lp {
@@ -160,6 +171,21 @@ impl super::Command for Lp {
                 prepare_user
                     .merge(prepare_ata)
                     .merge(unstake_tx)
+                    .into_bundle_with_options(options)?
+            }
+            Command::CalculateReward {
+                lp_token_mint,
+                position_id,
+                owner,
+            } => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                // Use provided owner or default to current payer
+                let position_owner = owner.unwrap_or_else(|| client.payer());
+
+                // Create calculate GT reward transaction using SDK
+                client
+                    .calculate_gt_reward(store, lp_token_mint, &position_owner, *position_id)?
                     .into_bundle_with_options(options)?
             }
         };

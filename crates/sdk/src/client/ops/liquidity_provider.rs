@@ -10,8 +10,8 @@ use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use crate::{
     builders::{
         liquidity_provider::{
-            CreateLpTokenController, DisableLpTokenController, InitializeLp, LpTokenKind,
-            StakeLpToken, StakeLpTokenHint, UnstakeLpToken,
+            CalculateGtReward, CreateLpTokenController, DisableLpTokenController, InitializeLp,
+            LpTokenKind, StakeLpToken, StakeLpTokenHint, UnstakeLpToken,
         },
         StoreProgram,
     },
@@ -60,6 +60,15 @@ pub trait LiquidityProviderOps<C> {
         oracle: &Pubkey,
         amount: NonZeroU64,
     ) -> StakeLpTokenBuilder<'_, C>;
+
+    /// Calculate GT reward for a position.
+    fn calculate_gt_reward(
+        &self,
+        store: &Pubkey,
+        lp_token_mint: &Pubkey,
+        owner: &Pubkey,
+        position_id: u64,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::Client<C> {
@@ -157,6 +166,25 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
                 .build(),
             hint: None,
         }
+    }
+
+    fn calculate_gt_reward(
+        &self,
+        store: &Pubkey,
+        lp_token_mint: &Pubkey,
+        owner: &Pubkey,
+        position_id: u64,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let builder = CalculateGtReward::builder()
+            .owner(*owner)
+            .store_program(self.store_program_for_builders(store))
+            .lp_program(self.lp_program_for_builders().clone())
+            .lp_token_mint(*lp_token_mint)
+            .position_id(position_id)
+            .build();
+
+        let ag = builder.into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
     }
 }
 
