@@ -92,6 +92,25 @@ enum Command {
         /// Staleness threshold in seconds.
         staleness_seconds: u32,
     },
+    /// Update APY gradient with sparse entries.
+    UpdateApyGradientSparse {
+        /// Bucket indices to update.
+        #[arg(long, value_delimiter = ',')]
+        bucket_indices: Vec<u8>,
+        /// APY values (percentages, will be converted to 1e20-scaled).
+        #[arg(long, value_delimiter = ',')]
+        apy_values: Vec<Value>,
+    },
+    /// Update APY gradient for a contiguous range.
+    UpdateApyGradientRange {
+        /// Start bucket index.
+        start_bucket: u8,
+        /// End bucket index.  
+        end_bucket: u8,
+        /// APY values (percentages, will be converted to 1e20-scaled).
+        #[arg(long, value_delimiter = ',')]
+        apy_values: Vec<Value>,
+    },
 }
 
 impl super::Command for Lp {
@@ -235,6 +254,62 @@ impl super::Command for Lp {
                 // Set pricing staleness configuration
                 client
                     .set_pricing_staleness(*staleness_seconds)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::UpdateApyGradientSparse {
+                bucket_indices,
+                apy_values,
+            } => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                // Validate input lengths match
+                if bucket_indices.len() != apy_values.len() {
+                    return Err(eyre::eyre!(
+                        "bucket_indices and apy_values must have the same length"
+                    ));
+                }
+
+                // Convert APY percentages to 1e20-scaled values
+                let apy_values_scaled = apy_values
+                    .iter()
+                    .map(|v| v.to_u128().map_err(eyre::Error::from))
+                    .collect::<eyre::Result<Vec<_>>>()?;
+
+                // Update APY gradient with sparse entries
+                client
+                    .update_apy_gradient_sparse(bucket_indices.clone(), apy_values_scaled)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::UpdateApyGradientRange {
+                start_bucket,
+                end_bucket,
+                apy_values,
+            } => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                // Validate range
+                if start_bucket > end_bucket {
+                    return Err(eyre::eyre!("start_bucket must be <= end_bucket"));
+                }
+
+                let expected_length = (end_bucket - start_bucket + 1) as usize;
+                if apy_values.len() != expected_length {
+                    return Err(eyre::eyre!(
+                        "apy_values length ({}) must match range size ({})",
+                        apy_values.len(),
+                        expected_length
+                    ));
+                }
+
+                // Convert APY percentages to 1e20-scaled values
+                let apy_values_scaled = apy_values
+                    .iter()
+                    .map(|v| v.to_u128().map_err(eyre::Error::from))
+                    .collect::<eyre::Result<Vec<_>>>()?;
+
+                // Update APY gradient for range
+                client
+                    .update_apy_gradient_range(*start_bucket, *end_bucket, apy_values_scaled)?
                     .into_bundle_with_options(options)?
             }
         };

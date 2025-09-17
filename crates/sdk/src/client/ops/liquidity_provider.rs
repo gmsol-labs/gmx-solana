@@ -12,7 +12,8 @@ use crate::{
         liquidity_provider::{
             AcceptAuthority, CalculateGtReward, CreateLpTokenController, DisableLpTokenController,
             InitializeLp, LpTokenKind, SetClaimEnabled, SetPricingStaleness, StakeLpToken,
-            StakeLpTokenHint, TransferAuthority, UnstakeLpToken,
+            StakeLpTokenHint, TransferAuthority, UnstakeLpToken, UpdateApyGradientRange,
+            UpdateApyGradientSparse,
         },
         StoreProgram,
     },
@@ -87,6 +88,21 @@ pub trait LiquidityProviderOps<C> {
     fn set_pricing_staleness(
         &self,
         staleness_seconds: u32,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
+
+    /// Update APY gradient with sparse entries.
+    fn update_apy_gradient_sparse(
+        &self,
+        bucket_indices: Vec<u8>,
+        apy_values: Vec<u128>,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
+
+    /// Update APY gradient for a contiguous range.
+    fn update_apy_gradient_range(
+        &self,
+        start_bucket: u8,
+        end_bucket: u8,
+        apy_values: Vec<u128>,
     ) -> crate::Result<TransactionBuilder<'_, C>>;
 }
 
@@ -249,6 +265,40 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             .authority(self.payer())
             .lp_program(self.lp_program_for_builders().clone())
             .staleness_seconds(staleness_seconds)
+            .build();
+
+        let ag = builder.into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
+    fn update_apy_gradient_sparse(
+        &self,
+        bucket_indices: Vec<u8>,
+        apy_values: Vec<u128>,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let builder = UpdateApyGradientSparse::builder()
+            .authority(self.payer())
+            .lp_program(self.lp_program_for_builders().clone())
+            .bucket_indices(bucket_indices)
+            .apy_values(apy_values)
+            .build();
+
+        let ag = builder.into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
+    fn update_apy_gradient_range(
+        &self,
+        start_bucket: u8,
+        end_bucket: u8,
+        apy_values: Vec<u128>,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let builder = UpdateApyGradientRange::builder()
+            .authority(self.payer())
+            .lp_program(self.lp_program_for_builders().clone())
+            .start_bucket(start_bucket)
+            .end_bucket(end_bucket)
+            .apy_values(apy_values)
             .build();
 
         let ag = builder.into_atomic_group(&())?;
