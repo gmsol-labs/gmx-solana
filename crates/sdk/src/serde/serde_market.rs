@@ -25,6 +25,8 @@ pub struct SerdeMarket {
     pub name: String,
     /// Enabled.
     pub enabled: bool,
+    /// Closed.
+    pub is_closed: bool,
     /// Is pure.
     pub is_pure: bool,
     /// Is ADL enabled for long.
@@ -33,6 +35,8 @@ pub struct SerdeMarket {
     pub is_adl_enabled_for_short: bool,
     /// Is GT minting enabled.
     pub is_gt_minting_enabled: bool,
+    /// The unix timestamp when the closed state was updated.
+    pub closed_updated_at: i64,
     /// Store address.
     pub store: StringPubkey,
     /// Metadata.
@@ -55,10 +59,12 @@ impl SerdeMarket {
         Ok(Self {
             name: market.name()?.to_string(),
             enabled: flags.get_flag(MarketFlag::Enabled),
+            is_closed: flags.get_flag(MarketFlag::Closed),
             is_pure: flags.get_flag(MarketFlag::Pure),
             is_adl_enabled_for_long: flags.get_flag(MarketFlag::AutoDeleveragingEnabledForLong),
             is_adl_enabled_for_short: flags.get_flag(MarketFlag::AutoDeleveragingEnabledForShort),
             is_gt_minting_enabled: flags.get_flag(MarketFlag::GTEnabled),
+            closed_updated_at: market.closed_state_updated_at,
             store: market.store.into(),
             meta: (&market.meta).into(),
             state: SerdeMarketState::from_other_state(&market.state.other, decimals),

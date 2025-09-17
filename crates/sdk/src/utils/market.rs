@@ -107,6 +107,10 @@ impl MarketDecimals {
             MarketConfigKey::MaxOpenInterestForLong => MARKET_DECIMALS,
             MarketConfigKey::MaxOpenInterestForShort => MARKET_DECIMALS,
             MarketConfigKey::MinTokensForFirstDeposit => MARKET_TOKEN_DECIMALS,
+            MarketConfigKey::MinCollateralFactorForLiquidation => MARKET_DECIMALS,
+            MarketConfigKey::MarketClosedMinCollateralFactorForLiquidation => MARKET_DECIMALS,
+            MarketConfigKey::MarketClosedBorrowingFeeBaseFactor => MARKET_DECIMALS,
+            MarketConfigKey::MarketClosedBorrowingFeeAboveOptimalUsageFactor => MARKET_DECIMALS,
             key => {
                 return Err(crate::Error::custom(format!(
                     "the decimals of `{key}` is unknown"

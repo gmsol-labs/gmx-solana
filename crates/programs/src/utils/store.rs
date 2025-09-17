@@ -419,6 +419,15 @@ mod utils {
                 MarketConfigKey::MinCollateralFactorForLiquidation => {
                     &self.min_collateral_factor_for_liquidation
                 }
+                MarketConfigKey::MarketClosedMinCollateralFactorForLiquidation => {
+                    &self.market_closed_min_collateral_factor_for_liquidation
+                }
+                MarketConfigKey::MarketClosedBorrowingFeeBaseFactor => {
+                    &self.market_closed_borrowing_fee_base_factor
+                }
+                MarketConfigKey::MarketClosedBorrowingFeeAboveOptimalUsageFactor => {
+                    &self.market_closed_borrowing_fee_above_optimal_usage_factor
+                }
                 _ => return None,
             };
             Some(value)

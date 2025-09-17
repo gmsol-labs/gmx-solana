@@ -2325,6 +2325,7 @@ pub(crate) fn display_options_for_markets() -> DisplayOptions {
         ("name", "Name"),
         ("meta.market_token", "Market Token"),
         ("enabled", "Is Enabled"),
+        ("is_closed", "Is Closed"),
         ("state.long_token_balance", "◎ Long Token"),
         ("state.short_token_balance", "◎ Short Token"),
         ("pools.claimable_fee.long_amount", "◎ Claimable Long Token"),
