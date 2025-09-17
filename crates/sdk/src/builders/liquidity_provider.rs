@@ -925,6 +925,105 @@ impl IntoAtomicGroup for SetClaimEnabled {
     }
 }
 
+/// Builder for updating APY gradient with sparse entries instruction.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct UpdateApyGradientSparse {
+    /// Authority (must match GlobalState authority).
+    #[builder(setter(into))]
+    pub authority: StringPubkey,
+    /// Liquidity provider program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub lp_program: LiquidityProviderProgram,
+    /// Bucket indices to update.
+    pub bucket_indices: Vec<u8>,
+    /// APY values (1e20-scaled).
+    pub apy_values: Vec<u128>,
+}
+
+impl IntoAtomicGroup for UpdateApyGradientSparse {
+    type Hint = ();
+
+    fn into_atomic_group(self, _hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let authority = self.authority.0;
+        let mut insts = AtomicGroup::new(&authority);
+
+        let global_state = self.lp_program.find_global_state_address();
+
+        let instruction = self
+            .lp_program
+            .anchor_instruction(args::UpdateApyGradientSparse {
+                bucket_indices: self.bucket_indices,
+                apy_values: self.apy_values,
+            })
+            .anchor_accounts(
+                accounts::UpdateApyGradientSparse {
+                    global_state,
+                    authority,
+                },
+                false,
+            )
+            .build();
+
+        insts.add(instruction);
+        Ok(insts)
+    }
+}
+
+/// Builder for updating APY gradient with range entries instruction.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct UpdateApyGradientRange {
+    /// Authority (must match GlobalState authority).
+    #[builder(setter(into))]
+    pub authority: StringPubkey,
+    /// Liquidity provider program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub lp_program: LiquidityProviderProgram,
+    /// Start bucket index.
+    pub start_bucket: u8,
+    /// End bucket index.
+    pub end_bucket: u8,
+    /// APY values (1e20-scaled).
+    pub apy_values: Vec<u128>,
+}
+
+impl IntoAtomicGroup for UpdateApyGradientRange {
+    type Hint = ();
+
+    fn into_atomic_group(self, _hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let authority = self.authority.0;
+        let mut insts = AtomicGroup::new(&authority);
+
+        let global_state = self.lp_program.find_global_state_address();
+
+        let instruction = self
+            .lp_program
+            .anchor_instruction(args::UpdateApyGradientRange {
+                start_bucket: self.start_bucket,
+                end_bucket: self.end_bucket,
+                apy_values: self.apy_values,
+            })
+            .anchor_accounts(
+                accounts::UpdateApyGradientRange {
+                    global_state,
+                    authority,
+                },
+                false,
+            )
+            .build();
+
+        insts.add(instruction);
+        Ok(insts)
+    }
+}
+
 /// Builder for LP token GT reward calculation instruction.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]
