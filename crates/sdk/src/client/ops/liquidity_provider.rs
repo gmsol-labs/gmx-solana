@@ -10,8 +10,9 @@ use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use crate::{
     builders::{
         liquidity_provider::{
-            CalculateGtReward, CreateLpTokenController, DisableLpTokenController, InitializeLp,
-            LpTokenKind, StakeLpToken, StakeLpTokenHint, UnstakeLpToken,
+            AcceptAuthority, CalculateGtReward, CreateLpTokenController, DisableLpTokenController,
+            InitializeLp, LpTokenKind, StakeLpToken, StakeLpTokenHint, TransferAuthority,
+            UnstakeLpToken,
         },
         StoreProgram,
     },
@@ -69,6 +70,15 @@ pub trait LiquidityProviderOps<C> {
         owner: &Pubkey,
         position_id: u64,
     ) -> crate::Result<TransactionBuilder<'_, C>>;
+
+    /// Transfer LP program authority to a new authority.
+    fn transfer_lp_authority(
+        &self,
+        new_authority: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
+
+    /// Accept LP program authority transfer.
+    fn accept_lp_authority(&self) -> crate::Result<TransactionBuilder<'_, C>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::Client<C> {
@@ -181,6 +191,30 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             .lp_program(self.lp_program_for_builders().clone())
             .lp_token_mint(*lp_token_mint)
             .position_id(position_id)
+            .build();
+
+        let ag = builder.into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
+    fn transfer_lp_authority(
+        &self,
+        new_authority: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let builder = TransferAuthority::builder()
+            .authority(self.payer())
+            .lp_program(self.lp_program_for_builders().clone())
+            .new_authority(*new_authority)
+            .build();
+
+        let ag = builder.into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
+    fn accept_lp_authority(&self) -> crate::Result<TransactionBuilder<'_, C>> {
+        let builder = AcceptAuthority::builder()
+            .pending_authority(self.payer())
+            .lp_program(self.lp_program_for_builders().clone())
             .build();
 
         let ag = builder.into_atomic_group(&())?;
