@@ -835,6 +835,51 @@ impl IntoAtomicGroup for AcceptAuthority {
     }
 }
 
+/// Builder for setting pricing staleness configuration instruction.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct SetPricingStaleness {
+    /// Authority (must match GlobalState authority).
+    #[builder(setter(into))]
+    pub authority: StringPubkey,
+    /// Liquidity provider program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub lp_program: LiquidityProviderProgram,
+    /// Staleness threshold in seconds.
+    pub staleness_seconds: u32,
+}
+
+impl IntoAtomicGroup for SetPricingStaleness {
+    type Hint = ();
+
+    fn into_atomic_group(self, _hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let authority = self.authority.0;
+        let mut insts = AtomicGroup::new(&authority);
+
+        let global_state = self.lp_program.find_global_state_address();
+
+        let instruction = self
+            .lp_program
+            .anchor_instruction(args::SetPricingStaleness {
+                staleness_seconds: self.staleness_seconds,
+            })
+            .anchor_accounts(
+                accounts::SetPricingStaleness {
+                    global_state,
+                    authority,
+                },
+                false,
+            )
+            .build();
+
+        insts.add(instruction);
+        Ok(insts)
+    }
+}
+
 /// Builder for setting claim enabled status instruction.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]

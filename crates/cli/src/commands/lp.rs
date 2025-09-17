@@ -87,6 +87,11 @@ enum Command {
         #[arg(long)]
         enable: bool,
     },
+    /// Set pricing staleness configuration.
+    SetPricingStaleness {
+        /// Staleness threshold in seconds.
+        staleness_seconds: u32,
+    },
 }
 
 impl super::Command for Lp {
@@ -222,6 +227,14 @@ impl super::Command for Lp {
                 // Set claim enabled status
                 client
                     .set_claim_enabled(*enable)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::SetPricingStaleness { staleness_seconds } => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                // Set pricing staleness configuration
+                client
+                    .set_pricing_staleness(*staleness_seconds)?
                     .into_bundle_with_options(options)?
             }
         };
