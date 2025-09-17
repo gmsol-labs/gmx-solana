@@ -111,6 +111,11 @@ enum Command {
         #[arg(long, value_delimiter = ',')]
         apy_values: Vec<Value>,
     },
+    /// Update minimum stake value.
+    UpdateMinStakeValue {
+        /// New minimum stake value.
+        new_min_stake_value: Value,
+    },
 }
 
 impl super::Command for Lp {
@@ -310,6 +315,20 @@ impl super::Command for Lp {
                 // Update APY gradient for range
                 client
                     .update_apy_gradient_range(*start_bucket, *end_bucket, apy_values_scaled)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::UpdateMinStakeValue {
+                new_min_stake_value,
+            } => {
+                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+
+                // Convert the value to 1e20-scaled u128
+                let min_stake_value_scaled =
+                    new_min_stake_value.to_u128().map_err(eyre::Error::from)?;
+
+                // Update minimum stake value
+                client
+                    .update_min_stake_value(min_stake_value_scaled)?
                     .into_bundle_with_options(options)?
             }
         };
