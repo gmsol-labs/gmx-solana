@@ -11,8 +11,8 @@ use crate::{
     builders::{
         liquidity_provider::{
             AcceptAuthority, CalculateGtReward, CreateLpTokenController, DisableLpTokenController,
-            InitializeLp, LpTokenKind, SetClaimEnabled, StakeLpToken, StakeLpTokenHint,
-            TransferAuthority, UnstakeLpToken,
+            InitializeLp, LpTokenKind, SetClaimEnabled, SetPricingStaleness, StakeLpToken,
+            StakeLpTokenHint, TransferAuthority, UnstakeLpToken,
         },
         StoreProgram,
     },
@@ -82,6 +82,12 @@ pub trait LiquidityProviderOps<C> {
 
     /// Set whether claiming GT at any time is allowed.
     fn set_claim_enabled(&self, enabled: bool) -> crate::Result<TransactionBuilder<'_, C>>;
+
+    /// Set pricing staleness configuration.
+    fn set_pricing_staleness(
+        &self,
+        staleness_seconds: u32,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::Client<C> {
@@ -229,6 +235,20 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             .authority(self.payer())
             .lp_program(self.lp_program_for_builders().clone())
             .enabled(enabled)
+            .build();
+
+        let ag = builder.into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
+    fn set_pricing_staleness(
+        &self,
+        staleness_seconds: u32,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let builder = SetPricingStaleness::builder()
+            .authority(self.payer())
+            .lp_program(self.lp_program_for_builders().clone())
+            .staleness_seconds(staleness_seconds)
             .build();
 
         let ag = builder.into_atomic_group(&())?;
