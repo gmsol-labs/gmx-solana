@@ -2351,6 +2351,7 @@ dependencies = [
  "serde_with",
  "shellexpand",
  "solana-remote-wallet",
+ "strum",
  "time",
  "tokio",
  "toml 0.8.23",
