@@ -428,6 +428,7 @@ impl Lp {
         }
 
         let options = DisplayOptions::table_projection([
+            ("position_id", "Position ID"),
             ("lp_token_symbol", "LP Token"),
             ("staked_amount", "Amount"),
             ("stake_start_time", "Staked Time"),
@@ -449,13 +450,13 @@ impl Lp {
     ) -> eyre::Result<()> {
         use crate::config::DisplayOptions;
 
-        // DoD requirement: LP token, amount, staked time, APY, accumulated GT, claimable GT
+        // Single position display: Position ID, LP token, amount, staked time, APY, claimable GT
         let options = DisplayOptions::table_projection([
+            ("position_id", "Position ID"),
             ("lp_token_symbol", "LP Token"),
             ("staked_amount", "Amount"),
             ("stake_start_time", "Staked Time"),
             ("current_apy", "APY"),
-            ("accumulated_gt", "Accumulated GT"),
             ("claimable_gt", "Claimable GT"),
         ]);
 

@@ -7,8 +7,6 @@ use super::StringPubkey;
 /// Additional computed data for LP position.
 #[derive(Debug, Clone)]
 pub struct LpPositionComputedData {
-    /// Accumulated GT rewards (total earned since staking) - u128 to avoid overflow.
-    pub accumulated_gt: u128,
     /// Claimable GT rewards (available for claiming now) - u128 to avoid overflow.
     pub claimable_gt: u128,
     /// Current effective APY as fixed-point Value (1e20 scale, same as on-chain).
@@ -40,11 +38,7 @@ pub struct SerdeLpStakingPosition {
     pub stake_start_time: i64,
     /// Current effective APY as fixed-point Value (display layer converts to percentage).
     pub current_apy: Value,
-    /// Accumulated GT rewards (total earned since staking) - raw format.
-    /// Note: Currently returns 0 as placeholder to avoid off-chain calculation drift.
-    pub accumulated_gt: Amount,
     /// Claimable GT rewards (available for claiming now) - raw format.
-    /// Note: Currently returns 0 as placeholder to avoid off-chain calculation drift.
     pub claimable_gt: Amount,
     /// Position vault address (PDA that holds staked tokens).
     pub vault: StringPubkey,
@@ -61,10 +55,6 @@ impl SerdeLpStakingPosition {
         gt_decimals: u8,
     ) -> crate::Result<Self> {
         // Use Amount::from_u128 to avoid silent truncation - will return error if overflow
-        let accumulated_gt =
-            Amount::from_u128(computed_data.accumulated_gt, gt_decimals).map_err(|_| {
-                crate::Error::custom("Accumulated GT amount exceeds maximum representable value")
-            })?;
         let claimable_gt =
             Amount::from_u128(computed_data.claimable_gt, gt_decimals).map_err(|_| {
                 crate::Error::custom("Claimable GT amount exceeds maximum representable value")
@@ -87,7 +77,6 @@ impl SerdeLpStakingPosition {
             staked_value_usd: Value::from_u128(position.staked_value_usd),
             stake_start_time: position.stake_start_time, // Raw timestamp, display layer formats
             current_apy: computed_data.current_apy,      // Raw Value, display layer converts to %
-            accumulated_gt,
             claimable_gt,
             vault: position.vault.into(),
             controller_enabled: controller.is_enabled,
