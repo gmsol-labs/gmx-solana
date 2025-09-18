@@ -4,7 +4,7 @@ use gmsol_sdk::{
         liquidity_provider::LiquidityProviderOps, token_account::TokenAccountOps, user::UserOps,
     },
     programs::anchor_lang::prelude::Pubkey,
-    utils::Value,
+    utils::{GmAmount, Value},
 };
 
 #[cfg(feature = "execute")]
@@ -46,9 +46,9 @@ enum Command {
         kind: LpTokenKind,
         /// LP token mint address.
         lp_token_mint: Pubkey,
-        /// Amount to stake (in raw token units).
+        /// Amount to stake (in GM/GLV token units, will be converted to raw units).
         #[arg(long)]
-        amount: u64,
+        amount: GmAmount,
         /// Optional position ID (if not provided, will generate randomly).
         #[arg(long)]
         position_id: Option<u64>,
@@ -66,9 +66,9 @@ enum Command {
         /// Position ID to unstake from.
         #[arg(long)]
         position_id: u64,
-        /// Amount to unstake (in raw token units).
+        /// Amount to unstake (in GM/GLV token units, will be converted to raw units).
         #[arg(long)]
-        amount: u64,
+        amount: GmAmount,
     },
     /// Calculate GT reward for a position.
     CalculateReward {
@@ -174,8 +174,9 @@ impl super::Command for Lp {
                 // Get oracle from global config
                 let oracle = ctx.config().oracle()?;
 
-                // Convert amount to NonZeroU64
-                let stake_amount = NonZeroU64::new(*amount)
+                // Convert GmAmount to u64 and then to NonZeroU64
+                let amount_u64 = amount.to_u64()?;
+                let stake_amount = NonZeroU64::new(amount_u64)
                     .ok_or_else(|| eyre::eyre!("Stake amount must be greater than zero"))?;
 
                 // Create stake builder with position ID if provided
@@ -215,9 +216,17 @@ impl super::Command for Lp {
                     None, // Use current payer as owner
                 );
 
+                // Convert GmAmount to u64
+                let amount_u64 = amount.to_u64()?;
+
                 // Create unstake transaction
-                let unstake_tx =
-                    client.unstake_lp_token(store, *kind, lp_token_mint, *position_id, *amount)?;
+                let unstake_tx = client.unstake_lp_token(
+                    store,
+                    *kind,
+                    lp_token_mint,
+                    *position_id,
+                    amount_u64,
+                )?;
 
                 // Merge all transactions and build bundle
                 prepare_user
