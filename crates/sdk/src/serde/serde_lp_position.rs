@@ -41,8 +41,10 @@ pub struct SerdeLpStakingPosition {
     /// Current effective APY as fixed-point Value (display layer converts to percentage).
     pub current_apy: Value,
     /// Accumulated GT rewards (total earned since staking) - raw format.
+    /// Note: Currently returns 0 as placeholder to avoid off-chain calculation drift.
     pub accumulated_gt: Amount,
     /// Claimable GT rewards (available for claiming now) - raw format.
+    /// Note: Currently returns 0 as placeholder to avoid off-chain calculation drift.
     pub claimable_gt: Amount,
     /// Position vault address (PDA that holds staked tokens).
     pub vault: StringPubkey,
