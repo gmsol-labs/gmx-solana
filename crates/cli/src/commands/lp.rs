@@ -131,6 +131,23 @@ enum Command {
         /// New minimum stake value.
         new_min_stake_value: Value,
     },
+    /// Query all LP staking positions for the current wallet.
+    QueryMyPositions,
+    /// Query all LP staking positions for a specified wallet.
+    QueryPositions {
+        /// Owner wallet address to query positions for.
+        owner: Pubkey,
+    },
+    /// Query a specific LP staking position.
+    QueryPosition {
+        /// Owner of the position.
+        owner: Pubkey,
+        /// Position ID to query.
+        #[arg(long)]
+        position_id: u64,
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+    },
 }
 
 impl super::Command for Lp {
@@ -350,9 +367,103 @@ impl super::Command for Lp {
                     .update_min_stake_value(min_stake_value_scaled)?
                     .into_bundle_with_options(options)?
             }
+            Command::QueryMyPositions => {
+                // Query all positions for current wallet
+                let positions = client.get_my_lp_positions(store).await?;
+                let output = &ctx.config().output();
+                self.display_positions_list(&positions, output)?;
+                return Ok(());
+            }
+            Command::QueryPositions { owner } => {
+                // Query all positions for specified owner
+                let positions = client.get_lp_positions(store, owner).await?;
+                let output = &ctx.config().output();
+                self.display_positions_list(&positions, output)?;
+                return Ok(());
+            }
+            Command::QueryPosition {
+                owner,
+                position_id,
+                lp_token_mint,
+            } => {
+                // Query specific position
+                let position = client
+                    .get_lp_position(store, owner, *position_id, lp_token_mint)
+                    .await?;
+
+                let output = &ctx.config().output();
+                match position {
+                    Some(pos) => {
+                        self.display_single_position(&pos, output)?;
+                    }
+                    None => {
+                        println!(
+                            "Position not found: owner={}, position_id={}, lp_token_mint={}",
+                            owner, position_id, lp_token_mint
+                        );
+                    }
+                }
+                return Ok(());
+            }
         };
 
         client.send_or_serialize(bundle).await?;
+        Ok(())
+    }
+}
+
+impl Lp {
+    /// Display a list of LP staking positions.
+    /// Table format: LP token, amount, staked time, APY, claimable GT
+    fn display_positions_list(
+        &self,
+        positions: &[gmsol_sdk::serde::serde_lp_position::SerdeLpStakingPosition],
+        output: &crate::config::OutputFormat,
+    ) -> eyre::Result<()> {
+        use crate::config::DisplayOptions;
+
+        if positions.is_empty() {
+            println!("No LP staking positions found.");
+            return Ok(());
+        }
+
+        let options = DisplayOptions::table_projection([
+            ("lp_token_symbol", "LP Token"),
+            ("staked_amount", "Amount"),
+            ("stake_start_time", "Staked Time"),
+            ("current_apy", "APY"),
+            ("claimable_gt", "Claimable GT"),
+        ])
+        .set_empty_message("No LP staking positions found.");
+
+        println!("{}", output.display_many(positions, options)?);
+        Ok(())
+    }
+
+    /// Display a single LP staking position with detailed information.
+    /// Single format: LP token, amount, staked time, APY, accumulated GT, claimable GT
+    fn display_single_position(
+        &self,
+        position: &gmsol_sdk::serde::serde_lp_position::SerdeLpStakingPosition,
+        output: &crate::config::OutputFormat,
+    ) -> eyre::Result<()> {
+        use crate::config::DisplayOptions;
+
+        // DoD requirement: LP token, amount, staked time, APY, accumulated GT, claimable GT
+        let options = DisplayOptions::table_projection([
+            ("lp_token_symbol", "LP Token"),
+            ("staked_amount", "Amount"),
+            ("stake_start_time", "Staked Time"),
+            ("current_apy", "APY"),
+            ("accumulated_gt", "Accumulated GT"),
+            ("claimable_gt", "Claimable GT"),
+        ]);
+
+        // For single position, display as single item
+        println!(
+            "{}",
+            output.display_many(std::iter::once(position), options)?
+        );
         Ok(())
     }
 }
