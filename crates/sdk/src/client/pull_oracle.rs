@@ -100,6 +100,10 @@ where
 }
 
 impl<O: PullOracle, T: SetExecutionFee> SetExecutionFee for WithPullOracle<O, T> {
+    fn is_execution_fee_estimation_required(&self) -> bool {
+        self.builder.is_execution_fee_estimation_required()
+    }
+
     fn set_execution_fee(&mut self, lamports: u64) -> &mut Self {
         self.builder.set_execution_fee(lamports);
         self
