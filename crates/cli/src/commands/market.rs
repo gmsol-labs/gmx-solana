@@ -866,7 +866,7 @@ impl super::Command for Market {
                             ("updatable", "Updatable"),
                         ]),
                     )?;
-                    println!("{}", out);
+                    println!("{out}");
                 }
 
                 if *factors || !(*flags) {
@@ -893,7 +893,7 @@ impl super::Command for Market {
                             ("updatable", "Updatable"),
                         ]),
                     )?;
-                    println!("{}", out);
+                    println!("{out}");
                 }
 
                 return Ok(());
@@ -915,7 +915,7 @@ impl super::Command for Market {
                             .updatable_market_config_flags;
                         let idx: u8 = parsed.into();
                         let is_updatable = (flags.value & (1u128 << idx)) != 0;
-                        println!("{}", is_updatable);
+                        println!("{is_updatable}");
                     }
                     (None, Some(name)) => {
                         let key: MarketConfigKey = name.parse()?;
@@ -925,7 +925,7 @@ impl super::Command for Market {
                             .updatable_market_config_factors;
                         let idx: u8 = factor.into();
                         let is_updatable = (factors.value & (1u128 << idx)) != 0;
-                        println!("{}", is_updatable);
+                        println!("{is_updatable}");
                     }
                     _ => {
                         eyre::bail!("specify exactly one of --flag or --factor");
