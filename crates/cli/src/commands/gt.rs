@@ -13,7 +13,7 @@ use gmsol_sdk::{
     },
     serde::StringPubkey,
     solana_utils::solana_sdk::signer::Signer,
-    utils::{unsigned_amount_to_decimal, zero_copy::ZeroCopy, Amount},
+    utils::{unsigned_amount_to_decimal, zero_copy::ZeroCopy, Amount, Value},
 };
 use std::{num::NonZeroU32, ops::Deref};
 
@@ -47,6 +47,10 @@ enum Command {
         /// Whether to skip the initialization of current exchange vault.
         #[arg(long)]
         skip_init_current: bool,
+        #[arg(long)]
+        buyback_value: Value,
+        #[arg(long)]
+        buyback_price: Option<Value>,
     },
     /// Set GT exchange time window.
     SetExchangeTimeWindow { seconds: NonZeroU32 },
@@ -152,6 +156,8 @@ impl super::Command for Gt {
             Command::ConfirmExchangeVault {
                 address,
                 skip_init_current,
+                buyback_value,
+                buyback_price,
             } => {
                 let store_account = client.store(store).await?;
                 let time_window = store_account.gt.exchange_time_window;
@@ -161,7 +167,12 @@ impl super::Command for Gt {
                     .transpose()?
                     .map(|rpc| rpc.output(()));
 
-                let mut rpc = client.confirm_gt_exchange_vault(store, address);
+                let mut rpc = client.confirm_gt_exchange_vault(
+                    store,
+                    address,
+                    buyback_value.to_u128()?,
+                    buyback_price.as_ref().map(|p| p.to_u128()).transpose()?,
+                );
 
                 if let Some(init) = init {
                     rpc = rpc.merge(init);

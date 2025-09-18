@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - model: Updated the params and logic for `PositionExt::check_liquidatable`: use `min_collateral_factor_for_liquidation` as min factor when `for_liquidation=true`.
 - programs(store): Replaced `u8::MAX` synthetic flag in oracle price map with `OraclePriceFlag` bitmap.
+- programs(store): The following deprecated store program instructions have been removed:
+  - `create_order` (replaced by `create_order_v2` since `0.6.0`)
+  - `close_order` (replaced by `close_order_v2` since `0.6.0`)
+  - `update_order` (replaced by `update_order_v2` since `0.6.0`)
+  - `execute_increase_or_swap_order` (replaced by `execute_increase_or_swap_order_v2` since `0.6.0`)
+  - `execute_decrease_order` (replaced by `execute_decrease_order_v2` since `0.6.0`)
+  - `set_feed_config` (replaced by `set_feed_config_v2` since `0.6.0`)
+  - `confirm_gt_exchange_vault` (replaced by `confirm_gt_exchange_vault_v2` since `0.6.0`)
+- programs(treasury): The following deprecated treasury program instructions have been removed:
+  - `sync_gt_bank` (replaced by `sync_gt_bank_v2` since `0.6.0`)
+  - `create_swap` (replaced by `create_swap_v2` since `0.6.0`)
+- sdk(sdk): Added `buyback_value` and `buyback_price` arguments to `GtOps::confirm_gt_exchange_vault`.
+- cli: Added `buyback_value` and `buyback_price` arguments to `gt confirm-exchange-vault` subcommand.
 
 ### Added
 
