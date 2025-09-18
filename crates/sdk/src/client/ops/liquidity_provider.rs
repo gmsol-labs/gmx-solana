@@ -418,6 +418,9 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             get_program_accounts_with_context, ProgramAccountsConfigForRpc,
         };
 
+        tracing::info!("Querying positions for owner: {}", owner);
+        tracing::info!("Using LP program ID: {}", lp_program.id);
+
         let config = ProgramAccountsConfigForRpc {
             filters: Some(vec![
                 // Filter by owner field (offset 8 bytes for discriminator)
@@ -429,13 +432,11 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             account_config: RpcAccountInfoConfig::default(),
         };
 
-        let position_accounts_result = get_program_accounts_with_context(
-            self.rpc(),
-            &gmsol_programs::gmsol_liquidity_provider::ID,
-            config,
-        )
-        .await?;
+        let position_accounts_result =
+            get_program_accounts_with_context(self.rpc(), &lp_program.id, config).await?;
         let position_accounts = position_accounts_result.into_value();
+
+        tracing::info!("Found {} position accounts", position_accounts.len());
 
         let mut results = Vec::new();
 
