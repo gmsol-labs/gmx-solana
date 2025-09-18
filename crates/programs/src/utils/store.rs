@@ -181,7 +181,8 @@ mod utils {
         glv::{GlvMarketFlag, MAX_GLV_MARKET_FLAGS},
         impl_fixed_map, impl_flags,
         market::{
-            self, HasMarketMeta, MarketConfigKey, MarketFlag, VirtualInventoryFlag,
+            self, HasMarketMeta, MarketConfigFactor, MarketConfigFlag, MarketConfigKey, MarketFlag,
+            VirtualInventoryFlag, MAX_MARKET_CONFIG_FACTORS, MAX_MARKET_CONFIG_FLAGS,
             MAX_MARKET_FLAGS, MAX_VIRTUAL_INVENTORY_FLAGS,
         },
         order::{self, PositionKind, TradeFlag, TradeFlagContainer},
@@ -195,10 +196,10 @@ mod utils {
         events::TradeEvent,
         types::{
             ActionFlagContainer, ActionHeader, GlvMarketConfig, GlvMarketFlagContainer, GlvMarkets,
-            GlvMarketsEntry, MarketConfig, MarketFlagContainer, MarketMeta, Members, MembersEntry,
-            OrderActionParams, OrderKind, RoleMap, RoleMapEntry, RoleMetadata, RoleStore,
-            SwapActionParams, TokenAndAccount, Tokens, TokensEntry, UpdateTokenConfigParams,
-            VirtualInventoryFlagContainer,
+            GlvMarketsEntry, MarketConfig, MarketConfigFactorContainer, MarketConfigFlagContainer,
+            MarketFlagContainer, MarketMeta, Members, MembersEntry, OrderActionParams, OrderKind,
+            RoleMap, RoleMapEntry, RoleMetadata, RoleStore, SwapActionParams, TokenAndAccount,
+            Tokens, TokensEntry, UpdateTokenConfigParams, VirtualInventoryFlagContainer,
         },
     };
 
@@ -224,6 +225,8 @@ mod utils {
     impl_flags!(MarketFlag, MAX_MARKET_FLAGS, u8);
     impl_flags!(GlvMarketFlag, MAX_GLV_MARKET_FLAGS, u8);
     impl_flags!(VirtualInventoryFlag, MAX_VIRTUAL_INVENTORY_FLAGS, u8);
+    impl_flags!(MarketConfigFlag, MAX_MARKET_CONFIG_FLAGS, u128);
+    impl_flags!(MarketConfigFactor, MAX_MARKET_CONFIG_FACTORS, u128);
 
     impl From<SwapActionParams> for swap::SwapActionParams {
         fn from(params: SwapActionParams) -> Self {
