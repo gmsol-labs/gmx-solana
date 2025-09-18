@@ -474,17 +474,16 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
                 &global_state.apy_gradient,
             );
 
-            // GT rewards: Use placeholders to avoid off-chain calculation drift
-            // These should eventually be queried from on-chain calculation or CPI results
-            let accumulated_gt = 0u128; // Placeholder: total accumulated since staking start
-            let claimable_gt = 0u128; // Placeholder: claimable since last snapshot
+            // GT rewards: Use placeholder to avoid off-chain calculation drift
+            // Accurate calculation requires on-chain CPI to GT program for cumulative inverse cost factor
+            // Use calculate_gt_reward instruction for precise amounts
+            let claimable_gt = 0u128;
 
             // Get LP token symbol (you might want to implement a token map lookup here)
             let lp_token_symbol = fallback_lp_token_symbol(&position.lp_mint.into());
 
             // Create computed data
             let computed_data = LpPositionComputedData {
-                accumulated_gt,
                 claimable_gt,
                 current_apy: crate::utils::Value::from_u128(current_apy),
                 lp_token_symbol,
@@ -568,17 +567,16 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             &global_state.apy_gradient,
         );
 
-        // GT rewards: Use placeholders to avoid off-chain calculation drift
-        // These should eventually be queried from on-chain calculation or CPI results
-        let accumulated_gt = 0u128; // Placeholder: total accumulated since staking start
-        let claimable_gt = 0u128; // Placeholder: claimable since last snapshot
+        // GT rewards: Use placeholder to avoid off-chain calculation drift
+        // Accurate calculation requires on-chain CPI to GT program for cumulative inverse cost factor
+        // Use calculate_gt_reward instruction for precise amounts
+        let claimable_gt = 0u128;
 
         // Get LP token symbol
         let lp_token_symbol = fallback_lp_token_symbol(&position.lp_mint.into());
 
         // Create computed data
         let computed_data = LpPositionComputedData {
-            accumulated_gt,
             claimable_gt,
             current_apy: crate::utils::Value::from_u128(current_apy),
             lp_token_symbol,
