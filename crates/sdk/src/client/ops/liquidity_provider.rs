@@ -29,6 +29,8 @@ use crate::{
     utils::token_map::FeedAddressMap,
 };
 
+const STAKE_LP_TOKEN_COMPUTE_BUDGET: u32 = 800_000;
+
 /// Operations for liquidity-provider program.
 pub trait LiquidityProviderOps<C> {
     /// Initialize LP staking program.
@@ -673,7 +675,9 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> StakeLpTokenBuilder<'a, C> {
     async fn build_txn(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
         let hint = self.prepare_hint().await?;
         let ag = self.builder.clone().into_atomic_group(&hint)?;
-        let txn = self.client.store_transaction().pre_atomic_group(ag, true);
+        let mut txn = self.client.store_transaction().pre_atomic_group(ag, true);
+        txn.compute_budget_mut()
+            .set_limit(STAKE_LP_TOKEN_COMPUTE_BUDGET);
         Ok(txn)
     }
 }
