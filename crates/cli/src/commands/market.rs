@@ -316,18 +316,19 @@ enum Command {
         addresses: Vec<Pubkey>,
     },
     /// Display updatable market config flags and/or factors.
+    /// By default, show both. Use --without-flags or --without-factors to hide.
     UpdatableConfig {
-        #[arg(long)]
-        flags: bool,
-        #[arg(long)]
-        factors: bool,
+        #[arg(long, alias = "no-flags")]
+        without_flags: bool,
+        #[arg(long, alias = "no-factors")]
+        without_factors: bool,
     },
     /// Query if a specific market config flag or factor is updatable.
     IsConfigUpdatable {
         #[arg(long, group = "what")]
-        flag: Option<String>,
+        flag: Option<MarketConfigFlag>,
         #[arg(long, group = "what")]
-        factor: Option<String>,
+        factor: Option<gmsol_sdk::core::market::MarketConfigKey>,
     },
 }
 
@@ -831,33 +832,32 @@ impl super::Command for Market {
                         println!("{msg}");
                     }
                 }
-
                 return Ok(());
             }
-            Command::UpdatableConfig { flags, factors } => {
+            Command::UpdatableConfig {
+                without_flags,
+                without_factors,
+            } => {
                 use gmsol_sdk::core::market::{
                     MarketConfigFactor, MarketConfigFlag, MarketConfigKey,
                 };
                 use gmsol_sdk::programs::gmsol_store::accounts as store_accounts;
-                use std::convert::TryFrom;
+                use strum::IntoEnumIterator;
 
                 let store_account: std::sync::Arc<store_accounts::Store> =
                     client.store(store).await?;
 
-                if *flags || !(*factors) {
+                if !*without_flags {
                     let mut rows = Vec::new();
-                    for i in u8::MIN..=u8::MAX {
-                        if let Ok(flag) = MarketConfigFlag::try_from(i) {
-                            let flags = &store_account
-                                .market_config_permissions
-                                .updatable_market_config_flags;
-                            let idx: u8 = flag.into();
-                            let updatable = (flags.value & (1u128 << idx)) != 0;
-                            rows.push(serde_json::json!({
-                                "name": flag.to_string(),
-                                "updatable": updatable,
-                            }));
-                        }
+                    for flag in MarketConfigFlag::iter() {
+                        let updatable = store_account
+                            .market_config_permissions
+                            .updatable_market_config_flags
+                            .get_flag(flag);
+                        rows.push(serde_json::json!({
+                            "name": flag.to_string(),
+                            "updatable": updatable,
+                        }));
                     }
                     let out = output.display_many(
                         rows,
@@ -869,21 +869,18 @@ impl super::Command for Market {
                     println!("{out}");
                 }
 
-                if *factors || !(*flags) {
+                if !*without_factors {
                     let mut rows = Vec::new();
-                    for i in u16::MIN..=u16::MAX {
-                        if let Ok(key) = MarketConfigKey::try_from(i) {
-                            if let Ok(factor) = MarketConfigFactor::try_from(key) {
-                                let factors = &store_account
-                                    .market_config_permissions
-                                    .updatable_market_config_factors;
-                                let idx: u8 = factor.into();
-                                let updatable = (factors.value & (1u128 << idx)) != 0;
-                                rows.push(serde_json::json!({
-                                    "key": key.to_string(),
-                                    "updatable": updatable,
-                                }));
-                            }
+                    for key in MarketConfigKey::iter() {
+                        if let Ok(factor) = MarketConfigFactor::try_from(key) {
+                            let updatable = store_account
+                                .market_config_permissions
+                                .updatable_market_config_factors
+                                .get_flag(factor);
+                            rows.push(serde_json::json!({
+                                "key": key.to_string(),
+                                "updatable": updatable,
+                            }));
                         }
                     }
                     let out = output.display_many(
@@ -899,32 +896,25 @@ impl super::Command for Market {
                 return Ok(());
             }
             Command::IsConfigUpdatable { flag, factor } => {
-                use gmsol_sdk::core::market::{
-                    MarketConfigFactor, MarketConfigFlag, MarketConfigKey,
-                };
+                use gmsol_sdk::core::market::MarketConfigFactor;
                 use gmsol_sdk::programs::gmsol_store::accounts as store_accounts;
-                use std::convert::TryFrom;
 
                 let store_account: std::sync::Arc<store_accounts::Store> =
                     client.store(store).await?;
                 match (flag, factor) {
-                    (Some(name), None) => {
-                        let parsed: MarketConfigFlag = name.parse()?;
-                        let flags = &store_account
+                    (Some(flag), None) => {
+                        let is_updatable = store_account
                             .market_config_permissions
-                            .updatable_market_config_flags;
-                        let idx: u8 = parsed.into();
-                        let is_updatable = (flags.value & (1u128 << idx)) != 0;
+                            .updatable_market_config_flags
+                            .get_flag(*flag);
                         println!("{is_updatable}");
                     }
-                    (None, Some(name)) => {
-                        let key: MarketConfigKey = name.parse()?;
-                        let factor = MarketConfigFactor::try_from(key)?;
-                        let factors = &store_account
+                    (None, Some(key)) => {
+                        let factor = MarketConfigFactor::try_from(*key)?;
+                        let is_updatable = store_account
                             .market_config_permissions
-                            .updatable_market_config_factors;
-                        let idx: u8 = factor.into();
-                        let is_updatable = (factors.value & (1u128 << idx)) != 0;
+                            .updatable_market_config_factors
+                            .get_flag(factor);
                         println!("{is_updatable}");
                     }
                     _ => {
