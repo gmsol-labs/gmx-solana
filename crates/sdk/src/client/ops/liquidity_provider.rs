@@ -446,7 +446,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             let position: Position =
                 anchor_lang::AccountDeserialize::try_deserialize(&mut account.data.as_slice())
                     .map_err(|e| {
-                        crate::Error::custom(format!("Failed to deserialize position: {}", e))
+                        crate::Error::custom(format!("Failed to deserialize position: {e}"))
                     })?;
 
             // Get controller for this position
