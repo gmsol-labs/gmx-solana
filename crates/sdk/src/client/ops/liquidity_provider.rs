@@ -1,5 +1,6 @@
 use std::{num::NonZeroU64, ops::Deref};
 
+use gmsol_programs::anchor_lang::Discriminator;
 use gmsol_programs::gmsol_liquidity_provider::accounts::{
     GlobalState, LpTokenController, Position,
 };
@@ -418,25 +419,25 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             get_program_accounts_with_context, ProgramAccountsConfigForRpc,
         };
 
-        tracing::info!("Querying positions for owner: {}", owner);
-        tracing::info!("Using LP program ID: {}", lp_program.id);
-
         let config = ProgramAccountsConfigForRpc {
             filters: Some(vec![
-                // Filter by owner field (offset 8 bytes for discriminator)
+                // First filter: Position discriminator (first 8 bytes)
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, Position::DISCRIMINATOR)),
+                // Second filter: owner field (offset 8 bytes for discriminator)
                 RpcFilterType::Memcmp(Memcmp::new(
-                    8, // Skip discriminator
+                    8, // Skip discriminator, owner is first field
                     MemcmpEncodedBytes::Base58(owner.to_string()),
                 )),
             ]),
-            account_config: RpcAccountInfoConfig::default(),
+            account_config: RpcAccountInfoConfig {
+                encoding: Some(solana_account_decoder::UiAccountEncoding::Base64),
+                ..RpcAccountInfoConfig::default()
+            },
         };
 
         let position_accounts_result =
             get_program_accounts_with_context(self.rpc(), &lp_program.id, config).await?;
         let position_accounts = position_accounts_result.into_value();
-
-        tracing::info!("Found {} position accounts", position_accounts.len());
 
         let mut results = Vec::new();
 
