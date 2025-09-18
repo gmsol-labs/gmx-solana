@@ -47,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added support for `update_closed_state` instruction.
 - sdk(sdk): Added support for `set_market_config_updatable` instruction.
 - sdk(sdk): Added support for `initialize` instruction for liquidity provider program.
-- cli: Added `lp init-lp` command. 
+- cli: Added `lp init-lp` command.
 
 ### Changed
 
@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - sdk(sdk): Fixed wrong event authority address in `CreateOrder`.
 - sdk(sdk): Added `openssl-vendored` feature to avoid link errors.
+- sdk(sdk): Fixed missing delegation to base impl of `SetExecutionFee::is_execution_fee_estimation_required`.
 
 ## [0.7.1] - 2025-08-15
 
