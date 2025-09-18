@@ -427,6 +427,39 @@ impl Lp {
             return Ok(());
         }
 
+        // Create formatted positions with 2-decimal APY
+        let formatted_positions: Vec<_> = positions
+            .iter()
+            .map(|pos| {
+                let mut formatted = serde_json::to_value(pos).unwrap();
+                if let Some(obj) = formatted.as_object_mut() {
+                    // Format APY to 2 decimal places
+                    if let Some(apy_value) = obj.get("current_apy") {
+                        if let Some(apy_str) = apy_value.as_str() {
+                            if let Ok(apy_num) = apy_str.parse::<f64>() {
+                                obj.insert(
+                                    "current_apy".to_string(),
+                                    serde_json::Value::String(format!("{:.2}", apy_num)),
+                                );
+                            }
+                        }
+                    }
+                    // Format GT to 4 decimal places
+                    if let Some(gt_value) = obj.get("claimable_gt") {
+                        if let Some(gt_str) = gt_value.as_str() {
+                            if let Ok(gt_num) = gt_str.parse::<f64>() {
+                                obj.insert(
+                                    "claimable_gt".to_string(),
+                                    serde_json::Value::String(format!("{:.4}", gt_num)),
+                                );
+                            }
+                        }
+                    }
+                }
+                formatted
+            })
+            .collect();
+
         let options = DisplayOptions::table_projection([
             ("position_id", "Position ID"),
             ("lp_token_symbol", "LP Token"),
@@ -437,7 +470,7 @@ impl Lp {
         ])
         .set_empty_message("No LP staking positions found.");
 
-        println!("{}", output.display_many(positions, options)?);
+        println!("{}", output.display_many(formatted_positions, options)?);
         Ok(())
     }
 
@@ -449,6 +482,33 @@ impl Lp {
         output: &crate::config::OutputFormat,
     ) -> eyre::Result<()> {
         use crate::config::DisplayOptions;
+
+        // Format single position with 2-decimal APY
+        let mut formatted = serde_json::to_value(position).unwrap();
+        if let Some(obj) = formatted.as_object_mut() {
+            // Format APY to 2 decimal places
+            if let Some(apy_value) = obj.get("current_apy") {
+                if let Some(apy_str) = apy_value.as_str() {
+                    if let Ok(apy_num) = apy_str.parse::<f64>() {
+                        obj.insert(
+                            "current_apy".to_string(),
+                            serde_json::Value::String(format!("{:.2}", apy_num)),
+                        );
+                    }
+                }
+            }
+            // Format GT to 4 decimal places
+            if let Some(gt_value) = obj.get("claimable_gt") {
+                if let Some(gt_str) = gt_value.as_str() {
+                    if let Ok(gt_num) = gt_str.parse::<f64>() {
+                        obj.insert(
+                            "claimable_gt".to_string(),
+                            serde_json::Value::String(format!("{:.4}", gt_num)),
+                        );
+                    }
+                }
+            }
+        }
 
         // Single position display: Position ID, LP token, amount, staked time, APY, claimable GT
         let options = DisplayOptions::table_projection([
@@ -463,7 +523,7 @@ impl Lp {
         // For single position, display as single item
         println!(
             "{}",
-            output.display_many(std::iter::once(position), options)?
+            output.display_many(std::iter::once(formatted), options)?
         );
         Ok(())
     }
