@@ -75,7 +75,6 @@ impl Decode for CreatedOrders {
 
                     let discriminator = &data[..8];
                     let order_idx = match discriminator {
-                        args::CreateOrder::DISCRIMINATOR => 5,
                         args::CreateOrderV2::DISCRIMINATOR => 5,
                         _ => {
                             continue;

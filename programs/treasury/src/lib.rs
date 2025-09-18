@@ -142,15 +142,6 @@ pub mod gmsol_treasury {
     }
 
     /// Sync GT Bank.
-    #[deprecated(since = "0.6.0", note = "use `sync_gt_bank_v2` instead")]
-    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_WITHDRAWER))]
-    pub fn sync_gt_bank(ctx: Context<SyncGtBank>) -> Result<()> {
-        SyncGtBank::invoke_unchecked(ctx)?;
-        Ok(())
-    }
-
-    /// Sync GT Bank.
-    #[deprecated(since = "0.6.0", note = "use `sync_gt_bank_v2` instead")]
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_WITHDRAWER))]
     pub fn sync_gt_bank_v2(ctx: Context<SyncGtBank>) -> Result<u64> {
         SyncGtBank::invoke_unchecked(ctx)
@@ -161,25 +152,6 @@ pub mod gmsol_treasury {
         ctx: Context<'_, '_, 'info, 'info, CompleteGtExchange<'info>>,
     ) -> Result<()> {
         instructions::complete_gt_exchange(ctx)
-    }
-
-    /// Create a swap.
-    #[deprecated(since = "0.6.0", note = "use `create_swap_v2` instead")]
-    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_KEEPER))]
-    pub fn create_swap<'info>(
-        ctx: Context<'_, '_, 'info, 'info, CreateSwap<'info>>,
-        nonce: [u8; 32],
-        swap_path_length: u8,
-        swap_in_amount: u64,
-        min_swap_out_amount: Option<u64>,
-    ) -> Result<()> {
-        instructions::unchecked_create_swap(
-            ctx,
-            nonce,
-            swap_path_length,
-            swap_in_amount,
-            min_swap_out_amount,
-        )
     }
 
     /// Create a swap.

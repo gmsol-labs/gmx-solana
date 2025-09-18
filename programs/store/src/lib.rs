@@ -933,47 +933,6 @@ pub mod gmsol_store {
     ///   owned by the `store`.
     /// - The given `token` must exist in the token map.
     /// - The `provider` index must correspond to a valid [`PriceProviderKind`].
-    #[deprecated(since = "0.6.0", note = "use `set_feed_config_v2` instead")]
-    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
-    pub fn set_feed_config(
-        ctx: Context<SetFeedConfig>,
-        token: Pubkey,
-        provider: u8,
-        feed: Pubkey,
-        timestamp_adjustment: u32,
-    ) -> Result<()> {
-        SetFeedConfig::invoke_unchecked(
-            ctx,
-            token,
-            &PriceProviderKind::try_from(provider)
-                .map_err(|_| CoreError::InvalidProviderKindIndex)?,
-            Some(feed),
-            Some(timestamp_adjustment),
-            None,
-        )
-    }
-
-    /// Set the feed config of the given provider for the given token.
-    ///
-    /// # Accounts
-    /// [*See the documentation for the accounts*](SetFeedConfig).
-    ///
-    /// # Arguments
-    /// - `token`: The token whose config will be updated.
-    /// - `provider`: The index of the provider whose feed config will be updated.
-    ///   Must be a valid [`PriceProviderKind`] value.
-    /// - `feed`: The new feed address.
-    /// - `timestamp_adjustment`: The new timestamp adjustment in seconds.
-    ///
-    /// # Errors
-    /// - The [`authority`](SetFeedConfig::authority) must be a signer
-    ///   and a MARKET_KEEPER in the given store.
-    /// - The [`store`](SetFeedConfig::store) must be an initialized [`Store`](states::Store)
-    ///   account owned by the store program.
-    /// - The [`token_map`](SetFeedConfig::token_map) must be an initialized token map account
-    ///   owned by the `store`.
-    /// - The given `token` must exist in the token map.
-    /// - The `provider` index must correspond to a valid [`PriceProviderKind`].
     #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
     pub fn set_feed_config_v2(
         ctx: Context<SetFeedConfig>,
@@ -2111,62 +2070,6 @@ pub mod gmsol_store {
     /// Create an order by the owner.
     ///
     /// # Accounts
-    /// *[See the documentation for the accounts.](CreateOrder)*
-    ///
-    /// # Arguments
-    /// - `nonce`: Nonce bytes used to derive the address for the order.
-    /// - `params`: Order Parameters specifying the market, order kind, and other details.
-    ///
-    /// # Errors
-    /// This instruction will fail if:
-    /// - The [`owner`](CreateOrder::owner) is not a signer or has insufficient balance for the
-    ///   execution fee and rent.
-    /// - The [`store`](CreateOrder::store) is not properly initialized.
-    /// - The [`market`](CreateOrder::market) is not initialized, is disabled, or not owned by
-    ///   the `store`.
-    /// - The [`user`](CreateOrder::user) is not initialized or does not correspond to the owner.
-    ///   The address must be a valid PDA derived from the `owner` and expected seeds.
-    /// - The [`order`](CreateOrder::order) is not uninitialized or the address is not a valid
-    ///   PDA derived from the `owner`, `nonce` and expected seeds.
-    /// - For increase/decrease orders:
-    ///   - The [`position`](CreateOrder::position) is missing, not validly initialized, or not
-    ///     owned by both the `owner` and `store`.
-    ///   - The [`long_token`](CreateOrder::long_token) or [`short_token`](CreateOrder::short_token)
-    ///     are missing, or do not match the those defined in the [`market`](CreateOrder::market).
-    ///   - The [`long_token_escrow`](CreateOrder::long_token_escrow) or
-    ///     [`short_token_escrow`](CreateOrder::short_token_escrow) are missing, not valid
-    ///     escrow accounts for `long_token` or `short_token` respectively, or not owned by the `order`.
-    /// - For increase/swap orders:
-    ///   - The [`initial_collateral_token`](CreateOrder::initial_collateral_token) is missing
-    ///     or invalid.
-    ///   - The [`initial_collateral_token_escrow`](CreateOrder::initial_collateral_token_escrow)
-    ///     is missing, not a valid escrow account for `initial_collateral_token`, or not owned by
-    ///     the `order`.
-    ///   - The [`initial_collateral_token_source`](CreateOrder::initial_collateral_token_source)
-    ///     is missing or not a valid source account with `owner` as the authority.
-    /// - For decrease/swap orders:
-    ///   - The [`final_output_token`](CreateOrder::final_output_token) is invalid.
-    ///   - The [`final_output_token_escrow`](CreateOrder::final_output_token_escrow) is missing,
-    ///     not a valid escrow account for `final_output_token`, or not owned by the `order`.
-    /// - The feature for creating this kind of order is not enabled.
-    /// - The remaining market accounts do not match the swap parameters, not all enabled or owned
-    ///   by the `store`.
-    ///
-    /// # Notes
-    /// - Unlike [`create_order_v2`], this instruction cannot emit a CPI Event due to the lack of required accounts for CPI.  
-    ///   As a result, it does not guarantee that an order will always have a corresponding `OrderUpdated` event.
-    #[deprecated(since = "0.6.0", note = "use `create_order_v2` instead.")]
-    pub fn create_order<'info>(
-        mut ctx: Context<'_, '_, 'info, 'info, CreateOrder<'info>>,
-        nonce: [u8; 32],
-        params: CreateOrderParams,
-    ) -> Result<()> {
-        internal::Create::create(&mut ctx, &nonce, &params, None)
-    }
-
-    /// Create an order by the owner.
-    ///
-    /// # Accounts
     /// *[See the documentation for the accounts.](CreateOrderV2)*
     ///
     /// # Arguments
@@ -2216,37 +2119,6 @@ pub mod gmsol_store {
         callback_version: Option<u8>,
     ) -> Result<()> {
         internal::Create::create(&mut ctx, &nonce, &params, callback_version)
-    }
-
-    /// Close an order, either by the owner or by keepers.
-    ///
-    /// # Accounts
-    /// *[See the documentation for the accounts.](CloseOrder)*
-    ///
-    /// # Arguments
-    /// - `reason`: The reason for the close.
-    ///
-    /// # Errors
-    /// - The [`executor`](CloseOrder::executor) must be a signer and either the owner
-    ///   of the `order` or a ORDER_KEEPER in the store.
-    /// - The [`store`](CloseOrder::store) must be initialized.
-    /// - The [`owner`](CloseOrder::owner) must be the owner of the `order`.
-    /// - The [`user`](CloseOrder::user) must be initialized and correspond to the `owner`.
-    /// - The [`referrer_user`](CloseOrder::referrer_user) must be present if the `owner` has a
-    ///   referrer, and it must be initialized and correspond to the referrer of the `owner`.
-    /// - The [`order`](CloseOrder::order) must be initialized and owned by the `store` and the
-    ///   `owner`.
-    /// - The tokens must be those recorded in the `order`.
-    /// - The escrow accounts must be owned and recorded in the `order`.
-    /// - The addresses of the ATAs must be valid.
-    /// - The `order` must be cancelled or completed if the `executor` is not the owner.
-    /// - The feature must be enabled for closing the given kind of `order`.
-    #[deprecated(since = "0.6.0", note = "use `close_order_v2` instead.")]
-    pub fn close_order<'info>(
-        ctx: Context<'_, '_, 'info, 'info, CloseOrder<'info>>,
-        reason: String,
-    ) -> Result<()> {
-        internal::Close::close(&ctx, &reason)
     }
 
     /// Close an order, either by the owner or by keepers.
@@ -2340,34 +2212,6 @@ pub mod gmsol_store {
     /// Update an order by the owner.
     ///
     /// # Accounts
-    /// *[See the documentation for the accounts.](UpdateOrder)*
-    ///
-    /// # Arguments
-    /// - `params`: Update Order Parameters.
-    ///
-    /// # Errors
-    /// - The [`owner`](UpdateOrder::owner) must be a signer and the owner of the `order`.
-    /// - The [`store`](UpdateOrder::store) must be initialized.
-    /// - The [`market`](UpdateOrder::market) must be initialized, enabled and owned by the `store`.
-    /// - The [`order`](UpdateOrder::order) must be:
-    ///   - Initialized and owned by both the `store` and the `owner`
-    ///   - Associated with the provided `market`
-    ///   - In a pending state
-    ///   - The order type must support updates
-    /// - The feature must be enabled in the `store` for updating the given kind of `order`.
-    /// - The updated parameters must be valid for the order type.
-    ///
-    /// # Notes
-    /// - Unlike [`update_order_v2`], this instruction cannot emit a CPI Event due to the lack of required accounts for CPI.  
-    ///   As a result, it does not guarantee that an order will always have a corresponding `OrderUpdated` event.
-    #[deprecated(since = "0.6.0", note = "use `update_order_v2` instead")]
-    pub fn update_order(ctx: Context<UpdateOrder>, params: UpdateOrderParams) -> Result<()> {
-        instructions::update_order(ctx, &params)
-    }
-
-    /// Update an order by the owner.
-    ///
-    /// # Accounts
     /// *[See the documentation for the accounts.](UpdateOrderV2)*
     ///
     /// # Arguments
@@ -2386,76 +2230,6 @@ pub mod gmsol_store {
     /// - The updated parameters must be valid for the order type.
     pub fn update_order_v2(ctx: Context<UpdateOrderV2>, params: UpdateOrderParams) -> Result<()> {
         UpdateOrderV2::invoke(ctx, &params)
-    }
-
-    /// Execute an increase/swap order by keepers.
-    ///
-    /// # Accounts
-    /// *[See the documentation for the accounts.](ExecuteIncreaseOrSwapOrder)*
-    ///
-    /// # Arguments
-    /// - `recent_timestamp`: A recent timestamp used for deriving the claimable accounts.
-    /// - `execution_fee`: The execution fee claimed to be used the keeper.
-    /// - `throw_on_execution_error`: If true, throws an error if order execution fails. If false,
-    ///   silently cancels the order on execution failure.
-    ///
-    /// # Errors
-    /// - The [`authority`](ExecuteIncreaseOrSwapOrder::authority) must be a signer and have the
-    ///   ORDER_KEEPER role in the `store`.
-    /// - The [`store`](ExecuteIncreaseOrSwapOrder::store) must be initialized.
-    /// - The [`token_map`](ExecuteIncreaseOrSwapOrder::token_map) must be initialized and authorized
-    ///   by the `store`.
-    /// - The [`oracle`](ExecuteIncreaseOrSwapOrder::oracle) must be initialized, cleared and owned
-    ///   by the `store`.
-    /// - The [`market`](ExecuteIncreaseOrSwapOrder::market) must be initialized, enabled and owned
-    ///   by the `store`. It must also be associated with the `order`.
-    /// - The [`owner`](ExecuteIncreaseOrSwapOrder::owner) must be the owner of the `order`.
-    /// - The [`user`](ExecuteIncreaseOrSwapOrder::user) must be initialized and associated with
-    ///   the `owner`.
-    /// - The [`order`](ExecuteIncreaseOrSwapOrder::order) must be:
-    ///   - Initialized and owned by both the `store` and `owner`
-    ///   - Associated with the provided `market`
-    ///   - In a pending state
-    /// - For increase orders:
-    ///   - The [`initial_collateral_token`](ExecuteIncreaseOrSwapOrder::initial_collateral_token)
-    ///     must be valid.
-    ///   - The [`position`](ExecuteIncreaseOrSwapOrder::position) must exist and be owned by the
-    ///     `owner` and `store`. It must match the `order`.
-    ///   - The [`event`](ExecuteIncreaseOrSwapOrder::event) must be a valid trade event buffer owned
-    ///     by both the `store` and `authority`.
-    ///   - The [`long_token`](ExecuteIncreaseOrSwapOrder::long_token) and [`short_token`](ExecuteIncreaseOrSwapOrder::short_token)
-    ///     must match those defined in the `market`.
-    ///   - The corresponding token escrow and vault accounts must be valid, recorded in the `order`
-    ///     and owned by the `order`.
-    /// - For swap orders:
-    ///   - The [`initial_collateral_token`](ExecuteIncreaseOrSwapOrder::initial_collateral_token)
-    ///     must be valid.
-    ///   - The [`final_output_token`](ExecuteIncreaseOrSwapOrder::final_output_token) must be valid.
-    ///   - The corresponding escrow and vault accounts must be valid, recorded in the `order` and
-    ///     owned by the `order`.
-    /// - The remaining accounts must be valid. See the documentation for the accounts for more
-    ///   details.
-    /// - The feature for executing this order type must be enabled in the `store`.
-    /// - If `throw_on_execution_error` is true, any execution failure will throw an error
-    // Note: There is a false positive lint for the doc link of `event`.
-    #[allow(rustdoc::broken_intra_doc_links)]
-    #[deprecated(
-        since = "0.6.0",
-        note = "use `execute_increase_or_swap_order_v2` instead."
-    )]
-    #[access_control(internal::Authenticate::only_order_keeper(&ctx))]
-    pub fn execute_increase_or_swap_order<'info>(
-        ctx: Context<'_, '_, 'info, 'info, ExecuteIncreaseOrSwapOrder<'info>>,
-        recent_timestamp: i64,
-        execution_fee: u64,
-        throw_on_execution_error: bool,
-    ) -> Result<()> {
-        instructions::unchecked_execute_increase_or_swap_order(
-            ctx,
-            recent_timestamp,
-            execution_fee,
-            throw_on_execution_error,
-        )
     }
 
     /// Execute an increase/swap order by keepers.
@@ -2517,64 +2291,6 @@ pub mod gmsol_store {
         throw_on_execution_error: bool,
     ) -> Result<()> {
         ExecuteIncreaseOrSwapOrderV2::invoke(
-            ctx,
-            recent_timestamp,
-            execution_fee,
-            throw_on_execution_error,
-        )
-    }
-
-    /// Execute a decrease order by keepers.
-    ///
-    /// # Accounts
-    /// *[See the documentation for the accounts.](ExecuteDecreaseOrder)*
-    ///
-    /// # Arguments
-    /// - `recent_timestamp`: A timestamp that must be within a recent time window.
-    /// - `execution_fee`: The execution fee claimed to be used by the keeper.
-    /// - `throw_on_execution_error`: If true, throws an error if order execution fails. If false,
-    ///   silently cancels the order on execution failure.
-    ///
-    /// # Errors
-    /// - The [`authority`](ExecuteDecreaseOrder::authority) must be a signer with the ORDER_KEEPER
-    ///   role in the `store`.
-    /// - The [`store`](ExecuteDecreaseOrder::store) must be initialized.
-    /// - The [`token_map`](ExecuteDecreaseOrder::token_map) must be initialized and authorized
-    ///   by the `store`.
-    /// - The [`oracle`](ExecuteDecreaseOrder::oracle) must be initialized, cleared and owned
-    ///   by the `store`.
-    /// - The [`market`](ExecuteDecreaseOrder::market) must be initialized, enabled and owned
-    ///   by the `store`.
-    /// - The [`owner`](ExecuteDecreaseOrder::owner) must be the owner of the `order`.
-    /// - The [`user`](ExecuteDecreaseOrder::user) must be initialized and associated with
-    ///   the `owner`.
-    /// - The [`order`](ExecuteDecreaseOrder::order) must be:
-    ///   - Initialized and owned by both the `store` and `owner`
-    ///   - Associated with the provided `market`
-    ///   - In the pending state
-    /// - The [`position`](ExecuteDecreaseOrder::position) must exist and be validly owned
-    ///   by the `owner` and `store`. It must match the `order`.
-    /// - The [`event`](ExecuteDecreaseOrder::event) must be a valid trade event buffer
-    ///   owned by both the `store` and `authority`.
-    /// - The tokens must match those recorded in the `order`.
-    /// - All escrow accounts must be valid, recorded in the `order` and owned by the `order`.
-    /// - All vault accounts must be valid market vault accounts and owned by the `store`.
-    /// - All claimable token accounts must be valid and properly delegated to their owners.
-    /// - The remaining accounts must be valid. See the documentation for the accounts for more
-    ///   details.
-    /// - The feature for executing decrease orders must be enabled in the `store`.
-    /// - If `throw_on_execution_error` is true, any execution failure will throw an error.
-    // Note: There is a false positive lint for the doc link of `event`.
-    #[allow(rustdoc::broken_intra_doc_links)]
-    #[deprecated(since = "0.6.0", note = "use `execute_decrease_order_v2` instead.")]
-    #[access_control(internal::Authenticate::only_order_keeper(&ctx))]
-    pub fn execute_decrease_order<'info>(
-        ctx: Context<'_, '_, 'info, 'info, ExecuteDecreaseOrder<'info>>,
-        recent_timestamp: i64,
-        execution_fee: u64,
-        throw_on_execution_error: bool,
-    ) -> Result<()> {
-        instructions::unchecked_execute_decrease_order(
             ctx,
             recent_timestamp,
             execution_fee,
@@ -3082,24 +2798,6 @@ pub mod gmsol_store {
         time_window_index: i64,
     ) -> Result<()> {
         instructions::prepare_gt_exchange_vault(ctx, time_window_index)
-    }
-
-    /// Confirm GT exchange vault.
-    ///
-    /// # Accounts
-    /// *[See the documentation for the accounts.](ConfirmGtExchangeVault)*
-    ///
-    /// # Errors
-    /// - The [`authority`](ConfirmGtExchangeVault::authority) must be a signer and have the GT_CONTROLLER role in the `store`.
-    /// - The [`store`](ConfirmGtExchangeVault::store) must be properly initialized.
-    /// - The GT state of the `store` must be initialized.
-    /// - The [`vault`](ConfirmGtExchangeVault::vault) must be validly initialized and owned by
-    ///   the `store`.
-    /// - The `vault` must be in a confirmable state (deposit window has passed but not yet confirmed).
-    #[deprecated(since = "0.6.0", note = "use `confirm_gt_exchange_vault_v2` instead")]
-    #[access_control(internal::Authenticate::only_gt_controller(&ctx))]
-    pub fn confirm_gt_exchange_vault(ctx: Context<ConfirmGtExchangeVault>) -> Result<()> {
-        instructions::unchecked_confirm_gt_exchange_vault(ctx, None, None)
     }
 
     /// Confirm GT exchange vault.

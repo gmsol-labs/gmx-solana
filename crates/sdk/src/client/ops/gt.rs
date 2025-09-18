@@ -62,7 +62,13 @@ pub trait GtOps<C> {
     }
 
     /// Confirm the given GT exchange vault.
-    fn confirm_gt_exchange_vault(&self, store: &Pubkey, vault: &Pubkey) -> TransactionBuilder<C>;
+    fn confirm_gt_exchange_vault(
+        &self,
+        store: &Pubkey,
+        vault: &Pubkey,
+        buyback_value: u128,
+        buyback_price: Option<u128>,
+    ) -> TransactionBuilder<C>;
 
     /// Request GT exchange with the given time window index.
     fn request_gt_exchange_with_time_window_index(
@@ -176,16 +182,25 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
             .output(vault)
     }
 
-    fn confirm_gt_exchange_vault(&self, store: &Pubkey, vault: &Pubkey) -> TransactionBuilder<C> {
+    fn confirm_gt_exchange_vault(
+        &self,
+        store: &Pubkey,
+        vault: &Pubkey,
+        buyback_value: u128,
+        buyback_price: Option<u128>,
+    ) -> TransactionBuilder<C> {
         self.store_transaction()
-            .anchor_accounts(accounts::ConfirmGtExchangeVault {
+            .anchor_accounts(accounts::ConfirmGtExchangeVaultV2 {
                 authority: self.payer(),
                 store: *store,
                 vault: *vault,
                 event_authority: self.store_event_authority(),
                 program: *self.store_program_id(),
             })
-            .anchor_args(args::ConfirmGtExchangeVault {})
+            .anchor_args(args::ConfirmGtExchangeVaultV2 {
+                buyback_value,
+                buyback_price,
+            })
     }
 
     fn request_gt_exchange_with_time_window_index(
