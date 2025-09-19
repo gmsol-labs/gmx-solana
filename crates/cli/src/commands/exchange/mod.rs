@@ -534,6 +534,14 @@ enum Command {
         #[arg(long, short)]
         side: Option<Side>,
     },
+    /// Update the closed state for the given market.
+    /// Requires appropriate permissions.
+    #[cfg(feature = "execute")]
+    UpdateClosedState {
+        #[command(flatten)]
+        args: executor::ExecutorArgs,
+        market_token: Pubkey,
+    },
     /// Close a profitable position when ADL is enabled.
     #[cfg(feature = "execute")]
     Adl {
@@ -2167,6 +2175,17 @@ impl super::Command for Exchange {
                 };
                 let builder =
                     client.update_adl(store, oracle, market_token, for_long, for_short)?;
+                executor.execute(builder, options).await?;
+                return Ok(());
+            }
+            #[cfg(feature = "execute")]
+            Command::UpdateClosedState { args, market_token } => {
+                ctx.require_not_serialize_only_mode()?;
+                ctx.require_not_ix_buffer_mode()?;
+
+                let executor = args.build(client).await?;
+                let oracle = ctx.config().oracle()?;
+                let builder = client.update_closed_state(store, oracle, market_token);
                 executor.execute(builder, options).await?;
                 return Ok(());
             }

@@ -1,8 +1,10 @@
 use std::ops::Deref;
 
 use gmsol_solana_utils::{
-    client_traits::FromRpcClientWith, make_bundle_builder::MakeBundleBuilder,
-    transaction_builder::TransactionBuilder, IntoAtomicGroup,
+    client_traits::FromRpcClientWith,
+    make_bundle_builder::{MakeBundleBuilder, SetExecutionFee},
+    transaction_builder::TransactionBuilder,
+    IntoAtomicGroup,
 };
 use gmsol_utils::oracle::PriceProviderKind;
 use solana_sdk::signer::Signer;
@@ -18,6 +20,21 @@ pub struct UpdateClosedStateBuilder<'a, C> {
     client: &'a crate::Client<C>,
     builder: UpdateClosedState,
     hint: Option<UpdateClosedStateHint>,
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> SetExecutionFee
+    for UpdateClosedStateBuilder<'a, C>
+{
+    fn is_execution_fee_estimation_required(&self) -> bool {
+        // update_closed_state does not consume a dynamic execution fee in the builder
+        // so skip estimation entirely.
+        false
+    }
+
+    fn set_execution_fee(&mut self, _lamports: u64) -> &mut Self {
+        // No-op: builder does not carry an execution fee field.
+        self
+    }
 }
 
 impl<'a, C> UpdateClosedStateBuilder<'a, C> {
