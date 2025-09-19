@@ -137,7 +137,7 @@ impl LiquidityProviderProgram {
             &global_state.apy_gradient,
         );
 
-        // Convert to per-second APY (mirrors lib.rs lines 700-704)
+        // Convert to per-second APY (exactly matches lib.rs lines 700-704)
         const SECONDS_PER_YEAR: u128 = 31_557_600; // 365.25 * 24 * 3600
         let avg_apy_per_sec = if SECONDS_PER_YEAR > 0 {
             avg_apy / SECONDS_PER_YEAR
@@ -162,44 +162,47 @@ impl LiquidityProviderProgram {
         Ok(gt_raw.min(u64::MAX as u128))
     }
 
-    /// Compute time-weighted average APY (simplified version of on-chain logic)
+    /// Compute time-weighted average APY (exactly matches on-chain logic from lib.rs)
     pub fn compute_time_weighted_apy(
         start_time: i64,
         end_time: i64,
         apy_gradient: &[u128; 53],
     ) -> u128 {
+        // Constants that match lib.rs exactly
+        const SECONDS_PER_WEEK: u128 = 7 * 24 * 3600;
+        const APY_LAST_INDEX: usize = 52; // APY_BUCKETS - 1 = 53 - 1 = 52
+
         if end_time <= start_time {
             return apy_gradient[0];
         }
 
-        let total_seconds = (end_time - start_time) as u128;
+        let total_seconds: u128 = (end_time - start_time) as u128;
         if total_seconds == 0 {
             return apy_gradient[0];
         }
 
-        let seconds_per_week = 7 * 24 * 3600;
-        let full_weeks = total_seconds / seconds_per_week;
-        let rem_seconds = total_seconds % seconds_per_week;
-
-        let mut acc = 0u128;
-        let capped_full = full_weeks.min(52); // APY_LAST_INDEX = 52
+        let full_weeks: u128 = total_seconds / SECONDS_PER_WEEK;
+        let rem_seconds: u128 = total_seconds % SECONDS_PER_WEEK;
 
         // Sum full-week contributions
-        for apy_value in apy_gradient.iter().take(capped_full as usize) {
-            acc = acc.saturating_add(apy_value.saturating_mul(seconds_per_week));
+        let mut acc: u128 = 0;
+        let capped_full: u128 = full_weeks.min(APY_LAST_INDEX as u128);
+        for &apy_value in apy_gradient.iter().take(capped_full as usize) {
+            acc = acc.saturating_add(apy_value.saturating_mul(SECONDS_PER_WEEK));
         }
 
-        // Handle weeks beyond the gradient
-        if full_weeks > 52 {
-            let extra = full_weeks - 52;
+        // Handle weeks beyond the gradient (exactly matches lib.rs logic)
+        if full_weeks > (APY_LAST_INDEX as u128) {
+            let extra = full_weeks - (APY_LAST_INDEX as u128); // weeks APY_LAST_INDEX+ use bucket APY_LAST_INDEX
             acc = acc.saturating_add(
-                apy_gradient[52].saturating_mul(seconds_per_week.saturating_mul(extra)),
+                apy_gradient[APY_LAST_INDEX].saturating_mul(SECONDS_PER_WEEK.saturating_mul(extra)),
             );
         }
 
-        // Add partial-week remainder
+        // Add partial-week remainder (exactly matches lib.rs type conversion)
         if rem_seconds > 0 {
-            let idx = (full_weeks.min(52) as usize).min(52);
+            let idx =
+                usize::try_from(full_weeks.min(APY_LAST_INDEX as u128)).unwrap_or(APY_LAST_INDEX);
             acc = acc.saturating_add(apy_gradient[idx].saturating_mul(rem_seconds));
         }
 
