@@ -19,14 +19,17 @@ use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use crate::{
     builders::{
         liquidity_provider::{
-            AcceptAuthority, CalculateGtReward, ClaimGtReward, CreateLpTokenController,
-            DisableLpTokenController, InitializeLp, LpTokenKind, SetClaimEnabled,
-            SetPricingStaleness, StakeLpToken, StakeLpTokenHint, TransferAuthority, UnstakeLpToken,
-            UpdateApyGradientRange, UpdateApyGradientSparse, UpdateMinStakeValue,
+            AcceptAuthority, ClaimGtReward, CreateLpTokenController, DisableLpTokenController,
+            InitializeLp, LpTokenKind, SetClaimEnabled, SetPricingStaleness, StakeLpToken,
+            StakeLpTokenHint, TransferAuthority, UnstakeLpToken, UpdateApyGradientRange,
+            UpdateApyGradientSparse, UpdateMinStakeValue,
         },
         StoreProgram,
     },
-    client::pull_oracle::{FeedIds, PullOraclePriceConsumer},
+    client::{
+        accounts::{get_program_accounts_with_context, ProgramAccountsConfigForRpc},
+        pull_oracle::{FeedIds, PullOraclePriceConsumer},
+    },
     utils::token_map::FeedAddressMap,
 };
 
@@ -77,11 +80,10 @@ pub trait LiquidityProviderOps<C> {
     /// Calculate GT reward for a position.
     fn calculate_gt_reward(
         &self,
-        store: &Pubkey,
         lp_token_mint: &Pubkey,
         owner: &Pubkey,
         position_id: u64,
-    ) -> crate::Result<TransactionBuilder<'_, C>>;
+    ) -> impl std::future::Future<Output = crate::Result<u128>>;
 
     /// Claim GT rewards for a position.
     fn claim_gt_reward(
@@ -256,23 +258,42 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         }
     }
 
-    fn calculate_gt_reward(
+    async fn calculate_gt_reward(
         &self,
-        store: &Pubkey,
         lp_token_mint: &Pubkey,
         owner: &Pubkey,
         position_id: u64,
-    ) -> crate::Result<TransactionBuilder<'_, C>> {
-        let builder = CalculateGtReward::builder()
-            .owner(*owner)
-            .store_program(self.store_program_for_builders(store))
-            .lp_program(self.lp_program_for_builders().clone())
-            .lp_token_mint(*lp_token_mint)
-            .position_id(position_id)
-            .build();
+    ) -> crate::Result<u128> {
+        // Get required accounts for GT calculation
+        let lp_program = self.lp_program_for_builders();
+        let global_state_address = lp_program.find_global_state_address();
+        let controller_address =
+            lp_program.find_lp_token_controller_address(&global_state_address, lp_token_mint);
+        let position_address =
+            lp_program.find_stake_position_address(owner, position_id, &controller_address);
 
-        let ag = builder.into_atomic_group(&())?;
-        Ok(self.store_transaction().pre_atomic_group(ag, true))
+        // Get all required accounts
+        let global_state = self
+            .account::<GlobalState>(&global_state_address)
+            .await?
+            .ok_or_else(|| crate::Error::custom("Global state not found"))?;
+
+        let position = self
+            .account::<Position>(&position_address)
+            .await?
+            .ok_or_else(|| crate::Error::custom("Position not found"))?;
+
+        let controller = self
+            .account::<LpTokenController>(&controller_address)
+            .await?
+            .ok_or_else(|| crate::Error::custom("Controller not found"))?;
+
+        // Direct GT calculation using builder's core logic
+        crate::builders::liquidity_provider::LiquidityProviderProgram::compute_claimable_gt_reward(
+            &position,
+            &controller,
+            &global_state,
+        )
     }
 
     fn claim_gt_reward(
@@ -410,10 +431,6 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         let gt_decimals = store_account.0.gt.decimals;
 
         // Query all Position accounts for this owner
-        use crate::client::accounts::{
-            get_program_accounts_with_context, ProgramAccountsConfigForRpc,
-        };
-
         let config = ProgramAccountsConfigForRpc {
             filters: Some(vec![
                 RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, Position::DISCRIMINATOR)),
