@@ -395,11 +395,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         store: &Pubkey,
         owner: &Pubkey,
     ) -> crate::Result<Vec<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
-        use crate::serde::serde_lp_position::{
-            fallback_lp_token_symbol, LpPositionComputedData, SerdeLpStakingPosition,
-        };
-
-        // Get global state to access GT decimals
+        // Get global state and store data
         let lp_program = self.lp_program_for_builders();
         let global_state_address = lp_program.find_global_state_address();
         let global_state = self
@@ -407,25 +403,22 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             .await?
             .ok_or_else(|| crate::Error::custom("Global state not found"))?;
 
-        // Get store to access GT decimals
         let store_account = self
             .account::<crate::utils::zero_copy::ZeroCopy<Store>>(store)
             .await?
             .ok_or_else(|| crate::Error::custom("Store not found"))?;
         let gt_decimals = store_account.0.gt.decimals;
 
-        // Query all Position accounts for this owner using account_with_config
+        // Query all Position accounts for this owner
         use crate::client::accounts::{
             get_program_accounts_with_context, ProgramAccountsConfigForRpc,
         };
 
         let config = ProgramAccountsConfigForRpc {
             filters: Some(vec![
-                // First filter: Position discriminator (first 8 bytes)
                 RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, Position::DISCRIMINATOR)),
-                // Second filter: owner field (offset 8 bytes for discriminator)
                 RpcFilterType::Memcmp(Memcmp::new(
-                    8, // Skip discriminator, owner is first field
+                    8,
                     MemcmpEncodedBytes::Base58(owner.to_string()),
                 )),
             ]),
@@ -455,45 +448,11 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
                 .await?
                 .ok_or_else(|| crate::Error::custom("Controller not found"))?;
 
-            // Calculate current APY (time-weighted based on staking duration)
-            let current_time = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64;
-
-            // For disabled controller, use disabled_at as end time
-            let effective_end_time = if controller.is_enabled {
-                current_time
-            } else {
-                controller.disabled_at
-            };
-
-            let current_apy = crate::builders::liquidity_provider::LiquidityProviderProgram::compute_time_weighted_apy(
-                position.stake_start_time,
-                effective_end_time,
-                &global_state.apy_gradient,
-            );
-
-            // GT rewards: Calculate actual claimable amount using precise on-chain logic
-            let claimable_gt = crate::builders::liquidity_provider::LiquidityProviderProgram::compute_claimable_gt_reward(
-                &position, &controller, &global_state
-            ).unwrap_or(0u128); // Fallback to 0 if calculation fails
-
-            // Get LP token symbol (you might want to implement a token map lookup here)
-            let lp_token_symbol = fallback_lp_token_symbol(&position.lp_mint.into());
-
-            // Create computed data
-            let computed_data = LpPositionComputedData {
-                claimable_gt,
-                current_apy: crate::utils::Value::from_u128(current_apy),
-                lp_token_symbol,
-            };
-
-            // Convert to serde format
-            let serde_position = SerdeLpStakingPosition::from_position(
+            // Use builder to create serde position (this includes all calculations)
+            let serde_position = crate::builders::liquidity_provider::LiquidityProviderProgram::create_serde_position(
                 &position,
                 &controller,
-                computed_data,
+                &global_state,
                 gt_decimals,
             )?;
 
@@ -510,11 +469,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         position_id: u64,
         lp_token_mint: &Pubkey,
     ) -> crate::Result<Option<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
-        use crate::serde::serde_lp_position::{
-            fallback_lp_token_symbol, LpPositionComputedData, SerdeLpStakingPosition,
-        };
-
-        // Get global state and controller addresses
+        // Get global state and addresses
         let lp_program = self.lp_program_for_builders();
         let global_state_address = lp_program.find_global_state_address();
         let controller_address =
@@ -536,7 +491,6 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
 
         // Try to get position account
         let position_account = self.account::<Position>(&position_address).await?;
-
         if position_account.is_none() {
             return Ok(None);
         }
@@ -548,47 +502,14 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             .await?
             .ok_or_else(|| crate::Error::custom("Controller not found"))?;
 
-        // Calculate current APY (time-weighted based on staking duration)
-        let current_time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64;
-
-        // For disabled controller, use disabled_at as end time
-        let effective_end_time = if controller.is_enabled {
-            current_time
-        } else {
-            controller.disabled_at
-        };
-
-        let current_apy = crate::builders::liquidity_provider::LiquidityProviderProgram::compute_time_weighted_apy(
-            position.stake_start_time,
-            effective_end_time,
-            &global_state.apy_gradient,
-        );
-
-        // GT rewards: Calculate actual claimable amount using precise on-chain logic
-        let claimable_gt = crate::builders::liquidity_provider::LiquidityProviderProgram::compute_claimable_gt_reward(
-            &position, &controller, &global_state
-        ).unwrap_or(0u128); // Fallback to 0 if calculation fails
-
-        // Get LP token symbol
-        let lp_token_symbol = fallback_lp_token_symbol(&position.lp_mint.into());
-
-        // Create computed data
-        let computed_data = LpPositionComputedData {
-            claimable_gt,
-            current_apy: crate::utils::Value::from_u128(current_apy),
-            lp_token_symbol,
-        };
-
-        // Convert to serde format
-        let serde_position = SerdeLpStakingPosition::from_position(
-            &position,
-            &controller,
-            computed_data,
-            gt_decimals,
-        )?;
+        // Use builder to create serde position (this includes all calculations)
+        let serde_position =
+            crate::builders::liquidity_provider::LiquidityProviderProgram::create_serde_position(
+                &position,
+                &controller,
+                &global_state,
+                gt_decimals,
+            )?;
 
         Ok(Some(serde_position))
     }

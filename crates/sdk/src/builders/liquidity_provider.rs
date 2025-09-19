@@ -1,9 +1,13 @@
 use std::{collections::BTreeSet, num::NonZeroU64};
 
 use anchor_lang::system_program;
+use gmsol_model::utils::apply_factor;
 use gmsol_programs::{
     gmsol_liquidity_provider::client::{accounts, args},
-    gmsol_store::accounts::{Glv, Market, Store},
+    gmsol_store::{
+        accounts::{Glv, Market, Store},
+        constants::MARKET_DECIMALS,
+    },
 };
 use gmsol_solana_utils::{
     client_traits::{FromRpcClientWith, RpcClientExt},
@@ -24,6 +28,9 @@ use typed_builder::TypedBuilder;
 
 use crate::{
     serde::{
+        serde_lp_position::{
+            fallback_lp_token_symbol, LpPositionComputedData, SerdeLpStakingPosition,
+        },
         serde_price_feed::{to_tokens_with_feeds, SerdeTokenRecord},
         StringPubkey,
     },
@@ -81,9 +88,6 @@ impl LiquidityProviderProgram {
         controller: &gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController,
         global_state: &gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState,
     ) -> crate::Result<u128> {
-        use gmsol_model::utils::apply_factor;
-        use gmsol_programs::gmsol_store::constants::MARKET_DECIMALS;
-
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -239,6 +243,75 @@ impl LiquidityProviderProgram {
         )
         .0
     }
+
+    /// Create serde position from raw position data (helper for ops layer)
+    pub fn create_serde_position(
+        position: &gmsol_programs::gmsol_liquidity_provider::accounts::Position,
+        controller: &gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController,
+        global_state: &gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState,
+        gt_decimals: u8,
+    ) -> crate::Result<crate::serde::serde_lp_position::SerdeLpStakingPosition> {
+        // Calculate current APY and GT rewards
+        let computed_data = Self::compute_position_data(position, controller, global_state)?;
+
+        // Get LP token symbol
+        let lp_token_symbol = fallback_lp_token_symbol(&position.lp_mint.into());
+
+        // Create computed data with symbol
+        let computed_data_with_symbol = LpPositionComputedData {
+            claimable_gt: computed_data.claimable_gt,
+            current_apy: crate::utils::Value::from_u128(computed_data.current_apy),
+            lp_token_symbol,
+        };
+
+        // Convert to serde format
+        SerdeLpStakingPosition::from_position(
+            position,
+            controller,
+            computed_data_with_symbol,
+            gt_decimals,
+        )
+    }
+
+    /// Compute position data (APY and GT rewards) - internal helper
+    fn compute_position_data(
+        position: &gmsol_programs::gmsol_liquidity_provider::accounts::Position,
+        controller: &gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController,
+        global_state: &gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState,
+    ) -> crate::Result<PositionComputedData> {
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        // Calculate effective end time based on controller status
+        let effective_end_time = if controller.is_enabled {
+            current_time
+        } else {
+            controller.disabled_at
+        };
+
+        // Calculate current APY using time-weighted calculation
+        let current_apy = Self::compute_time_weighted_apy(
+            position.stake_start_time,
+            effective_end_time,
+            &global_state.apy_gradient,
+        );
+
+        // Calculate GT rewards using precise on-chain logic
+        let claimable_gt = Self::compute_claimable_gt_reward(position, controller, global_state)?;
+
+        Ok(PositionComputedData {
+            current_apy,
+            claimable_gt,
+        })
+    }
+}
+
+/// Internal helper struct for computed position data
+struct PositionComputedData {
+    current_apy: u128,
+    claimable_gt: u128,
 }
 
 /// Builder for LP token staking instruction.
