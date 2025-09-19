@@ -464,9 +464,6 @@ pub struct InitializeLp {
     #[cfg_attr(serde, serde(default))]
     #[builder(default)]
     pub lp_program: LiquidityProviderProgram,
-    /// GT token mint address.
-    #[builder(setter(into))]
-    pub gt_mint: StringPubkey,
     /// Minimum stake value in USD scaled by 1e20.
     pub min_stake_value: u128,
     /// Initial APY for all buckets (1e20-scaled).
@@ -492,7 +489,6 @@ impl IntoAtomicGroup for InitializeLp {
                 accounts::Initialize {
                     global_state,
                     authority: payer,
-                    gt_mint: self.gt_mint.0,
                     system_program: system_program::ID,
                 },
                 false,

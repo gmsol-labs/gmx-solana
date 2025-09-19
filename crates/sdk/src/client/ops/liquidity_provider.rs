@@ -21,7 +21,6 @@ pub trait LiquidityProviderOps<C> {
     /// Initialize LP staking program.
     fn initialize_lp(
         &self,
-        gt_mint: &Pubkey,
         min_stake_value: u128,
         initial_apy: u128,
     ) -> crate::Result<TransactionBuilder<'_, C>>;
@@ -40,14 +39,12 @@ pub trait LiquidityProviderOps<C> {
 impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::Client<C> {
     fn initialize_lp(
         &self,
-        gt_mint: &Pubkey,
         min_stake_value: u128,
         initial_apy: u128,
     ) -> crate::Result<TransactionBuilder<'_, C>> {
         let builder = InitializeLp::builder()
             .payer(self.payer())
             .lp_program(self.lp_program_for_builders().clone())
-            .gt_mint(*gt_mint)
             .min_stake_value(min_stake_value)
             .initial_apy(initial_apy)
             .build();
