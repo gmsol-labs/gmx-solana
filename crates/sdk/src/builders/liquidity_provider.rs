@@ -166,13 +166,12 @@ impl LiquidityProviderProgram {
         Ok(gt_raw.min(u64::MAX as u128))
     }
 
-    /// Compute time-weighted average APY (exactly matches on-chain logic from lib.rs)
+    /// Compute current APY based on staking duration and APY gradient
     pub fn compute_time_weighted_apy(
         start_time: i64,
         end_time: i64,
         apy_gradient: &[u128; 53],
     ) -> u128 {
-        // Constants that match lib.rs exactly
         const SECONDS_PER_WEEK: u128 = 7 * 24 * 3600;
         const APY_LAST_INDEX: usize = 52; // APY_BUCKETS - 1 = 53 - 1 = 52
 
@@ -185,32 +184,15 @@ impl LiquidityProviderProgram {
             return apy_gradient[0];
         }
 
-        let full_weeks: u128 = total_seconds / SECONDS_PER_WEEK;
-        let rem_seconds: u128 = total_seconds % SECONDS_PER_WEEK;
+        // Calculate which week we're in
+        let week_index = total_seconds / SECONDS_PER_WEEK;
 
-        // Sum full-week contributions
-        let mut acc: u128 = 0;
-        let capped_full: u128 = full_weeks.min(APY_LAST_INDEX as u128);
-        for &apy_value in apy_gradient.iter().take(capped_full as usize) {
-            acc = acc.saturating_add(apy_value.saturating_mul(SECONDS_PER_WEEK));
+        // Get the corresponding APY from gradient array
+        if week_index >= APY_LAST_INDEX as u128 {
+            apy_gradient[APY_LAST_INDEX] // Use last bucket for weeks 52+
+        } else {
+            apy_gradient[week_index as usize]
         }
-
-        // Handle weeks beyond the gradient (exactly matches lib.rs logic)
-        if full_weeks > (APY_LAST_INDEX as u128) {
-            let extra = full_weeks - (APY_LAST_INDEX as u128); // weeks APY_LAST_INDEX+ use bucket APY_LAST_INDEX
-            acc = acc.saturating_add(
-                apy_gradient[APY_LAST_INDEX].saturating_mul(SECONDS_PER_WEEK.saturating_mul(extra)),
-            );
-        }
-
-        // Add partial-week remainder (exactly matches lib.rs type conversion)
-        if rem_seconds > 0 {
-            let idx =
-                usize::try_from(full_weeks.min(APY_LAST_INDEX as u128)).unwrap_or(APY_LAST_INDEX);
-            acc = acc.saturating_add(apy_gradient[idx].saturating_mul(rem_seconds));
-        }
-
-        acc / total_seconds
     }
 
     /// Find PDA for stake position account.
