@@ -121,8 +121,6 @@ pub struct Deployment {
     pub liquidity_provider_program: Pubkey,
     /// Liquidity provider global state.
     pub liquidity_provider_global_state: Pubkey,
-    /// Liquidity provider GT mint.
-    pub liquidity_provider_gt_mint: Keypair,
     /// Liquidity provider oracle.
     liquidity_provider_oracle: Keypair,
 }
@@ -213,7 +211,6 @@ impl Deployment {
             &[gmsol_liquidity_provider::GLOBAL_STATE_SEED],
             &liquidity_provider_program,
         );
-        let liquidity_provider_gt_mint = Keypair::generate(&mut rng);
         let liquidity_provider_oracle = Keypair::generate(&mut rng);
 
         Ok(Self {
@@ -247,7 +244,6 @@ impl Deployment {
             callback_shared_data: Default::default(),
             liquidity_provider_program,
             liquidity_provider_global_state,
-            liquidity_provider_gt_mint,
             liquidity_provider_oracle,
         })
     }
@@ -384,53 +380,11 @@ impl Deployment {
     }
 
     async fn initialize_liquidity_provider(&mut self) -> eyre::Result<()> {
-        use anchor_spl::token::{spl_token::instruction, Mint, ID};
         use gmsol_liquidity_provider as lp;
 
         self.liquidity_provider_program = lp::ID;
 
         let client = self.user_client(Self::DEFAULT_KEEPER)?;
-
-        // Use the stored GT mint keypair
-        let gt_mint = &self.liquidity_provider_gt_mint;
-
-        tracing::info!(
-            "Creating GT mint account with keypair: {}",
-            gt_mint.pubkey()
-        );
-
-        // First, create the GT mint account
-        let client_rpc = client.store_program().rpc();
-        let rent = client_rpc
-            .get_minimum_balance_for_rent_exemption(Mint::LEN)
-            .await?;
-
-        let create_mint_ix = client
-            .store_transaction()
-            .signer(gt_mint)
-            .pre_instruction(
-                system_instruction::create_account(
-                    &client.payer(),
-                    &gt_mint.pubkey(),
-                    rent,
-                    Mint::LEN as u64,
-                    &ID,
-                ),
-                true,
-            )
-            .pre_instruction(
-                instruction::initialize_mint2(
-                    &ID,
-                    &gt_mint.pubkey(),
-                    &client.payer(),
-                    None,
-                    9, // GT decimals
-                )?,
-                true,
-            );
-
-        let signature = create_mint_ix.send().await?;
-        tracing::info!(%signature, "created GT mint account with pubkey: {}", gt_mint.pubkey());
 
         // Now initialize the liquidity provider
         let initial_apy: u128 = 1_000_000_000_000_000_000u128; // 1% (1e20-scaled)
@@ -445,7 +399,6 @@ impl Deployment {
             .anchor_accounts(lp::accounts::Initialize {
                 global_state: self.liquidity_provider_global_state,
                 authority: client.payer(),
-                gt_mint: gt_mint.pubkey(),
                 system_program: system_program::ID,
             });
 
@@ -499,10 +452,12 @@ impl Deployment {
         let mut builder = client.bundle();
 
         for (market_name, market_token) in &self.market_tokens {
+            let controller_index = 0u64;
             let controller_seeds = &[
                 lp::LP_TOKEN_CONTROLLER_SEED,
                 global_state.as_ref(),
                 market_token.as_ref(),
+                &controller_index.to_le_bytes(),
             ];
             let (controller, _) = Pubkey::find_program_address(controller_seeds, &lp::ID);
 
@@ -511,6 +466,7 @@ impl Deployment {
                 .program(lp::id())
                 .anchor_args(lp::instruction::CreateLpTokenController {
                     lp_token_mint: *market_token,
+                    controller_index,
                 })
                 .anchor_accounts(lp::accounts::CreateLpTokenController {
                     global_state,
@@ -531,10 +487,12 @@ impl Deployment {
 
         // Create controller for GLV token
         if self.glv_token != Pubkey::default() {
+            let controller_index = 0u64;
             let controller_seeds = &[
                 lp::LP_TOKEN_CONTROLLER_SEED,
                 global_state.as_ref(),
                 self.glv_token.as_ref(),
+                &controller_index.to_le_bytes(),
             ];
             let (controller, _) = Pubkey::find_program_address(controller_seeds, &lp::ID);
 
@@ -543,6 +501,7 @@ impl Deployment {
                 .program(lp::id())
                 .anchor_args(lp::instruction::CreateLpTokenController {
                     lp_token_mint: self.glv_token,
+                    controller_index,
                 })
                 .anchor_accounts(lp::accounts::CreateLpTokenController {
                     global_state,

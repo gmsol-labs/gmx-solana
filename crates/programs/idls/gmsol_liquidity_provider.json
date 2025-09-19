@@ -116,43 +116,6 @@
           "docs": [
             "LP token controller for this position's mint"
           ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  112,
-                  95,
-                  116,
-                  111,
-                  107,
-                  101,
-                  110,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108,
-                  108,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "position.lp_mint",
-                "account": "Position"
-              }
-            ]
-          },
           "relations": [
             "position"
           ]
@@ -269,43 +232,6 @@
           "docs": [
             "LP token controller for this position's mint"
           ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  112,
-                  95,
-                  116,
-                  111,
-                  107,
-                  101,
-                  110,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108,
-                  108,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "position.lp_mint",
-                "account": "Position"
-              }
-            ]
-          },
           "relations": [
             "position"
           ]
@@ -474,6 +400,10 @@
               {
                 "kind": "arg",
                 "path": "lp_token_mint"
+              },
+              {
+                "kind": "arg",
+                "path": "controller_index"
               }
             ]
           }
@@ -498,6 +428,10 @@
         {
           "name": "lp_token_mint",
           "type": "pubkey"
+        },
+        {
+          "name": "controller_index",
+          "type": "u64"
         }
       ]
     },
@@ -552,44 +486,7 @@
           "docs": [
             "LP token controller to disable"
           ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  112,
-                  95,
-                  116,
-                  111,
-                  107,
-                  101,
-                  110,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108,
-                  108,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "controller.lp_token_mint",
-                "account": "LpTokenController"
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "gt_store",
@@ -663,9 +560,6 @@
           "name": "authority",
           "writable": true,
           "signer": true
-        },
-        {
-          "name": "gt_mint"
         },
         {
           "name": "system_program",
@@ -858,43 +752,7 @@
           "docs": [
             "LP token controller for this mint"
           ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  112,
-                  95,
-                  116,
-                  111,
-                  107,
-                  101,
-                  110,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108,
-                  108,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "lp_mint"
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "lp_mint",
@@ -1075,43 +933,7 @@
           "docs": [
             "LP token controller for this mint"
           ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  112,
-                  95,
-                  116,
-                  111,
-                  107,
-                  101,
-                  110,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108,
-                  108,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "lp_mint"
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "lp_mint",
@@ -1355,42 +1177,6 @@
             "LP token controller for this position's mint"
           ],
           "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  112,
-                  95,
-                  116,
-                  111,
-                  107,
-                  101,
-                  110,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108,
-                  108,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "global_state"
-              },
-              {
-                "kind": "account",
-                "path": "lp_mint"
-              }
-            ]
-          },
           "relations": [
             "position"
           ]
@@ -2176,13 +1962,6 @@
             "type": "pubkey"
           },
           {
-            "name": "gt_mint",
-            "docs": [
-              "GT token mint address"
-            ],
-            "type": "pubkey"
-          },
-          {
             "name": "apy_gradient",
             "docs": [
               "APY gradient buckets (APY_BUCKETS), each is 1e20-scaled APR for week buckets [0-1), [1-2), ..., [APY_BUCKETS, +inf)"
@@ -2699,6 +2478,13 @@
               "Corresponding LP token mint"
             ],
             "type": "pubkey"
+          },
+          {
+            "name": "controller_index",
+            "docs": [
+              "Controller index to allow multiple controllers per token"
+            ],
+            "type": "u64"
           },
           {
             "name": "total_positions",

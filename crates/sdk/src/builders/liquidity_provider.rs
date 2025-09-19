@@ -94,8 +94,15 @@ impl LiquidityProviderProgram {
         &self,
         global_state: &Pubkey,
         lp_token_mint: &Pubkey,
+        controller_index: u64,
     ) -> Pubkey {
-        crate::pda::find_lp_token_controller_address(global_state, lp_token_mint, &self.id).0
+        crate::pda::find_lp_token_controller_address(
+            global_state,
+            lp_token_mint,
+            controller_index,
+            &self.id,
+        )
+        .0
     }
 }
 
@@ -181,9 +188,9 @@ impl StakeLpToken {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        let controller = self
-            .lp_program
-            .find_lp_token_controller_address(&global_state, &lp_mint);
+        let controller =
+            self.lp_program
+                .find_lp_token_controller_address(&global_state, &lp_mint, 0);
 
         let position =
             self.lp_program
@@ -222,9 +229,9 @@ impl StakeLpToken {
         } = self.shared_args();
         let token_program_id = anchor_spl::token::ID;
         let market = self.store_program.find_market_address(&lp_mint);
-        let controller = self
-            .lp_program
-            .find_lp_token_controller_address(&global_state, &lp_mint);
+        let controller =
+            self.lp_program
+                .find_lp_token_controller_address(&global_state, &lp_mint, 0);
 
         Ok(self
             .lp_program
@@ -282,9 +289,9 @@ impl StakeLpToken {
         )
         .0;
 
-        let controller = self
-            .lp_program
-            .find_lp_token_controller_address(&global_state, &lp_mint);
+        let controller =
+            self.lp_program
+                .find_lp_token_controller_address(&global_state, &lp_mint, 0);
 
         Ok(self
             .lp_program
@@ -457,9 +464,6 @@ pub struct InitializeLp {
     #[cfg_attr(serde, serde(default))]
     #[builder(default)]
     pub lp_program: LiquidityProviderProgram,
-    /// GT token mint address.
-    #[builder(setter(into))]
-    pub gt_mint: StringPubkey,
     /// Minimum stake value in USD scaled by 1e20.
     pub min_stake_value: u128,
     /// Initial APY for all buckets (1e20-scaled).
@@ -485,7 +489,6 @@ impl IntoAtomicGroup for InitializeLp {
                 accounts::Initialize {
                     global_state,
                     authority: payer,
-                    gt_mint: self.gt_mint.0,
                     system_program: system_program::ID,
                 },
                 false,
