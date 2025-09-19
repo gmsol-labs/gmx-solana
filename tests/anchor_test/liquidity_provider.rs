@@ -481,10 +481,12 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
         .market_token("SOL", "fBTC", "USDG")
         .expect("GM token must exist");
 
+    let controller_index = 0u64;
     let controller_seeds = &[
         lp::LP_TOKEN_CONTROLLER_SEED,
         global_state.as_ref(),
         gm_token.as_ref(),
+        &controller_index.to_le_bytes(),
     ];
     let (gm_controller, _) = Pubkey::find_program_address(controller_seeds, &lp::ID);
 
@@ -503,10 +505,12 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
 
     // Test GLV controller
     let glv_token = &deployment.glv_token;
+    let glv_controller_index = 0u64;
     let glv_controller_seeds = &[
         lp::LP_TOKEN_CONTROLLER_SEED,
         global_state.as_ref(),
         glv_token.as_ref(),
+        &glv_controller_index.to_le_bytes(),
     ];
     let (glv_controller, _) = Pubkey::find_program_address(glv_controller_seeds, &lp::ID);
 
@@ -526,10 +530,12 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
         .market_token("SOL", "WSOL", "WSOL")
         .expect("Test token must exist");
 
+    let controller_index = 0u64;
     let test_controller_seeds = &[
         lp::LP_TOKEN_CONTROLLER_SEED,
         global_state.as_ref(),
         test_token.as_ref(),
+        &controller_index.to_le_bytes(),
     ];
     let (test_controller, _) = Pubkey::find_program_address(test_controller_seeds, &lp::ID);
 
@@ -547,6 +553,7 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
             .program(lp::id())
             .anchor_args(lp::instruction::CreateLpTokenController {
                 lp_token_mint: *test_token,
+                controller_index,
             })
             .anchor_accounts(lp::accounts::CreateLpTokenController {
                 global_state,
@@ -620,10 +627,12 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
         .market_token("SOL", "WSOL", "WSOL")
         .expect("Another test token must exist");
 
+    let unauthorized_controller_index = 0u64;
     let unauthorized_controller_seeds = &[
         lp::LP_TOKEN_CONTROLLER_SEED,
         global_state.as_ref(),
         another_test_token.as_ref(),
+        &unauthorized_controller_index.to_le_bytes(),
     ];
     let (unauthorized_controller, _) =
         Pubkey::find_program_address(unauthorized_controller_seeds, &lp::ID);
@@ -633,6 +642,7 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
         .program(lp::id())
         .anchor_args(lp::instruction::CreateLpTokenController {
             lp_token_mint: *another_test_token,
+            controller_index: unauthorized_controller_index,
         })
         .anchor_accounts(lp::accounts::CreateLpTokenController {
             global_state,
@@ -712,10 +722,12 @@ async fn position_controller_relationship_tests() -> eyre::Result<()> {
         .await?;
 
     // Verify controller's total_positions increased
+    let controller_index = 0u64;
     let controller_seeds = &[
         lp::LP_TOKEN_CONTROLLER_SEED,
         global_state.as_ref(),
         gm_token.as_ref(),
+        &controller_index.to_le_bytes(),
     ];
     let (controller, _) = Pubkey::find_program_address(controller_seeds, &lp::ID);
 

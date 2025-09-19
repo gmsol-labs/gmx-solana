@@ -568,10 +568,12 @@ pub mod gmsol_liquidity_provider {
     pub fn create_lp_token_controller(
         ctx: Context<CreateLpTokenController>,
         lp_token_mint: Pubkey,
+        controller_index: u64,
     ) -> Result<()> {
         let controller = &mut ctx.accounts.controller;
         controller.global_state = ctx.accounts.global_state.key();
         controller.lp_token_mint = lp_token_mint;
+        controller.controller_index = controller_index;
         controller.total_positions = 0;
         controller.is_enabled = true;
         controller.disabled_at = 0;
@@ -579,8 +581,9 @@ pub mod gmsol_liquidity_provider {
         controller.bump = ctx.bumps.controller;
 
         msg!(
-            "LP token controller created: mint={}, global_state={}",
+            "LP token controller created: mint={}, index={}, global_state={}",
             lp_token_mint,
+            controller_index,
             controller.global_state
         );
         Ok(())
@@ -786,12 +789,6 @@ pub struct StakeGm<'info> {
     /// LP token controller for this mint
     #[account(
         mut,
-        seeds = [
-            LP_TOKEN_CONTROLLER_SEED,
-            global_state.key().as_ref(),
-            lp_mint.key().as_ref()
-        ],
-        bump = controller.bump,
         has_one = global_state,
         constraint = controller.lp_token_mint == lp_mint.key()
     )]
@@ -871,12 +868,6 @@ pub struct StakeGlv<'info> {
     /// LP token controller for this mint
     #[account(
         mut,
-        seeds = [
-            LP_TOKEN_CONTROLLER_SEED,
-            global_state.key().as_ref(),
-            lp_mint.key().as_ref()
-        ],
-        bump = controller.bump,
         has_one = global_state,
         constraint = controller.lp_token_mint == lp_mint.key()
     )]
@@ -954,12 +945,6 @@ pub struct CalculateGtReward<'info> {
     pub global_state: Account<'info, GlobalState>,
     /// LP token controller for this position's mint
     #[account(
-        seeds = [
-            LP_TOKEN_CONTROLLER_SEED,
-            global_state.key().as_ref(),
-            position.lp_mint.as_ref()
-        ],
-        bump = controller.bump,
         has_one = global_state,
         constraint = controller.lp_token_mint == position.lp_mint
     )]
@@ -997,12 +982,6 @@ pub struct ClaimGt<'info> {
 
     /// LP token controller for this position's mint
     #[account(
-        seeds = [
-            LP_TOKEN_CONTROLLER_SEED,
-            global_state.key().as_ref(),
-            position.lp_mint.as_ref()
-        ],
-        bump = controller.bump,
         has_one = global_state,
         constraint = controller.lp_token_mint == position.lp_mint
     )]
@@ -1056,12 +1035,6 @@ pub struct UnstakeLp<'info> {
     /// LP token controller for this position's mint
     #[account(
         mut,
-        seeds = [
-            LP_TOKEN_CONTROLLER_SEED,
-            global_state.key().as_ref(),
-            lp_mint.key().as_ref()
-        ],
-        bump = controller.bump,
         has_one = global_state,
         constraint = controller.lp_token_mint == lp_mint.key()
     )]
@@ -1186,7 +1159,7 @@ pub struct SetPricingStaleness<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(lp_token_mint: Pubkey)]
+#[instruction(lp_token_mint: Pubkey, controller_index: u64)]
 pub struct CreateLpTokenController<'info> {
     /// Global config (PDA). The `authority` signer must match `global_state.authority`.
     #[account(seeds = [GLOBAL_STATE_SEED], bump = global_state.bump, has_one = authority)]
@@ -1199,7 +1172,8 @@ pub struct CreateLpTokenController<'info> {
         seeds = [
             LP_TOKEN_CONTROLLER_SEED,
             global_state.key().as_ref(),
-            lp_token_mint.as_ref()
+            lp_token_mint.as_ref(),
+            &controller_index.to_le_bytes()
         ],
         bump
     )]
@@ -1218,12 +1192,6 @@ pub struct DisableLpTokenController<'info> {
     /// LP token controller to disable
     #[account(
         mut,
-        seeds = [
-            LP_TOKEN_CONTROLLER_SEED,
-            global_state.key().as_ref(),
-            controller.lp_token_mint.as_ref()
-        ],
-        bump = controller.bump,
         has_one = global_state
     )]
     pub controller: Account<'info, LpTokenController>,
@@ -1265,6 +1233,8 @@ pub struct LpTokenController {
     pub global_state: Pubkey,
     /// Corresponding LP token mint
     pub lp_token_mint: Pubkey,
+    /// Controller index to allow multiple controllers per token
+    pub controller_index: u64,
     /// Current number of active positions
     pub total_positions: u64,
     /// Whether staking is enabled (default true, irreversible when set to false)

@@ -452,10 +452,12 @@ impl Deployment {
         let mut builder = client.bundle();
 
         for (market_name, market_token) in &self.market_tokens {
+            let controller_index = 0u64;
             let controller_seeds = &[
                 lp::LP_TOKEN_CONTROLLER_SEED,
                 global_state.as_ref(),
                 market_token.as_ref(),
+                &controller_index.to_le_bytes(),
             ];
             let (controller, _) = Pubkey::find_program_address(controller_seeds, &lp::ID);
 
@@ -464,6 +466,7 @@ impl Deployment {
                 .program(lp::id())
                 .anchor_args(lp::instruction::CreateLpTokenController {
                     lp_token_mint: *market_token,
+                    controller_index,
                 })
                 .anchor_accounts(lp::accounts::CreateLpTokenController {
                     global_state,
@@ -484,10 +487,12 @@ impl Deployment {
 
         // Create controller for GLV token
         if self.glv_token != Pubkey::default() {
+            let controller_index = 0u64;
             let controller_seeds = &[
                 lp::LP_TOKEN_CONTROLLER_SEED,
                 global_state.as_ref(),
                 self.glv_token.as_ref(),
+                &controller_index.to_le_bytes(),
             ];
             let (controller, _) = Pubkey::find_program_address(controller_seeds, &lp::ID);
 
@@ -496,6 +501,7 @@ impl Deployment {
                 .program(lp::id())
                 .anchor_args(lp::instruction::CreateLpTokenController {
                     lp_token_mint: self.glv_token,
+                    controller_index,
                 })
                 .anchor_accounts(lp::accounts::CreateLpTokenController {
                     global_state,

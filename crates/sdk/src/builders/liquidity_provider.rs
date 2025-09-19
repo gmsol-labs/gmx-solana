@@ -94,8 +94,9 @@ impl LiquidityProviderProgram {
         &self,
         global_state: &Pubkey,
         lp_token_mint: &Pubkey,
+        controller_index: u64,
     ) -> Pubkey {
-        crate::pda::find_lp_token_controller_address(global_state, lp_token_mint, &self.id).0
+        crate::pda::find_lp_token_controller_address(global_state, lp_token_mint, controller_index, &self.id).0
     }
 }
 
@@ -183,7 +184,7 @@ impl StakeLpToken {
 
         let controller = self
             .lp_program
-            .find_lp_token_controller_address(&global_state, &lp_mint);
+            .find_lp_token_controller_address(&global_state, &lp_mint, 0);
 
         let position =
             self.lp_program
@@ -224,7 +225,7 @@ impl StakeLpToken {
         let market = self.store_program.find_market_address(&lp_mint);
         let controller = self
             .lp_program
-            .find_lp_token_controller_address(&global_state, &lp_mint);
+            .find_lp_token_controller_address(&global_state, &lp_mint, 0);
 
         Ok(self
             .lp_program
@@ -284,7 +285,7 @@ impl StakeLpToken {
 
         let controller = self
             .lp_program
-            .find_lp_token_controller_address(&global_state, &lp_mint);
+            .find_lp_token_controller_address(&global_state, &lp_mint, 0);
 
         Ok(self
             .lp_program

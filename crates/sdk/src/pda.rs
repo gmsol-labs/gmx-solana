@@ -638,6 +638,7 @@ pub fn find_lp_stake_position_vault_address(
 pub fn find_lp_token_controller_address(
     global_state: &Pubkey,
     lp_token_mint: &Pubkey,
+    controller_index: u64,
     lp_program_id: &Pubkey,
 ) -> (Pubkey, u8) {
     use gmsol_programs::gmsol_liquidity_provider::constants::LP_TOKEN_CONTROLLER_SEED;
@@ -647,6 +648,7 @@ pub fn find_lp_token_controller_address(
             LP_TOKEN_CONTROLLER_SEED,
             global_state.as_ref(),
             lp_token_mint.as_ref(),
+            &controller_index.to_le_bytes(),
         ],
         lp_program_id,
     )
