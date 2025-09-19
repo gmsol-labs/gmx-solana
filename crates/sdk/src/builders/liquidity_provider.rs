@@ -162,9 +162,25 @@ impl LiquidityProviderProgram {
                 .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController>(&position.controller, Default::default())
                 .await?;
 
-            // Use builder to create serde position (this includes all calculations)
-            let serde_position =
-                Self::create_serde_position(&position, &controller, &global_state, gt_decimals)?;
+            // Calculate actual GT reward for this position (using pre-fetched store data)
+            let actual_gt_reward = self
+                .calculate_gt_reward_with_store(
+                    client,
+                    &position.lp_mint,
+                    &position.owner,
+                    position.position_id,
+                    &store_account.0,
+                )
+                .await?;
+
+            // Use builder to create serde position with actual GT reward
+            let serde_position = Self::create_serde_position(
+                &position,
+                &controller,
+                &global_state,
+                gt_decimals,
+                actual_gt_reward,
+            )?;
 
             results.push(serde_position);
         }
@@ -218,29 +234,72 @@ impl LiquidityProviderProgram {
             .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController>(&controller_address, Default::default())
             .await?;
 
-        // Use builder to create serde position (this includes all calculations)
-        let serde_position =
-            Self::create_serde_position(&position, &controller, &global_state, gt_decimals)?;
+        // Calculate actual GT reward for this position (using pre-fetched store data)
+        let actual_gt_reward = self
+            .calculate_gt_reward_with_store(
+                client,
+                lp_token_mint,
+                owner,
+                position_id,
+                &store_account.0,
+            )
+            .await?;
+
+        // Use builder to create serde position with actual GT reward
+        let serde_position = Self::create_serde_position(
+            &position,
+            &controller,
+            &global_state,
+            gt_decimals,
+            actual_gt_reward,
+        )?;
 
         Ok(Some(serde_position))
     }
 
     /// Calculate GT reward for a specific position (builder layer implementation)
+    /// This implements the same calculation as compute_reward_with_cpi in lib.rs
     pub async fn calculate_gt_reward(
+        &self,
+        client: &solana_client::nonblocking::rpc_client::RpcClient,
+        store: &Pubkey,
+        lp_token_mint: &Pubkey,
+        owner: &Pubkey,
+        position_id: u64,
+    ) -> crate::Result<u128> {
+        // Get store account
+        let store_account = client
+            .get_anchor_account::<crate::utils::zero_copy::ZeroCopy<gmsol_programs::gmsol_store::accounts::Store>>(store, Default::default())
+            .await?;
+
+        self.calculate_gt_reward_with_store(
+            client,
+            lp_token_mint,
+            owner,
+            position_id,
+            &store_account.0,
+        )
+        .await
+    }
+
+    /// Calculate GT reward for a specific position with pre-fetched store data (optimized version)
+    /// This implements the same calculation as compute_reward_with_cpi in lib.rs
+    pub async fn calculate_gt_reward_with_store(
         &self,
         client: &solana_client::nonblocking::rpc_client::RpcClient,
         lp_token_mint: &Pubkey,
         owner: &Pubkey,
         position_id: u64,
+        store_account: &gmsol_programs::gmsol_store::accounts::Store,
     ) -> crate::Result<u128> {
-        // Get required accounts for GT calculation
+        // Get required accounts for GT calculation (store account already provided)
         let global_state_address = self.find_global_state_address();
         let controller_address =
             self.find_lp_token_controller_address(&global_state_address, lp_token_mint);
         let position_address =
             self.find_stake_position_address(owner, position_id, &controller_address);
 
-        // Get all required accounts
+        // Get other required accounts (store is already provided)
         let global_state = client
             .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState>(
                 &global_state_address,
@@ -259,17 +318,7 @@ impl LiquidityProviderProgram {
             .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController>(&controller_address, Default::default())
             .await?;
 
-        // Direct GT calculation using core logic
-        Self::compute_claimable_gt_reward(&position, &controller, &global_state)
-    }
-
-    /// Compute GT reward amount using precise calculation that exactly mirrors on-chain logic.
-    /// This implements the same calculation as compute_reward_with_cpi in lib.rs
-    pub fn compute_claimable_gt_reward(
-        position: &gmsol_programs::gmsol_liquidity_provider::accounts::Position,
-        controller: &gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController,
-        global_state: &gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState,
-    ) -> crate::Result<u128> {
+        // GT reward calculation using precise on-chain logic
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -280,28 +329,38 @@ impl LiquidityProviderProgram {
             // Controller is disabled, use disabled snapshot values
             (controller.disabled_cum_inv_cost, controller.disabled_at)
         } else {
-            // Controller is enabled, estimate current cumulative inverse cost factor
-            // Since we cannot access private GT state fields directly, we'll use a conservative approximation
-            // that provides reasonable estimates for display purposes.
-            // For precise values, users should use the calculate_gt_reward instruction.
+            // Controller is enabled, calculate current cumulative inverse cost factor
+            // using GT state data: cum_now = store.gt.cumulative_inv_cost_factor + (current_time - last_update_time) * (1 / current_minting_cost)
 
-            let duration_since_stake = current_time.saturating_sub(position.stake_start_time);
+            // This mirrors the exact calculation in gt.rs:update_cumulative_inv_cost_factor()
+            let gt_state = &store_account.gt;
 
-            // Use a conservative estimate based on typical GT minting cost and duration
-            // This approximates the cumulative factor growth since the position started
-            let estimated_cumulative = if duration_since_stake > 0 {
-                let duration_value = duration_since_stake as u128;
-                // Use a conservative minting cost estimate (this is approximate)
-                let estimated_minting_cost = 1_000_000_000_000_000_000_000u128; // 1e21 as reasonable default
-                let estimated_delta =
-                    (duration_value * 10u128.pow(MARKET_DECIMALS as u32)) / estimated_minting_cost;
+            // Get current values from GT state
+            let last_update_time = gt_state.last_cumulative_inv_cost_factor_ts;
+            let current_cumulative = gt_state.cumulative_inv_cost_factor;
+            let current_minting_cost = gt_state.minting_cost;
 
-                position.cum_inv_cost.saturating_add(estimated_delta)
+            // Calculate time difference since last update
+            let duration_since_update = current_time.saturating_sub(last_update_time);
+
+            let updated_cumulative = if duration_since_update > 0 {
+                let duration_value = duration_since_update as u128;
+
+                // Calculate delta: (duration_seconds * MARKET_USD_UNIT) / minting_cost
+                // This exactly mirrors the div_to_factor calculation in gt.rs:update_cumulative_inv_cost_factor
+                let market_usd_unit = 10u128.pow(MARKET_DECIMALS as u32); // MARKET_USD_UNIT
+                let delta = if current_minting_cost > 0 {
+                    (duration_value * market_usd_unit) / current_minting_cost
+                } else {
+                    0 // Prevent division by zero
+                };
+
+                current_cumulative.saturating_add(delta)
             } else {
-                position.cum_inv_cost
+                current_cumulative
             };
 
-            (estimated_cumulative, current_time)
+            (updated_cumulative, current_time)
         };
 
         // Step 2: Calculate inv_cost_integral (mirrors lib.rs line 691)
@@ -453,16 +512,17 @@ impl LiquidityProviderProgram {
         controller: &gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController,
         global_state: &gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState,
         gt_decimals: u8,
+        claimable_gt: u128,
     ) -> crate::Result<crate::serde::serde_lp_position::SerdeLpStakingPosition> {
-        // Calculate current APY and GT rewards
+        // Calculate current APY
         let computed_data = Self::compute_position_data(position, controller, global_state)?;
 
         // Get LP token symbol
         let lp_token_symbol = fallback_lp_token_symbol(&position.lp_mint.into());
 
-        // Create computed data with symbol
+        // Create computed data with symbol (use provided GT value)
         let computed_data_with_symbol = LpPositionComputedData {
-            claimable_gt: computed_data.claimable_gt,
+            claimable_gt,
             current_apy: crate::utils::Value::from_u128(computed_data.current_apy),
             lp_token_symbol,
         };
@@ -477,6 +537,7 @@ impl LiquidityProviderProgram {
     }
 
     /// Compute position data (APY and GT rewards) - internal helper
+    /// Note: GT rewards are set to 0 for display purposes. Use calculate_gt_reward() method for precise GT calculations.
     fn compute_position_data(
         position: &gmsol_programs::gmsol_liquidity_provider::accounts::Position,
         controller: &gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController,
@@ -501,12 +562,8 @@ impl LiquidityProviderProgram {
             &global_state.apy_gradient,
         );
 
-        // Calculate GT rewards using precise on-chain logic (uses time-weighted APY internally)
-        let claimable_gt = Self::compute_claimable_gt_reward(position, controller, global_state)?;
-
         Ok(PositionComputedData {
             current_apy: current_display_apy, // Use display APY for UI
-            claimable_gt,
         })
     }
 }
@@ -514,7 +571,6 @@ impl LiquidityProviderProgram {
 /// Internal helper struct for computed position data
 struct PositionComputedData {
     current_apy: u128,
-    claimable_gt: u128,
 }
 
 /// Builder for LP token staking instruction.

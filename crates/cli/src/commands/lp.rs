@@ -278,7 +278,7 @@ impl super::Command for Lp {
 
                 // Calculate GT reward using direct core calculation logic
                 let gt_reward_raw = client
-                    .calculate_gt_reward(lp_token_mint, &position_owner, *position_id)
+                    .calculate_gt_reward(store, lp_token_mint, &position_owner, *position_id)
                     .await?;
 
                 // Get GT decimals for proper display formatting
@@ -289,21 +289,17 @@ impl super::Command for Lp {
                 let gt_decimals = store_account.0.gt.decimals;
 
                 // Display the calculated GT reward
-                println!("Calculated GT reward for position {}:", position_id);
-                println!("Owner: {}", position_owner);
-                println!("LP Token Mint: {}", lp_token_mint);
-                println!("GT Reward (raw units): {}", gt_reward_raw);
+                println!("Calculated GT reward for position {position_id}:");
+                println!("Owner: {position_owner}");
+                println!("LP Token Mint: {lp_token_mint}");
+                println!("GT Reward (raw units): {gt_reward_raw}");
 
                 // Convert to human-readable GT amount using actual decimals
                 let divisor = 10_u128.pow(gt_decimals as u32) as f64;
                 let gt_amount_readable = gt_reward_raw as f64 / divisor;
                 // Use actual GT decimals for calculation display, but limit to reasonable precision
                 let calculation_precision = gt_decimals.min(8) as usize; // Max 8 decimal places for readability
-                println!(
-                    "GT Reward (readable): {:.prec$} GT",
-                    gt_amount_readable,
-                    prec = calculation_precision
-                );
+                println!("GT Reward (readable): {gt_amount_readable:.calculation_precision$} GT");
 
                 return Ok(());
             }
@@ -504,8 +500,7 @@ impl Lp {
                                 obj.insert(
                                     "current_apy".to_string(),
                                     serde_json::Value::String(format!(
-                                        "{apy_num:.prec$}",
-                                        prec = APY_DISPLAY_DECIMALS
+                                        "{apy_num:.APY_DISPLAY_DECIMALS$}"
                                     )),
                                 );
                             }
@@ -521,8 +516,7 @@ impl Lp {
                                 obj.insert(
                                     "claimable_gt".to_string(),
                                     serde_json::Value::String(format!(
-                                        "{gt_num:.prec$}",
-                                        prec = display_precision
+                                        "{gt_num:.display_precision$}"
                                     )),
                                 );
                             }
@@ -564,10 +558,7 @@ impl Lp {
                     if let Ok(apy_num) = apy_str.parse::<f64>() {
                         obj.insert(
                             "current_apy".to_string(),
-                            serde_json::Value::String(format!(
-                                "{apy_num:.prec$}",
-                                prec = APY_DISPLAY_DECIMALS
-                            )),
+                            serde_json::Value::String(format!("{apy_num:.APY_DISPLAY_DECIMALS$}")),
                         );
                     }
                 }
@@ -580,10 +571,7 @@ impl Lp {
                         let display_precision = gt_decimals.min(GT_DISPLAY_DECIMALS as u8) as usize;
                         obj.insert(
                             "claimable_gt".to_string(),
-                            serde_json::Value::String(format!(
-                                "{gt_num:.prec$}",
-                                prec = display_precision
-                            )),
+                            serde_json::Value::String(format!("{gt_num:.display_precision$}")),
                         );
                     }
                 }

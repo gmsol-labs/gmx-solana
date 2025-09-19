@@ -75,6 +75,7 @@ pub trait LiquidityProviderOps<C> {
     /// Calculate GT reward for a position.
     fn calculate_gt_reward(
         &self,
+        store: &Pubkey,
         lp_token_mint: &Pubkey,
         owner: &Pubkey,
         position_id: u64,
@@ -255,13 +256,14 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
 
     async fn calculate_gt_reward(
         &self,
+        store: &Pubkey,
         lp_token_mint: &Pubkey,
         owner: &Pubkey,
         position_id: u64,
     ) -> crate::Result<u128> {
         let lp_program = self.lp_program_for_builders();
         lp_program
-            .calculate_gt_reward(self.rpc(), lp_token_mint, owner, position_id)
+            .calculate_gt_reward(self.rpc(), store, lp_token_mint, owner, position_id)
             .await
     }
 
