@@ -3,12 +3,14 @@ use gmsol_sdk::{
     ops::{
         liquidity_provider::LiquidityProviderOps, token_account::TokenAccountOps, user::UserOps,
     },
-    programs::anchor_lang::prelude::Pubkey,
-    utils::{GmAmount, Value},
+    programs::{anchor_lang::prelude::Pubkey, gmsol_store::accounts::Store},
+    utils::{zero_copy::ZeroCopy, GmAmount, Value},
 };
 
 #[cfg(feature = "execute")]
 use std::num::NonZeroU64;
+
+use crate::config::DisplayOptions;
 
 /// Liquidity Provider management commands.
 #[derive(Debug, clap::Args)]
@@ -77,9 +79,9 @@ enum Command {
         /// Position ID to calculate reward for.
         #[arg(long)]
         position_id: u64,
-        /// Owner of the position (optional, defaults to current payer).
+        /// Owner of the position.
         #[arg(long)]
-        owner: Option<Pubkey>,
+        owner: Pubkey,
     },
     /// Claim GT rewards for a position.
     ClaimGt {
@@ -256,13 +258,33 @@ impl super::Command for Lp {
                 position_id,
                 owner,
             } => {
-                // Use provided owner or default to current payer
-                let position_owner = owner.unwrap_or_else(|| client.payer());
+                // Use provided owner
+                let position_owner = *owner;
 
-                // Create calculate GT reward transaction using SDK
-                client
-                    .calculate_gt_reward(store, lp_token_mint, &position_owner, *position_id)?
-                    .into_bundle_with_options(options)?
+                // Calculate GT reward using direct core calculation logic
+                let gt_reward_raw = client
+                    .calculate_gt_reward(lp_token_mint, &position_owner, *position_id)
+                    .await?;
+
+                // Get GT decimals for proper display formatting
+                let store_account = client
+                    .account::<ZeroCopy<Store>>(store)
+                    .await?
+                    .ok_or_else(|| eyre::eyre!("Store not found"))?;
+                let gt_decimals = store_account.0.gt.decimals;
+
+                // Display the calculated GT reward
+                println!("Calculated GT reward for position {}:", position_id);
+                println!("Owner: {}", position_owner);
+                println!("LP Token Mint: {}", lp_token_mint);
+                println!("GT Reward (raw units): {}", gt_reward_raw);
+
+                // Convert to human-readable GT amount using actual decimals
+                let divisor = 10_u128.pow(gt_decimals as u32) as f64;
+                let gt_amount_readable = gt_reward_raw as f64 / divisor;
+                println!("GT Reward (readable): {:.6} GT", gt_amount_readable);
+
+                return Ok(());
             }
             Command::ClaimGt {
                 lp_token_mint,
@@ -420,8 +442,6 @@ impl Lp {
         positions: &[gmsol_sdk::serde::serde_lp_position::SerdeLpStakingPosition],
         output: &crate::config::OutputFormat,
     ) -> eyre::Result<()> {
-        use crate::config::DisplayOptions;
-
         if positions.is_empty() {
             println!("No LP staking positions found.");
             return Ok(());
@@ -481,8 +501,6 @@ impl Lp {
         position: &gmsol_sdk::serde::serde_lp_position::SerdeLpStakingPosition,
         output: &crate::config::OutputFormat,
     ) -> eyre::Result<()> {
-        use crate::config::DisplayOptions;
-
         // Format single position with 2-decimal APY
         let mut formatted = serde_json::to_value(position).unwrap();
         if let Some(obj) = formatted.as_object_mut() {
