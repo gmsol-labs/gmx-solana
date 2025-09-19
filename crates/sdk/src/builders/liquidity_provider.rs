@@ -3,6 +3,7 @@ use std::{collections::BTreeSet, num::NonZeroU64};
 use anchor_lang::system_program;
 use gmsol_model::utils::apply_factor;
 use gmsol_programs::{
+    anchor_lang::Discriminator,
     gmsol_liquidity_provider::client::{accounts, args},
     gmsol_store::{
         accounts::{Glv, Market, Store},
@@ -20,6 +21,10 @@ use gmsol_utils::{
     token_config::{token_records, TokensWithFeed},
 };
 use rand::Rng;
+use solana_client::{
+    rpc_config::RpcAccountInfoConfig,
+    rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
+};
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
@@ -27,6 +32,7 @@ use solana_sdk::{
 use typed_builder::TypedBuilder;
 
 use crate::{
+    client::accounts::{get_program_accounts_with_context, ProgramAccountsConfigForRpc},
     serde::{
         serde_lp_position::{
             fallback_lp_token_symbol, LpPositionComputedData, SerdeLpStakingPosition,
@@ -79,6 +85,165 @@ impl LiquidityProviderProgram {
     /// Find PDA for global state account.
     pub fn find_global_state_address(&self) -> Pubkey {
         crate::pda::find_lp_global_state_address(&self.id).0
+    }
+
+    /// Query all LP staking positions for a specific owner (builder layer implementation)
+    pub async fn query_lp_positions(
+        &self,
+        client: &solana_client::nonblocking::rpc_client::RpcClient,
+        store: &Pubkey,
+        owner: &Pubkey,
+    ) -> crate::Result<Vec<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
+        // Get global state and store data
+        let global_state_address = self.find_global_state_address();
+        let global_state = client
+            .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState>(
+                &global_state_address,
+                Default::default(),
+            )
+            .await?;
+
+        let store_account = client
+            .get_anchor_account::<crate::utils::zero_copy::ZeroCopy<gmsol_programs::gmsol_store::accounts::Store>>(store, Default::default())
+            .await?;
+        let gt_decimals = store_account.0.gt.decimals;
+
+        // Query all Position accounts for this owner
+        let config = ProgramAccountsConfigForRpc {
+            filters: Some(vec![
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+                    0,
+                    gmsol_programs::gmsol_liquidity_provider::accounts::Position::DISCRIMINATOR,
+                )),
+                RpcFilterType::Memcmp(Memcmp::new(
+                    8,
+                    MemcmpEncodedBytes::Base58(owner.to_string()),
+                )),
+            ]),
+            account_config: RpcAccountInfoConfig {
+                encoding: Some(solana_account_decoder::UiAccountEncoding::Base64),
+                ..RpcAccountInfoConfig::default()
+            },
+        };
+
+        let position_accounts_result =
+            get_program_accounts_with_context(client, &self.id, config).await?;
+        let position_accounts = position_accounts_result.into_value();
+
+        let mut results = Vec::new();
+
+        for (_position_address, account) in position_accounts {
+            // Deserialize position account
+            let position: gmsol_programs::gmsol_liquidity_provider::accounts::Position =
+                anchor_lang::AccountDeserialize::try_deserialize(&mut account.data.as_slice())
+                    .map_err(|e| {
+                        crate::Error::custom(format!("Failed to deserialize position: {e}"))
+                    })?;
+
+            // Get controller for this position
+            let controller = client
+                .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController>(&position.controller, Default::default())
+                .await?;
+
+            // Use builder to create serde position (this includes all calculations)
+            let serde_position =
+                Self::create_serde_position(&position, &controller, &global_state, gt_decimals)?;
+
+            results.push(serde_position);
+        }
+
+        Ok(results)
+    }
+
+    /// Query a specific LP staking position (builder layer implementation)
+    pub async fn query_lp_position(
+        &self,
+        client: &solana_client::nonblocking::rpc_client::RpcClient,
+        store: &Pubkey,
+        owner: &Pubkey,
+        position_id: u64,
+        lp_token_mint: &Pubkey,
+    ) -> crate::Result<Option<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
+        // Get global state and addresses
+        let global_state_address = self.find_global_state_address();
+        let controller_address =
+            self.find_lp_token_controller_address(&global_state_address, lp_token_mint);
+        let position_address =
+            self.find_stake_position_address(owner, position_id, &controller_address);
+
+        // Get accounts
+        let global_state = client
+            .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState>(
+                &global_state_address,
+                Default::default(),
+            )
+            .await?;
+
+        let store_account = client
+            .get_anchor_account::<crate::utils::zero_copy::ZeroCopy<gmsol_programs::gmsol_store::accounts::Store>>(store, Default::default())
+            .await?;
+        let gt_decimals = store_account.0.gt.decimals;
+
+        // Try to get position account - if it doesn't exist, return None
+        let position = match client
+            .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::Position>(
+                &position_address,
+                Default::default(),
+            )
+            .await
+        {
+            Ok(pos) => pos,
+            Err(_) => return Ok(None), // Position not found
+        };
+
+        // Get controller
+        let controller = client
+            .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController>(&controller_address, Default::default())
+            .await?;
+
+        // Use builder to create serde position (this includes all calculations)
+        let serde_position =
+            Self::create_serde_position(&position, &controller, &global_state, gt_decimals)?;
+
+        Ok(Some(serde_position))
+    }
+
+    /// Calculate GT reward for a specific position (builder layer implementation)
+    pub async fn calculate_gt_reward(
+        &self,
+        client: &solana_client::nonblocking::rpc_client::RpcClient,
+        lp_token_mint: &Pubkey,
+        owner: &Pubkey,
+        position_id: u64,
+    ) -> crate::Result<u128> {
+        // Get required accounts for GT calculation
+        let global_state_address = self.find_global_state_address();
+        let controller_address =
+            self.find_lp_token_controller_address(&global_state_address, lp_token_mint);
+        let position_address =
+            self.find_stake_position_address(owner, position_id, &controller_address);
+
+        // Get all required accounts
+        let global_state = client
+            .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState>(
+                &global_state_address,
+                Default::default(),
+            )
+            .await?;
+
+        let position = client
+            .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::Position>(
+                &position_address,
+                Default::default(),
+            )
+            .await?;
+
+        let controller = client
+            .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController>(&controller_address, Default::default())
+            .await?;
+
+        // Direct GT calculation using core logic
+        Self::compute_claimable_gt_reward(&position, &controller, &global_state)
     }
 
     /// Compute GT reward amount using precise calculation that exactly mirrors on-chain logic.

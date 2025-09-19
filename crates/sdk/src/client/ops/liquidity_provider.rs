@@ -1,10 +1,5 @@
 use std::{num::NonZeroU64, ops::Deref};
 
-use gmsol_programs::anchor_lang::Discriminator;
-use gmsol_programs::gmsol_liquidity_provider::accounts::{
-    GlobalState, LpTokenController, Position,
-};
-use gmsol_programs::gmsol_store::accounts::Store;
 use gmsol_solana_utils::{
     client_traits::FromRpcClientWith,
     make_bundle_builder::{MakeBundleBuilder, SetExecutionFee},
@@ -12,8 +7,6 @@ use gmsol_solana_utils::{
     IntoAtomicGroup,
 };
 use gmsol_utils::oracle::PriceProviderKind;
-use solana_client::rpc_config::RpcAccountInfoConfig;
-use solana_client::rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType};
 use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
 use crate::{
@@ -26,10 +19,7 @@ use crate::{
         },
         StoreProgram,
     },
-    client::{
-        accounts::{get_program_accounts_with_context, ProgramAccountsConfigForRpc},
-        pull_oracle::{FeedIds, PullOraclePriceConsumer},
-    },
+    client::pull_oracle::{FeedIds, PullOraclePriceConsumer},
     utils::token_map::FeedAddressMap,
 };
 
@@ -264,36 +254,10 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         owner: &Pubkey,
         position_id: u64,
     ) -> crate::Result<u128> {
-        // Get required accounts for GT calculation
         let lp_program = self.lp_program_for_builders();
-        let global_state_address = lp_program.find_global_state_address();
-        let controller_address =
-            lp_program.find_lp_token_controller_address(&global_state_address, lp_token_mint);
-        let position_address =
-            lp_program.find_stake_position_address(owner, position_id, &controller_address);
-
-        // Get all required accounts
-        let global_state = self
-            .account::<GlobalState>(&global_state_address)
-            .await?
-            .ok_or_else(|| crate::Error::custom("Global state not found"))?;
-
-        let position = self
-            .account::<Position>(&position_address)
-            .await?
-            .ok_or_else(|| crate::Error::custom("Position not found"))?;
-
-        let controller = self
-            .account::<LpTokenController>(&controller_address)
-            .await?
-            .ok_or_else(|| crate::Error::custom("Controller not found"))?;
-
-        // Direct GT calculation using builder's core logic
-        crate::builders::liquidity_provider::LiquidityProviderProgram::compute_claimable_gt_reward(
-            &position,
-            &controller,
-            &global_state,
-        )
+        lp_program
+            .calculate_gt_reward(self.rpc(), lp_token_mint, owner, position_id)
+            .await
     }
 
     fn claim_gt_reward(
@@ -416,67 +380,10 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         store: &Pubkey,
         owner: &Pubkey,
     ) -> crate::Result<Vec<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
-        // Get global state and store data
         let lp_program = self.lp_program_for_builders();
-        let global_state_address = lp_program.find_global_state_address();
-        let global_state = self
-            .account::<GlobalState>(&global_state_address)
-            .await?
-            .ok_or_else(|| crate::Error::custom("Global state not found"))?;
-
-        let store_account = self
-            .account::<crate::utils::zero_copy::ZeroCopy<Store>>(store)
-            .await?
-            .ok_or_else(|| crate::Error::custom("Store not found"))?;
-        let gt_decimals = store_account.0.gt.decimals;
-
-        // Query all Position accounts for this owner
-        let config = ProgramAccountsConfigForRpc {
-            filters: Some(vec![
-                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, Position::DISCRIMINATOR)),
-                RpcFilterType::Memcmp(Memcmp::new(
-                    8,
-                    MemcmpEncodedBytes::Base58(owner.to_string()),
-                )),
-            ]),
-            account_config: RpcAccountInfoConfig {
-                encoding: Some(solana_account_decoder::UiAccountEncoding::Base64),
-                ..RpcAccountInfoConfig::default()
-            },
-        };
-
-        let position_accounts_result =
-            get_program_accounts_with_context(self.rpc(), &lp_program.id, config).await?;
-        let position_accounts = position_accounts_result.into_value();
-
-        let mut results = Vec::new();
-
-        for (_position_address, account) in position_accounts {
-            // Deserialize position account
-            let position: Position =
-                anchor_lang::AccountDeserialize::try_deserialize(&mut account.data.as_slice())
-                    .map_err(|e| {
-                        crate::Error::custom(format!("Failed to deserialize position: {e}"))
-                    })?;
-
-            // Get controller for this position
-            let controller = self
-                .account::<LpTokenController>(&position.controller)
-                .await?
-                .ok_or_else(|| crate::Error::custom("Controller not found"))?;
-
-            // Use builder to create serde position (this includes all calculations)
-            let serde_position = crate::builders::liquidity_provider::LiquidityProviderProgram::create_serde_position(
-                &position,
-                &controller,
-                &global_state,
-                gt_decimals,
-            )?;
-
-            results.push(serde_position);
-        }
-
-        Ok(results)
+        lp_program
+            .query_lp_positions(self.rpc(), store, owner)
+            .await
     }
 
     async fn get_lp_position(
@@ -486,49 +393,10 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         position_id: u64,
         lp_token_mint: &Pubkey,
     ) -> crate::Result<Option<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
-        // Get global state and addresses
         let lp_program = self.lp_program_for_builders();
-        let global_state_address = lp_program.find_global_state_address();
-        let controller_address =
-            lp_program.find_lp_token_controller_address(&global_state_address, lp_token_mint);
-        let position_address =
-            lp_program.find_stake_position_address(owner, position_id, &controller_address);
-
-        // Get accounts
-        let global_state = self
-            .account::<GlobalState>(&global_state_address)
-            .await?
-            .ok_or_else(|| crate::Error::custom("Global state not found"))?;
-
-        let store_account = self
-            .account::<crate::utils::zero_copy::ZeroCopy<Store>>(store)
-            .await?
-            .ok_or_else(|| crate::Error::custom("Store not found"))?;
-        let gt_decimals = store_account.0.gt.decimals;
-
-        // Try to get position account
-        let position_account = self.account::<Position>(&position_address).await?;
-        if position_account.is_none() {
-            return Ok(None);
-        }
-        let position = position_account.unwrap();
-
-        // Get controller
-        let controller = self
-            .account::<LpTokenController>(&controller_address)
-            .await?
-            .ok_or_else(|| crate::Error::custom("Controller not found"))?;
-
-        // Use builder to create serde position (this includes all calculations)
-        let serde_position =
-            crate::builders::liquidity_provider::LiquidityProviderProgram::create_serde_position(
-                &position,
-                &controller,
-                &global_state,
-                gt_decimals,
-            )?;
-
-        Ok(Some(serde_position))
+        lp_program
+            .query_lp_position(self.rpc(), store, owner, position_id, lp_token_mint)
+            .await
     }
 
     async fn get_my_lp_positions(
