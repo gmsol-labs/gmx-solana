@@ -9,7 +9,9 @@ use super::StringPubkey;
 pub struct LpPositionComputedData {
     /// Claimable GT rewards (calculated using precise on-chain logic) - u128 to avoid overflow.
     pub claimable_gt: u128,
-    /// Current effective APY as fixed-point Value (1e20 scale, same as on-chain).
+    /// Current display APY (current week's APY rate) as fixed-point Value (1e20 scale, same as on-chain).
+    /// Note: This is used for UI display and represents the APY rate for the current staking week.
+    /// GT reward calculations internally use time-weighted APY for accuracy.
     pub current_apy: Value,
     /// LP token symbol (e.g., "GM-SOL/USDC", "GLV-BTC").
     /// Should have fallback to abbreviated mint address if mapping fails.
@@ -36,7 +38,9 @@ pub struct SerdeLpStakingPosition {
     pub staked_value_usd: Value,
     /// Stake start unix timestamp (seconds) - display layer handles formatting.
     pub stake_start_time: i64,
-    /// Current effective APY as fixed-point Value (display layer converts to percentage).
+    /// Current display APY (current week's APY rate) as fixed-point Value (display layer converts to percentage).
+    /// Note: This is the APY for the current staking week, used for UI display.
+    /// For GT reward calculations, time-weighted APY is used internally.
     pub current_apy: Value,
     /// Claimable GT rewards (calculated using precise on-chain logic) - raw format.
     pub claimable_gt: Amount,

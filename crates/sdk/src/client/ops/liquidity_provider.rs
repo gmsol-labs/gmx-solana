@@ -23,6 +23,11 @@ use crate::{
     utils::token_map::FeedAddressMap,
 };
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+/// Compute budget for LP token staking operations
 const STAKE_LP_TOKEN_COMPUTE_BUDGET: u32 = 800_000;
 
 /// Operations for liquidity-provider program.
