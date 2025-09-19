@@ -468,16 +468,16 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
                 controller.disabled_at
             };
 
-            let current_apy = self.compute_time_weighted_apy(
+            let current_apy = crate::builders::liquidity_provider::LiquidityProviderProgram::compute_time_weighted_apy(
                 position.stake_start_time,
                 effective_end_time,
                 &global_state.apy_gradient,
             );
 
-            // GT rewards: Use placeholder to avoid off-chain calculation drift
-            // Accurate calculation requires on-chain CPI to GT program for cumulative inverse cost factor
-            // Use calculate_gt_reward instruction for precise amounts
-            let claimable_gt = 0u128;
+            // GT rewards: Calculate actual claimable amount using precise on-chain logic
+            let claimable_gt = crate::builders::liquidity_provider::LiquidityProviderProgram::compute_claimable_gt_reward(
+                &position, &controller, &global_state
+            ).unwrap_or(0u128); // Fallback to 0 if calculation fails
 
             // Get LP token symbol (you might want to implement a token map lookup here)
             let lp_token_symbol = fallback_lp_token_symbol(&position.lp_mint.into());
@@ -561,16 +561,16 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             controller.disabled_at
         };
 
-        let current_apy = self.compute_time_weighted_apy(
+        let current_apy = crate::builders::liquidity_provider::LiquidityProviderProgram::compute_time_weighted_apy(
             position.stake_start_time,
             effective_end_time,
             &global_state.apy_gradient,
         );
 
-        // GT rewards: Use placeholder to avoid off-chain calculation drift
-        // Accurate calculation requires on-chain CPI to GT program for cumulative inverse cost factor
-        // Use calculate_gt_reward instruction for precise amounts
-        let claimable_gt = 0u128;
+        // GT rewards: Calculate actual claimable amount using precise on-chain logic
+        let claimable_gt = crate::builders::liquidity_provider::LiquidityProviderProgram::compute_claimable_gt_reward(
+            &position, &controller, &global_state
+        ).unwrap_or(0u128); // Fallback to 0 if calculation fails
 
         // Get LP token symbol
         let lp_token_symbol = fallback_lp_token_symbol(&position.lp_mint.into());
@@ -598,53 +598,6 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         store: &Pubkey,
     ) -> crate::Result<Vec<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
         self.get_lp_positions(store, &self.payer()).await
-    }
-}
-
-impl<C: Deref<Target = impl Signer> + Clone> crate::Client<C> {
-    /// Compute time-weighted average APY (simplified version of on-chain logic)
-    fn compute_time_weighted_apy(
-        &self,
-        start_time: i64,
-        end_time: i64,
-        apy_gradient: &[u128; 53],
-    ) -> u128 {
-        if end_time <= start_time {
-            return apy_gradient[0];
-        }
-
-        let total_seconds = (end_time - start_time) as u128;
-        if total_seconds == 0 {
-            return apy_gradient[0];
-        }
-
-        let seconds_per_week = 7 * 24 * 3600;
-        let full_weeks = total_seconds / seconds_per_week;
-        let rem_seconds = total_seconds % seconds_per_week;
-
-        let mut acc = 0u128;
-        let capped_full = full_weeks.min(52); // APY_LAST_INDEX = 52
-
-        // Sum full-week contributions
-        for apy_value in apy_gradient.iter().take(capped_full as usize) {
-            acc = acc.saturating_add(apy_value.saturating_mul(seconds_per_week));
-        }
-
-        // Handle weeks beyond the gradient
-        if full_weeks > 52 {
-            let extra = full_weeks - 52;
-            acc = acc.saturating_add(
-                apy_gradient[52].saturating_mul(seconds_per_week.saturating_mul(extra)),
-            );
-        }
-
-        // Add partial-week remainder
-        if rem_seconds > 0 {
-            let idx = (full_weeks.min(52) as usize).min(52);
-            acc = acc.saturating_add(apy_gradient[idx].saturating_mul(rem_seconds));
-        }
-
-        acc / total_seconds
     }
 }
 

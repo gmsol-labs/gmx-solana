@@ -414,7 +414,7 @@ impl super::Command for Lp {
 
 impl Lp {
     /// Display a list of LP staking positions.
-    /// Table format: LP token, amount, staked time, APY, claimable GT
+    /// Table format: LP token, amount, staked time, APY, claimable GT (calculated)
     fn display_positions_list(
         &self,
         positions: &[gmsol_sdk::serde::serde_lp_position::SerdeLpStakingPosition],
@@ -475,7 +475,7 @@ impl Lp {
     }
 
     /// Display a single LP staking position with detailed information.
-    /// Single format: LP token, amount, staked time, APY, accumulated GT, claimable GT
+    /// Single format: LP token, amount, staked time, APY, claimable GT (calculated)
     fn display_single_position(
         &self,
         position: &gmsol_sdk::serde::serde_lp_position::SerdeLpStakingPosition,
