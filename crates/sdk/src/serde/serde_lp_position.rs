@@ -7,7 +7,7 @@ use super::StringPubkey;
 /// Additional computed data for LP position.
 #[derive(Debug, Clone)]
 pub struct LpPositionComputedData {
-    /// Claimable GT rewards (available for claiming now) - u128 to avoid overflow.
+    /// Claimable GT rewards (calculated using precise on-chain logic) - u128 to avoid overflow.
     pub claimable_gt: u128,
     /// Current effective APY as fixed-point Value (1e20 scale, same as on-chain).
     pub current_apy: Value,
@@ -38,7 +38,7 @@ pub struct SerdeLpStakingPosition {
     pub stake_start_time: i64,
     /// Current effective APY as fixed-point Value (display layer converts to percentage).
     pub current_apy: Value,
-    /// Claimable GT rewards (available for claiming now) - raw format.
+    /// Claimable GT rewards (calculated using precise on-chain logic) - raw format.
     pub claimable_gt: Amount,
     /// Position vault address (PDA that holds staked tokens).
     pub vault: StringPubkey,
