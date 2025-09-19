@@ -113,7 +113,7 @@ enum Command {
         #[arg(long, value_delimiter = ',')]
         bucket_indices: Vec<u8>,
         /// APY values (percentages, will be converted to 1e20-scaled).
-        #[arg(long, value_delimiter = ',')]
+        #[arg(long, value_delimiter = ',', required = true)]
         apy_values: Vec<Value>,
     },
     /// Update APY gradient for a contiguous range.
@@ -123,7 +123,7 @@ enum Command {
         /// End bucket index.  
         end_bucket: u8,
         /// APY values (percentages, will be converted to 1e20-scaled).
-        #[arg(long, value_delimiter = ',')]
+        #[arg(long, value_delimiter = ',', required = true)]
         apy_values: Vec<Value>,
     },
     /// Update minimum stake value.
