@@ -12,6 +12,21 @@ use std::num::NonZeroU64;
 
 use crate::config::DisplayOptions;
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+/// Number of decimal places for APY display formatting
+const APY_DISPLAY_DECIMALS: usize = 2;
+
+/// Maximum number of decimal places for GT amount display formatting
+/// Actual GT decimals are dynamically retrieved from store, but limited to this max for readability
+const GT_DISPLAY_DECIMALS: usize = 4;
+
+// ============================================================================
+// Commands
+// ============================================================================
+
 /// Liquidity Provider management commands.
 #[derive(Debug, clap::Args)]
 pub struct Lp {
@@ -282,7 +297,13 @@ impl super::Command for Lp {
                 // Convert to human-readable GT amount using actual decimals
                 let divisor = 10_u128.pow(gt_decimals as u32) as f64;
                 let gt_amount_readable = gt_reward_raw as f64 / divisor;
-                println!("GT Reward (readable): {:.6} GT", gt_amount_readable);
+                // Use actual GT decimals for calculation display, but limit to reasonable precision
+                let calculation_precision = gt_decimals.min(8) as usize; // Max 8 decimal places for readability
+                println!(
+                    "GT Reward (readable): {:.prec$} GT",
+                    gt_amount_readable,
+                    prec = calculation_precision
+                );
 
                 return Ok(());
             }
@@ -392,15 +413,31 @@ impl super::Command for Lp {
             Command::QueryMyPositions => {
                 // Query all positions for current wallet
                 let positions = client.get_my_lp_positions(store).await?;
+
+                // Get GT decimals for proper formatting
+                let store_account = client
+                    .account::<ZeroCopy<Store>>(store)
+                    .await?
+                    .ok_or_else(|| eyre::eyre!("Store not found"))?;
+                let gt_decimals = store_account.0.gt.decimals;
+
                 let output = &ctx.config().output();
-                self.display_positions_list(&positions, output)?;
+                self.display_positions_list(&positions, output, gt_decimals)?;
                 return Ok(());
             }
             Command::QueryPositions { owner } => {
                 // Query all positions for specified owner
                 let positions = client.get_lp_positions(store, owner).await?;
+
+                // Get GT decimals for proper formatting
+                let store_account = client
+                    .account::<ZeroCopy<Store>>(store)
+                    .await?
+                    .ok_or_else(|| eyre::eyre!("Store not found"))?;
+                let gt_decimals = store_account.0.gt.decimals;
+
                 let output = &ctx.config().output();
-                self.display_positions_list(&positions, output)?;
+                self.display_positions_list(&positions, output, gt_decimals)?;
                 return Ok(());
             }
             Command::QueryPosition {
@@ -413,15 +450,21 @@ impl super::Command for Lp {
                     .get_lp_position(store, owner, *position_id, lp_token_mint)
                     .await?;
 
+                // Get GT decimals for proper formatting
+                let store_account = client
+                    .account::<ZeroCopy<Store>>(store)
+                    .await?
+                    .ok_or_else(|| eyre::eyre!("Store not found"))?;
+                let gt_decimals = store_account.0.gt.decimals;
+
                 let output = &ctx.config().output();
                 match position {
                     Some(pos) => {
-                        self.display_single_position(&pos, output)?;
+                        self.display_single_position(&pos, output, gt_decimals)?;
                     }
                     None => {
                         println!(
-                            "Position not found: owner={}, position_id={}, lp_token_mint={}",
-                            owner, position_id, lp_token_mint
+                            "Position not found: owner={owner}, position_id={position_id}, lp_token_mint={lp_token_mint}"
                         );
                     }
                 }
@@ -441,36 +484,46 @@ impl Lp {
         &self,
         positions: &[gmsol_sdk::serde::serde_lp_position::SerdeLpStakingPosition],
         output: &crate::config::OutputFormat,
+        gt_decimals: u8,
     ) -> eyre::Result<()> {
         if positions.is_empty() {
             println!("No LP staking positions found.");
             return Ok(());
         }
 
-        // Create formatted positions with 2-decimal APY
+        // Create formatted positions with proper decimal formatting
         let formatted_positions: Vec<_> = positions
             .iter()
             .map(|pos| {
                 let mut formatted = serde_json::to_value(pos).unwrap();
                 if let Some(obj) = formatted.as_object_mut() {
-                    // Format APY to 2 decimal places
+                    // Format APY to configured decimal places
                     if let Some(apy_value) = obj.get("current_apy") {
                         if let Some(apy_str) = apy_value.as_str() {
                             if let Ok(apy_num) = apy_str.parse::<f64>() {
                                 obj.insert(
                                     "current_apy".to_string(),
-                                    serde_json::Value::String(format!("{:.2}", apy_num)),
+                                    serde_json::Value::String(format!(
+                                        "{apy_num:.prec$}",
+                                        prec = APY_DISPLAY_DECIMALS
+                                    )),
                                 );
                             }
                         }
                     }
-                    // Format GT to 4 decimal places
+                    // Format GT using dynamic decimals from store
                     if let Some(gt_value) = obj.get("claimable_gt") {
                         if let Some(gt_str) = gt_value.as_str() {
                             if let Ok(gt_num) = gt_str.parse::<f64>() {
+                                // Use the actual GT decimals from store, but limit to reasonable display precision
+                                let display_precision =
+                                    gt_decimals.min(GT_DISPLAY_DECIMALS as u8) as usize;
                                 obj.insert(
                                     "claimable_gt".to_string(),
-                                    serde_json::Value::String(format!("{:.4}", gt_num)),
+                                    serde_json::Value::String(format!(
+                                        "{gt_num:.prec$}",
+                                        prec = display_precision
+                                    )),
                                 );
                             }
                         }
@@ -500,28 +553,37 @@ impl Lp {
         &self,
         position: &gmsol_sdk::serde::serde_lp_position::SerdeLpStakingPosition,
         output: &crate::config::OutputFormat,
+        gt_decimals: u8,
     ) -> eyre::Result<()> {
-        // Format single position with 2-decimal APY
+        // Format single position with proper decimal formatting
         let mut formatted = serde_json::to_value(position).unwrap();
         if let Some(obj) = formatted.as_object_mut() {
-            // Format APY to 2 decimal places
+            // Format APY to configured decimal places
             if let Some(apy_value) = obj.get("current_apy") {
                 if let Some(apy_str) = apy_value.as_str() {
                     if let Ok(apy_num) = apy_str.parse::<f64>() {
                         obj.insert(
                             "current_apy".to_string(),
-                            serde_json::Value::String(format!("{:.2}", apy_num)),
+                            serde_json::Value::String(format!(
+                                "{apy_num:.prec$}",
+                                prec = APY_DISPLAY_DECIMALS
+                            )),
                         );
                     }
                 }
             }
-            // Format GT to 4 decimal places
+            // Format GT using dynamic decimals from store
             if let Some(gt_value) = obj.get("claimable_gt") {
                 if let Some(gt_str) = gt_value.as_str() {
                     if let Ok(gt_num) = gt_str.parse::<f64>() {
+                        // Use the actual GT decimals from store, but limit to reasonable display precision
+                        let display_precision = gt_decimals.min(GT_DISPLAY_DECIMALS as u8) as usize;
                         obj.insert(
                             "claimable_gt".to_string(),
-                            serde_json::Value::String(format!("{:.4}", gt_num)),
+                            serde_json::Value::String(format!(
+                                "{gt_num:.prec$}",
+                                prec = display_precision
+                            )),
                         );
                     }
                 }

@@ -50,6 +50,23 @@ use crate::{
 
 use super::StoreProgram;
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+/// Seconds per year for APY calculations (365.25 * 24 * 3600)
+const SECONDS_PER_YEAR: u128 = 31_557_600;
+
+/// Seconds per week for APY gradient calculations (7 * 24 * 3600)
+const SECONDS_PER_WEEK: u128 = 7 * 24 * 3600;
+
+/// Last index of APY buckets (APY_BUCKETS - 1 = 53 - 1 = 52)
+const APY_LAST_INDEX: usize = 52;
+
+// ============================================================================
+// Structs and Implementations
+// ============================================================================
+
 /// A liquidity-provider program.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi, into_wasm_abi))]
@@ -307,7 +324,6 @@ impl LiquidityProviderProgram {
         );
 
         // Convert to per-second APY (exactly matches lib.rs lines 700-704)
-        const SECONDS_PER_YEAR: u128 = 31_557_600; // 365.25 * 24 * 3600
         let avg_apy_per_sec = if SECONDS_PER_YEAR > 0 {
             avg_apy / SECONDS_PER_YEAR
         } else {
@@ -331,15 +347,13 @@ impl LiquidityProviderProgram {
         Ok(gt_raw.min(u64::MAX as u128))
     }
 
-    /// Compute current APY based on staking duration and APY gradient
-    pub fn compute_time_weighted_apy(
+    /// Compute current display APY based on current staking duration (returns APY for current week).
+    /// This is used for UI display purposes to show the APY rate for the current week.
+    pub fn compute_current_display_apy(
         start_time: i64,
         end_time: i64,
         apy_gradient: &[u128; 53],
     ) -> u128 {
-        const SECONDS_PER_WEEK: u128 = 7 * 24 * 3600;
-        const APY_LAST_INDEX: usize = 52; // APY_BUCKETS - 1 = 53 - 1 = 52
-
         if end_time <= start_time {
             return apy_gradient[0];
         }
@@ -358,6 +372,48 @@ impl LiquidityProviderProgram {
         } else {
             apy_gradient[week_index as usize]
         }
+    }
+
+    /// Compute time-weighted average APY over [start, end] using APY_BUCKETS-bucket weekly gradient (1e20-scaled).
+    /// This mirrors the exact computation from the core program and is used for GT reward calculations.
+    /// This implements the same calculation as compute_time_weighted_apy in lib.rs
+    pub fn compute_time_weighted_apy(
+        start_time: i64,
+        end_time: i64,
+        apy_gradient: &[u128; 53],
+    ) -> u128 {
+        if end_time <= start_time {
+            return apy_gradient[0];
+        }
+        let total_seconds: u128 = (end_time - start_time) as u128;
+        if total_seconds == 0 {
+            return apy_gradient[0];
+        }
+
+        let full_weeks: u128 = total_seconds / SECONDS_PER_WEEK;
+        let rem_seconds: u128 = total_seconds % SECONDS_PER_WEEK;
+
+        // Sum full-week contributions (mirrors lib.rs:740-751)
+        let mut acc: u128 = 0;
+        let capped_full: u128 = full_weeks.min(APY_LAST_INDEX as u128);
+        for &apy_value in apy_gradient.iter().take(capped_full as usize) {
+            acc = acc.saturating_add(apy_value.saturating_mul(SECONDS_PER_WEEK));
+        }
+        if full_weeks > (APY_LAST_INDEX as u128) {
+            let extra = full_weeks - (APY_LAST_INDEX as u128); // weeks APY_LAST_INDEX+ use bucket APY_LAST_INDEX
+            acc = acc.saturating_add(
+                apy_gradient[APY_LAST_INDEX].saturating_mul(SECONDS_PER_WEEK.saturating_mul(extra)),
+            );
+        }
+
+        // Add partial-week remainder (mirrors lib.rs:754-757)
+        if rem_seconds > 0 {
+            let idx =
+                usize::try_from(full_weeks.min(APY_LAST_INDEX as u128)).unwrap_or(APY_LAST_INDEX);
+            acc = acc.saturating_add(apy_gradient[idx].saturating_mul(rem_seconds));
+        }
+
+        acc / total_seconds
     }
 
     /// Find PDA for stake position account.
@@ -438,18 +494,18 @@ impl LiquidityProviderProgram {
             controller.disabled_at
         };
 
-        // Calculate current APY using time-weighted calculation
-        let current_apy = Self::compute_time_weighted_apy(
+        // Calculate current display APY (shows current week's APY for UI display)
+        let current_display_apy = Self::compute_current_display_apy(
             position.stake_start_time,
             effective_end_time,
             &global_state.apy_gradient,
         );
 
-        // Calculate GT rewards using precise on-chain logic
+        // Calculate GT rewards using precise on-chain logic (uses time-weighted APY internally)
         let claimable_gt = Self::compute_claimable_gt_reward(position, controller, global_state)?;
 
         Ok(PositionComputedData {
-            current_apy,
+            current_apy: current_display_apy, // Use display APY for UI
             claimable_gt,
         })
     }
