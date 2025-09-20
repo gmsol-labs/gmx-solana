@@ -1,4 +1,31 @@
-use gmsol_sdk::utils::Value;
+use gmsol_sdk::{
+    builders::liquidity_provider::LpTokenKind,
+    ops::{
+        liquidity_provider::LiquidityProviderOps, token_account::TokenAccountOps, user::UserOps,
+    },
+    programs::{anchor_lang::prelude::Pubkey, gmsol_store::accounts::Store},
+    utils::{zero_copy::ZeroCopy, GmAmount, Value},
+};
+
+#[cfg(feature = "execute")]
+use std::num::NonZeroU64;
+
+use crate::config::DisplayOptions;
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/// Number of decimal places for APY display formatting
+const APY_DISPLAY_DECIMALS: usize = 2;
+
+/// Maximum number of decimal places for GT amount display formatting
+/// Actual GT decimals are dynamically retrieved from store, but limited to this max for readability
+const GT_DISPLAY_DECIMALS: usize = 4;
+
+// ============================================================================
+// Commands
+// ============================================================================
 
 /// Liquidity Provider management commands.
 #[derive(Debug, clap::Args)]
@@ -18,6 +45,147 @@ enum Command {
         #[arg(long)]
         initial_apy: Value,
     },
+    /// Create LP token controller for a specific token mint.
+    CreateController {
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
+    },
+    /// Disable LP token controller for a specific token mint.
+    DisableController {
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
+    },
+    /// Stake LP tokens (GM or GLV).
+    #[cfg(feature = "execute")]
+    Stake {
+        /// LP token kind (GM or GLV).
+        #[arg(long, value_enum)]
+        kind: LpTokenKind,
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+        /// Amount to stake (in GM/GLV token units, will be converted to raw units).
+        #[arg(long)]
+        amount: GmAmount,
+        /// Optional position ID (if not provided, will generate randomly).
+        #[arg(long)]
+        position_id: Option<u64>,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
+        /// Executor arguments for oracle handling.
+        #[command(flatten)]
+        args: crate::commands::exchange::executor::ExecutorArgs,
+    },
+    /// Unstake LP tokens (GM or GLV).
+    Unstake {
+        /// LP token kind (GM or GLV).
+        #[arg(long, value_enum)]
+        kind: LpTokenKind,
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+        /// Position ID to unstake from.
+        #[arg(long)]
+        position_id: u64,
+        /// Amount to unstake (in GM/GLV token units, will be converted to raw units).
+        #[arg(long)]
+        amount: GmAmount,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
+    },
+    /// Calculate GT reward for a position.
+    CalculateReward {
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+        /// Position ID to calculate reward for.
+        #[arg(long)]
+        position_id: u64,
+        /// Owner of the position.
+        #[arg(long)]
+        owner: Pubkey,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
+    },
+    /// Claim GT rewards for a position.
+    ClaimGt {
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+        /// Position ID to claim rewards for.
+        #[arg(long)]
+        position_id: u64,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
+    },
+    /// Transfer LP program authority to a new authority.
+    TransferAuthority {
+        /// New authority address.
+        new_authority: Pubkey,
+    },
+    /// Accept LP program authority transfer.
+    AcceptAuthority,
+    /// Set whether claiming GT at any time is allowed.
+    SetClaimEnabled {
+        /// Whether to enable claiming.
+        #[arg(long)]
+        enable: bool,
+    },
+    /// Set pricing staleness configuration.
+    SetPricingStaleness {
+        /// Staleness threshold in seconds.
+        staleness_seconds: u32,
+    },
+    /// Update APY gradient with sparse entries.
+    UpdateApyGradientSparse {
+        /// Bucket indices to update.
+        #[arg(long, value_delimiter = ',')]
+        bucket_indices: Vec<u8>,
+        /// APY values (percentages, will be converted to 1e20-scaled).
+        #[arg(long, value_delimiter = ',', required = true)]
+        apy_values: Vec<Value>,
+    },
+    /// Update APY gradient for a contiguous range.
+    UpdateApyGradientRange {
+        /// Start bucket index.
+        start_bucket: u8,
+        /// End bucket index.  
+        end_bucket: u8,
+        /// APY values (percentages, will be converted to 1e20-scaled).
+        #[arg(long, value_delimiter = ',', required = true)]
+        apy_values: Vec<Value>,
+    },
+    /// Update minimum stake value.
+    UpdateMinStakeValue {
+        /// New minimum stake value.
+        new_min_stake_value: Value,
+    },
+    /// Query all LP staking positions for the current wallet.
+    QueryMyPositions,
+    /// Query all LP staking positions for a specified wallet.
+    QueryPositions {
+        /// Owner wallet address to query positions for.
+        owner: Pubkey,
+    },
+    /// Query a specific LP staking position.
+    QueryPosition {
+        /// Owner of the position.
+        owner: Pubkey,
+        /// Position ID to query.
+        #[arg(long)]
+        position_id: u64,
+        /// LP token mint address.
+        lp_token_mint: Pubkey,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
+    },
 }
 
 impl super::Command for Lp {
@@ -27,23 +195,456 @@ impl super::Command for Lp {
 
     async fn execute(&self, ctx: super::Context<'_>) -> eyre::Result<()> {
         let client = ctx.client()?;
-        let _store = ctx.store();
+        let store = ctx.store();
         let options = ctx.bundle_options();
 
         let bundle = match &self.command {
             Command::InitLp {
                 min_stake_value,
                 initial_apy,
+            } => client
+                .initialize_lp(min_stake_value.to_u128()?, initial_apy.to_u128()?)?
+                .into_bundle_with_options(options)?,
+            Command::CreateController {
+                lp_token_mint,
+                controller_index,
+            } => client
+                .create_lp_token_controller(lp_token_mint, *controller_index)?
+                .into_bundle_with_options(options)?,
+            Command::DisableController {
+                lp_token_mint,
+                controller_index,
+            } => client
+                .disable_lp_token_controller(store, lp_token_mint, *controller_index)?
+                .into_bundle_with_options(options)?,
+            #[cfg(feature = "execute")]
+            Command::Stake {
+                kind,
+                lp_token_mint,
+                amount,
+                position_id,
+                controller_index,
+                args,
             } => {
-                use gmsol_sdk::ops::liquidity_provider::LiquidityProviderOps;
+                // Ensure we're not in instruction buffer mode since executor needs to send transactions
+                ctx.require_not_ix_buffer_mode()?;
 
-                client
-                    .initialize_lp(min_stake_value.to_u128()?, initial_apy.to_u128()?)?
+                // Get oracle from global config
+                let oracle = ctx.config().oracle()?;
+
+                // Convert GmAmount to u64 and then to NonZeroU64
+                let amount_u64 = amount.to_u64()?;
+                let stake_amount = NonZeroU64::new(amount_u64)
+                    .ok_or_else(|| eyre::eyre!("Stake amount must be greater than zero"))?;
+
+                // Create stake builder with position ID if provided
+                let builder = match position_id {
+                    Some(pos_id) => client
+                        .stake_lp_token(
+                            store,
+                            *kind,
+                            lp_token_mint,
+                            oracle,
+                            stake_amount,
+                            *controller_index,
+                        )
+                        .with_position_id(*pos_id),
+                    None => client.stake_lp_token(
+                        store,
+                        *kind,
+                        lp_token_mint,
+                        oracle,
+                        stake_amount,
+                        *controller_index,
+                    ),
+                };
+
+                // Use ExecutorArgs to build executor (same pattern as ConfirmGtBuyback in treasury)
+                let executor = args.build(client).await?;
+                executor.execute(builder, options).await?;
+                return Ok(());
+            }
+            Command::Unstake {
+                kind,
+                lp_token_mint,
+                position_id,
+                amount,
+                controller_index,
+            } => {
+                // Prepare GT user account (idempotent operation)
+                let prepare_user = client.prepare_user(store)?;
+
+                // Determine correct token program ID (GM uses token::ID, GLV uses token_2022::ID)
+                let token_program_id = match kind {
+                    LpTokenKind::Gm => anchor_spl::token::ID,
+                    LpTokenKind::Glv => anchor_spl::token_2022::ID,
+                };
+
+                // Prepare destination ATA (idempotent operation)
+                let prepare_ata = client.prepare_associated_token_account(
+                    lp_token_mint,
+                    &token_program_id,
+                    None, // Use current payer as owner
+                );
+
+                // Convert GmAmount to u64
+                let amount_u64 = amount.to_u64()?;
+
+                // Create unstake transaction
+                let unstake_tx = client.unstake_lp_token(
+                    store,
+                    *kind,
+                    lp_token_mint,
+                    *position_id,
+                    amount_u64,
+                    *controller_index,
+                )?;
+
+                // Merge all transactions and build bundle
+                prepare_user
+                    .merge(prepare_ata)
+                    .merge(unstake_tx)
                     .into_bundle_with_options(options)?
+            }
+            Command::CalculateReward {
+                lp_token_mint,
+                position_id,
+                owner,
+                controller_index,
+            } => {
+                // Use provided owner
+                let position_owner = *owner;
+
+                // Calculate GT reward using direct core calculation logic
+                let gt_reward_raw = client
+                    .calculate_gt_reward(
+                        store,
+                        lp_token_mint,
+                        &position_owner,
+                        *position_id,
+                        *controller_index,
+                    )
+                    .await?;
+
+                // Get GT decimals for proper display formatting
+                let store_account = client
+                    .account::<ZeroCopy<Store>>(store)
+                    .await?
+                    .ok_or_else(|| eyre::eyre!("Store not found"))?;
+                let gt_decimals = store_account.0.gt.decimals;
+
+                // Display the calculated GT reward
+                println!("Calculated GT reward for position {position_id}:");
+                println!("Owner: {position_owner}");
+                println!("LP Token Mint: {lp_token_mint}");
+                println!("GT Reward (raw units): {gt_reward_raw}");
+
+                // Convert to human-readable GT amount using actual decimals
+                let divisor = 10_u128.pow(gt_decimals as u32) as f64;
+                let gt_amount_readable = gt_reward_raw as f64 / divisor;
+                // Use actual GT decimals for calculation display, but limit to reasonable precision
+                let calculation_precision = gt_decimals.min(8) as usize; // Max 8 decimal places for readability
+                println!("GT Reward (readable): {gt_amount_readable:.calculation_precision$} GT");
+
+                return Ok(());
+            }
+            Command::ClaimGt {
+                lp_token_mint,
+                position_id,
+                controller_index,
+            } => {
+                // Prepare GT user account (idempotent operation) - same as Unstake
+                let prepare_user = client.prepare_user(store)?;
+
+                // Create claim GT reward transaction using SDK
+                let claim_tx = client.claim_gt_reward(
+                    store,
+                    lp_token_mint,
+                    *position_id,
+                    *controller_index,
+                )?;
+
+                // Merge prepare user and claim transactions
+                prepare_user
+                    .merge(claim_tx)
+                    .into_bundle_with_options(options)?
+            }
+            Command::TransferAuthority { new_authority } => {
+                // Transfer LP program authority
+                client
+                    .transfer_lp_authority(new_authority)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::AcceptAuthority => {
+                // Accept LP program authority transfer
+                client
+                    .accept_lp_authority()?
+                    .into_bundle_with_options(options)?
+            }
+            Command::SetClaimEnabled { enable } => {
+                // Set claim enabled status
+                client
+                    .set_claim_enabled(*enable)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::SetPricingStaleness { staleness_seconds } => {
+                // Set pricing staleness configuration
+                client
+                    .set_pricing_staleness(*staleness_seconds)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::UpdateApyGradientSparse {
+                bucket_indices,
+                apy_values,
+            } => {
+                // Validate input lengths match
+                if bucket_indices.len() != apy_values.len() {
+                    return Err(eyre::eyre!(
+                        "bucket_indices and apy_values must have the same length"
+                    ));
+                }
+
+                // Convert APY percentages to 1e20-scaled values
+                let apy_values_scaled = apy_values
+                    .iter()
+                    .map(|v| v.to_u128().map_err(eyre::Error::from))
+                    .collect::<eyre::Result<Vec<_>>>()?;
+
+                // Update APY gradient with sparse entries
+                client
+                    .update_apy_gradient_sparse(bucket_indices.clone(), apy_values_scaled)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::UpdateApyGradientRange {
+                start_bucket,
+                end_bucket,
+                apy_values,
+            } => {
+                // Validate range
+                if start_bucket > end_bucket {
+                    return Err(eyre::eyre!("start_bucket must be <= end_bucket"));
+                }
+
+                let expected_length = (end_bucket - start_bucket + 1) as usize;
+                if apy_values.len() != expected_length {
+                    return Err(eyre::eyre!(
+                        "apy_values length ({}) must match range size ({})",
+                        apy_values.len(),
+                        expected_length
+                    ));
+                }
+
+                // Convert APY percentages to 1e20-scaled values
+                let apy_values_scaled = apy_values
+                    .iter()
+                    .map(|v| v.to_u128().map_err(eyre::Error::from))
+                    .collect::<eyre::Result<Vec<_>>>()?;
+
+                // Update APY gradient for range
+                client
+                    .update_apy_gradient_range(*start_bucket, *end_bucket, apy_values_scaled)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::UpdateMinStakeValue {
+                new_min_stake_value,
+            } => {
+                // Convert the value to 1e20-scaled u128
+                let min_stake_value_scaled =
+                    new_min_stake_value.to_u128().map_err(eyre::Error::from)?;
+
+                // Update minimum stake value
+                client
+                    .update_min_stake_value(min_stake_value_scaled)?
+                    .into_bundle_with_options(options)?
+            }
+            Command::QueryMyPositions => {
+                // Query all positions for current wallet
+                let positions = client.get_my_lp_positions(store).await?;
+
+                // Get GT decimals for proper formatting
+                let store_account = client
+                    .account::<ZeroCopy<Store>>(store)
+                    .await?
+                    .ok_or_else(|| eyre::eyre!("Store not found"))?;
+                let gt_decimals = store_account.0.gt.decimals;
+
+                let output = &ctx.config().output();
+                self.display_positions_list(&positions, output, gt_decimals)?;
+                return Ok(());
+            }
+            Command::QueryPositions { owner } => {
+                // Query all positions for specified owner
+                let positions = client.get_lp_positions(store, owner).await?;
+
+                // Get GT decimals for proper formatting
+                let store_account = client
+                    .account::<ZeroCopy<Store>>(store)
+                    .await?
+                    .ok_or_else(|| eyre::eyre!("Store not found"))?;
+                let gt_decimals = store_account.0.gt.decimals;
+
+                let output = &ctx.config().output();
+                self.display_positions_list(&positions, output, gt_decimals)?;
+                return Ok(());
+            }
+            Command::QueryPosition {
+                owner,
+                position_id,
+                lp_token_mint,
+                controller_index,
+            } => {
+                // Query specific position
+                let position = client
+                    .get_lp_position(store, owner, *position_id, lp_token_mint, *controller_index)
+                    .await?;
+
+                // Get GT decimals for proper formatting
+                let store_account = client
+                    .account::<ZeroCopy<Store>>(store)
+                    .await?
+                    .ok_or_else(|| eyre::eyre!("Store not found"))?;
+                let gt_decimals = store_account.0.gt.decimals;
+
+                let output = &ctx.config().output();
+                match position {
+                    Some(pos) => {
+                        self.display_single_position(&pos, output, gt_decimals)?;
+                    }
+                    None => {
+                        println!(
+                            "Position not found: owner={owner}, position_id={position_id}, lp_token_mint={lp_token_mint}"
+                        );
+                    }
+                }
+                return Ok(());
             }
         };
 
         client.send_or_serialize(bundle).await?;
+        Ok(())
+    }
+}
+
+impl Lp {
+    /// Display a list of LP staking positions.
+    /// Table format: LP token, amount, staked time, APY, claimable GT (calculated)
+    fn display_positions_list(
+        &self,
+        positions: &[gmsol_sdk::serde::serde_lp_position::SerdeLpStakingPosition],
+        output: &crate::config::OutputFormat,
+        gt_decimals: u8,
+    ) -> eyre::Result<()> {
+        if positions.is_empty() {
+            println!("No LP staking positions found.");
+            return Ok(());
+        }
+
+        // Create formatted positions with proper decimal formatting
+        let formatted_positions: Vec<_> = positions
+            .iter()
+            .map(|pos| {
+                let mut formatted = serde_json::to_value(pos).unwrap();
+                if let Some(obj) = formatted.as_object_mut() {
+                    // Format APY to configured decimal places
+                    if let Some(apy_value) = obj.get("current_apy") {
+                        if let Some(apy_str) = apy_value.as_str() {
+                            if let Ok(apy_num) = apy_str.parse::<f64>() {
+                                obj.insert(
+                                    "current_apy".to_string(),
+                                    serde_json::Value::String(format!(
+                                        "{apy_num:.APY_DISPLAY_DECIMALS$}"
+                                    )),
+                                );
+                            }
+                        }
+                    }
+                    // Format GT using dynamic decimals from store
+                    if let Some(gt_value) = obj.get("claimable_gt") {
+                        if let Some(gt_str) = gt_value.as_str() {
+                            if let Ok(gt_num) = gt_str.parse::<f64>() {
+                                // Use the actual GT decimals from store, but limit to reasonable display precision
+                                let display_precision =
+                                    gt_decimals.min(GT_DISPLAY_DECIMALS as u8) as usize;
+                                obj.insert(
+                                    "claimable_gt".to_string(),
+                                    serde_json::Value::String(format!(
+                                        "{gt_num:.display_precision$}"
+                                    )),
+                                );
+                            }
+                        }
+                    }
+                }
+                formatted
+            })
+            .collect();
+
+        let options = DisplayOptions::table_projection([
+            ("position_id", "Position ID"),
+            ("lp_token_symbol", "LP Token"),
+            ("staked_amount", "Amount"),
+            ("stake_start_time", "Staked Time"),
+            ("current_apy", "APY"),
+            ("claimable_gt", "Claimable GT"),
+        ])
+        .set_empty_message("No LP staking positions found.");
+
+        println!("{}", output.display_many(formatted_positions, options)?);
+        Ok(())
+    }
+
+    /// Display a single LP staking position with detailed information.
+    /// Single format: LP token, amount, staked time, APY, claimable GT (calculated)
+    fn display_single_position(
+        &self,
+        position: &gmsol_sdk::serde::serde_lp_position::SerdeLpStakingPosition,
+        output: &crate::config::OutputFormat,
+        gt_decimals: u8,
+    ) -> eyre::Result<()> {
+        // Format single position with proper decimal formatting
+        let mut formatted = serde_json::to_value(position).unwrap();
+        if let Some(obj) = formatted.as_object_mut() {
+            // Format APY to configured decimal places
+            if let Some(apy_value) = obj.get("current_apy") {
+                if let Some(apy_str) = apy_value.as_str() {
+                    if let Ok(apy_num) = apy_str.parse::<f64>() {
+                        obj.insert(
+                            "current_apy".to_string(),
+                            serde_json::Value::String(format!("{apy_num:.APY_DISPLAY_DECIMALS$}")),
+                        );
+                    }
+                }
+            }
+            // Format GT using dynamic decimals from store
+            if let Some(gt_value) = obj.get("claimable_gt") {
+                if let Some(gt_str) = gt_value.as_str() {
+                    if let Ok(gt_num) = gt_str.parse::<f64>() {
+                        // Use the actual GT decimals from store, but limit to reasonable display precision
+                        let display_precision = gt_decimals.min(GT_DISPLAY_DECIMALS as u8) as usize;
+                        obj.insert(
+                            "claimable_gt".to_string(),
+                            serde_json::Value::String(format!("{gt_num:.display_precision$}")),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Single position display: Position ID, LP token, amount, staked time, APY, claimable GT
+        let options = DisplayOptions::table_projection([
+            ("position_id", "Position ID"),
+            ("lp_token_symbol", "LP Token"),
+            ("staked_amount", "Amount"),
+            ("stake_start_time", "Staked Time"),
+            ("current_apy", "APY"),
+            ("claimable_gt", "Claimable GT"),
+        ]);
+
+        // For single position, display as single item
+        println!(
+            "{}",
+            output.display_many(std::iter::once(formatted), options)?
+        );
         Ok(())
     }
 }

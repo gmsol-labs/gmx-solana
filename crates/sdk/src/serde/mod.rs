@@ -20,6 +20,9 @@ pub mod serde_price_feed;
 #[cfg(feature = "treasury")]
 pub mod treasury;
 
+/// LP staking position serialization.
+pub mod serde_lp_position;
+
 #[cfg(serde)]
 pub use string_pubkey::pubkey;
 pub use string_pubkey::StringPubkey;
