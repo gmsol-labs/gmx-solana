@@ -239,8 +239,8 @@ impl Adl for Market {
 
 /// Marker trait for markets that can be closed.
 pub(crate) trait ClosableMarket {
-    /// Validate that the market is open, or if closed, that it is not stale.
-    fn validate_open_or_nonstale_closed(
+    /// Validate that the market is open, or if closed, that the oracle prices are not stale.
+    fn validate_open_or_nonstale_oracle(
         &self,
         oracle: &Oracle,
         max_staleness: u64,
@@ -252,7 +252,7 @@ pub(crate) trait ClosableMarket {
 }
 
 impl ClosableMarket for Market {
-    fn validate_open_or_nonstale_closed(
+    fn validate_open_or_nonstale_oracle(
         &self,
         oracle: &Oracle,
         max_staleness: u64,
