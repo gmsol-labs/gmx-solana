@@ -75,6 +75,9 @@ enum Command {
         /// Optional position ID (if not provided, will generate randomly).
         #[arg(long)]
         position_id: Option<u64>,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
         /// Executor arguments for oracle handling.
         #[command(flatten)]
         args: crate::commands::exchange::executor::ExecutorArgs,
@@ -92,6 +95,9 @@ enum Command {
         /// Amount to unstake (in GM/GLV token units, will be converted to raw units).
         #[arg(long)]
         amount: GmAmount,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
     },
     /// Calculate GT reward for a position.
     CalculateReward {
@@ -103,6 +109,9 @@ enum Command {
         /// Owner of the position.
         #[arg(long)]
         owner: Pubkey,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
     },
     /// Claim GT rewards for a position.
     ClaimGt {
@@ -111,6 +120,9 @@ enum Command {
         /// Position ID to claim rewards for.
         #[arg(long)]
         position_id: u64,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
     },
     /// Transfer LP program authority to a new authority.
     TransferAuthority {
@@ -170,6 +182,9 @@ enum Command {
         position_id: u64,
         /// LP token mint address.
         lp_token_mint: Pubkey,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
     },
 }
 
@@ -208,6 +223,7 @@ impl super::Command for Lp {
                 lp_token_mint,
                 amount,
                 position_id,
+                controller_index,
                 args,
             } => {
                 // Ensure we're not in instruction buffer mode since executor needs to send transactions
@@ -224,11 +240,23 @@ impl super::Command for Lp {
                 // Create stake builder with position ID if provided
                 let builder = match position_id {
                     Some(pos_id) => client
-                        .stake_lp_token(store, *kind, lp_token_mint, oracle, stake_amount)
+                        .stake_lp_token(
+                            store,
+                            *kind,
+                            lp_token_mint,
+                            oracle,
+                            stake_amount,
+                            *controller_index,
+                        )
                         .with_position_id(*pos_id),
-                    None => {
-                        client.stake_lp_token(store, *kind, lp_token_mint, oracle, stake_amount)
-                    }
+                    None => client.stake_lp_token(
+                        store,
+                        *kind,
+                        lp_token_mint,
+                        oracle,
+                        stake_amount,
+                        *controller_index,
+                    ),
                 };
 
                 // Use ExecutorArgs to build executor (same pattern as ConfirmGtBuyback in treasury)
@@ -241,6 +269,7 @@ impl super::Command for Lp {
                 lp_token_mint,
                 position_id,
                 amount,
+                controller_index,
             } => {
                 // Prepare GT user account (idempotent operation)
                 let prepare_user = client.prepare_user(store)?;
@@ -268,6 +297,7 @@ impl super::Command for Lp {
                     lp_token_mint,
                     *position_id,
                     amount_u64,
+                    *controller_index,
                 )?;
 
                 // Merge all transactions and build bundle
@@ -280,13 +310,20 @@ impl super::Command for Lp {
                 lp_token_mint,
                 position_id,
                 owner,
+                controller_index,
             } => {
                 // Use provided owner
                 let position_owner = *owner;
 
                 // Calculate GT reward using direct core calculation logic
                 let gt_reward_raw = client
-                    .calculate_gt_reward(store, lp_token_mint, &position_owner, *position_id)
+                    .calculate_gt_reward(
+                        store,
+                        lp_token_mint,
+                        &position_owner,
+                        *position_id,
+                        *controller_index,
+                    )
                     .await?;
 
                 // Get GT decimals for proper display formatting
@@ -314,12 +351,18 @@ impl super::Command for Lp {
             Command::ClaimGt {
                 lp_token_mint,
                 position_id,
+                controller_index,
             } => {
                 // Prepare GT user account (idempotent operation) - same as Unstake
                 let prepare_user = client.prepare_user(store)?;
 
                 // Create claim GT reward transaction using SDK
-                let claim_tx = client.claim_gt_reward(store, lp_token_mint, *position_id)?;
+                let claim_tx = client.claim_gt_reward(
+                    store,
+                    lp_token_mint,
+                    *position_id,
+                    *controller_index,
+                )?;
 
                 // Merge prepare user and claim transactions
                 prepare_user
@@ -448,10 +491,11 @@ impl super::Command for Lp {
                 owner,
                 position_id,
                 lp_token_mint,
+                controller_index,
             } => {
                 // Query specific position
                 let position = client
-                    .get_lp_position(store, owner, *position_id, lp_token_mint)
+                    .get_lp_position(store, owner, *position_id, lp_token_mint, *controller_index)
                     .await?;
 
                 // Get GT decimals for proper formatting
