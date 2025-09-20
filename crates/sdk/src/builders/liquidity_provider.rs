@@ -311,6 +311,22 @@ impl LiquidityProviderProgram {
         Ok(results)
     }
 
+    /// Query LP Global State (builder layer implementation)
+    pub async fn query_lp_global_state(
+        &self,
+        client: &solana_client::nonblocking::rpc_client::RpcClient,
+    ) -> crate::Result<gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState> {
+        let global_state_address = self.find_global_state_address();
+
+        client
+            .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState>(
+                &global_state_address,
+                Default::default(),
+            )
+            .await
+            .map_err(crate::Error::from)
+    }
+
     /// Calculate GT reward for a specific position (builder layer implementation)
     /// This implements the same calculation as compute_reward_with_cpi in lib.rs
     pub async fn calculate_gt_reward(

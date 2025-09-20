@@ -170,6 +170,13 @@ pub trait LiquidityProviderOps<C> {
     ) -> impl std::future::Future<
         Output = crate::Result<Vec<crate::serde::serde_lp_controller::SerdeLpController>>,
     >;
+
+    /// Query LP Global State information (authority, APY gradient, min stake value).
+    fn get_lp_global_state(
+        &self,
+    ) -> impl std::future::Future<
+        Output = crate::Result<gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState>,
+    >;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::Client<C> {
@@ -462,6 +469,13 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         lp_program
             .query_lp_controllers(self.rpc(), lp_token_mint)
             .await
+    }
+
+    async fn get_lp_global_state(
+        &self,
+    ) -> crate::Result<gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState> {
+        let lp_program = self.lp_program_for_builders();
+        lp_program.query_lp_global_state(self.rpc()).await
     }
 }
 

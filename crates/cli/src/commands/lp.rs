@@ -191,6 +191,8 @@ enum Command {
         /// LP token mint address (GM or GLV token).
         lp_token_mint: Pubkey,
     },
+    /// Query LP Global State (authority, APY gradient, min stake value).
+    QueryGlobalState,
 }
 
 impl super::Command for Lp {
@@ -531,6 +533,14 @@ impl super::Command for Lp {
                 self.display_controllers(&controllers, lp_token_mint, output)?;
                 return Ok(());
             }
+            Command::QueryGlobalState => {
+                // Query LP global state using the client
+                let global_state = client.get_lp_global_state().await?;
+
+                let output = &ctx.config().output();
+                self.display_global_state(&global_state, output)?;
+                return Ok(());
+            }
         };
 
         client.send_or_serialize(bundle).await?;
@@ -686,6 +696,68 @@ impl Lp {
         .set_empty_message("No controllers found.");
 
         println!("{}", output.display_many(controllers, options)?);
+        Ok(())
+    }
+
+    /// Display LP Global State information.
+    fn display_global_state(
+        &self,
+        global_state: &gmsol_sdk::programs::gmsol_liquidity_provider::accounts::GlobalState,
+        output: &crate::config::OutputFormat,
+    ) -> eyre::Result<()> {
+        println!("LP Global State Information:");
+
+        let options = DisplayOptions::table_projection([("field", "Field"), ("value", "Value")]);
+
+        let mut state_data = Vec::new();
+
+        // Basic information
+        state_data.push(serde_json::json!({
+            "field": "Authority",
+            "value": global_state.authority.to_string()
+        }));
+
+        state_data.push(serde_json::json!({
+            "field": "Pending Authority",
+            "value": global_state.pending_authority.to_string()
+        }));
+
+        state_data.push(serde_json::json!({
+            "field": "Min Stake Value (1e20)",
+            "value": global_state.min_stake_value.to_string()
+        }));
+
+        state_data.push(serde_json::json!({
+            "field": "Claim Enabled",
+            "value": global_state.claim_enabled
+        }));
+
+        state_data.push(serde_json::json!({
+            "field": "Pricing Staleness (seconds)",
+            "value": global_state.pricing_staleness_seconds
+        }));
+
+        // APY Gradient summary (first few buckets)
+        state_data.push(serde_json::json!({
+            "field": "APY Gradient [0] (1e20)",
+            "value": global_state.apy_gradient[0].to_string()
+        }));
+
+        if global_state.apy_gradient.len() > 1 {
+            state_data.push(serde_json::json!({
+                "field": "APY Gradient [1] (1e20)",
+                "value": global_state.apy_gradient[1].to_string()
+            }));
+        }
+
+        if global_state.apy_gradient.len() > 52 {
+            state_data.push(serde_json::json!({
+                "field": "APY Gradient [52] (1e20)",
+                "value": global_state.apy_gradient[52].to_string()
+            }));
+        }
+
+        println!("{}", output.display_many(state_data, options)?);
         Ok(())
     }
 }
