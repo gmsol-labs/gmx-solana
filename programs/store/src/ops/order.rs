@@ -1272,7 +1272,7 @@ impl ExecuteOrderOperation<'_, '_> {
                     self.market
                         .load()
                         .map_err(|_| CoreError::LoadAccountError)?
-                        .validate_open_or_nonstale_closed(self.oracle, max_staleness)?;
+                        .validate_open_or_nonstale_oracle(self.oracle, max_staleness)?;
                 }
             }
             _ => {}
