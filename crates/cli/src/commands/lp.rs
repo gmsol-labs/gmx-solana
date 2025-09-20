@@ -186,6 +186,11 @@ enum Command {
         #[arg(long, default_value = "0")]
         controller_index: u64,
     },
+    /// Query LP token controllers for a specific token mint.
+    QueryControllers {
+        /// LP token mint address (GM or GLV token).
+        lp_token_mint: Pubkey,
+    },
 }
 
 impl super::Command for Lp {
@@ -518,6 +523,14 @@ impl super::Command for Lp {
                 }
                 return Ok(());
             }
+            Command::QueryControllers { lp_token_mint } => {
+                // Query controllers for the specified LP token mint
+                let controllers = client.get_lp_controllers(lp_token_mint).await?;
+
+                let output = &ctx.config().output();
+                self.display_controllers(&controllers, lp_token_mint, output)?;
+                return Ok(());
+            }
         };
 
         client.send_or_serialize(bundle).await?;
@@ -645,6 +658,34 @@ impl Lp {
             "{}",
             output.display_many(std::iter::once(formatted), options)?
         );
+        Ok(())
+    }
+
+    /// Display LP controllers for a specific token mint.
+    fn display_controllers(
+        &self,
+        controllers: &[gmsol_sdk::serde::serde_lp_controller::SerdeLpController],
+        lp_token_mint: &Pubkey,
+        output: &crate::config::OutputFormat,
+    ) -> eyre::Result<()> {
+        if controllers.is_empty() {
+            println!("No controllers found for LP token: {}", lp_token_mint);
+            return Ok(());
+        }
+
+        println!("Controllers for LP token: {}", lp_token_mint);
+
+        let options = DisplayOptions::table_projection([
+            ("controller_index", "Index"),
+            ("controller_address", "Controller Address"),
+            ("is_enabled", "Enabled"),
+            ("total_positions", "Total Positions"),
+            ("disabled_at", "Disabled At"),
+            ("disabled_cum_inv_cost", "Disabled Cum Inv Cost"),
+        ])
+        .set_empty_message("No controllers found.");
+
+        println!("{}", output.display_many(controllers, options)?);
         Ok(())
     }
 }

@@ -162,6 +162,14 @@ pub trait LiquidityProviderOps<C> {
     ) -> impl std::future::Future<
         Output = crate::Result<Vec<crate::serde::serde_lp_position::SerdeLpStakingPosition>>,
     >;
+
+    /// Query LP controllers for a specific token mint.
+    fn get_lp_controllers(
+        &self,
+        lp_token_mint: &Pubkey,
+    ) -> impl std::future::Future<
+        Output = crate::Result<Vec<crate::serde::serde_lp_controller::SerdeLpController>>,
+    >;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::Client<C> {
@@ -444,6 +452,16 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         store: &Pubkey,
     ) -> crate::Result<Vec<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
         self.get_lp_positions(store, &self.payer()).await
+    }
+
+    async fn get_lp_controllers(
+        &self,
+        lp_token_mint: &Pubkey,
+    ) -> crate::Result<Vec<crate::serde::serde_lp_controller::SerdeLpController>> {
+        let lp_program = self.lp_program_for_builders();
+        lp_program
+            .query_lp_controllers(self.rpc(), lp_token_mint)
+            .await
     }
 }
 

@@ -23,6 +23,9 @@ pub mod treasury;
 /// LP staking position serialization.
 pub mod serde_lp_position;
 
+/// LP controller serialization.
+pub mod serde_lp_controller;
+
 #[cfg(serde)]
 pub use string_pubkey::pubkey;
 pub use string_pubkey::StringPubkey;

@@ -263,6 +263,54 @@ impl LiquidityProviderProgram {
         Ok(Some(serde_position))
     }
 
+    /// Query all LP controllers for a specific token mint (builder layer implementation)
+    pub async fn query_lp_controllers(
+        &self,
+        client: &solana_client::nonblocking::rpc_client::RpcClient,
+        lp_token_mint: &Pubkey,
+    ) -> crate::Result<Vec<crate::serde::serde_lp_controller::SerdeLpController>> {
+        // First, try to query all LpTokenController accounts to see if any exist
+        let all_controllers_config = ProgramAccountsConfigForRpc {
+            filters: Some(vec![
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+                    0,
+                    gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController::DISCRIMINATOR,
+                )),
+            ]),
+            account_config: RpcAccountInfoConfig {
+                encoding: Some(solana_account_decoder::UiAccountEncoding::Base64),
+                ..RpcAccountInfoConfig::default()
+            },
+        };
+
+        let all_controller_accounts_result =
+            get_program_accounts_with_context(client, &self.id, all_controllers_config).await?;
+        let all_controller_accounts = all_controller_accounts_result.into_value();
+
+        let mut results = Vec::new();
+
+        for (controller_address, account) in all_controller_accounts {
+            // Deserialize controller account
+            let controller: gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController =
+                anchor_lang::AccountDeserialize::try_deserialize(&mut account.data.as_slice())
+                    .map_err(|e| {
+                        crate::Error::custom(format!("Failed to deserialize controller: {e}"))
+                    })?;
+
+            // Check if this controller matches our target lp_token_mint
+            if controller.lp_token_mint == *lp_token_mint {
+                let serde_controller =
+                    crate::serde::serde_lp_controller::SerdeLpController::from_controller(
+                        &controller,
+                        &controller_address,
+                    );
+                results.push(serde_controller);
+            }
+        }
+
+        Ok(results)
+    }
+
     /// Calculate GT reward for a specific position (builder layer implementation)
     /// This implements the same calculation as compute_reward_with_cpi in lib.rs
     pub async fn calculate_gt_reward(
