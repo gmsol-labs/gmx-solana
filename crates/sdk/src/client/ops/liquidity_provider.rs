@@ -175,7 +175,7 @@ pub trait LiquidityProviderOps<C> {
     fn get_lp_global_state(
         &self,
     ) -> impl std::future::Future<
-        Output = crate::Result<gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState>,
+        Output = crate::Result<crate::serde::serde_lp_global_state::SerdeLpGlobalState>,
     >;
 }
 
@@ -473,7 +473,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
 
     async fn get_lp_global_state(
         &self,
-    ) -> crate::Result<gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState> {
+    ) -> crate::Result<crate::serde::serde_lp_global_state::SerdeLpGlobalState> {
         let lp_program = self.lp_program_for_builders();
         lp_program.query_lp_global_state(self.rpc()).await
     }

@@ -26,6 +26,9 @@ pub mod serde_lp_position;
 /// LP controller serialization.
 pub mod serde_lp_controller;
 
+/// LP global state serialization.
+pub mod serde_lp_global_state;
+
 #[cfg(serde)]
 pub use string_pubkey::pubkey;
 pub use string_pubkey::StringPubkey;

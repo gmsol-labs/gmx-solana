@@ -315,16 +315,22 @@ impl LiquidityProviderProgram {
     pub async fn query_lp_global_state(
         &self,
         client: &solana_client::nonblocking::rpc_client::RpcClient,
-    ) -> crate::Result<gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState> {
+    ) -> crate::Result<crate::serde::serde_lp_global_state::SerdeLpGlobalState> {
         let global_state_address = self.find_global_state_address();
 
-        client
+        let global_state = client
             .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState>(
                 &global_state_address,
                 Default::default(),
             )
             .await
-            .map_err(crate::Error::from)
+            .map_err(crate::Error::from)?;
+
+        Ok(
+            crate::serde::serde_lp_global_state::SerdeLpGlobalState::from_global_state(
+                &global_state,
+            ),
+        )
     }
 
     /// Calculate GT reward for a specific position (builder layer implementation)

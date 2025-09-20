@@ -702,7 +702,7 @@ impl Lp {
     /// Display LP Global State information.
     fn display_global_state(
         &self,
-        global_state: &gmsol_sdk::programs::gmsol_liquidity_provider::accounts::GlobalState,
+        global_state: &gmsol_sdk::serde::serde_lp_global_state::SerdeLpGlobalState,
         output: &crate::config::OutputFormat,
     ) -> eyre::Result<()> {
         println!("LP Global State Information:");
@@ -737,23 +737,35 @@ impl Lp {
             "value": global_state.pricing_staleness_seconds
         }));
 
-        // APY Gradient summary (first few buckets)
         state_data.push(serde_json::json!({
-            "field": "APY Gradient [0] (1e20)",
-            "value": global_state.apy_gradient[0].to_string()
+            "field": "PDA Bump",
+            "value": global_state.bump
         }));
 
-        if global_state.apy_gradient.len() > 1 {
+        // APY Gradient summary (first few buckets)
+        if !global_state.apy_gradient.is_empty() {
             state_data.push(serde_json::json!({
-                "field": "APY Gradient [1] (1e20)",
-                "value": global_state.apy_gradient[1].to_string()
+                "field": "APY Gradient [0] (1e20)",
+                "value": global_state.apy_gradient[0].to_string()
             }));
-        }
 
-        if global_state.apy_gradient.len() > 52 {
+            if global_state.apy_gradient.len() > 1 {
+                state_data.push(serde_json::json!({
+                    "field": "APY Gradient [1] (1e20)",
+                    "value": global_state.apy_gradient[1].to_string()
+                }));
+            }
+
+            if global_state.apy_gradient.len() > 52 {
+                state_data.push(serde_json::json!({
+                    "field": "APY Gradient [52] (1e20)",
+                    "value": global_state.apy_gradient[52].to_string()
+                }));
+            }
+
             state_data.push(serde_json::json!({
-                "field": "APY Gradient [52] (1e20)",
-                "value": global_state.apy_gradient[52].to_string()
+                "field": "Total APY Buckets",
+                "value": global_state.apy_gradient.len()
             }));
         }
 
