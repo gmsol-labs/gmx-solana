@@ -49,11 +49,17 @@ enum Command {
     CreateController {
         /// LP token mint address.
         lp_token_mint: Pubkey,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
     },
     /// Disable LP token controller for a specific token mint.
     DisableController {
         /// LP token mint address.
         lp_token_mint: Pubkey,
+        /// Controller index (default: 0).
+        #[arg(long, default_value = "0")]
+        controller_index: u64,
     },
     /// Stake LP tokens (GM or GLV).
     #[cfg(feature = "execute")]
@@ -181,18 +187,20 @@ impl super::Command for Lp {
             Command::InitLp {
                 min_stake_value,
                 initial_apy,
-            } => {
-                // Use a placeholder for gt_mint since it's not actually used in the program logic
-                let placeholder_gt_mint = Pubkey::default();
-                client
-                    .initialize_lp(min_stake_value.to_u128()?, initial_apy.to_u128()?)?
-                    .into_bundle_with_options(options)?
-            }
-            Command::CreateController { lp_token_mint } => client
-                .create_lp_token_controller(lp_token_mint)?
+            } => client
+                .initialize_lp(min_stake_value.to_u128()?, initial_apy.to_u128()?)?
                 .into_bundle_with_options(options)?,
-            Command::DisableController { lp_token_mint } => client
-                .disable_lp_token_controller(store, lp_token_mint)?
+            Command::CreateController {
+                lp_token_mint,
+                controller_index,
+            } => client
+                .create_lp_token_controller(lp_token_mint, *controller_index)?
+                .into_bundle_with_options(options)?,
+            Command::DisableController {
+                lp_token_mint,
+                controller_index,
+            } => client
+                .disable_lp_token_controller(store, lp_token_mint, *controller_index)?
                 .into_bundle_with_options(options)?,
             #[cfg(feature = "execute")]
             Command::Stake {

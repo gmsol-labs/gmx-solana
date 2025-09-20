@@ -43,6 +43,7 @@ pub trait LiquidityProviderOps<C> {
     fn create_lp_token_controller(
         &self,
         lp_token_mint: &Pubkey,
+        controller_index: u64,
     ) -> crate::Result<TransactionBuilder<'_, C>>;
 
     /// Disable LP token controller for a specific token mint.
@@ -50,6 +51,7 @@ pub trait LiquidityProviderOps<C> {
         &self,
         store: &Pubkey,
         lp_token_mint: &Pubkey,
+        controller_index: u64,
     ) -> crate::Result<TransactionBuilder<'_, C>>;
 
     /// Unstake LP token.
@@ -177,11 +179,13 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
     fn create_lp_token_controller(
         &self,
         lp_token_mint: &Pubkey,
+        controller_index: u64,
     ) -> crate::Result<TransactionBuilder<'_, C>> {
         let builder = CreateLpTokenController::builder()
             .authority(self.payer())
             .lp_program(self.lp_program_for_builders().clone())
             .lp_token_mint(*lp_token_mint)
+            .controller_index(controller_index)
             .build();
 
         let ag = builder.into_atomic_group(&())?;
@@ -192,12 +196,14 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         &self,
         store: &Pubkey,
         lp_token_mint: &Pubkey,
+        controller_index: u64,
     ) -> crate::Result<TransactionBuilder<'_, C>> {
         let builder = DisableLpTokenController::builder()
             .authority(self.payer())
             .store_program(self.store_program_for_builders(store))
             .lp_program(self.lp_program_for_builders().clone())
             .lp_token_mint(*lp_token_mint)
+            .controller_index(controller_index)
             .build();
 
         let ag = builder.into_atomic_group(&())?;
