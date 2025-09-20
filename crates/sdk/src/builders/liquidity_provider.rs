@@ -169,6 +169,7 @@ impl LiquidityProviderProgram {
                     &position.lp_mint,
                     &position.owner,
                     position.position_id,
+                    controller.controller_index,
                     &store_account.0,
                 )
                 .await?;
@@ -196,11 +197,15 @@ impl LiquidityProviderProgram {
         owner: &Pubkey,
         position_id: u64,
         lp_token_mint: &Pubkey,
+        controller_index: u64,
     ) -> crate::Result<Option<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
         // Get global state and addresses
         let global_state_address = self.find_global_state_address();
-        let controller_address =
-            self.find_lp_token_controller_address(&global_state_address, lp_token_mint, 0);
+        let controller_address = self.find_lp_token_controller_address(
+            &global_state_address,
+            lp_token_mint,
+            controller_index,
+        );
         let position_address =
             self.find_stake_position_address(owner, position_id, &controller_address);
 
@@ -241,6 +246,7 @@ impl LiquidityProviderProgram {
                 lp_token_mint,
                 owner,
                 position_id,
+                controller_index,
                 &store_account.0,
             )
             .await?;
@@ -266,6 +272,7 @@ impl LiquidityProviderProgram {
         lp_token_mint: &Pubkey,
         owner: &Pubkey,
         position_id: u64,
+        controller_index: u64,
     ) -> crate::Result<u128> {
         // Get store account
         let store_account = client
@@ -277,6 +284,7 @@ impl LiquidityProviderProgram {
             lp_token_mint,
             owner,
             position_id,
+            controller_index,
             &store_account.0,
         )
         .await
@@ -290,12 +298,16 @@ impl LiquidityProviderProgram {
         lp_token_mint: &Pubkey,
         owner: &Pubkey,
         position_id: u64,
+        controller_index: u64,
         store_account: &gmsol_programs::gmsol_store::accounts::Store,
     ) -> crate::Result<u128> {
         // Get required accounts for GT calculation (store account already provided)
         let global_state_address = self.find_global_state_address();
-        let controller_address =
-            self.find_lp_token_controller_address(&global_state_address, lp_token_mint, 0);
+        let controller_address = self.find_lp_token_controller_address(
+            &global_state_address,
+            lp_token_mint,
+            controller_index,
+        );
         let position_address =
             self.find_stake_position_address(owner, position_id, &controller_address);
 
@@ -608,6 +620,10 @@ pub struct StakeLpToken {
     pub position_id: Option<u64>,
     /// Stake amount.
     pub amount: NonZeroU64,
+    /// Controller index.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub controller_index: u64,
     /// Feeds Parser.
     #[cfg_attr(serde, serde(skip))]
     #[builder(default)]
@@ -655,9 +671,11 @@ impl StakeLpToken {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        let controller =
-            self.lp_program
-                .find_lp_token_controller_address(&global_state, &lp_mint, 0);
+        let controller = self.lp_program.find_lp_token_controller_address(
+            &global_state,
+            &lp_mint,
+            self.controller_index,
+        );
 
         let position =
             self.lp_program
@@ -696,9 +714,11 @@ impl StakeLpToken {
         } = self.shared_args();
         let token_program_id = anchor_spl::token::ID;
         let market = self.store_program.find_market_address(&lp_mint);
-        let controller =
-            self.lp_program
-                .find_lp_token_controller_address(&global_state, &lp_mint, 0);
+        let controller = self.lp_program.find_lp_token_controller_address(
+            &global_state,
+            &lp_mint,
+            self.controller_index,
+        );
 
         Ok(self
             .lp_program
@@ -756,9 +776,11 @@ impl StakeLpToken {
         )
         .0;
 
-        let controller =
-            self.lp_program
-                .find_lp_token_controller_address(&global_state, &lp_mint, 0);
+        let controller = self.lp_program.find_lp_token_controller_address(
+            &global_state,
+            &lp_mint,
+            self.controller_index,
+        );
 
         Ok(self
             .lp_program
@@ -1116,6 +1138,10 @@ pub struct UnstakeLpToken {
     pub position_id: u64,
     /// Unstake amount.
     pub unstake_amount: u64,
+    /// Controller index.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub controller_index: u64,
 }
 
 impl UnstakeLpToken {
@@ -1137,9 +1163,11 @@ impl UnstakeLpToken {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        let controller =
-            self.lp_program
-                .find_lp_token_controller_address(&global_state, &lp_mint, 0);
+        let controller = self.lp_program.find_lp_token_controller_address(
+            &global_state,
+            &lp_mint,
+            self.controller_index,
+        );
 
         let position =
             self.lp_program
@@ -1571,6 +1599,10 @@ pub struct CalculateGtReward {
     pub lp_token_mint: StringPubkey,
     /// Position ID.
     pub position_id: u64,
+    /// Controller index.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub controller_index: u64,
 }
 
 /// Builder for claiming GT rewards instruction.
@@ -1595,6 +1627,10 @@ pub struct ClaimGtReward {
     pub lp_token_mint: StringPubkey,
     /// Position ID.
     pub position_id: u64,
+    /// Controller index.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub controller_index: u64,
 }
 
 impl IntoAtomicGroup for CalculateGtReward {
@@ -1607,9 +1643,11 @@ impl IntoAtomicGroup for CalculateGtReward {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        let controller =
-            self.lp_program
-                .find_lp_token_controller_address(&global_state, &lp_mint, 0);
+        let controller = self.lp_program.find_lp_token_controller_address(
+            &global_state,
+            &lp_mint,
+            self.controller_index,
+        );
 
         let position =
             self.lp_program
@@ -1646,9 +1684,11 @@ impl IntoAtomicGroup for ClaimGtReward {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        let controller =
-            self.lp_program
-                .find_lp_token_controller_address(&global_state, &lp_mint, 0);
+        let controller = self.lp_program.find_lp_token_controller_address(
+            &global_state,
+            &lp_mint,
+            self.controller_index,
+        );
 
         let position =
             self.lp_program
