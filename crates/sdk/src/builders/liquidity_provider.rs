@@ -200,7 +200,7 @@ impl LiquidityProviderProgram {
         // Get global state and addresses
         let global_state_address = self.find_global_state_address();
         let controller_address =
-            self.find_lp_token_controller_address(&global_state_address, lp_token_mint);
+            self.find_lp_token_controller_address(&global_state_address, lp_token_mint, 0);
         let position_address =
             self.find_stake_position_address(owner, position_id, &controller_address);
 
@@ -295,7 +295,7 @@ impl LiquidityProviderProgram {
         // Get required accounts for GT calculation (store account already provided)
         let global_state_address = self.find_global_state_address();
         let controller_address =
-            self.find_lp_token_controller_address(&global_state_address, lp_token_mint);
+            self.find_lp_token_controller_address(&global_state_address, lp_token_mint, 0);
         let position_address =
             self.find_stake_position_address(owner, position_id, &controller_address);
 
@@ -984,6 +984,10 @@ pub struct CreateLpTokenController {
     /// LP token mint address.
     #[builder(setter(into))]
     pub lp_token_mint: StringPubkey,
+    /// Controller index.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub controller_index: u64,
 }
 
 impl IntoAtomicGroup for CreateLpTokenController {
@@ -994,14 +998,17 @@ impl IntoAtomicGroup for CreateLpTokenController {
         let mut insts = AtomicGroup::new(&authority);
 
         let global_state = self.lp_program.find_global_state_address();
-        let controller = self
-            .lp_program
-            .find_lp_token_controller_address(&global_state, &self.lp_token_mint.0);
+        let controller = self.lp_program.find_lp_token_controller_address(
+            &global_state,
+            &self.lp_token_mint.0,
+            self.controller_index,
+        );
 
         let instruction = self
             .lp_program
             .anchor_instruction(args::CreateLpTokenController {
                 lp_token_mint: self.lp_token_mint.0,
+                controller_index: self.controller_index,
             })
             .anchor_accounts(
                 accounts::CreateLpTokenController {
@@ -1039,6 +1046,10 @@ pub struct DisableLpTokenController {
     /// LP token mint address.
     #[builder(setter(into))]
     pub lp_token_mint: StringPubkey,
+    /// Controller index.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub controller_index: u64,
 }
 
 impl IntoAtomicGroup for DisableLpTokenController {
@@ -1049,9 +1060,11 @@ impl IntoAtomicGroup for DisableLpTokenController {
         let mut insts = AtomicGroup::new(&authority);
 
         let global_state = self.lp_program.find_global_state_address();
-        let controller = self
-            .lp_program
-            .find_lp_token_controller_address(&global_state, &self.lp_token_mint.0);
+        let controller = self.lp_program.find_lp_token_controller_address(
+            &global_state,
+            &self.lp_token_mint.0,
+            self.controller_index,
+        );
 
         let instruction = self
             .lp_program
@@ -1124,9 +1137,9 @@ impl UnstakeLpToken {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        let controller = self
-            .lp_program
-            .find_lp_token_controller_address(&global_state, &lp_mint);
+        let controller =
+            self.lp_program
+                .find_lp_token_controller_address(&global_state, &lp_mint, 0);
 
         let position =
             self.lp_program
@@ -1594,9 +1607,9 @@ impl IntoAtomicGroup for CalculateGtReward {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        let controller = self
-            .lp_program
-            .find_lp_token_controller_address(&global_state, &lp_mint);
+        let controller =
+            self.lp_program
+                .find_lp_token_controller_address(&global_state, &lp_mint, 0);
 
         let position =
             self.lp_program
@@ -1633,9 +1646,9 @@ impl IntoAtomicGroup for ClaimGtReward {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        let controller = self
-            .lp_program
-            .find_lp_token_controller_address(&global_state, &lp_mint);
+        let controller =
+            self.lp_program
+                .find_lp_token_controller_address(&global_state, &lp_mint, 0);
 
         let position =
             self.lp_program
