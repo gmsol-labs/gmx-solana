@@ -21,6 +21,7 @@ use gmsol_utils::{
     token_config::{token_records, TokensWithFeed},
 };
 use rand::Rng;
+#[cfg(feature = "client")]
 use solana_client::{
     rpc_config::RpcAccountInfoConfig,
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
@@ -31,8 +32,10 @@ use solana_sdk::{
 };
 use typed_builder::TypedBuilder;
 
+#[cfg(feature = "client")]
+use crate::client::accounts::{get_program_accounts_with_context, ProgramAccountsConfigForRpc};
+
 use crate::{
-    client::accounts::{get_program_accounts_with_context, ProgramAccountsConfigForRpc},
     serde::{
         serde_lp_position::{
             fallback_lp_token_symbol, LpPositionComputedData, SerdeLpStakingPosition,
@@ -105,6 +108,7 @@ impl LiquidityProviderProgram {
     }
 
     /// Query all LP staking positions for a specific owner (builder layer implementation)
+    #[cfg(feature = "client")]
     pub async fn query_lp_positions(
         &self,
         client: &solana_client::nonblocking::rpc_client::RpcClient,
@@ -190,6 +194,7 @@ impl LiquidityProviderProgram {
     }
 
     /// Query a specific LP staking position (builder layer implementation)
+    #[cfg(feature = "client")]
     pub async fn query_lp_position(
         &self,
         client: &solana_client::nonblocking::rpc_client::RpcClient,
@@ -264,6 +269,7 @@ impl LiquidityProviderProgram {
     }
 
     /// Query all LP controllers for a specific token mint (builder layer implementation)
+    #[cfg(feature = "client")]
     pub async fn query_lp_controllers(
         &self,
         client: &solana_client::nonblocking::rpc_client::RpcClient,
@@ -312,6 +318,7 @@ impl LiquidityProviderProgram {
     }
 
     /// Query LP Global State (builder layer implementation)
+    #[cfg(feature = "client")]
     pub async fn query_lp_global_state(
         &self,
         client: &solana_client::nonblocking::rpc_client::RpcClient,
@@ -335,6 +342,7 @@ impl LiquidityProviderProgram {
 
     /// Calculate GT reward for a specific position (builder layer implementation)
     /// This implements the same calculation as compute_reward_with_cpi in lib.rs
+    #[cfg(feature = "client")]
     pub async fn calculate_gt_reward(
         &self,
         client: &solana_client::nonblocking::rpc_client::RpcClient,
@@ -362,6 +370,7 @@ impl LiquidityProviderProgram {
 
     /// Calculate GT reward for a specific position with pre-fetched store data (optimized version)
     /// This implements the same calculation as compute_reward_with_cpi in lib.rs
+    #[cfg(feature = "client")]
     pub async fn calculate_gt_reward_with_store(
         &self,
         client: &solana_client::nonblocking::rpc_client::RpcClient,
@@ -927,6 +936,7 @@ impl StakeLpTokenHint {
     }
 }
 
+#[cfg(feature = "client")]
 impl FromRpcClientWith<StakeLpToken> for StakeLpTokenHint {
     async fn from_rpc_client_with<'a>(
         builder: &'a StakeLpToken,
