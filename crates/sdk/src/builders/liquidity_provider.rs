@@ -1,25 +1,24 @@
 use std::{collections::BTreeSet, num::NonZeroU64};
 
 use anchor_lang::system_program;
+use gmsol_programs::gmsol_liquidity_provider::client::{accounts, args};
+use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup, Program, ProgramExt};
+use gmsol_utils::{oracle::PriceProviderKind, token_config::TokensWithFeed};
+
+#[cfg(feature = "client")]
 use gmsol_model::utils::apply_factor;
+#[cfg(feature = "client")]
 use gmsol_programs::{
     anchor_lang::Discriminator,
-    gmsol_liquidity_provider::client::{accounts, args},
     gmsol_store::{
         accounts::{Glv, Market, Store},
         constants::MARKET_DECIMALS,
     },
 };
-use gmsol_solana_utils::{
-    client_traits::{FromRpcClientWith, RpcClientExt},
-    AtomicGroup, IntoAtomicGroup, Program, ProgramExt,
-};
-use gmsol_utils::{
-    oracle::PriceProviderKind,
-    pubkey::optional_address,
-    swap::SwapActionParams,
-    token_config::{token_records, TokensWithFeed},
-};
+#[cfg(feature = "client")]
+use gmsol_solana_utils::client_traits::{FromRpcClientWith, RpcClientExt};
+#[cfg(feature = "client")]
+use gmsol_utils::{pubkey::optional_address, swap::SwapActionParams, token_config::token_records};
 use rand::Rng;
 #[cfg(feature = "client")]
 use solana_client::{
@@ -37,18 +36,21 @@ use crate::client::accounts::{get_program_accounts_with_context, ProgramAccounts
 
 use crate::{
     serde::{
-        serde_lp_position::{
-            fallback_lp_token_symbol, LpPositionComputedData, SerdeLpStakingPosition,
-        },
         serde_price_feed::{to_tokens_with_feeds, SerdeTokenRecord},
         StringPubkey,
     },
     utils::{
         glv::split_to_accounts,
-        market::ordered_tokens,
-        token_map::{FeedAddressMap, FeedsParser, TokenMap},
-        zero_copy::ZeroCopy,
+        token_map::{FeedAddressMap, FeedsParser},
     },
+};
+
+#[cfg(feature = "client")]
+use crate::{
+    serde::serde_lp_position::{
+        fallback_lp_token_symbol, LpPositionComputedData, SerdeLpStakingPosition,
+    },
+    utils::{market::ordered_tokens, token_map::TokenMap, zero_copy::ZeroCopy},
 };
 
 use super::StoreProgram;
@@ -57,14 +59,15 @@ use super::StoreProgram;
 // Constants
 // ============================================================================
 
-/// Seconds per year for APY calculations (365.25 * 24 * 3600)
-const SECONDS_PER_YEAR: u128 = 31_557_600;
-
 /// Seconds per week for APY gradient calculations (7 * 24 * 3600)
 const SECONDS_PER_WEEK: u128 = 7 * 24 * 3600;
 
 /// Last index of APY buckets (APY_BUCKETS - 1 = 53 - 1 = 52)
 const APY_LAST_INDEX: usize = 52;
+
+#[cfg(feature = "client")]
+/// Seconds per year for APY calculations (365.25 * 24 * 3600)
+const SECONDS_PER_YEAR: u128 = 31_557_600;
 
 // ============================================================================
 // Structs and Implementations
@@ -598,6 +601,7 @@ impl LiquidityProviderProgram {
     }
 
     /// Create serde position from raw position data (helper for ops layer)
+    #[cfg(feature = "client")]
     pub fn create_serde_position(
         position: &gmsol_programs::gmsol_liquidity_provider::accounts::Position,
         controller: &gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController,
@@ -629,6 +633,7 @@ impl LiquidityProviderProgram {
 
     /// Compute position data (APY and GT rewards) - internal helper
     /// Note: GT rewards are set to 0 for display purposes. Use calculate_gt_reward() method for precise GT calculations.
+    #[cfg(feature = "client")]
     fn compute_position_data(
         position: &gmsol_programs::gmsol_liquidity_provider::accounts::Position,
         controller: &gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController,
@@ -660,6 +665,7 @@ impl LiquidityProviderProgram {
 }
 
 /// Internal helper struct for computed position data
+#[cfg(feature = "client")]
 struct PositionComputedData {
     current_apy: u128,
 }
