@@ -21,12 +21,15 @@ pub mod serde_price_feed;
 pub mod treasury;
 
 /// LP staking position serialization.
+#[cfg(liquidity_provider)]
 pub mod serde_lp_position;
 
 /// LP controller serialization.
+#[cfg(liquidity_provider)]
 pub mod serde_lp_controller;
 
 /// LP global state serialization.
+#[cfg(liquidity_provider)]
 pub mod serde_lp_global_state;
 
 #[cfg(serde)]

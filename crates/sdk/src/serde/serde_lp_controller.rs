@@ -1,8 +1,10 @@
+#[cfg(liquidity_provider)]
 use gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController;
 
 use super::StringPubkey;
 
 /// Serializable version of LP token controller [`LpTokenController`].
+#[cfg(liquidity_provider)]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SerdeLpController {
@@ -24,6 +26,7 @@ pub struct SerdeLpController {
     pub disabled_cum_inv_cost: String,
 }
 
+#[cfg(liquidity_provider)]
 impl SerdeLpController {
     /// Create from LP [`LpTokenController`] with controller address.
     pub fn from_controller(

@@ -1,3 +1,4 @@
+#[cfg(liquidity_provider)]
 use gmsol_programs::gmsol_liquidity_provider::accounts::GlobalState;
 
 use crate::utils::Value;
@@ -5,6 +6,7 @@ use crate::utils::Value;
 use super::StringPubkey;
 
 /// Serializable version of LP Global State [`GlobalState`].
+#[cfg(liquidity_provider)]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SerdeLpGlobalState {
@@ -25,6 +27,7 @@ pub struct SerdeLpGlobalState {
     pub bump: u8,
 }
 
+#[cfg(liquidity_provider)]
 impl SerdeLpGlobalState {
     /// Create from LP [`GlobalState`].
     pub fn from_global_state(global_state: &GlobalState) -> Self {

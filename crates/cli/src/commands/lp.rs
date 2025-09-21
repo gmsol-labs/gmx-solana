@@ -679,11 +679,11 @@ impl Lp {
         output: &crate::config::OutputFormat,
     ) -> eyre::Result<()> {
         if controllers.is_empty() {
-            println!("No controllers found for LP token: {}", lp_token_mint);
+            println!("No controllers found for LP token: {lp_token_mint}");
             return Ok(());
         }
 
-        println!("Controllers for LP token: {}", lp_token_mint);
+        println!("Controllers for LP token: {lp_token_mint}");
 
         let options = DisplayOptions::table_projection([
             ("controller_index", "Index"),

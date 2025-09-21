@@ -1,3 +1,4 @@
+#[cfg(liquidity_provider)]
 use gmsol_programs::gmsol_liquidity_provider::accounts::{LpTokenController, Position};
 
 use crate::utils::{Amount, GmAmount, Value};
@@ -5,6 +6,7 @@ use crate::utils::{Amount, GmAmount, Value};
 use super::StringPubkey;
 
 /// Additional computed data for LP position.
+#[cfg(liquidity_provider)]
 #[derive(Debug, Clone)]
 pub struct LpPositionComputedData {
     /// Claimable GT rewards (calculated using precise on-chain logic) - u128 to avoid overflow.
@@ -19,6 +21,7 @@ pub struct LpPositionComputedData {
 }
 
 /// Serializable version of LP staking position [`Position`].
+#[cfg(liquidity_provider)]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SerdeLpStakingPosition {
@@ -50,6 +53,7 @@ pub struct SerdeLpStakingPosition {
     pub controller_enabled: bool,
 }
 
+#[cfg(liquidity_provider)]
 impl SerdeLpStakingPosition {
     /// Create from LP [`Position`] with additional computed data.
     pub fn from_position(
@@ -89,6 +93,7 @@ impl SerdeLpStakingPosition {
 }
 
 /// Helper to create a fallback symbol from mint address when token mapping fails.
+#[cfg(liquidity_provider)]
 pub fn fallback_lp_token_symbol(mint: &StringPubkey) -> String {
     let mint_str = mint.to_string();
     // Take first 4 and last 4 characters for abbreviated display
