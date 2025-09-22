@@ -2232,6 +2232,26 @@ pub mod gmsol_store {
         UpdateOrderV2::invoke(ctx, &params)
     }
 
+    /// Set whether to keep position account for an order by the owner.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](SetShouldKeepPositionAccount)*
+    ///
+    /// # Arguments
+    /// - `keep`: Whether the position account should be kept.
+    ///
+    /// # Errors
+    /// - The [`owner`](SetShouldKeepPositionAccount::owner) must be a signer and the owner of the `order`.
+    /// - The [`order`](SetShouldKeepPositionAccount::order) must be:
+    ///   - Initialized and owned by the `owner`
+    ///   - In a pending state
+    pub fn set_should_keep_position_account(
+        ctx: Context<SetShouldKeepPositionAccount>,
+        keep: bool,
+    ) -> Result<()> {
+        SetShouldKeepPositionAccount::invoke(ctx, keep)
+    }
+
     /// Execute an increase/swap order by keepers.
     ///
     /// # Accounts

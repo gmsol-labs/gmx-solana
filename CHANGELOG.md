@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Added `MarketConfigPermissions` store and `set_market_config_updatable` instruction for managing the permissions for updating market configs.
 - programs(store): Added `OrderFlag` and `flags` field to `OrderActionParams`
 - programs(store): Added logic to keep empty position account for orders with `OrderFlag::ShouldKeepPositionAccount` set.
+- programs(store): Added `set_should_keep_position_account` instrcution.
 - sdk(sdk): Added `try_deserialize_zero_copy_from_base64_with_options` utility function.
 - sdk(js): Added decode methods with `no_discriminator` option for JsMarket and JsPosition.
 - sdk(js): Added `add_create_orders_builder` function.
@@ -62,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added support for `update_closed_state` instruction.
 - sdk(sdk): Added support for `set_market_config_updatable` instruction.
 - sdk(sdk): Added support for `initialize` instruction for liquidity provider program.
+- sdk(sdk): Added support for `set_should_keep_position_account` instruction.
 - cli: Added `lp init-lp` command.
 
 ### Changed

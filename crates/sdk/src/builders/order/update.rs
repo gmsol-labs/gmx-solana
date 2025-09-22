@@ -125,6 +125,47 @@ impl IntoAtomicGroup for UpdateOrder {
     }
 }
 
+/// Builder for the `set_should_keep_position_account` instruction.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct SetShouldKeepPositionAccount {
+    /// Program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub program: StoreProgram,
+    /// Payer (a.k.a. owner).
+    #[builder(setter(into))]
+    pub payer: StringPubkey,
+    /// Order.
+    #[builder(setter(into))]
+    pub order: StringPubkey,
+    /// Whether to keep position account.
+    pub keep: bool,
+}
+
+impl IntoAtomicGroup for SetShouldKeepPositionAccount {
+    type Hint = ();
+
+    fn into_atomic_group(self, _hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let owner = self.payer.0;
+        let ix = self
+            .program
+            .anchor_instruction(args::SetShouldKeepPositionAccount { keep: self.keep })
+            .anchor_accounts(
+                accounts::SetShouldKeepPositionAccount {
+                    owner,
+                    order: self.order.0,
+                },
+                false,
+            )
+            .build();
+
+        Ok(AtomicGroup::with_instructions(&self.payer, [ix]))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use gmsol_solana_utils::transaction_builder::default_before_sign;
