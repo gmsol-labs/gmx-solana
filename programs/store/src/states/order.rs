@@ -4,7 +4,10 @@ use gmsol_model::{
     action::decrease_position::{DecreasePositionReport, DecreasePositionSwapType},
     price::Price,
 };
-use gmsol_utils::InitSpace as _;
+use gmsol_utils::{
+    order::{OrderFlag, MAX_ORDER_FLAGS},
+    InitSpace as _,
+};
 
 use crate::{
     events::{EventEmitter, GtUpdated, OrderRemoved},
@@ -23,6 +26,8 @@ use super::{
 };
 
 pub use gmsol_utils::order::{OrderKind, OrderSide};
+
+gmsol_utils::flags!(OrderFlag, MAX_ORDER_FLAGS, u8);
 
 /// Update Order Params.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace, Copy)]
@@ -671,8 +676,10 @@ pub struct OrderActionParams {
     side: u8,
     /// Decrease position swap type.
     decrease_position_swap_type: u8,
+    /// Order flags.
+    flags: OrderFlagContainer,
     #[cfg_attr(feature = "debug", debug(skip))]
-    padding_1: [u8; 5],
+    padding_1: [u8; 4],
     /// Collateral/Output token.
     pub(crate) collateral_token: Pubkey,
     /// Position address.

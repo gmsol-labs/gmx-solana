@@ -1,5 +1,8 @@
 use anchor_lang::prelude::*;
 
+/// Max number of order flags.
+pub const MAX_ORDER_FLAGS: usize = 8;
+
 /// Order Kind.
 #[derive(
     AnchorSerialize,
@@ -176,3 +179,13 @@ pub enum TradeFlag {
 }
 
 crate::flags!(TradeFlag, 8, u8);
+
+/// Order Flags.
+#[repr(u8)]
+#[non_exhaustive]
+#[derive(num_enum::IntoPrimitive, num_enum::TryFromPrimitive)]
+pub enum OrderFlag {
+    /// Whether to keep position account when empty.
+    ShouldKeepPositionAccount,
+    // CHECK: should have no more than `MAX_ORDER_FLAGS` of flags.
+}
