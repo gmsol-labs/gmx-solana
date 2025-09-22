@@ -64,7 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- programs(store): Refactored price flag in oracle price map into `OraclePriceFlag`
+- programs(store): Refactored price flag in oracle price map into `OraclePriceFlag`.
+- programs(store): Allow creating and executing order to increase collateral while market is closed.
 - cli: Improved prompt when creating timelock instruction buffers.
 - sdk(decode): Replaced `solana-transaction-status` with `solana-transaction-status-client-types` to simplify dependency.
 

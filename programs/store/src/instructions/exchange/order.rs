@@ -353,6 +353,15 @@ impl<'info> internal::Create<'info, Order> for CreateOrderV2<'info> {
     ) -> Result<()> {
         self.transfer_tokens(params)?;
 
+        let kind = params.kind;
+        let allow_closed = match kind {
+            // Allow creating order to increase collateral while the market is closed.
+            OrderKind::MarketIncrease => {
+                params.size_delta_value == 0 && params.initial_collateral_delta_amount != 0
+            }
+            _ => false,
+        };
+
         let ops = CreateOrderOperation::builder()
             .order(self.order.clone())
             .market(self.market.clone())
@@ -372,9 +381,9 @@ impl<'info> internal::Create<'info, Order> for CreateOrderV2<'info> {
                 &self.event_authority,
                 bumps.event_authority,
             )))
+            .allow_closed(allow_closed)
             .build();
 
-        let kind = params.kind;
         match kind {
             OrderKind::MarketSwap | OrderKind::LimitSwap => {
                 let swap_in = self
