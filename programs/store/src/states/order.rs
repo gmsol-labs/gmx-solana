@@ -924,4 +924,9 @@ impl OrderActionParams {
     pub fn valid_from_ts(&self) -> i64 {
         self.valid_from_ts
     }
+
+    /// Returns whether the empty position account should be kept.
+    pub(crate) fn should_keep_position_account(&self) -> bool {
+        self.flags.get_flag(OrderFlag::ShouldKeepPositionAccount)
+    }
 }

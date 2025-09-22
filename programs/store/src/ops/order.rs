@@ -915,6 +915,7 @@ impl ExecuteOrderOperation<'_, '_> {
                         .flatten()
                         .expect("must have an expiration time"),
                 );
+                // NOTE: Currently, the position account is not closed on order expiry.
                 return Ok((false, Box::new(TransferOut::new_failed()), false));
             }
             Err(err) => {
@@ -952,7 +953,8 @@ impl ExecuteOrderOperation<'_, '_> {
             should_send_trade_event,
         )?;
 
-        if remove_position {
+        let keep_position_account = self.order.load()?.params().should_keep_position_account();
+        if remove_position && !keep_position_account {
             self.close_position()?;
         }
 
