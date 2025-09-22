@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Introduced flag `enable_market_closed_params` to control activation of closed-market configs.
 - programs(store): Added a new `MARKET_CONFIG_KEEPER` role with permissions to update market configs.
 - programs(store): Added `MarketConfigPermissions` store and `set_market_config_updatable` instruction for managing the permissions for updating market configs.
+- programs(store): Added `OrderFlag` and `flags` field to `OrderActionParams`
 - sdk(sdk): Added `try_deserialize_zero_copy_from_base64_with_options` utility function.
 - sdk(js): Added decode methods with `no_discriminator` option for JsMarket and JsPosition.
 - sdk(js): Added `add_create_orders_builder` function.

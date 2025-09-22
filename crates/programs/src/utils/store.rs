@@ -185,7 +185,7 @@ mod utils {
             VirtualInventoryFlag, MAX_MARKET_CONFIG_FACTORS, MAX_MARKET_CONFIG_FLAGS,
             MAX_MARKET_FLAGS, MAX_VIRTUAL_INVENTORY_FLAGS,
         },
-        order::{self, PositionKind, TradeFlag, TradeFlagContainer},
+        order::{self, OrderFlag, PositionKind, TradeFlag, TradeFlagContainer, MAX_ORDER_FLAGS},
         pubkey::{self, optional_address},
         swap::{self, HasSwapParams},
         token_config::{self, TokensCollector},
@@ -197,9 +197,10 @@ mod utils {
         types::{
             ActionFlagContainer, ActionHeader, GlvMarketConfig, GlvMarketFlagContainer, GlvMarkets,
             GlvMarketsEntry, MarketConfig, MarketConfigFactorContainer, MarketConfigFlagContainer,
-            MarketFlagContainer, MarketMeta, Members, MembersEntry, OrderActionParams, OrderKind,
-            RoleMap, RoleMapEntry, RoleMetadata, RoleStore, SwapActionParams, TokenAndAccount,
-            Tokens, TokensEntry, UpdateTokenConfigParams, VirtualInventoryFlagContainer,
+            MarketFlagContainer, MarketMeta, Members, MembersEntry, OrderActionParams,
+            OrderFlagContainer, OrderKind, RoleMap, RoleMapEntry, RoleMetadata, RoleStore,
+            SwapActionParams, TokenAndAccount, Tokens, TokensEntry, UpdateTokenConfigParams,
+            VirtualInventoryFlagContainer,
         },
     };
 
@@ -227,6 +228,7 @@ mod utils {
     impl_flags!(VirtualInventoryFlag, MAX_VIRTUAL_INVENTORY_FLAGS, u8);
     impl_flags!(MarketConfigFlag, MAX_MARKET_CONFIG_FLAGS, u128);
     impl_flags!(MarketConfigFactor, MAX_MARKET_CONFIG_FACTORS, u128);
+    impl_flags!(OrderFlag, MAX_ORDER_FLAGS, u8);
 
     impl From<SwapActionParams> for swap::SwapActionParams {
         fn from(params: SwapActionParams) -> Self {
