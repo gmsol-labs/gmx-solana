@@ -75,9 +75,12 @@ enum Command {
         /// Optional position ID (if not provided, will generate randomly).
         #[arg(long)]
         position_id: Option<u64>,
-        /// Controller index (default: 0).
-        #[arg(long, default_value = "0")]
-        controller_index: u64,
+        /// Controller index.
+        #[arg(long)]
+        controller_index: Option<u64>,
+        /// Controller address (if provided, takes precedence over controller_index).
+        #[arg(long)]
+        controller_address: Option<Pubkey>,
         /// Executor arguments for oracle handling.
         #[command(flatten)]
         args: crate::commands::exchange::executor::ExecutorArgs,
@@ -231,6 +234,7 @@ impl super::Command for Lp {
                 amount,
                 position_id,
                 controller_index,
+                controller_address,
                 args,
             } => {
                 // Ensure we're not in instruction buffer mode since executor needs to send transactions
@@ -244,7 +248,20 @@ impl super::Command for Lp {
                 let stake_amount = NonZeroU64::new(amount_u64)
                     .ok_or_else(|| eyre::eyre!("Stake amount must be greater than zero"))?;
 
-                // Create stake builder with position ID if provided
+                // Validate that at least one controller parameter is provided
+                if controller_index.is_none() && controller_address.is_none() {
+                    return Err(eyre::eyre!(
+                        "Must provide either --controller-index or --controller-address"
+                    ));
+                }
+
+                // Determine which controller to use (address takes precedence)
+                let (final_controller_index, final_controller_address) = match controller_address {
+                    Some(addr) => (0, Some(*addr)), // Use address, set index to 0 (will be ignored)
+                    None => (controller_index.unwrap(), None), // Use index
+                };
+
+                // Create stake builder with controller parameters
                 let builder = match position_id {
                     Some(pos_id) => client
                         .stake_lp_token(
@@ -253,7 +270,8 @@ impl super::Command for Lp {
                             lp_token_mint,
                             oracle,
                             stake_amount,
-                            *controller_index,
+                            final_controller_index,
+                            final_controller_address,
                         )
                         .with_position_id(*pos_id),
                     None => client.stake_lp_token(
@@ -262,7 +280,8 @@ impl super::Command for Lp {
                         lp_token_mint,
                         oracle,
                         stake_amount,
-                        *controller_index,
+                        final_controller_index,
+                        final_controller_address,
                     ),
                 };
 

@@ -74,6 +74,7 @@ pub trait LiquidityProviderOps<C> {
         oracle: &Pubkey,
         amount: NonZeroU64,
         controller_index: u64,
+        controller_address: Option<Pubkey>,
     ) -> StakeLpTokenBuilder<'_, C>;
 
     /// Calculate GT reward for a position.
@@ -262,6 +263,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         oracle: &Pubkey,
         amount: NonZeroU64,
         controller_index: u64,
+        controller_address: Option<Pubkey>,
     ) -> StakeLpTokenBuilder<'_, C> {
         StakeLpTokenBuilder {
             client: self,
@@ -279,6 +281,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
                         .build(),
                 )
                 .controller_index(controller_index)
+                .controller_address(controller_address.map(|addr| addr.into()))
                 .build(),
             hint: None,
         }

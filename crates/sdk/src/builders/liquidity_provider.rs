@@ -709,6 +709,10 @@ pub struct StakeLpToken {
     #[cfg_attr(serde, serde(default))]
     #[builder(default)]
     pub controller_index: u64,
+    /// Controller address (if provided, takes precedence over controller_index).
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default, setter(into))]
+    pub controller_address: Option<StringPubkey>,
     /// Feeds Parser.
     #[cfg_attr(serde, serde(skip))]
     #[builder(default)]
@@ -756,11 +760,17 @@ impl StakeLpToken {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        let controller = self.lp_program.find_lp_token_controller_address(
-            &global_state,
-            &lp_mint,
-            self.controller_index,
-        );
+        // If controller_address is provided, use it directly (takes precedence over controller_index)
+        // Otherwise, calculate controller address from controller_index
+        let controller = if let Some(addr) = &self.controller_address {
+            addr.0
+        } else {
+            self.lp_program.find_lp_token_controller_address(
+                &global_state,
+                &lp_mint,
+                self.controller_index,
+            )
+        };
 
         let position =
             self.lp_program
@@ -799,11 +809,17 @@ impl StakeLpToken {
         } = self.shared_args();
         let token_program_id = anchor_spl::token::ID;
         let market = self.store_program.find_market_address(&lp_mint);
-        let controller = self.lp_program.find_lp_token_controller_address(
-            &global_state,
-            &lp_mint,
-            self.controller_index,
-        );
+
+        // Use controller_address if provided, otherwise calculate from controller_index
+        let controller = if let Some(addr) = &self.controller_address {
+            addr.0
+        } else {
+            self.lp_program.find_lp_token_controller_address(
+                &global_state,
+                &lp_mint,
+                self.controller_index,
+            )
+        };
 
         Ok(self
             .lp_program
@@ -861,11 +877,16 @@ impl StakeLpToken {
         )
         .0;
 
-        let controller = self.lp_program.find_lp_token_controller_address(
-            &global_state,
-            &lp_mint,
-            self.controller_index,
-        );
+        // Use controller_address if provided, otherwise calculate from controller_index
+        let controller = if let Some(addr) = &self.controller_address {
+            addr.0
+        } else {
+            self.lp_program.find_lp_token_controller_address(
+                &global_state,
+                &lp_mint,
+                self.controller_index,
+            )
+        };
 
         Ok(self
             .lp_program
