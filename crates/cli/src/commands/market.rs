@@ -691,6 +691,9 @@ impl super::Command for Market {
                 toggle,
             } => {
                 use indexmap::IndexMap;
+                if flags.is_empty() && factors.is_empty() {
+                    eyre::bail!("at least one --flag or --factor must be provided");
+                }
                 let value = toggle.is_enable();
                 let flags_map: IndexMap<_, _> = flags.iter().cloned().map(|f| (f, value)).collect();
                 let factors_map: IndexMap<_, _> = factors
