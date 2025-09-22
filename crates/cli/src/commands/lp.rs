@@ -538,7 +538,7 @@ impl super::Command for Lp {
                 let global_state = client.get_lp_global_state().await?;
 
                 let output = &ctx.config().output();
-                self.display_global_state(&global_state, output)?;
+                self.display_global_state(&global_state, output, &ctx)?;
                 return Ok(());
             }
         };
@@ -704,12 +704,28 @@ impl Lp {
         &self,
         global_state: &gmsol_sdk::serde::serde_lp_global_state::SerdeLpGlobalState,
         output: &crate::config::OutputFormat,
+        ctx: &super::Context<'_>,
     ) -> eyre::Result<()> {
         println!("LP Global State Information:");
 
         let options = DisplayOptions::table_projection([("field", "Field"), ("value", "Value")]);
 
         let mut state_data = Vec::new();
+
+        // Calculate and display Global State PDA address
+        let client = ctx.client()?;
+        let lp_program = client.lp_program_for_builders();
+        let global_state_address = lp_program.find_global_state_address();
+
+        state_data.push(serde_json::json!({
+            "field": "LP Program ID",
+            "value": lp_program.id.to_string()
+        }));
+
+        state_data.push(serde_json::json!({
+            "field": "Global State Address (PDA)",
+            "value": global_state_address.to_string()
+        }));
 
         // Basic information
         state_data.push(serde_json::json!({
