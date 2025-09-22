@@ -3,6 +3,7 @@ use std::ops::Deref;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use gmsol_callback::{interface::CallbackInterface, CALLBACK_AUTHORITY_SEED};
+use gmsol_utils::order::OrderKind;
 
 use crate::{
     constants,
@@ -466,6 +467,19 @@ impl<'info> ExecuteIncreaseOrSwapOrderV2<'info> {
         throw_on_execution_error: bool,
         event_emitter: &EventEmitter<'_, 'info>,
     ) -> Result<(RemovePosition, Box<TransferOut>, ShouldSendTradeEvent)> {
+        let allow_closed = {
+            let order = self.order.load()?;
+            let params = order.params();
+            let kind = params.kind()?;
+            match kind {
+                // Allow executing order to increase collateral while the market is closed.
+                OrderKind::MarketIncrease => {
+                    params.size() == 0 && params.initial_collateral_delta_amount != 0
+                }
+                _ => false,
+            }
+        };
+
         // Note: We only need the tokens here, the feeds are not necessary.
         let feeds = self
             .order
@@ -483,13 +497,14 @@ impl<'info> ExecuteIncreaseOrSwapOrderV2<'info> {
             .event(self.event.as_ref())
             .throw_on_execution_error(throw_on_execution_error)
             .executor(self.authority.to_account_info())
+            .allow_closed(allow_closed)
             .event_emitter(*event_emitter)
             .callback_authority(self.callback_authority.as_ref())
             .callback_program(self.callback_program.as_deref())
             .callback_shared_data_account(self.callback_shared_data_account.as_deref())
             .callback_partitioned_data_account(self.callback_partitioned_data_account.as_deref());
 
-        self.oracle.load_mut()?.with_prices(
+        self.oracle.load_mut()?.with_prices_opts(
             &self.store,
             &self.token_map,
             &feeds.tokens,
@@ -500,6 +515,7 @@ impl<'info> ExecuteIncreaseOrSwapOrderV2<'info> {
                     .build()
                     .execute()
             },
+            allow_closed,
         )
     }
 
