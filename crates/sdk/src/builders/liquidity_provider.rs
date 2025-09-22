@@ -1177,6 +1177,10 @@ pub struct DisableLpTokenController {
     #[cfg_attr(serde, serde(default))]
     #[builder(default)]
     pub controller_index: u64,
+    /// Controller address (if provided, takes precedence over controller_index).
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default, setter(into))]
+    pub controller_address: Option<StringPubkey>,
 }
 
 impl IntoAtomicGroup for DisableLpTokenController {
@@ -1187,11 +1191,18 @@ impl IntoAtomicGroup for DisableLpTokenController {
         let mut insts = AtomicGroup::new(&authority);
 
         let global_state = self.lp_program.find_global_state_address();
-        let controller = self.lp_program.find_lp_token_controller_address(
-            &global_state,
-            &self.lp_token_mint.0,
-            self.controller_index,
-        );
+
+        // If controller_address is provided, use it directly (takes precedence over controller_index)
+        // Otherwise, calculate controller address from controller_index
+        let controller = if let Some(addr) = &self.controller_address {
+            addr.0
+        } else {
+            self.lp_program.find_lp_token_controller_address(
+                &global_state,
+                &self.lp_token_mint.0,
+                self.controller_index,
+            )
+        };
 
         let instruction = self
             .lp_program

@@ -57,9 +57,12 @@ enum Command {
     DisableController {
         /// LP token mint address.
         lp_token_mint: Pubkey,
-        /// Controller index (default: 0).
-        #[arg(long, default_value = "0")]
-        controller_index: u64,
+        /// Controller index.
+        #[arg(long)]
+        controller_index: Option<u64>,
+        /// Controller address (if provided, takes precedence over controller_index).
+        #[arg(long)]
+        controller_address: Option<Pubkey>,
     },
     /// Stake LP tokens (GM or GLV).
     #[cfg(feature = "execute")]
@@ -224,9 +227,30 @@ impl super::Command for Lp {
             Command::DisableController {
                 lp_token_mint,
                 controller_index,
-            } => client
-                .disable_lp_token_controller(store, lp_token_mint, *controller_index)?
-                .into_bundle_with_options(options)?,
+                controller_address,
+            } => {
+                // Validate that at least one controller parameter is provided
+                if controller_index.is_none() && controller_address.is_none() {
+                    return Err(eyre::eyre!(
+                        "Must provide either --controller-index or --controller-address"
+                    ));
+                }
+
+                // Determine which controller to use (address takes precedence)
+                let (final_controller_index, final_controller_address) = match controller_address {
+                    Some(addr) => (0, Some(*addr)), // Use address, set index to 0 (will be ignored)
+                    None => (controller_index.unwrap(), None), // Use index
+                };
+
+                client
+                    .disable_lp_token_controller(
+                        store,
+                        lp_token_mint,
+                        final_controller_index,
+                        final_controller_address,
+                    )?
+                    .into_bundle_with_options(options)?
+            }
             #[cfg(feature = "execute")]
             Command::Stake {
                 kind,
