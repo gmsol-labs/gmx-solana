@@ -101,9 +101,12 @@ enum Command {
         /// Amount to unstake (in GM/GLV token units, will be converted to raw units).
         #[arg(long)]
         amount: GmAmount,
-        /// Controller index (default: 0).
-        #[arg(long, default_value = "0")]
-        controller_index: u64,
+        /// Controller index.
+        #[arg(long)]
+        controller_index: Option<u64>,
+        /// Controller address (if provided, takes precedence over controller_index).
+        #[arg(long)]
+        controller_address: Option<Pubkey>,
     },
     /// Calculate GT reward for a position.
     CalculateReward {
@@ -115,9 +118,12 @@ enum Command {
         /// Owner of the position.
         #[arg(long)]
         owner: Pubkey,
-        /// Controller index (default: 0).
-        #[arg(long, default_value = "0")]
-        controller_index: u64,
+        /// Controller index.
+        #[arg(long)]
+        controller_index: Option<u64>,
+        /// Controller address (if provided, takes precedence over controller_index).
+        #[arg(long)]
+        controller_address: Option<Pubkey>,
     },
     /// Claim GT rewards for a position.
     ClaimGt {
@@ -126,9 +132,12 @@ enum Command {
         /// Position ID to claim rewards for.
         #[arg(long)]
         position_id: u64,
-        /// Controller index (default: 0).
-        #[arg(long, default_value = "0")]
-        controller_index: u64,
+        /// Controller index.
+        #[arg(long)]
+        controller_index: Option<u64>,
+        /// Controller address (if provided, takes precedence over controller_index).
+        #[arg(long)]
+        controller_address: Option<Pubkey>,
     },
     /// Transfer LP program authority to a new authority.
     TransferAuthority {
@@ -188,9 +197,12 @@ enum Command {
         position_id: u64,
         /// LP token mint address.
         lp_token_mint: Pubkey,
-        /// Controller index (default: 0).
-        #[arg(long, default_value = "0")]
-        controller_index: u64,
+        /// Controller index.
+        #[arg(long)]
+        controller_index: Option<u64>,
+        /// Controller address (if provided, takes precedence over controller_index).
+        #[arg(long)]
+        controller_address: Option<Pubkey>,
     },
     /// Query LP token controllers for a specific token mint.
     QueryControllers {
@@ -320,7 +332,20 @@ impl super::Command for Lp {
                 position_id,
                 amount,
                 controller_index,
+                controller_address,
             } => {
+                // Validate that at least one controller parameter is provided
+                if controller_index.is_none() && controller_address.is_none() {
+                    return Err(eyre::eyre!(
+                        "Must provide either --controller-index or --controller-address"
+                    ));
+                }
+
+                // Determine which controller to use (address takes precedence)
+                let (final_controller_index, final_controller_address) = match controller_address {
+                    Some(addr) => (0, Some(*addr)), // Use address, set index to 0 (will be ignored)
+                    None => (controller_index.unwrap(), None), // Use index
+                };
                 // Prepare GT user account (idempotent operation)
                 let prepare_user = client.prepare_user(store)?;
 
@@ -347,7 +372,8 @@ impl super::Command for Lp {
                     lp_token_mint,
                     *position_id,
                     amount_u64,
-                    *controller_index,
+                    final_controller_index,
+                    final_controller_address,
                 )?;
 
                 // Merge all transactions and build bundle
@@ -361,7 +387,21 @@ impl super::Command for Lp {
                 position_id,
                 owner,
                 controller_index,
+                controller_address,
             } => {
+                // Validate that at least one controller parameter is provided
+                if controller_index.is_none() && controller_address.is_none() {
+                    return Err(eyre::eyre!(
+                        "Must provide either --controller-index or --controller-address"
+                    ));
+                }
+
+                // Determine which controller to use (address takes precedence)
+                let (final_controller_index, final_controller_address) = match controller_address {
+                    Some(addr) => (0, Some(*addr)), // Use address, set index to 0 (will be ignored)
+                    None => (controller_index.unwrap(), None), // Use index
+                };
+
                 // Use provided owner
                 let position_owner = *owner;
 
@@ -372,7 +412,8 @@ impl super::Command for Lp {
                         lp_token_mint,
                         &position_owner,
                         *position_id,
-                        *controller_index,
+                        final_controller_index,
+                        final_controller_address,
                     )
                     .await?;
 
@@ -402,7 +443,21 @@ impl super::Command for Lp {
                 lp_token_mint,
                 position_id,
                 controller_index,
+                controller_address,
             } => {
+                // Validate that at least one controller parameter is provided
+                if controller_index.is_none() && controller_address.is_none() {
+                    return Err(eyre::eyre!(
+                        "Must provide either --controller-index or --controller-address"
+                    ));
+                }
+
+                // Determine which controller to use (address takes precedence)
+                let (final_controller_index, final_controller_address) = match controller_address {
+                    Some(addr) => (0, Some(*addr)), // Use address, set index to 0 (will be ignored)
+                    None => (controller_index.unwrap(), None), // Use index
+                };
+
                 // Prepare GT user account (idempotent operation) - same as Unstake
                 let prepare_user = client.prepare_user(store)?;
 
@@ -411,7 +466,8 @@ impl super::Command for Lp {
                     store,
                     lp_token_mint,
                     *position_id,
-                    *controller_index,
+                    final_controller_index,
+                    final_controller_address,
                 )?;
 
                 // Merge prepare user and claim transactions
@@ -542,10 +598,31 @@ impl super::Command for Lp {
                 position_id,
                 lp_token_mint,
                 controller_index,
+                controller_address,
             } => {
+                // Validate that at least one controller parameter is provided
+                if controller_index.is_none() && controller_address.is_none() {
+                    return Err(eyre::eyre!(
+                        "Must provide either --controller-index or --controller-address"
+                    ));
+                }
+
+                // Determine which controller to use (address takes precedence)
+                let (final_controller_index, final_controller_address) = match controller_address {
+                    Some(addr) => (0, Some(*addr)), // Use address, set index to 0 (will be ignored)
+                    None => (controller_index.unwrap(), None), // Use index
+                };
+
                 // Query specific position
                 let position = client
-                    .get_lp_position(store, owner, *position_id, lp_token_mint, *controller_index)
+                    .get_lp_position(
+                        store,
+                        owner,
+                        *position_id,
+                        lp_token_mint,
+                        final_controller_index,
+                        final_controller_address,
+                    )
                     .await?;
 
                 // Get GT decimals for proper formatting

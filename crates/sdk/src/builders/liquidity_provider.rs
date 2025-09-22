@@ -177,6 +177,7 @@ impl LiquidityProviderProgram {
                     &position.owner,
                     position.position_id,
                     controller.controller_index,
+                    Some(&position.controller),
                     &store_account.0,
                 )
                 .await?;
@@ -206,16 +207,25 @@ impl LiquidityProviderProgram {
         position_id: u64,
         lp_token_mint: &Pubkey,
         controller_index: u64,
+        controller_address: Option<&Pubkey>,
     ) -> crate::Result<Option<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
         // Get global state and addresses
         let global_state_address = self.find_global_state_address();
-        let controller_address = self.find_lp_token_controller_address(
-            &global_state_address,
-            lp_token_mint,
-            controller_index,
-        );
+
+        // If controller_address is provided, use it directly (takes precedence over controller_index)
+        // Otherwise, calculate controller address from controller_index
+        let controller_addr = if let Some(addr) = controller_address {
+            *addr
+        } else {
+            self.find_lp_token_controller_address(
+                &global_state_address,
+                lp_token_mint,
+                controller_index,
+            )
+        };
+
         let position_address =
-            self.find_stake_position_address(owner, position_id, &controller_address);
+            self.find_stake_position_address(owner, position_id, &controller_addr);
 
         // Get accounts
         let global_state = client
@@ -244,7 +254,7 @@ impl LiquidityProviderProgram {
 
         // Get controller
         let controller = client
-            .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController>(&controller_address, Default::default())
+            .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController>(&controller_addr, Default::default())
             .await?;
 
         // Calculate actual GT reward for this position (using pre-fetched store data)
@@ -255,6 +265,7 @@ impl LiquidityProviderProgram {
                 owner,
                 position_id,
                 controller_index,
+                controller_address,
                 &store_account.0,
             )
             .await?;
@@ -354,6 +365,7 @@ impl LiquidityProviderProgram {
         owner: &Pubkey,
         position_id: u64,
         controller_index: u64,
+        controller_address: Option<&Pubkey>,
     ) -> crate::Result<u128> {
         // Get store account
         let store_account = client
@@ -366,6 +378,7 @@ impl LiquidityProviderProgram {
             owner,
             position_id,
             controller_index,
+            controller_address,
             &store_account.0,
         )
         .await
@@ -381,17 +394,26 @@ impl LiquidityProviderProgram {
         owner: &Pubkey,
         position_id: u64,
         controller_index: u64,
+        controller_address: Option<&Pubkey>,
         store_account: &gmsol_programs::gmsol_store::accounts::Store,
     ) -> crate::Result<u128> {
         // Get required accounts for GT calculation (store account already provided)
         let global_state_address = self.find_global_state_address();
-        let controller_address = self.find_lp_token_controller_address(
-            &global_state_address,
-            lp_token_mint,
-            controller_index,
-        );
+
+        // If controller_address is provided, use it directly (takes precedence over controller_index)
+        // Otherwise, calculate controller address from controller_index
+        let controller_addr = if let Some(addr) = controller_address {
+            *addr
+        } else {
+            self.find_lp_token_controller_address(
+                &global_state_address,
+                lp_token_mint,
+                controller_index,
+            )
+        };
+
         let position_address =
-            self.find_stake_position_address(owner, position_id, &controller_address);
+            self.find_stake_position_address(owner, position_id, &controller_addr);
 
         // Get other required accounts (store is already provided)
         let global_state = client
@@ -409,7 +431,7 @@ impl LiquidityProviderProgram {
             .await?;
 
         let controller = client
-            .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController>(&controller_address, Default::default())
+            .get_anchor_account::<gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController>(&controller_addr, Default::default())
             .await?;
 
         // GT reward calculation using precise on-chain logic
@@ -1258,6 +1280,10 @@ pub struct UnstakeLpToken {
     #[cfg_attr(serde, serde(default))]
     #[builder(default)]
     pub controller_index: u64,
+    /// Controller address (if provided, takes precedence over controller_index).
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default, setter(into))]
+    pub controller_address: Option<StringPubkey>,
 }
 
 impl UnstakeLpToken {
@@ -1279,11 +1305,17 @@ impl UnstakeLpToken {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        let controller = self.lp_program.find_lp_token_controller_address(
-            &global_state,
-            &lp_mint,
-            self.controller_index,
-        );
+        // If controller_address is provided, use it directly (takes precedence over controller_index)
+        // Otherwise, calculate controller address from controller_index
+        let controller = if let Some(addr) = &self.controller_address {
+            addr.0
+        } else {
+            self.lp_program.find_lp_token_controller_address(
+                &global_state,
+                &lp_mint,
+                self.controller_index,
+            )
+        };
 
         let position =
             self.lp_program
@@ -1719,6 +1751,10 @@ pub struct CalculateGtReward {
     #[cfg_attr(serde, serde(default))]
     #[builder(default)]
     pub controller_index: u64,
+    /// Controller address (if provided, takes precedence over controller_index).
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default, setter(into))]
+    pub controller_address: Option<StringPubkey>,
 }
 
 /// Builder for claiming GT rewards instruction.
@@ -1747,6 +1783,10 @@ pub struct ClaimGtReward {
     #[cfg_attr(serde, serde(default))]
     #[builder(default)]
     pub controller_index: u64,
+    /// Controller address (if provided, takes precedence over controller_index).
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default, setter(into))]
+    pub controller_address: Option<StringPubkey>,
 }
 
 impl IntoAtomicGroup for CalculateGtReward {
@@ -1759,11 +1799,17 @@ impl IntoAtomicGroup for CalculateGtReward {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        let controller = self.lp_program.find_lp_token_controller_address(
-            &global_state,
-            &lp_mint,
-            self.controller_index,
-        );
+        // If controller_address is provided, use it directly (takes precedence over controller_index)
+        // Otherwise, calculate controller address from controller_index
+        let controller = if let Some(addr) = &self.controller_address {
+            addr.0
+        } else {
+            self.lp_program.find_lp_token_controller_address(
+                &global_state,
+                &lp_mint,
+                self.controller_index,
+            )
+        };
 
         let position =
             self.lp_program
@@ -1800,11 +1846,17 @@ impl IntoAtomicGroup for ClaimGtReward {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        let controller = self.lp_program.find_lp_token_controller_address(
-            &global_state,
-            &lp_mint,
-            self.controller_index,
-        );
+        // If controller_address is provided, use it directly (takes precedence over controller_index)
+        // Otherwise, calculate controller address from controller_index
+        let controller = if let Some(addr) = &self.controller_address {
+            addr.0
+        } else {
+            self.lp_program.find_lp_token_controller_address(
+                &global_state,
+                &lp_mint,
+                self.controller_index,
+            )
+        };
 
         let position =
             self.lp_program

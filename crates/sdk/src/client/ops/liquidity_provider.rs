@@ -64,6 +64,7 @@ pub trait LiquidityProviderOps<C> {
         position_id: u64,
         unstake_amount: u64,
         controller_index: u64,
+        controller_address: Option<Pubkey>,
     ) -> crate::Result<TransactionBuilder<'_, C>>;
 
     /// Stake LP token.
@@ -86,6 +87,7 @@ pub trait LiquidityProviderOps<C> {
         owner: &Pubkey,
         position_id: u64,
         controller_index: u64,
+        controller_address: Option<Pubkey>,
     ) -> impl std::future::Future<Output = crate::Result<u128>>;
 
     /// Claim GT rewards for a position.
@@ -95,6 +97,7 @@ pub trait LiquidityProviderOps<C> {
         lp_token_mint: &Pubkey,
         position_id: u64,
         controller_index: u64,
+        controller_address: Option<Pubkey>,
     ) -> crate::Result<TransactionBuilder<'_, C>>;
 
     /// Transfer LP program authority to a new authority.
@@ -153,6 +156,7 @@ pub trait LiquidityProviderOps<C> {
         position_id: u64,
         lp_token_mint: &Pubkey,
         controller_index: u64,
+        controller_address: Option<Pubkey>,
     ) -> impl std::future::Future<
         Output = crate::Result<Option<crate::serde::serde_lp_position::SerdeLpStakingPosition>>,
     >;
@@ -242,6 +246,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         position_id: u64,
         unstake_amount: u64,
         controller_index: u64,
+        controller_address: Option<Pubkey>,
     ) -> crate::Result<TransactionBuilder<'_, C>> {
         let builder = UnstakeLpToken::builder()
             .payer(self.payer())
@@ -252,6 +257,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             .position_id(position_id)
             .unstake_amount(unstake_amount)
             .controller_index(controller_index)
+            .controller_address(controller_address.map(|addr| addr.into()))
             .build();
 
         let ag = builder.into_atomic_group(&())?;
@@ -297,8 +303,10 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         owner: &Pubkey,
         position_id: u64,
         controller_index: u64,
+        controller_address: Option<Pubkey>,
     ) -> crate::Result<u128> {
         let lp_program = self.lp_program_for_builders();
+
         lp_program
             .calculate_gt_reward(
                 self.rpc(),
@@ -307,6 +315,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
                 owner,
                 position_id,
                 controller_index,
+                controller_address.as_ref(),
             )
             .await
     }
@@ -317,6 +326,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         lp_token_mint: &Pubkey,
         position_id: u64,
         controller_index: u64,
+        controller_address: Option<Pubkey>,
     ) -> crate::Result<TransactionBuilder<'_, C>> {
         let builder = ClaimGtReward::builder()
             .owner(self.payer())
@@ -325,6 +335,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
             .lp_token_mint(*lp_token_mint)
             .position_id(position_id)
             .controller_index(controller_index)
+            .controller_address(controller_address.map(|addr| addr.into()))
             .build();
 
         let ag = builder.into_atomic_group(&())?;
@@ -446,8 +457,10 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
         position_id: u64,
         lp_token_mint: &Pubkey,
         controller_index: u64,
+        controller_address: Option<Pubkey>,
     ) -> crate::Result<Option<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
         let lp_program = self.lp_program_for_builders();
+
         lp_program
             .query_lp_position(
                 self.rpc(),
@@ -456,6 +469,7 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
                 position_id,
                 lp_token_mint,
                 controller_index,
+                controller_address.as_ref(),
             )
             .await
     }
