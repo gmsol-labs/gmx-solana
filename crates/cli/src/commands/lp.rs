@@ -742,24 +742,12 @@ impl Lp {
             "value": global_state.bump
         }));
 
-        // APY Gradient summary (first few buckets)
+        // APY Gradient complete list (all buckets from 0 to end)
         if !global_state.apy_gradient.is_empty() {
-            state_data.push(serde_json::json!({
-                "field": "APY Gradient [0] (1e20)",
-                "value": global_state.apy_gradient[0].to_string()
-            }));
-
-            if global_state.apy_gradient.len() > 1 {
+            for (index, apy_value) in global_state.apy_gradient.iter().enumerate() {
                 state_data.push(serde_json::json!({
-                    "field": "APY Gradient [1] (1e20)",
-                    "value": global_state.apy_gradient[1].to_string()
-                }));
-            }
-
-            if global_state.apy_gradient.len() > 52 {
-                state_data.push(serde_json::json!({
-                    "field": "APY Gradient [52] (1e20)",
-                    "value": global_state.apy_gradient[52].to_string()
+                    "field": format!("APY Gradient [{index}] (1e20)"),
+                    "value": apy_value.to_string()
                 }));
             }
 
