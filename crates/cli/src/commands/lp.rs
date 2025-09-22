@@ -49,8 +49,8 @@ enum Command {
     CreateController {
         /// LP token mint address.
         lp_token_mint: Pubkey,
-        /// Controller index (default: 0).
-        #[arg(long, default_value = "0")]
+        /// Controller index.
+        #[arg(long)]
         controller_index: u64,
     },
     /// Disable LP token controller for a specific token mint.

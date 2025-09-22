@@ -1093,8 +1093,6 @@ pub struct CreateLpTokenController {
     #[builder(setter(into))]
     pub lp_token_mint: StringPubkey,
     /// Controller index.
-    #[cfg_attr(serde, serde(default))]
-    #[builder(default)]
     pub controller_index: u64,
 }
 
