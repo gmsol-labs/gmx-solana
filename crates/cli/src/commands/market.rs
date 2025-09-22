@@ -330,6 +330,17 @@ enum Command {
         #[arg(long, group = "what")]
         factor: Option<gmsol_sdk::core::market::MarketConfigKey>,
     },
+    /// Enable or disable updates for a set of market config flags and/or factors.
+    SetConfigUpdatable {
+        /// Flags to set updatable.
+        #[arg(long = "flag", required = false, num_args = 1..)]
+        flags: Vec<MarketConfigFlag>,
+        /// Factors to set updatable.
+        #[arg(long = "factor", required = false, num_args = 1..)]
+        factors: Vec<gmsol_sdk::core::market::MarketConfigKey>,
+        #[command(flatten)]
+        toggle: ToggleValue,
+    },
 }
 
 impl super::Command for Market {
@@ -673,6 +684,25 @@ impl super::Command for Market {
                     bundle.push(rpc)?;
                 }
                 bundle
+            }
+            Command::SetConfigUpdatable {
+                flags,
+                factors,
+                toggle,
+            } => {
+                use indexmap::IndexMap;
+                if flags.is_empty() && factors.is_empty() {
+                    eyre::bail!("at least one --flag or --factor must be provided");
+                }
+                let value = toggle.is_enable();
+                let flags_map: IndexMap<_, _> = flags.iter().cloned().map(|f| (f, value)).collect();
+                let factors_map: IndexMap<_, _> = factors
+                    .iter()
+                    .map(|k| Ok::<_, eyre::Report>((*k).try_into().map(|f| (f, value))?))
+                    .collect::<eyre::Result<_>>()?;
+                client
+                    .set_market_config_updatable(store, flags_map, factors_map)?
+                    .into_bundle_with_options(options)?
             }
             Command::InitGt {
                 decimals,
