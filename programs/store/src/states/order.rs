@@ -514,6 +514,11 @@ impl Order {
         &self.params
     }
 
+    /// Get order params mutably.
+    pub(crate) fn params_mut(&mut self) -> &mut OrderActionParams {
+        &mut self.params
+    }
+
     /// Get swap params.
     pub fn swap(&self) -> &SwapActionParams {
         &self.swap
@@ -928,5 +933,13 @@ impl OrderActionParams {
     /// Returns whether the empty position account should be kept.
     pub(crate) fn should_keep_position_account(&self) -> bool {
         self.flags.get_flag(OrderFlag::ShouldKeepPositionAccount)
+    }
+
+    /// Set whether the position account should be kept.
+    ///
+    /// Returns the previous value.
+    pub(crate) fn set_should_keep_position_account(&mut self, keep: bool) -> bool {
+        self.flags
+            .set_flag(OrderFlag::ShouldKeepPositionAccount, keep)
     }
 }

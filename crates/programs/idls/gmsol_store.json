@@ -19582,6 +19582,56 @@
       ]
     },
     {
+      "name": "set_should_keep_position_account",
+      "docs": [
+        "Set whether to keep position account for an order by the owner.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](SetShouldKeepPositionAccount)*",
+        "",
+        "# Arguments",
+        "- `keep`: Whether the position account should be kept.",
+        "",
+        "# Errors",
+        "- The [`owner`](SetShouldKeepPositionAccount::owner) must be a signer and the owner of the `order`.",
+        "- The [`order`](SetShouldKeepPositionAccount::order) must be:",
+        "- Initialized and owned by the `owner`",
+        "- In a pending state"
+      ],
+      "discriminator": [
+        139,
+        102,
+        38,
+        33,
+        46,
+        57,
+        158,
+        17
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "Owner."
+          ],
+          "signer": true
+        },
+        {
+          "name": "order",
+          "docs": [
+            "Order to update."
+          ],
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "keep",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "set_token_map",
       "docs": [
         "Set the token map address for the store.",

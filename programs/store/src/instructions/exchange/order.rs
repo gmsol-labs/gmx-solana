@@ -982,7 +982,8 @@ pub struct UpdateOrderV2<'info> {
         mut,
         constraint = order.load()?.header.store == store.key() @ CoreError::StoreMismatched,
         constraint = order.load()?.header.market == market.key() @ CoreError::MarketMismatched,
-        constraint = order.load()?.header.owner== owner.key() @ CoreError::OwnerMismatched,
+        constraint = order.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
+        constraint = order.load()?.header.action_state()?.is_pending() @ CoreError::PreconditionsAreNotMet,
     )]
     pub order: AccountLoader<'info, Order>,
     /// Callback authority.
@@ -1162,6 +1163,28 @@ impl CloseEmptyPosition<'_> {
             .map_err(|_| error!(CoreError::ValueOverflow))?;
         let closable_after = position.created_at.saturating_add(min_age);
         require_gte!(now, closable_after, CoreError::PreconditionsAreNotMet);
+        Ok(())
+    }
+}
+
+/// The accounts definitions for [`set_should_keep_position_account`](crate::gmsol_store::set_should_keep_position_account).
+#[derive(Accounts)]
+pub struct SetShouldKeepPositionAccount<'info> {
+    /// Owner.
+    pub owner: Signer<'info>,
+    /// Order to update.
+    #[account(
+        mut,
+        constraint = order.load()?.header.owner== owner.key() @ CoreError::OwnerMismatched,
+        constraint = order.load()?.header.action_state()?.is_pending() @ CoreError::PreconditionsAreNotMet,
+    )]
+    pub order: AccountLoader<'info, Order>,
+}
+
+impl SetShouldKeepPositionAccount<'_> {
+    pub(crate) fn invoke(ctx: Context<Self>, keep: bool) -> Result<()> {
+        let mut order = ctx.accounts.order.load_mut()?;
+        order.params_mut().set_should_keep_position_account(keep);
         Ok(())
     }
 }
