@@ -56,6 +56,82 @@ use crate::{
 use super::StoreProgram;
 
 // ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for querying a specific LP position.
+#[derive(Debug, Clone)]
+pub struct LpPositionQueryParams<'a> {
+    /// Store address
+    pub store: &'a Pubkey,
+    /// Owner of the position
+    pub owner: &'a Pubkey,
+    /// Position ID
+    pub position_id: u64,
+    /// LP token mint address
+    pub lp_token_mint: &'a Pubkey,
+    /// Controller index
+    pub controller_index: u64,
+    /// Optional controller address (takes precedence over controller_index)
+    pub controller_address: Option<&'a Pubkey>,
+}
+
+/// Parameters for calculating GT rewards.
+#[derive(Debug, Clone)]
+pub struct GtRewardCalculationParams<'a> {
+    /// Store address
+    pub store: &'a Pubkey,
+    /// LP token mint address
+    pub lp_token_mint: &'a Pubkey,
+    /// Owner of the position
+    pub owner: &'a Pubkey,
+    /// Position ID
+    pub position_id: u64,
+    /// Controller index
+    pub controller_index: u64,
+    /// Optional controller address (takes precedence over controller_index)
+    pub controller_address: Option<&'a Pubkey>,
+}
+
+/// Parameters for staking LP tokens.
+#[derive(Debug, Clone)]
+pub struct StakeLpTokenParams<'a> {
+    /// Store address
+    pub store: &'a Pubkey,
+    /// LP token kind (GM or GLV)
+    pub lp_token_kind: LpTokenKind,
+    /// LP token mint address
+    pub lp_token_mint: &'a Pubkey,
+    /// Oracle buffer account
+    pub oracle: &'a Pubkey,
+    /// Stake amount
+    pub amount: std::num::NonZeroU64,
+    /// Controller index
+    pub controller_index: u64,
+    /// Optional controller address (takes precedence over controller_index)
+    pub controller_address: Option<Pubkey>,
+}
+
+/// Parameters for unstaking LP tokens.
+#[derive(Debug, Clone)]
+pub struct UnstakeLpTokenParams<'a> {
+    /// Store address
+    pub store: &'a Pubkey,
+    /// LP token kind (GM or GLV)
+    pub lp_token_kind: LpTokenKind,
+    /// LP token mint address
+    pub lp_token_mint: &'a Pubkey,
+    /// Position ID
+    pub position_id: u64,
+    /// Unstake amount
+    pub unstake_amount: u64,
+    /// Controller index
+    pub controller_index: u64,
+    /// Optional controller address (takes precedence over controller_index)
+    pub controller_address: Option<Pubkey>,
+}
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 
@@ -224,16 +300,16 @@ impl LiquidityProviderProgram {
                 .await?;
 
             // Calculate actual GT reward for this position (using pre-fetched store data)
+            let params = GtRewardCalculationParams {
+                store,
+                lp_token_mint: &position.lp_mint,
+                owner: &position.owner,
+                position_id: position.position_id,
+                controller_index: controller.controller_index,
+                controller_address: Some(&position.controller),
+            };
             let actual_gt_reward = self
-                .calculate_gt_reward_with_store(
-                    client,
-                    &position.lp_mint,
-                    &position.owner,
-                    position.position_id,
-                    controller.controller_index,
-                    Some(&position.controller),
-                    &store_account.0,
-                )
+                .calculate_gt_reward_with_store(client, &params, &store_account.0)
                 .await?;
 
             // Use builder to create serde position with actual GT reward
@@ -256,12 +332,7 @@ impl LiquidityProviderProgram {
     pub async fn query_lp_position(
         &self,
         client: &solana_client::nonblocking::rpc_client::RpcClient,
-        store: &Pubkey,
-        owner: &Pubkey,
-        position_id: u64,
-        lp_token_mint: &Pubkey,
-        controller_index: u64,
-        controller_address: Option<&Pubkey>,
+        params: &LpPositionQueryParams<'_>,
     ) -> crate::Result<Option<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
         // Get global state and addresses
         let global_state_address = self.find_global_state_address();
@@ -269,13 +340,13 @@ impl LiquidityProviderProgram {
         let controller_addr = resolve_controller_address(
             self,
             &global_state_address,
-            lp_token_mint,
-            controller_index,
-            controller_address,
+            params.lp_token_mint,
+            params.controller_index,
+            params.controller_address,
         );
 
         let position_address =
-            self.find_stake_position_address(owner, position_id, &controller_addr);
+            self.find_stake_position_address(params.owner, params.position_id, &controller_addr);
 
         // Get accounts
         let global_state = client
@@ -286,7 +357,7 @@ impl LiquidityProviderProgram {
             .await?;
 
         let store_account = client
-            .get_anchor_account::<crate::utils::zero_copy::ZeroCopy<gmsol_programs::gmsol_store::accounts::Store>>(store, Default::default())
+            .get_anchor_account::<crate::utils::zero_copy::ZeroCopy<gmsol_programs::gmsol_store::accounts::Store>>(params.store, Default::default())
             .await?;
         let gt_decimals = store_account.0.gt.decimals;
 
@@ -308,16 +379,16 @@ impl LiquidityProviderProgram {
             .await?;
 
         // Calculate actual GT reward for this position (using pre-fetched store data)
+        let gt_params = GtRewardCalculationParams {
+            store: params.store,
+            lp_token_mint: params.lp_token_mint,
+            owner: params.owner,
+            position_id: params.position_id,
+            controller_index: params.controller_index,
+            controller_address: params.controller_address,
+        };
         let actual_gt_reward = self
-            .calculate_gt_reward_with_store(
-                client,
-                lp_token_mint,
-                owner,
-                position_id,
-                controller_index,
-                controller_address,
-                &store_account.0,
-            )
+            .calculate_gt_reward_with_store(client, &gt_params, &store_account.0)
             .await?;
 
         // Use builder to create serde position with actual GT reward
@@ -410,28 +481,15 @@ impl LiquidityProviderProgram {
     pub async fn calculate_gt_reward(
         &self,
         client: &solana_client::nonblocking::rpc_client::RpcClient,
-        store: &Pubkey,
-        lp_token_mint: &Pubkey,
-        owner: &Pubkey,
-        position_id: u64,
-        controller_index: u64,
-        controller_address: Option<&Pubkey>,
+        params: &GtRewardCalculationParams<'_>,
     ) -> crate::Result<u128> {
         // Get store account
         let store_account = client
-            .get_anchor_account::<crate::utils::zero_copy::ZeroCopy<gmsol_programs::gmsol_store::accounts::Store>>(store, Default::default())
+            .get_anchor_account::<crate::utils::zero_copy::ZeroCopy<gmsol_programs::gmsol_store::accounts::Store>>(params.store, Default::default())
             .await?;
 
-        self.calculate_gt_reward_with_store(
-            client,
-            lp_token_mint,
-            owner,
-            position_id,
-            controller_index,
-            controller_address,
-            &store_account.0,
-        )
-        .await
+        self.calculate_gt_reward_with_store(client, params, &store_account.0)
+            .await
     }
 
     /// Calculate GT reward for a specific position with pre-fetched store data (optimized version)
@@ -440,11 +498,7 @@ impl LiquidityProviderProgram {
     pub async fn calculate_gt_reward_with_store(
         &self,
         client: &solana_client::nonblocking::rpc_client::RpcClient,
-        lp_token_mint: &Pubkey,
-        owner: &Pubkey,
-        position_id: u64,
-        controller_index: u64,
-        controller_address: Option<&Pubkey>,
+        params: &GtRewardCalculationParams<'_>,
         store_account: &gmsol_programs::gmsol_store::accounts::Store,
     ) -> crate::Result<u128> {
         // Get required accounts for GT calculation (store account already provided)
@@ -453,13 +507,13 @@ impl LiquidityProviderProgram {
         let controller_addr = resolve_controller_address(
             self,
             &global_state_address,
-            lp_token_mint,
-            controller_index,
-            controller_address,
+            params.lp_token_mint,
+            params.controller_index,
+            params.controller_address,
         );
 
         let position_address =
-            self.find_stake_position_address(owner, position_id, &controller_addr);
+            self.find_stake_position_address(params.owner, params.position_id, &controller_addr);
 
         // Get other required accounts (store is already provided)
         let global_state = client

@@ -1,5 +1,7 @@
 use gmsol_sdk::{
-    builders::liquidity_provider::LpTokenKind,
+    builders::liquidity_provider::{
+        GtRewardCalculationParams, LpPositionQueryParams, LpTokenKind, UnstakeLpTokenParams,
+    },
     ops::{
         liquidity_provider::LiquidityProviderOps, token_account::TokenAccountOps, user::UserOps,
     },
@@ -9,6 +11,9 @@ use gmsol_sdk::{
 
 #[cfg(feature = "execute")]
 use std::num::NonZeroU64;
+
+#[cfg(feature = "execute")]
+use gmsol_sdk::builders::liquidity_provider::StakeLpTokenParams;
 
 use crate::config::DisplayOptions;
 
@@ -315,27 +320,21 @@ impl super::Command for Lp {
                     resolve_controller_params(*controller_index, *controller_address)?;
 
                 // Create stake builder with controller parameters
+                let stake_params = StakeLpTokenParams {
+                    store,
+                    lp_token_kind: *kind,
+                    lp_token_mint,
+                    oracle,
+                    amount: stake_amount,
+                    controller_index: final_controller_index,
+                    controller_address: final_controller_address,
+                };
+
                 let builder = match position_id {
                     Some(pos_id) => client
-                        .stake_lp_token(
-                            store,
-                            *kind,
-                            lp_token_mint,
-                            oracle,
-                            stake_amount,
-                            final_controller_index,
-                            final_controller_address,
-                        )
+                        .stake_lp_token(stake_params.clone())
                         .with_position_id(*pos_id),
-                    None => client.stake_lp_token(
-                        store,
-                        *kind,
-                        lp_token_mint,
-                        oracle,
-                        stake_amount,
-                        final_controller_index,
-                        final_controller_address,
-                    ),
+                    None => client.stake_lp_token(stake_params),
                 };
 
                 // Use ExecutorArgs to build executor (same pattern as ConfirmGtBuyback in treasury)
@@ -373,15 +372,16 @@ impl super::Command for Lp {
                 let amount_u64 = amount.to_u64()?;
 
                 // Create unstake transaction
-                let unstake_tx = client.unstake_lp_token(
+                let unstake_params = UnstakeLpTokenParams {
                     store,
-                    *kind,
+                    lp_token_kind: *kind,
                     lp_token_mint,
-                    *position_id,
-                    amount_u64,
-                    final_controller_index,
-                    final_controller_address,
-                )?;
+                    position_id: *position_id,
+                    unstake_amount: amount_u64,
+                    controller_index: final_controller_index,
+                    controller_address: final_controller_address,
+                };
+                let unstake_tx = client.unstake_lp_token(unstake_params)?;
 
                 // Merge all transactions and build bundle
                 prepare_user
@@ -403,16 +403,15 @@ impl super::Command for Lp {
                 let position_owner = *owner;
 
                 // Calculate GT reward using direct core calculation logic
-                let gt_reward_raw = client
-                    .calculate_gt_reward(
-                        store,
-                        lp_token_mint,
-                        &position_owner,
-                        *position_id,
-                        final_controller_index,
-                        final_controller_address,
-                    )
-                    .await?;
+                let params = GtRewardCalculationParams {
+                    store,
+                    lp_token_mint,
+                    owner: &position_owner,
+                    position_id: *position_id,
+                    controller_index: final_controller_index,
+                    controller_address: final_controller_address.as_ref(),
+                };
+                let gt_reward_raw = client.calculate_gt_reward(params).await?;
 
                 // Get GT decimals for proper display formatting
                 let store_account = client
@@ -591,16 +590,15 @@ impl super::Command for Lp {
                     resolve_controller_params(*controller_index, *controller_address)?;
 
                 // Query specific position
-                let position = client
-                    .get_lp_position(
-                        store,
-                        owner,
-                        *position_id,
-                        lp_token_mint,
-                        final_controller_index,
-                        final_controller_address,
-                    )
-                    .await?;
+                let params = LpPositionQueryParams {
+                    store,
+                    owner,
+                    position_id: *position_id,
+                    lp_token_mint,
+                    controller_index: final_controller_index,
+                    controller_address: final_controller_address.as_ref(),
+                };
+                let position = client.get_lp_position(params).await?;
 
                 // Get GT decimals for proper formatting
                 let store_account = client

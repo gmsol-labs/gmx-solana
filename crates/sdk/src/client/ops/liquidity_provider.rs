@@ -1,4 +1,4 @@
-use std::{num::NonZeroU64, ops::Deref};
+use std::ops::Deref;
 
 use gmsol_solana_utils::{
     client_traits::FromRpcClientWith,
@@ -13,8 +13,9 @@ use crate::{
     builders::{
         liquidity_provider::{
             AcceptAuthority, ClaimGtReward, CreateLpTokenController, DisableLpTokenController,
-            InitializeLp, LpTokenKind, SetClaimEnabled, SetPricingStaleness, StakeLpToken,
-            StakeLpTokenHint, TransferAuthority, UnstakeLpToken, UpdateApyGradientRange,
+            GtRewardCalculationParams, InitializeLp, LpPositionQueryParams, SetClaimEnabled,
+            SetPricingStaleness, StakeLpToken, StakeLpTokenHint, StakeLpTokenParams,
+            TransferAuthority, UnstakeLpToken, UnstakeLpTokenParams, UpdateApyGradientRange,
             UpdateApyGradientSparse, UpdateMinStakeValue,
         },
         StoreProgram,
@@ -58,36 +59,16 @@ pub trait LiquidityProviderOps<C> {
     /// Unstake LP token.
     fn unstake_lp_token(
         &self,
-        store: &Pubkey,
-        lp_token_kind: LpTokenKind,
-        lp_token_mint: &Pubkey,
-        position_id: u64,
-        unstake_amount: u64,
-        controller_index: u64,
-        controller_address: Option<Pubkey>,
+        params: UnstakeLpTokenParams<'_>,
     ) -> crate::Result<TransactionBuilder<'_, C>>;
 
     /// Stake LP token.
-    fn stake_lp_token(
-        &self,
-        store: &Pubkey,
-        lp_token_kind: LpTokenKind,
-        lp_token_mint: &Pubkey,
-        oracle: &Pubkey,
-        amount: NonZeroU64,
-        controller_index: u64,
-        controller_address: Option<Pubkey>,
-    ) -> StakeLpTokenBuilder<'_, C>;
+    fn stake_lp_token(&self, params: StakeLpTokenParams<'_>) -> StakeLpTokenBuilder<'_, C>;
 
     /// Calculate GT reward for a position.
     fn calculate_gt_reward(
         &self,
-        store: &Pubkey,
-        lp_token_mint: &Pubkey,
-        owner: &Pubkey,
-        position_id: u64,
-        controller_index: u64,
-        controller_address: Option<Pubkey>,
+        params: GtRewardCalculationParams<'_>,
     ) -> impl std::future::Future<Output = crate::Result<u128>>;
 
     /// Claim GT rewards for a position.
@@ -151,12 +132,7 @@ pub trait LiquidityProviderOps<C> {
     /// Query a specific LP staking position.
     fn get_lp_position(
         &self,
-        store: &Pubkey,
-        owner: &Pubkey,
-        position_id: u64,
-        lp_token_mint: &Pubkey,
-        controller_index: u64,
-        controller_address: Option<Pubkey>,
+        params: LpPositionQueryParams<'_>,
     ) -> impl std::future::Future<
         Output = crate::Result<Option<crate::serde::serde_lp_position::SerdeLpStakingPosition>>,
     >;
@@ -240,57 +216,42 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
 
     fn unstake_lp_token(
         &self,
-        store: &Pubkey,
-        lp_token_kind: LpTokenKind,
-        lp_token_mint: &Pubkey,
-        position_id: u64,
-        unstake_amount: u64,
-        controller_index: u64,
-        controller_address: Option<Pubkey>,
+        params: UnstakeLpTokenParams<'_>,
     ) -> crate::Result<TransactionBuilder<'_, C>> {
         let builder = UnstakeLpToken::builder()
             .payer(self.payer())
-            .store_program(self.store_program_for_builders(store))
+            .store_program(self.store_program_for_builders(params.store))
             .lp_program(self.lp_program_for_builders().clone())
-            .lp_token_kind(lp_token_kind)
-            .lp_token_mint(*lp_token_mint)
-            .position_id(position_id)
-            .unstake_amount(unstake_amount)
-            .controller_index(controller_index)
-            .controller_address(controller_address.map(|addr| addr.into()))
+            .lp_token_kind(params.lp_token_kind)
+            .lp_token_mint(*params.lp_token_mint)
+            .position_id(params.position_id)
+            .unstake_amount(params.unstake_amount)
+            .controller_index(params.controller_index)
+            .controller_address(params.controller_address.map(|addr| addr.into()))
             .build();
 
         let ag = builder.into_atomic_group(&())?;
         Ok(self.store_transaction().pre_atomic_group(ag, true))
     }
 
-    fn stake_lp_token(
-        &self,
-        store: &Pubkey,
-        lp_token_kind: LpTokenKind,
-        lp_token_mint: &Pubkey,
-        oracle: &Pubkey,
-        amount: NonZeroU64,
-        controller_index: u64,
-        controller_address: Option<Pubkey>,
-    ) -> StakeLpTokenBuilder<'_, C> {
+    fn stake_lp_token(&self, params: StakeLpTokenParams<'_>) -> StakeLpTokenBuilder<'_, C> {
         StakeLpTokenBuilder {
             client: self,
             builder: StakeLpToken::builder()
                 .payer(self.payer())
-                .amount(amount)
-                .oracle(*oracle)
-                .lp_token_kind(lp_token_kind)
-                .lp_token_mint(*lp_token_mint)
+                .amount(params.amount)
+                .oracle(*params.oracle)
+                .lp_token_kind(params.lp_token_kind)
+                .lp_token_mint(*params.lp_token_mint)
                 .lp_program(self.lp_program_for_builders().clone())
                 .store_program(
                     StoreProgram::builder()
                         .id(*self.store_program_id())
-                        .store(*store)
+                        .store(*params.store)
                         .build(),
                 )
-                .controller_index(controller_index)
-                .controller_address(controller_address.map(|addr| addr.into()))
+                .controller_index(params.controller_index)
+                .controller_address(params.controller_address.map(|addr| addr.into()))
                 .build(),
             hint: None,
         }
@@ -298,26 +259,11 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
 
     async fn calculate_gt_reward(
         &self,
-        store: &Pubkey,
-        lp_token_mint: &Pubkey,
-        owner: &Pubkey,
-        position_id: u64,
-        controller_index: u64,
-        controller_address: Option<Pubkey>,
+        params: GtRewardCalculationParams<'_>,
     ) -> crate::Result<u128> {
         let lp_program = self.lp_program_for_builders();
 
-        lp_program
-            .calculate_gt_reward(
-                self.rpc(),
-                store,
-                lp_token_mint,
-                owner,
-                position_id,
-                controller_index,
-                controller_address.as_ref(),
-            )
-            .await
+        lp_program.calculate_gt_reward(self.rpc(), &params).await
     }
 
     fn claim_gt_reward(
@@ -452,26 +398,11 @@ impl<C: Deref<Target = impl Signer> + Clone> LiquidityProviderOps<C> for crate::
 
     async fn get_lp_position(
         &self,
-        store: &Pubkey,
-        owner: &Pubkey,
-        position_id: u64,
-        lp_token_mint: &Pubkey,
-        controller_index: u64,
-        controller_address: Option<Pubkey>,
+        params: LpPositionQueryParams<'_>,
     ) -> crate::Result<Option<crate::serde::serde_lp_position::SerdeLpStakingPosition>> {
         let lp_program = self.lp_program_for_builders();
 
-        lp_program
-            .query_lp_position(
-                self.rpc(),
-                store,
-                owner,
-                position_id,
-                lp_token_mint,
-                controller_index,
-                controller_address.as_ref(),
-            )
-            .await
+        lp_program.query_lp_position(self.rpc(), &params).await
     }
 
     async fn get_my_lp_positions(
