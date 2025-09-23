@@ -213,6 +213,43 @@ enum Command {
     QueryGlobalState,
 }
 
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Validates and resolves controller parameters.
+///
+/// # Arguments
+/// * `controller_index` - Optional controller index
+/// * `controller_address` - Optional controller address
+///
+/// # Returns
+/// * `Ok((final_controller_index, final_controller_address))` - Resolved controller parameters
+/// * `Err` - If both parameters are None
+///
+/// # Note
+/// If controller_address is provided, it takes precedence over controller_index.
+/// The final_controller_index will be set to 0 when using controller_address.
+fn resolve_controller_params(
+    controller_index: Option<u64>,
+    controller_address: Option<Pubkey>,
+) -> eyre::Result<(u64, Option<Pubkey>)> {
+    // Validate that at least one controller parameter is provided
+    if controller_index.is_none() && controller_address.is_none() {
+        return Err(eyre::eyre!(
+            "Must provide either --controller-index or --controller-address"
+        ));
+    }
+
+    // Determine which controller to use (address takes precedence)
+    let (final_controller_index, final_controller_address) = match controller_address {
+        Some(addr) => (0, Some(addr)), // Use address, set index to 0 (will be ignored)
+        None => (controller_index.unwrap(), None), // Use index
+    };
+
+    Ok((final_controller_index, final_controller_address))
+}
+
 impl super::Command for Lp {
     fn is_client_required(&self) -> bool {
         true
@@ -241,18 +278,8 @@ impl super::Command for Lp {
                 controller_index,
                 controller_address,
             } => {
-                // Validate that at least one controller parameter is provided
-                if controller_index.is_none() && controller_address.is_none() {
-                    return Err(eyre::eyre!(
-                        "Must provide either --controller-index or --controller-address"
-                    ));
-                }
-
-                // Determine which controller to use (address takes precedence)
-                let (final_controller_index, final_controller_address) = match controller_address {
-                    Some(addr) => (0, Some(*addr)), // Use address, set index to 0 (will be ignored)
-                    None => (controller_index.unwrap(), None), // Use index
-                };
+                let (final_controller_index, final_controller_address) =
+                    resolve_controller_params(*controller_index, *controller_address)?;
 
                 client
                     .disable_lp_token_controller(
@@ -284,18 +311,8 @@ impl super::Command for Lp {
                 let stake_amount = NonZeroU64::new(amount_u64)
                     .ok_or_else(|| eyre::eyre!("Stake amount must be greater than zero"))?;
 
-                // Validate that at least one controller parameter is provided
-                if controller_index.is_none() && controller_address.is_none() {
-                    return Err(eyre::eyre!(
-                        "Must provide either --controller-index or --controller-address"
-                    ));
-                }
-
-                // Determine which controller to use (address takes precedence)
-                let (final_controller_index, final_controller_address) = match controller_address {
-                    Some(addr) => (0, Some(*addr)), // Use address, set index to 0 (will be ignored)
-                    None => (controller_index.unwrap(), None), // Use index
-                };
+                let (final_controller_index, final_controller_address) =
+                    resolve_controller_params(*controller_index, *controller_address)?;
 
                 // Create stake builder with controller parameters
                 let builder = match position_id {
@@ -334,18 +351,8 @@ impl super::Command for Lp {
                 controller_index,
                 controller_address,
             } => {
-                // Validate that at least one controller parameter is provided
-                if controller_index.is_none() && controller_address.is_none() {
-                    return Err(eyre::eyre!(
-                        "Must provide either --controller-index or --controller-address"
-                    ));
-                }
-
-                // Determine which controller to use (address takes precedence)
-                let (final_controller_index, final_controller_address) = match controller_address {
-                    Some(addr) => (0, Some(*addr)), // Use address, set index to 0 (will be ignored)
-                    None => (controller_index.unwrap(), None), // Use index
-                };
+                let (final_controller_index, final_controller_address) =
+                    resolve_controller_params(*controller_index, *controller_address)?;
                 // Prepare GT user account (idempotent operation)
                 let prepare_user = client.prepare_user(store)?;
 
@@ -389,18 +396,8 @@ impl super::Command for Lp {
                 controller_index,
                 controller_address,
             } => {
-                // Validate that at least one controller parameter is provided
-                if controller_index.is_none() && controller_address.is_none() {
-                    return Err(eyre::eyre!(
-                        "Must provide either --controller-index or --controller-address"
-                    ));
-                }
-
-                // Determine which controller to use (address takes precedence)
-                let (final_controller_index, final_controller_address) = match controller_address {
-                    Some(addr) => (0, Some(*addr)), // Use address, set index to 0 (will be ignored)
-                    None => (controller_index.unwrap(), None), // Use index
-                };
+                let (final_controller_index, final_controller_address) =
+                    resolve_controller_params(*controller_index, *controller_address)?;
 
                 // Use provided owner
                 let position_owner = *owner;
@@ -445,18 +442,8 @@ impl super::Command for Lp {
                 controller_index,
                 controller_address,
             } => {
-                // Validate that at least one controller parameter is provided
-                if controller_index.is_none() && controller_address.is_none() {
-                    return Err(eyre::eyre!(
-                        "Must provide either --controller-index or --controller-address"
-                    ));
-                }
-
-                // Determine which controller to use (address takes precedence)
-                let (final_controller_index, final_controller_address) = match controller_address {
-                    Some(addr) => (0, Some(*addr)), // Use address, set index to 0 (will be ignored)
-                    None => (controller_index.unwrap(), None), // Use index
-                };
+                let (final_controller_index, final_controller_address) =
+                    resolve_controller_params(*controller_index, *controller_address)?;
 
                 // Prepare GT user account (idempotent operation) - same as Unstake
                 let prepare_user = client.prepare_user(store)?;
@@ -600,18 +587,8 @@ impl super::Command for Lp {
                 controller_index,
                 controller_address,
             } => {
-                // Validate that at least one controller parameter is provided
-                if controller_index.is_none() && controller_address.is_none() {
-                    return Err(eyre::eyre!(
-                        "Must provide either --controller-index or --controller-address"
-                    ));
-                }
-
-                // Determine which controller to use (address takes precedence)
-                let (final_controller_index, final_controller_address) = match controller_address {
-                    Some(addr) => (0, Some(*addr)), // Use address, set index to 0 (will be ignored)
-                    None => (controller_index.unwrap(), None), // Use index
-                };
+                let (final_controller_index, final_controller_address) =
+                    resolve_controller_params(*controller_index, *controller_address)?;
 
                 // Query specific position
                 let position = client
