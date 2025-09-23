@@ -720,6 +720,16 @@ impl Lp {
                             }
                         }
                     }
+                    // Format stake start time to human readable format
+                    if let Some(time_value) = obj.get("stake_start_time") {
+                        if let Some(time_num) = time_value.as_i64() {
+                            let formatted_time = self.format_timestamp(time_num);
+                            obj.insert(
+                                "stake_start_time".to_string(),
+                                serde_json::Value::String(formatted_time),
+                            );
+                        }
+                    }
                 }
                 formatted
             })
@@ -786,6 +796,16 @@ impl Lp {
                             serde_json::Value::String(format!("{gt_num:.display_precision$}")),
                         );
                     }
+                }
+            }
+            // Format stake start time to human readable format
+            if let Some(time_value) = obj.get("stake_start_time") {
+                if let Some(time_num) = time_value.as_i64() {
+                    let formatted_time = self.format_timestamp(time_num);
+                    obj.insert(
+                        "stake_start_time".to_string(),
+                        serde_json::Value::String(formatted_time),
+                    );
                 }
             }
         }
@@ -922,5 +942,29 @@ impl Lp {
 
         println!("{}", output.display_many(state_data, options)?);
         Ok(())
+    }
+
+    /// Format Unix timestamp to human readable date and time string.
+    /// Returns format: "YYYY-MM-DD HH:MM:SS UTC" or "Invalid timestamp" for invalid values.
+    fn format_timestamp(&self, timestamp: i64) -> String {
+        if timestamp <= 0 {
+            return "Invalid timestamp".to_string();
+        }
+
+        match time::OffsetDateTime::from_unix_timestamp(timestamp) {
+            Ok(datetime) => {
+                // Format as "YYYY-MM-DD HH:MM:SS UTC"
+                match datetime.format(
+                    &time::format_description::parse(
+                        "[year]-[month]-[day] [hour]:[minute]:[second] UTC",
+                    )
+                    .unwrap(),
+                ) {
+                    Ok(formatted) => formatted,
+                    Err(_) => "Invalid timestamp".to_string(),
+                }
+            }
+            Err(_) => "Invalid timestamp".to_string(),
+        }
     }
 }
