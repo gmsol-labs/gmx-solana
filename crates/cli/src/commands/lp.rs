@@ -186,23 +186,20 @@ enum Command {
         /// New minimum stake value.
         new_min_stake_value: Value,
     },
-    /// Query all LP staking positions for the current wallet.
-    QueryMyPositions,
-    /// Query all LP staking positions for a specified wallet.
+    /// Query LP staking positions.
     QueryPositions {
         /// Owner wallet address to query positions for.
-        owner: Pubkey,
-    },
-    /// Query a specific LP staking position.
-    QueryPosition {
-        /// Owner of the position.
-        owner: Pubkey,
-        /// Position ID to query.
+        /// If not provided, queries current wallet's positions.
         #[arg(long)]
-        position_id: u64,
-        /// LP token mint address.
-        lp_token_mint: Pubkey,
-        /// Controller index.
+        owner: Option<Pubkey>,
+        /// Position ID to query (for specific position query).
+        /// If provided, queries a specific position.
+        #[arg(long)]
+        position_id: Option<u64>,
+        /// LP token mint address (required for specific position query).
+        #[arg(long)]
+        lp_token_mint: Option<Pubkey>,
+        /// Controller index (for specific position query).
         #[arg(long)]
         controller_index: Option<u64>,
         /// Controller address (if provided, takes precedence over controller_index).
@@ -549,73 +546,88 @@ impl super::Command for Lp {
                     .update_min_stake_value(min_stake_value_scaled)?
                     .into_bundle_with_options(options)?
             }
-            Command::QueryMyPositions => {
-                // Query all positions for current wallet
-                let positions = client.get_my_lp_positions(store).await?;
-
-                // Get GT decimals for proper formatting
-                let store_account = client
-                    .account::<ZeroCopy<Store>>(store)
-                    .await?
-                    .ok_or_else(|| eyre::eyre!("Store not found"))?;
-                let gt_decimals = store_account.0.gt.decimals;
-
-                let output = &ctx.config().output();
-                self.display_positions_list(&positions, output, gt_decimals)?;
-                return Ok(());
-            }
-            Command::QueryPositions { owner } => {
-                // Query all positions for specified owner
-                let positions = client.get_lp_positions(store, owner).await?;
-
-                // Get GT decimals for proper formatting
-                let store_account = client
-                    .account::<ZeroCopy<Store>>(store)
-                    .await?
-                    .ok_or_else(|| eyre::eyre!("Store not found"))?;
-                let gt_decimals = store_account.0.gt.decimals;
-
-                let output = &ctx.config().output();
-                self.display_positions_list(&positions, output, gt_decimals)?;
-                return Ok(());
-            }
-            Command::QueryPosition {
+            Command::QueryPositions {
                 owner,
                 position_id,
                 lp_token_mint,
                 controller_index,
                 controller_address,
             } => {
-                let (final_controller_index, final_controller_address) =
-                    resolve_controller_params(*controller_index, *controller_address)?;
-
-                // Query specific position
-                let params = LpPositionQueryParams {
-                    store,
-                    owner,
-                    position_id: *position_id,
-                    lp_token_mint,
-                    controller_index: final_controller_index,
-                    controller_address: final_controller_address.as_ref(),
-                };
-                let position = client.get_lp_position(params).await?;
-
                 // Get GT decimals for proper formatting
                 let store_account = client
                     .account::<ZeroCopy<Store>>(store)
                     .await?
                     .ok_or_else(|| eyre::eyre!("Store not found"))?;
                 let gt_decimals = store_account.0.gt.decimals;
-
                 let output = &ctx.config().output();
-                match position {
-                    Some(pos) => {
-                        self.display_single_position(&pos, output, gt_decimals)?;
+
+                match (owner, position_id, lp_token_mint) {
+                    // Mode 1: Query my positions (QueryMyPositions)
+                    (None, None, None) => {
+                        let positions = client.get_my_lp_positions(store).await?;
+                        self.display_positions_list(&positions, output, gt_decimals)?;
                     }
-                    None => {
-                        println!(
-                            "Position not found: owner={owner}, position_id={position_id}, lp_token_mint={lp_token_mint}"
-                        );
+
+                    // Mode 2: Query positions for specified owner (QueryPositions)
+                    (Some(owner), None, None) => {
+                        let positions = client.get_lp_positions(store, owner).await?;
+                        self.display_positions_list(&positions, output, gt_decimals)?;
+                    }
+
+                    // Mode 3: Query all positions for owner and LP token mint
+                    (Some(owner), None, Some(lp_token_mint)) => {
+                        // Get all positions for the owner, then filter by LP token mint
+                        let all_positions = client.get_lp_positions(store, owner).await?;
+                        let filtered_positions: Vec<_> = all_positions
+                            .into_iter()
+                            .filter(|pos| pos.lp_token_mint.0 == *lp_token_mint)
+                            .collect();
+
+                        if filtered_positions.is_empty() {
+                            println!(
+                                "No positions found for owner={owner} and lp_token_mint={lp_token_mint}"
+                            );
+                        } else {
+                            self.display_positions_list(&filtered_positions, output, gt_decimals)?;
+                        }
+                    }
+
+                    // Mode 4: Query specific position (QueryPosition)
+                    (Some(owner), Some(position_id), Some(lp_token_mint)) => {
+                        let (final_controller_index, final_controller_address) =
+                            resolve_controller_params(*controller_index, *controller_address)?;
+
+                        let params = LpPositionQueryParams {
+                            store,
+                            owner,
+                            position_id: *position_id,
+                            lp_token_mint,
+                            controller_index: final_controller_index,
+                            controller_address: final_controller_address.as_ref(),
+                        };
+                        let position = client.get_lp_position(params).await?;
+
+                        match position {
+                            Some(pos) => {
+                                self.display_single_position(&pos, output, gt_decimals)?;
+                            }
+                            None => {
+                                println!(
+                                    "Position not found: owner={owner}, position_id={position_id}, lp_token_mint={lp_token_mint}"
+                                );
+                            }
+                        }
+                    }
+
+                    // Invalid parameter combination
+                    _ => {
+                        return Err(eyre::eyre!(
+                            "Invalid parameter combination. Use:\n\
+                            - No parameters: query my positions\n\
+                            - --owner only: query owner's positions\n\
+                            - --owner --lp-token-mint: query owner's positions for specific LP token\n\
+                            - --owner --position-id --lp-token-mint: query specific position"
+                        ));
                     }
                 }
                 return Ok(());
@@ -703,6 +715,8 @@ impl Lp {
         let options = DisplayOptions::table_projection([
             ("position_id", "Position ID"),
             ("lp_token_symbol", "LP Token"),
+            ("controller_index", "Controller Index"),
+            ("controller", "Controller Address"),
             ("staked_amount", "Amount"),
             ("stake_start_time", "Staked Time"),
             ("current_apy", "APY"),
@@ -751,10 +765,12 @@ impl Lp {
             }
         }
 
-        // Single position display: Position ID, LP token, amount, staked time, APY, claimable GT
+        // Single position display: Position ID, LP token, controller info, amount, staked time, APY, claimable GT
         let options = DisplayOptions::table_projection([
             ("position_id", "Position ID"),
             ("lp_token_symbol", "LP Token"),
+            ("controller_index", "Controller Index"),
+            ("controller", "Controller Address"),
             ("staked_amount", "Amount"),
             ("stake_start_time", "Staked Time"),
             ("current_apy", "APY"),
@@ -792,7 +808,7 @@ impl Lp {
         let options = DisplayOptions::table_projection([
             ("lp_token_mint", "LP Token Mint"),
             ("controller_index", "Index"),
-            ("controller_address", "Controller Address"),
+            ("controller", "Controller Address"),
             ("is_enabled", "Enabled"),
             ("total_positions", "Total Positions"),
             ("disabled_at", "Disabled At"),

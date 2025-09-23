@@ -29,6 +29,8 @@ pub struct SerdeLpStakingPosition {
     pub owner: StringPubkey,
     /// LP token controller that manages this position.
     pub controller: StringPubkey,
+    /// Controller index (allows multiple controllers per token).
+    pub controller_index: u64,
     /// LP token mint for this position.
     pub lp_token_mint: StringPubkey,
     /// LP token symbol (e.g., "GM-SOL/USDC", "GLV-BTC").
@@ -71,6 +73,7 @@ impl SerdeLpStakingPosition {
         Ok(Self {
             owner: position.owner.into(),
             controller: position.controller.into(),
+            controller_index: controller.controller_index,
             lp_token_mint: position.lp_mint.into(),
             lp_token_symbol,
             position_id: position.position_id,
