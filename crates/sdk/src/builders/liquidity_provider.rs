@@ -56,6 +56,60 @@ use crate::{
 use super::StoreProgram;
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Resolves controller address from optional controller_address and controller_index.
+///
+/// # Arguments
+/// * `lp_program` - The liquidity provider program instance
+/// * `global_state` - Global state address
+/// * `lp_token_mint` - LP token mint address  
+/// * `controller_index` - Controller index
+/// * `controller_address` - Optional controller address
+///
+/// # Returns
+/// Controller address (controller_address takes precedence if provided)
+fn resolve_controller_address(
+    lp_program: &LiquidityProviderProgram,
+    global_state: &Pubkey,
+    lp_token_mint: &Pubkey,
+    controller_index: u64,
+    controller_address: Option<&Pubkey>,
+) -> Pubkey {
+    if let Some(addr) = controller_address {
+        *addr
+    } else {
+        lp_program.find_lp_token_controller_address(global_state, lp_token_mint, controller_index)
+    }
+}
+
+/// Resolves controller address for builders (with StringPubkey types).
+///
+/// # Arguments
+/// * `lp_program` - The liquidity provider program instance
+/// * `global_state` - Global state address
+/// * `lp_token_mint` - LP token mint address  
+/// * `controller_index` - Controller index
+/// * `controller_address` - Optional controller address (StringPubkey)
+///
+/// # Returns
+/// Controller address (controller_address takes precedence if provided)
+fn resolve_controller_address_for_builder(
+    lp_program: &LiquidityProviderProgram,
+    global_state: &Pubkey,
+    lp_token_mint: &Pubkey,
+    controller_index: u64,
+    controller_address: Option<&crate::serde::StringPubkey>,
+) -> Pubkey {
+    if let Some(addr) = controller_address {
+        addr.0
+    } else {
+        lp_program.find_lp_token_controller_address(global_state, lp_token_mint, controller_index)
+    }
+}
+
+// ============================================================================
 // Constants
 // ============================================================================
 
@@ -212,17 +266,13 @@ impl LiquidityProviderProgram {
         // Get global state and addresses
         let global_state_address = self.find_global_state_address();
 
-        // If controller_address is provided, use it directly (takes precedence over controller_index)
-        // Otherwise, calculate controller address from controller_index
-        let controller_addr = if let Some(addr) = controller_address {
-            *addr
-        } else {
-            self.find_lp_token_controller_address(
-                &global_state_address,
-                lp_token_mint,
-                controller_index,
-            )
-        };
+        let controller_addr = resolve_controller_address(
+            self,
+            &global_state_address,
+            lp_token_mint,
+            controller_index,
+            controller_address,
+        );
 
         let position_address =
             self.find_stake_position_address(owner, position_id, &controller_addr);
@@ -400,17 +450,13 @@ impl LiquidityProviderProgram {
         // Get required accounts for GT calculation (store account already provided)
         let global_state_address = self.find_global_state_address();
 
-        // If controller_address is provided, use it directly (takes precedence over controller_index)
-        // Otherwise, calculate controller address from controller_index
-        let controller_addr = if let Some(addr) = controller_address {
-            *addr
-        } else {
-            self.find_lp_token_controller_address(
-                &global_state_address,
-                lp_token_mint,
-                controller_index,
-            )
-        };
+        let controller_addr = resolve_controller_address(
+            self,
+            &global_state_address,
+            lp_token_mint,
+            controller_index,
+            controller_address,
+        );
 
         let position_address =
             self.find_stake_position_address(owner, position_id, &controller_addr);
@@ -782,17 +828,13 @@ impl StakeLpToken {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        // If controller_address is provided, use it directly (takes precedence over controller_index)
-        // Otherwise, calculate controller address from controller_index
-        let controller = if let Some(addr) = &self.controller_address {
-            addr.0
-        } else {
-            self.lp_program.find_lp_token_controller_address(
-                &global_state,
-                &lp_mint,
-                self.controller_index,
-            )
-        };
+        let controller = resolve_controller_address_for_builder(
+            &self.lp_program,
+            &global_state,
+            &lp_mint,
+            self.controller_index,
+            self.controller_address.as_ref(),
+        );
 
         let position =
             self.lp_program
@@ -832,16 +874,13 @@ impl StakeLpToken {
         let token_program_id = anchor_spl::token::ID;
         let market = self.store_program.find_market_address(&lp_mint);
 
-        // Use controller_address if provided, otherwise calculate from controller_index
-        let controller = if let Some(addr) = &self.controller_address {
-            addr.0
-        } else {
-            self.lp_program.find_lp_token_controller_address(
-                &global_state,
-                &lp_mint,
-                self.controller_index,
-            )
-        };
+        let controller = resolve_controller_address_for_builder(
+            &self.lp_program,
+            &global_state,
+            &lp_mint,
+            self.controller_index,
+            self.controller_address.as_ref(),
+        );
 
         Ok(self
             .lp_program
@@ -899,16 +938,13 @@ impl StakeLpToken {
         )
         .0;
 
-        // Use controller_address if provided, otherwise calculate from controller_index
-        let controller = if let Some(addr) = &self.controller_address {
-            addr.0
-        } else {
-            self.lp_program.find_lp_token_controller_address(
-                &global_state,
-                &lp_mint,
-                self.controller_index,
-            )
-        };
+        let controller = resolve_controller_address_for_builder(
+            &self.lp_program,
+            &global_state,
+            &lp_mint,
+            self.controller_index,
+            self.controller_address.as_ref(),
+        );
 
         Ok(self
             .lp_program
@@ -1214,17 +1250,13 @@ impl IntoAtomicGroup for DisableLpTokenController {
 
         let global_state = self.lp_program.find_global_state_address();
 
-        // If controller_address is provided, use it directly (takes precedence over controller_index)
-        // Otherwise, calculate controller address from controller_index
-        let controller = if let Some(addr) = &self.controller_address {
-            addr.0
-        } else {
-            self.lp_program.find_lp_token_controller_address(
-                &global_state,
-                &self.lp_token_mint.0,
-                self.controller_index,
-            )
-        };
+        let controller = resolve_controller_address_for_builder(
+            &self.lp_program,
+            &global_state,
+            &self.lp_token_mint.0,
+            self.controller_index,
+            self.controller_address.as_ref(),
+        );
 
         let instruction = self
             .lp_program
@@ -1305,17 +1337,13 @@ impl UnstakeLpToken {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        // If controller_address is provided, use it directly (takes precedence over controller_index)
-        // Otherwise, calculate controller address from controller_index
-        let controller = if let Some(addr) = &self.controller_address {
-            addr.0
-        } else {
-            self.lp_program.find_lp_token_controller_address(
-                &global_state,
-                &lp_mint,
-                self.controller_index,
-            )
-        };
+        let controller = resolve_controller_address_for_builder(
+            &self.lp_program,
+            &global_state,
+            &lp_mint,
+            self.controller_index,
+            self.controller_address.as_ref(),
+        );
 
         let position =
             self.lp_program
@@ -1799,17 +1827,13 @@ impl IntoAtomicGroup for CalculateGtReward {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        // If controller_address is provided, use it directly (takes precedence over controller_index)
-        // Otherwise, calculate controller address from controller_index
-        let controller = if let Some(addr) = &self.controller_address {
-            addr.0
-        } else {
-            self.lp_program.find_lp_token_controller_address(
-                &global_state,
-                &lp_mint,
-                self.controller_index,
-            )
-        };
+        let controller = resolve_controller_address_for_builder(
+            &self.lp_program,
+            &global_state,
+            &lp_mint,
+            self.controller_index,
+            self.controller_address.as_ref(),
+        );
 
         let position =
             self.lp_program
@@ -1846,17 +1870,13 @@ impl IntoAtomicGroup for ClaimGtReward {
         let global_state = self.lp_program.find_global_state_address();
         let lp_mint = self.lp_token_mint.0;
 
-        // If controller_address is provided, use it directly (takes precedence over controller_index)
-        // Otherwise, calculate controller address from controller_index
-        let controller = if let Some(addr) = &self.controller_address {
-            addr.0
-        } else {
-            self.lp_program.find_lp_token_controller_address(
-                &global_state,
-                &lp_mint,
-                self.controller_index,
-            )
-        };
+        let controller = resolve_controller_address_for_builder(
+            &self.lp_program,
+            &global_state,
+            &lp_mint,
+            self.controller_index,
+            self.controller_address.as_ref(),
+        );
 
         let position =
             self.lp_program
