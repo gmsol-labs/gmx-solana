@@ -691,6 +691,19 @@ impl Lp {
                             }
                         }
                     }
+                    // Format Average APY to configured decimal places
+                    if let Some(apy_value) = obj.get("average_apy") {
+                        if let Some(apy_str) = apy_value.as_str() {
+                            if let Ok(apy_num) = apy_str.parse::<f64>() {
+                                obj.insert(
+                                    "average_apy".to_string(),
+                                    serde_json::Value::String(format!(
+                                        "{apy_num:.APY_DISPLAY_DECIMALS$}"
+                                    )),
+                                );
+                            }
+                        }
+                    }
                     // Format GT using dynamic decimals from store
                     if let Some(gt_value) = obj.get("claimable_gt") {
                         if let Some(gt_str) = gt_value.as_str() {
@@ -719,7 +732,8 @@ impl Lp {
             ("controller", "Controller Address"),
             ("staked_amount", "Amount"),
             ("stake_start_time", "Staked Time"),
-            ("current_apy", "APY"),
+            ("current_apy", "Current APY"),
+            ("average_apy", "Average APY"),
             ("claimable_gt", "Claimable GT"),
         ])
         .set_empty_message("No LP staking positions found.");
@@ -750,6 +764,17 @@ impl Lp {
                     }
                 }
             }
+            // Format Average APY to configured decimal places
+            if let Some(apy_value) = obj.get("average_apy") {
+                if let Some(apy_str) = apy_value.as_str() {
+                    if let Ok(apy_num) = apy_str.parse::<f64>() {
+                        obj.insert(
+                            "average_apy".to_string(),
+                            serde_json::Value::String(format!("{apy_num:.APY_DISPLAY_DECIMALS$}")),
+                        );
+                    }
+                }
+            }
             // Format GT using dynamic decimals from store
             if let Some(gt_value) = obj.get("claimable_gt") {
                 if let Some(gt_str) = gt_value.as_str() {
@@ -773,7 +798,8 @@ impl Lp {
             ("controller", "Controller Address"),
             ("staked_amount", "Amount"),
             ("stake_start_time", "Staked Time"),
-            ("current_apy", "APY"),
+            ("current_apy", "Current APY"),
+            ("average_apy", "Average APY"),
             ("claimable_gt", "Claimable GT"),
         ]);
 

@@ -146,6 +146,7 @@ pub struct UnstakeLpTokenParams<'a> {
 ///
 /// # Returns
 /// Controller address (controller_address takes precedence if provided)
+#[cfg(feature = "client")]
 fn resolve_controller_address(
     lp_program: &LiquidityProviderProgram,
     global_state: &Pubkey,
@@ -789,6 +790,7 @@ impl LiquidityProviderProgram {
                 |_| crate::Error::custom("Claimable GT amount exceeds maximum representable value"),
             )?,
             current_apy: crate::utils::Value::from_u128(computed_data.current_apy),
+            average_apy: crate::utils::Value::from_u128(computed_data.average_apy),
             lp_token_symbol,
         };
 
@@ -823,8 +825,16 @@ impl LiquidityProviderProgram {
             &global_state.apy_gradient,
         );
 
+        // Calculate time-weighted average APY over the entire staking period
+        let average_apy = Self::compute_time_weighted_apy(
+            position.stake_start_time,
+            effective_end_time,
+            &global_state.apy_gradient,
+        );
+
         Ok(PositionComputedData {
             current_apy: current_display_apy, // Use display APY for UI
+            average_apy,                      // Time-weighted average APY
         })
     }
 }
@@ -833,6 +843,7 @@ impl LiquidityProviderProgram {
 #[cfg(feature = "client")]
 struct PositionComputedData {
     current_apy: u128,
+    average_apy: u128,
 }
 
 /// Builder for LP token staking instruction.

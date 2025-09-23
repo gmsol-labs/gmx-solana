@@ -15,6 +15,9 @@ pub struct LpPositionComputedData {
     /// Note: This is used for UI display and represents the APY rate for the current staking week.
     /// GT reward calculations internally use time-weighted APY for accuracy.
     pub current_apy: Value,
+    /// Time-weighted average APY over the entire staking period as fixed-point Value (1e20 scale).
+    /// This represents the average APY rate considering all weeks of staking.
+    pub average_apy: Value,
     /// LP token symbol (e.g., "GM-SOL/USDC", "GLV-BTC").
     /// Should have fallback to abbreviated mint address if mapping fails.
     pub lp_token_symbol: String,
@@ -47,6 +50,9 @@ pub struct SerdeLpStakingPosition {
     /// Note: This is the APY for the current staking week, used for UI display.
     /// For GT reward calculations, time-weighted APY is used internally.
     pub current_apy: Value,
+    /// Time-weighted average APY over the entire staking period as fixed-point Value (display layer converts to percentage).
+    /// This represents the average APY rate considering all weeks of staking.
+    pub average_apy: Value,
     /// Claimable GT rewards (calculated using precise on-chain logic) - raw format.
     pub claimable_gt: Amount,
     /// Position vault address (PDA that holds staked tokens).
@@ -81,6 +87,7 @@ impl SerdeLpStakingPosition {
             staked_value_usd: Value::from_u128(position.staked_value_usd),
             stake_start_time: position.stake_start_time, // Raw timestamp, display layer formats
             current_apy: computed_data.current_apy,      // Raw Value, display layer converts to %
+            average_apy: computed_data.average_apy,      // Raw Value, display layer converts to %
             claimable_gt: computed_data.claimable_gt,    // Already an Amount type
             vault: position.vault.into(),
             controller_enabled: controller.is_enabled,
