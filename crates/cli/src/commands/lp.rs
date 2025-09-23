@@ -209,10 +209,10 @@ enum Command {
         #[arg(long)]
         controller_address: Option<Pubkey>,
     },
-    /// Query LP token controllers for a specific token mint.
+    /// Query LP token controllers for a specific token mint or all controllers.
     QueryControllers {
-        /// LP token mint address (GM or GLV token).
-        lp_token_mint: Pubkey,
+        /// LP token mint address (GM or GLV token). If not provided, returns all controllers.
+        lp_token_mint: Option<Pubkey>,
     },
     /// Query LP Global State (authority, APY gradient, min stake value).
     QueryGlobalState,
@@ -621,11 +621,14 @@ impl super::Command for Lp {
                 return Ok(());
             }
             Command::QueryControllers { lp_token_mint } => {
-                // Query controllers for the specified LP token mint
-                let controllers = client.get_lp_controllers(lp_token_mint).await?;
+                // Query controllers for the specified LP token mint or all controllers
+                let controllers = match lp_token_mint {
+                    Some(mint) => client.get_lp_controllers(mint).await?,
+                    None => client.get_all_lp_controllers().await?,
+                };
 
                 let output = &ctx.config().output();
-                self.display_controllers(&controllers, lp_token_mint, output)?;
+                self.display_controllers(&controllers, lp_token_mint.as_ref(), output)?;
                 return Ok(());
             }
             Command::QueryGlobalState => {
@@ -766,21 +769,28 @@ impl Lp {
         Ok(())
     }
 
-    /// Display LP controllers for a specific token mint.
+    /// Display LP controllers for a specific token mint or all controllers.
     fn display_controllers(
         &self,
         controllers: &[gmsol_sdk::serde::serde_lp_controller::SerdeLpController],
-        lp_token_mint: &Pubkey,
+        lp_token_mint: Option<&Pubkey>,
         output: &crate::config::OutputFormat,
     ) -> eyre::Result<()> {
         if controllers.is_empty() {
-            println!("No controllers found for LP token: {lp_token_mint}");
+            match lp_token_mint {
+                Some(mint) => println!("No controllers found for LP token: {mint}"),
+                None => println!("No LP token controllers found."),
+            }
             return Ok(());
         }
 
-        println!("Controllers for LP token: {lp_token_mint}");
+        match lp_token_mint {
+            Some(mint) => println!("Controllers for LP token: {mint}"),
+            None => println!("All LP token controllers:"),
+        }
 
         let options = DisplayOptions::table_projection([
+            ("lp_token_mint", "LP Token Mint"),
             ("controller_index", "Index"),
             ("controller_address", "Controller Address"),
             ("is_enabled", "Enabled"),

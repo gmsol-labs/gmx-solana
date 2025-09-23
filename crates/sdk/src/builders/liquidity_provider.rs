@@ -452,6 +452,52 @@ impl LiquidityProviderProgram {
         Ok(results)
     }
 
+    /// Query all LP controllers (builder layer implementation)
+    #[cfg(feature = "client")]
+    pub async fn query_all_lp_controllers(
+        &self,
+        client: &solana_client::nonblocking::rpc_client::RpcClient,
+    ) -> crate::Result<Vec<crate::serde::serde_lp_controller::SerdeLpController>> {
+        // Query all LpTokenController accounts
+        let all_controllers_config = ProgramAccountsConfigForRpc {
+            filters: Some(vec![
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+                    0,
+                    gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController::DISCRIMINATOR,
+                )),
+            ]),
+            account_config: RpcAccountInfoConfig {
+                encoding: Some(solana_account_decoder::UiAccountEncoding::Base64),
+                ..RpcAccountInfoConfig::default()
+            },
+        };
+
+        let all_controller_accounts_result =
+            get_program_accounts_with_context(client, &self.id, all_controllers_config).await?;
+        let all_controller_accounts = all_controller_accounts_result.into_value();
+
+        let mut results = Vec::new();
+
+        for (controller_address, account) in all_controller_accounts {
+            // Deserialize controller account
+            let controller: gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController =
+                anchor_lang::AccountDeserialize::try_deserialize(&mut account.data.as_slice())
+                    .map_err(|e| {
+                        crate::Error::custom(format!("Failed to deserialize controller: {e}"))
+                    })?;
+
+            // Convert all controllers to serde format
+            let serde_controller =
+                crate::serde::serde_lp_controller::SerdeLpController::from_controller(
+                    &controller,
+                    &controller_address,
+                );
+            results.push(serde_controller);
+        }
+
+        Ok(results)
+    }
+
     /// Query LP Global State (builder layer implementation)
     #[cfg(feature = "client")]
     pub async fn query_lp_global_state(
