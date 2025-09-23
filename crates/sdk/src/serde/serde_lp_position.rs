@@ -9,8 +9,8 @@ use super::StringPubkey;
 #[cfg(liquidity_provider)]
 #[derive(Debug, Clone)]
 pub struct LpPositionComputedData {
-    /// Claimable GT rewards (calculated using precise on-chain logic) - u128 to avoid overflow.
-    pub claimable_gt: u128,
+    /// Claimable GT rewards (calculated using precise on-chain logic) - Amount type for proper decimal handling.
+    pub claimable_gt: Amount,
     /// Current display APY (current week's APY rate) as fixed-point Value (1e20 scale, same as on-chain).
     /// Note: This is used for UI display and represents the APY rate for the current staking week.
     /// GT reward calculations internally use time-weighted APY for accuracy.
@@ -60,14 +60,7 @@ impl SerdeLpStakingPosition {
         position: &Position,
         controller: &LpTokenController,
         computed_data: LpPositionComputedData,
-        gt_decimals: u8,
     ) -> crate::Result<Self> {
-        // Use Amount::from_u128 to avoid silent truncation - will return error if overflow
-        let claimable_gt =
-            Amount::from_u128(computed_data.claimable_gt, gt_decimals).map_err(|_| {
-                crate::Error::custom("Claimable GT amount exceeds maximum representable value")
-            })?;
-
         // Symbol fallback: use provided symbol or generate from mint address
         let lp_token_symbol = if computed_data.lp_token_symbol.is_empty() {
             fallback_lp_token_symbol(&position.lp_mint.into())
@@ -85,7 +78,7 @@ impl SerdeLpStakingPosition {
             staked_value_usd: Value::from_u128(position.staked_value_usd),
             stake_start_time: position.stake_start_time, // Raw timestamp, display layer formats
             current_apy: computed_data.current_apy,      // Raw Value, display layer converts to %
-            claimable_gt,
+            claimable_gt: computed_data.claimable_gt,    // Already an Amount type
             vault: position.vault.into(),
             controller_enabled: controller.is_enabled,
         })

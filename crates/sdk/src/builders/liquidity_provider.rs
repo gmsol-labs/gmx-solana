@@ -739,18 +739,15 @@ impl LiquidityProviderProgram {
 
         // Create computed data with symbol (use provided GT value)
         let computed_data_with_symbol = LpPositionComputedData {
-            claimable_gt,
+            claimable_gt: crate::utils::Amount::from_u128(claimable_gt, gt_decimals).map_err(
+                |_| crate::Error::custom("Claimable GT amount exceeds maximum representable value"),
+            )?,
             current_apy: crate::utils::Value::from_u128(computed_data.current_apy),
             lp_token_symbol,
         };
 
         // Convert to serde format
-        SerdeLpStakingPosition::from_position(
-            position,
-            controller,
-            computed_data_with_symbol,
-            gt_decimals,
-        )
+        SerdeLpStakingPosition::from_position(position, controller, computed_data_with_symbol)
     }
 
     /// Compute position data (APY and GT rewards) - internal helper

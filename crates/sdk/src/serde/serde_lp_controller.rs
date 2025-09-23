@@ -1,6 +1,8 @@
 #[cfg(liquidity_provider)]
 use gmsol_programs::gmsol_liquidity_provider::accounts::LpTokenController;
 
+use crate::utils::Value;
+
 use super::StringPubkey;
 
 /// Serializable version of LP token controller [`LpTokenController`].
@@ -23,7 +25,7 @@ pub struct SerdeLpController {
     /// Timestamp when disabled (only valid when is_enabled = false, display as formatted date).
     pub disabled_at: i64,
     /// Cumulative inverse cost factor snapshot when disabled (only valid when is_enabled = false).
-    pub disabled_cum_inv_cost: String,
+    pub disabled_cum_inv_cost: Value,
 }
 
 #[cfg(liquidity_provider)]
@@ -41,7 +43,7 @@ impl SerdeLpController {
             total_positions: controller.total_positions,
             is_enabled: controller.is_enabled,
             disabled_at: controller.disabled_at,
-            disabled_cum_inv_cost: controller.disabled_cum_inv_cost.to_string(),
+            disabled_cum_inv_cost: Value::from_u128(controller.disabled_cum_inv_cost),
         }
     }
 }
