@@ -22,7 +22,7 @@ use crate::config::DisplayOptions;
 // ============================================================================
 
 /// Number of decimal places for APY display formatting
-const APY_DISPLAY_DECIMALS: usize = 2;
+const APY_DISPLAY_DECIMALS: usize = 4;
 
 /// Maximum number of decimal places for GT amount display formatting
 /// Actual GT decimals are dynamically retrieved from store, but limited to this max for readability
