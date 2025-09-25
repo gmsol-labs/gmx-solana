@@ -20775,6 +20775,115 @@
       "args": []
     },
     {
+      "name": "update_fees_state",
+      "docs": [
+        "Update the closed state for the market.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](UpdateFeesState)*",
+        "",
+        "# Errors",
+        "- The [`authority`](UpdateFeesState::authority) must be a signer and have the ORDER_KEEPER",
+        "role in the store.",
+        "- The [`store`](UpdateFeesState::store) must be an initialized [`Store`](states::Store)",
+        "account owned by the store program.",
+        "- The [`oracle`](UpdateFeesState::oracle) must be an initialized [`Oracle`](states::Oracle)",
+        "account that is owned by the store.",
+        "- The [`market`](UpdateFeesState::market) must be enabled and owned by the store.",
+        "- Price feed accounts must be valid and provided in the market's sorted token list order.",
+        "- Virtual inventory accounts must be valid and include the virtual inventory associate",
+        "with the market."
+      ],
+      "discriminator": [
+        237,
+        228,
+        13,
+        27,
+        82,
+        247,
+        215,
+        104
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "writable": true,
+          "relations": [
+            "token_map",
+            "oracle",
+            "market"
+          ]
+        },
+        {
+          "name": "token_map",
+          "docs": [
+            "Token map."
+          ],
+          "relations": [
+            "store"
+          ]
+        },
+        {
+          "name": "oracle",
+          "docs": [
+            "Buffer for oracle prices."
+          ],
+          "writable": true
+        },
+        {
+          "name": "market",
+          "docs": [
+            "Market."
+          ],
+          "writable": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "update_glv_config",
       "docs": [
         "Update GLV config.",

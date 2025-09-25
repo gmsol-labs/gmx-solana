@@ -10,7 +10,9 @@ use gmsol_utils::oracle::PriceProviderKind;
 use solana_sdk::signer::Signer;
 
 use crate::{
-    builders::market_state::{UpdateClosedState, UpdateClosedStateHint},
+    builders::market_state::{
+        UpdateClosedState, UpdateClosedStateHint, UpdateFeesState, UpdateFeesStateHint,
+    },
     client::pull_oracle::{FeedIds, PullOraclePriceConsumer},
     utils::token_map::FeedAddressMap,
 };
@@ -88,6 +90,96 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
 
 impl<C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
     for UpdateClosedStateBuilder<'_, C>
+{
+    async fn feed_ids(&mut self) -> crate::Result<FeedIds> {
+        let hint = self.prepare_hint().await?;
+        Ok(FeedIds::new(
+            self.builder.store_program.store.0,
+            hint.to_tokens_with_feeds()?,
+        ))
+    }
+
+    fn process_feeds(
+        &mut self,
+        provider: PriceProviderKind,
+        map: FeedAddressMap,
+    ) -> crate::Result<()> {
+        self.builder.insert_feed_parser(provider, map)?;
+        Ok(())
+    }
+}
+
+/// Builder for `update_fees_state` instruction.
+pub struct UpdateFeesStateBuilder<'a, C> {
+    client: &'a crate::Client<C>,
+    builder: UpdateFeesState,
+    hint: Option<UpdateFeesStateHint>,
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> SetExecutionFee for UpdateFeesStateBuilder<'a, C> {
+    fn is_execution_fee_estimation_required(&self) -> bool {
+        // update_fees_state does not consume a dynamic execution fee in the builder
+        // so skip estimation entirely.
+        false
+    }
+
+    fn set_execution_fee(&mut self, _lamports: u64) -> &mut Self {
+        // No-op: builder does not carry an execution fee field.
+        self
+    }
+}
+
+impl<'a, C> UpdateFeesStateBuilder<'a, C> {
+    pub(super) fn new(client: &'a crate::Client<C>, builder: UpdateFeesState) -> Self {
+        Self {
+            client,
+            builder,
+            hint: None,
+        }
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> UpdateFeesStateBuilder<'a, C> {
+    /// Prepare hint.
+    pub async fn prepare_hint(&mut self) -> crate::Result<UpdateFeesStateHint> {
+        if let Some(hint) = self.hint.as_ref() {
+            return Ok(hint.clone());
+        }
+        let hint =
+            UpdateFeesStateHint::from_rpc_client_with(&self.builder, self.client.rpc()).await?;
+        self.hint = Some(hint.clone());
+        Ok(hint)
+    }
+
+    async fn build_txn(&mut self) -> crate::Result<TransactionBuilder<'a, C>> {
+        let hint = self.prepare_hint().await?;
+        let ag = self.builder.clone().into_atomic_group(&hint)?;
+        let txn = self.client.store_transaction().pre_atomic_group(ag, true);
+        Ok(txn)
+    }
+}
+
+impl<'a, C: Deref<Target = impl Signer> + Clone> MakeBundleBuilder<'a, C>
+    for UpdateFeesStateBuilder<'a, C>
+{
+    async fn build_with_options(
+        &mut self,
+        options: gmsol_solana_utils::bundle_builder::BundleOptions,
+    ) -> gmsol_solana_utils::Result<gmsol_solana_utils::bundle_builder::BundleBuilder<'a, C>> {
+        let mut tx = self.client.bundle_with_options(options);
+
+        tx.try_push(
+            self.build_txn()
+                .await
+                .map_err(gmsol_solana_utils::Error::custom)?,
+        )?;
+
+        Ok(tx)
+    }
+}
+
+impl<C: Deref<Target = impl Signer> + Clone> PullOraclePriceConsumer
+    for UpdateFeesStateBuilder<'_, C>
 {
     async fn feed_ids(&mut self) -> crate::Result<FeedIds> {
         let hint = self.prepare_hint().await?;
