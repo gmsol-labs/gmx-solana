@@ -1,7 +1,7 @@
 use crate::anchor_test::setup::{current_deployment, Deployment};
 use gmsol_liquidity_provider as lp;
 use gmsol_sdk::{
-    builders::liquidity_provider::LpTokenKind,
+    builders::liquidity_provider::{LpTokenKind, StakeLpTokenParams},
     client::ops::liquidity_provider::LiquidityProviderOps,
     ops::{ExchangeOps, GlvOps, MarketOps},
 };
@@ -309,6 +309,7 @@ async fn comprehensive_gm_flow() -> eyre::Result<()> {
     let span = tracing::info_span!("comprehensive_gm_flow");
     let _enter = span.enter();
 
+    let controller_index = 0;
     let user = deployment.user_client(Deployment::DEFAULT_USER)?;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let store = &deployment.store;
@@ -363,13 +364,15 @@ async fn comprehensive_gm_flow() -> eyre::Result<()> {
 
     // Step 4: Stake GM tokens using the SDK builder with real pricing
     // Note: GM controller should already be created during deployment setup
-    let mut stake_builder = user.stake_lp_token(
+    let mut stake_builder = user.stake_lp_token(StakeLpTokenParams {
         store,
-        LpTokenKind::Gm,
-        gm_token,
-        lp_oracle,
-        NonZeroU64::new(gm_amount).expect("amount must be non-zero"),
-    );
+        lp_token_kind: LpTokenKind::Gm,
+        lp_token_mint: gm_token,
+        oracle: lp_oracle,
+        amount: NonZeroU64::new(gm_amount).expect("amount must be non-zero"),
+        controller_index,
+        controller_address: None,
+    });
 
     deployment
         .execute_with_pyth(&mut stake_builder, None, false, true)
@@ -389,6 +392,7 @@ async fn comprehensive_glv_flow() -> eyre::Result<()> {
     let span = tracing::info_span!("comprehensive_glv_flow");
     let _enter = span.enter();
 
+    let controller_index = 0;
     let user = deployment.user_client(Deployment::DEFAULT_USER)?;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let store = &deployment.store;
@@ -447,13 +451,15 @@ async fn comprehensive_glv_flow() -> eyre::Result<()> {
 
     // Step 4: Stake GLV tokens using the SDK builder with real pricing
     // Note: GLV controller should already be created during deployment setup
-    let mut stake_builder = user.stake_lp_token(
+    let mut stake_builder = user.stake_lp_token(StakeLpTokenParams {
         store,
-        LpTokenKind::Glv,
-        glv_token,
-        lp_oracle,
-        NonZeroU64::new(glv_amount).expect("amount must be non-zero"),
-    );
+        lp_token_kind: LpTokenKind::Glv,
+        lp_token_mint: glv_token,
+        oracle: lp_oracle,
+        amount: NonZeroU64::new(glv_amount).expect("amount must be non-zero"),
+        controller_index,
+        controller_address: None,
+    });
 
     deployment
         .execute_with_pyth(&mut stake_builder, None, false, true)
@@ -667,6 +673,7 @@ async fn position_controller_relationship_tests() -> eyre::Result<()> {
     let span = tracing::info_span!("position_controller_relationship_tests");
     let _enter = span.enter();
 
+    let controller_index = 0u64;
     let user = deployment.user_client(Deployment::DEFAULT_USER)?;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let store = &deployment.store;
@@ -708,13 +715,15 @@ async fn position_controller_relationship_tests() -> eyre::Result<()> {
     let gm_amount = 60_000_000_000;
     let test_position_id = 99999u64; // Fixed ID for testing
     let mut stake_builder = user
-        .stake_lp_token(
+        .stake_lp_token(StakeLpTokenParams {
             store,
-            LpTokenKind::Gm,
-            gm_token,
-            lp_oracle,
-            NonZeroU64::new(gm_amount).expect("amount must be non-zero"),
-        )
+            lp_token_kind: LpTokenKind::Gm,
+            lp_token_mint: gm_token,
+            oracle: lp_oracle,
+            amount: NonZeroU64::new(gm_amount).expect("amount must be non-zero"),
+            controller_index,
+            controller_address: None,
+        })
         .with_position_id(test_position_id);
 
     deployment
@@ -722,7 +731,6 @@ async fn position_controller_relationship_tests() -> eyre::Result<()> {
         .await?;
 
     // Verify controller's total_positions increased
-    let controller_index = 0u64;
     let controller_seeds = &[
         lp::LP_TOKEN_CONTROLLER_SEED,
         global_state.as_ref(),
@@ -777,13 +785,15 @@ async fn position_controller_relationship_tests() -> eyre::Result<()> {
     tracing::info!("✓ Controller disabled with snapshot values recorded");
 
     // Test 2.1: Try to stake when controller is disabled (should fail)
-    let mut failed_stake_builder = user.stake_lp_token(
+    let mut failed_stake_builder = user.stake_lp_token(StakeLpTokenParams {
         store,
-        LpTokenKind::Gm,
-        gm_token,
-        lp_oracle,
-        NonZeroU64::new(gm_amount).expect("amount must be non-zero"),
-    );
+        lp_token_kind: LpTokenKind::Gm,
+        lp_token_mint: gm_token,
+        oracle: lp_oracle,
+        amount: NonZeroU64::new(gm_amount).expect("amount must be non-zero"),
+        controller_index,
+        controller_address: None,
+    });
 
     let result = deployment
         .execute_with_pyth(&mut failed_stake_builder, None, false, false)
