@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use gmsol_programs::gmsol_store::{
     accounts::{Market, Store},
     client::{accounts, args},
@@ -11,6 +13,7 @@ use gmsol_utils::{
     pubkey::optional_address,
     token_config::{token_records, TokensWithFeed},
 };
+use solana_sdk::instruction::AccountMeta;
 use typed_builder::TypedBuilder;
 
 use crate::{
@@ -27,7 +30,7 @@ use crate::{
 
 use super::StoreProgram;
 
-/// Builder for `udpate_closed_state` instruction.
+/// Builder for `update_closed_state` instruction.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
@@ -149,5 +152,149 @@ impl FromRpcClientWith<UpdateClosedState> for UpdateClosedStateHint {
             token_map: (*token_map_address).into(),
             feeds,
         })
+    }
+}
+
+/// Builder for `update_fees_state` instruction.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct UpdateFeesState {
+    /// Payer (a.k.a. authority).
+    #[builder(setter(into))]
+    pub payer: StringPubkey,
+    /// Store program.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub store_program: StoreProgram,
+    /// Oracle buffer account.
+    #[builder(setter(into))]
+    pub oracle: StringPubkey,
+    /// Market token mint address.
+    #[builder(setter(into))]
+    pub market_token: StringPubkey,
+    /// Feeds Parser.
+    #[cfg_attr(serde, serde(skip))]
+    #[builder(default)]
+    pub feeds_parser: FeedsParser,
+}
+
+impl UpdateFeesState {
+    /// Insert a feed parser.
+    pub fn insert_feed_parser(
+        &mut self,
+        provider: PriceProviderKind,
+        map: FeedAddressMap,
+    ) -> crate::Result<()> {
+        self.feeds_parser
+            .insert_pull_oracle_feed_parser(provider, map);
+        Ok(())
+    }
+}
+
+/// Hint for [`UpdateFeesState`].
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct UpdateFeesStateHint {
+    /// Token map.
+    #[builder(setter(into))]
+    pub token_map: StringPubkey,
+    /// Virtual inventories.
+    #[builder(setter(into))]
+    pub virtual_inventories: BTreeSet<StringPubkey>,
+    /// Feeds.
+    #[builder(setter(into))]
+    pub feeds: Vec<SerdeTokenRecord>,
+}
+
+impl UpdateFeesStateHint {
+    /// Create [`TokensWithFeed`]
+    pub fn to_tokens_with_feeds(&self) -> gmsol_solana_utils::Result<TokensWithFeed> {
+        to_tokens_with_feeds(&self.feeds).map_err(gmsol_solana_utils::Error::custom)
+    }
+}
+
+impl FromRpcClientWith<UpdateFeesState> for UpdateFeesStateHint {
+    async fn from_rpc_client_with<'a>(
+        builder: &'a UpdateFeesState,
+        client: &'a impl gmsol_solana_utils::client_traits::RpcClient,
+    ) -> gmsol_solana_utils::Result<Self> {
+        let store_program = &builder.store_program;
+        let store_address = &store_program.store.0;
+        let store = client
+            .get_anchor_account::<ZeroCopy<Store>>(store_address, Default::default())
+            .await?
+            .0;
+        let token_map_address = optional_address(&store.token_map)
+            .ok_or_else(|| gmsol_solana_utils::Error::custom("token map is not set"))?;
+        let market_address = store_program.find_market_address(&builder.market_token);
+        let market = client
+            .get_anchor_account::<ZeroCopy<Market>>(&market_address, Default::default())
+            .await?
+            .0;
+        let tokens = ordered_tokens(&market.meta.into());
+        let token_map = client
+            .get_anchor_account::<TokenMap>(token_map_address, Default::default())
+            .await?;
+        let feeds = token_records(&token_map, &tokens)
+            .map_err(gmsol_solana_utils::Error::custom)?
+            .into_iter()
+            .map(SerdeTokenRecord::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(gmsol_solana_utils::Error::custom)?;
+
+        let mut virtual_inventories = BTreeSet::new();
+        if let Some(vi) = optional_address(&market.virtual_inventory_for_swaps) {
+            virtual_inventories.insert((*vi).into());
+        }
+        if let Some(vi) = optional_address(&market.virtual_inventory_for_positions) {
+            virtual_inventories.insert((*vi).into());
+        }
+
+        Ok(Self {
+            token_map: (*token_map_address).into(),
+            virtual_inventories,
+            feeds,
+        })
+    }
+}
+
+impl IntoAtomicGroup for UpdateFeesState {
+    type Hint = UpdateFeesStateHint;
+
+    fn into_atomic_group(self, hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let authority = &self.payer.0;
+        let market = self.store_program.find_market_address(&self.market_token);
+        let feeds = self
+            .feeds_parser
+            .parse(&hint.to_tokens_with_feeds()?)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(gmsol_solana_utils::Error::custom)?;
+        let virtual_inventories = hint
+            .virtual_inventories
+            .iter()
+            .map(|pubkey| AccountMeta::new(**pubkey, false));
+        let update = self
+            .store_program
+            .anchor_instruction(args::UpdateFeesState {})
+            .anchor_accounts(
+                accounts::UpdateFeesState {
+                    authority: *authority,
+                    store: self.store_program.store.0,
+                    token_map: hint.token_map.0,
+                    oracle: self.oracle.0,
+                    market,
+                    program: self.store_program.id.0,
+                    event_authority: self.store_program.find_event_authority_address(),
+                },
+                false,
+            )
+            .accounts(feeds)
+            .accounts(virtual_inventories.collect())
+            .build();
+        Ok(AtomicGroup::with_instructions(authority, [update]))
     }
 }

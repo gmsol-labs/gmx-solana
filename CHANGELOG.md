@@ -65,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added support for `set_market_config_updatable` instruction.
 - sdk(sdk): Added support for `initialize` instruction for liquidity provider program.
 - sdk(sdk): Added support for `set_should_keep_position_account` instruction.
+- sdk(sdk): Added support for `update_fees_state` instruction.
 - cli: Added `lp init-lp` command.
 
 ### Changed
