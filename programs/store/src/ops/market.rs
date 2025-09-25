@@ -2,14 +2,11 @@ use std::collections::BTreeMap;
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, TokenAccount};
-use gmsol_model::{
-    price::Prices, Bank, BorrowingFeeMarketMutExt, LiquidityMarketMutExt, MarketAction,
-    PerpMarketMutExt, PositionImpactMarketMutExt,
-};
+use gmsol_model::{price::Prices, Bank, LiquidityMarketMutExt, MarketAction};
 use typed_builder::TypedBuilder;
 
 use crate::{
-    events::{DepositExecuted, EventEmitter, MarketFeesUpdated, WithdrawalExecuted},
+    events::{DepositExecuted, EventEmitter, WithdrawalExecuted},
     states::{
         common::swap::{SwapActionParams, SwapActionParamsExt},
         deposit::DepositActionParams,
@@ -296,45 +293,7 @@ impl<'a, 'info, T> Execute<'a, 'info, T> {
     }
 
     fn pre_execute(&mut self, prices: &Prices<u128>) -> Result<()> {
-        // Distribute position impact.
-        let distribute_position_impact = self
-            .market
-            .distribute_position_impact()
-            .map_err(ModelError::from)?
-            .execute()
-            .map_err(ModelError::from)?;
-
-        if *distribute_position_impact.distribution_amount() != 0 {
-            msg!("[Pre-execute] position impact distributed");
-        }
-
-        // Update borrowing state.
-        let borrowing = self
-            .market
-            .base_mut()
-            .update_borrowing(prices)
-            .and_then(|a| a.execute())
-            .map_err(ModelError::from)?;
-        msg!("[Pre-execute] borrowing state updated");
-
-        // Update funding state.
-        let funding = self
-            .market
-            .base_mut()
-            .update_funding(prices)
-            .and_then(|a| a.execute())
-            .map_err(ModelError::from)?;
-        msg!("[Pre-execute] funding state updated");
-
-        self.event_emitter
-            .emit_cpi(&MarketFeesUpdated::from_reports(
-                self.market.rev(),
-                self.market.market_meta().market_token_mint,
-                distribute_position_impact,
-                borrowing,
-                funding,
-            ))?;
-        Ok(())
+        self.market_mut().base_mut().update_fees_state(prices)
     }
 
     fn validate_first_deposit(

@@ -5,18 +5,14 @@ use gmsol_model::{
     action::decrease_position::{DecreasePositionFlags, DecreasePositionSwapType},
     num::Unsigned,
     price::Prices,
-    BaseMarket, BaseMarketExt, BorrowingFeeMarketMutExt, MarketAction, PerpMarketMutExt,
-    PnlFactorKind, Position as _, PositionImpactMarketMutExt, PositionMut, PositionMutExt,
-    PositionState, PositionStateExt,
+    BaseMarket, BaseMarketExt, MarketAction, PnlFactorKind, Position as _, PositionMut,
+    PositionMutExt, PositionState, PositionStateExt,
 };
 use gmsol_utils::action::ActionCallbackKind;
 use typed_builder::TypedBuilder;
 
 use crate::{
-    events::{
-        EventEmitter, MarketFeesUpdated, OrderUpdated, PositionDecreased, PositionIncreased,
-        TradeData,
-    },
+    events::{EventEmitter, OrderUpdated, PositionDecreased, PositionIncreased, TradeData},
     states::{
         callback::CallbackAuthority,
         common::{
@@ -1021,41 +1017,7 @@ impl ExecuteOrderOperation<'_, '_> {
         )?;
         let mut transfer_out = Box::default();
 
-        {
-            // Distribute position impact.
-            let distribute_position_impact = market
-                .distribute_position_impact()
-                .map_err(ModelError::from)?
-                .execute()
-                .map_err(ModelError::from)?;
-
-            if *distribute_position_impact.distribution_amount() != 0 {
-                msg!("[Pre-execute] position impact distributed");
-            }
-
-            // Update borrowing state.
-            let borrowing = market
-                .update_borrowing(&prices)
-                .and_then(|a| a.execute())
-                .map_err(ModelError::from)?;
-            msg!("[Pre-execute] borrowing state updated");
-
-            // Update funding state.
-            let funding = market
-                .update_funding(&prices)
-                .and_then(|a| a.execute())
-                .map_err(ModelError::from)?;
-            msg!("[Pre-execute] funding state updated");
-
-            self.event_emitter
-                .emit_cpi(&MarketFeesUpdated::from_reports(
-                    market.rev(),
-                    market.market_meta().market_token_mint,
-                    distribute_position_impact,
-                    borrowing,
-                    funding,
-                ))?;
-        }
+        market.update_fees_state(&prices)?;
 
         let kind = self.order.load()?.params.kind()?;
         let mut should_send_trade_event = false;

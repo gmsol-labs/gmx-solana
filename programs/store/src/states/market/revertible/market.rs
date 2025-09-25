@@ -11,12 +11,13 @@ use gmsol_model::{
         position::PositionImpactDistributionParams,
         FeeParams, PositionParams, PriceImpactParams,
     },
+    price::Prices,
     PoolKind,
 };
 
 use crate::{
     constants, debug_msg,
-    events::{EventEmitter, InsufficientFundingFeePayment},
+    events::{EventEmitter, InsufficientFundingFeePayment, MarketFeesUpdated},
     states::{
         market::{
             clock::{AsClock, AsClockMut},
@@ -24,7 +25,7 @@ use crate::{
         },
         Factor, HasMarketMeta, Market, MarketMeta, OtherState,
     },
-    CoreError,
+    CoreError, ModelError,
 };
 
 use super::{
@@ -259,6 +260,48 @@ impl<'a, 'info> RevertibleMarket<'a, 'info> {
             .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
         self.other_mut().trade_count = next_trade_id;
         Ok(next_trade_id)
+    }
+
+    #[inline(never)]
+    pub(crate) fn update_fees_state(&mut self, prices: &Prices<u128>) -> Result<()> {
+        use gmsol_model::{
+            BorrowingFeeMarketMutExt, MarketAction, PerpMarketMutExt, PositionImpactMarketMutExt,
+        };
+
+        // Distribute position impact.
+        let distribute_position_impact = self
+            .distribute_position_impact()
+            .map_err(ModelError::from)?
+            .execute()
+            .map_err(ModelError::from)?;
+
+        if *distribute_position_impact.distribution_amount() != 0 {
+            msg!("[Pre-execute] position impact distributed");
+        }
+
+        // Update borrowing state.
+        let borrowing = self
+            .update_borrowing(prices)
+            .and_then(|a| a.execute())
+            .map_err(ModelError::from)?;
+        msg!("[Pre-execute] borrowing state updated");
+
+        // Update funding state.
+        let funding = self
+            .update_funding(prices)
+            .and_then(|a| a.execute())
+            .map_err(ModelError::from)?;
+        msg!("[Pre-execute] funding state updated");
+
+        self.event_emitter
+            .emit_cpi(&MarketFeesUpdated::from_reports(
+                self.rev(),
+                self.market_meta().market_token_mint,
+                distribute_position_impact,
+                borrowing,
+                funding,
+            ))?;
+        Ok(())
     }
 }
 
