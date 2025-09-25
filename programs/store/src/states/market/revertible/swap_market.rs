@@ -77,8 +77,7 @@ impl<'a, 'info> SwapMarkets<'a, 'info> {
             + Revision
             + HasMarketMeta
             + gmsol_model::Bank<Pubkey, Num = u64>
-            + gmsol_model::SwapMarketMut<{ constants::MARKET_DECIMALS }, Num = u128>
-            + gmsol_model::BorrowingFeeMarketMut<{ constants::MARKET_DECIMALS }>,
+            + gmsol_model::SwapMarketMut<{ constants::MARKET_DECIMALS }, Num = u128>,
     {
         let long_path = params
             .validated_primary_swap_path()
