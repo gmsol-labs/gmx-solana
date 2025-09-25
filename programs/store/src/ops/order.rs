@@ -899,7 +899,7 @@ impl ExecuteOrderOperation<'_, '_> {
 
         self.order.load()?.validate_valid_from_ts()?;
 
-        match self.validate_oracle_and_position_cut() {
+        match self.validate_oracle() {
             Ok(()) => {}
             Err(CoreError::OracleTimestampsAreLargerThanRequired)
                 if !self.throw_on_execution_error =>
@@ -1196,7 +1196,7 @@ impl ExecuteOrderOperation<'_, '_> {
         Ok(())
     }
 
-    fn validate_oracle_and_position_cut(&self) -> crate::CoreResult<()> {
+    fn validate_oracle(&self) -> crate::CoreResult<()> {
         self.oracle.validate_time(self)?;
         let (kind, is_long) = {
             let order = self.order.load().map_err(|_| CoreError::LoadAccountError)?;
@@ -1212,34 +1212,26 @@ impl ExecuteOrderOperation<'_, '_> {
                     .is_long(),
             )
         };
-        match kind {
-            OrderKind::AutoDeleveraging => {
-                let max_staleness = *self
-                    .store
-                    .load()
-                    .map_err(|_| CoreError::LoadAccountError)?
-                    .get_amount_by_key(AmountKey::AdlPricesMaxStaleness)
-                    .ok_or(CoreError::Unimplemented)?;
-                self.market
-                    .load()
-                    .map_err(|_| CoreError::LoadAccountError)?
-                    .validate_adl(self.oracle, is_long, max_staleness)?;
-            }
-            OrderKind::Liquidation => {
-                if self.allow_closed {
-                    let max_staleness = *self
-                        .store
-                        .load()
-                        .map_err(|_| CoreError::LoadAccountError)?
-                        .get_amount_by_key(AmountKey::MarketClosedPricesMaxStaleness)
-                        .ok_or(CoreError::Unimplemented)?;
-                    self.market
-                        .load()
-                        .map_err(|_| CoreError::LoadAccountError)?
-                        .validate_open_or_nonstale_oracle(self.oracle, max_staleness)?;
-                }
-            }
-            _ => {}
+        // Validate ADL state.
+        if let OrderKind::AutoDeleveraging = kind {
+            let max_staleness = *self
+                .store
+                .load()
+                .map_err(|_| CoreError::LoadAccountError)?
+                .get_amount_by_key(AmountKey::AdlPricesMaxStaleness)
+                .ok_or(CoreError::Unimplemented)?;
+            self.market
+                .load()
+                .map_err(|_| CoreError::LoadAccountError)?
+                .validate_adl(self.oracle, is_long, max_staleness)?;
+        };
+        // Validate closed state.
+        if self.allow_closed {
+            let store = self.store.load().map_err(|_| CoreError::LoadAccountError)?;
+            self.market
+                .load()
+                .map_err(|_| CoreError::LoadAccountError)?
+                .validate_open_or_nonstale_oracle_with_store(self.oracle, &store)?;
         }
         Ok(())
     }
