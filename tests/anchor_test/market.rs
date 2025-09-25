@@ -405,3 +405,40 @@ async fn set_market_config_updatable() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn update_fees_state() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("update_fees_state");
+    let _enter = span.enter();
+
+    let user = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+
+    let market_token = deployment
+        .market_token("SOL", "fBTC", "USDG")
+        .expect("must exist");
+
+    let mut builder = keeper.update_fees_state(store, oracle, market_token);
+    deployment
+        .execute_with_pyth(&mut builder, None, false, true)
+        .instrument(tracing::info_span!("update market fees state by ORDER_KEEPER", %market_token))
+        .await?;
+
+    let mut builder = user.update_closed_state(store, oracle, market_token);
+    let err = deployment
+        .execute_with_pyth(&mut builder, None, false, false)
+        .instrument(tracing::info_span!("update market fees state by ORDER_KEEPER", %market_token))
+        .await
+        .expect_err("should throw error when the payer is not an ORDER_KEEPER");
+
+    assert_eq!(
+        err.anchor_error_code(),
+        Some(CoreError::PermissionDenied.into())
+    );
+
+    Ok(())
+}
