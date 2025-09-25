@@ -1,10 +1,11 @@
 use anchor_lang::prelude::*;
 
 use gmsol_model::{BaseMarketExt, ClockKind, PnlFactorKind};
+use gmsol_utils::config::AmountKey;
 
 use crate::{
     constants,
-    states::{MarketPriceOptions, Oracle},
+    states::{MarketPriceOptions, Oracle, Store},
     CoreError, CoreResult, ModelError,
 };
 
@@ -249,6 +250,17 @@ pub(crate) trait ClosableMarket {
     fn closed_state_updated_at(&self) -> CoreResult<i64>;
 
     fn update_closed_state(&mut self, oracle: &Oracle) -> Result<()>;
+
+    fn validate_open_or_nonstale_oracle_with_store(
+        &self,
+        oracle: &Oracle,
+        store: &Store,
+    ) -> CoreResult<()> {
+        let max_staleness = store
+            .get_amount_by_key(AmountKey::MarketClosedPricesMaxStaleness)
+            .ok_or(CoreError::Unimplemented)?;
+        self.validate_open_or_nonstale_oracle(oracle, *max_staleness)
+    }
 }
 
 impl ClosableMarket for Market {

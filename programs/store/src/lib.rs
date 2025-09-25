@@ -2555,6 +2555,29 @@ pub mod gmsol_store {
         UpdateClosedState::invoke_unchecked(ctx)
     }
 
+    /// Update the closed state for the market.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](UpdateFeesState)*
+    ///
+    /// # Errors
+    /// - The [`authority`](UpdateFeesState::authority) must be a signer and have the ORDER_KEEPER
+    ///   role in the store.
+    /// - The [`store`](UpdateFeesState::store) must be an initialized [`Store`](states::Store)
+    ///   account owned by the store program.
+    /// - The [`oracle`](UpdateFeesState::oracle) must be an initialized [`Oracle`](states::Oracle)
+    ///   account that is owned by the store.
+    /// - The [`market`](UpdateFeesState::market) must be enabled and owned by the store.
+    /// - Price feed accounts must be valid and provided in the market's sorted token list order.
+    /// - Virtual inventory accounts must be valid and include the virtual inventory associate
+    ///   with the market.
+    #[access_control(internal::Authenticate::only_order_keeper(&ctx))]
+    pub fn update_fees_state<'info>(
+        ctx: Context<'_, '_, 'info, 'info, UpdateFeesState<'info>>,
+    ) -> Result<()> {
+        UpdateFeesState::invoke_unchecked(ctx)
+    }
+
     // ===========================================
     //                  Shift
     // ===========================================

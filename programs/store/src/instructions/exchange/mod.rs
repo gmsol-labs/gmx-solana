@@ -31,6 +31,9 @@ pub mod execute_shift;
 /// Update closed state.
 pub mod update_closed;
 
+/// Update fees state.
+pub mod update_fees;
+
 pub use deposit::*;
 pub use execute_deposit::*;
 pub use execute_order::*;
@@ -41,6 +44,7 @@ pub use position_cut::*;
 pub use shift::*;
 pub use update_adl::*;
 pub use update_closed::*;
+pub use update_fees::*;
 pub use withdrawal::*;
 
 use crate::CoreError;
