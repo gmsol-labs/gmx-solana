@@ -13,6 +13,7 @@ use gmsol_sdk::{
     constants::MARKET_DECIMALS,
     core::{market::MarketMeta, order::OrderKind},
     decode::gmsol::programs::GMSOLAccountData,
+    model::PositionStateExt,
     ops::{
         exchange::{deposit, glv_deposit, glv_shift, glv_withdrawal, shift, withdrawal},
         AddressLookupTableOps, ExchangeOps,
@@ -562,6 +563,25 @@ enum Command {
         args: executor::ExecutorArgs,
         position: Pubkey,
     },
+    /// Close an empty position account.
+    CloseEmptyPositions {
+        #[clap(flatten)]
+        args: CloseEmptyPositionsArgs,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+#[command(group(ArgGroup::new("positions-to-close").required(true)))]
+struct CloseEmptyPositionsArgs {
+    /// The addresses of positions to close.
+    #[arg(group = "positions-to-close", num_args = 1..)]
+    positions: Vec<Pubkey>,
+    /// Close all empty positions in the given market.
+    #[arg(long, group = "positions-to-close")]
+    market_token: Option<Pubkey>,
+    /// Close all empty positions.
+    #[arg(long, group = "positions-to-close")]
+    all: bool,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -2231,6 +2251,40 @@ impl super::Command for Exchange {
                 }
                 executor.execute(builder, options).await?;
                 return Ok(());
+            }
+            Command::CloseEmptyPositions {
+                args:
+                    CloseEmptyPositionsArgs {
+                        positions,
+                        market_token,
+                        all: _,
+                    },
+            } => {
+                let owner = &client.payer();
+                let positions = if !positions.is_empty() {
+                    positions.clone()
+                } else {
+                    client
+                        .positions(store, Some(owner), market_token.as_ref())
+                        .await?
+                        .iter()
+                        .filter_map(|(address, p)| p.state.is_empty().then_some(address))
+                        .copied()
+                        .collect()
+                };
+
+                if positions.is_empty() {
+                    println!("No position to close");
+                    return Ok(());
+                }
+
+                let mut bundle = client.bundle_with_options(options);
+                for position in positions {
+                    let txn = client.close_empty_position(store, &position)?;
+                    bundle.push(txn)?;
+                }
+
+                bundle
             }
         };
 
