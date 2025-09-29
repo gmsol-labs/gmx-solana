@@ -4,8 +4,8 @@ use gmsol_programs::gmsol_store::types::CreateOrderParams as StoreCreateOrderPar
 use gmsol_programs::gmsol_store::{client::accounts, types::OrderKind};
 use gmsol_solana_utils::client_traits::FromRpcClientWith;
 use gmsol_solana_utils::ProgramExt;
-use solana_sdk::instruction::AccountMeta;
 use solana_sdk::system_program;
+use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
 use typed_builder::TypedBuilder;
 
 use crate::builders::callback::{Callback, CallbackParams};
@@ -16,7 +16,7 @@ use crate::builders::{
 use crate::serde::StringPubkey;
 use crate::{AtomicGroup, IntoAtomicGroup};
 
-use super::MIN_EXECUTION_LAMPORTS_FOR_ORDER;
+use super::{PreparePosition, MIN_EXECUTION_LAMPORTS_FOR_ORDER};
 
 /// Create Order Kind.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
@@ -209,9 +209,18 @@ pub struct CreateOrder {
     #[cfg_attr(serde, serde(default))]
     #[builder(default)]
     pub unwrap_native_on_receive: bool,
+    /// Callback.
     #[cfg_attr(serde, serde(default))]
     #[builder(default)]
     pub callback: Option<Callback>,
+    /// Whether to skip position account creation.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub skip_position_creation: bool,
+    /// Whether to force position account creation.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default)]
+    pub force_position_creation: bool,
 }
 
 #[cfg(serde)]
@@ -225,15 +234,7 @@ impl CreateOrder {
         hint: &CreateOrderHint,
     ) -> Result<bool, crate::SolanaUtilsError> {
         let token = &*self.collateral_or_swap_out_token;
-        if *token == *hint.long_token {
-            Ok(true)
-        } else if *token == *hint.short_token {
-            Ok(false)
-        } else {
-            Err(crate::SolanaUtilsError::custom(
-                "invalid hint: `collateral_or_swap_out_token` is not one of the specified long or short tokens",
-            ))
-        }
+        hint.is_collateral_long(token)
     }
 }
 
@@ -249,6 +250,23 @@ pub struct CreateOrderHint {
     /// Short token.
     #[builder(setter(into))]
     pub short_token: StringPubkey,
+}
+
+impl CreateOrderHint {
+    /// Returns whether the given token is long token or short token.
+    /// # Errors
+    /// - Returns Error if the given `collateral` is not one of the specified long or short tokens.
+    pub fn is_collateral_long(&self, collateral: &Pubkey) -> Result<bool, crate::SolanaUtilsError> {
+        if *collateral == *self.long_token {
+            Ok(true)
+        } else if *collateral == *self.short_token {
+            Ok(false)
+        } else {
+            Err(crate::SolanaUtilsError::custom(
+                "invalid hint: `collateral` is not one of the specified long or short tokens",
+            ))
+        }
+    }
 }
 
 impl IntoAtomicGroup for CreateOrder {
@@ -379,22 +397,27 @@ impl IntoAtomicGroup for CreateOrder {
             valid_from_ts: self.params.valid_from_ts,
         };
 
-        if self.kind.is_increase() {
-            insts.add(
-                self.program
-                    .anchor_instruction(args::PreparePosition { params })
-                    .anchor_accounts(
-                        accounts::PreparePosition {
-                            owner,
-                            store: self.program.store.0,
-                            market,
-                            position: position.unwrap(),
-                            system_program: system_program::ID,
-                        },
-                        true,
-                    )
-                    .build(),
-            );
+        if is_position_order && self.skip_position_creation && self.force_position_creation {
+            return Err(crate::SolanaUtilsError::custom(
+                "invalid parameters: `skip_position_creation` and `force_position_creation` are both set",
+            ));
+        }
+
+        if (is_position_order && !self.skip_position_creation)
+            && (self.kind.is_increase() || self.force_position_creation)
+        {
+            let prepare = PreparePosition::builder()
+                .program(self.program.clone())
+                .collateral_token(collateral_or_swap_out_token)
+                .execution_lamports(self.execution_lamports)
+                .kind(self.kind)
+                .params(self.params.clone())
+                .payer(self.payer)
+                .should_unwrap_native_token(params.should_unwrap_native_token)
+                .swap_path_length(params.swap_path_length)
+                .build()
+                .into_atomic_group(hint)?;
+            insts.merge(prepare);
         }
 
         let CallbackParams {

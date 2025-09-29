@@ -7,6 +7,9 @@ pub mod close;
 /// Builder for the `update_order` instruction.
 pub mod update;
 
+/// Builder for position account management instructions.
+pub mod position;
+
 /// Min execution lamports for order.
 pub const MIN_EXECUTION_LAMPORTS_FOR_ORDER: u64 = 300_000;
 
@@ -15,5 +18,6 @@ pub use self::{
     create::{
         CreateOrder, CreateOrderHint, CreateOrderKind, CreateOrderParams, DecreasePositionSwapType,
     },
+    position::PreparePosition,
     update::{UpdateOrder, UpdateOrderHint, UpdateOrderParams},
 };

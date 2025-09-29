@@ -66,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added support for `initialize` instruction for liquidity provider program.
 - sdk(sdk): Added support for `set_should_keep_position_account` instruction.
 - sdk(sdk): Added support for `update_fees_state` instruction.
+- sdk(sdk): Added support for `prepare_position` instruction.
+- sdk(sdk&js): Added options for position creation management.
 - cli: Added `lp init-lp` command.
 
 ### Changed
