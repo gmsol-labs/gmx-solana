@@ -80,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- model & sdk(sdk): Aligned the funding value calculation with GMX V2.
 - sdk(sdk): Fixed wrong event authority address in `CreateOrder`.
 - sdk(sdk): Added `openssl-vendored` feature to avoid link errors.
 - sdk(sdk): Fixed missing delegation to base impl of `SetExecutionFee::is_execution_fee_estimation_required`.
