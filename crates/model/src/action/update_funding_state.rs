@@ -53,23 +53,19 @@ impl<M: PerpMarketMut<DECIMALS>, const DECIMALS: u8> UpdateFundingState<M, DECIM
             )?;
         report.next_funding_factor_per_second = next_funding_factor_per_second;
 
-        let size_of_larger_side = if long_open_interest > short_open_interest {
-            long_open_interest.clone()
-        } else {
-            short_open_interest.clone()
-        };
-        let duration_value = M::Num::from_u64(duration_in_seconds).ok_or(crate::Error::Convert)?;
-        let funding_factor = duration_value
-            .checked_mul(&funding_factor_per_second)
-            .ok_or(crate::Error::Computation("calculating funding factor"))?;
-        let funding_value = utils::apply_factor(&size_of_larger_side, &funding_factor)
-            .ok_or(crate::Error::Computation("calculating funding value"))?;
-
         let payer_open_interest = if longs_pay_shorts {
             &long_open_interest
         } else {
             &short_open_interest
         };
+
+        let duration_value = M::Num::from_u64(duration_in_seconds).ok_or(crate::Error::Convert)?;
+        let funding_factor = duration_value
+            .checked_mul(&funding_factor_per_second)
+            .ok_or(crate::Error::Computation("calculating funding factor"))?;
+        let funding_value = utils::apply_factor(payer_open_interest, &funding_factor)
+            .ok_or(crate::Error::Computation("calculating funding value"))?;
+
         let for_long_collateral = funding_value
             .checked_mul_div(
                 &self

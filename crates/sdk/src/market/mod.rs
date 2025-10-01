@@ -47,17 +47,21 @@ impl MarketCalculations for MarketModel {
                         &open_interest_for_long,
                         &open_interest_for_short,
                     )?;
-                let size_for_larger_side = open_interest_for_long.max(open_interest_for_short);
+                let size_of_paying_side = if longs_pay_shorts {
+                    open_interest_for_long
+                } else {
+                    open_interest_for_short
+                };
                 let funding_rate_per_second_for_long = if longs_pay_shorts {
                     funding_factor_per_second
-                        .checked_mul_div_ceil(&size_for_larger_side, &open_interest_for_long)
+                        .checked_mul_div_ceil(&size_of_paying_side, &open_interest_for_long)
                         .ok_or_else(|| {
                             crate::Error::custom("failed to calculate funding rate for long")
                         })?
                         .to_signed()?
                 } else {
                     funding_factor_per_second
-                        .checked_mul_div(&size_for_larger_side, &open_interest_for_long)
+                        .checked_mul_div(&size_of_paying_side, &open_interest_for_long)
                         .ok_or_else(|| {
                             crate::Error::custom("failed to calculate funding rate for long")
                         })?
@@ -65,14 +69,14 @@ impl MarketCalculations for MarketModel {
                 };
                 let funding_rate_per_second_for_short = if !longs_pay_shorts {
                     funding_factor_per_second
-                        .checked_mul_div_ceil(&size_for_larger_side, &open_interest_for_short)
+                        .checked_mul_div_ceil(&size_of_paying_side, &open_interest_for_short)
                         .ok_or_else(|| {
                             crate::Error::custom("failed to calculate funding rate for short")
                         })?
                         .to_signed()?
                 } else {
                     funding_factor_per_second
-                        .checked_mul_div(&size_for_larger_side, &open_interest_for_short)
+                        .checked_mul_div(&size_of_paying_side, &open_interest_for_short)
                         .ok_or_else(|| {
                             crate::Error::custom("failed to calculate funding rate for short")
                         })?
