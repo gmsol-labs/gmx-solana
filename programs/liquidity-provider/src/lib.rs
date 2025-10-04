@@ -645,7 +645,19 @@ fn calculate_gt_reward_amount(
     let gt_raw = apply_factor::<u128, MARKET_DECIMALS>(&per_sec_factor, &inv_cost_integral)
         .ok_or(ErrorCode::MathOverflow)?;
 
-    Ok(gt_raw.min(u64::MAX as u128) as u64)
+    // Check for saturation and log if necessary
+    let gt_amount = if gt_raw > u64::MAX as u128 {
+        msg!(
+            "WARNING: GT reward amount {} exceeds u64::MAX, saturating to {}",
+            gt_raw,
+            u64::MAX
+        );
+        u64::MAX
+    } else {
+        gt_raw as u64
+    };
+
+    Ok(gt_amount)
 }
 
 /// Output of reward computation with CPI-updated cumulative inverse cost
