@@ -72,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added new `CreateGlvDeposit` builder.
 - sdk(sdk): Added new `CreateWithdrawal` builder.
 - sdk(sdk): Added new `CreateGlvWithdrawal` builder.
+- sdk(sdk): Added new `CreateShift` builder.
 - cli: Added `lp init-lp` command.
 - cli: Added `exchange close-empty-positions` command.
 
