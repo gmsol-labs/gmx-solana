@@ -57,6 +57,7 @@ use crate::{
     builders::{
         callback::{Callback, CallbackParams},
         market_state::{UpdateClosedState, UpdateFeesState},
+        order::update::SetShouldKeepPositionAccount,
         position::CloseEmptyPosition,
     },
     client::Client,
@@ -455,6 +456,13 @@ pub trait ExchangeOps<C> {
         oracle: &Pubkey,
         market_token: &Pubkey,
     ) -> UpdateFeesStateBuilder<C>;
+
+    fn set_should_keep_position_account(
+        &self,
+        store: &Pubkey,
+        order: &Pubkey,
+        keep: bool,
+    ) -> crate::Result<TransactionBuilder<C>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> ExchangeOps<C> for Client<C> {
@@ -784,6 +792,22 @@ impl<C: Deref<Target = impl Signer> + Clone> ExchangeOps<C> for Client<C> {
                 .oracle(*oracle)
                 .build(),
         )
+    }
+
+    fn set_should_keep_position_account(
+        &self,
+        store: &Pubkey,
+        order: &Pubkey,
+        keep: bool,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let set = SetShouldKeepPositionAccount::builder()
+            .keep(keep)
+            .order(*order)
+            .payer(self.payer())
+            .program(self.store_program_for_builders(store))
+            .build()
+            .into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(set, false))
     }
 }
 

@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk&js): Added options for position creation management.
 - cli: Added `lp init-lp` command.
 - cli: Added `exchange close-empty-positions` command.
+- cli: Added options to keep or close position.
 
 ### Changed
 
