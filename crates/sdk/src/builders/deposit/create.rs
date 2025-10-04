@@ -129,7 +129,7 @@ impl IntoAtomicGroup for CreateDeposit {
         let token_program_id = anchor_spl::token::ID;
         let market_token = self.market_token.0;
 
-        let long_pay_token = self.long_pay_amount.is_zero().then(|| {
+        let long_pay_token = (!self.long_pay_amount.is_zero()).then(|| {
             self.long_pay_token
                 .as_deref()
                 .unwrap_or(&hint.pool_tokens.long_token)
@@ -142,7 +142,7 @@ impl IntoAtomicGroup for CreateDeposit {
                     get_associated_token_address_with_program_id(&owner, token, &token_program_id)
                 })
         });
-        let short_pay_token = self.short_pay_amount.is_zero().then(|| {
+        let short_pay_token = (!self.short_pay_amount.is_zero()).then(|| {
             self.short_pay_token
                 .as_deref()
                 .unwrap_or(&hint.pool_tokens.short_token)
