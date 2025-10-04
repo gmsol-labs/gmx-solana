@@ -126,7 +126,7 @@ impl IntoAtomicGroup for CreateDeposit {
 
         let receiver = self.receiver.as_deref().copied().unwrap_or(owner);
         let nonce = self.nonce.unwrap_or_else(generate_nonce);
-        let deposit = self.program.find_order_address(&owner, &nonce);
+        let deposit = self.program.find_deposit_address(&owner, &nonce);
         let token_program_id = anchor_spl::token::ID;
         let market_token = self.market_token.0;
 
