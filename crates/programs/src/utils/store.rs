@@ -4,7 +4,7 @@ use bytemuck::Zeroable;
 
 use crate::gmsol_store::{
     accounts::{Glv, GtExchange, Market, Position, ReferralCodeV2, Store, VirtualInventory},
-    types::{ActionHeader, EventPositionState, Pool, PositionState},
+    types::{ActionHeader, EventPositionState, Pool, PositionState, UpdateOrderParams},
 };
 
 /// Referral Code Bytes.
@@ -147,6 +147,17 @@ impl From<EventPositionState> for PositionState {
             short_token_claimable_funding_amount_per_size,
             reserved,
         }
+    }
+}
+
+impl UpdateOrderParams {
+    /// Is empty.
+    pub fn is_empty(&self) -> bool {
+        self.size_delta_value.is_none()
+            && self.acceptable_price.is_none()
+            && self.trigger_price.is_none()
+            && self.min_output.is_none()
+            && self.valid_from_ts.is_none()
     }
 }
 
