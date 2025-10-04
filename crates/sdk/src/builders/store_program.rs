@@ -91,6 +91,11 @@ impl StoreProgram {
         pda::find_deposit_address(&self.store, owner, &nonce.0.to_bytes(), &self.id).0
     }
 
+    /// Find withdrawal address.
+    pub fn find_withdrawal_address(&self, owner: &Pubkey, nonce: &NonceBytes) -> Pubkey {
+        pda::find_withdrawal_address(&self.store, owner, &nonce.0.to_bytes(), &self.id).0
+    }
+
     /// Find GLV deposit address.
     pub fn find_glv_deposit_address(&self, owner: &Pubkey, nonce: &NonceBytes) -> Pubkey {
         pda::find_glv_deposit_address(&self.store, owner, &nonce.0.to_bytes(), &self.id).0
