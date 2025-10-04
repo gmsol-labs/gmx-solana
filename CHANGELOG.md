@@ -69,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added support for `prepare_position` instruction.
 - sdk(sdk&js): Added options for position creation management.
 - sdk(sdk): Added new `CreateDeposit` builder.
+- sdk(sdk): Added new `CreateGlvDeposit` builder.
 - cli: Added `lp init-lp` command.
 - cli: Added `exchange close-empty-positions` command.
 - cli: Added options to keep or close position.

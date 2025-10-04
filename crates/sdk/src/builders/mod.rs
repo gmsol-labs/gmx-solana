@@ -24,6 +24,9 @@ pub mod market_state;
 /// Instruction builders related to deposit.
 pub mod deposit;
 
+/// Instruction builders related to GLV deposit.
+pub mod glv_deposit;
+
 /// Instruction builders related to liquidity provider program.
 #[cfg(liquidity_provider)]
 pub mod liquidity_provider;
