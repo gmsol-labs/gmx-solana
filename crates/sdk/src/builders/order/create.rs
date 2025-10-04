@@ -13,6 +13,7 @@ use crate::builders::{
     utils::{generate_nonce, prepare_ata},
     NonceBytes, StoreProgram,
 };
+use crate::builders::{MarketTokenIxBuilder, PoolTokenHint, StoreProgramIxBuilder};
 use crate::serde::StringPubkey;
 use crate::{AtomicGroup, IntoAtomicGroup};
 
@@ -257,15 +258,11 @@ impl CreateOrderHint {
     /// # Errors
     /// - Returns Error if the given `collateral` is not one of the specified long or short tokens.
     pub fn is_collateral_long(&self, collateral: &Pubkey) -> Result<bool, crate::SolanaUtilsError> {
-        if *collateral == *self.long_token {
-            Ok(true)
-        } else if *collateral == *self.short_token {
-            Ok(false)
-        } else {
-            Err(crate::SolanaUtilsError::custom(
-                "invalid hint: `collateral` is not one of the specified long or short tokens",
-            ))
+        PoolTokenHint {
+            long_token: self.long_token,
+            short_token: self.short_token,
         }
+        .is_collateral_long(collateral)
     }
 }
 
@@ -474,25 +471,27 @@ impl IntoAtomicGroup for CreateOrder {
     }
 }
 
+impl StoreProgramIxBuilder for CreateOrder {
+    fn store_program(&self) -> &StoreProgram {
+        &self.program
+    }
+}
+
+impl MarketTokenIxBuilder for CreateOrder {
+    fn market_token(&self) -> &Pubkey {
+        &self.params.market_token
+    }
+}
+
 impl FromRpcClientWith<CreateOrder> for CreateOrderHint {
     async fn from_rpc_client_with<'a>(
         builder: &'a CreateOrder,
         client: &'a impl gmsol_solana_utils::client_traits::RpcClient,
     ) -> gmsol_solana_utils::Result<Self> {
-        use crate::{programs::gmsol_store::accounts::Market, utils::zero_copy::ZeroCopy};
-        use gmsol_solana_utils::client_traits::RpcClientExt;
-
-        let market_address = builder
-            .program
-            .find_market_address(&builder.params.market_token);
-        let market = client
-            .get_anchor_account::<ZeroCopy<Market>>(&market_address, Default::default())
-            .await?
-            .0;
-
+        let hint = PoolTokenHint::from_rpc_client_with(builder, client).await?;
         Ok(Self {
-            long_token: market.meta.long_token_mint.into(),
-            short_token: market.meta.short_token_mint.into(),
+            long_token: hint.long_token,
+            short_token: hint.short_token,
         })
     }
 }

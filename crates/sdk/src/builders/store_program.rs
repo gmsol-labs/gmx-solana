@@ -126,6 +126,12 @@ impl StoreProgram {
     }
 }
 
+/// Builder for [`StoreProgram`] instructions.
+pub trait StoreProgramIxBuilder {
+    /// Returns the [`StoreProgram`].
+    fn store_program(&self) -> &StoreProgram;
+}
+
 /// Builder for Store Program Instruction.
 #[deprecated(
     since = "0.8.0",
