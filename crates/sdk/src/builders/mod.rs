@@ -21,6 +21,18 @@ pub mod market;
 /// Instruction builders related to market state.
 pub mod market_state;
 
+/// Instruction builders related to deposit.
+pub mod deposit;
+
+/// Instruction builders related to withdrawal.
+pub mod withdrawal;
+
+/// Instruction builders related to GLV deposit.
+pub mod glv_deposit;
+
+/// Instruction builders related to GLV withdrawal.
+pub mod glv_withdrawal;
+
 /// Instruction builders related to liquidity provider program.
 #[cfg(liquidity_provider)]
 pub mod liquidity_provider;
@@ -33,4 +45,8 @@ pub mod callback;
 /// Nonce Bytes.
 pub type NonceBytes = StringPubkey;
 
-pub use self::store_program::StoreProgram;
+pub use self::{
+    market::MarketTokenIxBuilder,
+    store_program::{StoreProgram, StoreProgramIxBuilder},
+    utils::PoolTokenHint,
+};

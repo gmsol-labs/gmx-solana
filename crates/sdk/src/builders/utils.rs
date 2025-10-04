@@ -1,7 +1,12 @@
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
+use gmsol_solana_utils::client_traits::FromRpcClientWith;
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
+use typed_builder::TypedBuilder;
 
-use crate::serde::StringPubkey;
+use crate::{
+    builders::{market::MarketTokenIxBuilder, store_program::StoreProgramIxBuilder},
+    serde::StringPubkey,
+};
 
 use super::NonceBytes;
 
@@ -67,5 +72,62 @@ pub(crate) fn get_ata_or_owner_with_program_id(
         *owner
     } else {
         get_associated_token_address_with_program_id(owner, mint, token_program_id)
+    }
+}
+
+/// Hint for pool tokens.
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(from_wasm_abi))]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct PoolTokenHint {
+    /// Long token.
+    #[builder(setter(into))]
+    pub long_token: StringPubkey,
+    /// Short token.
+    #[builder(setter(into))]
+    pub short_token: StringPubkey,
+}
+
+impl PoolTokenHint {
+    /// Returns whether the given token is long token or short token.
+    /// # Errors
+    /// - Returns Error if the given `collateral` is not one of the specified long or short tokens.
+    pub fn is_collateral_long(&self, collateral: &Pubkey) -> Result<bool, crate::SolanaUtilsError> {
+        if *collateral == *self.long_token {
+            Ok(true)
+        } else if *collateral == *self.short_token {
+            Ok(false)
+        } else {
+            Err(crate::SolanaUtilsError::custom(
+                "invalid hint: `collateral` is not one of the specified long or short tokens",
+            ))
+        }
+    }
+}
+
+impl<T> FromRpcClientWith<T> for PoolTokenHint
+where
+    T: StoreProgramIxBuilder + MarketTokenIxBuilder,
+{
+    async fn from_rpc_client_with<'a>(
+        builder: &'a T,
+        client: &'a impl gmsol_solana_utils::client_traits::RpcClient,
+    ) -> gmsol_solana_utils::Result<Self> {
+        use crate::{programs::gmsol_store::accounts::Market, utils::zero_copy::ZeroCopy};
+        use gmsol_solana_utils::client_traits::RpcClientExt;
+
+        let market_address = builder
+            .store_program()
+            .find_market_address(builder.market_token());
+        let market = client
+            .get_anchor_account::<ZeroCopy<Market>>(&market_address, Default::default())
+            .await?
+            .0;
+
+        Ok(Self {
+            long_token: market.meta.long_token_mint.into(),
+            short_token: market.meta.short_token_mint.into(),
+        })
     }
 }
