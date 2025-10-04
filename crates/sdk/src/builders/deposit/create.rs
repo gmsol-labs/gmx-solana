@@ -210,7 +210,7 @@ impl IntoAtomicGroup for CreateDeposit {
                     market_token,
                     initial_long_token: long_pay_token.copied(),
                     initial_short_token: short_pay_token.copied(),
-                    market_token_escrow: market_token_escrow,
+                    market_token_escrow,
                     initial_long_token_escrow: long_pay_token_escrow,
                     initial_short_token_escrow: short_pay_token_escrow,
                     market_token_ata,
