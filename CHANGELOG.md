@@ -72,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added new `CreateGlvDeposit` builder.
 - sdk(sdk): Added new `CreateWithdrawal` builder.
 - sdk(sdk): Added new `CreateGlvWithdrawal` builder.
+- sdk(sdk): Added new `CreateShift` builder.
 - sdk(programs): Added `MarketModel::into_empty_position_opts` function.
 - sdk(programs): Added `PositionModel::update` function.
 - sdk(sdk): Added `decode_anchor_event_with_options` utility function.
