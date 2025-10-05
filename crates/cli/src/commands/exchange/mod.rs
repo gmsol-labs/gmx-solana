@@ -258,6 +258,8 @@ enum Command {
         /// Provide to only prepare position for the order.
         #[arg(long)]
         prepare_position_only: bool,
+        #[command(flatten)]
+        should_keep_position: ShouldKeepPosition,
     },
     /// Create a limit increase order.
     LimitIncrease {
@@ -299,6 +301,8 @@ enum Command {
         /// Provide this to participate in a competition.
         #[arg(long)]
         competition: Option<Pubkey>,
+        #[command(flatten)]
+        should_keep_position: ShouldKeepPosition,
     },
     /// Create a market decrese order.
     MarketDecrease {
@@ -334,6 +338,8 @@ enum Command {
         /// Provide this to participate in a competition.
         #[arg(long)]
         competition: Option<Pubkey>,
+        #[command(flatten)]
+        should_keep_position: ShouldKeepPosition,
     },
     /// Create a limit decrese order.
     LimitDecrease {
@@ -375,6 +381,8 @@ enum Command {
         /// Valid from this timestamp.
         #[arg(long)]
         valid_from_ts: Option<humantime::Timestamp>,
+        #[command(flatten)]
+        should_keep_position: ShouldKeepPosition,
     },
     /// Create a stop-loss decrese order.
     StopLoss {
@@ -415,6 +423,8 @@ enum Command {
         /// Valid from this timestamp.
         #[arg(long)]
         valid_from_ts: Option<humantime::Timestamp>,
+        #[command(flatten)]
+        should_keep_position: ShouldKeepPosition,
     },
     /// Update a limit or stop-loss order.
     UpdateOrder {
@@ -435,6 +445,8 @@ enum Command {
         /// Valid from this timestamp.
         #[arg(long)]
         valid_from_ts: Option<humantime::Timestamp>,
+        #[command(flatten)]
+        should_keep_position: ShouldKeepPosition,
     },
     /// Create a market swap order.
     MarketSwap {
@@ -702,6 +714,29 @@ enum GlvCommand {
         /// The address of the GLV shift to close.
         glv_shift: Pubkey,
     },
+}
+
+#[derive(Debug, clap::Args, Default)]
+#[group(required = false, multiple = false)]
+pub(crate) struct ShouldKeepPosition {
+    /// Always keep the position open after execution.
+    #[arg(long)]
+    keep_position: bool,
+    /// Attempt to close the position after execution if possible.
+    #[arg(long)]
+    close_position: bool,
+}
+
+impl ShouldKeepPosition {
+    pub(crate) fn should_keep_position(&self) -> Option<bool> {
+        if self.keep_position {
+            Some(true)
+        } else if self.close_position {
+            Some(false)
+        } else {
+            None
+        }
+    }
 }
 
 impl super::Command for Exchange {
@@ -1202,6 +1237,7 @@ impl super::Command for Exchange {
                 min_collateral_amount,
                 acceptable_price,
                 prepare_position_only,
+                should_keep_position,
             } => {
                 let market_address = client.find_market_address(store, market_token);
                 let market = client.market(&market_address).await?;
@@ -1288,7 +1324,14 @@ impl super::Command for Exchange {
                     } else {
                         rpc
                     };
-                    tx.into_bundle_with_options(options)?
+                    let mut bundle = tx.into_bundle_with_options(options)?;
+
+                    if let Some(keep) = should_keep_position.should_keep_position() {
+                        let txn = client.set_should_keep_position_account(store, &order, keep)?;
+                        bundle.push(txn)?;
+                    }
+
+                    bundle
                 }
             }
             Command::LimitIncrease {
@@ -1305,6 +1348,7 @@ impl super::Command for Exchange {
                 competition,
                 min_collateral_amount,
                 acceptable_price,
+                should_keep_position,
             } => {
                 let market_address = client.find_market_address(store, market_token);
                 let market = client.market(&market_address).await?;
@@ -1384,7 +1428,14 @@ impl super::Command for Exchange {
                 } else {
                     rpc
                 };
-                tx.into_bundle_with_options(options)?
+                let mut bundle = tx.into_bundle_with_options(options)?;
+
+                if let Some(keep) = should_keep_position.should_keep_position() {
+                    let txn = client.set_should_keep_position_account(store, &order, keep)?;
+                    bundle.push(txn)?;
+                }
+
+                bundle
             }
             Command::MarketDecrease {
                 market_token,
@@ -1398,6 +1449,7 @@ impl super::Command for Exchange {
                 competition,
                 min_output,
                 acceptable_price,
+                should_keep_position,
             } => {
                 let is_collateral_token_long = collateral_side.is_long();
                 let market = if token_map.is_some() {
@@ -1470,7 +1522,14 @@ impl super::Command for Exchange {
                 } else {
                     rpc
                 };
-                tx.into_bundle_with_options(options)?
+                let mut bundle = tx.into_bundle_with_options(options)?;
+
+                if let Some(keep) = should_keep_position.should_keep_position() {
+                    let txn = client.set_should_keep_position_account(store, &order, keep)?;
+                    bundle.push(txn)?;
+                }
+
+                bundle
             }
             Command::LimitDecrease {
                 market_token,
@@ -1486,6 +1545,7 @@ impl super::Command for Exchange {
                 min_output,
                 acceptable_price,
                 valid_from_ts,
+                should_keep_position,
             }
             | Command::StopLoss {
                 market_token,
@@ -1501,6 +1561,7 @@ impl super::Command for Exchange {
                 min_output,
                 acceptable_price,
                 valid_from_ts,
+                should_keep_position,
             } => {
                 let market_address = client.find_market_address(store, market_token);
                 let market = client.market(&market_address).await?;
@@ -1575,7 +1636,14 @@ impl super::Command for Exchange {
                 } else {
                     rpc
                 };
-                tx.into_bundle_with_options(options)?
+                let mut bundle = tx.into_bundle_with_options(options)?;
+
+                if let Some(keep) = should_keep_position.should_keep_position() {
+                    let txn = client.set_should_keep_position_account(store, &order, keep)?;
+                    bundle.push(txn)?;
+                }
+
+                bundle
             }
             Command::UpdateOrder {
                 address,
@@ -1584,6 +1652,7 @@ impl super::Command for Exchange {
                 min_output,
                 size,
                 valid_from_ts,
+                should_keep_position,
             } => {
                 let order = client.order(address).await?;
                 let kind = order.params.kind()?;
@@ -1649,10 +1718,29 @@ impl super::Command for Exchange {
                     min_output,
                     valid_from_ts: valid_from_ts.as_ref().map(to_unix_timestamp).transpose()?,
                 };
-                client
-                    .update_order(store, &order.market_token, address, params, None)
-                    .await?
-                    .into_bundle_with_options(options)?
+
+                let mut bundle = client.bundle_with_options(options);
+
+                if !params.is_empty() {
+                    let update = client
+                        .update_order(store, &order.market_token, address, params, None)
+                        .await?;
+
+                    bundle.push(update)?;
+                }
+
+                if kind.is_increase_position() || kind.is_decrease_position() {
+                    if let Some(keep) = should_keep_position.should_keep_position() {
+                        let txn = client.set_should_keep_position_account(store, address, keep)?;
+                        bundle.push(txn)?;
+                    }
+                }
+
+                if bundle.is_empty() {
+                    eyre::bail!("You must provide at least one option to update");
+                }
+
+                bundle
             }
             Command::MarketSwap {
                 market_token,
