@@ -86,6 +86,11 @@ impl StoreProgram {
         pda::find_order_address(&self.store, owner, &nonce.0.to_bytes(), &self.id).0
     }
 
+    /// Find deposit address.
+    pub fn find_deposit_address(&self, owner: &Pubkey, nonce: &NonceBytes) -> Pubkey {
+        pda::find_deposit_address(&self.store, owner, &nonce.0.to_bytes(), &self.id).0
+    }
+
     /// Find market address.
     pub fn find_market_address(&self, market_token: &Pubkey) -> Pubkey {
         pda::find_market_address(&self.store, market_token, &self.id).0
@@ -124,6 +129,12 @@ impl StoreProgram {
     pub fn find_glv_address(&self, glv_token: &Pubkey) -> Pubkey {
         crate::pda::find_glv_address(glv_token, &self.id).0
     }
+}
+
+/// Builder for [`StoreProgram`] instructions.
+pub trait StoreProgramIxBuilder {
+    /// Returns the [`StoreProgram`].
+    fn store_program(&self) -> &StoreProgram;
 }
 
 /// Builder for Store Program Instruction.
