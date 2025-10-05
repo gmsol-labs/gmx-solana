@@ -195,53 +195,46 @@ impl IntoAtomicGroup for CreateDeposit {
             should_unwrap_native_token: self.unwrap_native_on_receive,
         };
 
-        let create =
-            self.program
-                .anchor_instruction(args::CreateDeposit {
-                    nonce: nonce.to_bytes(),
-                    params,
-                })
-                .anchor_accounts(
-                    accounts::CreateDeposit {
-                        owner,
-                        receiver,
-                        store: self.program.store.0,
-                        market: self.program.find_market_address(&market_token),
-                        deposit,
-                        market_token,
-                        initial_long_token: long_pay_token.copied(),
-                        initial_short_token: short_pay_token.copied(),
-                        market_token_escrow,
-                        initial_long_token_escrow: long_pay_token_escrow,
-                        initial_short_token_escrow: short_pay_token_escrow,
-                        market_token_ata,
-                        initial_long_token_source: long_pay_token_account,
-                        initial_short_token_source: short_pay_token_account,
-                        system_program: system_program::ID,
-                        token_program: token_program_id,
-                        associated_token_program: associated_token::ID,
-                    },
-                    true,
-                )
-                .accounts(
-                    self.long_swap_path
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, mint)| AccountMeta {
-                            pubkey: self.program.find_market_address(mint),
-                            is_signer: false,
-                            is_writable: idx == 0,
-                        })
-                        .chain(self.short_swap_path.iter().enumerate().map(|(idx, mint)| {
-                            AccountMeta {
-                                pubkey: self.program.find_market_address(mint),
-                                is_signer: false,
-                                is_writable: idx == 0,
-                            }
-                        }))
-                        .collect::<Vec<_>>(),
-                )
-                .build();
+        let create = self
+            .program
+            .anchor_instruction(args::CreateDeposit {
+                nonce: nonce.to_bytes(),
+                params,
+            })
+            .anchor_accounts(
+                accounts::CreateDeposit {
+                    owner,
+                    receiver,
+                    store: self.program.store.0,
+                    market: self.program.find_market_address(&market_token),
+                    deposit,
+                    market_token,
+                    initial_long_token: long_pay_token.copied(),
+                    initial_short_token: short_pay_token.copied(),
+                    market_token_escrow,
+                    initial_long_token_escrow: long_pay_token_escrow,
+                    initial_short_token_escrow: short_pay_token_escrow,
+                    market_token_ata,
+                    initial_long_token_source: long_pay_token_account,
+                    initial_short_token_source: short_pay_token_account,
+                    system_program: system_program::ID,
+                    token_program: token_program_id,
+                    associated_token_program: associated_token::ID,
+                },
+                true,
+            )
+            .accounts(
+                self.long_swap_path
+                    .iter()
+                    .chain(self.short_swap_path.iter())
+                    .map(|token| AccountMeta {
+                        pubkey: self.program.find_market_address(token),
+                        is_signer: false,
+                        is_writable: false,
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .build();
         insts.add(create);
 
         Ok(insts)
