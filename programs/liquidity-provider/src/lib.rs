@@ -109,6 +109,9 @@ pub mod gmsol_liquidity_provider {
     }
 
     /// Update APY gradient with a sparse table (only non-zero buckets)
+    ///
+    /// Note: APY changes are applied retroactively and affect all existing positions.
+    /// Rewards are calculated using current APY gradients at claim/unstake time.
     pub fn update_apy_gradient_sparse(
         ctx: Context<UpdateApyGradient>,
         bucket_indices: Vec<u8>, // indices of buckets to update
@@ -137,6 +140,9 @@ pub mod gmsol_liquidity_provider {
     }
 
     /// Update APY gradient for a contiguous range of buckets
+    ///
+    /// Note: APY changes are applied retroactively and affect all existing positions.
+    /// Rewards are calculated using current APY gradients at claim/unstake time.
     pub fn update_apy_gradient_range(
         ctx: Context<UpdateApyGradient>,
         start_bucket: u8,
