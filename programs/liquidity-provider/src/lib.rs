@@ -449,7 +449,9 @@ pub mod gmsol_liquidity_provider {
 
         // Decide transfer amount based on full_exit
         let amount_to_transfer = if full_exit {
-            old_amount
+            // For full exit, transfer ALL tokens from vault to prevent close_account failure
+            // This protects against dust attacks where attackers send small amounts to the vault
+            ctx.accounts.position_vault.amount
         } else {
             unstake_amount
         };
