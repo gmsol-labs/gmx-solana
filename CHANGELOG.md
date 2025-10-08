@@ -73,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added new `CreateWithdrawal` builder.
 - sdk(sdk): Added new `CreateGlvWithdrawal` builder.
 - sdk(programs): Added `MarketModel::into_empty_position_opts` function.
+- sdk(programs): Added `PositionModel::update` function.
 - cli: Added `lp init-lp` command.
 - cli: Added `exchange close-empty-positions` command.
 - cli: Added options to keep or close position.
