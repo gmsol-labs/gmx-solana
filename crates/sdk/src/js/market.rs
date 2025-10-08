@@ -1,13 +1,18 @@
 use std::sync::Arc;
 
 use gmsol_model::{LiquidityMarketExt, PnlFactorKind};
-use gmsol_programs::{gmsol_store::accounts::Market, model::MarketModel};
+use gmsol_programs::{
+    gmsol_store::accounts::Market,
+    model::{MarketModel, PositionOptions},
+};
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
 use crate::{
+    js::position::JsPositionModel,
     market::{MarketCalculations, MarketStatus},
+    serde::StringPubkey,
     utils::zero_copy::{
         try_deserialize_zero_copy, try_deserialize_zero_copy_from_base64_with_options,
     },
@@ -127,10 +132,76 @@ impl JsMarketModel {
         let prices = params.prices.into();
         self.model.status(&prices)
     }
+
+    /// Create an empty position model.
+    pub fn create_empty_position(
+        &self,
+        args: CreateEmptyPositionArgs,
+    ) -> crate::Result<JsPositionModel> {
+        let CreateEmptyPositionArgs {
+            is_long,
+            collateral_token,
+            owner,
+            created_at,
+            generate_bump,
+            store_program_id,
+        } = args;
+
+        let mut options = PositionOptions::default();
+
+        if let Some(owner) = owner {
+            options.owner = Some(*owner);
+        }
+
+        if let Some(created_at) = created_at {
+            options.created_at = created_at;
+        }
+
+        if let Some(generate_bump) = generate_bump {
+            options.generate_bump = generate_bump;
+        }
+
+        if let Some(program_id) = store_program_id {
+            options.store_program_id = *program_id;
+        }
+
+        let position =
+            self.model
+                .clone()
+                .into_empty_position_opts(is_long, *collateral_token, options)?;
+
+        Ok(position.into())
+    }
 }
 
 impl From<MarketModel> for JsMarketModel {
     fn from(model: MarketModel) -> Self {
         Self { model }
     }
+}
+
+/// Parameters for creating empty position model.
+#[derive(Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct CreateEmptyPositionArgs {
+    /// Is long side.
+    pub is_long: bool,
+    /// Collateral token.
+    pub collateral_token: StringPubkey,
+    /// The owner of the position.
+    ///
+    /// If set to `None`, the `owner` will use the default pubkey.
+    #[serde(default)]
+    pub owner: Option<StringPubkey>,
+    /// The timestamp of the position creation.
+    #[serde(default)]
+    pub created_at: Option<i64>,
+    /// Whether to generate a bump seed.
+    ///
+    /// If set `false`, the `bump` will be fixed to `0`.
+    #[serde(default)]
+    pub generate_bump: Option<bool>,
+    /// The store program ID used to generate the bump seed.
+    #[serde(default)]
+    pub store_program_id: Option<StringPubkey>,
 }

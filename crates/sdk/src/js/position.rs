@@ -5,6 +5,7 @@ use gmsol_programs::{gmsol_store::accounts::Position, model::PositionModel};
 use wasm_bindgen::prelude::*;
 
 use crate::{
+    js::events::JsTradeEvent,
     position::{status::PositionStatus, PositionCalculations},
     utils::zero_copy::{
         try_deserialize_zero_copy, try_deserialize_zero_copy_from_base64_with_options,
@@ -92,5 +93,24 @@ impl JsPositionModel {
         JsPosition {
             position: self.model.position_arc().clone(),
         }
+    }
+
+    /// Update with trade event.
+    pub fn update_with_trade_event(
+        &mut self,
+        event: &JsTradeEvent,
+        force_update: Option<bool>,
+    ) -> crate::Result<bool> {
+        let updated = self
+            .model
+            .update(&event.event.after.into(), force_update.unwrap_or_default());
+
+        Ok(updated)
+    }
+}
+
+impl From<PositionModel> for JsPositionModel {
+    fn from(model: PositionModel) -> Self {
+        Self { model }
     }
 }

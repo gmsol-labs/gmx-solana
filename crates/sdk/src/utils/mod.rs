@@ -32,6 +32,9 @@ pub mod decode;
 /// Utils for token map.
 pub mod token_map;
 
+/// Utils for events.
+pub mod events;
+
 /// Test utils.
 #[cfg(test)]
 pub mod test;
