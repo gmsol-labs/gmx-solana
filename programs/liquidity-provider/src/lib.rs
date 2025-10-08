@@ -429,6 +429,14 @@ pub mod gmsol_liquidity_provider {
             (p.staked_amount, p.staked_value_usd)
         };
         require!(unstake_amount <= old_amount, ErrorCode::InvalidArgument);
+        
+        // When claim is disabled, only allow full unstake to prevent reward claiming via partial unstakes
+        if !global_state.claim_enabled {
+            require!(
+                unstake_amount == old_amount,
+                ErrorCode::InvalidArgument
+            );
+        }
 
         // Sanity: ensure the passed lp_mint matches the position
         require_keys_eq!(
