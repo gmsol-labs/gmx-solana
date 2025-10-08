@@ -22,4 +22,7 @@ pub mod user;
 /// Utils.
 pub mod utils;
 
+/// Events.
+pub mod events;
+
 mod types;
