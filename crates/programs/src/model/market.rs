@@ -298,31 +298,100 @@ impl MarketModel {
     ///
     /// # Notes
     /// - All position parameters unrelated to the model,
-    ///   such as `owner` and `trade_id`, use zeroed values.
+    ///   such as `owner` and `bump`, use zeroed values.
     pub fn into_empty_position(
         self,
         is_long: bool,
         collateral_token: Pubkey,
     ) -> gmsol_model::Result<PositionModel> {
+        self.into_empty_position_opts(is_long, collateral_token, Default::default())
+    }
+
+    /// Convert into an empty position model with options.
+    pub fn into_empty_position_opts(
+        self,
+        is_long: bool,
+        collateral_token: Pubkey,
+        options: PositionOptions,
+    ) -> gmsol_model::Result<PositionModel> {
+        const POSITION_SEED: &[u8] = b"position";
+
+        if !(self.meta.long_token_mint == collateral_token
+            || self.meta.short_token_mint == collateral_token)
+        {
+            return Err(gmsol_model::Error::InvalidArgument(
+                "invalid `collateral_token`",
+            ));
+        }
+
+        let owner = options.owner.unwrap_or_default();
+        let store = &self.store;
+        let market_token = &self.meta.market_token_mint;
         let kind = if is_long {
             PositionKind::Long
         } else {
             PositionKind::Short
         } as u8;
+
+        let bump = if options.generate_bump {
+            Pubkey::find_program_address(
+                &[
+                    POSITION_SEED,
+                    store.as_ref(),
+                    owner.as_ref(),
+                    market_token.as_ref(),
+                    collateral_token.as_ref(),
+                    &[kind],
+                ],
+                &options.store_program_id,
+            )
+            .1
+        } else {
+            0
+        };
+
         let position = Position {
             version: 0,
-            bump: 0,
-            store: self.store,
+            bump,
+            store: *store,
             kind,
             padding_0: Zeroable::zeroed(),
-            created_at: 0,
-            owner: Pubkey::default(),
-            market_token: self.meta.market_token_mint,
+            created_at: options.created_at,
+            owner,
+            market_token: *market_token,
             collateral_token,
             state: Zeroable::zeroed(),
             reserved: Zeroable::zeroed(),
         };
         PositionModel::new(self, Arc::new(position))
+    }
+}
+
+/// Options for creating a position model.
+#[derive(Debug, Clone)]
+pub struct PositionOptions {
+    /// The owner of the position.
+    ///
+    /// If set to `None`, the `owner` will use the default pubkey.
+    pub owner: Option<Pubkey>,
+    /// The timestamp of the position creation.
+    pub created_at: i64,
+    /// Whether to generate a bump seed.
+    ///
+    /// If set `false`, the `bump` will be fixed to `0`.
+    pub generate_bump: bool,
+    /// The store program ID used to generate the bump seed.
+    pub store_program_id: Pubkey,
+}
+
+impl Default for PositionOptions {
+    fn default() -> Self {
+        Self {
+            owner: None,
+            created_at: 0,
+            generate_bump: false,
+            store_program_id: crate::gmsol_store::ID,
+        }
     }
 }
 
