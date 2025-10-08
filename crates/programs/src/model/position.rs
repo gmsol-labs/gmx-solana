@@ -79,6 +79,23 @@ impl PositionModel {
     pub fn clear(&mut self) {
         self.swap_history.clear();
     }
+
+    /// Updates the current state with the given [`PositionState`]
+    /// if its `trade_id` is newer.
+    ///
+    /// Skips the trade ID check if `force_update` is `true`.
+    ///
+    /// Returns `true` if an update was made.
+    pub fn update(&mut self, new_state: &PositionState, force_update: bool) -> bool {
+        let position = &mut self.position;
+
+        if !force_update && new_state.trade_id <= position.state.trade_id {
+            return false;
+        }
+        Arc::make_mut(position).state = *new_state;
+
+        true
+    }
 }
 
 impl gmsol_model::PositionState<{ constants::MARKET_DECIMALS }> for PositionState {
