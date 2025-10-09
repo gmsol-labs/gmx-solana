@@ -27,6 +27,9 @@ pub mod deposit;
 /// Instruction builders related to withdrawal.
 pub mod withdrawal;
 
+/// Instruction builders related to shift.
+pub mod shift;
+
 /// Instruction builders related to GLV deposit.
 pub mod glv_deposit;
 
