@@ -633,7 +633,7 @@ pub(crate) fn push_to_market_config_buffer(
     Ok(())
 }
 
-/// The accounts definition for [`set_market_config_update_permission`](crate::gmsol_store::set_market_config_update_permission).
+/// The accounts definition for [`set_market_config_updatable`](crate::gmsol_store::set_market_config_updatable).
 #[derive(Accounts)]
 pub struct SetMarketConfigUpdatable<'info> {
     /// The caller.

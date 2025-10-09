@@ -83,7 +83,7 @@
 //!   token to the given token map.
 //! - [`toggle_token_config`]: Enable or disable a token config of the given token map.
 //! - [`set_expected_provider`]: Set the expected provider for the given token.
-//! - [`set_feed_config`]: Set the feed config of the given provider for the given token.
+//! - [`set_feed_config_v2`]: Set the feed config of the given provider for the given token.
 //! - [`is_token_config_enabled`](gmsol_store::is_token_config_enabled): Check if the config for the given token is enabled.
 //! - [`token_expected_provider`](gmsol_store::token_expected_provider): Get the expected provider set for the given token.
 //! - [`token_feed`](gmsol_store::token_feed): Get the feed address of the given provider set for the given token.
@@ -151,11 +151,11 @@
 //! #### Instructions for [`Order`](states::Order) and [`Position`](states::Position)
 //! - [`prepare_position`](gmsol_store::prepare_position): Prepare the position account for orders.
 //! - [`prepare_trade_event_buffer`](gmsol_store::prepare_trade_event_buffer): Prepare trade event buffer.
-//! - [`create_order`]: Create an order by the owner.
-//! - [`update_order`](gmsol_store::update_order): Update an order by the owner.
-//! - [`execute_increase_or_swap_order`](gmsol_store::execute_increase_or_swap_order()): Execute an order by keepers.
-//! - [`execute_decrease_order`]: Execute a decrease order by keepers.
-//! - [`close_order`]: Close an order, either by the owner or by keepers.
+//! - [`create_order_v2`]: Create an order by the owner.
+//! - [`update_order_v2`]: Update an order by the owner.
+//! - [`execute_increase_or_swap_order_v2`]: Execute an order by keepers.
+//! - [`execute_decrease_order_v2`]: Execute a decrease order by keepers.
+//! - [`close_order_v2`]: Close an order, either by the owner or by keepers.
 //! - [`cancel_order_if_no_position`]: Cancel an order if the position does not exist.
 //! - [`liquidate`]: Perform a liquidation by keepers.
 //! - [`auto_deleverage`]: Perform an ADL by keepers.
@@ -206,7 +206,7 @@
 //! - [`gt_set_referral_reward_factors`]: Set referral reward factors.
 //! - [`gt_set_exchange_time_window`]: Set GT exchange time window.
 //! - [`prepare_gt_exchange_vault`](gmsol_store::prepare_gt_exchange_vault): Prepare current GT exchange vault.
-//! - [`confirm_gt_exchange_vault`]: Confirm GT exchange vault.
+//! - [`confirm_gt_exchange_vault_v2`]: Confirm GT exchange vault.
 //! - [`request_gt_exchange`](gmsol_store::request_gt_exchange): Request a GT exchange.
 //! - [`close_gt_exchange`]: Close a confirmed GT exchange.
 
