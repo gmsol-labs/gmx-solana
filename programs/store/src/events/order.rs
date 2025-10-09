@@ -273,8 +273,7 @@ impl TryFrom<&Order> for OrderParamsForEvent {
 ///
 /// # Notes
 /// - For compatibility reasons, the [`OrderUpdated`] event is not emitted
-///   by the [`create_order`](crate::gmsol_store::create_order) and
-///   [`update_order`](crate::gmsol_store::update_order) instructions.
+///   by the (deprecated) `create_order` and `update_order` instructions.
 ///   As a result, there is no guarantee that every order will have
 ///   corresponding [`OrderUpdated`] events.
 #[event]

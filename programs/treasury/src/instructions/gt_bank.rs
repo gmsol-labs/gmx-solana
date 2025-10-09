@@ -130,7 +130,7 @@ impl<'info> CpiAuthentication<'info> for PrepareGtBank<'info> {
     }
 }
 
-/// The accounts definition for [`sync_gt_bank`](crate::gmsol_treasury::sync_gt_bank).
+/// The accounts definition for [`sync_gt_bank_v2`](crate::gmsol_treasury::sync_gt_bank_v2).
 #[derive(Accounts)]
 pub struct SyncGtBank<'info> {
     /// Authority.
