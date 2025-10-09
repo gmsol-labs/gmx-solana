@@ -953,7 +953,7 @@ impl<'info> GetMarketTokenValue<'info> {
                     .market_token_value(&u128::from(amount), &prices, pnl_factor, maximize)
                     .map_err(ModelError::from)?
                     .ok_or_else(|| {
-                        msg!("evluation was not performed");
+                        msg!("evaluation was not performed");
                         error!(CoreError::InvalidArgument)
                     })?;
                 if emit_event {
