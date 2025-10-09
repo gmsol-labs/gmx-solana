@@ -5,7 +5,10 @@ use crate::{
     internal,
     ops::market::RemainingAccountsForMarket,
     states::{
-        market::{revertible::RevertibleMarket, utils::ClosableMarket},
+        market::{
+            revertible::{Revertible, RevertibleMarket},
+            utils::ClosableMarket,
+        },
         Market, MarketPriceOptions, Oracle, Store, TokenMapHeader,
     },
 };
@@ -99,7 +102,11 @@ impl<'info> UpdateFeesState<'info> {
                         allow_short_closed: false,
                     },
                 )?;
-                market.update_fees_state(&prices)
+                market.update_fees_state(&prices)?;
+
+                market.commit();
+                virtual_inventories.commit();
+                Ok(())
             },
             true,
         )?;
