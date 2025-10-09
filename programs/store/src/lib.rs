@@ -2555,7 +2555,7 @@ pub mod gmsol_store {
         UpdateClosedState::invoke_unchecked(ctx)
     }
 
-    /// Update the closed state for the market.
+    /// Update fees state for the given market.
     ///
     /// # Accounts
     /// *[See the documentation for the accounts.](UpdateFeesState)*
