@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- model: Added `min_collatereal_factor_for_liquidation` to `PositionParams`.
+- model: Added `min_collateral_factor_for_liquidation` to `PositionParams`.
 - programs(store): Added `cumulative_inv_cost_factor` as a new global metric for GT, along with an instruction to update it.
 - programs(store): Added `mint_gt_reward` instruction.
 - programs(store): Added `get_market_token_value` instruction for market token pricing.
@@ -36,13 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Added `close_empty_position` instruction.
 - programs(store): Added flag to indicate whether the token's market is open in oracle price map.
 - programs(store): Added `update_closed_state` instruction.
-- programs(store): Added new market config: `min_collatereal_factor_for_liquidation`.
+- programs(store): Added new market config: `min_collateral_factor_for_liquidation`.
 - programs(store): Introduced new config parameters for closed markets:
   - `market_closed_min_collateral_factor_for_liquidation`
   - `market_closed_skip_borrowing_fee_for_smaller_side`
   - `market_closed_borrowing_fee_base_factor`
   - `market_closed_borrowing_fee_above_optimal_usage_factor`
-- programs(store): Introduced flag `enable_market_closed_params` to control activation of closed-market configs.
+- programs(store): Introduced flag `use_market_closed_params` to control activation of closed-market configs.
 - programs(store): Added a new `MARKET_CONFIG_KEEPER` role with permissions to update market configs.
 - programs(store): Added `MarketConfigPermissions` store and `set_market_config_updatable` instruction for managing the permissions for updating market configs.
 - programs(store): Added `OrderFlag` and `flags` field to `OrderActionParams`
