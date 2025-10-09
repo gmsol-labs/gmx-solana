@@ -108,6 +108,9 @@ pub mod gmsol_liquidity_provider {
     }
 
     /// Update APY gradient with a sparse table (only non-zero buckets)
+    ///
+    /// Note: APY changes are applied retroactively and affect all existing positions.
+    /// Rewards are calculated using current APY gradients at claim/unstake time.
     pub fn update_apy_gradient_sparse(
         ctx: Context<UpdateApyGradient>,
         bucket_indices: Vec<u8>, // indices of buckets to update
@@ -136,6 +139,9 @@ pub mod gmsol_liquidity_provider {
     }
 
     /// Update APY gradient for a contiguous range of buckets
+    ///
+    /// Note: APY changes are applied retroactively and affect all existing positions.
+    /// Rewards are calculated using current APY gradients at claim/unstake time.
     pub fn update_apy_gradient_range(
         ctx: Context<UpdateApyGradient>,
         start_bucket: u8,
@@ -423,6 +429,11 @@ pub mod gmsol_liquidity_provider {
         };
         require!(unstake_amount <= old_amount, ErrorCode::InvalidArgument);
 
+        // When claim is disabled, only allow full unstake to prevent reward claiming via partial unstakes
+        if !global_state.claim_enabled {
+            require!(unstake_amount == old_amount, ErrorCode::InvalidArgument);
+        }
+
         // Sanity: ensure the passed lp_mint matches the position
         require_keys_eq!(
             ctx.accounts.lp_mint.key(),
@@ -448,7 +459,9 @@ pub mod gmsol_liquidity_provider {
 
         // Decide transfer amount based on full_exit
         let amount_to_transfer = if full_exit {
-            old_amount
+            // For full exit, transfer ALL tokens from vault to prevent close_account failure
+            // This protects against dust attacks where attackers send small amounts to the vault
+            ctx.accounts.position_vault.amount
         } else {
             unstake_amount
         };
