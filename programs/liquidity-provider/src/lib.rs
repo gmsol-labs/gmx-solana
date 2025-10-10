@@ -55,7 +55,7 @@ pub const APY_MAX: u128 = 200_000_000_000_000_000_000u128; // 200% at 1e20 scale
 const SECONDS_PER_YEAR: u128 = 31_557_600; // 365.25 * 24 * 3600
 const SECONDS_PER_WEEK: u128 = 7 * 24 * 3600;
 
-declare_id!("BGDJg2u2NWwUE5q4Q4masGCFBVAhJ5pKrMbVSwjVwo8m");
+declare_id!("LPMWczEVgXyQ3979XaqqEttanCXmYGvtJqPVtw1PvC8");
 
 #[program]
 pub mod gmsol_liquidity_provider {

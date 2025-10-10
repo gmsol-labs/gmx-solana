@@ -14,7 +14,7 @@ gmsol_timelock = "TimeBQ7gQyWyQMD3bTteAdy7hTVDNWSwELdSVZHfSXL"
 gmsol_mock_chainlink_verifier = "4nMxSRfeW7W2zFbN8FJ4YDvuTzEzCo1e6GzJxJLnDUoZ"
 gmsol_callback = "9JtQ9fBS91b2YxmHXNeGE8ipQYhLd2DRGGZSV8SPTJGw"
 gmsol_competition = "2AxuNr6euZPKQbTwNsLBjzFTZFAevA85F4PW9m9Dv8pc"
-gmsol_liquidity_provider = "BGDJg2u2NWwUE5q4Q4masGCFBVAhJ5pKrMbVSwjVwo8m"
+gmsol_liquidity_provider = "LPMWczEVgXyQ3979XaqqEttanCXmYGvtJqPVtw1PvC8"
 
 [registry]
 url = "https://api.apr.dev"
