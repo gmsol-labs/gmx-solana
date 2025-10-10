@@ -33,4 +33,5 @@ migration = []
 anchor-lang = { workspace = true }
 anchor-spl = { workspace = true, features = ["token", "token_2022"] }
 gmsol-programs = { workspace = true }
-gmsol-model = { workspace = true, features = ["u128"]}
+gmsol-model = { workspace = true, features = ["u128"] }
+gmsol-utils = { workspace = true, features = ["security-txt"] }

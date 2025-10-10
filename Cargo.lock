@@ -2409,6 +2409,7 @@ dependencies = [
  "anchor-spl",
  "gmsol-model",
  "gmsol-programs",
+ "gmsol-utils",
 ]
 
 [[package]]

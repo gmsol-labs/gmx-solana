@@ -1495,3 +1495,6 @@ fn get_glv_token_value_via_cpi<'info>(
 
     Ok(result.get())
 }
+
+#[cfg(not(feature = "no-entrypoint"))]
+gmsol_utils::security_txt!("GMX-Solana Liquidity Provider Program");
