@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 /// Order execution simulation.
 pub mod order;
 

@@ -1,11 +1,11 @@
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     fmt,
+    sync::Arc,
 };
 
 use either::Either;
 use gmsol_model::{
-    action::swap::SwapReport,
     price::{Price, Prices},
     MarketAction, SwapMarketMutExt,
 };
@@ -18,10 +18,16 @@ use petgraph::{
 use rust_decimal::{Decimal, MathematicalOps};
 use solana_sdk::pubkey::Pubkey;
 
-use crate::{
-    builders::order::{CreateOrderKind, CreateOrderParams},
-    market_graph::simulation::order::{OrderSimulation, OrderSimulationBuilder},
-};
+use crate::builders::order::{CreateOrderKind, CreateOrderParams};
+
+#[allow(deprecated)]
+use crate::market_graph::simulation::order::{OrderSimulation, OrderSimulationBuilder};
+
+#[cfg(simulation)]
+use crate::simulation::Simulator;
+
+#[cfg(simulation)]
+pub use crate::simulation::SwapOutput;
 
 use self::estimation::SwapEstimation;
 
@@ -39,11 +45,18 @@ pub mod config;
 pub mod error;
 
 /// Execution simulation.
+#[deprecated(since = "0.8.0", note = "use `Simulator` instead")]
+#[cfg(simulation)]
 pub mod simulation;
 
 type Graph = StableDiGraph<Node, Edge>;
 
 /// Order Simulation Builder.
+#[deprecated(
+    since = "0.8.0",
+    note = "use `OrderSimulationBuilderForSimulator` instead"
+)]
+#[allow(deprecated)]
 pub type OrderSimulationBuilderForGraph<'a> = OrderSimulationBuilder<
     'a,
     (
@@ -58,11 +71,10 @@ pub type OrderSimulationBuilderForGraph<'a> = OrderSimulationBuilder<
     ),
 >;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Node {
-    #[allow(dead_code)]
     token: Pubkey,
-    price: Option<Price<u128>>,
+    price: Option<Arc<Price<u128>>>,
 }
 
 impl Node {
@@ -71,7 +83,7 @@ impl Node {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Edge {
     market_token: Pubkey,
     estimated: Option<SwapEstimation>,
@@ -90,19 +102,19 @@ impl Edge {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct IndexTokenState {
     node: Node,
     markets: HashSet<Pubkey>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct CollateralTokenState {
     ix: NodeIndex,
     markets: HashSet<Pubkey>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct MarketState {
     market: MarketModel,
     long_edge: EdgeIndex,
@@ -120,7 +132,7 @@ impl MarketState {
 }
 
 /// Market Graph.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MarketGraph {
     index_tokens: HashMap<Pubkey, IndexTokenState>,
     collateral_tokens: HashMap<Pubkey, CollateralTokenState>,
@@ -196,18 +208,15 @@ impl MarketGraph {
         }
     }
 
-    /// Update token price.
-    ///
-    /// Return `true` if the token exists.
-    pub fn update_token_price(&mut self, token: &Pubkey, price: &Price<u128>) {
+    pub(crate) fn update_token_price_state(&mut self, token: &Pubkey, price: Arc<Price<u128>>) {
         if let Some(state) = self.index_tokens.get_mut(token) {
-            state.node.price = Some(*price);
+            state.node.price = Some(price.clone());
         }
         if let Some(state) = self.collateral_tokens.get(token) {
             self.graph
                 .node_weight_mut(state.ix)
                 .expect("internal: inconsistent token map")
-                .price = Some(*price);
+                .price = Some(price);
         }
         let related_markets_for_index_token = self
             .index_tokens
@@ -228,6 +237,13 @@ impl MarketGraph {
         for market_token in related_markets {
             self.update_estimation(Some(&market_token));
         }
+    }
+
+    /// Update token price.
+    ///
+    /// Return `true` if the token exists.
+    pub fn update_token_price(&mut self, token: &Pubkey, price: &Price<u128>) {
+        self.update_token_price_state(token, Arc::new(*price));
     }
 
     /// Update value for the estimation.
@@ -311,7 +327,8 @@ impl MarketGraph {
     }
 
     fn get_price(&self, token: &Pubkey) -> Option<Price<u128>> {
-        self.get_token_node(token).and_then(|node| node.price)
+        self.get_token_node(token)
+            .and_then(|node| node.price.as_deref().copied())
     }
 
     fn get_prices(&self, meta: &MarketMeta) -> Option<Prices<u128>> {
@@ -529,6 +546,8 @@ impl MarketGraph {
     }
 
     /// Swap along the provided path with the given price updater.
+    #[deprecated(since = "0.8.0", note = "use `to_simulator` instead")]
+    #[cfg(simulation)]
     pub fn swap_along_path_with_price_updater(
         &self,
         path: &[Pubkey],
@@ -582,6 +601,9 @@ impl MarketGraph {
     }
 
     /// Swap along the provided path.
+    #[deprecated(since = "0.8.0", note = "use `to_simulator` instead")]
+    #[allow(deprecated)]
+    #[cfg(simulation)]
     pub fn swap_along_path(
         &self,
         path: &[Pubkey],
@@ -592,6 +614,9 @@ impl MarketGraph {
     }
 
     /// Create a builder for order simulation.
+    #[deprecated(since = "0.8.0", note = "use `to_simulator` instead")]
+    #[allow(deprecated)]
+    #[cfg(simulation)]
     pub fn simulate_order<'a>(
         &'a self,
         kind: CreateOrderKind,
@@ -604,6 +629,91 @@ impl MarketGraph {
             .params(params)
             .collateral_or_swap_out_token(collateral_or_swap_out_token)
     }
+
+    /// Update with [`Simulator`](crate::simulation::Simulator).
+    #[cfg(simulation)]
+    pub fn update_with_simulator(
+        &mut self,
+        simulator: &Simulator,
+        options: UpdateGraphWithSimulatorOptions,
+    ) {
+        for (_, market) in simulator.markets() {
+            self.insert_market(market.clone());
+        }
+
+        if options.update_token_prices {
+            for (token, state) in simulator.tokens() {
+                if let Some(price) = state.price() {
+                    self.update_token_price_state(token, price.clone());
+                }
+            }
+        }
+    }
+
+    /// Create a [`Simulator`](crate::simulation::Simulator).
+    #[cfg(simulation)]
+    pub fn to_simulator(&self, options: CreateGraphSimulatorOptions) -> Simulator {
+        use crate::simulation::simulator::TokenState;
+
+        let market_filter = options.market_filter.as_ref();
+        let mut token_filter: Option<HashSet<_>> = None;
+        let markets = self
+            .markets
+            .iter()
+            .filter_map(|(market_token, state)| {
+                if let Some(filter) = market_filter {
+                    if !filter.contains(market_token) {
+                        return None;
+                    }
+                    let token_filter = token_filter.get_or_insert_default();
+                    token_filter.insert(state.market.meta.index_token_mint);
+                    token_filter.insert(state.market.meta.long_token_mint);
+                    token_filter.insert(state.market.meta.short_token_mint);
+                };
+
+                Some((*market_token, state.market.clone()))
+            })
+            .collect();
+
+        let index_token_prices = self
+            .index_tokens
+            .iter()
+            .map(|(token, state)| (*token, state.node.price.clone()));
+        let collateral_token_prices = self
+            .graph
+            .node_weights()
+            .map(|node| (node.token, node.price.clone()));
+
+        let tokens = index_token_prices
+            .chain(collateral_token_prices)
+            .filter(|(token, _)| {
+                if let Some(token_filter) = token_filter.as_ref() {
+                    token_filter.contains(token)
+                } else {
+                    true
+                }
+            })
+            .map(|(token, price)| (token, TokenState::from_price(price)))
+            .collect();
+
+        crate::simulation::Simulator::from_parts(tokens, markets)
+    }
+}
+
+/// Options for creating [`Simulator`].
+#[cfg(simulation)]
+#[derive(Debug, Default, Clone)]
+pub struct CreateGraphSimulatorOptions {
+    /// Market filter.
+    pub market_filter: Option<HashSet<Pubkey>>,
+}
+
+/// Options for updating [`MarketGraph`] with [`Simulator`].
+#[cfg(simulation)]
+#[derive(Debug, Default, Clone)]
+pub struct UpdateGraphWithSimulatorOptions {
+    /// Whether to update token prices with the simulator.
+    pub update_token_prices: bool,
 }
 
 /// Best Swap Paths.
@@ -697,31 +807,6 @@ fn distance_to_exchange_rate(d: Decimal) -> Decimal {
     (-d).exp()
 }
 
-/// Swap output.
-#[derive(Debug, Clone)]
-pub struct SwapOutput {
-    output_token: Pubkey,
-    amount: u128,
-    reports: Vec<SwapReport<u128, i128>>,
-}
-
-impl SwapOutput {
-    /// Returns the output token.
-    pub fn output_token(&self) -> &Pubkey {
-        &self.output_token
-    }
-
-    /// Returns the output amount.
-    pub fn amount(&self) -> u128 {
-        self.amount
-    }
-
-    /// Returns the swap reports.
-    pub fn reports(&self) -> &[SwapReport<u128, i128>] {
-        &self.reports
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -731,7 +816,6 @@ mod tests {
 
     use crate::{
         constants,
-        market_graph::simulation::order::OrderSimulationOutput,
         utils::{test::setup_fmt_tracing, zero_copy::try_deserialize_zero_copy_from_base64},
     };
 
@@ -882,7 +966,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg(simulation)]
     fn position_order_simulation() -> crate::Result<()> {
+        use crate::simulation::order::OrderSimulationOutput;
+
         let _tracing = setup_fmt_tracing("info");
 
         let bome: Pubkey = BOME.parse().unwrap();
@@ -901,6 +988,7 @@ mod tests {
 
         println!("{best_path:?}");
 
+        let mut simulator = g.to_simulator(Default::default());
         let bome_price = 101468850000;
         let sol_price = 10821227000000;
         let amount = 5 * constants::MARKET_USD_UNIT / bome_price;
@@ -911,7 +999,7 @@ mod tests {
             .size(size)
             .market_token(market_token)
             .build();
-        let output = g
+        let output = simulator
             .simulate_order(CreateOrderKind::MarketIncrease, &params, &wsol)
             .pay_token(Some(&bome))
             .swap_path(&best_path)
@@ -920,10 +1008,13 @@ mod tests {
 
         println!("{output:?}");
 
+        // Ensure the market graph is in-sync with the simulator.
+        g.update_with_simulator(&simulator, Default::default());
         g.update_value(constants::MARKET_USD_UNIT * 5);
         let paths = g.best_swap_paths(&wsol, false)?;
         let (_, best_path) = paths.to(&bome);
         println!("{best_path:?}");
+
         let size = 50 * constants::MARKET_USD_UNIT;
         let params = CreateOrderParams::builder()
             .amount(amount)
@@ -935,12 +1026,13 @@ mod tests {
         let OrderSimulationOutput::Increase { position, .. } = output else {
             unreachable!()
         };
-        let output = g
+        let output = simulator
             .simulate_order(CreateOrderKind::LimitDecrease, &params, &wsol)
             .receive_token(Some(&bome))
             .swap_path(&best_path)
             .position(Some(position.position_arc()))
             .build()
+            .update_prices(Default::default())?
             .execute_with_options(Default::default());
 
         println!("{output:?}");
@@ -949,6 +1041,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(simulation)]
     fn swap_order_simulation() -> crate::Result<()> {
         let _tracing = setup_fmt_tracing("info");
 
@@ -978,6 +1071,7 @@ mod tests {
             .market_token(market_token)
             .build();
         let output = g
+            .to_simulator(Default::default())
             .simulate_order(CreateOrderKind::MarketSwap, &params, &wsol)
             .pay_token(Some(&bome))
             .swap_path(&best_path)
@@ -995,10 +1089,12 @@ mod tests {
             .min_output(amount * bome_price / sol_price * 102 / 100)
             .build();
         let output = g
+            .to_simulator(Default::default())
             .simulate_order(CreateOrderKind::LimitSwap, &params, &wsol)
             .pay_token(Some(&bome))
             .swap_path(&best_path)
             .build()
+            .update_prices(Default::default())?
             .execute_with_options(Default::default())?;
 
         println!("{output:?}");

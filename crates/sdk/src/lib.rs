@@ -21,6 +21,10 @@ pub mod position;
 /// Utilities for serialization.
 pub mod serde;
 
+/// Simulation for market actions.
+#[cfg(simulation)]
+pub mod simulation;
+
 /// Utils.
 pub mod utils;
 

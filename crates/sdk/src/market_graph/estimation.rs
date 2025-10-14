@@ -4,7 +4,7 @@ use rust_decimal::{Decimal, MathematicalOps};
 
 use crate::constants;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct SwapEstimation {
     pub(super) ln_exchange_rate: Decimal,
 }

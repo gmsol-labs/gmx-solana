@@ -13,13 +13,14 @@ keywords.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["market-graph"]
+default = ["market-graph", "simulation"]
 treasury = ["gmsol-programs/treasury", "gmsol-utils/treasury"]
 timelock = ["gmsol-programs/timelock", "gmsol-utils/instruction"]
 competition = ["gmsol-programs/competition"]
 liquidity-provider = ["gmsol-programs/liquidity-provider"]
 devnet = ["gmsol-utils/devnet", "switchboard-on-demand-client?/devnet"]
 js = [
+    "simulation",
     "market-graph",
     "wasm-bindgen",
     "serde",
@@ -42,6 +43,7 @@ serde = [
     "indexmap/serde",
 ]
 market-graph = ["petgraph", "rust_decimal/maths"]
+simulation = []
 client = [
     "gmsol-solana-utils/make-bundle-builder",
     "gmsol-solana-utils/anchor",
