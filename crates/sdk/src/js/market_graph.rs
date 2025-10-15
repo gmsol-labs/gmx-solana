@@ -182,4 +182,10 @@ impl JsMarketGraph {
             .update_with_simulator(simulator, options.unwrap_or_default());
         Ok(())
     }
+
+    /// Create a clone of this graph.
+    #[wasm_bindgen(js_name = clone)]
+    pub fn js_clone(&self) -> Self {
+        self.clone()
+    }
 }

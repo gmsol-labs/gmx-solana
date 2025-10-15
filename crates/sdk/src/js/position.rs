@@ -16,6 +16,7 @@ use super::{market::JsMarketModel, price::Prices};
 
 /// JS version of [`Position`].
 #[wasm_bindgen(js_name = Position)]
+#[derive(Clone)]
 pub struct JsPosition {
     pub(crate) position: Arc<Position>,
 }
@@ -57,10 +58,17 @@ impl JsPosition {
             model: PositionModel::new(market.model.clone(), self.position.clone())?,
         })
     }
+
+    /// Create a clone of this position.
+    #[wasm_bindgen(js_name = clone)]
+    pub fn js_clone(&self) -> Self {
+        self.clone()
+    }
 }
 
 /// JS version of [`PositionModel`].
 #[wasm_bindgen(js_name = PositionModel)]
+#[derive(Clone)]
 pub struct JsPositionModel {
     model: PositionModel,
 }
@@ -106,6 +114,12 @@ impl JsPositionModel {
             .update(&event.event.after.into(), force_update.unwrap_or_default());
 
         Ok(updated)
+    }
+
+    /// Create a clone of this position model.
+    #[wasm_bindgen(js_name = clone)]
+    pub fn js_clone(&self) -> Self {
+        self.clone()
     }
 }
 
