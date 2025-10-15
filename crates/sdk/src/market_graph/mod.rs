@@ -5,10 +5,7 @@ use std::{
 };
 
 use either::Either;
-use gmsol_model::{
-    price::{Price, Prices},
-    MarketAction, SwapMarketMutExt,
-};
+use gmsol_model::price::{Price, Prices};
 use gmsol_programs::{gmsol_store::types::MarketMeta, model::MarketModel};
 use petgraph::{
     graph::{EdgeIndex, NodeIndex},
@@ -18,13 +15,15 @@ use petgraph::{
 use rust_decimal::{Decimal, MathematicalOps};
 use solana_sdk::pubkey::Pubkey;
 
-use crate::builders::order::{CreateOrderKind, CreateOrderParams};
-
 #[allow(deprecated)]
+#[cfg(simulation)]
 use crate::market_graph::simulation::order::{OrderSimulation, OrderSimulationBuilder};
 
 #[cfg(simulation)]
-use crate::simulation::Simulator;
+use crate::{
+    builders::order::{CreateOrderKind, CreateOrderParams},
+    simulation::Simulator,
+};
 
 #[cfg(simulation)]
 pub use crate::simulation::SwapOutput;
@@ -57,6 +56,7 @@ type Graph = StableDiGraph<Node, Edge>;
     note = "use `OrderSimulationBuilderForSimulator` instead"
 )]
 #[allow(deprecated)]
+#[cfg(simulation)]
 pub type OrderSimulationBuilderForGraph<'a> = OrderSimulationBuilder<
     'a,
     (
@@ -73,6 +73,7 @@ pub type OrderSimulationBuilderForGraph<'a> = OrderSimulationBuilder<
 
 #[derive(Debug, Clone)]
 struct Node {
+    #[cfg_attr(not(simulation), allow(dead_code))]
     token: Pubkey,
     price: Option<Arc<Price<u128>>>,
 }
@@ -555,6 +556,8 @@ impl MarketGraph {
         mut amount: u128,
         mut price_updater: impl FnMut(&MarketMeta, &mut Prices<u128>) -> crate::Result<()>,
     ) -> crate::Result<SwapOutput> {
+        use crate::model::{MarketAction, SwapMarketMutExt};
+
         let mut current_token = *source_token;
 
         let mut reports = Vec::with_capacity(path.len());
