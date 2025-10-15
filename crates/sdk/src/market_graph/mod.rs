@@ -19,6 +19,7 @@ use solana_sdk::pubkey::Pubkey;
 #[cfg(simulation)]
 use crate::market_graph::simulation::order::{OrderSimulation, OrderSimulationBuilder};
 
+use crate::serde::StringPubkey;
 #[cfg(simulation)]
 use crate::{
     builders::order::{CreateOrderKind, CreateOrderParams},
@@ -644,7 +645,7 @@ impl MarketGraph {
             self.insert_market(market.clone());
         }
 
-        if options.update_token_prices {
+        if options.update_token_prices.unwrap_or_default() {
             for (token, state) in simulator.tokens() {
                 if let Some(price) = state.price() {
                     self.update_token_price_state(token, price.clone());
@@ -706,17 +707,25 @@ impl MarketGraph {
 /// Options for creating [`Simulator`].
 #[cfg(simulation)]
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(into_wasm_abi, from_wasm_abi))]
 pub struct CreateGraphSimulatorOptions {
     /// Market filter.
-    pub market_filter: Option<HashSet<Pubkey>>,
+    #[cfg_attr(serde, serde(default))]
+    pub market_filter: Option<HashSet<StringPubkey>>,
 }
 
 /// Options for updating [`MarketGraph`] with [`Simulator`].
 #[cfg(simulation)]
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(js, derive(tsify_next::Tsify))]
+#[cfg_attr(js, tsify(into_wasm_abi, from_wasm_abi))]
 pub struct UpdateGraphWithSimulatorOptions {
     /// Whether to update token prices with the simulator.
-    pub update_token_prices: bool,
+    #[cfg_attr(serde, serde(default))]
+    pub update_token_prices: Option<bool>,
 }
 
 /// Best Swap Paths.

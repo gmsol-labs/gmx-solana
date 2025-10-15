@@ -25,4 +25,7 @@ pub mod utils;
 /// Events.
 pub mod events;
 
+/// Simulation.
+pub mod simulation;
+
 mod types;
