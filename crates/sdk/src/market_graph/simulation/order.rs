@@ -1,11 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use gmsol_model::{
-    action::{
-        decrease_position::{DecreasePositionFlags, DecreasePositionReport},
-        increase_position::IncreasePositionReport,
-        swap::SwapReport,
-    },
+    action::decrease_position::DecreasePositionFlags,
     num::MulDiv,
     price::{Price, Prices},
     MarketAction, PositionMutExt,
@@ -20,27 +16,10 @@ use typed_builder::TypedBuilder;
 
 use crate::{
     builders::order::{CreateOrderKind, CreateOrderParams},
-    market_graph::{simulation::SimulationOptions, MarketGraph, SwapOutput},
+    market_graph::{simulation::SimulationOptions, MarketGraph},
 };
 
-/// Order simulation output.
-#[derive(Debug)]
-pub enum OrderSimulationOutput {
-    /// Increase output.
-    Increase {
-        swaps: Vec<SwapReport<u128, i128>>,
-        report: Box<IncreasePositionReport<u128, i128>>,
-        position: PositionModel,
-    },
-    /// Decrease output.
-    Decrease {
-        swaps: Vec<SwapReport<u128, i128>>,
-        report: Box<DecreasePositionReport<u128, i128>>,
-        position: PositionModel,
-    },
-    /// Swap output.
-    Swap(SwapOutput),
-}
+pub use crate::simulation::order::OrderSimulationOutput;
 
 /// Order execution simulation.
 #[derive(Debug, Clone, TypedBuilder)]

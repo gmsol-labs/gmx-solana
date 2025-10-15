@@ -5,8 +5,8 @@ use crate::{
     js::position::JsPosition,
     market::Value,
     market_graph::{
-        simulation::{order::OrderSimulationOutput, SimulationOptions},
-        MarketGraph, MarketGraphConfig, SwapEstimationParams,
+        simulation::order::OrderSimulationOutput, MarketGraph, MarketGraphConfig,
+        SwapEstimationParams,
     },
     serde::StringPubkey,
     utils::{base64::encode_base64, zero_copy::try_deserialize_zero_copy_from_base64},
@@ -146,11 +146,15 @@ impl JsMarketGraph {
     }
 
     /// Simulates order execution.
+    #[deprecated(since = "0.8.0", note = "use `to_simulator` instead")]
+    #[allow(deprecated)]
     pub fn simulate_order(
         &self,
         args: SimulateOrderArgs,
         position: Option<JsPosition>,
     ) -> crate::Result<JsOrderSimulationOutput> {
+        use crate::market_graph::simulation::SimulationOptions;
+
         let SimulateOrderArgs {
             kind,
             params,

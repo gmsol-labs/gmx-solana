@@ -96,6 +96,16 @@ impl PositionModel {
 
         true
     }
+
+    /// Get the market model.
+    pub fn market_model(&self) -> &MarketModel {
+        &self.market
+    }
+
+    /// Set market model to the given.
+    pub fn set_market_model(&mut self, market: &MarketModel) {
+        self.market = market.clone();
+    }
 }
 
 impl gmsol_model::PositionState<{ constants::MARKET_DECIMALS }> for PositionState {

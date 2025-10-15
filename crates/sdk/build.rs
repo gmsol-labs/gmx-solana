@@ -9,5 +9,6 @@ fn main() {
         timelock: { feature = "timelock" },
         competition: { feature = "competition" },
         liquidity_provider: { feature = "liquidity-provider" },
+        simulation: { feature = "simulation" },
     }
 }
