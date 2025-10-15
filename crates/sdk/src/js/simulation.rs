@@ -137,6 +137,12 @@ impl JsSimulator {
         })?;
         Ok(JsOrderSimulationOutput { output })
     }
+
+    /// Create a clone of this simulator.
+    #[wasm_bindgen(js_name = clone)]
+    pub fn js_clone(&self) -> Self {
+        self.clone()
+    }
 }
 
 /// A JS binding for [`OrderSimulationOutput`].

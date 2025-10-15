@@ -22,6 +22,7 @@ use super::price::Prices;
 
 /// Wrapper of [`Market`].
 #[wasm_bindgen(js_name = Market)]
+#[derive(Clone)]
 pub struct JsMarket {
     market: Arc<Market>,
 }
@@ -83,6 +84,12 @@ impl JsMarket {
     pub fn short_token_address(&self) -> String {
         self.market.meta.short_token_mint.to_string()
     }
+
+    /// Create a clone of this market.
+    #[wasm_bindgen(js_name = clone)]
+    pub fn js_clone(&self) -> Self {
+        self.clone()
+    }
 }
 
 /// Params for calculating market token price.
@@ -112,6 +119,7 @@ pub struct MarketStatusParams {
 
 /// Wrapper of [`MarketModel`].
 #[wasm_bindgen(js_name = MarketModel)]
+#[derive(Clone)]
 pub struct JsMarketModel {
     pub(super) model: MarketModel,
 }
@@ -171,6 +179,12 @@ impl JsMarketModel {
                 .into_empty_position_opts(is_long, *collateral_token, options)?;
 
         Ok(position.into())
+    }
+
+    /// Create a clone of this market model.
+    #[wasm_bindgen(js_name = clone)]
+    pub fn js_clone(&self) -> Self {
+        self.clone()
     }
 }
 
