@@ -138,7 +138,7 @@ impl Simulator {
             let meta = &market.meta;
             if meta.long_token_mint == meta.short_token_mint {
                 return Err(crate::Error::custom(format!(
-                    "[swap] `{market_token} is not a swappable market"
+                    "[swap] `{market_token}` is not a swappable market"
                 )));
             }
             let is_token_in_long = if meta.long_token_mint == current_token {
