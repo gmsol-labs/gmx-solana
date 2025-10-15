@@ -19,10 +19,10 @@ use solana_sdk::pubkey::Pubkey;
 #[cfg(simulation)]
 use crate::market_graph::simulation::order::{OrderSimulation, OrderSimulationBuilder};
 
-use crate::serde::StringPubkey;
 #[cfg(simulation)]
 use crate::{
     builders::order::{CreateOrderKind, CreateOrderParams},
+    serde::StringPubkey,
     simulation::Simulator,
 };
 
