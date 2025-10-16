@@ -12,19 +12,21 @@
 
 ## Audits
 
-| Program             | Last Audit Date | Version   |
-| ------------------- | --------------- | --------- |
-| [gmsol-store]       | [2025-08-08]    | [cd0dfc8] |
-| [gmsol-treasury]    | [2025-08-08]    | [cd0dfc8] |
-| [gmsol-timelock]    | [2025-08-08]    | [cd0dfc8] |
-| [gmsol-competition] | [2025-08-08]    | [cd0dfc8] |
+| Program                    | Last Audit Date | Version   |
+| -------------------------- | --------------- | --------- |
+| [gmsol-store]              | [2025-09-23]    | [7618169] |
+| [gmsol-treasury]           | [2025-09-23]    | [7618169] |
+| [gmsol-timelock]           | [2025-09-23]    | [7618169] |
+| [gmsol-competition]        | [2025-09-23]    | [7618169] |
+| [gmsol-liquidity-provider] | [2025-09-23]    | [7618169] |
 
 [gmsol-store]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/store
 [gmsol-treasury]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/treasury
 [gmsol-timelock]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/timelock
 [gmsol-competition]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/competition
-[2025-08-08]: https://github.com/gmsol-labs/gmx-solana-audits/blob/main/GMX_Solana_Audit_Report_August_8_2025_Zenith.pdf
-[cd0dfc8]: https://github.com/gmsol-labs/gmx-solana/commit/cd0dfc84b5e2b1857f54c6cdbe25459fb6e43145
+[gmsol-liquidity-provider]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/liquidity-provider
+[2025-09-23]: https://github.com/gmsol-labs/gmx-solana-audits/blob/main/GMX_Solana_Audit_Report_September_23_2025_Zenith.pdf
+[7618169]: https://github.com/gmsol-labs/gmx-solana/commit/7618169dfda4858ec87890bb66a1caafc8dca08c
 
 ## Integration
 
@@ -34,7 +36,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-gmsol-sdk = { version = "0.7", features = ["client"] }
+gmsol-sdk = { version = "0.8", features = ["client"] }
 ```
 
 Create a `Client` and start using the core APIs:
