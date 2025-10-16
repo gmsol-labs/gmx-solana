@@ -91,6 +91,12 @@ enum Command {
         #[arg(long)]
         debug: bool,
     },
+    /// Mint reward to the given address.
+    MintReward {
+        amount: Amount,
+        #[arg(long)]
+        owner: Pubkey,
+    },
 }
 
 impl super::Command for Gt {
@@ -343,6 +349,14 @@ impl super::Command for Gt {
                 }
 
                 return Ok(());
+            }
+            Command::MintReward { amount, owner } => {
+                let store_account = client.store(store).await?;
+                let decimals = store_account.gt.decimals;
+                if amount.is_zero() {
+                    eyre::bail!("the reward amount cannot be zero");
+                }
+                client.mint_gt_reward(store, owner, amount.to_u64(decimals)?)?
             }
         };
 
