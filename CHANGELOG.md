@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2025-10-17
+
 ### Breaking Changes
 
 - model: Updated the params and logic for `PositionExt::check_liquidatable`: use `min_collateral_factor_for_liquidation` as min factor when `for_liquidation=true`.
@@ -418,7 +420,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provided SDK (`gmsol`) and other utility crates.
 - Provided a command-line interface (`gmsol`).
 
-[unreleased]: https://github.com/gmsol-labs/gmx-solana/compare/v0.7.1...HEAD
+[unreleased]: https://github.com/gmsol-labs/gmx-solana/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.8.0
 [0.7.1]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.7.1
 [0.7.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.7.0
 [0.6.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.6.0
