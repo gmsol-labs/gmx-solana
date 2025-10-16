@@ -30,7 +30,8 @@ pub type OrderSimulationBuilderForSimulator<'a> = OrderSimulationBuilder<
     ),
 >;
 
-type PriceState = Option<Arc<Price<u128>>>;
+/// Price State.
+pub type PriceState = Option<Arc<Price<u128>>>;
 
 /// A simulator for actions.
 #[derive(Debug, Clone)]

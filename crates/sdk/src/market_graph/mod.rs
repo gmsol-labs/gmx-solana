@@ -634,7 +634,7 @@ impl MarketGraph {
             .collateral_or_swap_out_token(collateral_or_swap_out_token)
     }
 
-    /// Update with [`Simulator`](crate::simulation::Simulator).
+    /// Update with [`Simulator`].
     #[cfg(simulation)]
     pub fn update_with_simulator(
         &mut self,
@@ -654,7 +654,7 @@ impl MarketGraph {
         }
     }
 
-    /// Create a [`Simulator`](crate::simulation::Simulator).
+    /// Create a [`Simulator`].
     #[cfg(simulation)]
     pub fn to_simulator(&self, options: CreateGraphSimulatorOptions) -> Simulator {
         use crate::simulation::simulator::TokenState;
