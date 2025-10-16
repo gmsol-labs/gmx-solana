@@ -36,6 +36,9 @@ pub mod glv_deposit;
 /// Instruction builders related to GLV withdrawal.
 pub mod glv_withdrawal;
 
+/// Instruction builders related to GT operations.
+pub mod gt;
+
 /// Instruction builders related to liquidity provider program.
 #[cfg(liquidity_provider)]
 pub mod liquidity_provider;

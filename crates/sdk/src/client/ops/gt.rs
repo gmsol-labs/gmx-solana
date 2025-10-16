@@ -4,11 +4,11 @@ use gmsol_programs::gmsol_store::{
     accounts::GtExchange,
     client::{accounts, args},
 };
-use gmsol_solana_utils::transaction_builder::TransactionBuilder;
+use gmsol_solana_utils::{transaction_builder::TransactionBuilder, IntoAtomicGroup};
 use gmsol_utils::gt::get_time_window_index;
 use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
 
-use crate::utils::zero_copy::ZeroCopy;
+use crate::{builders::gt::MintGtReward, utils::zero_copy::ZeroCopy};
 
 /// GT Operations.
 pub trait GtOps<C> {
@@ -102,6 +102,14 @@ pub trait GtOps<C> {
         hint_owner: Option<&Pubkey>,
         hint_vault: Option<&Pubkey>,
     ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
+
+    /// Mint GT reward.
+    fn mint_gt_reward(
+        &self,
+        store: &Pubkey,
+        owner: &Pubkey,
+        amount: u64,
+    ) -> crate::Result<TransactionBuilder<C>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
@@ -255,6 +263,24 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
                 exchange: *exchange,
             })
             .anchor_args(args::CloseGtExchange {}))
+    }
+
+    fn mint_gt_reward(
+        &self,
+        store: &Pubkey,
+        owner: &Pubkey,
+        amount: u64,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        Ok(self.store_transaction().pre_atomic_group(
+            MintGtReward::builder()
+                .amount(amount)
+                .payer(self.payer())
+                .owner((*owner).into())
+                .store_program(self.store_program_for_builders(store))
+                .build()
+                .into_atomic_group(&())?,
+            true,
+        ))
     }
 }
 
