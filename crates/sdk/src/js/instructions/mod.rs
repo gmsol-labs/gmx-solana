@@ -22,6 +22,21 @@ pub mod close_order;
 /// Update order.
 pub mod update_order;
 
+/// Create deposit.
+pub mod create_deposit;
+
+/// Create withdrawal.
+pub mod create_withdrawal;
+
+/// Create shift.
+pub mod create_shift;
+
+/// Create GLV deposit.
+pub mod create_glv_deposit;
+
+/// Create GLV withdrawal.
+pub mod create_glv_withdrawal;
+
 /// A JS version transaction group options.
 #[derive(Debug, Serialize, Deserialize, Tsify, Default)]
 #[tsify(from_wasm_abi)]
