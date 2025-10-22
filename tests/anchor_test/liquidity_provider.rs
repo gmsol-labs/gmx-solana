@@ -39,8 +39,7 @@ async fn liquidity_provider_tests() -> eyre::Result<()> {
     for (i, &apy) in gs.apy_gradient.iter().enumerate() {
         assert_eq!(
             apy, expected_apy,
-            "Bucket {} should have APY {}",
-            i, expected_apy
+            "Bucket {i} should have APY {expected_apy}",
         );
     }
     tracing::info!("✓ Initialization test passed");
@@ -131,8 +130,7 @@ async fn liquidity_provider_tests() -> eyre::Result<()> {
         let expected_apy = apy_values[i];
         assert_eq!(
             gs.apy_gradient[bucket_idx as usize], expected_apy,
-            "Bucket {} should have APY {}",
-            bucket_idx, expected_apy
+            "Bucket {bucket_idx} should have APY {expected_apy}",
         );
     }
     tracing::info!("✓ Sparse APY gradient update test passed");
@@ -180,8 +178,7 @@ async fn liquidity_provider_tests() -> eyre::Result<()> {
         let bucket_idx = range_start as usize + i;
         assert_eq!(
             gs.apy_gradient[bucket_idx], *expected_apy,
-            "Bucket {} should have APY {}",
-            bucket_idx, expected_apy
+            "Bucket {bucket_idx} should have APY {expected_apy}",
         );
     }
     tracing::info!("✓ Range APY gradient update test passed");
@@ -893,7 +890,7 @@ async fn position_controller_relationship_tests() -> eyre::Result<()> {
 
     // Get user's LP token account
     let user_lp_token =
-        anchor_spl::associated_token::get_associated_token_address(&user.payer(), &gm_token);
+        anchor_spl::associated_token::get_associated_token_address(&user.payer(), gm_token);
 
     let unstake_ix = user
         .store_transaction()
