@@ -222,7 +222,7 @@ impl JsMarketGraph {
         use crate::simulation::{simulate_gm_deposit_exact, Simulator};
         let simulator: Simulator = self.graph.to_simulator(Default::default());
         let mut simulator = simulator.clone();
-        let market_token = (*args.market_token).into();
+        let market_token = *args.market_token;
         let out = simulate_gm_deposit_exact(
             &mut simulator,
             &market_token,
@@ -243,7 +243,7 @@ impl JsMarketGraph {
         use crate::simulation::{simulate_gm_withdrawal_exact, Simulator};
         let simulator: Simulator = self.graph.to_simulator(Default::default());
         let mut simulator = simulator.clone();
-        let market_token = (*args.market_token).into();
+        let market_token = *args.market_token;
         let out =
             simulate_gm_withdrawal_exact(&mut simulator, &market_token, args.market_token_amount)?;
         Ok(GmWithdrawalExactOutput {
@@ -301,7 +301,7 @@ impl JsMarketGraph {
 
         let simulator: Simulator = self.graph.to_simulator(Default::default());
         let mut simulator = simulator.clone();
-        let market_token: Pubkey = (*args.market_token).into();
+        let market_token: Pubkey = *args.market_token;
         let components = args
             .components
             .iter()
@@ -398,7 +398,7 @@ fn simulate_swap_leg(
     leg: &LpSwapLegArgs,
 ) -> crate::Result<LpSwapLegOutput> {
     use solana_sdk::pubkey::Pubkey;
-    let source: Pubkey = (*leg.source_token).into();
+    let source: Pubkey = *leg.source_token;
     let path: Vec<Pubkey> = leg.swap_path.iter().map(|p| **p).collect();
     let swap = sim.swap_along_path(&path, &source, leg.amount)?;
     Ok(LpSwapLegOutput {

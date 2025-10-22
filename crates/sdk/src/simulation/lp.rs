@@ -124,6 +124,7 @@ fn find_component<'a>(
         .ok_or_else(|| crate::Error::custom("current market not found in GLV components"))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn simulate_glv_deposit_exact(
     sim: &mut Simulator,
     market_token: &Pubkey,
