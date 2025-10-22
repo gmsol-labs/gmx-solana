@@ -262,7 +262,7 @@ impl JsMarketGraph {
 
         let simulator: Simulator = self.graph.to_simulator(Default::default());
         let mut simulator = simulator.clone();
-        let market_token: Pubkey = args.market_token.into();
+        let market_token: Pubkey = *args.market_token;
         let components = args
             .components
             .iter()
