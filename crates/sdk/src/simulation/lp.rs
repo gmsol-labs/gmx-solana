@@ -30,7 +30,8 @@ pub fn simulate_gm_deposit_exact(
         .with_virtual_inventory_impact(include_virtual_inventory_impact)
         .execute()?;
     let minted = *report.minted();
-    let report_borsh_base64 = borsh_to_base64(&report)?;
+    let mirror = GmDepositReportMirror { minted };
+    let report_borsh_base64 = borsh_to_base64(&mirror)?;
     Ok(GmDepositExactOutput {
         minted,
         report_borsh_base64,
@@ -46,7 +47,11 @@ pub fn simulate_gm_withdrawal_exact(
     let report = market.withdraw(market_token_amount, prices)?.execute()?;
     let long_out = *report.long_token_output();
     let short_out = *report.short_token_output();
-    let report_borsh_base64 = borsh_to_base64(&report)?;
+    let mirror = GmWithdrawalReportMirror {
+        long_out,
+        short_out,
+    };
+    let report_borsh_base64 = borsh_to_base64(&mirror)?;
     Ok(GmWithdrawalExactOutput {
         long_out,
         short_out,
@@ -63,6 +68,17 @@ fn borsh_to_base64<T: borsh::BorshSerialize>(data: &T) -> crate::Result<String> 
 use borsh::BorshSerialize;
 use gmsol_model::utils::{market_token_amount_to_usd, usd_to_market_token_amount};
 use gmsol_programs::constants::MARKET_USD_TO_AMOUNT_DIVISOR;
+
+#[derive(Debug, Clone, BorshSerialize)]
+struct GmDepositReportMirror {
+    pub minted: u128,
+}
+
+#[derive(Debug, Clone, BorshSerialize)]
+struct GmWithdrawalReportMirror {
+    pub long_out: u128,
+    pub short_out: u128,
+}
 
 #[derive(Debug, Clone)]
 pub struct GlvComponentSim {
