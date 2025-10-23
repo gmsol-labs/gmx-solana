@@ -80,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added `decode_anchor_event_with_options` utility function.
 - sdk(js): Added support for `TradeEvent`.
 - sdk(sdk): Added support for `mint_gt_reward` instruction.
+- sdk(sdk): Added `base58-legacy` format for transaction serialization.
 - cli: Added `lp init-lp` command.
 - cli: Added `exchange close-empty-positions` command.
 - cli: Added options to keep or close position.
