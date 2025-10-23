@@ -11,6 +11,35 @@ pub struct GmDepositExactOutput {
 }
 
 #[derive(Debug, Clone)]
+pub struct ShiftExactOutput {
+    pub to_minted: u128,
+    pub withdrawal_report_borsh_base64: String,
+    pub deposit_report_borsh_base64: String,
+}
+
+pub fn simulate_shift_exact(
+    sim: &mut Simulator,
+    from_market_token: &Pubkey,
+    to_market_token: &Pubkey,
+    from_market_token_amount: u128,
+    include_virtual_inventory_impact: bool,
+) -> crate::Result<ShiftExactOutput> {
+    let w = simulate_gm_withdrawal_exact(sim, from_market_token, from_market_token_amount)?;
+    let d = simulate_gm_deposit_exact(
+        sim,
+        to_market_token,
+        w.long_out,
+        w.short_out,
+        include_virtual_inventory_impact,
+    )?;
+    Ok(ShiftExactOutput {
+        to_minted: d.minted,
+        withdrawal_report_borsh_base64: w.report_borsh_base64,
+        deposit_report_borsh_base64: d.report_borsh_base64,
+    })
+}
+
+#[derive(Debug, Clone)]
 pub struct GmWithdrawalExactOutput {
     pub long_out: u128,
     pub short_out: u128,

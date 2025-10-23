@@ -29,6 +29,26 @@ pub struct JsMarketGraph {
     graph: MarketGraph,
 }
 
+fn simulate_swap_leg_with_amount(
+    sim: &mut crate::simulation::Simulator,
+    leg: &LpSwapLegArgs,
+    amount: u128,
+) -> crate::Result<LpSwapLegOutput> {
+    use solana_sdk::pubkey::Pubkey;
+    let source: Pubkey = *leg.source_token;
+    let path: Vec<Pubkey> = leg.swap_path.iter().map(|p| **p).collect();
+    let swap = sim.swap_along_path(&path, &source, amount)?;
+    Ok(LpSwapLegOutput {
+        output_token: (*swap.output_token()).into(),
+        amount: swap.amount(),
+        report: swap
+            .reports()
+            .iter()
+            .map(encode_borsh_base64)
+            .collect::<crate::Result<Vec<_>>>()?,
+    })
+}
+
 /// Best swap path.
 #[derive(Debug, Serialize, Deserialize, Tsify)]
 #[tsify(into_wasm_abi)]
@@ -250,6 +270,93 @@ impl JsMarketGraph {
             long_out: out.long_out,
             short_out: out.short_out,
             report: out.report_borsh_base64,
+        })
+    }
+
+    pub fn simulate_shift_exact(&self, args: ShiftExactArgs) -> crate::Result<ShiftExactOutput> {
+        use crate::simulation::{self, Simulator};
+        use solana_sdk::pubkey::Pubkey;
+
+        let simulator: Simulator = self.graph.to_simulator(Default::default());
+        let mut simulator = simulator.clone();
+        let from_market_token: Pubkey = *args.from_market_token;
+        let to_market_token: Pubkey = *args.to_market_token;
+        let out = simulation::lp::simulate_shift_exact(
+            &mut simulator,
+            &from_market_token,
+            &to_market_token,
+            args.from_market_token_amount,
+            args.include_virtual_inventory_impact.unwrap_or(true),
+        )?;
+        Ok(ShiftExactOutput {
+            to_minted: out.to_minted,
+            withdrawal_report: out.withdrawal_report_borsh_base64,
+            deposit_report: out.deposit_report_borsh_base64,
+        })
+    }
+
+    pub fn simulate_shift_with_swaps(
+        &self,
+        args: ShiftWithSwapsArgs,
+    ) -> crate::Result<ShiftWithSwapsOutput> {
+        use crate::simulation::{self, Simulator};
+        use solana_sdk::pubkey::Pubkey;
+
+        let simulator: Simulator = self.graph.to_simulator(Default::default());
+        let mut simulator = simulator.clone();
+
+        let from_market_token: Pubkey = *args.from_market_token;
+        let to_market_token: Pubkey = *args.to_market_token;
+
+        let w = simulation::lp::simulate_gm_withdrawal_exact(
+            &mut simulator,
+            &from_market_token,
+            args.from_market_token_amount,
+        )?;
+
+        let mut long_in = w.long_out;
+        let mut short_in = w.short_out;
+
+        let long_swap = if let Some(leg) = args.long {
+            Some(simulate_swap_leg_with_amount(
+                &mut simulator,
+                &leg,
+                long_in,
+            )?)
+        } else {
+            None
+        };
+        if let Some(ls) = &long_swap {
+            long_in = ls.amount;
+        }
+
+        let short_swap = if let Some(leg) = args.short {
+            Some(simulate_swap_leg_with_amount(
+                &mut simulator,
+                &leg,
+                short_in,
+            )?)
+        } else {
+            None
+        };
+        if let Some(ss) = &short_swap {
+            short_in = ss.amount;
+        }
+
+        let d = simulation::lp::simulate_gm_deposit_exact(
+            &mut simulator,
+            &to_market_token,
+            long_in,
+            short_in,
+            args.include_virtual_inventory_impact.unwrap_or(true),
+        )?;
+
+        Ok(ShiftWithSwapsOutput {
+            to_minted: d.minted,
+            withdrawal_report: w.report_borsh_base64,
+            deposit_report: d.report_borsh_base64,
+            long_swap,
+            short_swap,
         })
     }
 
@@ -490,4 +597,48 @@ pub struct GlvWithdrawalExactOutput {
     pub long_out: u128,
     pub short_out: u128,
     pub pricing_report: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct ShiftExactArgs {
+    pub from_market_token: StringPubkey,
+    pub to_market_token: StringPubkey,
+    pub from_market_token_amount: u128,
+    #[serde(default)]
+    pub include_virtual_inventory_impact: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi)]
+pub struct ShiftExactOutput {
+    pub to_minted: u128,
+    pub withdrawal_report: String,
+    pub deposit_report: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct ShiftWithSwapsArgs {
+    pub from_market_token: StringPubkey,
+    pub to_market_token: StringPubkey,
+    pub from_market_token_amount: u128,
+    #[serde(default)]
+    pub include_virtual_inventory_impact: Option<bool>,
+    #[serde(default)]
+    pub long: Option<LpSwapLegArgs>,
+    #[serde(default)]
+    pub short: Option<LpSwapLegArgs>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi)]
+pub struct ShiftWithSwapsOutput {
+    pub to_minted: u128,
+    pub withdrawal_report: String,
+    pub deposit_report: String,
+    #[serde(default)]
+    pub long_swap: Option<LpSwapLegOutput>,
+    #[serde(default)]
+    pub short_swap: Option<LpSwapLegOutput>,
 }
