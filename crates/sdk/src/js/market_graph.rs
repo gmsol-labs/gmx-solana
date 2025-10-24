@@ -7,9 +7,11 @@ use crate::{
         CreateGraphSimulatorOptions, MarketGraph, MarketGraphConfig, SwapEstimationParams,
         UpdateGraphWithSimulatorOptions,
     },
-    utils::zero_copy::try_deserialize_zero_copy_from_base64,
+    serde::StringPubkey,
+    utils::{base64::encode_base64, zero_copy::try_deserialize_zero_copy_from_base64},
 };
 
+use borsh::BorshSerialize;
 use gmsol_programs::model::MarketModel;
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
@@ -25,6 +27,26 @@ use super::{
 #[derive(Clone)]
 pub struct JsMarketGraph {
     graph: MarketGraph,
+}
+
+fn simulate_swap_leg_with_amount(
+    sim: &mut crate::simulation::Simulator,
+    leg: &LpSwapLegArgs,
+    amount: u128,
+) -> crate::Result<LpSwapLegOutput> {
+    use solana_sdk::pubkey::Pubkey;
+    let source: Pubkey = *leg.source_token;
+    let path: Vec<Pubkey> = leg.swap_path.iter().map(|p| **p).collect();
+    let swap = sim.swap_along_path(&path, &source, amount)?;
+    Ok(LpSwapLegOutput {
+        output_token: (*swap.output_token()).into(),
+        amount: swap.amount(),
+        report: swap
+            .reports()
+            .iter()
+            .map(encode_borsh_base64)
+            .collect::<crate::Result<Vec<_>>>()?,
+    })
 }
 
 /// Best swap path.
@@ -167,6 +189,253 @@ impl JsMarketGraph {
         Ok(JsOrderSimulationOutput { output })
     }
 
+    pub fn simulate_deposit_swaps(&self, args: LpSwapLegsArgs) -> crate::Result<LpSwapLegsOutput> {
+        self.simulate_lp_swap_legs(args)
+    }
+
+    pub fn simulate_withdrawal_swaps(
+        &self,
+        args: LpSwapLegsArgs,
+    ) -> crate::Result<LpSwapLegsOutput> {
+        self.simulate_lp_swap_legs(args)
+    }
+
+    pub fn simulate_glv_deposit_swaps(
+        &self,
+        args: LpSwapLegsArgs,
+    ) -> crate::Result<LpSwapLegsOutput> {
+        self.simulate_lp_swap_legs(args)
+    }
+
+    pub fn simulate_glv_withdrawal_swaps(
+        &self,
+        args: LpSwapLegsArgs,
+    ) -> crate::Result<LpSwapLegsOutput> {
+        self.simulate_lp_swap_legs(args)
+    }
+
+    fn simulate_lp_swap_legs(&self, args: LpSwapLegsArgs) -> crate::Result<LpSwapLegsOutput> {
+        use crate::simulation::Simulator;
+
+        let simulator: Simulator = self.graph.to_simulator(Default::default());
+        let mut simulator = simulator.clone();
+
+        let long = if let Some(leg) = args.long {
+            Some(simulate_swap_leg(&mut simulator, &leg)?)
+        } else {
+            None
+        };
+
+        let short = if let Some(leg) = args.short {
+            Some(simulate_swap_leg(&mut simulator, &leg)?)
+        } else {
+            None
+        };
+
+        Ok(LpSwapLegsOutput { long, short })
+    }
+
+    pub fn simulate_deposit_exact(
+        &self,
+        args: GmDepositExactArgs,
+    ) -> crate::Result<GmDepositExactOutput> {
+        use crate::simulation::{simulate_gm_deposit_exact, Simulator};
+        let simulator: Simulator = self.graph.to_simulator(Default::default());
+        let mut simulator = simulator.clone();
+        let market_token = *args.market_token;
+        let out = simulate_gm_deposit_exact(
+            &mut simulator,
+            &market_token,
+            args.long_amount,
+            args.short_amount,
+            args.include_virtual_inventory_impact.unwrap_or(true),
+        )?;
+        Ok(GmDepositExactOutput {
+            minted: out.minted,
+            report: out.report_borsh_base64,
+        })
+    }
+
+    pub fn simulate_withdrawal_exact(
+        &self,
+        args: GmWithdrawalExactArgs,
+    ) -> crate::Result<GmWithdrawalExactOutput> {
+        use crate::simulation::{simulate_gm_withdrawal_exact, Simulator};
+        let simulator: Simulator = self.graph.to_simulator(Default::default());
+        let mut simulator = simulator.clone();
+        let market_token = *args.market_token;
+        let out =
+            simulate_gm_withdrawal_exact(&mut simulator, &market_token, args.market_token_amount)?;
+        Ok(GmWithdrawalExactOutput {
+            long_out: out.long_out,
+            short_out: out.short_out,
+            report: out.report_borsh_base64,
+        })
+    }
+
+    pub fn simulate_shift_exact(&self, args: ShiftExactArgs) -> crate::Result<ShiftExactOutput> {
+        use crate::simulation::{self, Simulator};
+        use solana_sdk::pubkey::Pubkey;
+
+        let simulator: Simulator = self.graph.to_simulator(Default::default());
+        let mut simulator = simulator.clone();
+        let from_market_token: Pubkey = *args.from_market_token;
+        let to_market_token: Pubkey = *args.to_market_token;
+        let out = simulation::lp::simulate_shift_exact(
+            &mut simulator,
+            &from_market_token,
+            &to_market_token,
+            args.from_market_token_amount,
+            args.include_virtual_inventory_impact.unwrap_or(true),
+        )?;
+        Ok(ShiftExactOutput {
+            to_minted: out.to_minted,
+            withdrawal_report: out.withdrawal_report_borsh_base64,
+            deposit_report: out.deposit_report_borsh_base64,
+        })
+    }
+
+    pub fn simulate_shift_with_swaps(
+        &self,
+        args: ShiftWithSwapsArgs,
+    ) -> crate::Result<ShiftWithSwapsOutput> {
+        use crate::simulation::{self, Simulator};
+        use solana_sdk::pubkey::Pubkey;
+
+        let simulator: Simulator = self.graph.to_simulator(Default::default());
+        let mut simulator = simulator.clone();
+
+        let from_market_token: Pubkey = *args.from_market_token;
+        let to_market_token: Pubkey = *args.to_market_token;
+
+        let w = simulation::lp::simulate_gm_withdrawal_exact(
+            &mut simulator,
+            &from_market_token,
+            args.from_market_token_amount,
+        )?;
+
+        let mut long_in = w.long_out;
+        let mut short_in = w.short_out;
+
+        let long_swap = if let Some(leg) = args.long {
+            Some(simulate_swap_leg_with_amount(
+                &mut simulator,
+                &leg,
+                long_in,
+            )?)
+        } else {
+            None
+        };
+        if let Some(ls) = &long_swap {
+            long_in = ls.amount;
+        }
+
+        let short_swap = if let Some(leg) = args.short {
+            Some(simulate_swap_leg_with_amount(
+                &mut simulator,
+                &leg,
+                short_in,
+            )?)
+        } else {
+            None
+        };
+        if let Some(ss) = &short_swap {
+            short_in = ss.amount;
+        }
+
+        let d = simulation::lp::simulate_gm_deposit_exact(
+            &mut simulator,
+            &to_market_token,
+            long_in,
+            short_in,
+            args.include_virtual_inventory_impact.unwrap_or(true),
+        )?;
+
+        Ok(ShiftWithSwapsOutput {
+            to_minted: d.minted,
+            withdrawal_report: w.report_borsh_base64,
+            deposit_report: d.report_borsh_base64,
+            long_swap,
+            short_swap,
+        })
+    }
+
+    pub fn simulate_glv_deposit_exact(
+        &self,
+        args: GlvDepositExactArgs,
+    ) -> crate::Result<GlvDepositExactOutput> {
+        use crate::simulation::{self, Simulator};
+        use solana_sdk::pubkey::Pubkey;
+
+        let simulator: Simulator = self.graph.to_simulator(Default::default());
+        let mut simulator = simulator.clone();
+        let market_token: Pubkey = *args.market_token;
+        let components = args
+            .components
+            .iter()
+            .map(|c| simulation::lp::GlvComponentSim {
+                market_token: c.market_token.into(),
+                balance: c.balance,
+                pool_value: c.pool_value,
+                supply: c.supply,
+            })
+            .collect::<Vec<_>>();
+
+        let out = simulation::lp::simulate_glv_deposit_exact(
+            &mut simulator,
+            &market_token,
+            args.long_amount,
+            args.short_amount,
+            args.market_token_amount,
+            args.include_virtual_inventory_impact.unwrap_or(true),
+            args.glv_supply,
+            &components,
+        )?;
+
+        Ok(GlvDepositExactOutput {
+            glv_minted: out.glv_minted,
+            market_token_delta: out.market_token_delta,
+            pricing_report: out.pricing_report_borsh_base64,
+        })
+    }
+
+    pub fn simulate_glv_withdrawal_exact(
+        &self,
+        args: GlvWithdrawalExactArgs,
+    ) -> crate::Result<GlvWithdrawalExactOutput> {
+        use crate::simulation::{self, Simulator};
+        use solana_sdk::pubkey::Pubkey;
+
+        let simulator: Simulator = self.graph.to_simulator(Default::default());
+        let mut simulator = simulator.clone();
+        let market_token: Pubkey = *args.market_token;
+        let components = args
+            .components
+            .iter()
+            .map(|c| simulation::lp::GlvComponentSim {
+                market_token: c.market_token.into(),
+                balance: c.balance,
+                pool_value: c.pool_value,
+                supply: c.supply,
+            })
+            .collect::<Vec<_>>();
+
+        let out = simulation::lp::simulate_glv_withdrawal_exact(
+            &mut simulator,
+            &market_token,
+            args.glv_token_amount,
+            args.glv_supply,
+            &components,
+        )?;
+
+        Ok(GlvWithdrawalExactOutput {
+            market_token_amount: out.market_token_amount,
+            long_out: out.long_out,
+            short_out: out.short_out,
+            pricing_report: out.pricing_report_borsh_base64,
+        })
+    }
+
     /// Create a simulator.
     pub fn to_simulator(&self, options: Option<CreateGraphSimulatorOptions>) -> JsSimulator {
         JsSimulator::from(self.graph.to_simulator(options.unwrap_or_default()))
@@ -188,4 +457,188 @@ impl JsMarketGraph {
     pub fn js_clone(&self) -> Self {
         self.clone()
     }
+}
+
+fn encode_borsh_base64<T: BorshSerialize>(data: &T) -> crate::Result<String> {
+    data.try_to_vec()
+        .map(|data| encode_base64(&data))
+        .map_err(crate::Error::custom)
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct LpSwapLegArgs {
+    pub source_token: StringPubkey,
+    pub amount: u128,
+    #[serde(default)]
+    pub swap_path: Vec<StringPubkey>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct LpSwapLegsArgs {
+    #[serde(default)]
+    pub long: Option<LpSwapLegArgs>,
+    #[serde(default)]
+    pub short: Option<LpSwapLegArgs>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi)]
+pub struct LpSwapLegOutput {
+    pub output_token: StringPubkey,
+    pub amount: u128,
+    pub report: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi)]
+pub struct LpSwapLegsOutput {
+    #[serde(default)]
+    pub long: Option<LpSwapLegOutput>,
+    #[serde(default)]
+    pub short: Option<LpSwapLegOutput>,
+}
+
+fn simulate_swap_leg(
+    sim: &mut crate::simulation::Simulator,
+    leg: &LpSwapLegArgs,
+) -> crate::Result<LpSwapLegOutput> {
+    use solana_sdk::pubkey::Pubkey;
+    let source: Pubkey = *leg.source_token;
+    let path: Vec<Pubkey> = leg.swap_path.iter().map(|p| **p).collect();
+    let swap = sim.swap_along_path(&path, &source, leg.amount)?;
+    Ok(LpSwapLegOutput {
+        output_token: (*swap.output_token()).into(),
+        amount: swap.amount(),
+        report: swap
+            .reports()
+            .iter()
+            .map(encode_borsh_base64)
+            .collect::<crate::Result<Vec<_>>>()?,
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct GmDepositExactArgs {
+    pub market_token: StringPubkey,
+    pub long_amount: u128,
+    pub short_amount: u128,
+    #[serde(default)]
+    pub include_virtual_inventory_impact: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi)]
+pub struct GmDepositExactOutput {
+    pub minted: u128,
+    pub report: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct GmWithdrawalExactArgs {
+    pub market_token: StringPubkey,
+    pub market_token_amount: u128,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi)]
+pub struct GmWithdrawalExactOutput {
+    pub long_out: u128,
+    pub short_out: u128,
+    pub report: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct GlvComponent {
+    pub market_token: StringPubkey,
+    pub balance: u64,
+    pub pool_value: u128,
+    pub supply: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct GlvDepositExactArgs {
+    pub market_token: StringPubkey,
+    pub long_amount: u128,
+    pub short_amount: u128,
+    pub market_token_amount: u128,
+    pub glv_supply: u64,
+    pub components: Vec<GlvComponent>,
+    #[serde(default)]
+    pub include_virtual_inventory_impact: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi)]
+pub struct GlvDepositExactOutput {
+    pub glv_minted: u64,
+    pub market_token_delta: u64,
+    pub pricing_report: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct GlvWithdrawalExactArgs {
+    pub market_token: StringPubkey,
+    pub glv_token_amount: u64,
+    pub glv_supply: u64,
+    pub components: Vec<GlvComponent>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi)]
+pub struct GlvWithdrawalExactOutput {
+    pub market_token_amount: u64,
+    pub long_out: u128,
+    pub short_out: u128,
+    pub pricing_report: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct ShiftExactArgs {
+    pub from_market_token: StringPubkey,
+    pub to_market_token: StringPubkey,
+    pub from_market_token_amount: u128,
+    #[serde(default)]
+    pub include_virtual_inventory_impact: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi)]
+pub struct ShiftExactOutput {
+    pub to_minted: u128,
+    pub withdrawal_report: String,
+    pub deposit_report: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct ShiftWithSwapsArgs {
+    pub from_market_token: StringPubkey,
+    pub to_market_token: StringPubkey,
+    pub from_market_token_amount: u128,
+    #[serde(default)]
+    pub include_virtual_inventory_impact: Option<bool>,
+    #[serde(default)]
+    pub long: Option<LpSwapLegArgs>,
+    #[serde(default)]
+    pub short: Option<LpSwapLegArgs>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi)]
+pub struct ShiftWithSwapsOutput {
+    pub to_minted: u128,
+    pub withdrawal_report: String,
+    pub deposit_report: String,
+    #[serde(default)]
+    pub long_swap: Option<LpSwapLegOutput>,
+    #[serde(default)]
+    pub short_swap: Option<LpSwapLegOutput>,
 }
