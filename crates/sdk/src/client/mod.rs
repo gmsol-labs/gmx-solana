@@ -302,7 +302,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
 
     /// Create a new treasury program.
     pub fn new_treasury_program(&self) -> crate::Result<Program<C>> {
-        Ok(self.program(*self.store_program_id()))
+        Ok(self.program(*self.treasury_program_id()))
     }
 
     /// Get the program id of the store program.
