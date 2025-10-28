@@ -14,3 +14,4 @@ docker-target
 /idl-out
 solana_installer.sh
 crates/LICENSE
+*.so
