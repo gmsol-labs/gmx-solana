@@ -4,6 +4,9 @@ pub mod simulator;
 /// Order simulation.
 pub mod order;
 
+/// Deposit simulation.
+pub mod deposit;
+
 /// Liquidity (GM) exact simulation.
 pub mod lp;
 

@@ -5,7 +5,10 @@ use gmsol_model::{
     price::{Price, Prices},
     MarketAction, SwapMarketMutExt,
 };
-use gmsol_programs::{gmsol_store::types::MarketMeta, model::MarketModel};
+use gmsol_programs::{
+    gmsol_store::types::{CreateDepositParams, MarketMeta},
+    model::MarketModel,
+};
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
@@ -13,7 +16,10 @@ use crate::{
     simulation::order::OrderSimulation,
 };
 
-use super::order::OrderSimulationBuilder;
+use super::{
+    deposit::{DepositSimulation, DepositSimulationBuilder},
+    order::OrderSimulationBuilder,
+};
 
 /// Order Simulation Builder.
 pub type OrderSimulationBuilderForSimulator<'a> = OrderSimulationBuilder<
@@ -22,6 +28,20 @@ pub type OrderSimulationBuilderForSimulator<'a> = OrderSimulationBuilder<
         (&'a mut Simulator,),
         (CreateOrderKind,),
         (&'a CreateOrderParams,),
+        (&'a Pubkey,),
+        (),
+        (),
+        (),
+        (),
+    ),
+>;
+
+/// Deposit Simulation Builder for Simulator.
+pub type DepositSimulationBuilderForSimulator<'a> = DepositSimulationBuilder<
+    'a,
+    (
+        (&'a mut Simulator,),
+        (&'a CreateDepositParams,),
         (&'a Pubkey,),
         (),
         (),
@@ -94,21 +114,29 @@ impl Simulator {
         })
     }
 
-    pub(crate) fn get_prices_for_market(
+    pub(crate) fn get_prices_and_meta_for_market(
         &self,
         market_token: &Pubkey,
-    ) -> crate::Result<Prices<u128>> {
+    ) -> crate::Result<(Prices<u128>, &MarketMeta)> {
         let market = self.markets.get(market_token).ok_or_else(|| {
             crate::Error::custom(format!(
                 "[sim] market `{market_token}` not found in the simulator"
             ))
         })?;
         let meta = &market.meta;
-        self.get_prices(meta).ok_or_else(|| {
+        let prices = self.get_prices(meta).ok_or_else(|| {
             crate::Error::custom(format!(
                 "[sim] prices for market `{market_token}` are not ready in the simulator"
             ))
-        })
+        })?;
+        Ok((prices, meta))
+    }
+
+    pub(crate) fn get_prices_for_market(
+        &self,
+        market_token: &Pubkey,
+    ) -> crate::Result<Prices<u128>> {
+        Ok(self.get_prices_and_meta_for_market(market_token)?.0)
     }
 
     pub(crate) fn get_market_with_prices_mut(
@@ -165,6 +193,16 @@ impl Simulator {
         })
     }
 
+    /// Get token states.
+    pub fn tokens(&self) -> impl Iterator<Item = (&Pubkey, &TokenState)> {
+        self.tokens.iter()
+    }
+
+    /// Get market states.
+    pub fn markets(&self) -> impl Iterator<Item = (&Pubkey, &MarketModel)> {
+        self.markets.iter()
+    }
+
     /// Create a builder for order simulation.
     pub fn simulate_order<'a>(
         &'a mut self,
@@ -179,14 +217,16 @@ impl Simulator {
             .collateral_or_swap_out_token(collateral_or_swap_out_token)
     }
 
-    /// Get token states.
-    pub fn tokens(&self) -> impl Iterator<Item = (&Pubkey, &TokenState)> {
-        self.tokens.iter()
-    }
-
-    /// Get market states.
-    pub fn markets(&self) -> impl Iterator<Item = (&Pubkey, &MarketModel)> {
-        self.markets.iter()
+    /// Create a builder for deposit simulation.
+    pub fn simulate_deposit<'a>(
+        &'a mut self,
+        market_token: &'a Pubkey,
+        params: &'a CreateDepositParams,
+    ) -> DepositSimulationBuilderForSimulator<'a> {
+        DepositSimulation::builder()
+            .simulator(self)
+            .market_token(market_token)
+            .params(params)
     }
 }
 

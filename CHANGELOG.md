@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- sdk(sdk): Add deposit simulation.
+
 ## [0.8.0] - 2025-10-24
 
 ### Breaking Changes
