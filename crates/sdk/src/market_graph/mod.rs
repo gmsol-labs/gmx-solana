@@ -1113,4 +1113,60 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    #[cfg(simulation)]
+    fn deposit_simulation() -> crate::Result<()> {
+        use gmsol_programs::gmsol_store::types::CreateDepositParams;
+
+        let _tracing = setup_fmt_tracing("info");
+
+        let bome: Pubkey = BOME.parse().unwrap();
+        let wsol: Pubkey = WSOL.parse().unwrap();
+        let usdc: Pubkey = USDC.parse().unwrap();
+        let market_token: Pubkey = "BwN2FWixP5JyKjJNyD1YcRKN1XhgvFtnzrPrkfyb4DkW"
+            .parse()
+            .unwrap();
+
+        let (mut g, _) = create_and_update_market_graph()?;
+
+        g.update_value(constants::MARKET_USD_UNIT * 6);
+        g.update_max_steps(5);
+
+        let paths = g.best_swap_paths(&bome, false)?;
+        let (_, best_long_path) = paths.to(&wsol);
+
+        let paths = g.best_swap_paths(&wsol, false)?;
+        let (_, best_short_path) = paths.to(&usdc);
+
+        println!("{best_long_path:?}");
+        println!("{best_short_path:?}");
+
+        let bome_price = 101468850000;
+        let sol_price = 10821227000000;
+        let long_amount = 5 * constants::MARKET_USD_UNIT / bome_price;
+        let short_amount = 5 * constants::MARKET_USD_UNIT / sol_price;
+        let params = CreateDepositParams {
+            execution_lamports: 0,
+            long_token_swap_length: best_long_path.len() as u8,
+            short_token_swap_length: best_short_path.len() as u8,
+            initial_long_token_amount: long_amount as u64,
+            initial_short_token_amount: short_amount as u64,
+            min_market_token_amount: 0,
+            should_unwrap_native_token: true,
+        };
+        let output = g
+            .to_simulator(Default::default())
+            .simulate_deposit(&market_token, &params)
+            .long_pay_token(Some(&bome))
+            .long_swap_path(&best_long_path)
+            .short_pay_token(Some(&wsol))
+            .short_swap_path(&best_short_path)
+            .build()
+            .execute_with_options(Default::default())?;
+
+        println!("{output:?}");
+
+        Ok(())
+    }
 }
