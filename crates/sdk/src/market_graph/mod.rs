@@ -700,7 +700,7 @@ impl MarketGraph {
             .map(|(token, price)| (token, TokenState::from_price(price)))
             .collect();
 
-        crate::simulation::Simulator::from_parts(tokens, markets)
+        crate::simulation::Simulator::from_parts(tokens, markets, Default::default())
     }
 }
 
@@ -837,6 +837,15 @@ mod tests {
     const WSOL: &str = "So11111111111111111111111111111111111111112";
     const BOME: &str = "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82";
 
+    #[cfg(simulation)]
+    use crate::glv::model::GlvModel;
+    #[cfg(simulation)]
+    const SOL_BALANCED_MARKET_TOKEN: &str = "BwN2FWixP5JyKjJNyD1YcRKN1XhgvFtnzrPrkfyb4DkW";
+    #[cfg(simulation)]
+    const BNB_BALANCED_MARKET_TOKEN: &str = "J42dzcHkgmzU7MARv7k29TrkKaGQ1j2mTaYjkBkN7pn5";
+    #[cfg(simulation)]
+    const AAVE_BALANCED_MARKET_TOKEN: &str = "2dVHXNgzC7vvcsDi89S6crSkX3Y6HzPgZfmWqttEzvmo";
+
     fn get_market_updates() -> Vec<(String, u64)> {
         const DATA: &str = include_str!("test_data/markets.csv");
         DATA.trim()
@@ -898,6 +907,51 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    #[cfg(simulation)]
+    fn get_glv() -> (Pubkey, GlvModel) {
+        use gmsol_programs::{
+            bytemuck::Zeroable,
+            constants::MARKET_USD_UNIT,
+            gmsol_store::{accounts::Glv, types::GlvMarketConfig},
+        };
+
+        const MARKET_TOKEN_UNIT: u64 = 1_000_000_000;
+
+        let usdc: Pubkey = USDC.parse().unwrap();
+        let wsol: Pubkey = WSOL.parse().unwrap();
+        let sol_balanced_market_token = SOL_BALANCED_MARKET_TOKEN.parse().unwrap();
+        let bnb_balanced_market_token = BNB_BALANCED_MARKET_TOKEN.parse().unwrap();
+        let aave_balanced_market_token = AAVE_BALANCED_MARKET_TOKEN.parse().unwrap();
+
+        let glv_token = Pubkey::new_unique();
+        let mut glv = Glv::zeroed();
+        glv.glv_token = glv_token;
+        glv.long_token = wsol;
+        glv.short_token = usdc;
+
+        for market_token in [
+            sol_balanced_market_token,
+            bnb_balanced_market_token,
+            aave_balanced_market_token,
+        ] {
+            glv.markets.insert(
+                &market_token,
+                GlvMarketConfig {
+                    max_amount: 10_000 * MARKET_TOKEN_UNIT,
+                    flags: Zeroable::zeroed(),
+                    padding_0: Zeroable::zeroed(),
+                    max_value: 10_000 * MARKET_USD_UNIT,
+                    balance: 1_000 * MARKET_TOKEN_UNIT,
+                    padding_1: Zeroable::zeroed(),
+                },
+            );
+        }
+
+        let model = GlvModel::new(Arc::new(glv), 3_000 * MARKET_TOKEN_UNIT);
+
+        (glv_token, model)
     }
 
     fn create_and_update_market_graph() -> crate::Result<(MarketGraph, HashSet<Pubkey>)> {
@@ -986,9 +1040,7 @@ mod tests {
 
         let bome: Pubkey = BOME.parse().unwrap();
         let wsol: Pubkey = WSOL.parse().unwrap();
-        let market_token: Pubkey = "BwN2FWixP5JyKjJNyD1YcRKN1XhgvFtnzrPrkfyb4DkW"
-            .parse()
-            .unwrap();
+        let market_token: Pubkey = SOL_BALANCED_MARKET_TOKEN.parse().unwrap();
 
         let (mut g, _) = create_and_update_market_graph()?;
 
@@ -1059,9 +1111,7 @@ mod tests {
 
         let bome: Pubkey = BOME.parse().unwrap();
         let wsol: Pubkey = WSOL.parse().unwrap();
-        let market_token: Pubkey = "BwN2FWixP5JyKjJNyD1YcRKN1XhgvFtnzrPrkfyb4DkW"
-            .parse()
-            .unwrap();
+        let market_token: Pubkey = SOL_BALANCED_MARKET_TOKEN.parse().unwrap();
 
         let (mut g, _) = create_and_update_market_graph()?;
 
@@ -1124,9 +1174,7 @@ mod tests {
         let bome: Pubkey = BOME.parse().unwrap();
         let wsol: Pubkey = WSOL.parse().unwrap();
         let usdc: Pubkey = USDC.parse().unwrap();
-        let market_token: Pubkey = "BwN2FWixP5JyKjJNyD1YcRKN1XhgvFtnzrPrkfyb4DkW"
-            .parse()
-            .unwrap();
+        let market_token: Pubkey = SOL_BALANCED_MARKET_TOKEN.parse().unwrap();
 
         let (mut g, _) = create_and_update_market_graph()?;
 
@@ -1158,6 +1206,68 @@ mod tests {
         let output = g
             .to_simulator(Default::default())
             .simulate_deposit(&market_token, &params)
+            .long_pay_token(Some(&bome))
+            .long_swap_path(&best_long_path)
+            .short_pay_token(Some(&wsol))
+            .short_swap_path(&best_short_path)
+            .build()
+            .execute_with_options(Default::default())?;
+
+        println!("{output:?}");
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(simulation)]
+    fn glv_deposit_simulation() -> crate::Result<()> {
+        use gmsol_programs::gmsol_store::types::CreateGlvDepositParams;
+
+        let _tracing = setup_fmt_tracing("info");
+
+        let bome: Pubkey = BOME.parse().unwrap();
+        let wsol: Pubkey = WSOL.parse().unwrap();
+        let usdc: Pubkey = USDC.parse().unwrap();
+        let market_token: Pubkey = SOL_BALANCED_MARKET_TOKEN.parse().unwrap();
+
+        let (glv_token, glv) = get_glv();
+
+        let (mut g, _) = create_and_update_market_graph()?;
+
+        g.update_value(constants::MARKET_USD_UNIT * 6);
+        g.update_max_steps(5);
+
+        let paths = g.best_swap_paths(&bome, false)?;
+        let (_, best_long_path) = paths.to(&wsol);
+
+        let paths = g.best_swap_paths(&wsol, false)?;
+        let (_, best_short_path) = paths.to(&usdc);
+
+        println!("{best_long_path:?}");
+        println!("{best_short_path:?}");
+
+        let bome_price = 101468850000;
+        let sol_price = 10821227000000;
+        let long_amount = 5 * constants::MARKET_USD_UNIT / bome_price;
+        let short_amount = 5 * constants::MARKET_USD_UNIT / sol_price;
+        let params = CreateGlvDepositParams {
+            execution_lamports: 0,
+            market_token_amount: 10 * 1_000_000_000,
+            long_token_swap_length: best_long_path.len() as u8,
+            short_token_swap_length: best_short_path.len() as u8,
+            initial_long_token_amount: long_amount as u64,
+            initial_short_token_amount: short_amount as u64,
+            min_market_token_amount: 0,
+            min_glv_token_amount: 0,
+            should_unwrap_native_token: true,
+        };
+
+        let mut simulator = g.to_simulator(Default::default());
+
+        simulator.insert_glv(glv);
+
+        let output = simulator
+            .simulate_glv_deposit(&glv_token, &market_token, &params)
             .long_pay_token(Some(&bome))
             .long_swap_path(&best_long_path)
             .short_pay_token(Some(&wsol))

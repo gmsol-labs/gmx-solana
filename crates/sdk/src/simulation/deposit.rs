@@ -11,9 +11,9 @@ use super::{SimulationOptions, Simulator};
 /// Deposit simulation output.
 #[derive(Debug)]
 pub struct DepositSimulationOutput {
-    long_swaps: Vec<SwapReport<u128, i128>>,
-    short_swaps: Vec<SwapReport<u128, i128>>,
-    report: Box<DepositReport<u128, i128>>,
+    pub(crate) long_swaps: Vec<SwapReport<u128, i128>>,
+    pub(crate) short_swaps: Vec<SwapReport<u128, i128>>,
+    pub(crate) report: Box<DepositReport<u128, i128>>,
 }
 
 impl DepositSimulationOutput {
@@ -103,6 +103,14 @@ impl DepositSimulation<'_> {
         let report = market
             .deposit(long_swap_output.amount, short_swap_output.amount, prices)?
             .execute()?;
+
+        let minted = report.minted();
+        let min_market_token_amount = u128::from(params.min_market_token_amount);
+        if *minted < min_market_token_amount {
+            return Err(crate::Error::custom(format!(
+                "[sim] insufficient output amount: {minted} < {min_market_token_amount}",
+            )));
+        }
 
         Ok(DepositSimulationOutput {
             long_swaps: long_swap_output.reports,
