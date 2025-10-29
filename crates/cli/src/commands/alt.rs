@@ -74,6 +74,8 @@ impl super::Command for Alt {
                 price_feed_provider,
                 custom_addresses,
             } => {
+                const MAX_ADDRESSES: usize = 256;
+
                 let mut bundle = client.bundle_with_options(options);
                 let mut new_addresses = match kind {
                     AltKind::Custom => {
@@ -100,25 +102,32 @@ impl super::Command for Alt {
 
                 new_addresses.append(&mut custom_addresses.clone());
 
-                let alt;
                 if *init {
-                    let (init, address) = client.create_alt().await?;
-                    bundle.push(init)?;
-                    alt = address;
+                    for chunk in new_addresses.chunks(MAX_ADDRESSES) {
+                        let (init, alt) = client.create_alt().await?;
+                        bundle.push(init)?;
+                        tracing::info!(
+                            %alt,
+                            "extending ALT with {} addresses: {new_addresses:#?}",
+                            new_addresses.len()
+                        );
+                        println!("{alt}");
+                        let extend_txns = client.extend_alt(&alt, chunk.to_vec(), None)?;
+                        bundle.append(extend_txns, false)?;
+                    }
                 } else {
-                    alt = address.expect("must provided");
-                }
+                    let alt = address.expect("must provided");
+                    if !new_addresses.is_empty() {
+                        tracing::info!(
+                            "extending ALT with {} addresses: {new_addresses:#?}",
+                            new_addresses.len()
+                        );
+                        let extend_txns = client.extend_alt(&alt, new_addresses.clone(), None)?;
+                        bundle.append(extend_txns, false)?;
+                    }
 
-                if !new_addresses.is_empty() {
-                    tracing::info!(
-                        "extending ALT with {} addresses: {new_addresses:#?}",
-                        new_addresses.len()
-                    );
-                    let extend_txns = client.extend_alt(&alt, new_addresses.clone(), None)?;
-                    bundle.append(extend_txns, false)?;
+                    println!("{alt}");
                 }
-
-                println!("{alt}");
 
                 bundle
             }
