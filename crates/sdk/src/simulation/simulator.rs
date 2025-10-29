@@ -6,18 +6,20 @@ use gmsol_model::{
     MarketAction, SwapMarketMutExt,
 };
 use gmsol_programs::{
-    gmsol_store::types::{CreateDepositParams, MarketMeta},
+    gmsol_store::types::{CreateDepositParams, CreateGlvDepositParams, MarketMeta},
     model::MarketModel,
 };
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
     builders::order::{CreateOrderKind, CreateOrderParams},
+    glv::model::GlvModel,
     simulation::order::OrderSimulation,
 };
 
 use super::{
     deposit::{DepositSimulation, DepositSimulationBuilder},
+    glv_deposit::{GlvDepositSimulation, GlvDepositSimulationBuilder},
     order::OrderSimulationBuilder,
 };
 
@@ -50,6 +52,21 @@ pub type DepositSimulationBuilderForSimulator<'a> = DepositSimulationBuilder<
     ),
 >;
 
+/// GLV Deposit Simulation Builder for Simulator.
+pub type GlvDepositSimulationBuilderForSimulator<'a> = GlvDepositSimulationBuilder<
+    'a,
+    (
+        (&'a mut Simulator,),
+        (&'a CreateGlvDepositParams,),
+        (&'a Pubkey,),
+        (&'a Pubkey,),
+        (),
+        (),
+        (),
+        (),
+    ),
+>;
+
 /// Price State.
 pub type PriceState = Option<Arc<Price<u128>>>;
 
@@ -58,6 +75,7 @@ pub type PriceState = Option<Arc<Price<u128>>>;
 pub struct Simulator {
     tokens: HashMap<Pubkey, TokenState>,
     markets: HashMap<Pubkey, MarketModel>,
+    glvs: HashMap<Pubkey, GlvModel>,
 }
 
 impl Simulator {
@@ -65,8 +83,13 @@ impl Simulator {
     pub fn from_parts(
         tokens: HashMap<Pubkey, TokenState>,
         markets: HashMap<Pubkey, MarketModel>,
+        glvs: HashMap<Pubkey, GlvModel>,
     ) -> Self {
-        Self { tokens, markets }
+        Self {
+            tokens,
+            markets,
+            glvs,
+        }
     }
 
     /// Get market by its market token.
@@ -139,6 +162,19 @@ impl Simulator {
         Ok(self.get_prices_and_meta_for_market(market_token)?.0)
     }
 
+    pub(crate) fn get_market_with_prices(
+        &self,
+        market_token: &Pubkey,
+    ) -> crate::Result<(&MarketModel, Prices<u128>)> {
+        let prices = self.get_prices_for_market(market_token)?;
+        let market = self.get_market(market_token).ok_or_else(|| {
+            crate::Error::custom(format!(
+                "[sim] market `{market_token}` not found in the simulator"
+            ))
+        })?;
+        Ok((market, prices))
+    }
+
     pub(crate) fn get_market_with_prices_mut(
         &mut self,
         market_token: &Pubkey,
@@ -150,6 +186,50 @@ impl Simulator {
             ))
         })?;
         Ok((market, prices))
+    }
+
+    /// Get GLV by GLV token address.
+    pub fn get_glv(&self, glv_token: &Pubkey) -> Option<&GlvModel> {
+        self.glvs.get(glv_token)
+    }
+
+    /// Get GLV by GLV token address mutably.
+    pub fn get_glv_mut(&mut self, glv_token: &Pubkey) -> Option<&mut GlvModel> {
+        self.glvs.get_mut(glv_token)
+    }
+
+    /// Insert GLV model.
+    pub fn insert_glv(&mut self, glv: GlvModel) -> Option<GlvModel> {
+        self.glvs.insert(glv.glv_token, glv)
+    }
+
+    pub(crate) fn get_glv_value(&self, glv_token: &Pubkey, maximize: bool) -> crate::Result<u128> {
+        let glv = self.get_glv(glv_token).ok_or_else(|| {
+            crate::Error::custom(format!("[sim] GLV for GLV token `{glv_token}` not found"))
+        })?;
+
+        let mut value = 0u128;
+
+        for market_token in glv.market_tokens() {
+            let (market, prices) = self.get_market_with_prices(&market_token)?;
+            let balance = glv
+                .market_config(&market_token)
+                .expect("must exist")
+                .balance;
+            let value_for_market = gmsol_model::glv::get_glv_value_for_market(
+                &prices,
+                market,
+                balance.into(),
+                maximize,
+            )?
+            .market_token_value_in_glv;
+
+            value = value
+                .checked_add(value_for_market)
+                .ok_or(crate::Error::custom("[sim] GLV value overflow"))?;
+        }
+
+        Ok(value)
     }
 
     /// Swap along the provided path.
@@ -225,6 +305,20 @@ impl Simulator {
     ) -> DepositSimulationBuilderForSimulator<'a> {
         DepositSimulation::builder()
             .simulator(self)
+            .market_token(market_token)
+            .params(params)
+    }
+
+    /// Create a builder for GLV deposit simulation.
+    pub fn simulate_glv_deposit<'a>(
+        &'a mut self,
+        glv_token: &'a Pubkey,
+        market_token: &'a Pubkey,
+        params: &'a CreateGlvDepositParams,
+    ) -> GlvDepositSimulationBuilderForSimulator<'a> {
+        GlvDepositSimulation::builder()
+            .simulator(self)
+            .glv_token(glv_token)
             .market_token(market_token)
             .params(params)
     }

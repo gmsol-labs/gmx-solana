@@ -41,6 +41,10 @@ pub mod fixed;
 /// Utils.
 pub mod utils;
 
+/// GLV calculations.
+#[cfg(feature = "glv")]
+pub mod glv;
+
 /// Utils for testing.
 #[cfg(any(test, feature = "test"))]
 pub mod test;

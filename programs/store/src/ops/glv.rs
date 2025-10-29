@@ -5,7 +5,7 @@ use anchor_spl::{
     token::{transfer_checked, Mint, TokenAccount, TransferChecked},
     token_interface,
 };
-use gmsol_model::{price::Prices, BaseMarketExt, PnlFactorKind};
+use gmsol_model::{glv::GlvValueForMarket, price::Prices, BaseMarketExt, PnlFactorKind};
 use typed_builder::TypedBuilder;
 
 use crate::{
@@ -1113,7 +1113,7 @@ pub(crate) fn get_glv_value_for_market_with_new_index_price<M>(
     market: &M,
     balance: u128,
     maximize: bool,
-) -> Result<GlvValueForMarket>
+) -> Result<GlvValueForMarket<u128>>
 where
     M: gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }, Num = u128, Signed = i128>,
     M: HasMarketMeta,
@@ -1129,45 +1129,21 @@ fn get_glv_value_for_market<M>(
     market: &M,
     balance: u128,
     maximize: bool,
-) -> Result<GlvValueForMarket>
+) -> Result<GlvValueForMarket<u128>>
 where
     M: gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }, Num = u128, Signed = i128>,
 {
-    use gmsol_model::{utils, LiquidityMarketExt};
-
-    let value = market
-        .pool_value(prices, PnlFactorKind::MaxAfterDeposit, maximize)
-        .map_err(ModelError::from)?;
-
-    let supply = market.total_supply();
-
-    if balance == 0 {
-        return Ok(GlvValueForMarket::new(0, value, supply));
-    }
-
-    if value.is_negative() {
-        return err!(CoreError::GlvNegativeMarketPoolValue);
-    }
-
-    let glv_value = utils::market_token_amount_to_usd(&balance, &value.unsigned_abs(), &supply)
-        .ok_or_else(|| error!(CoreError::FailedToCalculateGlvValueForMarket))?;
-
-    Ok(GlvValueForMarket::new(glv_value, value, supply))
-}
-
-pub(crate) struct GlvValueForMarket {
-    pub(crate) market_token_value_in_glv: u128,
-    pub(crate) pool_value: i128,
-    pub(crate) supply: u128,
-}
-
-impl GlvValueForMarket {
-    pub(crate) fn new(glv_value: u128, pool_value: i128, supply: u128) -> Self {
-        Self {
-            market_token_value_in_glv: glv_value,
-            pool_value,
-            supply,
-        }
+    match gmsol_model::glv::get_glv_value_for_market(prices, market, balance, maximize) {
+        Ok(value) => Ok(value),
+        Err(err) => match err {
+            gmsol_model::Error::InvalidPoolValue("negative for GLV pricing") => {
+                err!(CoreError::GlvNegativeMarketPoolValue)
+            }
+            gmsol_model::Error::Computation("converting market token amount to value") => {
+                err!(CoreError::FailedToCalculateGlvValueForMarket)
+            }
+            err => Err(ModelError::from(err).into()),
+        },
     }
 }
 
@@ -1181,29 +1157,26 @@ where
     M: gmsol_model::LiquidityMarket<{ constants::MARKET_DECIMALS }, Num = u128, Signed = i128>,
     M: HasMarketMeta,
 {
-    use gmsol_model::{utils, LiquidityMarketExt};
-
     let prices = oracle.market_prices(market).expect("must exist");
 
-    let value = market
-        .pool_value(&prices, PnlFactorKind::MaxAfterWithdrawal, maximize)
-        .map_err(ModelError::from)?;
-
-    if value.is_negative() {
-        return err!(CoreError::GlvNegativeMarketPoolValue);
-    }
-
-    let supply = market.total_supply();
-
-    let market_token_amount = utils::usd_to_market_token_amount(
+    match gmsol_model::glv::get_market_token_amount_for_glv_value(
+        &prices,
+        market,
         glv_value,
-        value.unsigned_abs(),
-        supply,
+        maximize,
         constants::MARKET_USD_TO_AMOUNT_DIVISOR,
-    )
-    .ok_or_else(|| error!(CoreError::FailedToCalculateMarketTokenAmountToBurn))?;
-
-    Ok(market_token_amount)
+    ) {
+        Ok(amount) => Ok(amount),
+        Err(err) => match err {
+            gmsol_model::Error::InvalidPoolValue("negative for GLV pricing") => {
+                err!(CoreError::GlvNegativeMarketPoolValue)
+            }
+            gmsol_model::Error::Computation("converting GLV value to market token amount") => {
+                err!(CoreError::FailedToCalculateMarketTokenAmountToBurn)
+            }
+            err => Err(ModelError::from(err).into()),
+        },
+    }
 }
 
 /// Operation for executing a GLV withdrawal.

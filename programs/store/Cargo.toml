@@ -40,7 +40,12 @@ test-only = ["gmsol-callback/test-only"]
 no-competition = ["gmsol-callback/no-competition"]
 
 [dependencies]
-gmsol-model = { workspace = true, features = ["u128", "solana", "strum"] }
+gmsol-model = { workspace = true, features = [
+    "u128",
+    "solana",
+    "strum",
+    "glv",
+] }
 gmsol-utils = { workspace = true, features = ["security-txt"] }
 gmsol-callback = { workspace = true, features = ["interface"] }
 gmsol-chainlink-datastreams = { workspace = true, features = ["gmsol"] }

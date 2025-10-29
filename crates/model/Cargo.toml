@@ -16,6 +16,7 @@ solana = ["anchor-lang", "borsh", "gmsol-utils"]
 strum = ["dep:strum"]
 serde = ["dep:serde"]
 js = ["tsify-next", "serde", "wasm-bindgen"]
+glv = []
 
 [dependencies]
 gmsol-utils = { workspace = true, optional = true }
