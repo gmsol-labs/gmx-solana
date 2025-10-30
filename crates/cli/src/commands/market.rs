@@ -45,6 +45,13 @@ use crate::{
     config::DisplayOptions,
 };
 
+#[cfg(feature = "chaos_risk_oracle")]
+use gmsol_sdk::client::risk_oracle::{
+    client::ChaosClient,
+    types::{to_per_market_updates, EncodedRecommendation},
+    verify::verify_signature,
+};
+
 use super::{
     utils::{KeypairArgs, Side, ToggleValue},
     CommandClient,
@@ -154,8 +161,9 @@ enum Command {
     /// Push to `MarketConfigBuffer` account with configs read from file.
     PushToBuffer {
         /// Path to the config file to read from.
-        #[arg(requires = "buffer-input")]
-        path: PathBuf,
+        /// Required unless `--from-chaos` is set.
+        #[arg(requires = "buffer-input", required_unless_present = "from_chaos")]
+        path: Option<PathBuf>,
         /// Buffer account to be pushed to.
         #[arg(long, group = "buffer-input")]
         buffer: Option<Pubkey>,
@@ -172,6 +180,15 @@ enum Command {
         /// Only effective when used with `--init`.
         #[arg(long, default_value = "1d")]
         expire_after: humantime::Duration,
+        /// Create from Chaos Labs' Risk Oracle instead of file.
+        #[arg(long, default_value_t = false)]
+        from_chaos: bool,
+        /// Comma-separated Chaos parameter types to request (optional).
+        #[arg(long, value_delimiter = ',')]
+        types: Option<Vec<String>>,
+        /// Skip response signature verification.
+        #[arg(long, default_value_t = false)]
+        no_verify: bool,
     },
     /// Create Market Vault.
     CreateVault { token: Pubkey },
@@ -580,18 +597,94 @@ impl super::Command for Market {
                 market_token,
                 batch,
                 expire_after,
+                from_chaos,
+                types,
+                no_verify,
             } => {
-                let configs: MarketConfigs = toml_from_file(path)?;
-                let config = configs
-                    .configs
-                    .get(market_token)
-                    .ok_or_eyre(format!("the config for `{market_token}` not found"))?;
                 assert!(buffer.is_none() == *init, "must hold");
                 let keypair = Keypair::new();
                 let buffer = match buffer {
                     Some(buffer) => Either::Left(buffer),
                     None => Either::Right(&keypair),
                 };
+
+                if *from_chaos {
+                    #[cfg(not(feature = "chaos_risk_oracle"))]
+                    let _ = (&types, &no_verify);
+                    #[cfg(not(feature = "chaos_risk_oracle"))]
+                    {
+                        eyre::bail!("chaos_risk_oracle feature is not enabled for CLI");
+                    }
+                    #[cfg(feature = "chaos_risk_oracle")]
+                    {
+                        let base_url = ctx.config().chaos_base_url();
+                        let api_key = ctx.config().chaos_api_key();
+                        let chaos = ChaosClient::try_new(&base_url, api_key)?;
+                        let update_types: Vec<String> = if let Some(t) = types {
+                            t.clone()
+                        } else {
+                            vec![
+                                "oiCaps/maxOpenInterestForLongs/v1".to_string(),
+                                "oiCaps/maxOpenInterestForShorts/v1".to_string(),
+                                "priceImpact/negativePositionImpactFactor/v1".to_string(),
+                                "priceImpact/positionImpactExponentFactor/v1".to_string(),
+                                "priceImpact/positivePositionImpactFactor/v1".to_string(),
+                            ]
+                        };
+                        let update_types_ref: Vec<&str> =
+                            update_types.iter().map(|s| s.as_str()).collect();
+                        let recs: Vec<EncodedRecommendation> = chaos
+                            .fetch_latest_recommendations("gmx_solana", &update_types_ref)
+                            .await?;
+
+                        if !*no_verify {
+                            if let Some(expected) = ctx.config().chaos_signer() {
+                                for r in &recs {
+                                    verify_signature(r, &expected)?;
+                                }
+                            }
+                        }
+
+                        let per_market = to_per_market_updates(&recs)?;
+                        let target = per_market
+                            .into_iter()
+                            .find(|u| u.market == *market_token)
+                            .ok_or_eyre("no chaos updates for the specified market_token")?;
+
+                        let mut bundle = client.bundle_with_options(options);
+                        let buffer_pubkey = match buffer {
+                            Either::Left(pubkey) => *pubkey,
+                            Either::Right(kp) => {
+                                bundle.push(client.initialize_market_config_buffer(
+                                    store,
+                                    kp,
+                                    expire_after.as_secs().try_into().unwrap_or(u32::MAX),
+                                ))?;
+                                kp.pubkey()
+                            }
+                        };
+                        println!("Buffer: {buffer_pubkey}");
+
+                        for batch_entries in target.entries.chunks(batch.get()) {
+                            bundle.push(client.push_to_market_config_buffer(
+                                &buffer_pubkey,
+                                batch_entries.iter().cloned(),
+                            ))?;
+                        }
+
+                        client.send_or_serialize(bundle).await?;
+                        return Ok(());
+                    }
+                }
+
+                let path = path
+                    .as_ref()
+                    .ok_or_eyre("path is required unless --from-chaos")?;
+                let configs: MarketConfigs = toml_from_file(path)?;
+                let config = configs
+                    .configs
+                    .get(market_token)
+                    .ok_or_eyre(format!("the config for `{market_token}` not found"))?;
                 let bundle = push_to_market_config_buffer(
                     client,
                     buffer,

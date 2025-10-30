@@ -47,6 +47,10 @@ pub mod switchboard;
 #[cfg(feature = "squads")]
 pub mod squads;
 
+/// Chaos Labs Risk Oracle support.
+#[cfg(feature = "chaos_risk_oracle")]
+pub mod risk_oracle;
+
 use std::{
     collections::BTreeMap,
     ops::Deref,
