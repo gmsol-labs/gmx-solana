@@ -64,8 +64,7 @@ impl ChaosClient {
         if !status.is_success() {
             let snippet: String = text.chars().take(1024).collect();
             return Err(crate::Error::custom(format!(
-                "chaos oracle http error: {} body: {}",
-                status, snippet
+                "chaos oracle http error: {status} body: {snippet}"
             )));
         }
 
@@ -74,8 +73,7 @@ impl ChaosClient {
             Err(err) => {
                 let snippet: String = text.chars().take(1024).collect();
                 Err(crate::Error::custom(format!(
-                    "failed to decode recommendations: {} body_snippet: {}",
-                    err, snippet
+                    "failed to decode recommendations: {err} body_snippet: {snippet}"
                 )))
             }
         }

@@ -72,7 +72,7 @@ pub fn to_per_market_updates(
                 grouped
                     .entry(market)
                     .or_default()
-                    .push((dst.to_string(), *v as u128));
+                    .push((dst.to_string(), *v));
             }
         }
     }

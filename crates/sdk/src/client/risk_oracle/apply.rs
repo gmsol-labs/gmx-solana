@@ -4,6 +4,12 @@ use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use super::types::PerMarketUpdates;
 use crate::{client::ops::market::MarketOps, Client};
 
+type ApplyTransactions<'b, C> = (
+    TransactionBuilder<'b, C>,
+    Vec<TransactionBuilder<'b, C>>,
+    Vec<TransactionBuilder<'b, C>>,
+);
+
 pub struct RiskOracleApplier<'a, C> {
     client: &'a Client<C>,
     store: Pubkey,
@@ -25,11 +31,7 @@ where
         buffer: &'b dyn Signer,
         expire_after_secs: u32,
         updates: &[PerMarketUpdates],
-    ) -> crate::Result<(
-        TransactionBuilder<'b, C>,
-        Vec<TransactionBuilder<'_, C>>,
-        Vec<TransactionBuilder<'_, C>>,
-    )>
+    ) -> crate::Result<ApplyTransactions<'b, C>>
     where
         'a: 'b,
     {
@@ -37,7 +39,7 @@ where
             self.client
                 .initialize_market_config_buffer(&self.store, buffer, expire_after_secs);
 
-        let mut pushes: Vec<TransactionBuilder<'_, C>> = Vec::new();
+        let mut pushes: Vec<TransactionBuilder<'b, C>> = Vec::new();
         for u in updates {
             let push = self
                 .client
@@ -45,7 +47,7 @@ where
             pushes.push(push);
         }
 
-        let mut applies: Vec<TransactionBuilder<'_, C>> = Vec::new();
+        let mut applies: Vec<TransactionBuilder<'b, C>> = Vec::new();
         for u in updates {
             let apply = self.client.update_market_config_with_buffer(
                 &self.store,
