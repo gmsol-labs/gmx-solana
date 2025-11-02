@@ -1,7 +1,9 @@
 [workspace]
 resolver = "2"
 members = ["crates/*", "programs/*", "examples", "tests"]
-
+exclude = [
+    "litesvm_tests"
+]
 [workspace.package]
 version = "0.9.0"
 edition = "2021"

@@ -1,0 +1,23 @@
+[package]
+name = "litesvm_tests"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytemuck = { version = "1.16.1", features = ["derive", "min_const_generics"] }
+solana-sdk = { version = "2.2.1" }
+solana-client = "2.2.1"
+solana-rpc-client = "2.2.1"
+solana-clock = "2.2.1"
+spl-token = { version = "8.0.0", features = ["no-entrypoint"] }
+anyhow = "1.0.99"
+litesvm = "0.7.0"
+serde = "1.0.219"
+reqwest = { version = "0.12", features = ["json", "blocking", "rustls-tls"] }
+spl-associated-token-account = "7.0.0"
+tokio = "1.47.1"
+solana-system-interface = "2.0.0"
+rand = "0.7.3"
+anchor-lang = "0.32.1"
+eyre = "0.6.12"
+anchor-client = "0.32.1"
