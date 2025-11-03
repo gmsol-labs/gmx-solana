@@ -638,9 +638,16 @@ impl super::Command for Market {
                             .await?;
 
                         if !*no_verify {
-                            if let Some(expected) = ctx.config().chaos_signer() {
-                                for r in &recs {
-                                    verify_signature(r, &expected)?;
+                            match ctx.config().chaos_signer() {
+                                Some(expected) => {
+                                    for r in &recs {
+                                        verify_signature(r, &expected)?;
+                                    }
+                                }
+                                None => {
+                                    eyre::bail!(
+                                        "verification requested but chaos signer is missing; set RISK_ORACLE_SIGNER env or [chaos].signer in config.toml, or pass --no-verify to skip"
+                                    );
                                 }
                             }
                         }
