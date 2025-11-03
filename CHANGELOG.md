@@ -10,7 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - sdk(sdk): Add deposit simulation.
+- sdk(sdk): Add GLV deposit simulation.
 - cli: Add auto-creation support of multiple ALTs based on ALT limit for `alt extend` command.
+
+### Changed
+
+- programs(store): Refactor core GLV calculation logic to model crate.
 
 ## [0.8.0] - 2025-10-24
 

@@ -97,7 +97,7 @@ gmsol-programs = { workspace = true, features = [
     "utils",
     "gmsol-utils",
 ] }
-gmsol-model = { workspace = true, features = ["u128", "strum"] }
+gmsol-model = { workspace = true, features = ["u128", "strum", "glv"] }
 gmsol-solana-utils = { workspace = true, features = [
     "client-traits",
     "anchor-lang",
