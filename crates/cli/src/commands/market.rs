@@ -638,7 +638,7 @@ impl super::Command for Market {
                             .await?;
 
                         if !*no_verify {
-                            match ctx.config().chaos_signer() {
+                            match ctx.config().chaos_signer_strict()? {
                                 Some(expected) => {
                                     for r in &recs {
                                         verify_signature(r, &expected)?;

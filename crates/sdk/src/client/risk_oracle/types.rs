@@ -4,7 +4,7 @@ use gmsol_utils::market::MarketConfigKey;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
-pub type DecimalsMap = HashMap<String, i8>;
+pub type DecimalsMap = HashMap<String, u8>;
 pub type ValuesMap = HashMap<String, u128>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

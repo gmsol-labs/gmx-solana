@@ -27,8 +27,7 @@ fn push_kv(
         .ok_or_else(|| crate::Error::custom(format!("missing value for {key}")))?;
     let d = *decimals
         .get(key)
-        .ok_or_else(|| crate::Error::custom(format!("missing decimals for {key}")))?
-        as u8;
+        .ok_or_else(|| crate::Error::custom(format!("missing decimals for {key}")))?;
     msg.extend_from_slice(&v.to_le_bytes());
     msg.push(d);
     Ok(())
@@ -98,7 +97,12 @@ pub fn verify_signature(
     let hash = build_signed_message(rec)?;
 
     let mut sig_bytes = [0u8; 64];
-    let sig_vec = hex::decode(&rec.signature).map_err(crate::Error::custom)?;
+    let sig_str = rec.signature.trim();
+    let sig_hex = sig_str
+        .strip_prefix("0x")
+        .or_else(|| sig_str.strip_prefix("0X"))
+        .unwrap_or(sig_str);
+    let sig_vec = hex::decode(sig_hex).map_err(crate::Error::custom)?;
     if sig_vec.len() != 64 {
         return Err(crate::Error::custom(
             "invalid signature length; expected 64 bytes",

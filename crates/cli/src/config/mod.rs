@@ -346,15 +346,17 @@ impl Config {
         self.chaos.as_ref().and_then(|c| c.api_key.clone())
     }
 
-    pub fn chaos_signer(&self) -> Option<Pubkey> {
+    pub fn chaos_signer_strict(&self) -> eyre::Result<Option<Pubkey>> {
         if let Ok(v) = std::env::var("RISK_ORACLE_SIGNER") {
-            if let Ok(pk) = v.parse() {
-                return Some(pk);
-            }
+            let pk: Pubkey = v
+                .parse()
+                .map_err(|_| eyre::eyre!("invalid RISK_ORACLE_SIGNER: {v}"))?;
+            return Ok(Some(pk));
         }
-        self.chaos
+        Ok(self
+            .chaos
             .as_ref()
-            .and_then(|c| c.signer.as_ref().map(|s| s.0))
+            .and_then(|c| c.signer.as_ref().map(|s| s.0)))
     }
 }
 
