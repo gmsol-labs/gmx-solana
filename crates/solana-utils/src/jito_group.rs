@@ -102,11 +102,10 @@ impl JitoGroup {
         let mut bundle_ids = Vec::new();
         let mut error: Option<crate::Error> = None;
 
-        for (_batch_idx, txns) in batches.into_iter().enumerate() {
+        for txns in batches.into_iter() {
             let mut futures = txns
                 .into_iter()
-                .enumerate()
-                .map(|(_idx, txn)| {
+                .map(|txn| {
                     let base_url = opts.endpoint_url.clone();
                     let uuid = opts.uuid.clone();
                     async move {
