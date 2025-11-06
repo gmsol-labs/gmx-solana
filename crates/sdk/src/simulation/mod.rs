@@ -7,6 +7,9 @@ pub mod order;
 /// Deposit simulation.
 pub mod deposit;
 
+/// Withdrawal simulation.
+pub mod withdrawal;
+
 /// GLV deposit simulation.
 pub mod glv_deposit;
 

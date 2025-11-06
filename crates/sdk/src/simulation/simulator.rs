@@ -6,7 +6,9 @@ use gmsol_model::{
     MarketAction, SwapMarketMutExt,
 };
 use gmsol_programs::{
-    gmsol_store::types::{CreateDepositParams, CreateGlvDepositParams, MarketMeta},
+    gmsol_store::types::{
+        CreateDepositParams, CreateGlvDepositParams, CreateWithdrawalParams, MarketMeta,
+    },
     model::MarketModel,
 };
 use solana_sdk::pubkey::Pubkey;
@@ -21,6 +23,7 @@ use super::{
     deposit::{DepositSimulation, DepositSimulationBuilder},
     glv_deposit::{GlvDepositSimulation, GlvDepositSimulationBuilder},
     order::OrderSimulationBuilder,
+    withdrawal::{WithdrawalSimulation, WithdrawalSimulationBuilder},
 };
 
 /// Order Simulation Builder.
@@ -44,6 +47,20 @@ pub type DepositSimulationBuilderForSimulator<'a> = DepositSimulationBuilder<
     (
         (&'a mut Simulator,),
         (&'a CreateDepositParams,),
+        (&'a Pubkey,),
+        (),
+        (),
+        (),
+        (),
+    ),
+>;
+
+/// Withdrawal Simulation Builder for Simulator.
+pub type WithdrawalSimulationBuilderForSimulator<'a> = WithdrawalSimulationBuilder<
+    'a,
+    (
+        (&'a mut Simulator,),
+        (&'a CreateWithdrawalParams,),
         (&'a Pubkey,),
         (),
         (),
@@ -304,6 +321,18 @@ impl Simulator {
         params: &'a CreateDepositParams,
     ) -> DepositSimulationBuilderForSimulator<'a> {
         DepositSimulation::builder()
+            .simulator(self)
+            .market_token(market_token)
+            .params(params)
+    }
+
+    /// Create a builder for withdrawal simulation.
+    pub fn simulate_withdrawal<'a>(
+        &'a mut self,
+        market_token: &'a Pubkey,
+        params: &'a CreateWithdrawalParams,
+    ) -> WithdrawalSimulationBuilderForSimulator<'a> {
+        WithdrawalSimulation::builder()
             .simulator(self)
             .market_token(market_token)
             .params(params)

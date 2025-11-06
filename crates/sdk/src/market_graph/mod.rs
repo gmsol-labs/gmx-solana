@@ -1220,6 +1220,58 @@ mod tests {
 
     #[test]
     #[cfg(simulation)]
+    fn withdrawal_simulation() -> crate::Result<()> {
+        use gmsol_programs::gmsol_store::types::CreateWithdrawalParams;
+
+        let _tracing = setup_fmt_tracing("info");
+
+        let bome: Pubkey = BOME.parse().unwrap();
+        let wsol: Pubkey = WSOL.parse().unwrap();
+        let usdc: Pubkey = USDC.parse().unwrap();
+        let market_token: Pubkey = SOL_BALANCED_MARKET_TOKEN.parse().unwrap();
+
+        let (mut g, _) = create_and_update_market_graph()?;
+
+        g.update_value(constants::MARKET_USD_UNIT * 6);
+        g.update_max_steps(5);
+
+        let paths = g.best_swap_paths(&wsol, false)?;
+        let (_, best_long_path) = paths.to(&bome);
+
+        let paths = g.best_swap_paths(&usdc, false)?;
+        let (_, best_short_path) = paths.to(&wsol);
+
+        println!("{best_long_path:?}");
+        println!("{best_short_path:?}");
+
+        let market_token_amount = 5 * 1_000_000_000;
+
+        let params = CreateWithdrawalParams {
+            execution_lamports: 0,
+            long_token_swap_path_length: best_long_path.len() as u8,
+            short_token_swap_path_length: best_short_path.len() as u8,
+            market_token_amount,
+            min_long_token_amount: 0,
+            min_short_token_amount: 0,
+            should_unwrap_native_token: true,
+        };
+        let output = g
+            .to_simulator(Default::default())
+            .simulate_withdrawal(&market_token, &params)
+            .long_receive_token(Some(&bome))
+            .long_swap_path(&best_long_path)
+            .short_receive_token(Some(&wsol))
+            .short_swap_path(&best_short_path)
+            .build()
+            .execute_with_options(Default::default())?;
+
+        println!("{output:?}");
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(simulation)]
     fn glv_deposit_simulation() -> crate::Result<()> {
         use gmsol_programs::gmsol_store::types::CreateGlvDepositParams;
 
