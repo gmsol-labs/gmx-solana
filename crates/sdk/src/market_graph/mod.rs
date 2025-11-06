@@ -1272,8 +1272,10 @@ mod tests {
 
     #[test]
     #[cfg(simulation)]
-    fn glv_deposit_simulation() -> crate::Result<()> {
-        use gmsol_programs::gmsol_store::types::CreateGlvDepositParams;
+    fn glv_deposit_and_withdrawal_simulation() -> crate::Result<()> {
+        use gmsol_programs::gmsol_store::types::{
+            CreateGlvDepositParams, CreateGlvWithdrawalParams,
+        };
 
         let _tracing = setup_fmt_tracing("info");
 
@@ -1283,6 +1285,8 @@ mod tests {
         let market_token: Pubkey = SOL_BALANCED_MARKET_TOKEN.parse().unwrap();
 
         let (glv_token, glv) = get_glv();
+
+        let initial_supply = glv.supply();
 
         let (mut g, _) = create_and_update_market_graph()?;
 
@@ -1327,7 +1331,42 @@ mod tests {
             .build()
             .execute_with_options(Default::default())?;
 
-        println!("{output:?}");
+        println!("deposit: {output:?}");
+
+        g.update_with_simulator(&simulator, Default::default());
+
+        let paths = g.best_swap_paths(&wsol, false)?;
+        let (_, best_long_path) = paths.to(&bome);
+
+        let paths = g.best_swap_paths(&usdc, false)?;
+        let (_, best_short_path) = paths.to(&wsol);
+
+        println!("{best_long_path:?}");
+        println!("{best_short_path:?}");
+
+        let params = CreateGlvWithdrawalParams {
+            execution_lamports: 0,
+            glv_token_amount: output.output_amount(),
+            long_token_swap_length: best_long_path.len() as u8,
+            short_token_swap_length: best_short_path.len() as u8,
+            min_final_long_token_amount: 0,
+            min_final_short_token_amount: 0,
+            should_unwrap_native_token: true,
+        };
+
+        let output = simulator
+            .simulate_glv_withdrawal(&glv_token, &market_token, &params)
+            .long_receive_token(Some(&bome))
+            .long_swap_path(&best_long_path)
+            .short_receive_token(Some(&wsol))
+            .short_swap_path(&best_short_path)
+            .build()
+            .execute_with_options(Default::default())?;
+
+        println!("withdrawal: {output:?}");
+
+        let glv = simulator.get_glv(&glv_token).unwrap();
+        assert_eq!(glv.supply(), initial_supply);
 
         Ok(())
     }

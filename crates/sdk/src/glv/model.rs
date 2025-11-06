@@ -26,6 +26,11 @@ impl GlvModel {
         Self { glv, supply }
     }
 
+    /// Get current GLV supply
+    pub fn supply(&self) -> u64 {
+        self.supply
+    }
+
     /// Deposit to GLV.
     pub fn deposit(
         &mut self,
@@ -57,12 +62,53 @@ impl GlvModel {
         .try_into()
         .map_err(|_| crate::Error::custom("[GLV] GLV amount to mint overflow"))?;
 
+        let next_supply = self
+            .supply
+            .checked_add(glv_amount)
+            .ok_or(crate::Error::custom("[GLV] GLV token supply overflow"))?;
+
         Arc::make_mut(&mut self.glv)
             .markets
             .get_mut(market_token)
             .expect("must exist")
             .balance = next_balance;
 
+        self.supply = next_supply;
+
         Ok(glv_amount)
+    }
+
+    /// Withdraw from GLV.
+    pub fn withdraw_from_glv(
+        &mut self,
+        market_token: &Pubkey,
+        amount: u64,
+        glv_token_amount: u64,
+    ) -> crate::Result<()> {
+        let current_balance = self
+            .glv
+            .market_config(market_token)
+            .ok_or_else(|| {
+                crate::Error::custom(format!("[GLV] `{market_token}` not found in GLV"))
+            })?
+            .balance;
+        let next_balance = current_balance
+            .checked_sub(amount)
+            .ok_or(crate::Error::custom("[GLV] market token balance underflow"))?;
+
+        let next_supply = self
+            .supply
+            .checked_sub(glv_token_amount)
+            .ok_or(crate::Error::custom("[GLV] GLV token supply underflow"))?;
+
+        Arc::make_mut(&mut self.glv)
+            .markets
+            .get_mut(market_token)
+            .expect("must exist")
+            .balance = next_balance;
+
+        self.supply = next_supply;
+
+        Ok(())
     }
 }

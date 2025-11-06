@@ -7,7 +7,8 @@ use gmsol_model::{
 };
 use gmsol_programs::{
     gmsol_store::types::{
-        CreateDepositParams, CreateGlvDepositParams, CreateWithdrawalParams, MarketMeta,
+        CreateDepositParams, CreateGlvDepositParams, CreateGlvWithdrawalParams,
+        CreateWithdrawalParams, MarketMeta,
     },
     model::MarketModel,
 };
@@ -22,6 +23,7 @@ use crate::{
 use super::{
     deposit::{DepositSimulation, DepositSimulationBuilder},
     glv_deposit::{GlvDepositSimulation, GlvDepositSimulationBuilder},
+    glv_withdrawal::{GlvWithdrawalSimulation, GlvWithdrawalSimulationBuilder},
     order::OrderSimulationBuilder,
     withdrawal::{WithdrawalSimulation, WithdrawalSimulationBuilder},
 };
@@ -75,6 +77,21 @@ pub type GlvDepositSimulationBuilderForSimulator<'a> = GlvDepositSimulationBuild
     (
         (&'a mut Simulator,),
         (&'a CreateGlvDepositParams,),
+        (&'a Pubkey,),
+        (&'a Pubkey,),
+        (),
+        (),
+        (),
+        (),
+    ),
+>;
+
+/// GLV Withdrawal Simulation Builder for Simulator.
+pub type GlvWithdrawalSimulationBuilderForSimulator<'a> = GlvWithdrawalSimulationBuilder<
+    'a,
+    (
+        (&'a mut Simulator,),
+        (&'a CreateGlvWithdrawalParams,),
         (&'a Pubkey,),
         (&'a Pubkey,),
         (),
@@ -346,6 +363,20 @@ impl Simulator {
         params: &'a CreateGlvDepositParams,
     ) -> GlvDepositSimulationBuilderForSimulator<'a> {
         GlvDepositSimulation::builder()
+            .simulator(self)
+            .glv_token(glv_token)
+            .market_token(market_token)
+            .params(params)
+    }
+
+    /// Create a builder for GLV withdrawal simulation.
+    pub fn simulate_glv_withdrawal<'a>(
+        &'a mut self,
+        glv_token: &'a Pubkey,
+        market_token: &'a Pubkey,
+        params: &'a CreateGlvWithdrawalParams,
+    ) -> GlvWithdrawalSimulationBuilderForSimulator<'a> {
+        GlvWithdrawalSimulation::builder()
             .simulator(self)
             .glv_token(glv_token)
             .market_token(market_token)
