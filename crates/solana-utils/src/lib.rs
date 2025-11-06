@@ -52,6 +52,10 @@ pub mod client_traits;
 /// Utils.
 pub mod utils;
 
+/// Jito Group & sender
+#[cfg(all(client, feature = "jito"))]
+pub mod jito_group;
+
 pub use crate::{
     error::Error,
     instruction_group::{AtomicGroup, IntoAtomicGroup, ParallelGroup},
