@@ -1272,6 +1272,36 @@ mod tests {
 
     #[test]
     #[cfg(simulation)]
+    fn shift_simulation() -> crate::Result<()> {
+        use gmsol_programs::gmsol_store::types::CreateShiftParams;
+
+        let _tracing = setup_fmt_tracing("info");
+
+        let from_market_token: Pubkey = SOL_BALANCED_MARKET_TOKEN.parse().unwrap();
+        let to_market_token: Pubkey = BNB_BALANCED_MARKET_TOKEN.parse().unwrap();
+
+        let (g, _) = create_and_update_market_graph()?;
+
+        let from_market_token_amount = 5 * 1_000_000_000;
+
+        let params = CreateShiftParams {
+            execution_lamports: 0,
+            from_market_token_amount,
+            min_to_market_token_amount: 0,
+        };
+        let output = g
+            .to_simulator(Default::default())
+            .simulate_shift(&from_market_token, &to_market_token, &params)
+            .build()
+            .execute_with_options(Default::default())?;
+
+        println!("{output:?}");
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(simulation)]
     fn glv_deposit_and_withdrawal_simulation() -> crate::Result<()> {
         use gmsol_programs::gmsol_store::types::{
             CreateGlvDepositParams, CreateGlvWithdrawalParams,

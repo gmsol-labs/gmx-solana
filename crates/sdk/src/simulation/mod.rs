@@ -10,6 +10,9 @@ pub mod deposit;
 /// Withdrawal simulation.
 pub mod withdrawal;
 
+/// Shift simulation.
+pub mod shift;
+
 /// GLV deposit simulation.
 pub mod glv_deposit;
 

@@ -7,7 +7,7 @@ use gmsol_model::{
 };
 use gmsol_programs::{
     gmsol_store::types::{
-        CreateDepositParams, CreateGlvDepositParams, CreateGlvWithdrawalParams,
+        CreateDepositParams, CreateGlvDepositParams, CreateGlvWithdrawalParams, CreateShiftParams,
         CreateWithdrawalParams, MarketMeta,
     },
     model::MarketModel,
@@ -25,6 +25,7 @@ use super::{
     glv_deposit::{GlvDepositSimulation, GlvDepositSimulationBuilder},
     glv_withdrawal::{GlvWithdrawalSimulation, GlvWithdrawalSimulationBuilder},
     order::OrderSimulationBuilder,
+    shift::{ShiftSimulation, ShiftSimulationBuilder},
     withdrawal::{WithdrawalSimulation, WithdrawalSimulationBuilder},
 };
 
@@ -68,6 +69,17 @@ pub type WithdrawalSimulationBuilderForSimulator<'a> = WithdrawalSimulationBuild
         (),
         (),
         (),
+    ),
+>;
+
+/// Shift Simulation Builder for Simulator.
+pub type ShiftSimulationBuilderForSimulator<'a> = ShiftSimulationBuilder<
+    'a,
+    (
+        (&'a mut Simulator,),
+        (&'a CreateShiftParams,),
+        (&'a Pubkey,),
+        (&'a Pubkey,),
     ),
 >;
 
@@ -380,6 +392,20 @@ impl Simulator {
             .simulator(self)
             .glv_token(glv_token)
             .market_token(market_token)
+            .params(params)
+    }
+
+    /// Create a builder for shift simulation.
+    pub fn simulate_shift<'a>(
+        &'a mut self,
+        from_market_token: &'a Pubkey,
+        to_market_token: &'a Pubkey,
+        params: &'a CreateShiftParams,
+    ) -> ShiftSimulationBuilderForSimulator<'a> {
+        ShiftSimulation::builder()
+            .simulator(self)
+            .from_market_token(from_market_token)
+            .to_market_token(to_market_token)
             .params(params)
     }
 }
