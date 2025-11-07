@@ -6,7 +6,10 @@ use gmsol_model::{
     MarketAction, SwapMarketMutExt,
 };
 use gmsol_programs::{
-    gmsol_store::types::{CreateDepositParams, CreateGlvDepositParams, MarketMeta},
+    gmsol_store::types::{
+        CreateDepositParams, CreateGlvDepositParams, CreateGlvWithdrawalParams, CreateShiftParams,
+        CreateWithdrawalParams, MarketMeta,
+    },
     model::MarketModel,
 };
 use solana_sdk::pubkey::Pubkey;
@@ -20,7 +23,10 @@ use crate::{
 use super::{
     deposit::{DepositSimulation, DepositSimulationBuilder},
     glv_deposit::{GlvDepositSimulation, GlvDepositSimulationBuilder},
+    glv_withdrawal::{GlvWithdrawalSimulation, GlvWithdrawalSimulationBuilder},
     order::OrderSimulationBuilder,
+    shift::{ShiftSimulation, ShiftSimulationBuilder},
+    withdrawal::{WithdrawalSimulation, WithdrawalSimulationBuilder},
 };
 
 /// Order Simulation Builder.
@@ -52,12 +58,52 @@ pub type DepositSimulationBuilderForSimulator<'a> = DepositSimulationBuilder<
     ),
 >;
 
+/// Withdrawal Simulation Builder for Simulator.
+pub type WithdrawalSimulationBuilderForSimulator<'a> = WithdrawalSimulationBuilder<
+    'a,
+    (
+        (&'a mut Simulator,),
+        (&'a CreateWithdrawalParams,),
+        (&'a Pubkey,),
+        (),
+        (),
+        (),
+        (),
+    ),
+>;
+
+/// Shift Simulation Builder for Simulator.
+pub type ShiftSimulationBuilderForSimulator<'a> = ShiftSimulationBuilder<
+    'a,
+    (
+        (&'a mut Simulator,),
+        (&'a CreateShiftParams,),
+        (&'a Pubkey,),
+        (&'a Pubkey,),
+    ),
+>;
+
 /// GLV Deposit Simulation Builder for Simulator.
 pub type GlvDepositSimulationBuilderForSimulator<'a> = GlvDepositSimulationBuilder<
     'a,
     (
         (&'a mut Simulator,),
         (&'a CreateGlvDepositParams,),
+        (&'a Pubkey,),
+        (&'a Pubkey,),
+        (),
+        (),
+        (),
+        (),
+    ),
+>;
+
+/// GLV Withdrawal Simulation Builder for Simulator.
+pub type GlvWithdrawalSimulationBuilderForSimulator<'a> = GlvWithdrawalSimulationBuilder<
+    'a,
+    (
+        (&'a mut Simulator,),
+        (&'a CreateGlvWithdrawalParams,),
         (&'a Pubkey,),
         (&'a Pubkey,),
         (),
@@ -309,6 +355,18 @@ impl Simulator {
             .params(params)
     }
 
+    /// Create a builder for withdrawal simulation.
+    pub fn simulate_withdrawal<'a>(
+        &'a mut self,
+        market_token: &'a Pubkey,
+        params: &'a CreateWithdrawalParams,
+    ) -> WithdrawalSimulationBuilderForSimulator<'a> {
+        WithdrawalSimulation::builder()
+            .simulator(self)
+            .market_token(market_token)
+            .params(params)
+    }
+
     /// Create a builder for GLV deposit simulation.
     pub fn simulate_glv_deposit<'a>(
         &'a mut self,
@@ -320,6 +378,34 @@ impl Simulator {
             .simulator(self)
             .glv_token(glv_token)
             .market_token(market_token)
+            .params(params)
+    }
+
+    /// Create a builder for GLV withdrawal simulation.
+    pub fn simulate_glv_withdrawal<'a>(
+        &'a mut self,
+        glv_token: &'a Pubkey,
+        market_token: &'a Pubkey,
+        params: &'a CreateGlvWithdrawalParams,
+    ) -> GlvWithdrawalSimulationBuilderForSimulator<'a> {
+        GlvWithdrawalSimulation::builder()
+            .simulator(self)
+            .glv_token(glv_token)
+            .market_token(market_token)
+            .params(params)
+    }
+
+    /// Create a builder for shift simulation.
+    pub fn simulate_shift<'a>(
+        &'a mut self,
+        from_market_token: &'a Pubkey,
+        to_market_token: &'a Pubkey,
+        params: &'a CreateShiftParams,
+    ) -> ShiftSimulationBuilderForSimulator<'a> {
+        ShiftSimulation::builder()
+            .simulator(self)
+            .from_market_token(from_market_token)
+            .to_market_token(to_market_token)
             .params(params)
     }
 }

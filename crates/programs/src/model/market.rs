@@ -202,11 +202,26 @@ impl Market {
     }
 }
 
+/// Swap Pricing Kind.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum SwapPricingKind {
+    /// Swap.
+    #[default]
+    Swap,
+    /// Deposit.
+    Deposit,
+    /// Withdrawal.
+    Withdrawal,
+    /// Shift.
+    Shift,
+}
+
 /// Market Model.
 #[derive(Debug, Clone)]
 pub struct MarketModel {
     market: Arc<Market>,
     supply: u64,
+    swap_pricing: SwapPricingKind,
 }
 
 impl Deref for MarketModel {
@@ -220,12 +235,33 @@ impl Deref for MarketModel {
 impl MarketModel {
     /// Create from parts.
     pub fn from_parts(market: Arc<Market>, supply: u64) -> Self {
-        Self { market, supply }
+        Self {
+            market,
+            supply,
+            swap_pricing: Default::default(),
+        }
     }
 
     /// Get whether it is a pure market.
     pub fn is_pure(&self) -> bool {
         self.market.flag(MarketFlag::Pure)
+    }
+
+    /// Get swap pricing kind.
+    pub fn swap_pricing(&self) -> &SwapPricingKind {
+        &self.swap_pricing
+    }
+
+    /// Execute a function with the specified swap pricing kind.
+    pub fn with_swap_pricing<T>(
+        &mut self,
+        mut swap_pricing: SwapPricingKind,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        std::mem::swap(&mut self.swap_pricing, &mut swap_pricing);
+        let output = (f)(self);
+        std::mem::swap(&mut self.swap_pricing, &mut swap_pricing);
+        output
     }
 
     /// Record transferred in.
@@ -526,11 +562,22 @@ impl gmsol_model::SwapMarket<{ constants::MARKET_DECIMALS }> for MarketModel {
     }
 
     fn swap_fee_params(&self) -> gmsol_model::Result<FeeParams<Self::Num>> {
-        Ok(FeeParams::builder()
-            .fee_receiver_factor(self.config.swap_fee_receiver_factor)
-            .positive_impact_fee_factor(self.config.swap_fee_factor_for_positive_impact)
-            .negative_impact_fee_factor(self.config.swap_fee_factor_for_negative_impact)
-            .build())
+        let params = match self.swap_pricing {
+            SwapPricingKind::Shift => FeeParams::builder()
+                .fee_receiver_factor(self.config.swap_fee_receiver_factor)
+                .positive_impact_fee_factor(0)
+                .negative_impact_fee_factor(0)
+                .build(),
+            SwapPricingKind::Swap | SwapPricingKind::Deposit | SwapPricingKind::Withdrawal => {
+                FeeParams::builder()
+                    .fee_receiver_factor(self.config.swap_fee_receiver_factor)
+                    .positive_impact_fee_factor(self.config.swap_fee_factor_for_positive_impact)
+                    .negative_impact_fee_factor(self.config.swap_fee_factor_for_negative_impact)
+                    .build()
+            }
+        };
+
+        Ok(params)
     }
 }
 

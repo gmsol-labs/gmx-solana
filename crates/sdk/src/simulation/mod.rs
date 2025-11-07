@@ -7,8 +7,17 @@ pub mod order;
 /// Deposit simulation.
 pub mod deposit;
 
+/// Withdrawal simulation.
+pub mod withdrawal;
+
+/// Shift simulation.
+pub mod shift;
+
 /// GLV deposit simulation.
 pub mod glv_deposit;
+
+/// GLV withdrawal simulation.
+pub mod glv_withdrawal;
 
 /// Liquidity (GM) exact simulation.
 pub mod lp;
