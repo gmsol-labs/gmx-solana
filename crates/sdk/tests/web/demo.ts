@@ -14,6 +14,8 @@ import {
   create_withdrawals,
   create_shifts,
   Glv,
+  create_glv_deposits,
+  create_glv_withdrawals,
 } from "../../pkg/index.js";
 
 function toBase64(data: number[]): string {
@@ -444,6 +446,25 @@ const withdrawalSimulationOutput = simulator.simulate_withdrawal({
 
 console.log(`withdrawal simulation: ${withdrawalSimulationOutput.report()}`);
 
+// Create shifts.
+const shiftParams = {
+  from_market_token: marketToken,
+  to_market_token: "BwN2FWixP5JyKjJNyD1YcRKN1XhgvFtnzrPrkfyb4DkW",
+  from_market_token_amount: 2_000_000_000n,
+};
+const shiftGroup = create_shifts([shiftParams], {
+  recent_blockhash: recentBlockhash,
+  payer,
+  transaction_group: {},
+});
+
+console.log("create shifts");
+for (const batch of shiftGroup.serialize()) {
+  for (const txn of batch) {
+    console.log(toBase64(txn));
+  }
+}
+
 // Decode GLV from base64 data.
 const glv = Glv.decode_from_base64_with_options(encodedGlv);
 console.log(`GLV token address: ${glv.glv_token_address()}`);
@@ -460,3 +481,71 @@ console.log(
     .get_glv(glvToken)
     ?.supply()}`
 );
+
+// Create GLV deposits.
+const glvDepositParams = {
+  glv_token: glvToken,
+  market_token: marketToken,
+  receiver: payer,
+  long_pay_token: wsol,
+  short_pay_token: usdc,
+  long_swap_path: [],
+  short_swap_path: [],
+  long_pay_amount: 1_000_000n,
+  short_pay_amount: 0n,
+  min_receive_amount: 0n,
+  unwrap_native_on_receive: true,
+};
+const glvDepositGroup = create_glv_deposits([glvDepositParams], {
+  recent_blockhash: recentBlockhash,
+  payer,
+  hints: new Map([
+    [
+      glvToken,
+      {
+        pool_tokens: {
+          long_token: wsol,
+          short_token: usdc,
+        },
+      },
+    ],
+  ]),
+  transaction_group: {},
+});
+
+console.log("create GLV deposits");
+for (const batch of glvDepositGroup.serialize()) {
+  for (const txn of batch) {
+    console.log(toBase64(txn));
+  }
+}
+
+// Create GLV withdrawals
+const glvWithdrawalParams = {
+  glv_token: glvToken,
+  market_token: marketToken,
+  glv_token_amount: 2_000_000_000n,
+};
+const glvWithdrawalGroup = create_glv_withdrawals([glvWithdrawalParams], {
+  recent_blockhash: recentBlockhash,
+  payer,
+  hints: new Map([
+    [
+      glvToken,
+      {
+        pool_tokens: {
+          long_token: wsol,
+          short_token: usdc,
+        },
+      },
+    ],
+  ]),
+  transaction_group: {},
+});
+
+console.log("create GLV withdrawals");
+for (const batch of glvWithdrawalGroup.serialize()) {
+  for (const txn of batch) {
+    console.log(toBase64(txn));
+  }
+}

@@ -88,9 +88,9 @@ pub fn create_glv_deposits_builder(
     let mut wrap_native = false;
 
     for params in deposits.into_iter() {
-        let market_token = params.market_token;
-        let hint = options.hints.get(&market_token).ok_or_else(|| {
-            crate::Error::custom(format!("hint for {} is not provided", market_token.0))
+        let glv_token = params.glv_token;
+        let hint = options.hints.get(&glv_token).ok_or_else(|| {
+            crate::Error::custom(format!("hint for {} is not provided", glv_token.0))
         })?;
 
         let mut wrap_amount = 0;
@@ -105,15 +105,13 @@ pub fn create_glv_deposits_builder(
                 wrap_amount += params.short_pay_amount.unwrap_or_default();
             }
         }
-        tokens.insert(market_token);
-        tokens.insert(params.glv_token);
 
         let program = options.program.clone().unwrap_or_default();
         let builder = CreateGlvDeposit::builder()
             .program(program)
             .payer(options.payer)
             .glv_token(params.glv_token)
-            .market_token(market_token)
+            .market_token(params.market_token)
             .long_pay_token(params.long_pay_token)
             .short_pay_token(params.short_pay_token)
             .long_swap_path(params.long_swap_path.unwrap_or_default())

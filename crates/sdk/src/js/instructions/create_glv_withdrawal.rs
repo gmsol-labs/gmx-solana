@@ -30,21 +30,21 @@ pub struct CreateGlvWithdrawalParamsJs {
     #[serde(default)]
     pub short_receive_token: Option<StringPubkey>,
     #[serde(default)]
-    pub long_swap_path: Vec<StringPubkey>,
+    pub long_swap_path: Option<Vec<StringPubkey>>,
     #[serde(default)]
-    pub short_swap_path: Vec<StringPubkey>,
+    pub short_swap_path: Option<Vec<StringPubkey>>,
     #[serde(default)]
-    pub glv_token_amount: u64,
+    pub glv_token_amount: Option<u128>,
     #[serde(default)]
-    pub min_long_receive_amount: u64,
+    pub min_long_receive_amount: Option<u128>,
     #[serde(default)]
-    pub min_short_receive_amount: u64,
+    pub min_short_receive_amount: Option<u128>,
     #[serde(default)]
-    pub unwrap_native_on_receive: bool,
+    pub skip_unwrap_native_on_receive: Option<bool>,
     #[serde(default)]
-    pub skip_long_receive_token_ata_creation: bool,
+    pub skip_long_receive_token_ata_creation: Option<bool>,
     #[serde(default)]
-    pub skip_short_receive_token_ata_creation: bool,
+    pub skip_short_receive_token_ata_creation: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Tsify)]
@@ -81,13 +81,12 @@ pub fn create_glv_withdrawals_builder(
     let mut groups: Vec<AtomicGroup> = Vec::with_capacity(withdrawals.len());
 
     for params in withdrawals.into_iter() {
-        let market_token = params.market_token;
-        let hint = options.hints.get(&market_token).ok_or_else(|| {
-            crate::Error::custom(format!("hint for {} is not provided", market_token.0))
+        let glv_token = params.glv_token;
+        let hint = options.hints.get(&glv_token).ok_or_else(|| {
+            crate::Error::custom(format!("hint for {} is not provided", glv_token.0))
         })?;
 
-        tokens.insert(market_token);
-        tokens.insert(params.glv_token);
+        tokens.insert(params.market_token);
         if let Some(t) = params.long_receive_token.as_ref() {
             tokens.insert(*t);
         }
@@ -100,17 +99,35 @@ pub fn create_glv_withdrawals_builder(
             .program(program)
             .payer(options.payer)
             .glv_token(params.glv_token)
-            .market_token(market_token)
+            .market_token(params.market_token)
             .long_receive_token(params.long_receive_token)
             .short_receive_token(params.short_receive_token)
-            .long_swap_path(params.long_swap_path)
-            .short_swap_path(params.short_swap_path)
-            .glv_token_amount(params.glv_token_amount)
-            .min_long_receive_amount(params.min_long_receive_amount)
-            .min_short_receive_amount(params.min_short_receive_amount)
-            .unwrap_native_on_receive(params.unwrap_native_on_receive)
-            .skip_long_receive_token_ata_creation(params.skip_long_receive_token_ata_creation)
-            .skip_short_receive_token_ata_creation(params.skip_short_receive_token_ata_creation);
+            .long_swap_path(params.long_swap_path.unwrap_or_default())
+            .short_swap_path(params.short_swap_path.unwrap_or_default())
+            .glv_token_amount(params.glv_token_amount.unwrap_or_default().try_into()?)
+            .min_long_receive_amount(
+                params
+                    .min_long_receive_amount
+                    .unwrap_or_default()
+                    .try_into()?,
+            )
+            .min_short_receive_amount(
+                params
+                    .min_short_receive_amount
+                    .unwrap_or_default()
+                    .try_into()?,
+            )
+            .unwrap_native_on_receive(!params.skip_unwrap_native_on_receive.unwrap_or_default())
+            .skip_long_receive_token_ata_creation(
+                params
+                    .skip_long_receive_token_ata_creation
+                    .unwrap_or_default(),
+            )
+            .skip_short_receive_token_ata_creation(
+                params
+                    .skip_short_receive_token_ata_creation
+                    .unwrap_or_default(),
+            );
 
         let built = if let Some(r) = params.receiver {
             builder.receiver(r).build()

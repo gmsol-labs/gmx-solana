@@ -61,7 +61,6 @@ pub fn create_shifts_builder(
     let mut groups: Vec<AtomicGroup> = Vec::with_capacity(shifts.len());
 
     for params in shifts.into_iter() {
-        tokens.insert(params.from_market_token);
         tokens.insert(params.to_market_token);
 
         let program = options.program.clone().unwrap_or_default();
