@@ -3,7 +3,7 @@
 use std::{ops::Deref, sync::Arc};
 
 use gmsol_model::price::Price;
-use gmsol_programs::gmsol_store::types::CreateDepositParams;
+use gmsol_programs::gmsol_store::types::{CreateDepositParams, CreateWithdrawalParams};
 use solana_sdk::pubkey::Pubkey;
 use wasm_bindgen::prelude::*;
 
@@ -18,6 +18,7 @@ use crate::js::{market::JsMarketModel, position::JsPosition};
 use super::{
     deposit::{JsDepositSimulationOutput, SimulateDepositArgs},
     order::{JsOrderSimulationOutput, SimulateOrderArgs},
+    withdrawal::{JsWithdrawalSimulationOutput, SimulateWithdrawalArgs},
 };
 
 /// A JS binding for [`Simulator`].
@@ -146,6 +147,44 @@ impl JsSimulator {
             .execute_with_options(Default::default())?;
 
         Ok(JsDepositSimulationOutput { output })
+    }
+
+    /// Simulate a withdrawal execution.
+    pub fn simulate_withdrawal(
+        &mut self,
+        args: SimulateWithdrawalArgs,
+    ) -> crate::Result<JsWithdrawalSimulationOutput> {
+        let SimulateWithdrawalArgs {
+            params,
+            market_token,
+            long_receive_token,
+            short_receive_token,
+        } = args;
+
+        let long_swap_path = convert_swap_path(params.long_swap_path.as_deref());
+        let short_swap_path = convert_swap_path(params.short_swap_path.as_deref());
+
+        let params = CreateWithdrawalParams {
+            execution_lamports: 0,
+            long_token_swap_path_length: long_swap_path.len().try_into()?,
+            short_token_swap_path_length: short_swap_path.len().try_into()?,
+            market_token_amount: params.market_token_amount.unwrap_or_default(),
+            min_long_token_amount: params.min_long_receive_amount.unwrap_or_default(),
+            min_short_token_amount: params.min_short_receive_amount.unwrap_or_default(),
+            should_unwrap_native_token: !params.skip_unwrap_native_on_receive.unwrap_or_default(),
+        };
+
+        let output = self
+            .simulator
+            .simulate_withdrawal(&market_token, &params)
+            .long_receive_token(long_receive_token.as_deref())
+            .long_swap_path(&long_swap_path)
+            .short_receive_token(short_receive_token.as_deref())
+            .short_swap_path(&short_swap_path)
+            .build()
+            .execute_with_options(Default::default())?;
+
+        Ok(JsWithdrawalSimulationOutput { output })
     }
 
     /// Create a clone of this simulator.

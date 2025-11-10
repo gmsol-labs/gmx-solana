@@ -1,6 +1,7 @@
 pub mod deposit;
 pub mod order;
 pub mod simulator;
+pub mod withdrawal;
 
 pub use order::{JsOrderSimulationOutput, SimulateOrderArgs};
 pub use simulator::JsSimulator;
