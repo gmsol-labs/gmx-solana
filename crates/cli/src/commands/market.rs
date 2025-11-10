@@ -478,11 +478,7 @@ impl super::Command for Market {
                             .raw_account_with_config(address, Default::default())
                             .await?;
                         let account = raw.into_value().ok_or(gmsol_sdk::Error::NotFound)?;
-                        let disc = account
-                            .data
-                            .get(0..8)
-                            .map(hex::encode)
-                            .unwrap_or_default();
+                        let disc = account.data.get(0..8).map(hex::encode).unwrap_or_default();
                         println!(
                             "{}",
                             serde_json::json!({
