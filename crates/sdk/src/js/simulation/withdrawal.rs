@@ -30,7 +30,7 @@ pub struct JsWithdrawalSimulationOutput {
     pub(crate) output: WithdrawalSimulationOutput,
 }
 
-#[wasm_bindgen(js_class = DepositSimulationOutput)]
+#[wasm_bindgen(js_class = WithdrawalSimulationOutput)]
 impl JsWithdrawalSimulationOutput {
     /// Returns the withdraw report.
     pub fn report(&self) -> crate::Result<String> {
