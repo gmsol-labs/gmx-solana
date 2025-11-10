@@ -10,6 +10,7 @@ use solana_sdk::pubkey::Pubkey;
 use wasm_bindgen::prelude::*;
 
 use crate::{
+    js::glv::JsGlvModel,
     market::Value,
     serde::StringPubkey,
     simulation::{order::UpdatePriceOptions, SimulationOptions, Simulator},
@@ -63,6 +64,14 @@ impl JsSimulator {
         }))
     }
 
+    /// Get GLV by its GLV token.
+    pub fn get_glv(&self, glv_token: &str) -> crate::Result<Option<JsGlvModel>> {
+        Ok(self
+            .simulator
+            .get_glv(&glv_token.parse()?)
+            .map(|glv| glv.clone().into()))
+    }
+
     /// Upsert the prices for the given token.
     pub fn insert_price(&mut self, token: &str, price: Value) -> crate::Result<()> {
         let token = token.parse()?;
@@ -71,6 +80,12 @@ impl JsSimulator {
             max: price.max,
         });
         self.simulator.insert_price(&token, price)?;
+        Ok(())
+    }
+
+    /// Upsert a GLV model.
+    pub fn insert_glv(&mut self, glv: &JsGlvModel) -> crate::Result<()> {
+        self.simulator.insert_glv(glv.model.clone());
         Ok(())
     }
 

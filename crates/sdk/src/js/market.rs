@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use gmsol_model::{LiquidityMarketExt, PnlFactorKind};
+use gmsol_model::{LiquidityMarket, LiquidityMarketExt, PnlFactorKind};
 use gmsol_programs::{
     gmsol_store::accounts::Market,
     model::{MarketModel, PositionOptions},
@@ -139,6 +139,11 @@ impl JsMarketModel {
     pub fn status(&self, params: MarketStatusParams) -> crate::Result<MarketStatus> {
         let prices = params.prices.into();
         self.model.status(&prices)
+    }
+
+    /// Returns current supply.
+    pub fn supply(&self) -> u128 {
+        self.model.total_supply()
     }
 
     /// Create an empty position model.
