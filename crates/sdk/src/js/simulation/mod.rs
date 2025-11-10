@@ -1,5 +1,6 @@
 pub mod deposit;
 pub mod order;
+pub mod shift;
 pub mod simulator;
 pub mod withdrawal;
 

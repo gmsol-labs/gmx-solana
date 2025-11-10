@@ -3,7 +3,9 @@
 use std::{ops::Deref, sync::Arc};
 
 use gmsol_model::price::Price;
-use gmsol_programs::gmsol_store::types::{CreateDepositParams, CreateWithdrawalParams};
+use gmsol_programs::gmsol_store::types::{
+    CreateDepositParams, CreateShiftParams, CreateWithdrawalParams,
+};
 use solana_sdk::pubkey::Pubkey;
 use wasm_bindgen::prelude::*;
 
@@ -18,6 +20,7 @@ use crate::js::{market::JsMarketModel, position::JsPosition};
 use super::{
     deposit::{JsDepositSimulationOutput, SimulateDepositArgs},
     order::{JsOrderSimulationOutput, SimulateOrderArgs},
+    shift::{JsShiftSimulationOutput, SimulateShiftArgs},
     withdrawal::{JsWithdrawalSimulationOutput, SimulateWithdrawalArgs},
 };
 
@@ -185,6 +188,32 @@ impl JsSimulator {
             .execute_with_options(Default::default())?;
 
         Ok(JsWithdrawalSimulationOutput { output })
+    }
+
+    /// Simulate a shift execution.
+    pub fn simulate_shift(
+        &mut self,
+        args: SimulateShiftArgs,
+    ) -> crate::Result<JsShiftSimulationOutput> {
+        let SimulateShiftArgs {
+            params,
+            from_market_token,
+            to_market_token,
+        } = args;
+
+        let params = CreateShiftParams {
+            execution_lamports: 0,
+            from_market_token_amount: params.from_market_token_amount.unwrap_or_default(),
+            min_to_market_token_amount: params.min_to_market_token_amount.unwrap_or_default(),
+        };
+
+        let output = self
+            .simulator
+            .simulate_shift(&from_market_token, &to_market_token, &params)
+            .build()
+            .execute_with_options(Default::default())?;
+
+        Ok(JsShiftSimulationOutput { output })
     }
 
     /// Create a clone of this simulator.
