@@ -120,15 +120,13 @@ impl JsSimulator {
         &mut self,
         args: SimulateDepositArgs,
     ) -> crate::Result<JsDepositSimulationOutput> {
-        let SimulateDepositArgs {
-            params,
-            market_token,
-            long_pay_token,
-            short_pay_token,
-        } = args;
+        let SimulateDepositArgs { params } = args;
 
         let long_swap_path = convert_swap_path(params.long_swap_path.as_deref());
         let short_swap_path = convert_swap_path(params.short_swap_path.as_deref());
+        let market_token = &params.market_token;
+        let long_pay_token = &params.long_pay_token;
+        let short_pay_token = &params.short_pay_token;
         let params = CreateDepositParams {
             execution_lamports: 0,
             long_token_swap_length: long_swap_path.len().try_into()?,
@@ -141,7 +139,7 @@ impl JsSimulator {
 
         let output = self
             .simulator
-            .simulate_deposit(&market_token, &params)
+            .simulate_deposit(market_token, &params)
             .long_pay_token(long_pay_token.as_deref())
             .long_swap_path(&long_swap_path)
             .short_pay_token(short_pay_token.as_deref())
@@ -157,16 +155,13 @@ impl JsSimulator {
         &mut self,
         args: SimulateWithdrawalArgs,
     ) -> crate::Result<JsWithdrawalSimulationOutput> {
-        let SimulateWithdrawalArgs {
-            params,
-            market_token,
-            long_receive_token,
-            short_receive_token,
-        } = args;
+        let SimulateWithdrawalArgs { params } = args;
 
         let long_swap_path = convert_swap_path(params.long_swap_path.as_deref());
         let short_swap_path = convert_swap_path(params.short_swap_path.as_deref());
-
+        let market_token = &params.market_token;
+        let long_receive_token = &params.long_receive_token;
+        let short_receive_token = &params.long_receive_token;
         let params = CreateWithdrawalParams {
             execution_lamports: 0,
             long_token_swap_path_length: long_swap_path.len().try_into()?,
@@ -179,7 +174,7 @@ impl JsSimulator {
 
         let output = self
             .simulator
-            .simulate_withdrawal(&market_token, &params)
+            .simulate_withdrawal(market_token, &params)
             .long_receive_token(long_receive_token.as_deref())
             .long_swap_path(&long_swap_path)
             .short_receive_token(short_receive_token.as_deref())
@@ -195,12 +190,10 @@ impl JsSimulator {
         &mut self,
         args: SimulateShiftArgs,
     ) -> crate::Result<JsShiftSimulationOutput> {
-        let SimulateShiftArgs {
-            params,
-            from_market_token,
-            to_market_token,
-        } = args;
+        let SimulateShiftArgs { params } = args;
 
+        let from_market_token = &params.from_market_token;
+        let to_market_token = &params.to_market_token;
         let params = CreateShiftParams {
             execution_lamports: 0,
             from_market_token_amount: params.from_market_token_amount.unwrap_or_default(),
@@ -209,7 +202,7 @@ impl JsSimulator {
 
         let output = self
             .simulator
-            .simulate_shift(&from_market_token, &to_market_token, &params)
+            .simulate_shift(from_market_token, to_market_token, &params)
             .build()
             .execute_with_options(Default::default())?;
 

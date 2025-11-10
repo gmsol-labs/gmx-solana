@@ -8,7 +8,6 @@ use crate::{
     js::{
         instructions::create_withdrawal::CreateWithdrawalParamsJs, simulation::encode_borsh_base64,
     },
-    serde::StringPubkey,
     simulation::withdrawal::WithdrawalSimulationOutput,
 };
 
@@ -17,11 +16,6 @@ use crate::{
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SimulateWithdrawalArgs {
     pub(crate) params: CreateWithdrawalParamsJs,
-    pub(crate) market_token: StringPubkey,
-    #[serde(default)]
-    pub(crate) long_receive_token: Option<StringPubkey>,
-    #[serde(default)]
-    pub(crate) short_receive_token: Option<StringPubkey>,
 }
 
 /// Simulation output for withdrawal.

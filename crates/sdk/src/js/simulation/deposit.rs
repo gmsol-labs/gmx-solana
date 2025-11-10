@@ -6,7 +6,6 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     js::{instructions::create_deposit::CreateDepositParamsJs, simulation::encode_borsh_base64},
-    serde::StringPubkey,
     simulation::deposit::DepositSimulationOutput,
 };
 
@@ -15,11 +14,6 @@ use crate::{
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SimulateDepositArgs {
     pub(crate) params: CreateDepositParamsJs,
-    pub(crate) market_token: StringPubkey,
-    #[serde(default)]
-    pub(crate) long_pay_token: Option<StringPubkey>,
-    #[serde(default)]
-    pub(crate) short_pay_token: Option<StringPubkey>,
 }
 
 /// Simulation output for deposit.

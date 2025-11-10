@@ -6,7 +6,6 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     js::{instructions::create_shift::CreateShiftParamsJs, simulation::encode_borsh_base64},
-    serde::StringPubkey,
     simulation::shift::ShiftSimulationOutput,
 };
 
@@ -15,8 +14,6 @@ use crate::{
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SimulateShiftArgs {
     pub(crate) params: CreateShiftParamsJs,
-    pub(crate) from_market_token: StringPubkey,
-    pub(crate) to_market_token: StringPubkey,
 }
 
 /// Simulation output for shift.
