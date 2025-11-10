@@ -481,7 +481,7 @@ impl super::Command for Market {
                         let disc = account
                             .data
                             .get(0..8)
-                            .map(|b| hex::encode(b))
+                            .map(hex::encode)
                             .unwrap_or_default();
                         println!(
                             "{}",
