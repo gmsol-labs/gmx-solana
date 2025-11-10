@@ -33,11 +33,11 @@ pub struct CreateDepositParamsJs {
     #[serde(default)]
     pub short_swap_path: Option<Vec<StringPubkey>>,
     #[serde(default)]
-    pub long_pay_amount: Option<u64>,
+    pub long_pay_amount: Option<u128>,
     #[serde(default)]
-    pub short_pay_amount: Option<u64>,
+    pub short_pay_amount: Option<u128>,
     #[serde(default)]
-    pub min_receive_amount: Option<u64>,
+    pub min_receive_amount: Option<u128>,
     #[serde(default)]
     pub skip_unwrap_native_on_receive: Option<bool>,
 }
@@ -98,9 +98,9 @@ pub fn create_deposits_builder(
             .short_pay_token(params.short_pay_token)
             .long_swap_path(params.long_swap_path.unwrap_or_default())
             .short_swap_path(params.short_swap_path.unwrap_or_default())
-            .long_pay_amount(params.long_pay_amount.unwrap_or_default())
-            .short_pay_amount(params.short_pay_amount.unwrap_or_default())
-            .min_receive_amount(params.min_receive_amount.unwrap_or_default())
+            .long_pay_amount(params.long_pay_amount.unwrap_or_default().try_into()?)
+            .short_pay_amount(params.short_pay_amount.unwrap_or_default().try_into()?)
+            .min_receive_amount(params.min_receive_amount.unwrap_or_default().try_into()?)
             .unwrap_native_on_receive(!params.skip_unwrap_native_on_receive.unwrap_or_default());
 
         let built = if let Some(r) = params.receiver {

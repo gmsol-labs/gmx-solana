@@ -21,9 +21,9 @@ pub struct CreateShiftParamsJs {
     #[serde(default)]
     pub receiver: Option<StringPubkey>,
     #[serde(default)]
-    pub from_market_token_amount: Option<u64>,
+    pub from_market_token_amount: Option<u128>,
     #[serde(default)]
-    pub min_to_market_token_amount: Option<u64>,
+    pub min_to_market_token_amount: Option<u128>,
     #[serde(default)]
     pub skip_to_market_token_ata_creation: Option<bool>,
 }
@@ -70,8 +70,18 @@ pub fn create_shifts_builder(
             .payer(options.payer)
             .from_market_token(params.from_market_token)
             .to_market_token(params.to_market_token)
-            .from_market_token_amount(params.from_market_token_amount.unwrap_or_default())
-            .min_to_market_token_amount(params.min_to_market_token_amount.unwrap_or_default())
+            .from_market_token_amount(
+                params
+                    .from_market_token_amount
+                    .unwrap_or_default()
+                    .try_into()?,
+            )
+            .min_to_market_token_amount(
+                params
+                    .min_to_market_token_amount
+                    .unwrap_or_default()
+                    .try_into()?,
+            )
             .skip_to_market_token_ata_creation(
                 params.skip_to_market_token_ata_creation.unwrap_or_default(),
             );

@@ -131,9 +131,9 @@ impl JsSimulator {
             execution_lamports: 0,
             long_token_swap_length: long_swap_path.len().try_into()?,
             short_token_swap_length: short_swap_path.len().try_into()?,
-            initial_long_token_amount: params.long_pay_amount.unwrap_or_default(),
-            initial_short_token_amount: params.short_pay_amount.unwrap_or_default(),
-            min_market_token_amount: params.min_receive_amount.unwrap_or_default(),
+            initial_long_token_amount: params.long_pay_amount.unwrap_or_default().try_into()?,
+            initial_short_token_amount: params.short_pay_amount.unwrap_or_default().try_into()?,
+            min_market_token_amount: params.min_receive_amount.unwrap_or_default().try_into()?,
             should_unwrap_native_token: !params.skip_unwrap_native_on_receive.unwrap_or_default(),
         };
 
@@ -166,9 +166,15 @@ impl JsSimulator {
             execution_lamports: 0,
             long_token_swap_path_length: long_swap_path.len().try_into()?,
             short_token_swap_path_length: short_swap_path.len().try_into()?,
-            market_token_amount: params.market_token_amount.unwrap_or_default(),
-            min_long_token_amount: params.min_long_receive_amount.unwrap_or_default(),
-            min_short_token_amount: params.min_short_receive_amount.unwrap_or_default(),
+            market_token_amount: params.market_token_amount.unwrap_or_default().try_into()?,
+            min_long_token_amount: params
+                .min_long_receive_amount
+                .unwrap_or_default()
+                .try_into()?,
+            min_short_token_amount: params
+                .min_short_receive_amount
+                .unwrap_or_default()
+                .try_into()?,
             should_unwrap_native_token: !params.skip_unwrap_native_on_receive.unwrap_or_default(),
         };
 
@@ -196,8 +202,14 @@ impl JsSimulator {
         let to_market_token = &params.to_market_token;
         let params = CreateShiftParams {
             execution_lamports: 0,
-            from_market_token_amount: params.from_market_token_amount.unwrap_or_default(),
-            min_to_market_token_amount: params.min_to_market_token_amount.unwrap_or_default(),
+            from_market_token_amount: params
+                .from_market_token_amount
+                .unwrap_or_default()
+                .try_into()?,
+            min_to_market_token_amount: params
+                .min_to_market_token_amount
+                .unwrap_or_default()
+                .try_into()?,
         };
 
         let output = self

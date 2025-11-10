@@ -33,11 +33,11 @@ pub struct CreateWithdrawalParamsJs {
     #[serde(default)]
     pub short_swap_path: Option<Vec<StringPubkey>>,
     #[serde(default)]
-    pub market_token_amount: Option<u64>,
+    pub market_token_amount: Option<u128>,
     #[serde(default)]
-    pub min_long_receive_amount: Option<u64>,
+    pub min_long_receive_amount: Option<u128>,
     #[serde(default)]
-    pub min_short_receive_amount: Option<u64>,
+    pub min_short_receive_amount: Option<u128>,
     #[serde(default)]
     pub skip_unwrap_native_on_receive: Option<bool>,
 }
@@ -92,9 +92,19 @@ pub fn create_withdrawals_builder(
             .short_receive_token(params.short_receive_token)
             .long_swap_path(params.long_swap_path.unwrap_or_default())
             .short_swap_path(params.short_swap_path.unwrap_or_default())
-            .market_token_amount(params.market_token_amount.unwrap_or_default())
-            .min_long_receive_amount(params.min_long_receive_amount.unwrap_or_default())
-            .min_short_receive_amount(params.min_short_receive_amount.unwrap_or_default())
+            .market_token_amount(params.market_token_amount.unwrap_or_default().try_into()?)
+            .min_long_receive_amount(
+                params
+                    .min_long_receive_amount
+                    .unwrap_or_default()
+                    .try_into()?,
+            )
+            .min_short_receive_amount(
+                params
+                    .min_short_receive_amount
+                    .unwrap_or_default()
+                    .try_into()?,
+            )
             .unwrap_native_on_receive(!params.skip_unwrap_native_on_receive.unwrap_or_default());
 
         let built = if let Some(r) = params.receiver {
