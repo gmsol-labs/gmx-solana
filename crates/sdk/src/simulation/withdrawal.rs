@@ -25,7 +25,7 @@ impl WithdrawalSimulationOutput {
     }
 
     /// Returns short swap reports.
-    pub fn short_swap(&self) -> &[SwapReport<u128, i128>] {
+    pub fn short_swaps(&self) -> &[SwapReport<u128, i128>] {
         &self.short_swaps
     }
 

@@ -11,6 +11,8 @@ import {
   Pubkey,
   TradeEvent,
   update_orders,
+  create_withdrawals,
+  create_shifts,
 } from "../../pkg/index.js";
 
 function toBase64(data: number[]): string {
@@ -358,38 +360,34 @@ console.log("size_in_tokens:", tradeEventPosition.size_in_tokens());
 console.log("collateral amount:", tradeEventPosition.collateral_amount());
 
 // Create deposits (minimal check)
-const depositGroup = create_deposits(
-  [
-    {
-      market_token: marketToken,
-      receiver: payer,
-      long_pay_token: wsol,
-      short_pay_token: usdc,
-      long_swap_path: [],
-      short_swap_path: [],
-      long_pay_amount: 1_000_000,
-      short_pay_amount: 0,
-      min_receive_amount: 0,
-      unwrap_native_on_receive: true,
-    },
-  ],
-  {
-    recent_blockhash: recentBlockhash,
-    payer,
-    hints: new Map([
-      [
-        marketToken,
-        {
-          pool_tokens: {
-            long_token: wsol,
-            short_token: usdc,
-          },
+const depositParams = {
+  market_token: marketToken,
+  receiver: payer,
+  long_pay_token: wsol,
+  short_pay_token: usdc,
+  long_swap_path: [],
+  short_swap_path: [],
+  long_pay_amount: 1_000_000n,
+  short_pay_amount: 0n,
+  min_receive_amount: 0n,
+  unwrap_native_on_receive: true,
+};
+const depositGroup = create_deposits([depositParams], {
+  recent_blockhash: recentBlockhash,
+  payer,
+  hints: new Map([
+    [
+      marketToken,
+      {
+        pool_tokens: {
+          long_token: wsol,
+          short_token: usdc,
         },
-      ],
-    ]),
-    transaction_group: {},
-  }
-);
+      },
+    ],
+  ]),
+  transaction_group: {},
+});
 
 console.log("create deposits");
 for (const batch of depositGroup.serialize()) {
@@ -398,72 +396,45 @@ for (const batch of depositGroup.serialize()) {
   }
 }
 
-try {
-  const gmDeposit = graph.simulate_deposit_exact({
-    market_token: marketToken,
-    long_amount: 1_000_000n,
-    short_amount: 2_000_000n,
-    include_virtual_inventory_impact: true,
-  });
-  console.log("gm deposit exact:", gmDeposit);
+// Simulate deposit.
+const depositSimulationOutput = simulator.simulate_deposit({
+  params: depositParams,
+});
 
-  const gmWithdrawal = graph.simulate_withdrawal_exact({
-    market_token: marketToken,
-    market_token_amount: 1_000_000n,
-  });
-  console.log("gm withdrawal exact:", gmWithdrawal);
+console.log(`deposit simulation: ${depositSimulationOutput.report()}`);
 
-  const glvComponents = [
-    {
-      market_token: marketToken,
-      balance: 1_000_000,
-      pool_value: 10_000_000_000n,
-      supply: 1_000_000,
-    },
-  ];
+// Create withdrawals
+const withdrawalParams = {
+  market_token: marketToken,
+  market_token_amount: 2_000_000_000n,
+};
+const withdrawalGroup = create_withdrawals([withdrawalParams], {
+  recent_blockhash: recentBlockhash,
+  payer,
+  hints: new Map([
+    [
+      marketToken,
+      {
+        pool_tokens: {
+          long_token: wsol,
+          short_token: usdc,
+        },
+      },
+    ],
+  ]),
+  transaction_group: {},
+});
 
-  const glvDeposit = graph.simulate_glv_deposit_exact({
-    market_token: marketToken,
-    long_amount: 1_000_000n,
-    short_amount: 0n,
-    market_token_amount: 1_000_000n,
-    glv_supply: 1_000_000,
-    components: glvComponents,
-    include_virtual_inventory_impact: true,
-  });
-  console.log("glv deposit exact:", glvDeposit);
-
-  const glvWithdrawal = graph.simulate_glv_withdrawal_exact({
-    market_token: marketToken,
-    glv_token_amount: 10_000,
-    glv_supply: 1_000_000,
-    components: glvComponents,
-  });
-  console.log("glv withdrawal exact:", glvWithdrawal);
-
-  const lpDepositLegs = graph.simulate_deposit_swaps({
-    long: { source_token: wsol, amount: 1_000_000n, swap_path: [] },
-    short: { source_token: usdc, amount: 2_000_000n, swap_path: [] },
-  });
-  console.log("lp deposit legs:", lpDepositLegs);
-
-  const lpWithdrawalLegs = graph.simulate_withdrawal_swaps({
-    long: { source_token: wsol, amount: 500_000n, swap_path: [] },
-    short: { source_token: usdc, amount: 500_000n, swap_path: [] },
-  });
-  console.log("lp withdrawal legs:", lpWithdrawalLegs);
-
-  const glvLpDepositLegs = graph.simulate_glv_deposit_swaps({
-    long: { source_token: wsol, amount: 1_000_000n, swap_path: [] },
-    short: { source_token: usdc, amount: 1_000_000n, swap_path: [] },
-  });
-  console.log("glv lp deposit legs:", glvLpDepositLegs);
-
-  const glvLpWithdrawalLegs = graph.simulate_glv_withdrawal_swaps({
-    long: { source_token: wsol, amount: 1_000_000n, swap_path: [] },
-    short: { source_token: usdc, amount: 1_000_000n, swap_path: [] },
-  });
-  console.log("glv lp withdrawal legs:", glvLpWithdrawalLegs);
-} catch (e) {
-  console.error("smoke tests error:", e);
+console.log("create withdrawals");
+for (const batch of withdrawalGroup.serialize()) {
+  for (const txn of batch) {
+    console.log(toBase64(txn));
+  }
 }
+
+// Simulate withdrawal.
+const withdrawalSimulationOutput = simulator.simulate_withdrawal({
+  params: withdrawalParams,
+});
+
+console.log(`withdrawal simulation: ${withdrawalSimulationOutput.report()}`);
