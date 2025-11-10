@@ -111,17 +111,38 @@ impl JitoGroup {
         opts: JitoSendOptions,
     ) -> Result<Vec<String>, (Vec<String>, crate::Error)> {
         // Delegate to detailed API and aggregate per legacy signature.
+        let cont = opts.continue_on_error;
         let detailed = self
             .send_detailed_with_options(signers, recent_blockhash, opts)
             .await;
-        let mut ok_ids = Vec::new();
+        let mut ok_ids: Vec<String> = Vec::new();
+        let mut errs: Vec<crate::Error> = Vec::new();
         for res in detailed {
             match res {
                 Ok(id) => ok_ids.push(id),
-                Err(err) => return Err((ok_ids, err)),
+                Err(err) => errs.push(err),
             }
         }
-        Ok(ok_ids)
+        if errs.is_empty() {
+            return Ok(ok_ids);
+        }
+        // If only one error and not continuing, return first error with partial ids for backward compatibility.
+        if !cont && errs.len() == 1 {
+            return Err((ok_ids, errs.into_iter().next().unwrap()));
+        }
+        // Aggregate all errors into a single custom message.
+        let preview = errs
+            .iter()
+            .map(|e| e.to_string())
+            .take(3)
+            .collect::<Vec<_>>()
+            .join(" | ");
+        let msg = if errs.len() <= 3 {
+            format!("{} bundle(s) failed: {}", errs.len(), preview)
+        } else {
+            format!("{} bundle(s) failed: {} ...", errs.len(), preview)
+        };
+        Err((ok_ids, crate::Error::custom(msg)))
     }
 
     /// Submit bundles and return per-bundle results in order.
