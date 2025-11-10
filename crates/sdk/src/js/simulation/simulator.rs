@@ -161,7 +161,7 @@ impl JsSimulator {
         let short_swap_path = convert_swap_path(params.short_swap_path.as_deref());
         let market_token = &params.market_token;
         let long_receive_token = &params.long_receive_token;
-        let short_receive_token = &params.long_receive_token;
+        let short_receive_token = &params.short_receive_token;
         let params = CreateWithdrawalParams {
             execution_lamports: 0,
             long_token_swap_path_length: long_swap_path.len().try_into()?,
