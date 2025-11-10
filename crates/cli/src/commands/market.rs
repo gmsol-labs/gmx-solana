@@ -47,9 +47,7 @@ use crate::{
 
 #[cfg(feature = "chaos_risk_oracle")]
 use gmsol_sdk::client::risk_oracle::{
-    client::ChaosClient,
-    types::{to_per_market_updates, EncodedRecommendation},
-    verify::verify_signature,
+    client::ChaosClient, types::EncodedRecommendation, verify::verify_signature,
 };
 
 use super::{
@@ -159,10 +157,10 @@ enum Command {
         new_authority: Pubkey,
     },
     /// Push to `MarketConfigBuffer` account with configs read from file.
+    #[command(group = clap::ArgGroup::new("buffer-input").required(true).multiple(false))]
     PushToBuffer {
         /// Path to the config file to read from.
-        /// Required unless `--from-chaos` is set.
-        #[arg(requires = "buffer-input", required_unless_present = "from_chaos")]
+        #[arg(required_unless_present = "from_chaos")]
         path: Option<PathBuf>,
         /// Buffer account to be pushed to.
         #[arg(long, group = "buffer-input")]
@@ -473,13 +471,46 @@ impl super::Command for Market {
                 address,
                 market_token,
             } => {
-                let buffer = client
-                    .account::<MarketConfigBuffer>(address)
-                    .await?
-                    .ok_or(gmsol_sdk::Error::NotFound)?;
-                let token_map = client.authorized_token_map(store).await?;
-                let market = client.market_by_token(store, market_token).await?;
-                let decimals = MarketDecimals::new(&market.meta.into(), &token_map)?;
+                let buffer = match client.account::<MarketConfigBuffer>(address).await? {
+                    Some(acc) => acc,
+                    None => {
+                        let raw = client
+                            .raw_account_with_config(address, Default::default())
+                            .await?;
+                        let account = raw.into_value().ok_or(gmsol_sdk::Error::NotFound)?;
+                        let disc = account
+                            .data
+                            .get(0..8)
+                            .map(|b| hex::encode(b))
+                            .unwrap_or_default();
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "pubkey": address,
+                                "owner": account.owner,
+                                "data_len": account.data.len(),
+                                "discriminator_hex": disc,
+                            })
+                        );
+                        eyre::bail!(
+                            "account exists but failed to decode as MarketConfigBuffer; see diagnostics above"
+                        );
+                    }
+                };
+                // Try to fetch real market decimals; fallback to zeros if unavailable
+                let decimals = match (
+                    client.authorized_token_map(store).await,
+                    client.market_by_token(store, market_token).await,
+                ) {
+                    (Ok(token_map), Ok(market)) => {
+                        MarketDecimals::new(&market.meta.into(), &token_map)?
+                    }
+                    _ => MarketDecimals {
+                        index_token_decimals: 0,
+                        long_token_decimals: 0,
+                        short_token_decimals: 0,
+                    },
+                };
                 let buffer = SerdeMarketConfigBuffer::from_market_config_buffer(&buffer, decimals)?;
                 println!(
                     "{}",
@@ -494,6 +525,7 @@ impl super::Command for Market {
                         ])
                     )?
                 );
+                println!("\n{}", serde_json::to_string_pretty(&buffer)?);
                 return Ok(());
             }
             Command::CreateTokenMap { keypair } => {
@@ -652,11 +684,89 @@ impl super::Command for Market {
                             }
                         }
 
-                        let per_market = to_per_market_updates(&recs)?;
-                        let target = per_market
-                            .into_iter()
-                            .find(|u| u.market == *market_token)
-                            .ok_or_eyre("no chaos updates for the specified market_token")?;
+                        // Map Chaos key -> final on-chain config key string
+                        fn map_key(chaos_key: &str, parameter_name: &str) -> Option<&'static str> {
+                            match parameter_name {
+                                "oiCaps" => match chaos_key {
+                                    "oiCaps/maxOpenInterestForLongs/v1" => {
+                                        Some("max_open_interest_for_long")
+                                    }
+                                    "oiCaps/maxOpenInterestForShorts/v1" => {
+                                        Some("max_open_interest_for_short")
+                                    }
+                                    _ => None,
+                                },
+                                "priceImpact" => match chaos_key {
+                                    "priceImpact/negativePositionImpactFactor/v1" => {
+                                        Some("position_impact_negative_factor")
+                                    }
+                                    "priceImpact/positivePositionImpactFactor/v1" => {
+                                        Some("position_impact_positive_factor")
+                                    }
+                                    "priceImpact/positionImpactExponentFactor/v1" => {
+                                        Some("position_impact_exponent")
+                                    }
+                                    _ => None,
+                                },
+                                _ => None,
+                            }
+                        }
+
+                        // Scaling helper: API decimals -> market decimals
+                        fn pow10(n: u32) -> Option<u128> {
+                            let mut v: u128 = 1;
+                            for _ in 0..n {
+                                v = v.checked_mul(10)?;
+                            }
+                            Some(v)
+                        }
+                        fn scale_value(
+                            v_api: u128,
+                            dec_api: u8,
+                            dec_target: u8,
+                        ) -> eyre::Result<u128> {
+                            if dec_target == dec_api {
+                                return Ok(v_api);
+                            }
+                            if dec_target > dec_api {
+                                let p = pow10((dec_target - dec_api) as u32)
+                                    .ok_or_eyre("pow10 overflow")?;
+                                v_api
+                                    .checked_mul(p)
+                                    .ok_or_eyre("value overflow during scaling")
+                            } else {
+                                let p = pow10((dec_api - dec_target) as u32)
+                                    .ok_or_eyre("pow10 overflow")?;
+                                Ok(v_api / p)
+                            }
+                        }
+
+                        let mut entries: Vec<(String, u128)> = Vec::new();
+                        for rec in &recs {
+                            if rec.market_pubkey()? != *market_token {
+                                continue;
+                            }
+                            for (k, v_api) in &rec.new_values {
+                                if let Some(key) = map_key(k, &rec.parameter_name) {
+                                    // Determine target decimals; override exponent to integer (0) as requested
+                                    let dec_target: u8 = if key == "position_impact_exponent" {
+                                        0
+                                    } else {
+                                        gmsol_sdk::programs::constants::MARKET_DECIMALS
+                                    };
+                                    let dec_api = *rec
+                                        .decimals
+                                        .get(k)
+                                        .ok_or_eyre(format!("missing decimals for {k}"))?;
+                                    let v_scaled = scale_value(*v_api, dec_api, dec_target)?;
+                                    entries.push((key.to_string(), v_scaled));
+                                }
+                            }
+                        }
+
+                        if entries.is_empty() {
+                            eyre::bail!("no chaos updates for the specified market_token");
+                        }
 
                         let mut bundle = client.bundle_with_options(options);
                         let buffer_pubkey = match buffer {
@@ -672,7 +782,7 @@ impl super::Command for Market {
                         };
                         println!("Buffer: {buffer_pubkey}");
 
-                        for batch_entries in target.entries.chunks(batch.get()) {
+                        for batch_entries in entries.chunks(batch.get()) {
                             bundle.push(client.push_to_market_config_buffer(
                                 &buffer_pubkey,
                                 batch_entries.iter().cloned(),

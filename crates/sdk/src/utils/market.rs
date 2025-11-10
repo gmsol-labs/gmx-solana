@@ -40,6 +40,10 @@ impl MarketDecimals {
         })
     }
 
+    /// Decimals used to display exponent-type market config values.
+    /// Exponents are integers in on-chain representation, so this is zero.
+    pub const EXPONENT_DECIMALS: u8 = 0;
+
     /// Returns the decimals for the given market config key.
     pub fn market_config_decimals(&self, key: MarketConfigKey) -> crate::Result<u8> {
         let decimals = match key {
@@ -59,7 +63,7 @@ impl MarketDecimals {
             MarketConfigKey::MaxPositivePositionImpactFactor => MARKET_DECIMALS,
             MarketConfigKey::MaxNegativePositionImpactFactor => MARKET_DECIMALS,
             MarketConfigKey::MaxPositionImpactFactorForLiquidations => MARKET_DECIMALS,
-            MarketConfigKey::PositionImpactExponent => MARKET_DECIMALS,
+            MarketConfigKey::PositionImpactExponent => Self::EXPONENT_DECIMALS,
             MarketConfigKey::PositionImpactPositiveFactor => MARKET_DECIMALS,
             MarketConfigKey::PositionImpactNegativeFactor => MARKET_DECIMALS,
             MarketConfigKey::OrderFeeReceiverFactor => MARKET_DECIMALS,
