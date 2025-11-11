@@ -157,16 +157,25 @@ enum Command {
         new_authority: Pubkey,
     },
     /// Push to `MarketConfigBuffer` account with configs read from file.
-    #[command(group = clap::ArgGroup::new("buffer-input").required(true).multiple(false))]
+    #[command(
+        group = clap::ArgGroup::new("buffer-target")
+            .required(true)
+            .multiple(false)
+            .args(["buffer", "init"]),
+        group = clap::ArgGroup::new("source-input")
+            .required(true)
+            .multiple(false)
+            .args(["path", "from_chaos"]),
+    )]
     PushToBuffer {
         /// Path to the config file to read from.
-        #[arg(required_unless_present = "from_chaos")]
+        #[arg(group = "source-input")]
         path: Option<PathBuf>,
         /// Buffer account to be pushed to.
-        #[arg(long, group = "buffer-input")]
+        #[arg(long, group = "buffer-target")]
         buffer: Option<Pubkey>,
         /// Whether to create a new buffer account.
-        #[arg(long, group = "buffer-input")]
+        #[arg(long, group = "buffer-target")]
         init: bool,
         /// The expected market token to use for this buffer.
         #[arg(long)]
@@ -680,60 +689,55 @@ impl super::Command for Market {
                             }
                         }
 
-                        // Map Chaos key -> final on-chain config key string
-                        fn map_key(chaos_key: &str, parameter_name: &str) -> Option<&'static str> {
+                        let market =
+                            client
+                                .market_by_token(store, market_token)
+                                .await
+                                .map_err(|e| {
+                                    eyre::eyre!(
+                                        "failed to get market by token {}: {e}",
+                                        market_token
+                                    )
+                                })?;
+                        let token_map = client
+                            .authorized_token_map(store)
+                            .await
+                            .map_err(|e| eyre::eyre!("failed to get authorized token map: {e}"))?;
+                        let md = gmsol_sdk::utils::market::MarketDecimals::new(&market.meta.into(), &token_map).map_err(|e| eyre::eyre!("failed to create MarketDecimals (is market's tokens in token_map?): {e}"))?;
+
+                        fn map_key(
+                            chaos_key: &str,
+                            parameter_name: &str,
+                        ) -> Option<(&'static str, gmsol_sdk::core::market::MarketConfigKey)>
+                        {
                             match parameter_name {
                                 "oiCaps" => match chaos_key {
-                                    "oiCaps/maxOpenInterestForLongs/v1" => {
-                                        Some("max_open_interest_for_long")
-                                    }
-                                    "oiCaps/maxOpenInterestForShorts/v1" => {
-                                        Some("max_open_interest_for_short")
-                                    }
+                                    "oiCaps/maxOpenInterestForLongs/v1" => Some((
+                                        "max_open_interest_for_long",
+                                        gmsol_sdk::core::market::MarketConfigKey::MaxOpenInterestForLong,
+                                    )),
+                                    "oiCaps/maxOpenInterestForShorts/v1" => Some((
+                                        "max_open_interest_for_short",
+                                        gmsol_sdk::core::market::MarketConfigKey::MaxOpenInterestForShort,
+                                    )),
                                     _ => None,
                                 },
                                 "priceImpact" => match chaos_key {
-                                    "priceImpact/negativePositionImpactFactor/v1" => {
-                                        Some("position_impact_negative_factor")
-                                    }
-                                    "priceImpact/positivePositionImpactFactor/v1" => {
-                                        Some("position_impact_positive_factor")
-                                    }
-                                    "priceImpact/positionImpactExponentFactor/v1" => {
-                                        Some("position_impact_exponent")
-                                    }
+                                    "priceImpact/negativePositionImpactFactor/v1" => Some((
+                                        "position_impact_negative_factor",
+                                        gmsol_sdk::core::market::MarketConfigKey::PositionImpactNegativeFactor,
+                                    )),
+                                    "priceImpact/positivePositionImpactFactor/v1" => Some((
+                                        "position_impact_positive_factor",
+                                        gmsol_sdk::core::market::MarketConfigKey::PositionImpactPositiveFactor,
+                                    )),
+                                    "priceImpact/positionImpactExponentFactor/v1" => Some((
+                                        "position_impact_exponent",
+                                        gmsol_sdk::core::market::MarketConfigKey::PositionImpactExponent,
+                                    )),
                                     _ => None,
                                 },
                                 _ => None,
-                            }
-                        }
-
-                        // Scaling helper: API decimals -> market decimals
-                        fn pow10(n: u32) -> Option<u128> {
-                            let mut v: u128 = 1;
-                            for _ in 0..n {
-                                v = v.checked_mul(10)?;
-                            }
-                            Some(v)
-                        }
-                        fn scale_value(
-                            v_api: u128,
-                            dec_api: u8,
-                            dec_target: u8,
-                        ) -> eyre::Result<u128> {
-                            if dec_target == dec_api {
-                                return Ok(v_api);
-                            }
-                            if dec_target > dec_api {
-                                let p = pow10((dec_target - dec_api) as u32)
-                                    .ok_or_eyre("pow10 overflow")?;
-                                v_api
-                                    .checked_mul(p)
-                                    .ok_or_eyre("value overflow during scaling")
-                            } else {
-                                let p = pow10((dec_api - dec_target) as u32)
-                                    .ok_or_eyre("pow10 overflow")?;
-                                Ok(v_api / p)
                             }
                         }
 
@@ -743,19 +747,23 @@ impl super::Command for Market {
                                 continue;
                             }
                             for (k, v_api) in &rec.new_values {
-                                if let Some(key) = map_key(k, &rec.parameter_name) {
-                                    // Determine target decimals; override exponent to integer (0) as requested
-                                    let dec_target: u8 = if key == "position_impact_exponent" {
-                                        0
-                                    } else {
-                                        gmsol_sdk::programs::constants::MARKET_DECIMALS
-                                    };
+                                if let Some((key_str, key_enum)) = map_key(k, &rec.parameter_name) {
                                     let dec_api = *rec
                                         .decimals
                                         .get(k)
                                         .ok_or_eyre(format!("missing decimals for {k}"))?;
-                                    let v_scaled = scale_value(*v_api, dec_api, dec_target)?;
-                                    entries.push((key.to_string(), v_scaled));
+                                    let dec_target = md.market_config_decimals(key_enum)?;
+
+                                    let amount = Amount::from_u128(*v_api, dec_api)?;
+                                    let v_scaled = match key_enum {
+                                        gmsol_sdk::core::market::MarketConfigKey::PositionImpactExponent
+                                        | gmsol_sdk::core::market::MarketConfigKey::SwapImpactExponent => {
+                                            let rounded = Amount(amount.0.round());
+                                            rounded.to_u128(dec_target)?
+                                        }
+                                        _ => amount.to_u128(dec_target)?,
+                                    };
+                                    entries.push((key_str.to_string(), v_scaled));
                                 }
                             }
                         }
