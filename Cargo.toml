@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*", "programs/*", "examples", "tests"]
 
 [workspace.package]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 edition = "2021"
 license-file = "LICENSE"
 description = "GMX-Solana is an extension of GMX on the Solana blockchain."
@@ -120,59 +120,59 @@ libsecp256k1 = "0.7.1"
 version = "1.0.3"
 
 [workspace.dependencies.gmsol-model]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "crates/model"
 
 [workspace.dependencies.gmsol-utils]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "crates/utils"
 
 [workspace.dependencies.gmsol-store]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "programs/store"
 
 [workspace.dependencies.gmsol-treasury]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "programs/treasury"
 
 [workspace.dependencies.gmsol-timelock]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "programs/timelock"
 
 [workspace.dependencies.gmsol-mock-chainlink-verifier]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "programs/mock-chainlink-verifier"
 
 [workspace.dependencies.gmsol-callback]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "programs/callback"
 
 [workspace.dependencies.gmsol-competition]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "programs/competition"
 
 [workspace.dependencies.gmsol-liquidity-provider]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "programs/liquidity-provider"
 
 [workspace.dependencies.gmsol-decode]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "crates/decode"
 
 [workspace.dependencies.gmsol-chainlink-datastreams]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "crates/chainlink-datastreams"
 
 [workspace.dependencies.gmsol-solana-utils]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "crates/solana-utils"
 
 [workspace.dependencies.gmsol-programs]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "crates/programs"
 
 [workspace.dependencies.gmsol-sdk]
-version = "0.9.0"
+version = "0.9.0-alpha.3"
 path = "crates/sdk"
 
 [profile.release]
