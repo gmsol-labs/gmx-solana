@@ -4,12 +4,14 @@ use std::{ops::Deref, sync::Arc};
 
 use gmsol_model::price::Price;
 use gmsol_programs::gmsol_store::types::{
-    CreateDepositParams, CreateShiftParams, CreateWithdrawalParams,
+    CreateDepositParams, CreateGlvDepositParams, CreateGlvWithdrawalParams, CreateShiftParams,
+    CreateWithdrawalParams,
 };
 use solana_sdk::pubkey::Pubkey;
 use wasm_bindgen::prelude::*;
 
 use crate::{
+    js::glv::JsGlvModel,
     market::Value,
     serde::StringPubkey,
     simulation::{order::UpdatePriceOptions, SimulationOptions, Simulator},
@@ -19,6 +21,8 @@ use crate::js::{market::JsMarketModel, position::JsPosition};
 
 use super::{
     deposit::{JsDepositSimulationOutput, SimulateDepositArgs},
+    glv_deposit::{JsGlvDepositSimulationOutput, SimulateGlvDepositArgs},
+    glv_withdrawal::{JsGlvWithdrawalSimulationOutput, SimulateGlvWithdrawalArgs},
     order::{JsOrderSimulationOutput, SimulateOrderArgs},
     shift::{JsShiftSimulationOutput, SimulateShiftArgs},
     withdrawal::{JsWithdrawalSimulationOutput, SimulateWithdrawalArgs},
@@ -63,6 +67,14 @@ impl JsSimulator {
         }))
     }
 
+    /// Get GLV by its GLV token.
+    pub fn get_glv(&self, glv_token: &str) -> crate::Result<Option<JsGlvModel>> {
+        Ok(self
+            .simulator
+            .get_glv(&glv_token.parse()?)
+            .map(|glv| glv.clone().into()))
+    }
+
     /// Upsert the prices for the given token.
     pub fn insert_price(&mut self, token: &str, price: Value) -> crate::Result<()> {
         let token = token.parse()?;
@@ -71,6 +83,12 @@ impl JsSimulator {
             max: price.max,
         });
         self.simulator.insert_price(&token, price)?;
+        Ok(())
+    }
+
+    /// Upsert a GLV model.
+    pub fn insert_glv(&mut self, glv: &JsGlvModel) -> crate::Result<()> {
+        self.simulator.insert_glv(glv.model.clone());
         Ok(())
     }
 
@@ -219,6 +237,89 @@ impl JsSimulator {
             .execute_with_options(Default::default())?;
 
         Ok(JsShiftSimulationOutput { output })
+    }
+
+    /// Simulate a GLV deposit execution.
+    pub fn simulate_glv_deposit(
+        &mut self,
+        args: SimulateGlvDepositArgs,
+    ) -> crate::Result<JsGlvDepositSimulationOutput> {
+        let SimulateGlvDepositArgs { params } = args;
+
+        let long_swap_path = convert_swap_path(params.long_swap_path.as_deref());
+        let short_swap_path = convert_swap_path(params.short_swap_path.as_deref());
+        let glv_token = &params.glv_token;
+        let market_token = &params.market_token;
+        let long_pay_token = &params.long_pay_token;
+        let short_pay_token = &params.short_pay_token;
+        let params = CreateGlvDepositParams {
+            execution_lamports: 0,
+            long_token_swap_length: long_swap_path.len().try_into()?,
+            short_token_swap_length: short_swap_path.len().try_into()?,
+            initial_long_token_amount: params.long_pay_amount.unwrap_or_default().try_into()?,
+            initial_short_token_amount: params.short_pay_amount.unwrap_or_default().try_into()?,
+            market_token_amount: params.market_token_amount.unwrap_or_default().try_into()?,
+            min_market_token_amount: params
+                .min_market_token_amount
+                .unwrap_or_default()
+                .try_into()?,
+            min_glv_token_amount: params.min_receive_amount.unwrap_or_default().try_into()?,
+            should_unwrap_native_token: !params.skip_unwrap_native_on_receive.unwrap_or_default(),
+        };
+
+        let output = self
+            .simulator
+            .simulate_glv_deposit(glv_token, market_token, &params)
+            .long_pay_token(long_pay_token.as_deref())
+            .long_swap_path(&long_swap_path)
+            .short_pay_token(short_pay_token.as_deref())
+            .short_swap_path(&short_swap_path)
+            .build()
+            .execute_with_options(Default::default())?;
+
+        Ok(JsGlvDepositSimulationOutput { output })
+    }
+
+    /// Simulate a GLV withdrawal execution.
+    pub fn simulate_glv_withdrawal(
+        &mut self,
+        args: SimulateGlvWithdrawalArgs,
+    ) -> crate::Result<JsGlvWithdrawalSimulationOutput> {
+        let SimulateGlvWithdrawalArgs { params } = args;
+
+        let long_swap_path = convert_swap_path(params.long_swap_path.as_deref());
+        let short_swap_path = convert_swap_path(params.short_swap_path.as_deref());
+        let glv_token = &params.glv_token;
+        let market_token = &params.market_token;
+        let long_receive_token = &params.long_receive_token;
+        let short_receive_token = &params.short_receive_token;
+        let params = CreateGlvWithdrawalParams {
+            execution_lamports: 0,
+            long_token_swap_length: long_swap_path.len().try_into()?,
+            short_token_swap_length: short_swap_path.len().try_into()?,
+            glv_token_amount: params.glv_token_amount.unwrap_or_default().try_into()?,
+            min_final_long_token_amount: params
+                .min_long_receive_amount
+                .unwrap_or_default()
+                .try_into()?,
+            min_final_short_token_amount: params
+                .min_short_receive_amount
+                .unwrap_or_default()
+                .try_into()?,
+            should_unwrap_native_token: !params.skip_unwrap_native_on_receive.unwrap_or_default(),
+        };
+
+        let output = self
+            .simulator
+            .simulate_glv_withdrawal(glv_token, market_token, &params)
+            .long_receive_token(long_receive_token.as_deref())
+            .long_swap_path(&long_swap_path)
+            .short_receive_token(short_receive_token.as_deref())
+            .short_swap_path(&short_swap_path)
+            .build()
+            .execute_with_options(Default::default())?;
+
+        Ok(JsGlvWithdrawalSimulationOutput { output })
     }
 
     /// Create a clone of this simulator.

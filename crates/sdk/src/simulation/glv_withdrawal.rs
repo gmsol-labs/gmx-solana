@@ -27,12 +27,12 @@ impl GlvWithdrawalSimulationOutput {
     }
 
     /// Returns short swap reports.
-    pub fn short_swap(&self) -> &[SwapReport<u128, i128>] {
+    pub fn short_swaps(&self) -> &[SwapReport<u128, i128>] {
         &self.short_swaps
     }
 
-    /// Returns withdrawal report.
-    pub fn report(&self) -> &WithdrawReport<u128> {
+    /// Returns withdraw report.
+    pub fn withdraw_report(&self) -> &WithdrawReport<u128> {
         &self.report
     }
 

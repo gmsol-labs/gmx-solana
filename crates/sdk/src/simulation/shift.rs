@@ -17,12 +17,12 @@ pub struct ShiftSimulationOutput {
 
 impl ShiftSimulationOutput {
     /// Returns the withdrawal report.
-    pub fn withdraw(&self) -> &WithdrawReport<u128> {
+    pub fn withdraw_report(&self) -> &WithdrawReport<u128> {
         &self.withdraw
     }
 
     /// Returns the deposit report.
-    pub fn deposit(&self) -> &DepositReport<u128, i128> {
+    pub fn deposit_report(&self) -> &DepositReport<u128, i128> {
         &self.deposit
     }
 }

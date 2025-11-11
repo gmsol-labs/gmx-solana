@@ -329,6 +329,11 @@ impl Simulator {
         self.markets.iter()
     }
 
+    /// Get GLV states.
+    pub fn glvs(&self) -> impl Iterator<Item = (&Pubkey, &GlvModel)> {
+        self.glvs.iter()
+    }
+
     /// Create a builder for order simulation.
     pub fn simulate_order<'a>(
         &'a mut self,

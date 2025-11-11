@@ -25,12 +25,12 @@ pub struct JsShiftSimulationOutput {
 #[wasm_bindgen(js_class = ShiftSimulationOutput)]
 impl JsShiftSimulationOutput {
     /// Returns the deposit report.
-    pub fn deposit(&self) -> crate::Result<String> {
-        encode_borsh_base64(self.output.deposit())
+    pub fn deposit_report(&self) -> crate::Result<String> {
+        encode_borsh_base64(self.output.deposit_report())
     }
 
     /// Returns the withdraw report.
-    pub fn withdraw(&self) -> crate::Result<String> {
-        encode_borsh_base64(self.output.withdraw())
+    pub fn withdraw_report(&self) -> crate::Result<String> {
+        encode_borsh_base64(self.output.withdraw_report())
     }
 }

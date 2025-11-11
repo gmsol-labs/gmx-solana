@@ -96,11 +96,24 @@ impl<T> AsRef<T> for ZeroCopy<T> {
 }
 
 /// Deserialize a [`ZeroCopy`](anchor_lang::ZeroCopy) structure.
-pub fn try_deserialize_zero_copy<T: anchor_lang::ZeroCopy>(
+pub fn try_deserialize_zero_copy_with_options<T: anchor_lang::ZeroCopy>(
     mut data: &[u8],
+    no_discriminator: bool,
 ) -> crate::Result<ZeroCopy<T>> {
     use anchor_lang::AccountDeserialize;
-    Ok(ZeroCopy::<T>::try_deserialize(&mut data)?)
+    if no_discriminator {
+        let data = [T::DISCRIMINATOR, data].concat();
+        Ok(ZeroCopy::<T>::try_deserialize(&mut data.as_slice())?)
+    } else {
+        Ok(ZeroCopy::<T>::try_deserialize(&mut data)?)
+    }
+}
+
+/// Deserialize a [`ZeroCopy`](anchor_lang::ZeroCopy) structure.
+pub fn try_deserialize_zero_copy<T: anchor_lang::ZeroCopy>(
+    data: &[u8],
+) -> crate::Result<ZeroCopy<T>> {
+    try_deserialize_zero_copy_with_options(data, false)
 }
 
 /// Deserialize a [`ZeroCopy`](anchor_lang::ZeroCopy) structure from base64.
