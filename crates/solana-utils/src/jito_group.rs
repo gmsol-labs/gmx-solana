@@ -357,12 +357,12 @@ impl JitoGroup {
                         .send_bundle(Some(params), uuid)
                         .await
                         .map_err(|e| crate::Error::custom(e.to_string()))
-                        .and_then(|value| {
-                            Ok(value
+                        .map(|value| {
+                            value
                                 .get("result")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string())
-                                .unwrap_or_else(|| value.to_string()))
+                                .unwrap_or_else(|| value.to_string())
                         });
                 results.push(res);
             }
@@ -400,12 +400,12 @@ impl JitoGroup {
                     .send_bundle(Some(params), uuid_ref)
                     .await
                     .map_err(|e| crate::Error::custom(e.to_string()))
-                    .and_then(|value| {
-                        Ok(value
+                    .map(|value| {
+                        value
                             .get("result")
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string())
-                            .unwrap_or_else(|| value.to_string()))
+                            .unwrap_or_else(|| value.to_string())
                     });
                 (idx, res)
             }
