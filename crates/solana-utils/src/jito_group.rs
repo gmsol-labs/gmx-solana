@@ -1,6 +1,9 @@
 #![allow(clippy::result_large_err)]
 
 #[cfg(all(feature = "jito", client))]
+use futures_util::stream::{self, StreamExt};
+
+#[cfg(all(feature = "jito", client))]
 use solana_sdk::{
     hash::Hash, message::VersionedMessage, signer::Signer, transaction::VersionedTransaction,
 };
@@ -62,6 +65,8 @@ pub struct JitoSendOptions {
     pub uuid: Option<String>,
     /// Bundle packing strategy.
     pub bundle_mode: BundleMode,
+    /// Optional concurrency for bundle submissions. If `None`, submissions are sequential.
+    pub parallelism: Option<usize>,
 }
 
 #[cfg(all(feature = "jito", client))]
@@ -152,6 +157,40 @@ impl JitoGroup {
         recent_blockhash: Hash,
         opts: JitoSendOptions,
     ) -> Vec<Result<String, crate::Error>> {
+        let plan = match self
+            .build_bundle_plan(signers, recent_blockhash, &opts)
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => return vec![Err(e)],
+        };
+
+        self.submit_bundles(
+            &plan,
+            &opts.endpoint_url,
+            opts.uuid.as_deref(),
+            opts.parallelism,
+        )
+        .await
+    }
+}
+
+#[cfg(all(feature = "jito", client))]
+fn encode_txn_base64(txn: &VersionedTransaction) -> crate::Result<String> {
+    let bytes = bincode::serialize(txn).map_err(|e| crate::Error::custom(e.to_string()))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
+#[cfg(all(feature = "jito", client))]
+impl JitoGroup {
+    /// Build a bundle plan from the underlying TransactionGroup according to the bundle_mode.
+    /// This function constructs the logical grouping of transactions into bundles without performing network I/O.
+    pub async fn build_bundle_plan(
+        &self,
+        signers: &crate::signer::TransactionSigners<impl std::ops::Deref<Target = dyn Signer>>,
+        recent_blockhash: Hash,
+        opts: &JitoSendOptions,
+    ) -> crate::Result<Vec<Vec<VersionedTransaction>>> {
         let compute_budget = ComputeBudgetOptions {
             without_compute_budget: opts.without_compute_budget,
             compute_unit_price_micro_lamports: opts.compute_unit_price_micro_lamports,
@@ -159,7 +198,7 @@ impl JitoGroup {
         };
 
         // Build transactions per ParallelGroup (batch) in order.
-        let batches = match self
+        let batches = self
             .inner
             .to_transactions_with_options(
                 signers,
@@ -168,49 +207,41 @@ impl JitoGroup {
                 compute_budget,
                 default_before_sign as fn(&VersionedMessage) -> crate::Result<()>,
             )
-            .collect::<crate::Result<Vec<_>>>()
-        {
-            Ok(v) => v,
-            Err(e) => return vec![Err(e)],
-        };
+            .collect::<crate::Result<Vec<_>>>()?;
 
         // Gather PG metadata for packing decisions.
         let pgs = self.inner.groups();
         if pgs.len() != batches.len() {
-            return vec![Err(crate::Error::custom("mismatched PG and batch lengths"))];
+            return Err(crate::Error::custom("mismatched PG and batch lengths"));
         }
 
-        #[derive(Clone)]
-        struct PgTx<'a> {
+        struct PgTx {
             pg_mergeable: bool,
             ag_mergeable: Vec<bool>,
-            txns: Vec<&'a VersionedTransaction>,
+            txns: Vec<VersionedTransaction>,
         }
 
         let mut pg_txs: Vec<PgTx> = Vec::with_capacity(batches.len());
-        for (i, txs) in batches.iter().enumerate() {
-            let pg = &pgs[i];
+        for (pg, txs) in pgs.iter().zip(batches.into_iter()) {
             let ag_flags: Vec<bool> = pg.iter().map(|ag| ag.is_mergeable()).collect();
             if ag_flags.len() != txs.len() {
-                return vec![Err(crate::Error::custom(
-                    "mismatched AG and tx counts in PG",
-                ))];
+                return Err(crate::Error::custom("mismatched AG and tx counts in PG"));
             }
             pg_txs.push(PgTx {
                 pg_mergeable: pg.is_mergeable(),
                 ag_mergeable: ag_flags,
-                txns: txs.iter().collect(),
+                txns: txs,
             });
         }
 
         let max_default = 5usize;
-        let mut plan: Vec<Vec<&VersionedTransaction>> = Vec::new();
+        let mut plan: Vec<Vec<VersionedTransaction>> = Vec::new();
 
         match opts.bundle_mode.clone() {
             BundleMode::SingleTx => {
-                for p in &pg_txs {
-                    for tx in &p.txns {
-                        plan.push(vec![*tx]);
+                for p in pg_txs.into_iter() {
+                    for tx in p.txns.into_iter() {
+                        plan.push(vec![tx]);
                     }
                 }
             }
@@ -220,12 +251,11 @@ impl JitoGroup {
                 } else {
                     max_txs_per_bundle
                 };
-                for p in &pg_txs {
-                    // Always pack within PG by AG mergeability; non-mergeable AGs are solo bundles.
-                    let mut cur: Vec<&VersionedTransaction> = Vec::new();
-                    for (tx, ag_ok) in p.txns.iter().zip(p.ag_mergeable.iter().copied()) {
+                for mut p in pg_txs.into_iter() {
+                    let mut cur: Vec<VersionedTransaction> = Vec::new();
+                    for (tx, ag_ok) in p.txns.drain(..).zip(p.ag_mergeable.into_iter()) {
                         if ag_ok {
-                            cur.push(*tx);
+                            cur.push(tx);
                             if cur.len() >= limit {
                                 plan.push(std::mem::take(&mut cur));
                             }
@@ -233,7 +263,7 @@ impl JitoGroup {
                             if !cur.is_empty() {
                                 plan.push(std::mem::take(&mut cur));
                             }
-                            plan.push(vec![*tx]);
+                            plan.push(vec![tx]);
                         }
                     }
                     if !cur.is_empty() {
@@ -247,39 +277,35 @@ impl JitoGroup {
                 } else {
                     max_txs_per_bundle
                 };
-                let mut cur: Vec<&VersionedTransaction> = Vec::new();
-                let mut cur_open = false; // whether we are inside a chain of mergeable PGs
-                for p in &pg_txs {
+                let mut cur: Vec<VersionedTransaction> = Vec::new();
+                let mut cur_open = false;
+                for p in pg_txs.into_iter() {
                     if !p.pg_mergeable {
-                        // Flush current chain
                         if !cur.is_empty() {
                             plan.push(std::mem::take(&mut cur));
                         }
                         cur_open = false;
-                        // Non-mergeable PG -> no packing within
-                        for tx in &p.txns {
-                            plan.push(vec![*tx]);
+                        for tx in p.txns.into_iter() {
+                            plan.push(vec![tx]);
                         }
                         continue;
                     }
-                    // PG is mergeable: try to pack its mergeable AG txns into current chain
-                    for (tx, ag_ok) in p.txns.iter().zip(p.ag_mergeable.iter().copied()) {
+                    for (tx, ag_ok) in p.txns.into_iter().zip(p.ag_mergeable.into_iter()) {
                         if ag_ok {
                             if !cur_open {
                                 cur_open = true;
                             }
-                            cur.push(*tx);
+                            cur.push(tx);
                             if cur.len() >= limit {
                                 plan.push(std::mem::take(&mut cur));
                                 cur_open = false;
                             }
                         } else {
-                            // Non-mergeable AG breaks packing; flush and push solo
                             if !cur.is_empty() {
                                 plan.push(std::mem::take(&mut cur));
                             }
                             cur_open = false;
-                            plan.push(vec![*tx]);
+                            plan.push(vec![tx]);
                         }
                     }
                 }
@@ -289,53 +315,107 @@ impl JitoGroup {
             }
         }
 
-        // Now submit each bundle concurrently per stage (we already flattened PG boundaries in plan),
-        // but to preserve ordering we can just submit sequentially or chunk by some parallelism.
-        // For simplicity and determinism, submit sequentially; callers can parallelize at higher level if needed.
-        let mut results: Vec<Result<String, crate::Error>> = Vec::with_capacity(plan.len());
-        for bundle in plan.into_iter() {
-            let mut tx_strings = Vec::with_capacity(bundle.len());
-            for tx in bundle.into_iter() {
-                match encode_txn_base64(tx) {
-                    Ok(s) => tx_strings.push(serde_json::Value::String(s)),
-                    Err(e) => {
-                        results.push(Err(e));
-                        continue;
-                    }
-                }
-            }
-            if tx_strings.is_empty() {
-                continue;
-            }
+        Ok(plan)
+    }
 
-            let base_url = opts.endpoint_url.clone();
-            let uuid = opts.uuid.clone();
-            let params = serde_json::Value::Array(tx_strings);
-            let submit = async move {
-                let value = jito_sdk_rust::JitoJsonRpcSDK::new(&base_url, uuid.clone())
-                    .send_bundle(Some(params), uuid.as_deref())
-                    .await
-                    .map_err(|e| crate::Error::custom(e.to_string()))?;
-                let id = value
-                    .get("result")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| value.to_string());
-                Ok::<String, crate::Error>(id)
-            };
-
-            match submit.await {
-                Ok(id) => results.push(Ok(id)),
-                Err(err) => results.push(Err(err)),
-            }
+    /// Submit a bundle plan to the Jito endpoint.
+    /// By default, submissions are sequential; if `parallelism` is `Some(n)` and `n > 1`,
+    /// bounded concurrency is used while preserving result order.
+    pub async fn submit_bundles(
+        &self,
+        plan: &[Vec<VersionedTransaction>],
+        endpoint_url: &str,
+        uuid: Option<&str>,
+        parallelism: Option<usize>,
+    ) -> Vec<Result<String, crate::Error>> {
+        if plan.is_empty() {
+            return Vec::new();
         }
 
-        results
-    }
-}
+        let limit = parallelism.unwrap_or(1);
+        if limit <= 1 {
+            // Sequential path
+            let mut results = Vec::with_capacity(plan.len());
+            for bundle in plan.iter() {
+                let mut tx_strings = Vec::with_capacity(bundle.len());
+                for tx in bundle.iter() {
+                    match encode_txn_base64(tx) {
+                        Ok(s) => tx_strings.push(serde_json::Value::String(s)),
+                        Err(e) => {
+                            results.push(Err(e));
+                            continue;
+                        }
+                    }
+                }
+                if tx_strings.is_empty() {
+                    results.push(Err(crate::Error::custom("empty bundle after encoding")));
+                    continue;
+                }
+                let params = serde_json::Value::Array(tx_strings);
+                let res =
+                    jito_sdk_rust::JitoJsonRpcSDK::new(endpoint_url, uuid.map(|s| s.to_string()))
+                        .send_bundle(Some(params), uuid)
+                        .await
+                        .map_err(|e| crate::Error::custom(e.to_string()))
+                        .and_then(|value| {
+                            Ok(value
+                                .get("result")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| value.to_string()))
+                        });
+                results.push(res);
+            }
+            return results;
+        }
 
-#[cfg(all(feature = "jito", client))]
-fn encode_txn_base64(txn: &VersionedTransaction) -> crate::Result<String> {
-    let bytes = bincode::serialize(txn).map_err(|e| crate::Error::custom(e.to_string()))?;
-    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+        // Concurrent path with ordered aggregation
+        let total = plan.len();
+        let jobs: Vec<(usize, Vec<VersionedTransaction>)> =
+            plan.iter().cloned().enumerate().collect();
+
+        let mut ordered: Vec<Option<Result<String, crate::Error>>> =
+            (0..total).map(|_| None).collect();
+        let mut s = stream::iter(jobs.into_iter().map(|(idx, bundle)| {
+            let endpoint_url = endpoint_url.to_string();
+            let uuid = uuid.map(|s| s.to_string());
+            async move {
+                let mut tx_strings = Vec::with_capacity(bundle.len());
+                for tx in bundle.into_iter() {
+                    match encode_txn_base64(&tx) {
+                        Ok(s) => tx_strings.push(serde_json::Value::String(s)),
+                        Err(e) => return (idx, Err(e)),
+                    }
+                }
+                if tx_strings.is_empty() {
+                    return (
+                        idx,
+                        Err(crate::Error::custom("empty bundle after encoding")),
+                    );
+                }
+                let params = serde_json::Value::Array(tx_strings);
+                let uuid_ref = uuid.as_deref();
+                let uuid_for_new = uuid.clone();
+                let res = jito_sdk_rust::JitoJsonRpcSDK::new(&endpoint_url, uuid_for_new)
+                    .send_bundle(Some(params), uuid_ref)
+                    .await
+                    .map_err(|e| crate::Error::custom(e.to_string()))
+                    .and_then(|value| {
+                        Ok(value
+                            .get("result")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| value.to_string()))
+                    });
+                (idx, res)
+            }
+        }))
+        .buffer_unordered(limit);
+
+        while let Some((idx, res)) = s.next().await {
+            ordered[idx] = Some(res);
+        }
+
+        ordered.into_iter().map(|x| x.unwrap()).collect()
+    }
 }
