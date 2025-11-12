@@ -693,7 +693,7 @@ impl super::Command for Market {
                                         .ok_or_eyre(format!("missing decimals for {k}"))?;
                                     let dec_target = md.market_config_decimals(key_enum)?;
 
-                                    let amount = Amount::from_u128(*v_api, dec_api)?;
+                                    let amount = Amount::from_u128((*v_api).into(), dec_api)?;
                                     let v_scaled = match key_enum {
                                         gmsol_sdk::core::market::MarketConfigKey::PositionImpactExponent
                                         | gmsol_sdk::core::market::MarketConfigKey::SwapImpactExponent => {

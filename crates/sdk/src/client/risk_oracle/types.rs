@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
 pub type DecimalsMap = HashMap<String, u8>;
-pub type ValuesMap = HashMap<String, u128>;
+pub type ValuesMap = HashMap<String, u64>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -72,7 +72,7 @@ pub fn to_per_market_updates(
                 grouped
                     .entry(market)
                     .or_default()
-                    .push((dst.to_string(), *v));
+                    .push((dst.to_string(), (*v).into()));
             }
         }
     }
