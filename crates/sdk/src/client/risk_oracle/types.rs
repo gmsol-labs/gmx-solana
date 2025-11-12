@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use gmsol_utils::market::MarketConfigKey;
+use crate::core::market::MarketConfigKey;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
@@ -35,7 +35,7 @@ impl EncodedRecommendation {
     }
 }
 
-fn map_key(chaos_key: &str, parameter_name: &str) -> Option<MarketConfigKey> {
+pub fn map_key(chaos_key: &str, parameter_name: &str) -> Option<MarketConfigKey> {
     match parameter_name {
         "oiCaps" => match chaos_key {
             "oiCaps/maxOpenInterestForLongs/v1" => Some(MarketConfigKey::MaxOpenInterestForLong),

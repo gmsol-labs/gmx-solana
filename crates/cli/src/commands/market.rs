@@ -483,39 +483,19 @@ impl super::Command for Market {
                 let buffer = match client.account::<MarketConfigBuffer>(address).await? {
                     Some(acc) => acc,
                     None => {
-                        let raw = client
-                            .raw_account_with_config(address, Default::default())
-                            .await?;
-                        let account = raw.into_value().ok_or(gmsol_sdk::Error::NotFound)?;
-                        let disc = account.data.get(0..8).map(hex::encode).unwrap_or_default();
-                        println!(
-                            "{}",
-                            serde_json::json!({
-                                "pubkey": address,
-                                "owner": account.owner,
-                                "data_len": account.data.len(),
-                                "discriminator_hex": disc,
-                            })
-                        );
-                        eyre::bail!(
-                            "account exists but failed to decode as MarketConfigBuffer; see diagnostics above"
-                        );
+                        eyre::bail!("account exists but failed to decode as MarketConfigBuffer")
                     }
                 };
-                // Try to fetch real market decimals; fallback to zeros if unavailable
-                let decimals = match (
-                    client.authorized_token_map(store).await,
-                    client.market_by_token(store, market_token).await,
-                ) {
-                    (Ok(token_map), Ok(market)) => {
-                        MarketDecimals::new(&market.meta.into(), &token_map)?
-                    }
-                    _ => MarketDecimals {
-                        index_token_decimals: 0,
-                        long_token_decimals: 0,
-                        short_token_decimals: 0,
-                    },
-                };
+                // Compute real market decimals; do not fallback silently
+                let token_map = client
+                    .authorized_token_map(store)
+                    .await
+                    .map_err(|e| eyre::eyre!("failed to load authorized token map: {e}"))?;
+                let market = client
+                    .market_by_token(store, market_token)
+                    .await
+                    .map_err(|e| eyre::eyre!("failed to load market by token: {e}"))?;
+                let decimals = MarketDecimals::new(&market.meta.into(), &token_map)?;
                 let buffer = SerdeMarketConfigBuffer::from_market_config_buffer(&buffer, decimals)?;
                 println!(
                     "{}",
@@ -705,49 +685,18 @@ impl super::Command for Market {
                             .map_err(|e| eyre::eyre!("failed to get authorized token map: {e}"))?;
                         let md = gmsol_sdk::utils::market::MarketDecimals::new(&market.meta.into(), &token_map).map_err(|e| eyre::eyre!("failed to create MarketDecimals (is market's tokens in token_map?): {e}"))?;
 
-                        fn map_key(
-                            chaos_key: &str,
-                            parameter_name: &str,
-                        ) -> Option<(&'static str, gmsol_sdk::core::market::MarketConfigKey)>
-                        {
-                            match parameter_name {
-                                "oiCaps" => match chaos_key {
-                                    "oiCaps/maxOpenInterestForLongs/v1" => Some((
-                                        "max_open_interest_for_long",
-                                        gmsol_sdk::core::market::MarketConfigKey::MaxOpenInterestForLong,
-                                    )),
-                                    "oiCaps/maxOpenInterestForShorts/v1" => Some((
-                                        "max_open_interest_for_short",
-                                        gmsol_sdk::core::market::MarketConfigKey::MaxOpenInterestForShort,
-                                    )),
-                                    _ => None,
-                                },
-                                "priceImpact" => match chaos_key {
-                                    "priceImpact/negativePositionImpactFactor/v1" => Some((
-                                        "position_impact_negative_factor",
-                                        gmsol_sdk::core::market::MarketConfigKey::PositionImpactNegativeFactor,
-                                    )),
-                                    "priceImpact/positivePositionImpactFactor/v1" => Some((
-                                        "position_impact_positive_factor",
-                                        gmsol_sdk::core::market::MarketConfigKey::PositionImpactPositiveFactor,
-                                    )),
-                                    "priceImpact/positionImpactExponentFactor/v1" => Some((
-                                        "position_impact_exponent",
-                                        gmsol_sdk::core::market::MarketConfigKey::PositionImpactExponent,
-                                    )),
-                                    _ => None,
-                                },
-                                _ => None,
-                            }
-                        }
-
                         let mut entries: Vec<(String, u128)> = Vec::new();
                         for rec in &recs {
                             if rec.market_pubkey()? != *market_token {
                                 continue;
                             }
                             for (k, v_api) in &rec.new_values {
-                                if let Some((key_str, key_enum)) = map_key(k, &rec.parameter_name) {
+                                if let Some(key_enum) =
+                                    gmsol_sdk::client::risk_oracle::types::map_key(
+                                        k,
+                                        &rec.parameter_name,
+                                    )
+                                {
                                     let dec_api = *rec
                                         .decimals
                                         .get(k)
@@ -763,7 +712,8 @@ impl super::Command for Market {
                                         }
                                         _ => amount.to_u128(dec_target)?,
                                     };
-                                    entries.push((key_str.to_string(), v_scaled));
+                                    let key_str = key_enum.to_string();
+                                    entries.push((key_str, v_scaled));
                                 }
                             }
                         }
