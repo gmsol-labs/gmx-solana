@@ -45,7 +45,7 @@ use crate::{
     config::DisplayOptions,
 };
 
-#[cfg(feature = "chaos_risk_oracle")]
+#[cfg(feature = "chaoslabs-risk-oracle")]
 use gmsol_sdk::client::risk_oracle::{
     client::ChaosClient, types::EncodedRecommendation, verify::verify_signature,
 };
@@ -480,21 +480,12 @@ impl super::Command for Market {
                 address,
                 market_token,
             } => {
-                let buffer = match client.account::<MarketConfigBuffer>(address).await? {
-                    Some(acc) => acc,
-                    None => {
-                        eyre::bail!("account exists but failed to decode as MarketConfigBuffer")
-                    }
-                };
-                // Compute real market decimals; do not fallback silently
-                let token_map = client
-                    .authorized_token_map(store)
-                    .await
-                    .map_err(|e| eyre::eyre!("failed to load authorized token map: {e}"))?;
-                let market = client
-                    .market_by_token(store, market_token)
-                    .await
-                    .map_err(|e| eyre::eyre!("failed to load market by token: {e}"))?;
+                let buffer = client
+                    .account::<MarketConfigBuffer>(address)
+                    .await?
+                    .ok_or(gmsol_sdk::Error::NotFound)?;
+                let token_map = client.authorized_token_map(store).await?;
+                let market = client.market_by_token(store, market_token).await?;
                 let decimals = MarketDecimals::new(&market.meta.into(), &token_map)?;
                 let buffer = SerdeMarketConfigBuffer::from_market_config_buffer(&buffer, decimals)?;
                 println!(
@@ -510,7 +501,6 @@ impl super::Command for Market {
                         ])
                     )?
                 );
-                println!("\n{}", serde_json::to_string_pretty(&buffer)?);
                 return Ok(());
             }
             Command::CreateTokenMap { keypair } => {
@@ -626,13 +616,13 @@ impl super::Command for Market {
                 };
 
                 if *from_chaos {
-                    #[cfg(not(feature = "chaos_risk_oracle"))]
+                    #[cfg(not(feature = "chaoslabs-risk-oracle"))]
                     let _ = (&types, &no_verify);
-                    #[cfg(not(feature = "chaos_risk_oracle"))]
+                    #[cfg(not(feature = "chaoslabs-risk-oracle"))]
                     {
-                        eyre::bail!("chaos_risk_oracle feature is not enabled for CLI");
+                        eyre::bail!("chaoslabs-risk-oracle feature is not enabled for CLI");
                     }
-                    #[cfg(feature = "chaos_risk_oracle")]
+                    #[cfg(feature = "chaoslabs-risk-oracle")]
                     {
                         let base_url = ctx.config().chaos_base_url();
                         let api_key = ctx.config().chaos_api_key();

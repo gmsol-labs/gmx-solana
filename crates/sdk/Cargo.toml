@@ -89,7 +89,7 @@ openssl-vendored = [
     "gmsol-solana-utils/openssl-vendored",
 ]
 http-rpc-sender = ["gmsol-solana-utils/http-rpc-sender"]
-chaos_risk_oracle = [
+chaoslabs-risk-oracle = [
     "client",
     "reqwest",
     "serde",

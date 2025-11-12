@@ -48,7 +48,7 @@ pub mod switchboard;
 pub mod squads;
 
 /// Chaos Labs Risk Oracle support.
-#[cfg(feature = "chaos_risk_oracle")]
+#[cfg(feature = "chaoslabs-risk-oracle")]
 pub mod risk_oracle;
 
 use std::{
