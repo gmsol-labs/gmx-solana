@@ -15,7 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added GLV deposit simulation.
 - sdk(sdk): Added GLV withdrawal simulation.
 - sdk(sdk): Added JsGlv and JsGlvModel.
+- sdk(sdk): Added support for ChaosLabs Risk Oracle.
 - cli: Added auto-creation support of multiple ALTs based on ALT limit for `alt extend` command.
+- cli: Added support for creating market config buffer from ChaosLabs Risk Oracle's recommandations.
 
 ### Changed
 
