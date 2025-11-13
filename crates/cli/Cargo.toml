@@ -24,6 +24,7 @@ chainlink = ["gmsol-sdk/chainlink"]
 pyth = ["gmsol-sdk/pyth"]
 switchboard = ["gmsol-sdk/switchboard"]
 execute = ["chainlink", "pyth", "switchboard"]
+chaoslabs-risk-oracle = ["gmsol-sdk/chaoslabs-risk-oracle"]
 
 [dependencies]
 gmsol-sdk = { workspace = true, features = [

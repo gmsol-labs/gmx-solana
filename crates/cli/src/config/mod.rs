@@ -124,6 +124,11 @@ pub struct Config {
     #[arg(long, global = true)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     priority_lamports: Option<Lamport>,
+    /// Chaos Labs Risk Oracle configuration.
+    /// Not a CLI flag; only loaded from config file and env.
+    #[arg(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    chaos: Option<ChaosConfig>,
 }
 
 impl Config {
@@ -323,6 +328,46 @@ impl Config {
     pub fn skip_preflight(&self) -> bool {
         self.skip_preflight
     }
+
+    pub fn chaos_base_url(&self) -> String {
+        if let Ok(v) = std::env::var("CHAOS_BASE_URL") {
+            return v;
+        }
+        self.chaos
+            .as_ref()
+            .and_then(|c| c.base_url.clone())
+            .unwrap_or_else(|| "https://oracle.chaoslabs.co".to_string())
+    }
+
+    pub fn chaos_api_key(&self) -> Option<String> {
+        if let Ok(v) = std::env::var("CHAOS_API_KEY") {
+            return Some(v);
+        }
+        self.chaos.as_ref().and_then(|c| c.api_key.clone())
+    }
+
+    pub fn chaos_signer_strict(&self) -> eyre::Result<Option<Pubkey>> {
+        if let Ok(v) = std::env::var("RISK_ORACLE_SIGNER") {
+            let pk: Pubkey = v
+                .parse()
+                .map_err(|_| eyre::eyre!("invalid RISK_ORACLE_SIGNER: {v}"))?;
+            return Ok(Some(pk));
+        }
+        Ok(self
+            .chaos
+            .as_ref()
+            .and_then(|c| c.signer.as_ref().map(|s| s.0)))
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+pub struct ChaosConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signer: Option<StringPubkey>,
 }
 
 #[cfg(feature = "squads")]
