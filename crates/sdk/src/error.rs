@@ -60,6 +60,9 @@ pub enum Error {
     /// Market closed error.
     #[error("market closed: {0}")]
     MarketClosed(String),
+    /// Convert integer error.
+    #[error(transparent)]
+    ConvertInterger(#[from] std::num::TryFromIntError),
 }
 
 impl Error {

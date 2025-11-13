@@ -8,7 +8,7 @@ use wasm_bindgen::prelude::*;
 use crate::{
     builders::{
         deposit::{CreateDeposit, CreateDepositHint},
-        token::PrepareTokenAccounts,
+        token::{PrepareTokenAccounts, WrapNative},
         user::PrepareUser,
         StoreProgram,
     },
@@ -29,17 +29,17 @@ pub struct CreateDepositParamsJs {
     #[serde(default)]
     pub short_pay_token: Option<StringPubkey>,
     #[serde(default)]
-    pub long_swap_path: Vec<StringPubkey>,
+    pub long_swap_path: Option<Vec<StringPubkey>>,
     #[serde(default)]
-    pub short_swap_path: Vec<StringPubkey>,
+    pub short_swap_path: Option<Vec<StringPubkey>>,
     #[serde(default)]
-    pub long_pay_amount: u64,
+    pub long_pay_amount: Option<u128>,
     #[serde(default)]
-    pub short_pay_amount: u64,
+    pub short_pay_amount: Option<u128>,
     #[serde(default)]
-    pub min_receive_amount: u64,
+    pub min_receive_amount: Option<u128>,
     #[serde(default)]
-    pub unwrap_native_on_receive: bool,
+    pub skip_unwrap_native_on_receive: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Tsify)]
@@ -56,6 +56,8 @@ pub struct CreateDepositOptions {
     pub hints: HashMap<StringPubkey, CreateDepositHint>,
     #[serde(default)]
     pub transaction_group: TransactionGroupOptions,
+    #[serde(default)]
+    skip_wrap_native_on_pay: Option<bool>,
 }
 
 #[wasm_bindgen]
@@ -75,17 +77,26 @@ pub fn create_deposits_builder(
     let mut tokens = HashSet::default();
     let mut groups: Vec<AtomicGroup> = Vec::with_capacity(deposits.len());
 
+    let should_wrap_native = !options.skip_wrap_native_on_pay.unwrap_or_default();
+    let mut wrap_native = false;
+
     for params in deposits.into_iter() {
         let market_token = params.market_token;
         let hint = options.hints.get(&market_token).ok_or_else(|| {
             crate::Error::custom(format!("hint for {} is not provided", market_token.0))
         })?;
 
+        let mut wrap_amount = 0;
+
         if let Some(t) = params.long_pay_token.as_ref() {
-            tokens.insert(*t);
+            if should_wrap_native && **t == WrapNative::NATIVE_MINT {
+                wrap_amount += params.long_pay_amount.unwrap_or_default();
+            }
         }
         if let Some(t) = params.short_pay_token.as_ref() {
-            tokens.insert(*t);
+            if should_wrap_native && **t == WrapNative::NATIVE_MINT {
+                wrap_amount += params.short_pay_amount.unwrap_or_default();
+            }
         }
         tokens.insert(market_token);
 
@@ -96,21 +107,38 @@ pub fn create_deposits_builder(
             .market_token(market_token)
             .long_pay_token(params.long_pay_token)
             .short_pay_token(params.short_pay_token)
-            .long_swap_path(params.long_swap_path)
-            .short_swap_path(params.short_swap_path)
-            .long_pay_amount(params.long_pay_amount)
-            .short_pay_amount(params.short_pay_amount)
-            .min_receive_amount(params.min_receive_amount)
-            .unwrap_native_on_receive(params.unwrap_native_on_receive);
+            .long_swap_path(params.long_swap_path.unwrap_or_default())
+            .short_swap_path(params.short_swap_path.unwrap_or_default())
+            .long_pay_amount(params.long_pay_amount.unwrap_or_default().try_into()?)
+            .short_pay_amount(params.short_pay_amount.unwrap_or_default().try_into()?)
+            .min_receive_amount(params.min_receive_amount.unwrap_or_default().try_into()?)
+            .unwrap_native_on_receive(!params.skip_unwrap_native_on_receive.unwrap_or_default());
 
         let built = if let Some(r) = params.receiver {
             builder.receiver(r).build()
         } else {
             builder.build()
+        }
+        .into_atomic_group(hint)?;
+
+        let ag = if wrap_amount == 0 {
+            built
+        } else {
+            wrap_native = true;
+            let mut wrap = WrapNative::builder()
+                .owner(options.payer)
+                .lamports(wrap_amount.try_into().map_err(crate::Error::custom)?)
+                .build()
+                .into_atomic_group(&true)?;
+            wrap.merge(built);
+            wrap
         };
 
-        let ag = built.into_atomic_group(hint)?;
         groups.push(ag);
+    }
+
+    if wrap_native {
+        tokens.insert(WrapNative::NATIVE_MINT.into());
     }
 
     Ok(CreateDepositsBuilder {

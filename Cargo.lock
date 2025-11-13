@@ -2485,6 +2485,7 @@ dependencies = [
  "hex",
  "hmac 0.12.1",
  "indexmap 2.10.0",
+ "libsecp256k1 0.7.2",
  "petgraph",
  "pin-project-lite",
  "pyth-sdk",
@@ -2515,6 +2516,7 @@ dependencies = [
  "tracing-subscriber",
  "tsify-next",
  "typed-builder",
+ "uuid",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]
@@ -3500,11 +3502,14 @@ dependencies = [
  "arrayref",
  "base64 0.22.1",
  "digest 0.9.0",
+ "hmac-drbg",
  "libsecp256k1-core 0.3.0",
  "libsecp256k1-gen-ecmult 0.3.0",
  "libsecp256k1-gen-genmult 0.3.0",
  "rand 0.8.5",
  "serde",
+ "sha2 0.9.9",
+ "typenum",
 ]
 
 [[package]]

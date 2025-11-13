@@ -29,17 +29,17 @@ pub struct CreateWithdrawalParamsJs {
     #[serde(default)]
     pub short_receive_token: Option<StringPubkey>,
     #[serde(default)]
-    pub long_swap_path: Vec<StringPubkey>,
+    pub long_swap_path: Option<Vec<StringPubkey>>,
     #[serde(default)]
-    pub short_swap_path: Vec<StringPubkey>,
+    pub short_swap_path: Option<Vec<StringPubkey>>,
     #[serde(default)]
-    pub market_token_amount: u64,
+    pub market_token_amount: Option<u128>,
     #[serde(default)]
-    pub min_long_receive_amount: u64,
+    pub min_long_receive_amount: Option<u128>,
     #[serde(default)]
-    pub min_short_receive_amount: u64,
+    pub min_short_receive_amount: Option<u128>,
     #[serde(default)]
-    pub unwrap_native_on_receive: bool,
+    pub skip_unwrap_native_on_receive: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Tsify)]
@@ -90,12 +90,22 @@ pub fn create_withdrawals_builder(
             .market_token(market_token)
             .long_receive_token(params.long_receive_token)
             .short_receive_token(params.short_receive_token)
-            .long_swap_path(params.long_swap_path)
-            .short_swap_path(params.short_swap_path)
-            .market_token_amount(params.market_token_amount)
-            .min_long_receive_amount(params.min_long_receive_amount)
-            .min_short_receive_amount(params.min_short_receive_amount)
-            .unwrap_native_on_receive(params.unwrap_native_on_receive);
+            .long_swap_path(params.long_swap_path.unwrap_or_default())
+            .short_swap_path(params.short_swap_path.unwrap_or_default())
+            .market_token_amount(params.market_token_amount.unwrap_or_default().try_into()?)
+            .min_long_receive_amount(
+                params
+                    .min_long_receive_amount
+                    .unwrap_or_default()
+                    .try_into()?,
+            )
+            .min_short_receive_amount(
+                params
+                    .min_short_receive_amount
+                    .unwrap_or_default()
+                    .try_into()?,
+            )
+            .unwrap_native_on_receive(!params.skip_unwrap_native_on_receive.unwrap_or_default());
 
         let built = if let Some(r) = params.receiver {
             builder.receiver(r).build()

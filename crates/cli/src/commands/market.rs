@@ -45,6 +45,11 @@ use crate::{
     config::DisplayOptions,
 };
 
+#[cfg(feature = "chaoslabs-risk-oracle")]
+use gmsol_sdk::client::risk_oracle::{
+    client::ChaosClient, types::EncodedRecommendation, verify::verify_signature,
+};
+
 use super::{
     utils::{KeypairArgs, Side, ToggleValue},
     CommandClient,
@@ -152,15 +157,25 @@ enum Command {
         new_authority: Pubkey,
     },
     /// Push to `MarketConfigBuffer` account with configs read from file.
+    #[command(
+        group = clap::ArgGroup::new("buffer-target")
+            .required(true)
+            .multiple(false)
+            .args(["buffer", "init"]),
+        group = clap::ArgGroup::new("source-input")
+            .required(true)
+            .multiple(false)
+            .args(["path", "from_chaos"]),
+    )]
     PushToBuffer {
         /// Path to the config file to read from.
-        #[arg(requires = "buffer-input")]
-        path: PathBuf,
+        #[arg(group = "source-input")]
+        path: Option<PathBuf>,
         /// Buffer account to be pushed to.
-        #[arg(long, group = "buffer-input")]
+        #[arg(long, group = "buffer-target")]
         buffer: Option<Pubkey>,
         /// Whether to create a new buffer account.
-        #[arg(long, group = "buffer-input")]
+        #[arg(long, group = "buffer-target")]
         init: bool,
         /// The expected market token to use for this buffer.
         #[arg(long)]
@@ -172,6 +187,15 @@ enum Command {
         /// Only effective when used with `--init`.
         #[arg(long, default_value = "1d")]
         expire_after: humantime::Duration,
+        /// Create from Chaos Labs' Risk Oracle instead of file.
+        #[arg(long, default_value_t = false)]
+        from_chaos: bool,
+        /// Comma-separated Chaos parameter types to request (optional).
+        #[arg(long, value_delimiter = ',')]
+        types: Option<Vec<String>>,
+        /// Skip response signature verification.
+        #[arg(long, default_value_t = false)]
+        no_verify: bool,
     },
     /// Create Market Vault.
     CreateVault { token: Pubkey },
@@ -580,18 +604,148 @@ impl super::Command for Market {
                 market_token,
                 batch,
                 expire_after,
+                from_chaos,
+                types,
+                no_verify,
             } => {
-                let configs: MarketConfigs = toml_from_file(path)?;
-                let config = configs
-                    .configs
-                    .get(market_token)
-                    .ok_or_eyre(format!("the config for `{market_token}` not found"))?;
                 assert!(buffer.is_none() == *init, "must hold");
                 let keypair = Keypair::new();
                 let buffer = match buffer {
                     Some(buffer) => Either::Left(buffer),
                     None => Either::Right(&keypair),
                 };
+
+                if *from_chaos {
+                    #[cfg(not(feature = "chaoslabs-risk-oracle"))]
+                    let _ = (&types, &no_verify);
+                    #[cfg(not(feature = "chaoslabs-risk-oracle"))]
+                    {
+                        eyre::bail!("chaoslabs-risk-oracle feature is not enabled for CLI");
+                    }
+                    #[cfg(feature = "chaoslabs-risk-oracle")]
+                    {
+                        let base_url = ctx.config().chaos_base_url();
+                        let api_key = ctx.config().chaos_api_key();
+                        let chaos = ChaosClient::try_new(&base_url, api_key)?;
+                        let update_types: Vec<String> = if let Some(t) = types {
+                            t.clone()
+                        } else {
+                            vec![
+                                "oiCaps/maxOpenInterestForLongs/v1".to_string(),
+                                "oiCaps/maxOpenInterestForShorts/v1".to_string(),
+                                "priceImpact/negativePositionImpactFactor/v1".to_string(),
+                                "priceImpact/positionImpactExponentFactor/v1".to_string(),
+                                "priceImpact/positivePositionImpactFactor/v1".to_string(),
+                            ]
+                        };
+                        let update_types_ref: Vec<&str> =
+                            update_types.iter().map(|s| s.as_str()).collect();
+                        let recs: Vec<EncodedRecommendation> = chaos
+                            .fetch_latest_recommendations("gmx_solana", &update_types_ref)
+                            .await?;
+
+                        if !*no_verify {
+                            match ctx.config().chaos_signer_strict()? {
+                                Some(expected) => {
+                                    for r in &recs {
+                                        verify_signature(r, &expected)?;
+                                    }
+                                }
+                                None => {
+                                    eyre::bail!(
+                                        "verification requested but chaos signer is missing; set RISK_ORACLE_SIGNER env or [chaos].signer in config.toml, or pass --no-verify to skip"
+                                    );
+                                }
+                            }
+                        }
+
+                        let market =
+                            client
+                                .market_by_token(store, market_token)
+                                .await
+                                .map_err(|e| {
+                                    eyre::eyre!(
+                                        "failed to get market by token {}: {e}",
+                                        market_token
+                                    )
+                                })?;
+                        let token_map = client
+                            .authorized_token_map(store)
+                            .await
+                            .map_err(|e| eyre::eyre!("failed to get authorized token map: {e}"))?;
+                        let md = gmsol_sdk::utils::market::MarketDecimals::new(&market.meta.into(), &token_map).map_err(|e| eyre::eyre!("failed to create MarketDecimals (is market's tokens in token_map?): {e}"))?;
+
+                        let mut entries: Vec<(String, u128)> = Vec::new();
+                        for rec in &recs {
+                            if rec.market_pubkey()? != *market_token {
+                                continue;
+                            }
+                            for (k, v_api) in &rec.new_values {
+                                if let Some(key_enum) =
+                                    gmsol_sdk::client::risk_oracle::types::map_key(
+                                        k,
+                                        &rec.parameter_name,
+                                    )
+                                {
+                                    let dec_api = *rec
+                                        .decimals
+                                        .get(k)
+                                        .ok_or_eyre(format!("missing decimals for {k}"))?;
+                                    let dec_target = md.market_config_decimals(key_enum)?;
+
+                                    let amount = Amount::from_u128((*v_api).into(), dec_api)?;
+                                    let v_scaled = match key_enum {
+                                        gmsol_sdk::core::market::MarketConfigKey::PositionImpactExponent
+                                        | gmsol_sdk::core::market::MarketConfigKey::SwapImpactExponent => {
+                                            let rounded = Amount(amount.0.round());
+                                            rounded.to_u128(dec_target)?
+                                        }
+                                        _ => amount.to_u128(dec_target)?,
+                                    };
+                                    let key_str = key_enum.to_string();
+                                    entries.push((key_str, v_scaled));
+                                }
+                            }
+                        }
+
+                        if entries.is_empty() {
+                            eyre::bail!("no chaos updates for the specified market_token");
+                        }
+
+                        let mut bundle = client.bundle_with_options(options);
+                        let buffer_pubkey = match buffer {
+                            Either::Left(pubkey) => *pubkey,
+                            Either::Right(kp) => {
+                                bundle.push(client.initialize_market_config_buffer(
+                                    store,
+                                    kp,
+                                    expire_after.as_secs().try_into().unwrap_or(u32::MAX),
+                                ))?;
+                                kp.pubkey()
+                            }
+                        };
+                        println!("Buffer: {buffer_pubkey}");
+
+                        for batch_entries in entries.chunks(batch.get()) {
+                            bundle.push(client.push_to_market_config_buffer(
+                                &buffer_pubkey,
+                                batch_entries.iter().cloned(),
+                            ))?;
+                        }
+
+                        client.send_or_serialize(bundle).await?;
+                        return Ok(());
+                    }
+                }
+
+                let path = path
+                    .as_ref()
+                    .ok_or_eyre("path is required unless --from-chaos")?;
+                let configs: MarketConfigs = toml_from_file(path)?;
+                let config = configs
+                    .configs
+                    .get(market_token)
+                    .ok_or_eyre(format!("the config for `{market_token}` not found"))?;
                 let bundle = push_to_market_config_buffer(
                     client,
                     buffer,

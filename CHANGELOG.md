@@ -9,9 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- sdk(sdk): Add deposit simulation.
-- sdk(sdk): Add GLV deposit simulation.
-- cli: Add auto-creation support of multiple ALTs based on ALT limit for `alt extend` command.
+- sdk(sdk): Added deposit simulation.
+- sdk(sdk): Added withdrawal simulation.
+- sdk(sdk): Added shift simulation.
+- sdk(sdk): Added GLV deposit simulation.
+- sdk(sdk): Added GLV withdrawal simulation.
+- sdk(sdk): Added JsGlv and JsGlvModel.
+- cli: Added auto-creation support of multiple ALTs based on ALT limit for `alt extend` command.
 
 ### Changed
 
