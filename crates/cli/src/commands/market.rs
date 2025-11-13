@@ -680,6 +680,7 @@ impl super::Command for Market {
                             if rec.market_pubkey()? != *market_token {
                                 continue;
                             }
+                            tracing::info!(%market_token, "adding recommendation: {rec:#?}");
                             for (k, v_api) in &rec.new_values {
                                 if let Some(key_enum) =
                                     gmsol_sdk::client::risk_oracle::types::map_key(
