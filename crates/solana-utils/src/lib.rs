@@ -53,7 +53,7 @@ pub mod client_traits;
 pub mod utils;
 
 /// Jito Group & sender
-#[cfg(all(client, feature = "jito"))]
+#[cfg(feature = "jito")]
 pub mod jito_group;
 
 pub use crate::{

@@ -3,7 +3,7 @@
 #[cfg(all(feature = "jito", client))]
 use futures_util::stream::{self, StreamExt};
 
-#[cfg(all(feature = "jito", client))]
+#[cfg(feature = "jito")]
 use solana_sdk::{
     hash::Hash, message::VersionedMessage, signer::Signer, transaction::VersionedTransaction,
 };
@@ -11,13 +11,13 @@ use solana_sdk::{
 #[cfg(all(feature = "jito", client))]
 use base64::Engine;
 
-#[cfg(all(feature = "jito", client))]
+#[cfg(feature = "jito")]
 use crate::{
     instruction_group::ComputeBudgetOptions, transaction_builder::default_before_sign,
     transaction_group::TransactionGroup,
 };
 
-#[cfg(all(feature = "jito", client))]
+#[cfg(feature = "jito")]
 /// Packing strategy for Jito bundles.
 #[derive(Debug, Clone)]
 pub enum BundleMode {
@@ -37,7 +37,7 @@ pub enum BundleMode {
     },
 }
 
-#[cfg(all(feature = "jito", client))]
+#[cfg(feature = "jito")]
 impl Default for BundleMode {
     fn default() -> Self {
         // Prefer packing as much as possible while respecting AG/PG mergeable semantics.
@@ -47,7 +47,7 @@ impl Default for BundleMode {
     }
 }
 
-#[cfg(all(feature = "jito", client))]
+#[cfg(feature = "jito")]
 /// Options for sending Jito bundles.
 #[derive(Debug, Clone, Default)]
 pub struct JitoSendOptions {
@@ -69,22 +69,21 @@ pub struct JitoSendOptions {
     pub parallelism: Option<usize>,
 }
 
-#[cfg(all(feature = "jito", client))]
+#[cfg(feature = "jito")]
 /// A Jito sending group built on `TransactionGroup` that encodes parallel/serial bundle topology.
 #[derive(Debug, Clone)]
 pub struct JitoGroup {
     inner: TransactionGroup,
 }
 
-#[cfg(all(feature = "jito", client))]
+#[cfg(feature = "jito")]
 impl From<TransactionGroup> for JitoGroup {
     fn from(inner: TransactionGroup) -> Self {
         Self { inner }
     }
 }
 
-#[cfg(all(feature = "jito", client))]
-#[cfg(feature = "client")]
+#[cfg(all(feature = "jito", feature = "client"))]
 impl<'a, C> From<crate::bundle_builder::Bundle<'a, C>> for JitoGroup
 where
     C: std::ops::Deref + Clone,
@@ -158,14 +157,14 @@ impl JitoGroup {
         opts: JitoSendOptions,
     ) -> Vec<Result<String, crate::Error>> {
         let plan = match self
-            .build_bundle_plan(signers, recent_blockhash, &opts)
+            .build_bundle_plan_staged(signers, recent_blockhash, &opts)
             .await
         {
             Ok(p) => p,
             Err(e) => return vec![Err(e)],
         };
 
-        self.submit_bundles(
+        self.submit_bundles_staged(
             &plan,
             &opts.endpoint_url,
             opts.uuid.as_deref(),
@@ -175,29 +174,22 @@ impl JitoGroup {
     }
 }
 
-#[cfg(all(feature = "jito", client))]
-fn encode_txn_base64(txn: &VersionedTransaction) -> crate::Result<String> {
-    let bytes = bincode::serialize(txn).map_err(|e| crate::Error::custom(e.to_string()))?;
-    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
-}
-
-#[cfg(all(feature = "jito", client))]
+#[cfg(feature = "jito")]
 impl JitoGroup {
-    /// Build a bundle plan from the underlying TransactionGroup according to the bundle_mode.
-    /// This function constructs the logical grouping of transactions into bundles without performing network I/O.
-    pub async fn build_bundle_plan(
+    /// Build a staged bundle plan from the underlying TransactionGroup according to the bundle_mode.
+    /// Staged plan expresses serial stages -> parallel bundles per stage -> transactions per bundle (<=5).
+    pub async fn build_bundle_plan_staged(
         &self,
         signers: &crate::signer::TransactionSigners<impl std::ops::Deref<Target = dyn Signer>>,
         recent_blockhash: Hash,
         opts: &JitoSendOptions,
-    ) -> crate::Result<Vec<Vec<VersionedTransaction>>> {
+    ) -> crate::Result<Vec<Vec<Vec<VersionedTransaction>>>> {
         let compute_budget = ComputeBudgetOptions {
             without_compute_budget: opts.without_compute_budget,
             compute_unit_price_micro_lamports: opts.compute_unit_price_micro_lamports,
             compute_unit_min_priority_lamports: opts.compute_unit_min_priority_lamports,
         };
 
-        // Build transactions per ParallelGroup (batch) in order.
         let batches = self
             .inner
             .to_transactions_with_options(
@@ -209,7 +201,6 @@ impl JitoGroup {
             )
             .collect::<crate::Result<Vec<_>>>()?;
 
-        // Gather PG metadata for packing decisions.
         let pgs = self.inner.groups();
         if pgs.len() != batches.len() {
             return Err(crate::Error::custom("mismatched PG and batch lengths"));
@@ -235,14 +226,16 @@ impl JitoGroup {
         }
 
         let max_default = 5usize;
-        let mut plan: Vec<Vec<VersionedTransaction>> = Vec::new();
+        let mut staged: Vec<Vec<Vec<VersionedTransaction>>> = Vec::new();
 
         match opts.bundle_mode.clone() {
             BundleMode::SingleTx => {
                 for p in pg_txs.into_iter() {
+                    let mut stage: Vec<Vec<VersionedTransaction>> = Vec::new();
                     for tx in p.txns.into_iter() {
-                        plan.push(vec![tx]);
+                        stage.push(vec![tx]);
                     }
+                    staged.push(stage);
                 }
             }
             BundleMode::PackWithinPG { max_txs_per_bundle } => {
@@ -252,23 +245,25 @@ impl JitoGroup {
                     max_txs_per_bundle
                 };
                 for mut p in pg_txs.into_iter() {
+                    let mut stage: Vec<Vec<VersionedTransaction>> = Vec::new();
                     let mut cur: Vec<VersionedTransaction> = Vec::new();
                     for (tx, ag_ok) in p.txns.drain(..).zip(p.ag_mergeable.into_iter()) {
                         if ag_ok {
                             cur.push(tx);
                             if cur.len() >= limit {
-                                plan.push(std::mem::take(&mut cur));
+                                stage.push(std::mem::take(&mut cur));
                             }
                         } else {
                             if !cur.is_empty() {
-                                plan.push(std::mem::take(&mut cur));
+                                stage.push(std::mem::take(&mut cur));
                             }
-                            plan.push(vec![tx]);
+                            stage.push(vec![tx]);
                         }
                     }
                     if !cur.is_empty() {
-                        plan.push(cur);
+                        stage.push(cur);
                     }
+                    staged.push(stage);
                 }
             }
             BundleMode::PackAcrossMergeablePGs { max_txs_per_bundle } => {
@@ -277,51 +272,80 @@ impl JitoGroup {
                 } else {
                     max_txs_per_bundle
                 };
-                let mut cur: Vec<VersionedTransaction> = Vec::new();
-                let mut cur_open = false;
-                for p in pg_txs.into_iter() {
+                let mut cur_stage: Vec<Vec<VersionedTransaction>> = Vec::new();
+                let mut stage_open = false;
+                for mut p in pg_txs.into_iter() {
                     if !p.pg_mergeable {
+                        // flush current stage
+                        if !cur_stage.is_empty() {
+                            staged.push(std::mem::take(&mut cur_stage));
+                        }
+                        stage_open = false;
+                        // non-mergeable PG becomes its own stage
+                        let mut stage: Vec<Vec<VersionedTransaction>> = Vec::new();
+                        let mut cur: Vec<VersionedTransaction> = Vec::new();
+                        for (tx, ag_ok) in p.txns.drain(..).zip(p.ag_mergeable.into_iter()) {
+                            if ag_ok {
+                                cur.push(tx);
+                                if cur.len() >= limit {
+                                    stage.push(std::mem::take(&mut cur));
+                                }
+                            } else {
+                                if !cur.is_empty() {
+                                    stage.push(std::mem::take(&mut cur));
+                                }
+                                stage.push(vec![tx]);
+                            }
+                        }
                         if !cur.is_empty() {
-                            plan.push(std::mem::take(&mut cur));
+                            stage.push(cur);
                         }
-                        cur_open = false;
-                        for tx in p.txns.into_iter() {
-                            plan.push(vec![tx]);
-                        }
+                        staged.push(stage);
                         continue;
                     }
+                    // mergeable PG: pack within current open stage
                     for (tx, ag_ok) in p.txns.into_iter().zip(p.ag_mergeable.into_iter()) {
                         if ag_ok {
-                            if !cur_open {
-                                cur_open = true;
+                            if !stage_open {
+                                stage_open = true;
                             }
-                            cur.push(tx);
-                            if cur.len() >= limit {
-                                plan.push(std::mem::take(&mut cur));
-                                cur_open = false;
+                            if let Some(last) = cur_stage.last_mut() {
+                                if last.len() < limit {
+                                    last.push(tx);
+                                } else {
+                                    cur_stage.push(vec![tx]);
+                                }
+                            } else {
+                                cur_stage.push(vec![tx]);
                             }
                         } else {
-                            if !cur.is_empty() {
-                                plan.push(std::mem::take(&mut cur));
-                            }
-                            cur_open = false;
-                            plan.push(vec![tx]);
+                            // break packing; non-mergeable is solo bundle inside the stage
+                            cur_stage.push(vec![tx]);
                         }
                     }
                 }
-                if !cur.is_empty() {
-                    plan.push(cur);
+                if !cur_stage.is_empty() {
+                    staged.push(cur_stage);
                 }
             }
         }
 
-        Ok(plan)
+        Ok(staged)
     }
+}
 
-    /// Submit a bundle plan to the Jito endpoint.
+#[cfg(all(feature = "jito", client))]
+fn encode_txn_base64(txn: &VersionedTransaction) -> crate::Result<String> {
+    let bytes = bincode::serialize(txn).map_err(|e| crate::Error::custom(e.to_string()))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
+#[cfg(all(feature = "jito", client))]
+impl JitoGroup {
+    /// Submit a bundle plan (flat list) to the Jito endpoint.
     /// By default, submissions are sequential; if `parallelism` is `Some(n)` and `n > 1`,
     /// bounded concurrency is used while preserving result order.
-    pub async fn submit_bundles(
+    pub(crate) async fn submit_bundles(
         &self,
         plan: &[Vec<VersionedTransaction>],
         endpoint_url: &str,
@@ -417,5 +441,27 @@ impl JitoGroup {
         }
 
         ordered.into_iter().map(|x| x.unwrap()).collect()
+    }
+}
+
+#[cfg(all(feature = "jito", client))]
+impl JitoGroup {
+    /// Submit a staged bundle plan to the Jito endpoint.
+    /// Advances stages sequentially; inside each stage, bundles are sent with optional bounded concurrency.
+    pub async fn submit_bundles_staged(
+        &self,
+        staged: &[Vec<Vec<VersionedTransaction>>],
+        endpoint_url: &str,
+        uuid: Option<&str>,
+        per_stage_parallelism: Option<usize>,
+    ) -> Vec<Result<String, crate::Error>> {
+        let mut all = Vec::new();
+        for bundles in staged.iter() {
+            let part = self
+                .submit_bundles(bundles, endpoint_url, uuid, per_stage_parallelism)
+                .await;
+            all.extend(part);
+        }
+        all
     }
 }
