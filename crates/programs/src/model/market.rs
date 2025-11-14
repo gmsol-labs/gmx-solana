@@ -25,7 +25,7 @@ use crate::{
         accounts::{Market, Position},
         types::{MarketConfig, MarketMeta, Pool, PoolStorage, Pools},
     },
-    model::{position::PositionKind, PositionModel},
+    model::{position::PositionKind, PositionModel, VirtualInventoryModel},
 };
 
 use super::clock::{AsClock, AsClockMut};
@@ -222,6 +222,8 @@ pub struct MarketModel {
     market: Arc<Market>,
     supply: u64,
     swap_pricing: SwapPricingKind,
+    vi_for_swaps: Option<Arc<VirtualInventoryModel>>,
+    vi_for_positions: Option<Arc<VirtualInventoryModel>>,
 }
 
 impl Deref for MarketModel {
@@ -239,6 +241,8 @@ impl MarketModel {
             market,
             supply,
             swap_pricing: Default::default(),
+            vi_for_swaps: None,
+            vi_for_positions: None,
         }
     }
 
@@ -261,6 +265,40 @@ impl MarketModel {
         std::mem::swap(&mut self.swap_pricing, &mut swap_pricing);
         let output = (f)(self);
         std::mem::swap(&mut self.swap_pricing, &mut swap_pricing);
+        output
+    }
+
+    /// Execute a function with the specified virtual inventory models.
+    ///
+    /// This method temporarily replaces the virtual inventory models
+    /// (for swaps and positions) of the `MarketModel`, executes the
+    /// provided function, and then restores the original values.
+    ///
+    /// # Arguments
+    /// * `vi_for_swaps` - Optional virtual inventory model for swaps (wrapped in `Arc`)
+    /// * `vi_for_positions` - Optional virtual inventory model for positions (wrapped in `Arc`)
+    /// * `f` - Function to execute with the temporary VI models
+    ///
+    /// # Returns
+    /// The return value of the function `f`
+    ///
+    /// # Note
+    /// The virtual inventory models are passed as `Arc` to avoid unnecessary cloning.
+    /// If you have a `VirtualInventoryModel` value, wrap it with `Arc::new()` before passing.
+    /// If you want to reuse the same VI after the call, you can clone the `Arc` (which is cheap).
+    pub fn with_vi_models<T>(
+        &mut self,
+        vi_for_swaps: Option<Arc<VirtualInventoryModel>>,
+        vi_for_positions: Option<Arc<VirtualInventoryModel>>,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let mut temp_vi_for_swaps = vi_for_swaps;
+        let mut temp_vi_for_positions = vi_for_positions;
+        std::mem::swap(&mut self.vi_for_swaps, &mut temp_vi_for_swaps);
+        std::mem::swap(&mut self.vi_for_positions, &mut temp_vi_for_positions);
+        let output = (f)(self);
+        std::mem::swap(&mut self.vi_for_swaps, &mut temp_vi_for_swaps);
+        std::mem::swap(&mut self.vi_for_positions, &mut temp_vi_for_positions);
         output
     }
 
