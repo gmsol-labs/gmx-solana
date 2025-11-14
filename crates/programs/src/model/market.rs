@@ -374,6 +374,56 @@ impl MarketModel {
         Arc::make_mut(&mut self.market)
     }
 
+    /// Check if the market has a virtual inventory address for swaps.
+    fn has_vi_for_swaps_address(&self) -> bool {
+        self.market.virtual_inventory_for_swaps != Pubkey::default()
+    }
+
+    /// Check if the market has a virtual inventory address for positions.
+    fn has_vi_for_positions_address(&self) -> bool {
+        self.market.virtual_inventory_for_positions != Pubkey::default()
+    }
+
+    /// Validate virtual inventory consistency for swaps.
+    fn validate_vi_for_swaps(&self) -> gmsol_model::Result<()> {
+        if self.disable_vis {
+            return Ok(());
+        }
+
+        let market_has_vi = self.has_vi_for_swaps_address();
+        let model_has_vi = self.vi_for_swaps.is_some();
+
+        match (market_has_vi, model_has_vi) {
+            (true, false) => Err(gmsol_model::Error::InvalidArgument(
+                "virtual inventory for swaps should be present but is missing",
+            )),
+            (false, true) => Err(gmsol_model::Error::InvalidArgument(
+                "virtual inventory for swaps should not be present but is provided",
+            )),
+            _ => Ok(()),
+        }
+    }
+
+    /// Validate virtual inventory consistency for positions.
+    fn validate_vi_for_positions(&self) -> gmsol_model::Result<()> {
+        if self.disable_vis {
+            return Ok(());
+        }
+
+        let market_has_vi = self.has_vi_for_positions_address();
+        let model_has_vi = self.vi_for_positions.is_some();
+
+        match (market_has_vi, model_has_vi) {
+            (true, false) => Err(gmsol_model::Error::InvalidArgument(
+                "virtual inventory for positions should be present but is missing",
+            )),
+            (false, true) => Err(gmsol_model::Error::InvalidArgument(
+                "virtual inventory for positions should not be present but is provided",
+            )),
+            _ => Ok(()),
+        }
+    }
+
     /// Returns the time in seconds since last funding fee state update.
     pub fn passed_in_seconds_for_funding(&self) -> gmsol_model::Result<u64> {
         AsClock::from(&self.state.clocks.funding).passed_in_seconds()
@@ -527,13 +577,21 @@ impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for MarketModel {
     fn virtual_inventory_for_swaps_pool(
         &self,
     ) -> gmsol_model::Result<Option<impl Deref<Target = Self::Pool>>> {
-        Ok(None::<&Self::Pool>)
+        if self.disable_vis {
+            return Ok(None);
+        }
+        self.validate_vi_for_swaps()?;
+        Ok(self.vi_for_swaps.as_ref().map(|vi| vi.pool()))
     }
 
     fn virtual_inventory_for_positions_pool(
         &self,
     ) -> gmsol_model::Result<Option<impl Deref<Target = Self::Pool>>> {
-        Ok(None::<&Self::Pool>)
+        if self.disable_vis {
+            return Ok(None);
+        }
+        self.validate_vi_for_positions()?;
+        Ok(self.vi_for_positions.as_ref().map(|vi| vi.pool()))
     }
 
     fn usd_to_amount_divisor(&self) -> Self::Num {
@@ -861,7 +919,14 @@ impl gmsol_model::BaseMarketMut<{ constants::MARKET_DECIMALS }> for MarketModel 
     fn virtual_inventory_for_swaps_pool_mut(
         &mut self,
     ) -> gmsol_model::Result<Option<impl DerefMut<Target = Self::Pool>>> {
-        Ok(None::<&mut Self::Pool>)
+        if self.disable_vis {
+            return Ok(None);
+        }
+        self.validate_vi_for_swaps()?;
+        Ok(self.vi_for_swaps.as_mut().map(|vi| {
+            let vi_mut = Arc::make_mut(vi);
+            vi_mut.pool_mut()
+        }))
     }
 }
 
@@ -957,7 +1022,14 @@ impl gmsol_model::PerpMarketMut<{ constants::MARKET_DECIMALS }> for MarketModel 
     fn virtual_inventory_for_positions_pool_mut(
         &mut self,
     ) -> gmsol_model::Result<Option<impl DerefMut<Target = Self::Pool>>> {
-        Ok(None::<&mut Self::Pool>)
+        if self.disable_vis {
+            return Ok(None);
+        }
+        self.validate_vi_for_positions()?;
+        Ok(self.vi_for_positions.as_mut().map(|vi| {
+            let vi_mut = Arc::make_mut(vi);
+            vi_mut.pool_mut()
+        }))
     }
 }
 
