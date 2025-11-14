@@ -224,6 +224,7 @@ pub struct MarketModel {
     swap_pricing: SwapPricingKind,
     vi_for_swaps: Option<Arc<VirtualInventoryModel>>,
     vi_for_positions: Option<Arc<VirtualInventoryModel>>,
+    disable_vis: bool,
 }
 
 impl Deref for MarketModel {
@@ -243,6 +244,7 @@ impl MarketModel {
             swap_pricing: Default::default(),
             vi_for_swaps: None,
             vi_for_positions: None,
+            disable_vis: false,
         }
     }
 
@@ -299,6 +301,15 @@ impl MarketModel {
         let output = (f)(self);
         std::mem::swap(&mut self.vi_for_swaps, &mut temp_vi_for_swaps);
         std::mem::swap(&mut self.vi_for_positions, &mut temp_vi_for_positions);
+        output
+    }
+
+    /// Execute a function with virtual inventories disabled.
+    pub fn with_vis_disabled<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let mut disable_vis = true;
+        std::mem::swap(&mut self.disable_vis, &mut disable_vis);
+        let output = (f)(self);
+        std::mem::swap(&mut self.disable_vis, &mut disable_vis);
         output
     }
 
