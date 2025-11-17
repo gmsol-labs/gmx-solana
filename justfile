@@ -2,6 +2,7 @@ IDL_OUT_DIR := "idl-out"
 FEATURES := "u128"
 DEVNET_FEATURES := "devnet,test-only,migration"
 INTEGRATION_TEST_FEATURES := "integration-test"
+CLI_FEATURES := "execute,squads,chaoslabs-risk-oracle"
 SCRIPTS := "./scripts"
 TARGET := "./target"
 
@@ -93,10 +94,10 @@ setup-localnet keeper oracle="42" time_window="600":
   sh {{SETUP_LOCALNET_SCRIPT}}
 
 cli *ARGS:
-  cargo run -p gmsol-cli --features execute,squads -- {{ARGS}}
+  cargo run -p gmsol-cli --features {{CLI_FEATURES}} -- {{ARGS}}
 
 cli-devnet *ARGS:
-  cargo run -p gmsol-cli --features devnet,execute,squads -- {{ARGS}}
+  cargo run -p gmsol-cli --features devnet,{{CLI_FEATURES}} -- {{ARGS}}
 
 install-cli *ARGS:
-  cargo install --path crates/cli --features execute,squads --locked {{ARGS}}
+  cargo install --path crates/cli --features {{CLI_FEATURES}} --locked {{ARGS}}
