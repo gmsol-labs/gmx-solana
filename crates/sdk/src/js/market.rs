@@ -178,10 +178,12 @@ impl JsMarketModel {
             options.store_program_id = *program_id;
         }
 
-        let position =
-            self.model
+        let mut market_model = self.model.clone();
+        let position = market_model.with_vis_disabled(|market| {
+            market
                 .clone()
-                .into_empty_position_opts(is_long, *collateral_token, options)?;
+                .into_empty_position_opts(is_long, *collateral_token, options)
+        })?;
 
         Ok(position.into())
     }

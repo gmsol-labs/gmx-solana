@@ -52,25 +52,30 @@ impl SwapEstimationParams {
         let token_in_amount = self
             .value
             .checked_div(prices.collateral_token_price(is_from_long_side).min)?;
-        let swap = market
-            .swap(is_from_long_side, token_in_amount, prices)
-            .inspect_err(|err| {
-                #[cfg(tracing)]
-                {
-                    tracing::trace!("estimation failed when creating swap: {err}");
-                }
-                _ = err;
-            })
-            .ok()?
-            .execute()
-            .inspect_err(|err| {
-                #[cfg(tracing)]
-                {
-                    tracing::trace!("estimation failed when executing swap: {err}");
-                }
-                _ = err;
-            })
-            .ok()?;
+        let swap = market.with_vis_disabled(|market| {
+            market
+                .swap(is_from_long_side, token_in_amount, prices)
+                .inspect_err(|err| {
+                    #[cfg(tracing)]
+                    {
+                        tracing::trace!("estimation failed when creating swap: {err}");
+                    }
+                    _ = err;
+                })
+                .ok()
+                .and_then(|action| {
+                    action
+                        .execute()
+                        .inspect_err(|err| {
+                            #[cfg(tracing)]
+                            {
+                                tracing::trace!("estimation failed when executing swap: {err}");
+                            }
+                            _ = err;
+                        })
+                        .ok()
+                })
+        })?;
         let token_out_value = swap
             .token_out_amount()
             .checked_mul(prices.collateral_token_price(!is_from_long_side).max)?;
