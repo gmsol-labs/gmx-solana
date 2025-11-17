@@ -100,9 +100,11 @@ impl DepositSimulation<'_> {
             .expect("market storage must exist");
 
         // Execute deposit.
-        let report = market
-            .deposit(long_swap_output.amount, short_swap_output.amount, prices)?
-            .execute()?;
+        let report = market.with_vis_disabled(|market| {
+            market
+                .deposit(long_swap_output.amount, short_swap_output.amount, prices)?
+                .execute()
+        })?;
 
         let minted = report.minted();
         let min_market_token_amount = u128::from(params.min_market_token_amount);

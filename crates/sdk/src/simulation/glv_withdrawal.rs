@@ -122,9 +122,11 @@ impl GlvWithdrawalSimulation<'_> {
         let market = simulator.get_market_mut(market_token).expect("must exist");
 
         // Execute withdrawal.
-        let report = market
-            .withdraw(u128::from(market_token_amount), prices)?
-            .execute()?;
+        let report = market.with_vis_disabled(|market| {
+            market
+                .withdraw(u128::from(market_token_amount), prices)?
+                .execute()
+        })?;
 
         let (long_amount, short_amount) =
             (*report.long_token_output(), *report.short_token_output());
