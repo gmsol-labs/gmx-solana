@@ -1,10 +1,7 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use crate::gmsol_store::{
-    accounts::VirtualInventory,
-    types::{Pool, PoolStorage},
-};
+use crate::gmsol_store::{accounts::VirtualInventory, types::Pool};
 
 /// Virtual Inventory Model.
 ///
@@ -35,7 +32,7 @@ impl VirtualInventoryModel {
     /// This returns a reference to the [`Pool`] stored in the
     /// [`PoolStorage`] of the virtual inventory.
     pub fn pool(&self) -> &Pool {
-        &self.virtual_inventory.pool().pool
+        &self.virtual_inventory.pool.pool
     }
 
     /// Get a mutable reference to the pool.
