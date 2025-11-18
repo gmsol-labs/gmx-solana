@@ -259,15 +259,35 @@ impl MarketModel {
     }
 
     /// Execute a function with the specified swap pricing kind.
+    ///
+    /// # Panic Safety
+    /// This method uses RAII to ensure state is restored even if the closure panics.
     pub fn with_swap_pricing<T>(
         &mut self,
-        mut swap_pricing: SwapPricingKind,
+        swap_pricing: SwapPricingKind,
         f: impl FnOnce(&mut Self) -> T,
     ) -> T {
-        std::mem::swap(&mut self.swap_pricing, &mut swap_pricing);
-        let output = (f)(self);
-        std::mem::swap(&mut self.swap_pricing, &mut swap_pricing);
-        output
+        struct SwapPricingGuard<'a> {
+            model: &'a mut MarketModel,
+            original_swap_pricing: SwapPricingKind,
+        }
+
+        impl Drop for SwapPricingGuard<'_> {
+            fn drop(&mut self) {
+                self.model.swap_pricing = self.original_swap_pricing;
+            }
+        }
+
+        let original_swap_pricing = self.swap_pricing;
+        self.swap_pricing = swap_pricing;
+
+        let guard = SwapPricingGuard {
+            model: self,
+            original_swap_pricing,
+        };
+
+        (f)(guard.model)
+        // guard is automatically dropped at the end of scope, restoring original state
     }
 
     /// Execute a function with the specified virtual inventory models.
@@ -288,29 +308,75 @@ impl MarketModel {
     /// The virtual inventory models are passed as `Arc` to avoid unnecessary cloning.
     /// If you have a `VirtualInventoryModel` value, wrap it with `Arc::new()` before passing.
     /// If you want to reuse the same VI after the call, you can clone the `Arc` (which is cheap).
+    ///
+    /// # Panic Safety
+    /// This method uses RAII to ensure state is restored even if the closure panics.
     pub fn with_vi_models<T>(
         &mut self,
         vi_for_swaps: Option<Arc<VirtualInventoryModel>>,
         vi_for_positions: Option<Arc<VirtualInventoryModel>>,
         f: impl FnOnce(&mut Self) -> T,
     ) -> T {
+        struct ViModelsGuard<'a> {
+            model: &'a mut MarketModel,
+            original_vi_for_swaps: Option<Arc<VirtualInventoryModel>>,
+            original_vi_for_positions: Option<Arc<VirtualInventoryModel>>,
+        }
+
+        impl Drop for ViModelsGuard<'_> {
+            fn drop(&mut self) {
+                std::mem::swap(
+                    &mut self.model.vi_for_swaps,
+                    &mut self.original_vi_for_swaps,
+                );
+                std::mem::swap(
+                    &mut self.model.vi_for_positions,
+                    &mut self.original_vi_for_positions,
+                );
+            }
+        }
+
         let mut temp_vi_for_swaps = vi_for_swaps;
         let mut temp_vi_for_positions = vi_for_positions;
         std::mem::swap(&mut self.vi_for_swaps, &mut temp_vi_for_swaps);
         std::mem::swap(&mut self.vi_for_positions, &mut temp_vi_for_positions);
-        let output = (f)(self);
-        std::mem::swap(&mut self.vi_for_swaps, &mut temp_vi_for_swaps);
-        std::mem::swap(&mut self.vi_for_positions, &mut temp_vi_for_positions);
-        output
+
+        let guard = ViModelsGuard {
+            model: self,
+            original_vi_for_swaps: temp_vi_for_swaps,
+            original_vi_for_positions: temp_vi_for_positions,
+        };
+
+        (f)(guard.model)
+        // guard is automatically dropped at the end of scope, restoring original state
     }
 
     /// Execute a function with virtual inventories disabled.
+    ///
+    /// # Panic Safety
+    /// This method uses RAII to ensure state is restored even if the closure panics.
     pub fn with_vis_disabled<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        let mut disable_vis = true;
-        std::mem::swap(&mut self.disable_vis, &mut disable_vis);
-        let output = (f)(self);
-        std::mem::swap(&mut self.disable_vis, &mut disable_vis);
-        output
+        struct DisableVisGuard<'a> {
+            model: &'a mut MarketModel,
+            original_disable_vis: bool,
+        }
+
+        impl Drop for DisableVisGuard<'_> {
+            fn drop(&mut self) {
+                self.model.disable_vis = self.original_disable_vis;
+            }
+        }
+
+        let original_disable_vis = self.disable_vis;
+        self.disable_vis = true;
+
+        let guard = DisableVisGuard {
+            model: self,
+            original_disable_vis,
+        };
+
+        (f)(guard.model)
+        // guard is automatically dropped at the end of scope, restoring original state
     }
 
     /// Record transferred in.
