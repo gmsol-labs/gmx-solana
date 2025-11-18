@@ -307,7 +307,8 @@ impl MarketModel {
     /// # Note
     /// The virtual inventory models are passed as `Arc` to avoid unnecessary cloning.
     /// If you have a `VirtualInventoryModel` value, wrap it with `Arc::new()` before passing.
-    /// If you want to reuse the same VI after the call, you can clone the `Arc` (which is cheap).
+    /// The passed `Arc` values will be consumed. If you need to reuse them after the call,
+    /// you should clone them **before** passing (which is cheap).
     ///
     /// # Panic Safety
     /// This method uses RAII to ensure state is restored even if the closure panics.
