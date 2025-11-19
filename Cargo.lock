@@ -2534,6 +2534,7 @@ dependencies = [
  "dyn-clone",
  "either",
  "futures-util",
+ "jito-sdk-rust",
  "reqwest 0.12.22",
  "serde",
  "serde_json",
@@ -3339,6 +3340,25 @@ name = "itoa"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
+
+[[package]]
+name = "jito-sdk-rust"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af2290b118094c5dfe9a4f72750c6f90be478703f2f819c45e89105f700a3dd5"
+dependencies = [
+ "anyhow",
+ "base64 0.21.7",
+ "bincode",
+ "bs58 0.4.0",
+ "rand 0.8.5",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "jni"

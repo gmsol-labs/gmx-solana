@@ -31,6 +31,7 @@ client-traits = [
 ]
 http-rpc-sender = ["client-traits", "reqwest/json", "backon"]
 openssl-vendored = ["reqwest?/native-tls-vendored"]
+jito = ["client", "serde_json", "dep:serde", "reqwest/json", "dep:jito-sdk-rust", "dep:bincode"]
 
 [dependencies]
 solana-sdk = { workspace = true }
@@ -60,6 +61,8 @@ solana-account-decoder-client-types = { workspace = true, optional = true }
 # feat:http-sender
 reqwest = { workspace = true, optional = true }
 backon = { workspace = true, optional = true }
+jito-sdk-rust = { workspace = true, optional = true }
+bincode = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases = { workspace = true }
