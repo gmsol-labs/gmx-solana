@@ -54,8 +54,11 @@ impl JsPosition {
 
     /// Convert to a [`JsPositionModel`].
     pub fn to_model(&self, market: &JsMarketModel) -> crate::Result<JsPositionModel> {
+        let mut market_model = market.model.clone();
         Ok(JsPositionModel {
-            model: PositionModel::new(market.model.clone(), self.position.clone())?,
+            model: market_model.with_vis_disabled(|market| {
+                PositionModel::new(market.clone(), self.position.clone())
+            })?,
         })
     }
 

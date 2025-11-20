@@ -1,5 +1,6 @@
 use std::{
     borrow::Borrow,
+    collections::BTreeMap,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -25,7 +26,7 @@ use crate::{
         accounts::{Market, Position},
         types::{MarketConfig, MarketMeta, Pool, PoolStorage, Pools},
     },
-    model::{position::PositionKind, PositionModel},
+    model::{position::PositionKind, PositionModel, VirtualInventoryModel},
 };
 
 use super::clock::{AsClock, AsClockMut};
@@ -222,6 +223,9 @@ pub struct MarketModel {
     market: Arc<Market>,
     supply: u64,
     swap_pricing: SwapPricingKind,
+    vi_for_swaps: Option<Arc<VirtualInventoryModel>>,
+    vi_for_positions: Option<Arc<VirtualInventoryModel>>,
+    disable_vis: bool,
 }
 
 impl Deref for MarketModel {
@@ -239,6 +243,9 @@ impl MarketModel {
             market,
             supply,
             swap_pricing: Default::default(),
+            vi_for_swaps: None,
+            vi_for_positions: None,
+            disable_vis: false,
         }
     }
 
@@ -253,15 +260,191 @@ impl MarketModel {
     }
 
     /// Execute a function with the specified swap pricing kind.
+    ///
+    /// # Panic Safety
+    /// This method uses RAII to ensure state is restored even if the closure panics.
     pub fn with_swap_pricing<T>(
         &mut self,
-        mut swap_pricing: SwapPricingKind,
+        swap_pricing: SwapPricingKind,
         f: impl FnOnce(&mut Self) -> T,
     ) -> T {
-        std::mem::swap(&mut self.swap_pricing, &mut swap_pricing);
-        let output = (f)(self);
-        std::mem::swap(&mut self.swap_pricing, &mut swap_pricing);
-        output
+        struct SwapPricingGuard<'a> {
+            model: &'a mut MarketModel,
+            original_swap_pricing: SwapPricingKind,
+        }
+
+        impl Drop for SwapPricingGuard<'_> {
+            fn drop(&mut self) {
+                self.model.swap_pricing = self.original_swap_pricing;
+            }
+        }
+
+        let original_swap_pricing = self.swap_pricing;
+        self.swap_pricing = swap_pricing;
+
+        let guard = SwapPricingGuard {
+            model: self,
+            original_swap_pricing,
+        };
+
+        (f)(guard.model)
+        // guard is automatically dropped at the end of scope, restoring original state
+    }
+
+    /// Execute a function with virtual inventory models from a map.
+    ///
+    /// This method temporarily replaces the virtual inventory models
+    /// (for swaps and positions) of the `MarketModel` with models from the provided map,
+    /// executes the provided function, and then restores the original values.
+    ///
+    /// The virtual inventory models are looked up from the map using the market's
+    /// `virtual_inventory_for_swaps` and `virtual_inventory_for_positions` addresses.
+    ///
+    /// # Arguments
+    /// * `vi_map` - A mutable reference to a map of Pubkey to VirtualInventoryModel
+    /// * `f` - Function to execute with the temporary VI models
+    ///
+    /// # Returns
+    /// The return value of the function `f`
+    ///
+    /// # Note
+    /// The virtual inventory models are passed via a mutable reference to a map,
+    /// allowing the caller to maintain access to the models and observe any
+    /// state changes made during the function execution.
+    ///
+    /// # Panic Safety
+    /// This method uses RAII to ensure state is restored even if the closure panics.
+    pub fn with_vi_models<T>(
+        &mut self,
+        vi_map: &mut BTreeMap<Pubkey, VirtualInventoryModel>,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        struct ViModelsGuard<'a> {
+            model: &'a mut MarketModel,
+            original_vi_for_swaps: Option<Arc<VirtualInventoryModel>>,
+            original_vi_for_positions: Option<Arc<VirtualInventoryModel>>,
+        }
+
+        impl Drop for ViModelsGuard<'_> {
+            fn drop(&mut self) {
+                std::mem::swap(
+                    &mut self.model.vi_for_swaps,
+                    &mut self.original_vi_for_swaps,
+                );
+                std::mem::swap(
+                    &mut self.model.vi_for_positions,
+                    &mut self.original_vi_for_positions,
+                );
+            }
+        }
+
+        // Look up VI models from the map using market addresses
+        let vi_for_swaps = self
+            .market
+            .virtual_inventory_for_swaps
+            .ne(&Pubkey::default())
+            .then(|| {
+                vi_map
+                    .get_mut(&self.market.virtual_inventory_for_swaps)
+                    .map(|vi| Arc::new(vi.clone()))
+            })
+            .flatten();
+
+        let vi_for_positions = self
+            .market
+            .virtual_inventory_for_positions
+            .ne(&Pubkey::default())
+            .then(|| {
+                vi_map
+                    .get_mut(&self.market.virtual_inventory_for_positions)
+                    .map(|vi| Arc::new(vi.clone()))
+            })
+            .flatten();
+
+        let mut temp_vi_for_swaps = vi_for_swaps;
+        let mut temp_vi_for_positions = vi_for_positions;
+        std::mem::swap(&mut self.vi_for_swaps, &mut temp_vi_for_swaps);
+        std::mem::swap(&mut self.vi_for_positions, &mut temp_vi_for_positions);
+
+        let guard = ViModelsGuard {
+            model: self,
+            original_vi_for_swaps: temp_vi_for_swaps,
+            original_vi_for_positions: temp_vi_for_positions,
+        };
+
+        let result = (f)(guard.model);
+
+        // Update the map with any changes made to the VI models
+        // Extract the modified VI models from Arc and write them back to the map
+        if let Some(vi_for_swaps_arc) = guard.model.vi_for_swaps.take() {
+            if let Some(vi_in_map) = vi_map.get_mut(&guard.model.market.virtual_inventory_for_swaps)
+            {
+                // Try to unwrap the Arc to get the owned VirtualInventoryModel
+                // If the Arc is unique (which it should be since we just created it),
+                // this will extract the model without cloning
+                match Arc::try_unwrap(vi_for_swaps_arc) {
+                    Ok(vi_model) => {
+                        *vi_in_map = vi_model;
+                    }
+                    Err(arc) => {
+                        // If the Arc is shared (shouldn't happen, but handle it gracefully),
+                        // clone the model and restore the Arc
+                        *vi_in_map = (*arc).clone();
+                        guard.model.vi_for_swaps = Some(arc);
+                    }
+                }
+            } else {
+                // Restore the Arc if the key doesn't exist in the map
+                guard.model.vi_for_swaps = Some(vi_for_swaps_arc);
+            }
+        }
+        if let Some(vi_for_positions_arc) = guard.model.vi_for_positions.take() {
+            if let Some(vi_in_map) =
+                vi_map.get_mut(&guard.model.market.virtual_inventory_for_positions)
+            {
+                match Arc::try_unwrap(vi_for_positions_arc) {
+                    Ok(vi_model) => {
+                        *vi_in_map = vi_model;
+                    }
+                    Err(arc) => {
+                        *vi_in_map = (*arc).clone();
+                        guard.model.vi_for_positions = Some(arc);
+                    }
+                }
+            } else {
+                guard.model.vi_for_positions = Some(vi_for_positions_arc);
+            }
+        }
+
+        result
+    }
+
+    /// Execute a function with virtual inventories disabled.
+    ///
+    /// # Panic Safety
+    /// This method uses RAII to ensure state is restored even if the closure panics.
+    pub fn with_vis_disabled<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        struct DisableVisGuard<'a> {
+            model: &'a mut MarketModel,
+            original_disable_vis: bool,
+        }
+
+        impl Drop for DisableVisGuard<'_> {
+            fn drop(&mut self) {
+                self.model.disable_vis = self.original_disable_vis;
+            }
+        }
+
+        let original_disable_vis = self.disable_vis;
+        self.disable_vis = true;
+
+        let guard = DisableVisGuard {
+            model: self,
+            original_disable_vis,
+        };
+
+        (f)(guard.model)
+        // guard is automatically dropped at the end of scope, restoring original state
     }
 
     /// Record transferred in.
@@ -323,6 +506,66 @@ impl MarketModel {
 
     fn make_market_mut(&mut self) -> &mut Market {
         Arc::make_mut(&mut self.market)
+    }
+
+    /// Check if the market has a virtual inventory address for swaps.
+    fn has_vi_for_swaps_address(&self) -> bool {
+        self.market.virtual_inventory_for_swaps != Pubkey::default()
+    }
+
+    /// Check if the market has a virtual inventory address for positions.
+    fn has_vi_for_positions_address(&self) -> bool {
+        self.market.virtual_inventory_for_positions != Pubkey::default()
+    }
+
+    /// Validate virtual inventory consistency for swaps.
+    ///
+    /// # Note
+    /// We do not validate PDA address matching here because:
+    /// - The assumption that the provided VI address must match the calculated PDA is too strong
+    /// - PDA address calculation has high computational cost
+    fn validate_vi_for_swaps(&self) -> gmsol_model::Result<()> {
+        if self.disable_vis {
+            return Ok(());
+        }
+
+        let market_has_vi = self.has_vi_for_swaps_address();
+        let model_has_vi = self.vi_for_swaps.is_some();
+
+        match (market_has_vi, model_has_vi) {
+            (true, false) => Err(gmsol_model::Error::InvalidArgument(
+                "virtual inventory for swaps should be present but is missing",
+            )),
+            (false, true) => Err(gmsol_model::Error::InvalidArgument(
+                "virtual inventory for swaps should not be present but is provided",
+            )),
+            _ => Ok(()),
+        }
+    }
+
+    /// Validate virtual inventory consistency for positions.
+    ///
+    /// # Note
+    /// We do not validate PDA address matching here because:
+    /// - The assumption that the provided VI address must match the calculated PDA is too strong
+    /// - PDA address calculation has high computational cost
+    fn validate_vi_for_positions(&self) -> gmsol_model::Result<()> {
+        if self.disable_vis {
+            return Ok(());
+        }
+
+        let market_has_vi = self.has_vi_for_positions_address();
+        let model_has_vi = self.vi_for_positions.is_some();
+
+        match (market_has_vi, model_has_vi) {
+            (true, false) => Err(gmsol_model::Error::InvalidArgument(
+                "virtual inventory for positions should be present but is missing",
+            )),
+            (false, true) => Err(gmsol_model::Error::InvalidArgument(
+                "virtual inventory for positions should not be present but is provided",
+            )),
+            _ => Ok(()),
+        }
     }
 
     /// Returns the time in seconds since last funding fee state update.
@@ -478,13 +721,21 @@ impl gmsol_model::BaseMarket<{ constants::MARKET_DECIMALS }> for MarketModel {
     fn virtual_inventory_for_swaps_pool(
         &self,
     ) -> gmsol_model::Result<Option<impl Deref<Target = Self::Pool>>> {
-        Ok(None::<&Self::Pool>)
+        if self.disable_vis {
+            return Ok(None);
+        }
+        self.validate_vi_for_swaps()?;
+        Ok(self.vi_for_swaps.as_ref().map(|vi| vi.pool()))
     }
 
     fn virtual_inventory_for_positions_pool(
         &self,
     ) -> gmsol_model::Result<Option<impl Deref<Target = Self::Pool>>> {
-        Ok(None::<&Self::Pool>)
+        if self.disable_vis {
+            return Ok(None);
+        }
+        self.validate_vi_for_positions()?;
+        Ok(self.vi_for_positions.as_ref().map(|vi| vi.pool()))
     }
 
     fn usd_to_amount_divisor(&self) -> Self::Num {
@@ -812,7 +1063,14 @@ impl gmsol_model::BaseMarketMut<{ constants::MARKET_DECIMALS }> for MarketModel 
     fn virtual_inventory_for_swaps_pool_mut(
         &mut self,
     ) -> gmsol_model::Result<Option<impl DerefMut<Target = Self::Pool>>> {
-        Ok(None::<&mut Self::Pool>)
+        if self.disable_vis {
+            return Ok(None);
+        }
+        self.validate_vi_for_swaps()?;
+        Ok(self.vi_for_swaps.as_mut().map(|vi| {
+            let vi_mut = Arc::make_mut(vi);
+            vi_mut.pool_mut()
+        }))
     }
 }
 
@@ -908,7 +1166,14 @@ impl gmsol_model::PerpMarketMut<{ constants::MARKET_DECIMALS }> for MarketModel 
     fn virtual_inventory_for_positions_pool_mut(
         &mut self,
     ) -> gmsol_model::Result<Option<impl DerefMut<Target = Self::Pool>>> {
-        Ok(None::<&mut Self::Pool>)
+        if self.disable_vis {
+            return Ok(None);
+        }
+        self.validate_vi_for_positions()?;
+        Ok(self.vi_for_positions.as_mut().map(|vi| {
+            let vi_mut = Arc::make_mut(vi);
+            vi_mut.pool_mut()
+        }))
     }
 }
 

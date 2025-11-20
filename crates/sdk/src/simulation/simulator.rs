@@ -307,7 +307,9 @@ impl Simulator {
                     "[swap] invalid swap step. Current step: {market_token}"
                 )));
             };
-            let report = market.swap(is_token_in_long, amount, prices)?.execute()?;
+            let report = market.with_vis_disabled(|market| {
+                market.swap(is_token_in_long, amount, prices)?.execute()
+            })?;
             amount = *report.token_out_amount();
             reports.push(report);
         }

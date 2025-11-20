@@ -234,16 +234,22 @@ impl OrderSimulation<'_> {
             .get_market_mut(&params.market_token)
             .expect("market storage must exist");
 
-        let market = storage.clone();
+        let mut market = storage.clone();
 
         let mut position = match position {
             Some(position) => {
                 if position.collateral_token != *collateral_or_swap_out_token {
                     return Err(crate::Error::custom("[sim] collateral token mismatched"));
                 }
-                PositionModel::new(market, position.clone())?
+                market.with_vis_disabled(|market| {
+                    PositionModel::new(market.clone(), position.clone())
+                })?
             }
-            None => market.into_empty_position(params.is_long, *collateral_or_swap_out_token)?,
+            None => market.with_vis_disabled(|market| {
+                market
+                    .clone()
+                    .into_empty_position(params.is_long, *collateral_or_swap_out_token)
+            })?,
         };
 
         let report = position
@@ -340,9 +346,10 @@ impl OrderSimulation<'_> {
             .get_market_mut(&params.market_token)
             .expect("market storage must exist");
 
-        let market = storage.clone();
+        let mut market = storage.clone();
 
-        let mut position = PositionModel::new(market, position.clone())?;
+        let mut position = market
+            .with_vis_disabled(|market| PositionModel::new(market.clone(), position.clone()))?;
 
         let report = position
             .decrease(
