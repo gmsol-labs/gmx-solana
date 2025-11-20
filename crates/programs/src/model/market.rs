@@ -451,41 +451,12 @@ impl MarketModel {
         self.market.virtual_inventory_for_positions != Pubkey::default()
     }
 
-    /// Calculate the PDA address for virtual inventory for swaps.
-    fn calculate_vi_for_swaps_address(
-        store: &Pubkey,
-        index: u32,
-        store_program_id: &Pubkey,
-    ) -> (Pubkey, u8) {
-        const VIRTUAL_INVENTORY_FOR_SWAPS_SEED: &[u8] = b"vi_for_swaps";
-        Pubkey::find_program_address(
-            &[
-                VIRTUAL_INVENTORY_FOR_SWAPS_SEED,
-                store.as_ref(),
-                &index.to_le_bytes(),
-            ],
-            store_program_id,
-        )
-    }
-
-    /// Calculate the PDA address for virtual inventory for positions.
-    fn calculate_vi_for_positions_address(
-        store: &Pubkey,
-        index_token: &Pubkey,
-        store_program_id: &Pubkey,
-    ) -> (Pubkey, u8) {
-        const VIRTUAL_INVENTORY_FOR_POSITIONS_SEED: &[u8] = b"vi_for_positions";
-        Pubkey::find_program_address(
-            &[
-                VIRTUAL_INVENTORY_FOR_POSITIONS_SEED,
-                store.as_ref(),
-                index_token.as_ref(),
-            ],
-            store_program_id,
-        )
-    }
-
     /// Validate virtual inventory consistency for swaps.
+    ///
+    /// # Note
+    /// We do not validate PDA address matching here because:
+    /// - The assumption that the provided VI address must match the calculated PDA is too strong
+    /// - PDA address calculation has high computational cost
     fn validate_vi_for_swaps(&self) -> gmsol_model::Result<()> {
         if self.disable_vis {
             return Ok(());
@@ -501,27 +472,16 @@ impl MarketModel {
             (false, true) => Err(gmsol_model::Error::InvalidArgument(
                 "virtual inventory for swaps should not be present but is provided",
             )),
-            (true, true) => {
-                // Validate address match
-                let expected_address = self.market.virtual_inventory_for_swaps;
-                let vi = self.vi_for_swaps.as_ref().unwrap();
-                let calculated_address = Self::calculate_vi_for_swaps_address(
-                    &vi.store,
-                    vi.index,
-                    &crate::gmsol_store::ID,
-                );
-                if calculated_address.0 != expected_address {
-                    return Err(gmsol_model::Error::InvalidArgument(
-                        "virtual inventory for swaps address mismatch: expected address from the provided VI does not match the market's VI address",
-                    ));
-                }
-                Ok(())
-            }
-            (false, false) => Ok(()),
+            _ => Ok(()),
         }
     }
 
     /// Validate virtual inventory consistency for positions.
+    ///
+    /// # Note
+    /// We do not validate PDA address matching here because:
+    /// - The assumption that the provided VI address must match the calculated PDA is too strong
+    /// - PDA address calculation has high computational cost
     fn validate_vi_for_positions(&self) -> gmsol_model::Result<()> {
         if self.disable_vis {
             return Ok(());
@@ -537,23 +497,7 @@ impl MarketModel {
             (false, true) => Err(gmsol_model::Error::InvalidArgument(
                 "virtual inventory for positions should not be present but is provided",
             )),
-            (true, true) => {
-                // Validate address match
-                let expected_address = self.market.virtual_inventory_for_positions;
-                let vi = self.vi_for_positions.as_ref().unwrap();
-                let calculated_address = Self::calculate_vi_for_positions_address(
-                    &vi.store,
-                    &self.market.meta.index_token_mint,
-                    &crate::gmsol_store::ID,
-                );
-                if calculated_address.0 != expected_address {
-                    return Err(gmsol_model::Error::InvalidArgument(
-                        "virtual inventory for positions address mismatch: expected address from the provided VI does not match the market's VI address",
-                    ));
-                }
-                Ok(())
-            }
-            (false, false) => Ok(()),
+            _ => Ok(()),
         }
     }
 
