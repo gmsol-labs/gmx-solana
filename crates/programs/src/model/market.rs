@@ -1,5 +1,6 @@
 use std::{
     borrow::Borrow,
+    collections::BTreeMap,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -290,32 +291,32 @@ impl MarketModel {
         // guard is automatically dropped at the end of scope, restoring original state
     }
 
-    /// Execute a function with the specified virtual inventory models.
+    /// Execute a function with virtual inventory models from a map.
     ///
     /// This method temporarily replaces the virtual inventory models
-    /// (for swaps and positions) of the `MarketModel`, executes the
-    /// provided function, and then restores the original values.
+    /// (for swaps and positions) of the `MarketModel` with models from the provided map,
+    /// executes the provided function, and then restores the original values.
+    ///
+    /// The virtual inventory models are looked up from the map using the market's
+    /// `virtual_inventory_for_swaps` and `virtual_inventory_for_positions` addresses.
     ///
     /// # Arguments
-    /// * `vi_for_swaps` - Optional virtual inventory model for swaps (wrapped in `Arc`)
-    /// * `vi_for_positions` - Optional virtual inventory model for positions (wrapped in `Arc`)
+    /// * `vi_map` - A mutable reference to a map of Pubkey to VirtualInventoryModel
     /// * `f` - Function to execute with the temporary VI models
     ///
     /// # Returns
     /// The return value of the function `f`
     ///
     /// # Note
-    /// The virtual inventory models are passed as `Arc` to avoid unnecessary cloning.
-    /// If you have a `VirtualInventoryModel` value, wrap it with `Arc::new()` before passing.
-    /// The passed `Arc` values will be consumed. If you need to reuse them after the call,
-    /// you should clone them **before** passing (which is cheap).
+    /// The virtual inventory models are passed via a mutable reference to a map,
+    /// allowing the caller to maintain access to the models and observe any
+    /// state changes made during the function execution.
     ///
     /// # Panic Safety
     /// This method uses RAII to ensure state is restored even if the closure panics.
     pub fn with_vi_models<T>(
         &mut self,
-        vi_for_swaps: Option<Arc<VirtualInventoryModel>>,
-        vi_for_positions: Option<Arc<VirtualInventoryModel>>,
+        vi_map: &mut BTreeMap<Pubkey, VirtualInventoryModel>,
         f: impl FnOnce(&mut Self) -> T,
     ) -> T {
         struct ViModelsGuard<'a> {
@@ -337,6 +338,29 @@ impl MarketModel {
             }
         }
 
+        // Look up VI models from the map using market addresses
+        let vi_for_swaps = self
+            .market
+            .virtual_inventory_for_swaps
+            .ne(&Pubkey::default())
+            .then(|| {
+                vi_map
+                    .get_mut(&self.market.virtual_inventory_for_swaps)
+                    .map(|vi| Arc::new(vi.clone()))
+            })
+            .flatten();
+
+        let vi_for_positions = self
+            .market
+            .virtual_inventory_for_positions
+            .ne(&Pubkey::default())
+            .then(|| {
+                vi_map
+                    .get_mut(&self.market.virtual_inventory_for_positions)
+                    .map(|vi| Arc::new(vi.clone()))
+            })
+            .flatten();
+
         let mut temp_vi_for_swaps = vi_for_swaps;
         let mut temp_vi_for_positions = vi_for_positions;
         std::mem::swap(&mut self.vi_for_swaps, &mut temp_vi_for_swaps);
@@ -348,8 +372,51 @@ impl MarketModel {
             original_vi_for_positions: temp_vi_for_positions,
         };
 
-        (f)(guard.model)
-        // guard is automatically dropped at the end of scope, restoring original state
+        let result = (f)(guard.model);
+
+        // Update the map with any changes made to the VI models
+        // Extract the modified VI models from Arc and write them back to the map
+        if let Some(vi_for_swaps_arc) = guard.model.vi_for_swaps.take() {
+            if let Some(vi_in_map) = vi_map.get_mut(&guard.model.market.virtual_inventory_for_swaps)
+            {
+                // Try to unwrap the Arc to get the owned VirtualInventoryModel
+                // If the Arc is unique (which it should be since we just created it),
+                // this will extract the model without cloning
+                match Arc::try_unwrap(vi_for_swaps_arc) {
+                    Ok(vi_model) => {
+                        *vi_in_map = vi_model;
+                    }
+                    Err(arc) => {
+                        // If the Arc is shared (shouldn't happen, but handle it gracefully),
+                        // clone the model and restore the Arc
+                        *vi_in_map = (*arc).clone();
+                        guard.model.vi_for_swaps = Some(arc);
+                    }
+                }
+            } else {
+                // Restore the Arc if the key doesn't exist in the map
+                guard.model.vi_for_swaps = Some(vi_for_swaps_arc);
+            }
+        }
+        if let Some(vi_for_positions_arc) = guard.model.vi_for_positions.take() {
+            if let Some(vi_in_map) =
+                vi_map.get_mut(&guard.model.market.virtual_inventory_for_positions)
+            {
+                match Arc::try_unwrap(vi_for_positions_arc) {
+                    Ok(vi_model) => {
+                        *vi_in_map = vi_model;
+                    }
+                    Err(arc) => {
+                        *vi_in_map = (*arc).clone();
+                        guard.model.vi_for_positions = Some(arc);
+                    }
+                }
+            } else {
+                guard.model.vi_for_positions = Some(vi_for_positions_arc);
+            }
+        }
+
+        result
     }
 
     /// Execute a function with virtual inventories disabled.
