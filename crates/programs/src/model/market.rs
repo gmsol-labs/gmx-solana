@@ -223,8 +223,8 @@ pub struct MarketModel {
     market: Arc<Market>,
     supply: u64,
     swap_pricing: SwapPricingKind,
-    vi_for_swaps: Option<Arc<VirtualInventoryModel>>,
-    vi_for_positions: Option<Arc<VirtualInventoryModel>>,
+    vi_for_swaps: Option<VirtualInventoryModel>,
+    vi_for_positions: Option<VirtualInventoryModel>,
     disable_vis: bool,
 }
 
@@ -321,8 +321,8 @@ impl MarketModel {
     ) -> T {
         struct ViModelsGuard<'a> {
             model: &'a mut MarketModel,
-            original_vi_for_swaps: Option<Arc<VirtualInventoryModel>>,
-            original_vi_for_positions: Option<Arc<VirtualInventoryModel>>,
+            original_vi_for_swaps: Option<VirtualInventoryModel>,
+            original_vi_for_positions: Option<VirtualInventoryModel>,
         }
 
         impl Drop for ViModelsGuard<'_> {
@@ -346,7 +346,7 @@ impl MarketModel {
             .then(|| {
                 vi_map
                     .get_mut(&self.market.virtual_inventory_for_swaps)
-                    .map(|vi| Arc::new(vi.clone()))
+                    .map(|vi| vi.clone())
             })
             .flatten();
 
@@ -357,7 +357,7 @@ impl MarketModel {
             .then(|| {
                 vi_map
                     .get_mut(&self.market.virtual_inventory_for_positions)
-                    .map(|vi| Arc::new(vi.clone()))
+                    .map(|vi| vi.clone())
             })
             .flatten();
 
@@ -375,44 +375,21 @@ impl MarketModel {
         let result = (f)(guard.model);
 
         // Update the map with any changes made to the VI models
-        // Extract the modified VI models from Arc and write them back to the map
-        if let Some(vi_for_swaps_arc) = guard.model.vi_for_swaps.take() {
+        if let Some(vi_for_swaps_model) = guard.model.vi_for_swaps.take() {
             if let Some(vi_in_map) = vi_map.get_mut(&guard.model.market.virtual_inventory_for_swaps)
             {
-                // Try to unwrap the Arc to get the owned VirtualInventoryModel
-                // If the Arc is unique (which it should be since we just created it),
-                // this will extract the model without cloning
-                match Arc::try_unwrap(vi_for_swaps_arc) {
-                    Ok(vi_model) => {
-                        *vi_in_map = vi_model;
-                    }
-                    Err(arc) => {
-                        // If the Arc is shared (shouldn't happen, but handle it gracefully),
-                        // clone the model and restore the Arc
-                        *vi_in_map = (*arc).clone();
-                        guard.model.vi_for_swaps = Some(arc);
-                    }
-                }
+                *vi_in_map = vi_for_swaps_model;
             } else {
-                // Restore the Arc if the key doesn't exist in the map
-                guard.model.vi_for_swaps = Some(vi_for_swaps_arc);
+                guard.model.vi_for_swaps = Some(vi_for_swaps_model);
             }
         }
-        if let Some(vi_for_positions_arc) = guard.model.vi_for_positions.take() {
+        if let Some(vi_for_positions_model) = guard.model.vi_for_positions.take() {
             if let Some(vi_in_map) =
                 vi_map.get_mut(&guard.model.market.virtual_inventory_for_positions)
             {
-                match Arc::try_unwrap(vi_for_positions_arc) {
-                    Ok(vi_model) => {
-                        *vi_in_map = vi_model;
-                    }
-                    Err(arc) => {
-                        *vi_in_map = (*arc).clone();
-                        guard.model.vi_for_positions = Some(arc);
-                    }
-                }
+                *vi_in_map = vi_for_positions_model;
             } else {
-                guard.model.vi_for_positions = Some(vi_for_positions_arc);
+                guard.model.vi_for_positions = Some(vi_for_positions_model);
             }
         }
 
@@ -1067,10 +1044,7 @@ impl gmsol_model::BaseMarketMut<{ constants::MARKET_DECIMALS }> for MarketModel 
             return Ok(None);
         }
         self.validate_vi_for_swaps()?;
-        Ok(self.vi_for_swaps.as_mut().map(|vi| {
-            let vi_mut = Arc::make_mut(vi);
-            vi_mut.pool_mut()
-        }))
+        Ok(self.vi_for_swaps.as_mut().map(|vi| vi.pool_mut()))
     }
 }
 
@@ -1170,10 +1144,7 @@ impl gmsol_model::PerpMarketMut<{ constants::MARKET_DECIMALS }> for MarketModel 
             return Ok(None);
         }
         self.validate_vi_for_positions()?;
-        Ok(self.vi_for_positions.as_mut().map(|vi| {
-            let vi_mut = Arc::make_mut(vi);
-            vi_mut.pool_mut()
-        }))
+        Ok(self.vi_for_positions.as_mut().map(|vi| vi.pool_mut()))
     }
 }
 
