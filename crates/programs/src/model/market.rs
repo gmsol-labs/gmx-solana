@@ -321,75 +321,77 @@ impl MarketModel {
     ) -> T {
         struct ViModelsGuard<'a> {
             model: &'a mut MarketModel,
-            original_vi_for_swaps: Option<VirtualInventoryModel>,
-            original_vi_for_positions: Option<VirtualInventoryModel>,
+            loaded_from_map_for_swaps: bool,
+            loaded_from_map_for_positions: bool,
         }
 
         impl Drop for ViModelsGuard<'_> {
             fn drop(&mut self) {
-                std::mem::swap(
-                    &mut self.model.vi_for_swaps,
-                    &mut self.original_vi_for_swaps,
-                );
-                std::mem::swap(
-                    &mut self.model.vi_for_positions,
-                    &mut self.original_vi_for_positions,
-                );
+                if self.loaded_from_map_for_swaps {
+                    // Detach temporary VI from the model; it will have been
+                    // moved back into the map before this guard is dropped.
+                    self.model.vi_for_swaps = None;
+                }
+                if self.loaded_from_map_for_positions {
+                    self.model.vi_for_positions = None;
+                }
             }
         }
 
-        // Look up VI models from the map using market addresses
-        let vi_for_swaps = self
-            .market
-            .virtual_inventory_for_swaps
-            .ne(&Pubkey::default())
-            .then(|| {
-                vi_map
-                    .get_mut(&self.market.virtual_inventory_for_swaps)
-                    .map(|vi| vi.clone())
-            })
-            .flatten();
+        // Determine the VI addresses, if any.
+        let vi_for_swaps_key = (self.market.virtual_inventory_for_swaps != Pubkey::default())
+            .then_some(self.market.virtual_inventory_for_swaps);
+        let vi_for_positions_key = (self.market.virtual_inventory_for_positions
+            != Pubkey::default())
+        .then_some(self.market.virtual_inventory_for_positions);
 
-        let vi_for_positions = self
-            .market
-            .virtual_inventory_for_positions
-            .ne(&Pubkey::default())
-            .then(|| {
-                vi_map
-                    .get_mut(&self.market.virtual_inventory_for_positions)
-                    .map(|vi| vi.clone())
-            })
-            .flatten();
+        // Attach VI models from the map to the MarketModel *only if* the model
+        // does not already have VI models attached. This ensures that nested
+        // calls to `with_vi_models` reuse the same VI instances instead of
+        // creating independent copies.
+        let mut loaded_from_map_for_swaps = false;
+        if self.vi_for_swaps.is_none() {
+            if let Some(key) = vi_for_swaps_key {
+                if let Some(vi_model) = vi_map.remove(&key) {
+                    self.vi_for_swaps = Some(vi_model);
+                    loaded_from_map_for_swaps = true;
+                }
+            }
+        }
 
-        let mut temp_vi_for_swaps = vi_for_swaps;
-        let mut temp_vi_for_positions = vi_for_positions;
-        std::mem::swap(&mut self.vi_for_swaps, &mut temp_vi_for_swaps);
-        std::mem::swap(&mut self.vi_for_positions, &mut temp_vi_for_positions);
+        let mut loaded_from_map_for_positions = false;
+        if self.vi_for_positions.is_none() {
+            if let Some(key) = vi_for_positions_key {
+                if let Some(vi_model) = vi_map.remove(&key) {
+                    self.vi_for_positions = Some(vi_model);
+                    loaded_from_map_for_positions = true;
+                }
+            }
+        }
 
         let guard = ViModelsGuard {
             model: self,
-            original_vi_for_swaps: temp_vi_for_swaps,
-            original_vi_for_positions: temp_vi_for_positions,
+            loaded_from_map_for_swaps,
+            loaded_from_map_for_positions,
         };
 
         let result = (f)(guard.model);
 
-        // Update the map with any changes made to the VI models
-        if let Some(vi_for_swaps_model) = guard.model.vi_for_swaps.take() {
-            if let Some(vi_in_map) = vi_map.get_mut(&guard.model.market.virtual_inventory_for_swaps)
+        // Update the map with any changes made to the VI models. For VI models
+        // that were taken from the map at the start of this call, move them
+        // back into the map so that subsequent users observe the updated state.
+        if loaded_from_map_for_swaps {
+            if let (Some(key), Some(vi_for_swaps_model)) =
+                (vi_for_swaps_key, guard.model.vi_for_swaps.take())
             {
-                *vi_in_map = vi_for_swaps_model;
-            } else {
-                guard.model.vi_for_swaps = Some(vi_for_swaps_model);
+                vi_map.insert(key, vi_for_swaps_model);
             }
         }
-        if let Some(vi_for_positions_model) = guard.model.vi_for_positions.take() {
-            if let Some(vi_in_map) =
-                vi_map.get_mut(&guard.model.market.virtual_inventory_for_positions)
+        if loaded_from_map_for_positions {
+            if let (Some(key), Some(vi_for_positions_model)) =
+                (vi_for_positions_key, guard.model.vi_for_positions.take())
             {
-                *vi_in_map = vi_for_positions_model;
-            } else {
-                guard.model.vi_for_positions = Some(vi_for_positions_model);
+                vi_map.insert(key, vi_for_positions_model);
             }
         }
 
