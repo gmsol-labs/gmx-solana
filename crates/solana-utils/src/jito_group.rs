@@ -273,15 +273,11 @@ impl JitoGroup {
                     max_txs_per_bundle
                 };
                 let mut cur_stage: Vec<Vec<VersionedTransaction>> = Vec::new();
-                let mut stage_open = false;
                 for mut p in pg_txs.into_iter() {
                     if !p.pg_mergeable {
-                        // flush current stage
                         if !cur_stage.is_empty() {
                             staged.push(std::mem::take(&mut cur_stage));
                         }
-                        stage_open = false;
-                        // non-mergeable PG becomes its own stage
                         let mut stage: Vec<Vec<VersionedTransaction>> = Vec::new();
                         let mut cur: Vec<VersionedTransaction> = Vec::new();
                         for (tx, ag_ok) in p.txns.drain(..).zip(p.ag_mergeable.into_iter()) {
@@ -303,26 +299,43 @@ impl JitoGroup {
                         staged.push(stage);
                         continue;
                     }
-                    // mergeable PG: pack within current open stage
-                    for (tx, ag_ok) in p.txns.into_iter().zip(p.ag_mergeable.into_iter()) {
+
+                    let can_merge_into_current_stage = if cur_stage.len() == 1 {
+                        cur_stage[0].len() < limit
+                    } else {
+                        false
+                    };
+
+                    if !can_merge_into_current_stage && !cur_stage.is_empty() {
+                        staged.push(std::mem::take(&mut cur_stage));
+                    }
+
+                    let mut bundles: Vec<Vec<VersionedTransaction>> = Vec::new();
+                    let mut cur: Vec<VersionedTransaction> = if can_merge_into_current_stage {
+                        std::mem::take(&mut cur_stage[0])
+                    } else {
+                        Vec::new()
+                    };
+
+                    for (tx, ag_ok) in p.txns.drain(..).zip(p.ag_mergeable.into_iter()) {
                         if ag_ok {
-                            if !stage_open {
-                                stage_open = true;
-                            }
-                            if let Some(last) = cur_stage.last_mut() {
-                                if last.len() < limit {
-                                    last.push(tx);
-                                } else {
-                                    cur_stage.push(vec![tx]);
-                                }
-                            } else {
-                                cur_stage.push(vec![tx]);
+                            cur.push(tx);
+                            if cur.len() >= limit {
+                                bundles.push(std::mem::take(&mut cur));
                             }
                         } else {
-                            // break packing; non-mergeable is solo bundle inside the stage
-                            cur_stage.push(vec![tx]);
+                            if !cur.is_empty() {
+                                bundles.push(std::mem::take(&mut cur));
+                            }
+                            bundles.push(vec![tx]);
                         }
                     }
+
+                    if !cur.is_empty() {
+                        bundles.push(cur);
+                    }
+
+                    cur_stage = bundles;
                 }
                 if !cur_stage.is_empty() {
                     staged.push(cur_stage);
