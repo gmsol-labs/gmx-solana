@@ -314,6 +314,13 @@ impl MarketModel {
     ///
     /// # Panic Safety
     /// This method uses RAII to ensure state is restored even if the closure panics.
+    ///
+    /// # Notes
+    /// - If the `MarketModel` already has virtual inventory models attached
+    ///   (i.e. `vi_for_swaps` / `vi_for_positions` are `Some`), this function
+    ///   will not load VI models from `vi_map` and will not write any changes
+    ///   back to `vi_map`. In that case, only the existing in-model VI
+    ///   instances are used and mutated.
     pub fn with_vi_models<T>(
         &mut self,
         vi_map: &mut BTreeMap<Pubkey, VirtualInventoryModel>,
