@@ -89,9 +89,11 @@ impl WithdrawalSimulation<'_> {
         let short_receive_token = short_receive_token.copied().unwrap_or(short_token);
 
         // Execute withdrawal.
-        let report = market
-            .withdraw(u128::from(params.market_token_amount), prices)?
-            .execute()?;
+        let report = market.with_vis_disabled(|market| {
+            market
+                .withdraw(u128::from(params.market_token_amount), prices)?
+                .execute()
+        })?;
 
         let (long_amount, short_amount) =
             (*report.long_token_output(), *report.short_token_output());

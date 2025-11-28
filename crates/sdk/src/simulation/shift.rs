@@ -72,12 +72,14 @@ impl ShiftSimulation<'_> {
             .expect("must exist");
 
         let withdraw = from_market.with_swap_pricing(SwapPricingKind::Shift, |market| {
-            market
-                .withdraw(
-                    params.from_market_token_amount.into(),
-                    prices_for_from_market,
-                )?
-                .execute()
+            market.with_vis_disabled(|market| {
+                market
+                    .withdraw(
+                        params.from_market_token_amount.into(),
+                        prices_for_from_market,
+                    )?
+                    .execute()
+            })
         })?;
 
         let (long_token_amount, short_token_amount) = (
@@ -96,9 +98,11 @@ impl ShiftSimulation<'_> {
             .get_market_mut(to_market_token)
             .expect("must exist");
         let deposit = to_market.with_swap_pricing(SwapPricingKind::Shift, |market| {
-            market
-                .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
-                .execute()
+            market.with_vis_disabled(|market| {
+                market
+                    .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
+                    .execute()
+            })
         })?;
 
         let minted = deposit.minted();

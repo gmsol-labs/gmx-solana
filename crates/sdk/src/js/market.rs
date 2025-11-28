@@ -128,17 +128,17 @@ pub struct JsMarketModel {
 impl JsMarketModel {
     /// Get market token price.
     pub fn market_token_price(&self, params: MarketTokenPriceParams) -> crate::Result<u128> {
-        Ok(self.model.market_token_price(
-            &params.prices.into(),
-            params.pnl_factor,
-            params.maximize,
-        )?)
+        let mut market_model = self.model.clone();
+        Ok(market_model.with_vis_disabled(|market| {
+            market.market_token_price(&params.prices.into(), params.pnl_factor, params.maximize)
+        })?)
     }
 
     /// Get market status.
     pub fn status(&self, params: MarketStatusParams) -> crate::Result<MarketStatus> {
         let prices = params.prices.into();
-        self.model.status(&prices)
+        let mut market_model = self.model.clone();
+        market_model.with_vis_disabled(|market| market.status(&prices))
     }
 
     /// Returns current supply.
@@ -178,10 +178,12 @@ impl JsMarketModel {
             options.store_program_id = *program_id;
         }
 
-        let position =
-            self.model
+        let mut market_model = self.model.clone();
+        let position = market_model.with_vis_disabled(|market| {
+            market
                 .clone()
-                .into_empty_position_opts(is_long, *collateral_token, options)?;
+                .into_empty_position_opts(is_long, *collateral_token, options)
+        })?;
 
         Ok(position.into())
     }
