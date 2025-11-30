@@ -328,19 +328,33 @@ impl MarketModel {
     ) -> T {
         struct ViModelsGuard<'a> {
             model: &'a mut MarketModel,
+            vi_map: &'a mut BTreeMap<Pubkey, VirtualInventoryModel>,
+            vi_for_swaps_key: Option<Pubkey>,
+            vi_for_positions_key: Option<Pubkey>,
             loaded_from_map_for_swaps: bool,
             loaded_from_map_for_positions: bool,
         }
 
         impl Drop for ViModelsGuard<'_> {
             fn drop(&mut self) {
+                // All cleanup work must be done in Drop to ensure panic safety.
+                // This includes:
+                // 1. Moving VI models back to vi_map
+                // 2. Setting vi_for_* to None in the model (via take())
                 if self.loaded_from_map_for_swaps {
-                    // Detach temporary VI from the model; it will have been
-                    // moved back into the map before this guard is dropped.
-                    self.model.vi_for_swaps = None;
+                    if let (Some(key), Some(vi_for_swaps_model)) =
+                        (self.vi_for_swaps_key, self.model.vi_for_swaps.take())
+                    {
+                        self.vi_map.insert(key, vi_for_swaps_model);
+                    }
                 }
                 if self.loaded_from_map_for_positions {
-                    self.model.vi_for_positions = None;
+                    if let (Some(key), Some(vi_for_positions_model)) = (
+                        self.vi_for_positions_key,
+                        self.model.vi_for_positions.take(),
+                    ) {
+                        self.vi_map.insert(key, vi_for_positions_model);
+                    }
                 }
             }
         }
@@ -376,33 +390,22 @@ impl MarketModel {
             }
         }
 
-        let guard = ViModelsGuard {
-            model: self,
-            loaded_from_map_for_swaps,
-            loaded_from_map_for_positions,
-        };
-
-        let result = (f)(guard.model);
-
-        // Update the map with any changes made to the VI models. For VI models
-        // that were taken from the map at the start of this call, move them
-        // back into the map so that subsequent users observe the updated state.
-        if loaded_from_map_for_swaps {
-            if let (Some(key), Some(vi_for_swaps_model)) =
-                (vi_for_swaps_key, guard.model.vi_for_swaps.take())
-            {
-                vi_map.insert(key, vi_for_swaps_model);
-            }
+        // Use a scope block to limit guard's lifetime to f's execution only.
+        // This ensures:
+        // 1. Panic safety: guard drop will restore VI models even if f panics
+        // 2. vi_map is released immediately after f completes, allowing future access
+        {
+            let guard = ViModelsGuard {
+                model: self,
+                vi_map,
+                vi_for_swaps_key,
+                vi_for_positions_key,
+                loaded_from_map_for_swaps,
+                loaded_from_map_for_positions,
+            };
+            (f)(guard.model)
+            // guard is dropped here, restoring VI models to vi_map
         }
-        if loaded_from_map_for_positions {
-            if let (Some(key), Some(vi_for_positions_model)) =
-                (vi_for_positions_key, guard.model.vi_for_positions.take())
-            {
-                vi_map.insert(key, vi_for_positions_model);
-            }
-        }
-
-        result
     }
 
     /// Execute a function with virtual inventories disabled.
