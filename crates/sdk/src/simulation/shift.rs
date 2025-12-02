@@ -72,33 +72,39 @@ impl ShiftSimulation<'_> {
         }
 
         // Execute withdrawal.
+        let vi_map_for_withdraw: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
+            BTreeMap::new()
+        } else {
+            simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
+        };
         let from_market = simulator
             .get_market_mut(from_market_token)
             .expect("must exist");
 
-        let withdraw = from_market.with_swap_pricing(SwapPricingKind::Shift, |market| {
-            if options.disable_vis {
-                market.with_vis_disabled(|market| {
-                    market
-                        .withdraw(
-                            params.from_market_token_amount.into(),
-                            prices_for_from_market,
-                        )?
-                        .execute()
-                })
-            } else {
-                let mut vi_map: BTreeMap<Pubkey, VirtualInventoryModel> =
-                    simulator.vis().map(|(k, v)| (*k, v.clone())).collect();
-                market.with_vi_models(&mut vi_map, |market| {
-                    market
-                        .withdraw(
-                            params.from_market_token_amount.into(),
-                            prices_for_from_market,
-                        )?
-                        .execute()
-                })
-            }
-        })?;
+        let withdraw = {
+            let mut vi_map = vi_map_for_withdraw;
+            from_market.with_swap_pricing(SwapPricingKind::Shift, |market| {
+                if options.disable_vis {
+                    market.with_vis_disabled(|market| {
+                        market
+                            .withdraw(
+                                params.from_market_token_amount.into(),
+                                prices_for_from_market,
+                            )?
+                            .execute()
+                    })
+                } else {
+                    market.with_vi_models(&mut vi_map, |market| {
+                        market
+                            .withdraw(
+                                params.from_market_token_amount.into(),
+                                prices_for_from_market,
+                            )?
+                            .execute()
+                    })
+                }
+            })?
+        };
 
         let (long_token_amount, short_token_amount) = (
             *withdraw.long_token_output(),
@@ -112,26 +118,32 @@ impl ShiftSimulation<'_> {
         }
 
         // Execute deposit.
+        let vi_map_for_deposit: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
+            BTreeMap::new()
+        } else {
+            simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
+        };
         let to_market = simulator
             .get_market_mut(to_market_token)
             .expect("must exist");
-        let deposit = to_market.with_swap_pricing(SwapPricingKind::Shift, |market| {
-            if options.disable_vis {
-                market.with_vis_disabled(|market| {
-                    market
-                        .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
-                        .execute()
-                })
-            } else {
-                let mut vi_map: BTreeMap<Pubkey, VirtualInventoryModel> =
-                    simulator.vis().map(|(k, v)| (*k, v.clone())).collect();
-                market.with_vi_models(&mut vi_map, |market| {
-                    market
-                        .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
-                        .execute()
-                })
-            }
-        })?;
+        let deposit = {
+            let mut vi_map = vi_map_for_deposit;
+            to_market.with_swap_pricing(SwapPricingKind::Shift, |market| {
+                if options.disable_vis {
+                    market.with_vis_disabled(|market| {
+                        market
+                            .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
+                            .execute()
+                    })
+                } else {
+                    market.with_vi_models(&mut vi_map, |market| {
+                        market
+                            .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
+                            .execute()
+                    })
+                }
+            })?
+        };
 
         let minted = deposit.minted();
         let min_to_market_token_amount = params.min_to_market_token_amount;

@@ -121,6 +121,11 @@ impl GlvWithdrawalSimulation<'_> {
             .expect("must exist")
             .withdraw_from_glv(market_token, market_token_amount, params.glv_token_amount)?;
 
+        let vi_map: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
+            BTreeMap::new()
+        } else {
+            simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
+        };
         let market = simulator.get_market_mut(market_token).expect("must exist");
 
         // Execute withdrawal.
@@ -131,8 +136,7 @@ impl GlvWithdrawalSimulation<'_> {
                     .execute()
             })?
         } else {
-            let mut vi_map: BTreeMap<Pubkey, VirtualInventoryModel> =
-                simulator.vis().map(|(k, v)| (*k, v.clone())).collect();
+            let mut vi_map = vi_map;
             market.with_vi_models(&mut vi_map, |market| {
                 market
                     .withdraw(u128::from(market_token_amount), prices)?

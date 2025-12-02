@@ -235,6 +235,11 @@ impl OrderSimulation<'_> {
             return Err(crate::Error::custom("[sim] invalid swap path"));
         }
 
+        let vi_map: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
+            BTreeMap::new()
+        } else {
+            simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
+        };
         let storage = simulator
             .get_market_mut(&params.market_token)
             .expect("market storage must exist");
@@ -258,8 +263,7 @@ impl OrderSimulation<'_> {
                 })?,
             }
         } else {
-            let mut vi_map: BTreeMap<Pubkey, VirtualInventoryModel> =
-                simulator.vis().map(|(k, v)| (*k, v.clone())).collect();
+            let mut vi_map = vi_map;
             match position {
                 Some(position) => {
                     if position.collateral_token != *collateral_or_swap_out_token {
@@ -367,6 +371,11 @@ impl OrderSimulation<'_> {
             return Err(crate::Error::custom("[sim] collateral token mismatched"));
         }
 
+        let vi_map: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
+            BTreeMap::new()
+        } else {
+            simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
+        };
         let storage = simulator
             .get_market_mut(&params.market_token)
             .expect("market storage must exist");
@@ -377,8 +386,7 @@ impl OrderSimulation<'_> {
             market
                 .with_vis_disabled(|market| PositionModel::new(market.clone(), position.clone()))?
         } else {
-            let mut vi_map: BTreeMap<Pubkey, VirtualInventoryModel> =
-                simulator.vis().map(|(k, v)| (*k, v.clone())).collect();
+            let mut vi_map = vi_map;
             market.with_vi_models(&mut vi_map, |market| {
                 PositionModel::new(market.clone(), position.clone())
             })?
