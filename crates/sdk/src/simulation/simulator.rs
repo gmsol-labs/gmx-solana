@@ -256,13 +256,20 @@ impl Simulator {
     }
 
     /// Swap along the provided path.
+    ///
+    /// # Arguments
+    /// * `path` - The path of market tokens to swap along
+    /// * `source_token` - The source token to swap from
+    /// * `amount` - The amount to swap
+    /// * `options` - Optional simulation options. If `None`, default options are used.
     pub fn swap_along_path(
         &mut self,
         path: &[Pubkey],
         source_token: &Pubkey,
-        mut amount: u128,
+        amount: u128,
+        options: Option<SimulationOptions>,
     ) -> crate::Result<SwapOutput> {
-        self.swap_along_path_with_options(path, source_token, amount, SimulationOptions::default())
+        self.swap_along_path_with_options(path, source_token, amount, options.unwrap_or_default())
     }
 
     /// Swap along the provided path with options.
