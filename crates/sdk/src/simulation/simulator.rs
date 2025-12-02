@@ -362,11 +362,6 @@ impl Simulator {
         self.vis.iter()
     }
 
-    /// Get a mutable reference to the virtual inventory map for internal use.
-    pub(crate) fn vis_mut(&mut self) -> &mut HashMap<Pubkey, VirtualInventoryModel> {
-        &mut self.vis
-    }
-
     /// Create a builder for order simulation.
     pub fn simulate_order<'a>(
         &'a mut self,
