@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use gmsol_model::{
     action::{
@@ -14,7 +14,7 @@ use gmsol_model::{
 use gmsol_programs::{
     constants::{MARKET_DECIMALS, MARKET_USD_UNIT},
     gmsol_store::accounts::Position,
-    model::{MarketModel, PositionModel},
+    model::{MarketModel, PositionModel, VirtualInventoryModel},
 };
 use rust_decimal::prelude::Zero;
 use solana_sdk::pubkey::Pubkey;
@@ -225,7 +225,12 @@ impl OrderSimulation<'_> {
         }
 
         let source_token = pay_token.unwrap_or(collateral_or_swap_out_token);
-        let swap_output = simulator.swap_along_path(swap_path, source_token, params.amount)?;
+        let swap_output = simulator.swap_along_path_with_options(
+            swap_path,
+            source_token,
+            params.amount,
+            options.clone(),
+        )?;
         if swap_output.output_token() != collateral_or_swap_out_token {
             return Err(crate::Error::custom("[sim] invalid swap path"));
         }
@@ -236,20 +241,40 @@ impl OrderSimulation<'_> {
 
         let mut market = storage.clone();
 
-        let mut position = match position {
-            Some(position) => {
-                if position.collateral_token != *collateral_or_swap_out_token {
-                    return Err(crate::Error::custom("[sim] collateral token mismatched"));
+        let mut position = if options.disable_vis {
+            match position {
+                Some(position) => {
+                    if position.collateral_token != *collateral_or_swap_out_token {
+                        return Err(crate::Error::custom("[sim] collateral token mismatched"));
+                    }
+                    market.with_vis_disabled(|market| {
+                        PositionModel::new(market.clone(), position.clone())
+                    })?
                 }
-                market.with_vis_disabled(|market| {
-                    PositionModel::new(market.clone(), position.clone())
-                })?
+                None => market.with_vis_disabled(|market| {
+                    market
+                        .clone()
+                        .into_empty_position(params.is_long, *collateral_or_swap_out_token)
+                })?,
             }
-            None => market.with_vis_disabled(|market| {
-                market
-                    .clone()
-                    .into_empty_position(params.is_long, *collateral_or_swap_out_token)
-            })?,
+        } else {
+            let mut vi_map: BTreeMap<Pubkey, VirtualInventoryModel> =
+                simulator.vis().map(|(k, v)| (*k, v.clone())).collect();
+            match position {
+                Some(position) => {
+                    if position.collateral_token != *collateral_or_swap_out_token {
+                        return Err(crate::Error::custom("[sim] collateral token mismatched"));
+                    }
+                    market.with_vi_models(&mut vi_map, |market| {
+                        PositionModel::new(market.clone(), position.clone())
+                    })?
+                }
+                None => market.with_vi_models(&mut vi_map, |market| {
+                    market
+                        .clone()
+                        .into_empty_position(params.is_long, *collateral_or_swap_out_token)
+                })?,
+            }
         };
 
         let report = position
@@ -348,8 +373,16 @@ impl OrderSimulation<'_> {
 
         let mut market = storage.clone();
 
-        let mut position = market
-            .with_vis_disabled(|market| PositionModel::new(market.clone(), position.clone()))?;
+        let mut position = if options.disable_vis {
+            market
+                .with_vis_disabled(|market| PositionModel::new(market.clone(), position.clone()))?
+        } else {
+            let mut vi_map: BTreeMap<Pubkey, VirtualInventoryModel> =
+                simulator.vis().map(|(k, v)| (*k, v.clone())).collect();
+            market.with_vi_models(&mut vi_map, |market| {
+                PositionModel::new(market.clone(), position.clone())
+            })?
+        };
 
         let report = position
             .decrease(
@@ -375,8 +408,12 @@ impl OrderSimulation<'_> {
 
         let swaps = if !report.output_amount().is_zero() {
             let source_token = collateral_or_swap_out_token;
-            let swap_output =
-                simulator.swap_along_path(swap_path, source_token, *report.output_amount())?;
+            let swap_output = simulator.swap_along_path_with_options(
+                swap_path,
+                source_token,
+                *report.output_amount(),
+                options.clone(),
+            )?;
             let receive_token = receive_token.unwrap_or(collateral_or_swap_out_token);
             if swap_output.output_token() != receive_token {
                 return Err(crate::Error::custom(format!(
@@ -415,7 +452,12 @@ impl OrderSimulation<'_> {
 
         let swap_in = *pay_token.unwrap_or(collateral_or_swap_out_token);
 
-        let swap_output = simulator.swap_along_path(swap_path, &swap_in, params.amount)?;
+        let swap_output = simulator.swap_along_path_with_options(
+            swap_path,
+            &swap_in,
+            params.amount,
+            options.clone(),
+        )?;
         if swap_output.output_token() != collateral_or_swap_out_token {
             return Err(crate::Error::custom("[sim] invalid swap path"));
         }

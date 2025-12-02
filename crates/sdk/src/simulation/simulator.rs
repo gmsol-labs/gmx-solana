@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use gmsol_model::{
     action::swap::SwapReport,
@@ -10,7 +13,7 @@ use gmsol_programs::{
         CreateDepositParams, CreateGlvDepositParams, CreateGlvWithdrawalParams, CreateShiftParams,
         CreateWithdrawalParams, MarketMeta,
     },
-    model::MarketModel,
+    model::{MarketModel, VirtualInventoryModel},
 };
 use solana_sdk::pubkey::Pubkey;
 
@@ -123,6 +126,7 @@ pub struct Simulator {
     tokens: HashMap<Pubkey, TokenState>,
     markets: HashMap<Pubkey, MarketModel>,
     glvs: HashMap<Pubkey, GlvModel>,
+    vis: HashMap<Pubkey, VirtualInventoryModel>,
 }
 
 impl Simulator {
@@ -136,6 +140,7 @@ impl Simulator {
             tokens,
             markets,
             glvs,
+            vis: HashMap::new(),
         }
     }
 
@@ -257,6 +262,17 @@ impl Simulator {
         source_token: &Pubkey,
         mut amount: u128,
     ) -> crate::Result<SwapOutput> {
+        self.swap_along_path_with_options(path, source_token, amount, SimulationOptions::default())
+    }
+
+    /// Swap along the provided path with options.
+    pub(crate) fn swap_along_path_with_options(
+        &mut self,
+        path: &[Pubkey],
+        source_token: &Pubkey,
+        mut amount: u128,
+        options: SimulationOptions,
+    ) -> crate::Result<SwapOutput> {
         let mut current_token = *source_token;
 
         let mut reports = Vec::with_capacity(path.len());
@@ -279,9 +295,17 @@ impl Simulator {
                     "[swap] invalid swap step. Current step: {market_token}"
                 )));
             };
-            let report = market.with_vis_disabled(|market| {
-                market.swap(is_token_in_long, amount, prices)?.execute()
-            })?;
+            let report = if options.disable_vis {
+                market.with_vis_disabled(|market| {
+                    market.swap(is_token_in_long, amount, prices)?.execute()
+                })?
+            } else {
+                let mut vi_map: BTreeMap<Pubkey, VirtualInventoryModel> =
+                    self.vis().map(|(k, v)| (*k, v.clone())).collect();
+                market.with_vi_models(&mut vi_map, |market| {
+                    market.swap(is_token_in_long, amount, prices)?.execute()
+                })?
+            };
             amount = *report.token_out_amount();
             reports.push(report);
         }
@@ -306,6 +330,30 @@ impl Simulator {
     /// Get GLV states.
     pub fn glvs(&self) -> impl Iterator<Item = (&Pubkey, &GlvModel)> {
         self.glvs.iter()
+    }
+
+    /// Insert virtual inventory model.
+    pub fn insert_vi(
+        &mut self,
+        vi_address: Pubkey,
+        vi: VirtualInventoryModel,
+    ) -> Option<VirtualInventoryModel> {
+        self.vis.insert(vi_address, vi)
+    }
+
+    /// Get virtual inventory model by address.
+    pub fn get_vi(&self, vi_address: &Pubkey) -> Option<&VirtualInventoryModel> {
+        self.vis.get(vi_address)
+    }
+
+    /// Get all virtual inventory states.
+    pub fn vis(&self) -> impl Iterator<Item = (&Pubkey, &VirtualInventoryModel)> {
+        self.vis.iter()
+    }
+
+    /// Get a mutable reference to the virtual inventory map for internal use.
+    pub(crate) fn vis_mut(&mut self) -> &mut HashMap<Pubkey, VirtualInventoryModel> {
+        &mut self.vis
     }
 
     /// Create a builder for order simulation.
@@ -394,6 +442,8 @@ impl Simulator {
 pub struct SimulationOptions {
     /// Whether to skip the validation for limit price.
     pub skip_limit_price_validation: bool,
+    /// Whether to disable the use of virtual inventories during simulation.
+    pub disable_vis: bool,
 }
 
 /// Token state for [`Simulator`].
