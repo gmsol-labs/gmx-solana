@@ -284,6 +284,11 @@ impl Simulator {
 
         let mut reports = Vec::with_capacity(path.len());
         for market_token in path {
+            let vi_map: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
+                BTreeMap::new()
+            } else {
+                self.vis().map(|(k, v)| (*k, v.clone())).collect()
+            };
             let (market, prices) = self.get_market_with_prices_mut(market_token)?;
             let meta = &market.meta;
             if meta.long_token_mint == meta.short_token_mint {
@@ -307,8 +312,7 @@ impl Simulator {
                     market.swap(is_token_in_long, amount, prices)?.execute()
                 })?
             } else {
-                let mut vi_map: BTreeMap<Pubkey, VirtualInventoryModel> =
-                    self.vis().map(|(k, v)| (*k, v.clone())).collect();
+                let mut vi_map = vi_map;
                 market.with_vi_models(&mut vi_map, |market| {
                     market.swap(is_token_in_long, amount, prices)?.execute()
                 })?
