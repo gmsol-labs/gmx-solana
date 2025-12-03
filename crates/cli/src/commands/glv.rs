@@ -399,7 +399,7 @@ impl TryFrom<GlvConfig> for UpdateGlvParams {
         Ok(Self {
             min_tokens_for_first_deposit: config
                 .min_tokens_for_first_deposit
-                .map(|f| f.0.try_into().map_err(gmsol_sdk::Error::custom))
+                .map(|f| f.to_u64())
                 .transpose()?,
             shift_min_interval_secs: config
                 .shift_min_interval
@@ -420,4 +420,22 @@ struct UpdateGlv {
     glv: GlvConfig,
     #[serde(flatten)]
     market: IndexMap<StringPubkey, MarketConfigWithFlag>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_glv_config_decimals_conversion() {
+        let toml_content = r#"
+            min_tokens_for_first_deposit = "1.2"
+        "#;
+
+        let config: GlvConfig = toml::from_str(toml_content).expect("Failed to parse TOML");
+        let params: UpdateGlvParams = config.try_into().expect("Failed to convert");
+
+        let expected = 1_200_000_000u64;
+        assert_eq!(params.min_tokens_for_first_deposit, Some(expected));
+    }
 }
