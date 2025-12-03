@@ -71,18 +71,21 @@ impl ShiftSimulation<'_> {
             )));
         }
 
-        // Execute withdrawal.
-        let vi_map_for_withdraw: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
+        // Create a single vi_map to be shared between withdraw and deposit operations
+        // This ensures that if both markets share the same VI, the state changes from
+        // withdraw are reflected in deposit (important for shift operations).
+        let mut vi_map: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
             BTreeMap::new()
         } else {
             simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
         };
+
+        // Execute withdrawal.
         let from_market = simulator
             .get_market_mut(from_market_token)
             .expect("must exist");
 
         let withdraw = {
-            let mut vi_map = vi_map_for_withdraw;
             from_market.with_swap_pricing(SwapPricingKind::Shift, |market| {
                 if options.disable_vis {
                     market.with_vis_disabled(|market| {
@@ -117,17 +120,11 @@ impl ShiftSimulation<'_> {
             ));
         }
 
-        // Execute deposit.
-        let vi_map_for_deposit: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
-            BTreeMap::new()
-        } else {
-            simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
-        };
+        // Execute deposit using the same vi_map (so it sees the updated VI state from withdraw).
         let to_market = simulator
             .get_market_mut(to_market_token)
             .expect("must exist");
         let deposit = {
-            let mut vi_map = vi_map_for_deposit;
             to_market.with_swap_pricing(SwapPricingKind::Shift, |market| {
                 if options.disable_vis {
                     market.with_vis_disabled(|market| {
