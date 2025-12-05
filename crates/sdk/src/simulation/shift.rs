@@ -1,13 +1,8 @@
-use std::collections::BTreeMap;
-
 use gmsol_model::{
     action::{deposit::DepositReport, withdraw::WithdrawReport},
     LiquidityMarketMutExt, MarketAction,
 };
-use gmsol_programs::{
-    gmsol_store::types::CreateShiftParams,
-    model::{SwapPricingKind, VirtualInventoryModel},
-};
+use gmsol_programs::{gmsol_store::types::CreateShiftParams, model::SwapPricingKind};
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
@@ -71,41 +66,37 @@ impl ShiftSimulation<'_> {
             )));
         }
 
-        // Create a single vi_map to be shared between withdraw and deposit operations
-        // This ensures that if both markets share the same VI, the state changes from
-        // withdraw are reflected in deposit (important for shift operations).
-        let mut vi_map: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
-            BTreeMap::new()
-        } else {
-            simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
-        };
-
         // Execute withdrawal.
-        let from_market = simulator
-            .get_market_mut(from_market_token)
-            .expect("must exist");
-
         let withdraw = {
-            from_market.with_swap_pricing(SwapPricingKind::Shift, |market| {
-                if options.disable_vis {
-                    market.with_vis_disabled(|market| {
-                        market
-                            .withdraw(
-                                params.from_market_token_amount.into(),
-                                prices_for_from_market,
-                            )?
-                            .execute()
-                    })
-                } else {
-                    market.with_vi_models(&mut vi_map, |market| {
-                        market
-                            .withdraw(
-                                params.from_market_token_amount.into(),
-                                prices_for_from_market,
-                            )?
-                            .execute()
-                    })
-                }
+            let (from_market, maybe_vi_map) = if options.disable_vis {
+                (
+                    simulator
+                        .get_market_mut(from_market_token)
+                        .expect("must exist"),
+                    None,
+                )
+            } else {
+                let (market, vi_map) = simulator.get_market_and_vis_mut(from_market_token)?;
+                (market, Some(vi_map))
+            };
+
+            from_market.with_swap_pricing(SwapPricingKind::Shift, |market| match maybe_vi_map {
+                None => market.with_vis_disabled(|market| {
+                    market
+                        .withdraw(
+                            params.from_market_token_amount.into(),
+                            prices_for_from_market,
+                        )?
+                        .execute()
+                }),
+                Some(vi_map) => market.with_vi_models(vi_map, |market| {
+                    market
+                        .withdraw(
+                            params.from_market_token_amount.into(),
+                            prices_for_from_market,
+                        )?
+                        .execute()
+                }),
             })?
         };
 
@@ -120,25 +111,31 @@ impl ShiftSimulation<'_> {
             ));
         }
 
-        // Execute deposit using the same vi_map (so it sees the updated VI state from withdraw).
-        let to_market = simulator
-            .get_market_mut(to_market_token)
-            .expect("must exist");
+        // Execute deposit.
         let deposit = {
-            to_market.with_swap_pricing(SwapPricingKind::Shift, |market| {
-                if options.disable_vis {
-                    market.with_vis_disabled(|market| {
-                        market
-                            .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
-                            .execute()
-                    })
-                } else {
-                    market.with_vi_models(&mut vi_map, |market| {
-                        market
-                            .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
-                            .execute()
-                    })
-                }
+            let (to_market, maybe_vi_map) = if options.disable_vis {
+                (
+                    simulator
+                        .get_market_mut(to_market_token)
+                        .expect("must exist"),
+                    None,
+                )
+            } else {
+                let (market, vi_map) = simulator.get_market_and_vis_mut(to_market_token)?;
+                (market, Some(vi_map))
+            };
+
+            to_market.with_swap_pricing(SwapPricingKind::Shift, |market| match maybe_vi_map {
+                None => market.with_vis_disabled(|market| {
+                    market
+                        .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
+                        .execute()
+                }),
+                Some(vi_map) => market.with_vi_models(vi_map, |market| {
+                    market
+                        .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
+                        .execute()
+                }),
             })?
         };
 

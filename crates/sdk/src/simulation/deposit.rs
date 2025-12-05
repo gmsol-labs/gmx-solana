@@ -1,10 +1,8 @@
-use std::collections::BTreeMap;
-
 use gmsol_model::{
     action::{deposit::DepositReport, swap::SwapReport},
     LiquidityMarketMutExt, MarketAction,
 };
-use gmsol_programs::{gmsol_store::types::CreateDepositParams, model::VirtualInventoryModel};
+use gmsol_programs::gmsol_store::types::CreateDepositParams;
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
@@ -99,25 +97,19 @@ impl DepositSimulation<'_> {
             return Err(crate::Error::custom("[sim] invalid short swap path"));
         }
 
-        let vi_map: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
-            BTreeMap::new()
-        } else {
-            simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
-        };
-        let market = simulator
-            .get_market_mut(market_token)
-            .expect("market storage must exist");
-
         // Execute deposit.
         let report = if options.disable_vis {
+            let market = simulator
+                .get_market_mut(market_token)
+                .expect("market storage must exist");
             market.with_vis_disabled(|market| {
                 market
                     .deposit(long_swap_output.amount, short_swap_output.amount, prices)?
                     .execute()
             })?
         } else {
-            let mut vi_map = vi_map;
-            market.with_vi_models(&mut vi_map, |market| {
+            let (market, vi_map) = simulator.get_market_and_vis_mut(market_token)?;
+            market.with_vi_models(vi_map, |market| {
                 market
                     .deposit(long_swap_output.amount, short_swap_output.amount, prices)?
                     .execute()

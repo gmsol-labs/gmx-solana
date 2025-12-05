@@ -1,10 +1,8 @@
-use std::collections::BTreeMap;
-
 use gmsol_model::{
     action::{swap::SwapReport, withdraw::WithdrawReport},
     LiquidityMarketMutExt, MarketAction,
 };
-use gmsol_programs::{gmsol_store::types::CreateGlvWithdrawalParams, model::VirtualInventoryModel};
+use gmsol_programs::gmsol_store::types::CreateGlvWithdrawalParams;
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
@@ -121,23 +119,17 @@ impl GlvWithdrawalSimulation<'_> {
             .expect("must exist")
             .withdraw_from_glv(market_token, market_token_amount, params.glv_token_amount)?;
 
-        let vi_map: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
-            BTreeMap::new()
-        } else {
-            simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
-        };
-        let market = simulator.get_market_mut(market_token).expect("must exist");
-
         // Execute withdrawal.
         let report = if options.disable_vis {
+            let market = simulator.get_market_mut(market_token).expect("must exist");
             market.with_vis_disabled(|market| {
                 market
                     .withdraw(u128::from(market_token_amount), prices)?
                     .execute()
             })?
         } else {
-            let mut vi_map = vi_map;
-            market.with_vi_models(&mut vi_map, |market| {
+            let (market, vi_map) = simulator.get_market_and_vis_mut(market_token)?;
+            market.with_vi_models(vi_map, |market| {
                 market
                     .withdraw(u128::from(market_token_amount), prices)?
                     .execute()

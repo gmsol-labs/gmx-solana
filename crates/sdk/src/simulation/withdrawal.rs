@@ -1,10 +1,8 @@
-use std::collections::BTreeMap;
-
 use gmsol_model::{
     action::{swap::SwapReport, withdraw::WithdrawReport},
     LiquidityMarketMutExt, MarketAction,
 };
-use gmsol_programs::{gmsol_store::types::CreateWithdrawalParams, model::VirtualInventoryModel};
+use gmsol_programs::gmsol_store::types::CreateWithdrawalParams;
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
@@ -83,12 +81,16 @@ impl WithdrawalSimulation<'_> {
             return Err(crate::Error::custom("[sim] empty withdrawal"));
         }
 
-        let vi_map: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
-            BTreeMap::new()
+        let prices = simulator.get_prices_for_market(market_token)?;
+        let (market, maybe_vi_map) = if options.disable_vis {
+            (
+                simulator.get_market_mut(market_token).expect("must exist"),
+                None,
+            )
         } else {
-            simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
+            let (market, vi_map) = simulator.get_market_and_vis_mut(market_token)?;
+            (market, Some(vi_map))
         };
-        let (market, prices) = simulator.get_market_with_prices_mut(market_token)?;
         let meta = &market.meta;
         let long_token = meta.long_token_mint;
         let short_token = meta.short_token_mint;
@@ -96,19 +98,17 @@ impl WithdrawalSimulation<'_> {
         let short_receive_token = short_receive_token.copied().unwrap_or(short_token);
 
         // Execute withdrawal.
-        let report = if options.disable_vis {
-            market.with_vis_disabled(|market| {
+        let report = match maybe_vi_map {
+            None => market.with_vis_disabled(|market| {
                 market
                     .withdraw(u128::from(params.market_token_amount), prices)?
                     .execute()
-            })?
-        } else {
-            let mut vi_map = vi_map;
-            market.with_vi_models(&mut vi_map, |market| {
+            })?,
+            Some(vi_map) => market.with_vi_models(vi_map, |market| {
                 market
                     .withdraw(u128::from(params.market_token_amount), prices)?
                     .execute()
-            })?
+            })?,
         };
 
         let (long_amount, short_amount) =
