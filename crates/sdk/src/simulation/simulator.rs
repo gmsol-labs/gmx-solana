@@ -126,7 +126,7 @@ pub struct Simulator {
     tokens: HashMap<Pubkey, TokenState>,
     markets: HashMap<Pubkey, MarketModel>,
     glvs: HashMap<Pubkey, GlvModel>,
-    vis: HashMap<Pubkey, VirtualInventoryModel>,
+    vis: BTreeMap<Pubkey, VirtualInventoryModel>,
 }
 
 impl Simulator {
@@ -140,7 +140,7 @@ impl Simulator {
             tokens,
             markets,
             glvs,
-            vis: HashMap::new(),
+            vis: BTreeMap::new(),
         }
     }
 
@@ -240,6 +240,33 @@ impl Simulator {
         Ok((market, prices))
     }
 
+    /// Get mutable references to a market and the global VI map.
+    ///
+    /// This helper allows passing `&mut MarketModel` and `&mut BTreeMap<Pubkey, VirtualInventoryModel>`
+    /// to `MarketModel::with_vi_models` without cloning virtual inventories.
+    pub(crate) fn get_market_and_vis_mut(
+        &mut self,
+        market_token: &Pubkey,
+    ) -> crate::Result<(
+        &mut MarketModel,
+        &mut BTreeMap<Pubkey, VirtualInventoryModel>,
+    )> {
+        let Simulator {
+            tokens: _,
+            markets,
+            glvs: _,
+            vis,
+        } = self;
+
+        let market = markets.get_mut(market_token).ok_or_else(|| {
+            crate::Error::custom(format!(
+                "[sim] market `{market_token}` not found in the simulator"
+            ))
+        })?;
+
+        Ok((market, vis))
+    }
+
     /// Get GLV by GLV token address.
     pub fn get_glv(&self, glv_token: &Pubkey) -> Option<&GlvModel> {
         self.glvs.get(glv_token)
@@ -284,12 +311,24 @@ impl Simulator {
 
         let mut reports = Vec::with_capacity(path.len());
         for market_token in path {
-            let vi_map: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
-                BTreeMap::new()
+            // Fetch prices first; this only needs an immutable borrow.
+            let prices = self.get_prices_for_market(market_token)?;
+
+            // Then borrow market (and VI map if needed) mutably.
+            let (market, maybe_vi_map) = if options.disable_vis {
+                (
+                    self.get_market_mut(market_token).ok_or_else(|| {
+                        crate::Error::custom(format!(
+                            "[sim] market `{market_token}` not found in the simulator"
+                        ))
+                    })?,
+                    None,
+                )
             } else {
-                self.vis().map(|(k, v)| (*k, v.clone())).collect()
+                let (market, vi_map) = self.get_market_and_vis_mut(market_token)?;
+                (market, Some(vi_map))
             };
-            let (market, prices) = self.get_market_with_prices_mut(market_token)?;
+
             let meta = &market.meta;
             if meta.long_token_mint == meta.short_token_mint {
                 return Err(crate::Error::custom(format!(
@@ -307,15 +346,13 @@ impl Simulator {
                     "[swap] invalid swap step. Current step: {market_token}"
                 )));
             };
-            let report = if options.disable_vis {
-                market.with_vis_disabled(|market| {
+            let report = match maybe_vi_map {
+                None => market.with_vis_disabled(|market| {
                     market.swap(is_token_in_long, amount, prices)?.execute()
-                })?
-            } else {
-                let mut vi_map = vi_map;
-                market.with_vi_models(&mut vi_map, |market| {
+                })?,
+                Some(vi_map) => market.with_vi_models(vi_map, |market| {
                     market.swap(is_token_in_long, amount, prices)?.execute()
-                })?
+                })?,
             };
             amount = *report.token_out_amount();
             reports.push(report);
