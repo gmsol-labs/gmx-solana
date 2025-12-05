@@ -282,6 +282,44 @@ impl Simulator {
         self.glvs.insert(glv.glv_token, glv)
     }
 
+    pub(crate) fn get_glv_value(&self, glv_token: &Pubkey, maximize: bool) -> crate::Result<u128> {
+        let glv = self.get_glv(glv_token).ok_or_else(|| {
+            crate::Error::custom(format!("[sim] GLV for GLV token `{glv_token}` not found"))
+        })?;
+
+        let mut value = 0u128;
+
+        for market_token in glv.market_tokens() {
+            let (market, prices) = self.get_market_with_prices(&market_token)?;
+            let balance = glv
+                .market_config(&market_token)
+                .expect("must exist")
+                .balance;
+            let value_for_market = gmsol_model::glv::get_glv_value_for_market(
+                &prices,
+                market,
+                balance.into(),
+                maximize,
+            )?
+            .market_token_value_in_glv;
+
+            value = value
+                .checked_add(value_for_market)
+                .ok_or(crate::Error::custom("[sim] GLV value overflow"))?;
+        }
+
+        Ok(value)
+    }
+
+    /// Get a mutable reference to the global virtual inventory map.
+    ///
+    /// This is used by simulations that need to attach VI models to cloned
+    /// `MarketModel` instances via `MarketModel::with_vi_models` without
+    /// cloning the underlying virtual inventory state.
+    pub(crate) fn vis_mut(&mut self) -> &mut BTreeMap<Pubkey, VirtualInventoryModel> {
+        &mut self.vis
+    }
+
     /// Swap along the provided path.
     ///
     /// # Arguments

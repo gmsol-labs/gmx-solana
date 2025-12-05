@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 
 use gmsol_model::{
     action::{
@@ -14,7 +14,7 @@ use gmsol_model::{
 use gmsol_programs::{
     constants::{MARKET_DECIMALS, MARKET_USD_UNIT},
     gmsol_store::accounts::Position,
-    model::{MarketModel, PositionModel, VirtualInventoryModel},
+    model::{MarketModel, PositionModel},
 };
 use rust_decimal::prelude::Zero;
 use solana_sdk::pubkey::Pubkey;
@@ -235,16 +235,13 @@ impl OrderSimulation<'_> {
             return Err(crate::Error::custom("[sim] invalid swap path"));
         }
 
-        let vi_map: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
-            BTreeMap::new()
-        } else {
-            simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
-        };
-        let storage = simulator
-            .get_market_mut(&params.market_token)
+        // Work on a cloned market model, so that position logic operates on an
+        /// owned `MarketModel`, while the underlying VI state is shared via the
+        /// simulator's global VI map.
+        let mut market = simulator
+            .get_market(&params.market_token)
+            .cloned()
             .expect("market storage must exist");
-
-        let mut market = storage.clone();
 
         let mut position = if options.disable_vis {
             match position {
@@ -263,21 +260,26 @@ impl OrderSimulation<'_> {
                 })?,
             }
         } else {
-            let mut vi_map = vi_map;
             match position {
                 Some(position) => {
                     if position.collateral_token != *collateral_or_swap_out_token {
                         return Err(crate::Error::custom("[sim] collateral token mismatched"));
                     }
-                    market.with_vi_models(&mut vi_map, |market| {
-                        PositionModel::new(market.clone(), position.clone())
+                    {
+                        let vi_map = simulator.vis_mut();
+                        market.with_vi_models(vi_map, |market| {
+                            PositionModel::new(market.clone(), position.clone())
+                        })?
+                    }
+                }
+                None => {
+                    let vi_map = simulator.vis_mut();
+                    market.with_vi_models(vi_map, |market| {
+                        market
+                            .clone()
+                            .into_empty_position(params.is_long, *collateral_or_swap_out_token)
                     })?
                 }
-                None => market.with_vi_models(&mut vi_map, |market| {
-                    market
-                        .clone()
-                        .into_empty_position(params.is_long, *collateral_or_swap_out_token)
-                })?,
             }
         };
 
@@ -290,7 +292,13 @@ impl OrderSimulation<'_> {
             )?
             .execute()?;
 
-        *storage = position.market_model().clone();
+        // Persist the evolved market model back into the simulator environment.
+        {
+            let storage = simulator
+                .get_market_mut(&params.market_token)
+                .expect("market storage must exist");
+            *storage = position.market_model().clone();
+        }
 
         Ok(OrderSimulationOutput::Increase {
             swaps: swap_output.reports,
@@ -371,23 +379,19 @@ impl OrderSimulation<'_> {
             return Err(crate::Error::custom("[sim] collateral token mismatched"));
         }
 
-        let vi_map: BTreeMap<Pubkey, VirtualInventoryModel> = if options.disable_vis {
-            BTreeMap::new()
-        } else {
-            simulator.vis().map(|(k, v)| (*k, v.clone())).collect()
-        };
-        let storage = simulator
-            .get_market_mut(&params.market_token)
+        // Work on a cloned market model; VI state is shared via simulator's
+        // global VI map when VIS are enabled.
+        let mut market = simulator
+            .get_market(&params.market_token)
+            .cloned()
             .expect("market storage must exist");
-
-        let mut market = storage.clone();
 
         let mut position = if options.disable_vis {
             market
                 .with_vis_disabled(|market| PositionModel::new(market.clone(), position.clone()))?
         } else {
-            let mut vi_map = vi_map;
-            market.with_vi_models(&mut vi_map, |market| {
+            let vi_map = simulator.vis_mut();
+            market.with_vi_models(vi_map, |market| {
                 PositionModel::new(market.clone(), position.clone())
             })?
         };
@@ -412,7 +416,13 @@ impl OrderSimulation<'_> {
             )
             .execute()?;
 
-        *storage = position.market_model().clone();
+        // Persist the evolved market model back into the simulator environment.
+        {
+            let storage = simulator
+                .get_market_mut(&params.market_token)
+                .expect("market storage must exist");
+            *storage = position.market_model().clone();
+        }
 
         let swaps = if !report.output_amount().is_zero() {
             let source_token = collateral_or_swap_out_token;
