@@ -68,7 +68,7 @@ impl GlvWithdrawalSimulation<'_> {
     /// Execute with options.
     pub fn execute_with_options(
         self,
-        _options: SimulationOptions,
+        options: SimulationOptions,
     ) -> crate::Result<GlvWithdrawalSimulationOutput> {
         let Self {
             simulator,
@@ -119,14 +119,22 @@ impl GlvWithdrawalSimulation<'_> {
             .expect("must exist")
             .withdraw_from_glv(market_token, market_token_amount, params.glv_token_amount)?;
 
-        let market = simulator.get_market_mut(market_token).expect("must exist");
-
         // Execute withdrawal.
-        let report = market.with_vis_disabled(|market| {
-            market
-                .withdraw(u128::from(market_token_amount), prices)?
-                .execute()
-        })?;
+        let report = if options.disable_vis {
+            let market = simulator.get_market_mut(market_token).expect("must exist");
+            market.with_vis_disabled(|market| {
+                market
+                    .withdraw(u128::from(market_token_amount), prices)?
+                    .execute()
+            })?
+        } else {
+            let (market, vi_map) = simulator.get_market_and_vis_mut(market_token)?;
+            market.with_vi_models(vi_map, |market| {
+                market
+                    .withdraw(u128::from(market_token_amount), prices)?
+                    .execute()
+            })?
+        };
 
         let (long_amount, short_amount) =
             (*report.long_token_output(), *report.short_token_output());
@@ -135,8 +143,12 @@ impl GlvWithdrawalSimulation<'_> {
         let (long_swaps, long_output_amount) = if long_amount == 0 {
             (vec![], 0)
         } else {
-            let swap_output =
-                simulator.swap_along_path(long_swap_path, &long_token, long_amount)?;
+            let swap_output = simulator.swap_along_path_with_options(
+                long_swap_path,
+                &long_token,
+                long_amount,
+                options.clone(),
+            )?;
 
             if swap_output.output_token != long_receive_token {
                 return Err(crate::Error::custom("[sim] invalid long swap path"));
@@ -156,8 +168,12 @@ impl GlvWithdrawalSimulation<'_> {
         let (short_swaps, short_output_amount) = if short_amount == 0 {
             (vec![], 0)
         } else {
-            let swap_output =
-                simulator.swap_along_path(short_swap_path, &short_token, short_amount)?;
+            let swap_output = simulator.swap_along_path_with_options(
+                short_swap_path,
+                &short_token,
+                short_amount,
+                options.clone(),
+            )?;
 
             if swap_output.output_token != short_receive_token {
                 return Err(crate::Error::custom("[sim] invalid short swap path"));

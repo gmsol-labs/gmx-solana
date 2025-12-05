@@ -53,7 +53,7 @@ impl DepositSimulation<'_> {
     /// Execute with options.
     pub fn execute_with_options(
         self,
-        _options: SimulationOptions,
+        options: SimulationOptions,
     ) -> crate::Result<DepositSimulationOutput> {
         let Self {
             simulator,
@@ -77,34 +77,44 @@ impl DepositSimulation<'_> {
         let long_pay_token = long_pay_token.copied().unwrap_or(long_token);
         let short_pay_token = short_pay_token.copied().unwrap_or(short_token);
 
-        let long_swap_output = simulator.swap_along_path(
+        let long_swap_output = simulator.swap_along_path_with_options(
             long_swap_path,
             &long_pay_token,
             params.initial_long_token_amount.into(),
+            options.clone(),
         )?;
         if long_swap_output.output_token != long_token {
             return Err(crate::Error::custom("[sim] invalid long swap path"));
         }
 
-        let short_swap_output = simulator.swap_along_path(
+        let short_swap_output = simulator.swap_along_path_with_options(
             short_swap_path,
             &short_pay_token,
             params.initial_short_token_amount.into(),
+            options.clone(),
         )?;
         if short_swap_output.output_token != short_token {
             return Err(crate::Error::custom("[sim] invalid short swap path"));
         }
 
-        let market = simulator
-            .get_market_mut(market_token)
-            .expect("market storage must exist");
-
         // Execute deposit.
-        let report = market.with_vis_disabled(|market| {
-            market
-                .deposit(long_swap_output.amount, short_swap_output.amount, prices)?
-                .execute()
-        })?;
+        let report = if options.disable_vis {
+            let market = simulator
+                .get_market_mut(market_token)
+                .expect("market storage must exist");
+            market.with_vis_disabled(|market| {
+                market
+                    .deposit(long_swap_output.amount, short_swap_output.amount, prices)?
+                    .execute()
+            })?
+        } else {
+            let (market, vi_map) = simulator.get_market_and_vis_mut(market_token)?;
+            market.with_vi_models(vi_map, |market| {
+                market
+                    .deposit(long_swap_output.amount, short_swap_output.amount, prices)?
+                    .execute()
+            })?
+        };
 
         let minted = report.minted();
         let min_market_token_amount = u128::from(params.min_market_token_amount);
