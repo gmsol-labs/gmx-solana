@@ -310,6 +310,15 @@ impl Simulator {
         Ok(value)
     }
 
+    /// Get a mutable reference to the global virtual inventory map.
+    ///
+    /// This is used by simulations that need to attach VI models to cloned
+    /// `MarketModel` instances via `MarketModel::with_vi_models` without
+    /// cloning the underlying virtual inventory state.
+    pub(crate) fn vis_mut(&mut self) -> &mut BTreeMap<Pubkey, VirtualInventoryModel> {
+        &mut self.vis
+    }
+
     /// Swap along the provided path.
     ///
     /// # Arguments
