@@ -236,8 +236,8 @@ impl OrderSimulation<'_> {
         }
 
         // Work on a cloned market model, so that position logic operates on an
-        /// owned `MarketModel`, while the underlying VI state is shared via the
-        /// simulator's global VI map.
+        // owned `MarketModel`, while the underlying VI state is shared via the
+        // simulator's global VI map.
         let mut market = simulator
             .get_market(&params.market_token)
             .cloned()

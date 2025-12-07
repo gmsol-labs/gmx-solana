@@ -227,19 +227,6 @@ impl Simulator {
         Ok((market, prices))
     }
 
-    pub(crate) fn get_market_with_prices_mut(
-        &mut self,
-        market_token: &Pubkey,
-    ) -> crate::Result<(&mut MarketModel, Prices<u128>)> {
-        let prices = self.get_prices_for_market(market_token)?;
-        let market = self.get_market_mut(market_token).ok_or_else(|| {
-            crate::Error::custom(format!(
-                "[sim] market `{market_token}` not found in the simulator"
-            ))
-        })?;
-        Ok((market, prices))
-    }
-
     /// Get mutable references to a market and the global VI map.
     ///
     /// This helper allows passing `&mut MarketModel` and `&mut BTreeMap<Pubkey, VirtualInventoryModel>`
