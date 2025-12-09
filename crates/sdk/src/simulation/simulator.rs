@@ -135,12 +135,13 @@ impl Simulator {
         tokens: HashMap<Pubkey, TokenState>,
         markets: HashMap<Pubkey, MarketModel>,
         glvs: HashMap<Pubkey, GlvModel>,
+        vis: BTreeMap<Pubkey, VirtualInventoryModel>,
     ) -> Self {
         Self {
             tokens,
             markets,
             glvs,
-            vis: BTreeMap::new(),
+            vis,
         }
     }
 
