@@ -8,9 +8,11 @@ use gmsol_programs::gmsol_store::types::{
     CreateWithdrawalParams,
 };
 use solana_sdk::pubkey::Pubkey;
+use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
 use crate::{
+    glv::{GlvCalculations, GlvStatus},
     js::glv::JsGlvModel,
     market::Value,
     serde::StringPubkey,
@@ -47,6 +49,22 @@ impl Deref for JsSimulator {
     fn deref(&self) -> &Self::Target {
         &self.simulator
     }
+}
+
+/// Arguments for GLV status calculations.
+#[derive(Debug, serde::Serialize, serde::Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct GetGlvStatusArgs {
+    glv_token: StringPubkey,
+}
+
+/// Arguments for GLV status calculations.
+#[derive(Debug, serde::Serialize, serde::Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct GetGlvTokenValueArgs {
+    glv_token: StringPubkey,
+    amount: u128,
+    maximize: bool,
 }
 
 #[wasm_bindgen(js_class = Simulator)]
@@ -326,6 +344,17 @@ impl JsSimulator {
     #[wasm_bindgen(js_name = clone)]
     pub fn js_clone(&self) -> Self {
         self.clone()
+    }
+
+    /// Calculates GLV status.
+    pub fn get_glv_status(&self, args: GetGlvStatusArgs) -> crate::Result<GlvStatus> {
+        self.simulator.get_glv_status(&args.glv_token)
+    }
+
+    /// Calculates GLV token value.
+    pub fn get_glv_token_value(&self, args: GetGlvTokenValueArgs) -> crate::Result<u128> {
+        self.simulator
+            .get_glv_token_value(&args.glv_token, args.amount.try_into()?, args.maximize)
     }
 }
 

@@ -8,10 +8,11 @@ use gmsol_model::{
     num::{MulDiv, Unsigned},
     num_traits::Zero,
     price::Prices,
-    Balance, BaseMarket, BaseMarketExt, BorrowingFeeMarketExt, PerpMarket, PerpMarketExt,
-    PerpMarketMutExt,
+    utils::div_to_factor,
+    Balance, BalanceExt, BaseMarket, BaseMarketExt, BorrowingFeeMarketExt, PerpMarket,
+    PerpMarketExt, PerpMarketMutExt, PnlFactorKind,
 };
-use gmsol_programs::model::MarketModel;
+use gmsol_programs::{constants::MARKET_DECIMALS, model::MarketModel};
 
 use crate::constants;
 
@@ -24,6 +25,9 @@ pub use self::{
 pub trait MarketCalculations {
     /// Calculate market status.
     fn status(&self, prices: &Prices<u128>) -> crate::Result<MarketStatus>;
+
+    /// Calculates max sellable value.
+    fn max_sellable_value(&self, prices: &Prices<u128>) -> crate::Result<u128>;
 }
 
 impl MarketCalculations for MarketModel {
@@ -161,5 +165,70 @@ impl MarketCalculations for MarketModel {
             min_collateral_factor_for_long,
             min_collateral_factor_for_short,
         })
+    }
+
+    fn max_sellable_value(&self, prices: &Prices<u128>) -> crate::Result<u128> {
+        fn max_sellable_value_for_one_side(
+            market: &MarketModel,
+            prices: &Prices<u128>,
+            is_long: bool,
+        ) -> crate::Result<u128> {
+            let index_token_price = &prices.index_token_price;
+
+            // Calculate min pool value according to the reserve factor.
+            let reserved_value = market.reserved_value(index_token_price, is_long)?;
+            let reserve_factor = market.reserve_factor()?;
+            let mut min_pool_value =
+                div_to_factor::<_, { MARKET_DECIMALS }>(&reserved_value, &reserve_factor, true)
+                    .ok_or_else(|| {
+                        crate::Error::custom(
+                            "failed to calculate min pool value according to reserve factor",
+                        )
+                    })?;
+
+            // Calculate min pool value according to the pnl factor.
+            let pnl = market.pnl(&prices.index_token_price, is_long, true)?;
+            if pnl.is_positive() {
+                let pnl_factor =
+                    market.pnl_factor_config(PnlFactorKind::MaxAfterWithdrawal, is_long)?;
+                let min_pool_value_for_pnl_factor =
+                    div_to_factor::<_, { MARKET_DECIMALS }>(&pnl.unsigned_abs(), &pnl_factor, true)
+                        .ok_or_else(|| {
+                            crate::Error::custom(
+                                "failed to calculate min pool value according to pnl factor",
+                            )
+                        })?;
+                min_pool_value = min_pool_value.max(min_pool_value_for_pnl_factor);
+            }
+
+            let pool_value = market.pool_value_without_pnl_for_one_side(prices, is_long, false)?;
+
+            pool_value.checked_sub(min_pool_value).ok_or_else(|| {
+                crate::Error::custom(format!(
+                    "failed to calculate max sellable value for one side, is_long={is_long}"
+                ))
+            })
+        }
+
+        let max_sellable_value_for_long = max_sellable_value_for_one_side(self, prices, true)?;
+        let max_sellable_value_for_short = max_sellable_value_for_one_side(self, prices, false)?;
+
+        let liquidity_pool = self.liquidity_pool()?;
+        let liquidity_pool_value_for_long =
+            liquidity_pool.long_usd_value(prices.long_token_price.pick_price(true))?;
+        let liquidity_pool_value_for_short =
+            liquidity_pool.short_usd_value(prices.short_token_price.pick_price(true))?;
+        let liquidity_pool_value = liquidity_pool_value_for_long
+            .checked_add(liquidity_pool_value_for_short)
+            .ok_or_else(|| crate::Error::custom("liquidity pool value overflow"))?;
+
+        max_sellable_value_for_long
+            .checked_mul_div(&liquidity_pool_value, &liquidity_pool_value_for_long)
+            .and_then(|scaled_for_long| {
+                let scaled_for_short = max_sellable_value_for_short
+                    .checked_mul_div(&liquidity_pool_value, &liquidity_pool_value_for_short)?;
+                Some(scaled_for_long.min(scaled_for_short))
+            })
+            .ok_or_else(|| crate::Error::custom("failed to calculate max sellable value"))
     }
 }
