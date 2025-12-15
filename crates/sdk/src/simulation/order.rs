@@ -256,7 +256,7 @@ impl OrderSimulation<'_> {
 
         let (report, mut position) = with_vi_models_if_some(
             &market_snapshot,
-            position.cloned(),
+            position,
             vi_ctx,
             params.is_long,
             collateral_or_swap_out_token,
@@ -375,7 +375,7 @@ impl OrderSimulation<'_> {
 
         let (report, mut position) = with_vi_models_if_some(
             &market_snapshot,
-            Some(position.clone()),
+            Some(position),
             vi_ctx,
             params.is_long,
             collateral_or_swap_out_token,
@@ -481,18 +481,19 @@ impl OrderSimulation<'_> {
 
 fn with_vi_models_if_some<T>(
     market: &MarketModel,
-    position: Option<Arc<Position>>,
+    position: Option<&Arc<Position>>,
     vi_map: Option<&mut BTreeMap<Pubkey, VirtualInventoryModel>>,
     is_long: bool,
     collateral_token: &Pubkey,
     f: impl FnOnce(&mut PositionModel) -> crate::Result<T>,
 ) -> crate::Result<(T, PositionModel)> {
     let mut market: MarketModel = market.clone();
-    let (output, mut position) = market.with_vis_if(vi_map, |_: &mut MarketModel| {
-        let mut position = make_position_model(&market, position, is_long, collateral_token)?;
+    let (output, mut position) = market.with_vis_if(vi_map, |market_in_scope| {
+        let mut position =
+            make_position_model(market_in_scope, position, is_long, collateral_token)?;
         let output = f(&mut position)?;
-        *market = position.market_model().clone();
-        Ok((output, position))
+        *market_in_scope = position.market_model().clone();
+        crate::Result::Ok((output, position))
     })?;
     position.set_market_model(&market);
     Ok((output, position))
@@ -500,7 +501,7 @@ fn with_vi_models_if_some<T>(
 
 fn make_position_model(
     market: &MarketModel,
-    position: Option<Arc<Position>>,
+    position: Option<&Arc<Position>>,
     is_long: bool,
     collateral_token: &Pubkey,
 ) -> crate::Result<PositionModel> {
@@ -509,7 +510,7 @@ fn make_position_model(
             if position.collateral_token != *collateral_token {
                 return Err(crate::Error::custom("[sim] collateral token mismatched"));
             }
-            Ok(PositionModel::new(market.clone(), position)?)
+            Ok(PositionModel::new(market.clone(), position.clone())?)
         }
         None => Ok(market
             .clone()
