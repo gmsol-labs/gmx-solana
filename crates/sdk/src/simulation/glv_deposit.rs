@@ -6,7 +6,7 @@ use gmsol_programs::gmsol_store::types::{CreateDepositParams, CreateGlvDepositPa
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
-use crate::{glv::calculations::GlvCalculations, simulation::deposit::DepositSimulation};
+use crate::{glv::calculator::GlvCalculator, simulation::deposit::DepositSimulation};
 
 use super::{deposit::DepositSimulationOutput, SimulationOptions, Simulator};
 

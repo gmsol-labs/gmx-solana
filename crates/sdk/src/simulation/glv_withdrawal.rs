@@ -6,7 +6,7 @@ use gmsol_programs::gmsol_store::types::CreateGlvWithdrawalParams;
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
-use crate::{constants, glv::calculations::GlvCalculations};
+use crate::{constants, glv::calculator::GlvCalculator};
 
 use super::{SimulationOptions, Simulator};
 

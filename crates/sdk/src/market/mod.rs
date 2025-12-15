@@ -4,6 +4,9 @@ pub mod value;
 /// Market Status.
 pub mod status;
 
+/// Market calculator trait.
+pub mod caluclator;
+
 use gmsol_model::{
     num::{MulDiv, Unsigned},
     num_traits::Zero,
@@ -17,6 +20,7 @@ use gmsol_programs::{constants::MARKET_DECIMALS, model::MarketModel};
 use crate::constants;
 
 pub use self::{
+    caluclator::MarketCalculator,
     status::MarketStatus,
     value::{SignedValue, Value},
 };

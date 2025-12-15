@@ -1,52 +1,15 @@
-use gmsol_model::{
-    price::{Price, Prices},
-    utils::market_token_amount_to_usd,
-};
-use gmsol_programs::{gmsol_store::types::MarketMeta, model::MarketModel};
+use gmsol_model::utils::market_token_amount_to_usd;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
     glv::{GlvModel, GlvStatus},
-    market::{MarketCalculations, Value},
+    market::{caluclator::MarketCalculator, MarketCalculations, Value},
 };
 
-/// A trait providing useful calculation methods for GLV.
-pub trait GlvCalculations {
+/// Performs GLV calculations.
+pub trait GlvCalculator: MarketCalculator {
     /// Returns [`GlvModel`] corresponding to the given GLV token.
     fn get_glv_model(&self, glv_token: &Pubkey) -> Option<&GlvModel>;
-
-    /// Returns [`MarketModel`] corresponding to the given market token.
-    fn get_market_model(&self, market_token: &Pubkey) -> Option<&MarketModel>;
-
-    /// Returns [`Price`] corresponding to the given token address.
-    fn get_price(&self, token: &Pubkey) -> Option<Price<u128>>;
-
-    /// Returns [`Prices`] corresponding to the given [`MarketMeta`].
-    fn get_prices_for_market_meta(&self, meta: &MarketMeta) -> Option<Prices<u128>> {
-        let index_token_price = self.get_price(&meta.index_token_mint)?;
-        let long_token_price = self.get_price(&meta.long_token_mint)?;
-        let short_token_price = self.get_price(&meta.short_token_mint)?;
-        Some(Prices {
-            index_token_price,
-            long_token_price,
-            short_token_price,
-        })
-    }
-
-    /// Returns [`MarketModel`] and [`Prices`] corresponding to the given market token.
-    fn get_market_model_with_prices(
-        &self,
-        market_token: &Pubkey,
-    ) -> crate::Result<(&MarketModel, Prices<u128>)> {
-        let market = self
-            .get_market_model(market_token)
-            .ok_or_else(|| crate::Error::NotFound)?;
-        let meta = &market.meta;
-        let prices = self
-            .get_prices_for_market_meta(meta)
-            .ok_or_else(|| crate::Error::NotFound)?;
-        Ok((market, prices))
-    }
 
     /// Calcualtes the market token value in GLV.
     fn get_market_token_value_in_glv(
@@ -107,7 +70,7 @@ struct Calculator<'a, C: ?Sized> {
     context: &'a C,
 }
 
-impl<'a, C: GlvCalculations + ?Sized> Calculator<'a, C> {
+impl<'a, C: GlvCalculator + ?Sized> Calculator<'a, C> {
     fn new(context: &'a C, glv_token: &Pubkey) -> crate::Result<Self> {
         let glv = context.get_glv_model(glv_token).ok_or_else(|| {
             crate::Error::custom(format!("[sim] GLV for GLV token `{glv_token}` not found"))

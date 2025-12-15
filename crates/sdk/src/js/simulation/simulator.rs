@@ -12,7 +12,7 @@ use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    glv::{GlvCalculations, GlvStatus},
+    glv::{GlvCalculator, GlvStatus},
     js::glv::JsGlvModel,
     market::Value,
     serde::StringPubkey,

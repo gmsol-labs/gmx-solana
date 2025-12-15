@@ -16,7 +16,8 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::{
     builders::order::{CreateOrderKind, CreateOrderParams},
-    glv::{calculations::GlvCalculations, model::GlvModel},
+    glv::{calculator::GlvCalculator, model::GlvModel},
+    market::caluclator::MarketCalculator,
     simulation::order::OrderSimulation,
 };
 
@@ -438,16 +439,18 @@ impl SwapOutput {
     }
 }
 
-impl GlvCalculations for Simulator {
-    fn get_glv_model(&self, glv_token: &Pubkey) -> Option<&GlvModel> {
-        self.get_glv(glv_token)
-    }
-
+impl MarketCalculator for Simulator {
     fn get_market_model(&self, market_token: &Pubkey) -> Option<&MarketModel> {
         self.get_market(market_token)
     }
 
-    fn get_price(&self, token: &Pubkey) -> Option<Price<u128>> {
+    fn get_token_price(&self, token: &Pubkey) -> Option<Price<u128>> {
         self.get_price(token)
+    }
+}
+
+impl GlvCalculator for Simulator {
+    fn get_glv_model(&self, glv_token: &Pubkey) -> Option<&GlvModel> {
+        self.get_glv(glv_token)
     }
 }

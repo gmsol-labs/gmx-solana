@@ -4,9 +4,9 @@ pub mod model;
 /// GLV status.
 pub mod status;
 
-/// GLV calculations.
-pub mod calculations;
+/// GLV calculator trait.
+pub mod calculator;
 
-pub use calculations::GlvCalculations;
+pub use calculator::GlvCalculator;
 pub use model::GlvModel;
 pub use status::GlvStatus;
