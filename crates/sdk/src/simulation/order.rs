@@ -254,7 +254,7 @@ impl OrderSimulation<'_> {
             Some(simulator.vis_mut())
         };
 
-        let (report, mut position) = with_vi_models_if_some(
+        let (report, position) = with_vi_models_if_some(
             &market_snapshot,
             position,
             vi_ctx,
