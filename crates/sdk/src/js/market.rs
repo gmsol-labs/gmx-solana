@@ -117,6 +117,14 @@ pub struct MarketStatusParams {
     pub prices: Prices,
 }
 
+/// Params for calculating max sellable avlue.
+#[derive(Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct MaxSellableValueParams {
+    /// Prices.
+    pub prices: Prices,
+}
+
 /// Wrapper of [`MarketModel`].
 #[wasm_bindgen(js_name = MarketModel)]
 #[derive(Clone)]
@@ -132,6 +140,11 @@ impl JsMarketModel {
         Ok(market_model.with_vis_disabled(|market| {
             market.market_token_price(&params.prices.into(), params.pnl_factor, params.maximize)
         })?)
+    }
+
+    /// Calculates max sellable value.
+    pub fn max_sellable_value(&self, params: MaxSellableValueParams) -> crate::Result<u128> {
+        self.model.max_sellable_value(&params.prices.into())
     }
 
     /// Get market status.

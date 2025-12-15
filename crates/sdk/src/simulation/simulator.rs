@@ -16,7 +16,8 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::{
     builders::order::{CreateOrderKind, CreateOrderParams},
-    glv::model::GlvModel,
+    glv::{calculator::GlvCalculator, model::GlvModel},
+    market::caluclator::MarketCalculator,
     simulation::order::OrderSimulation,
 };
 
@@ -249,35 +250,6 @@ impl Simulator {
         self.glvs.insert(glv.glv_token, glv)
     }
 
-    pub(crate) fn get_glv_value(&self, glv_token: &Pubkey, maximize: bool) -> crate::Result<u128> {
-        let glv = self.get_glv(glv_token).ok_or_else(|| {
-            crate::Error::custom(format!("[sim] GLV for GLV token `{glv_token}` not found"))
-        })?;
-
-        let mut value = 0u128;
-
-        for market_token in glv.market_tokens() {
-            let (market, prices) = self.get_market_with_prices(&market_token)?;
-            let balance = glv
-                .market_config(&market_token)
-                .expect("must exist")
-                .balance;
-            let value_for_market = gmsol_model::glv::get_glv_value_for_market(
-                &prices,
-                market,
-                balance.into(),
-                maximize,
-            )?
-            .market_token_value_in_glv;
-
-            value = value
-                .checked_add(value_for_market)
-                .ok_or(crate::Error::custom("[sim] GLV value overflow"))?;
-        }
-
-        Ok(value)
-    }
-
     /// Swap along the provided path.
     pub fn swap_along_path(
         &mut self,
@@ -464,5 +436,21 @@ impl SwapOutput {
     /// Returns the swap reports.
     pub fn reports(&self) -> &[SwapReport<u128, i128>] {
         &self.reports
+    }
+}
+
+impl MarketCalculator for Simulator {
+    fn get_market_model(&self, market_token: &Pubkey) -> Option<&MarketModel> {
+        self.get_market(market_token)
+    }
+
+    fn get_token_price(&self, token: &Pubkey) -> Option<Price<u128>> {
+        self.get_price(token)
+    }
+}
+
+impl GlvCalculator for Simulator {
+    fn get_glv_model(&self, glv_token: &Pubkey) -> Option<&GlvModel> {
+        self.get_glv(glv_token)
     }
 }
