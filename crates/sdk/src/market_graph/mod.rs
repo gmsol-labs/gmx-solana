@@ -456,15 +456,14 @@ impl MarketGraph {
         let g = &self.graph;
         let mut predecessors = vec![None; g.node_bound()];
         let mut distances = vec![None; g.node_bound()];
-
-        let mut visited = HashSet::<EdgeIndex>::new();
+        let mut visited_nodes = HashSet::<NodeIndex>::new();
 
         self.dfs_recursive(
             source,
             Some(Decimal::ZERO),
             None,
             0,
-            &mut visited,
+            &mut visited_nodes,
             &mut distances,
             &mut predecessors,
         );
@@ -479,7 +478,7 @@ impl MarketGraph {
         distance: Option<Decimal>,
         predecessor: Option<(NodeIndex, Pubkey)>,
         steps: usize,
-        visited: &mut HashSet<EdgeIndex>,
+        visited_nodes: &mut HashSet<NodeIndex>,
         distances: &mut Distances,
         predecessors: &mut Predecessors,
     ) {
@@ -494,27 +493,29 @@ impl MarketGraph {
         if best_d.map(|best| d >= best).unwrap_or(false) {
             return;
         }
+
+        visited_nodes.insert(i);
+
         distances[self.to_index(i)] = Some(d);
         predecessors[self.to_index(i)] = predecessor;
 
         for edge in self.graph.edges(i) {
-            let edge_ix = edge.id();
-            if visited.contains(&edge_ix) {
+            let j = edge.target();
+            if visited_nodes.contains(&j) {
                 continue;
             }
-            visited.insert(edge_ix);
-            let j = edge.target();
             self.dfs_recursive(
                 j,
                 edge.weight().cost().map(|w| w + d),
                 Some((i, edge.weight().market_token)),
                 steps + 1,
-                visited,
+                visited_nodes,
                 distances,
                 predecessors,
             );
-            visited.remove(&edge_ix);
         }
+
+        visited_nodes.remove(&i);
     }
 
     /// Find the best swap path for the given source and target.
