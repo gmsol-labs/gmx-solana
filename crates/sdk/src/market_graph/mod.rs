@@ -702,7 +702,12 @@ impl MarketGraph {
             .map(|(token, price)| (token, TokenState::from_price(price)))
             .collect();
 
-        crate::simulation::Simulator::from_parts(tokens, markets, Default::default())
+        crate::simulation::Simulator::from_parts(
+            tokens,
+            markets,
+            Default::default(),
+            Default::default(),
+        )
     }
 }
 

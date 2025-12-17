@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use gmsol_model::{
     action::{
@@ -14,7 +14,7 @@ use gmsol_model::{
 use gmsol_programs::{
     constants::{MARKET_DECIMALS, MARKET_USD_UNIT},
     gmsol_store::accounts::Position,
-    model::{MarketModel, PositionModel},
+    model::{MarketModel, PositionModel, VirtualInventoryModel},
 };
 use rust_decimal::prelude::Zero;
 use solana_sdk::pubkey::Pubkey;
@@ -225,43 +225,56 @@ impl OrderSimulation<'_> {
         }
 
         let source_token = pay_token.unwrap_or(collateral_or_swap_out_token);
-        let swap_output = simulator.swap_along_path(swap_path, source_token, params.amount)?;
+        let swap_output = simulator.swap_along_path_with_options(
+            swap_path,
+            source_token,
+            params.amount,
+            options.clone(),
+        )?;
         if swap_output.output_token() != collateral_or_swap_out_token {
             return Err(crate::Error::custom("[sim] invalid swap path"));
         }
 
-        let storage = simulator
-            .get_market_mut(&params.market_token)
-            .expect("market storage must exist");
-
-        let mut market = storage.clone();
-
-        let mut position = match position {
-            Some(position) => {
-                if position.collateral_token != *collateral_or_swap_out_token {
-                    return Err(crate::Error::custom("[sim] collateral token mismatched"));
-                }
-                market.with_vis_disabled(|market| {
-                    PositionModel::new(market.clone(), position.clone())
-                })?
-            }
-            None => market.with_vis_disabled(|market| {
-                market
-                    .clone()
-                    .into_empty_position(params.is_long, *collateral_or_swap_out_token)
-            })?,
+        // Execute the increase against a cloned market model, while VI state
+        // is managed exclusively via the simulator's global VI map.
+        let market_snapshot = {
+            let market = simulator.get_market(&params.market_token).ok_or_else(|| {
+                crate::Error::custom(format!(
+                    "[sim] market `{}` not found in the simulator",
+                    params.market_token
+                ))
+            })?;
+            market.clone()
         };
 
-        let report = position
-            .increase(
-                prices,
-                swap_output.amount(),
-                params.size,
-                params.acceptable_price,
-            )?
-            .execute()?;
+        let swap_amount = swap_output.amount();
+        let vi_ctx = if options.disable_vis {
+            None
+        } else {
+            Some(simulator.vis_mut())
+        };
 
-        *storage = position.market_model().clone();
+        let (report, position) = with_vi_models_if_some(
+            &market_snapshot,
+            position,
+            vi_ctx,
+            params.is_long,
+            collateral_or_swap_out_token,
+            move |position_model: &mut PositionModel| {
+                let report = position_model
+                    .increase(prices, swap_amount, params.size, params.acceptable_price)?
+                    .execute()?;
+                Ok(report)
+            },
+        )?;
+
+        // Persist the evolved market model back into the simulator environment.
+        {
+            let storage = simulator
+                .get_market_mut(&params.market_token)
+                .expect("market storage must exist");
+            *storage = position.market_model().clone();
+        }
 
         Ok(OrderSimulationOutput::Increase {
             swaps: swap_output.reports,
@@ -342,41 +355,70 @@ impl OrderSimulation<'_> {
             return Err(crate::Error::custom("[sim] collateral token mismatched"));
         }
 
-        let storage = simulator
-            .get_market_mut(&params.market_token)
-            .expect("market storage must exist");
+        // Execute the decrease against a cloned market model, while VI state
+        // is managed exclusively via the simulator's global VI map.
+        let market_snapshot = {
+            let market = simulator.get_market(&params.market_token).ok_or_else(|| {
+                crate::Error::custom(format!(
+                    "[sim] market `{}` not found in the simulator",
+                    params.market_token
+                ))
+            })?;
+            market.clone()
+        };
 
-        let mut market = storage.clone();
+        let vi_ctx = if options.disable_vis {
+            None
+        } else {
+            Some(simulator.vis_mut())
+        };
 
-        let mut position = market
-            .with_vis_disabled(|market| PositionModel::new(market.clone(), position.clone()))?;
+        let (report, mut position) = with_vi_models_if_some(
+            &market_snapshot,
+            Some(position),
+            vi_ctx,
+            params.is_long,
+            collateral_or_swap_out_token,
+            move |position_model: &mut PositionModel| {
+                let report = position_model
+                    .decrease(
+                        prices,
+                        params.size,
+                        params.acceptable_price,
+                        params.amount,
+                        DecreasePositionFlags {
+                            is_insolvent_close_allowed: false,
+                            is_liquidation_order: false,
+                            is_cap_size_delta_usd_allowed: false,
+                        },
+                    )?
+                    .set_swap(
+                        params
+                            .decrease_position_swap_type
+                            .map(Into::into)
+                            .unwrap_or_default(),
+                    )
+                    .execute()?;
+                Ok(report)
+            },
+        )?;
 
-        let report = position
-            .decrease(
-                prices,
-                params.size,
-                params.acceptable_price,
-                params.amount,
-                DecreasePositionFlags {
-                    is_insolvent_close_allowed: false,
-                    is_liquidation_order: false,
-                    is_cap_size_delta_usd_allowed: false,
-                },
-            )?
-            .set_swap(
-                params
-                    .decrease_position_swap_type
-                    .map(Into::into)
-                    .unwrap_or_default(),
-            )
-            .execute()?;
-
-        *storage = position.market_model().clone();
+        // Persist the evolved market model back into the simulator environment.
+        {
+            let storage = simulator
+                .get_market_mut(&params.market_token)
+                .expect("market storage must exist");
+            *storage = position.market_model().clone();
+        }
 
         let swaps = if !report.output_amount().is_zero() {
             let source_token = collateral_or_swap_out_token;
-            let swap_output =
-                simulator.swap_along_path(swap_path, source_token, *report.output_amount())?;
+            let swap_output = simulator.swap_along_path_with_options(
+                swap_path,
+                source_token,
+                *report.output_amount(),
+                options.clone(),
+            )?;
             let receive_token = receive_token.unwrap_or(collateral_or_swap_out_token);
             if swap_output.output_token() != receive_token {
                 return Err(crate::Error::custom(format!(
@@ -415,7 +457,12 @@ impl OrderSimulation<'_> {
 
         let swap_in = *pay_token.unwrap_or(collateral_or_swap_out_token);
 
-        let swap_output = simulator.swap_along_path(swap_path, &swap_in, params.amount)?;
+        let swap_output = simulator.swap_along_path_with_options(
+            swap_path,
+            &swap_in,
+            params.amount,
+            options.clone(),
+        )?;
         if swap_output.output_token() != collateral_or_swap_out_token {
             return Err(crate::Error::custom("[sim] invalid swap path"));
         }
@@ -429,5 +476,44 @@ impl OrderSimulation<'_> {
         }
 
         Ok(OrderSimulationOutput::Swap(swap_output))
+    }
+}
+
+fn with_vi_models_if_some<T>(
+    market: &MarketModel,
+    position: Option<&Arc<Position>>,
+    vi_map: Option<&mut BTreeMap<Pubkey, VirtualInventoryModel>>,
+    is_long: bool,
+    collateral_token: &Pubkey,
+    f: impl FnOnce(&mut PositionModel) -> crate::Result<T>,
+) -> crate::Result<(T, PositionModel)> {
+    let mut market: MarketModel = market.clone();
+    let (output, mut position) = market.with_vis_if(vi_map, |market_in_scope| {
+        let mut position =
+            make_position_model(market_in_scope, position, is_long, collateral_token)?;
+        let output = f(&mut position)?;
+        *market_in_scope = position.market_model().clone();
+        crate::Result::Ok((output, position))
+    })?;
+    position.set_market_model(&market);
+    Ok((output, position))
+}
+
+fn make_position_model(
+    market: &MarketModel,
+    position: Option<&Arc<Position>>,
+    is_long: bool,
+    collateral_token: &Pubkey,
+) -> crate::Result<PositionModel> {
+    match position {
+        Some(position) => {
+            if position.collateral_token != *collateral_token {
+                return Err(crate::Error::custom("[sim] collateral token mismatched"));
+            }
+            Ok(PositionModel::new(market.clone(), position.clone())?)
+        }
+        None => Ok(market
+            .clone()
+            .into_empty_position(is_long, *collateral_token)?),
     }
 }

@@ -65,7 +65,7 @@ impl WithdrawalSimulation<'_> {
     /// Execute with options.
     pub fn execute_with_options(
         self,
-        _options: SimulationOptions,
+        options: SimulationOptions,
     ) -> crate::Result<WithdrawalSimulationOutput> {
         let Self {
             simulator,
@@ -81,7 +81,16 @@ impl WithdrawalSimulation<'_> {
             return Err(crate::Error::custom("[sim] empty withdrawal"));
         }
 
-        let (market, prices) = simulator.get_market_with_prices_mut(market_token)?;
+        let prices = simulator.get_prices_for_market(market_token)?;
+        let (market, maybe_vi_map) = if options.disable_vis {
+            (
+                simulator.get_market_mut(market_token).expect("must exist"),
+                None,
+            )
+        } else {
+            let (market, vi_map) = simulator.get_market_and_vis_mut(market_token)?;
+            (market, Some(vi_map))
+        };
         let meta = &market.meta;
         let long_token = meta.long_token_mint;
         let short_token = meta.short_token_mint;
@@ -89,11 +98,18 @@ impl WithdrawalSimulation<'_> {
         let short_receive_token = short_receive_token.copied().unwrap_or(short_token);
 
         // Execute withdrawal.
-        let report = market.with_vis_disabled(|market| {
-            market
-                .withdraw(u128::from(params.market_token_amount), prices)?
-                .execute()
-        })?;
+        let report = match maybe_vi_map {
+            None => market.with_vis_disabled(|market| {
+                market
+                    .withdraw(u128::from(params.market_token_amount), prices)?
+                    .execute()
+            })?,
+            Some(vi_map) => market.with_vi_models(vi_map, |market| {
+                market
+                    .withdraw(u128::from(params.market_token_amount), prices)?
+                    .execute()
+            })?,
+        };
 
         let (long_amount, short_amount) =
             (*report.long_token_output(), *report.short_token_output());
@@ -102,8 +118,12 @@ impl WithdrawalSimulation<'_> {
         let (long_swaps, long_output_amount) = if long_amount == 0 {
             (vec![], 0)
         } else {
-            let swap_output =
-                simulator.swap_along_path(long_swap_path, &long_token, long_amount)?;
+            let swap_output = simulator.swap_along_path_with_options(
+                long_swap_path,
+                &long_token,
+                long_amount,
+                options.clone(),
+            )?;
 
             if swap_output.output_token != long_receive_token {
                 return Err(crate::Error::custom("[sim] invalid long swap path"));
@@ -123,8 +143,12 @@ impl WithdrawalSimulation<'_> {
         let (short_swaps, short_output_amount) = if short_amount == 0 {
             (vec![], 0)
         } else {
-            let swap_output =
-                simulator.swap_along_path(short_swap_path, &short_token, short_amount)?;
+            let swap_output = simulator.swap_along_path_with_options(
+                short_swap_path,
+                &short_token,
+                short_amount,
+                options.clone(),
+            )?;
 
             if swap_output.output_token != short_receive_token {
                 return Err(crate::Error::custom("[sim] invalid short swap path"));

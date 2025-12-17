@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use gmsol_model::{
     action::swap::SwapReport,
@@ -10,7 +13,7 @@ use gmsol_programs::{
         CreateDepositParams, CreateGlvDepositParams, CreateGlvWithdrawalParams, CreateShiftParams,
         CreateWithdrawalParams, MarketMeta,
     },
-    model::MarketModel,
+    model::{MarketModel, VirtualInventoryModel},
 };
 use solana_sdk::pubkey::Pubkey;
 
@@ -123,6 +126,7 @@ pub struct Simulator {
     tokens: HashMap<Pubkey, TokenState>,
     markets: HashMap<Pubkey, MarketModel>,
     glvs: HashMap<Pubkey, GlvModel>,
+    vis: BTreeMap<Pubkey, VirtualInventoryModel>,
 }
 
 impl Simulator {
@@ -131,11 +135,13 @@ impl Simulator {
         tokens: HashMap<Pubkey, TokenState>,
         markets: HashMap<Pubkey, MarketModel>,
         glvs: HashMap<Pubkey, GlvModel>,
+        vis: BTreeMap<Pubkey, VirtualInventoryModel>,
     ) -> Self {
         Self {
             tokens,
             markets,
             glvs,
+            vis,
         }
     }
 
@@ -222,17 +228,31 @@ impl Simulator {
         Ok((market, prices))
     }
 
-    pub(crate) fn get_market_with_prices_mut(
+    /// Get mutable references to a market and the global VI map.
+    ///
+    /// This helper allows passing `&mut MarketModel` and `&mut BTreeMap<Pubkey, VirtualInventoryModel>`
+    /// to `MarketModel::with_vi_models` without cloning virtual inventories.
+    pub(crate) fn get_market_and_vis_mut(
         &mut self,
         market_token: &Pubkey,
-    ) -> crate::Result<(&mut MarketModel, Prices<u128>)> {
-        let prices = self.get_prices_for_market(market_token)?;
-        let market = self.get_market_mut(market_token).ok_or_else(|| {
+    ) -> crate::Result<(
+        &mut MarketModel,
+        &mut BTreeMap<Pubkey, VirtualInventoryModel>,
+    )> {
+        let Simulator {
+            tokens: _,
+            markets,
+            glvs: _,
+            vis,
+        } = self;
+
+        let market = markets.get_mut(market_token).ok_or_else(|| {
             crate::Error::custom(format!(
                 "[sim] market `{market_token}` not found in the simulator"
             ))
         })?;
-        Ok((market, prices))
+
+        Ok((market, vis))
     }
 
     /// Get GLV by GLV token address.
@@ -250,18 +270,62 @@ impl Simulator {
         self.glvs.insert(glv.glv_token, glv)
     }
 
+    /// Get a mutable reference to the global virtual inventory map.
+    ///
+    /// This is used by simulations that need to attach VI models to cloned
+    /// `MarketModel` instances via `MarketModel::with_vi_models` without
+    /// cloning the underlying virtual inventory state.
+    pub(crate) fn vis_mut(&mut self) -> &mut BTreeMap<Pubkey, VirtualInventoryModel> {
+        &mut self.vis
+    }
+
     /// Swap along the provided path.
+    ///
+    /// # Arguments
+    /// * `path` - The path of market tokens to swap along
+    /// * `source_token` - The source token to swap from
+    /// * `amount` - The amount to swap
+    /// * `options` - Optional simulation options. If `None`, default options are used.
     pub fn swap_along_path(
         &mut self,
         path: &[Pubkey],
         source_token: &Pubkey,
+        amount: u128,
+        options: Option<SimulationOptions>,
+    ) -> crate::Result<SwapOutput> {
+        self.swap_along_path_with_options(path, source_token, amount, options.unwrap_or_default())
+    }
+
+    /// Swap along the provided path with options.
+    pub(crate) fn swap_along_path_with_options(
+        &mut self,
+        path: &[Pubkey],
+        source_token: &Pubkey,
         mut amount: u128,
+        options: SimulationOptions,
     ) -> crate::Result<SwapOutput> {
         let mut current_token = *source_token;
 
         let mut reports = Vec::with_capacity(path.len());
         for market_token in path {
-            let (market, prices) = self.get_market_with_prices_mut(market_token)?;
+            // Fetch prices first; this only needs an immutable borrow.
+            let prices = self.get_prices_for_market(market_token)?;
+
+            // Then borrow market (and VI map if needed) mutably.
+            let (market, maybe_vi_map) = if options.disable_vis {
+                (
+                    self.get_market_mut(market_token).ok_or_else(|| {
+                        crate::Error::custom(format!(
+                            "[sim] market `{market_token}` not found in the simulator"
+                        ))
+                    })?,
+                    None,
+                )
+            } else {
+                let (market, vi_map) = self.get_market_and_vis_mut(market_token)?;
+                (market, Some(vi_map))
+            };
+
             let meta = &market.meta;
             if meta.long_token_mint == meta.short_token_mint {
                 return Err(crate::Error::custom(format!(
@@ -279,9 +343,14 @@ impl Simulator {
                     "[swap] invalid swap step. Current step: {market_token}"
                 )));
             };
-            let report = market.with_vis_disabled(|market| {
-                market.swap(is_token_in_long, amount, prices)?.execute()
-            })?;
+            let report = match maybe_vi_map {
+                None => market.with_vis_disabled(|market| {
+                    market.swap(is_token_in_long, amount, prices)?.execute()
+                })?,
+                Some(vi_map) => market.with_vi_models(vi_map, |market| {
+                    market.swap(is_token_in_long, amount, prices)?.execute()
+                })?,
+            };
             amount = *report.token_out_amount();
             reports.push(report);
         }
@@ -306,6 +375,25 @@ impl Simulator {
     /// Get GLV states.
     pub fn glvs(&self) -> impl Iterator<Item = (&Pubkey, &GlvModel)> {
         self.glvs.iter()
+    }
+
+    /// Insert virtual inventory model.
+    pub fn insert_vi(
+        &mut self,
+        vi_address: Pubkey,
+        vi: VirtualInventoryModel,
+    ) -> Option<VirtualInventoryModel> {
+        self.vis.insert(vi_address, vi)
+    }
+
+    /// Get virtual inventory model by address.
+    pub fn get_vi(&self, vi_address: &Pubkey) -> Option<&VirtualInventoryModel> {
+        self.vis.get(vi_address)
+    }
+
+    /// Get all virtual inventory states.
+    pub fn vis(&self) -> impl Iterator<Item = (&Pubkey, &VirtualInventoryModel)> {
+        self.vis.iter()
     }
 
     /// Create a builder for order simulation.
@@ -394,6 +482,8 @@ impl Simulator {
 pub struct SimulationOptions {
     /// Whether to skip the validation for limit price.
     pub skip_limit_price_validation: bool,
+    /// Whether to disable the use of virtual inventories during simulation.
+    pub disable_vis: bool,
 }
 
 /// Token state for [`Simulator`].

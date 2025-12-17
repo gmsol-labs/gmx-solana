@@ -147,6 +147,7 @@ impl JsSimulator {
 
         let output = simulation.execute_with_options(SimulationOptions {
             skip_limit_price_validation: skip_limit_price_validation.unwrap_or_default(),
+            disable_vis: false,
         })?;
         Ok(JsOrderSimulationOutput { output })
     }

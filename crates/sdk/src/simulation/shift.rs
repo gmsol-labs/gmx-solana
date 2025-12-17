@@ -40,7 +40,7 @@ impl ShiftSimulation<'_> {
     /// Execute with options.
     pub fn execute_with_options(
         self,
-        _options: SimulationOptions,
+        options: SimulationOptions,
     ) -> crate::Result<ShiftSimulationOutput> {
         let Self {
             simulator,
@@ -67,20 +67,38 @@ impl ShiftSimulation<'_> {
         }
 
         // Execute withdrawal.
-        let from_market = simulator
-            .get_market_mut(from_market_token)
-            .expect("must exist");
+        let withdraw = {
+            let (from_market, maybe_vi_map) = if options.disable_vis {
+                (
+                    simulator
+                        .get_market_mut(from_market_token)
+                        .expect("must exist"),
+                    None,
+                )
+            } else {
+                let (market, vi_map) = simulator.get_market_and_vis_mut(from_market_token)?;
+                (market, Some(vi_map))
+            };
 
-        let withdraw = from_market.with_swap_pricing(SwapPricingKind::Shift, |market| {
-            market.with_vis_disabled(|market| {
-                market
-                    .withdraw(
-                        params.from_market_token_amount.into(),
-                        prices_for_from_market,
-                    )?
-                    .execute()
-            })
-        })?;
+            from_market.with_swap_pricing(SwapPricingKind::Shift, |market| match maybe_vi_map {
+                None => market.with_vis_disabled(|market| {
+                    market
+                        .withdraw(
+                            params.from_market_token_amount.into(),
+                            prices_for_from_market,
+                        )?
+                        .execute()
+                }),
+                Some(vi_map) => market.with_vi_models(vi_map, |market| {
+                    market
+                        .withdraw(
+                            params.from_market_token_amount.into(),
+                            prices_for_from_market,
+                        )?
+                        .execute()
+                }),
+            })?
+        };
 
         let (long_token_amount, short_token_amount) = (
             *withdraw.long_token_output(),
@@ -94,16 +112,32 @@ impl ShiftSimulation<'_> {
         }
 
         // Execute deposit.
-        let to_market = simulator
-            .get_market_mut(to_market_token)
-            .expect("must exist");
-        let deposit = to_market.with_swap_pricing(SwapPricingKind::Shift, |market| {
-            market.with_vis_disabled(|market| {
-                market
-                    .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
-                    .execute()
-            })
-        })?;
+        let deposit = {
+            let (to_market, maybe_vi_map) = if options.disable_vis {
+                (
+                    simulator
+                        .get_market_mut(to_market_token)
+                        .expect("must exist"),
+                    None,
+                )
+            } else {
+                let (market, vi_map) = simulator.get_market_and_vis_mut(to_market_token)?;
+                (market, Some(vi_map))
+            };
+
+            to_market.with_swap_pricing(SwapPricingKind::Shift, |market| match maybe_vi_map {
+                None => market.with_vis_disabled(|market| {
+                    market
+                        .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
+                        .execute()
+                }),
+                Some(vi_map) => market.with_vi_models(vi_map, |market| {
+                    market
+                        .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
+                        .execute()
+                }),
+            })?
+        };
 
         let minted = deposit.minted();
         let min_to_market_token_amount = params.min_to_market_token_amount;

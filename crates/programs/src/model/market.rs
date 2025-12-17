@@ -408,6 +408,25 @@ impl MarketModel {
         }
     }
 
+    /// Execute a function with or without virtual inventories depending on the given map.
+    ///
+    /// - If `vi_map` is `Some`, this will attach VI models from the map via [`Self::with_vi_models`].
+    /// - If `vi_map` is `None`, this will temporarily disable VIs via [`Self::with_vis_disabled`].
+    ///
+    /// This is a small utility to unify the entry point of VI enable/disable logic so that
+    /// callers do not need to duplicate branching between `with_vi_models` and
+    /// `with_vis_disabled`.
+    pub fn with_vis_if<T>(
+        &mut self,
+        vi_map: Option<&mut BTreeMap<Pubkey, VirtualInventoryModel>>,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        match vi_map {
+            Some(vi_map) => self.with_vi_models(vi_map, f),
+            None => self.with_vis_disabled(f),
+        }
+    }
+
     /// Execute a function with virtual inventories disabled.
     ///
     /// # Panic Safety
