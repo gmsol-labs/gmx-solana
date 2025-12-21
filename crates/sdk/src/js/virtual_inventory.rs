@@ -5,7 +5,6 @@ use wasm_bindgen::prelude::*;
 
 use crate::utils::zero_copy::{
     try_deserialize_zero_copy, try_deserialize_zero_copy_from_base64_with_options,
-    try_deserialize_zero_copy_with_options,
 };
 
 /// Wrapper of [`VirtualInventory`].
