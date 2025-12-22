@@ -19,7 +19,9 @@ use crate::{
     simulation::{order::UpdatePriceOptions, SimulationOptions, Simulator},
 };
 
-use crate::js::{market::JsMarketModel, position::JsPosition};
+use crate::js::{
+    market::JsMarketModel, position::JsPosition, virtual_inventory::JsVirtualInventoryModel,
+};
 
 use super::{
     deposit::{JsDepositSimulationOutput, SimulateDepositArgs},
@@ -35,11 +37,15 @@ use super::{
 #[derive(Clone)]
 pub struct JsSimulator {
     simulator: Simulator,
+    disable_vis: bool,
 }
 
 impl From<Simulator> for JsSimulator {
     fn from(simulator: Simulator) -> Self {
-        Self { simulator }
+        Self {
+            simulator,
+            disable_vis: false,
+        }
     }
 }
 
@@ -110,6 +116,36 @@ impl JsSimulator {
         Ok(())
     }
 
+    /// Insert a virtual inventory model.
+    pub fn insert_vi(
+        &mut self,
+        vi_address: &str,
+        vi: &JsVirtualInventoryModel,
+    ) -> crate::Result<()> {
+        let vi_address = vi_address.parse()?;
+        self.simulator.insert_vi(vi_address, vi.model.clone());
+        Ok(())
+    }
+
+    /// Get virtual inventory model by address.
+    pub fn get_vi(&self, vi_address: &str) -> crate::Result<Option<JsVirtualInventoryModel>> {
+        let vi_address = vi_address.parse()?;
+        Ok(self
+            .simulator
+            .get_vi(&vi_address)
+            .map(|vi| vi.clone().into()))
+    }
+
+    /// Set whether to disable virtual inventories for simulations.
+    pub fn set_disable_vis(&mut self, disable: bool) {
+        self.disable_vis = disable;
+    }
+
+    /// Get whether virtual inventories are disabled.
+    pub fn disable_vis(&self) -> bool {
+        self.disable_vis
+    }
+
     /// Simulate an order execution.
     pub fn simulate_order(
         &mut self,
@@ -147,7 +183,7 @@ impl JsSimulator {
 
         let output = simulation.execute_with_options(SimulationOptions {
             skip_limit_price_validation: skip_limit_price_validation.unwrap_or_default(),
-            disable_vis: false,
+            disable_vis: self.disable_vis,
         })?;
         Ok(JsOrderSimulationOutput { output })
     }
@@ -182,7 +218,10 @@ impl JsSimulator {
             .short_pay_token(short_pay_token.as_deref())
             .short_swap_path(&short_swap_path)
             .build()
-            .execute_with_options(Default::default())?;
+            .execute_with_options(SimulationOptions {
+                skip_limit_price_validation: false,
+                disable_vis: self.disable_vis,
+            })?;
 
         Ok(JsDepositSimulationOutput { output })
     }
@@ -223,7 +262,10 @@ impl JsSimulator {
             .short_receive_token(short_receive_token.as_deref())
             .short_swap_path(&short_swap_path)
             .build()
-            .execute_with_options(Default::default())?;
+            .execute_with_options(SimulationOptions {
+                skip_limit_price_validation: false,
+                disable_vis: self.disable_vis,
+            })?;
 
         Ok(JsWithdrawalSimulationOutput { output })
     }
@@ -253,7 +295,10 @@ impl JsSimulator {
             .simulator
             .simulate_shift(from_market_token, to_market_token, &params)
             .build()
-            .execute_with_options(Default::default())?;
+            .execute_with_options(SimulationOptions {
+                skip_limit_price_validation: false,
+                disable_vis: self.disable_vis,
+            })?;
 
         Ok(JsShiftSimulationOutput { output })
     }
@@ -294,7 +339,10 @@ impl JsSimulator {
             .short_pay_token(short_pay_token.as_deref())
             .short_swap_path(&short_swap_path)
             .build()
-            .execute_with_options(Default::default())?;
+            .execute_with_options(SimulationOptions {
+                skip_limit_price_validation: false,
+                disable_vis: self.disable_vis,
+            })?;
 
         Ok(JsGlvDepositSimulationOutput { output })
     }
@@ -336,7 +384,10 @@ impl JsSimulator {
             .short_receive_token(short_receive_token.as_deref())
             .short_swap_path(&short_swap_path)
             .build()
-            .execute_with_options(Default::default())?;
+            .execute_with_options(SimulationOptions {
+                skip_limit_price_validation: false,
+                disable_vis: self.disable_vis,
+            })?;
 
         Ok(JsGlvWithdrawalSimulationOutput { output })
     }

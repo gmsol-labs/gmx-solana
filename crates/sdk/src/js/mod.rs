@@ -28,6 +28,9 @@ pub mod events;
 /// GLV.
 pub mod glv;
 
+/// Virtual Inventory.
+pub mod virtual_inventory;
+
 /// Simulation.
 pub mod simulation;
 
