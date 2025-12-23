@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use gmsol_model::{price::Prices, utils::div_to_factor, MarketAction, SwapMarketMutExt};
 use gmsol_programs::model::{MarketModel, VirtualInventoryModel};
 use rust_decimal::{Decimal, MathematicalOps};
+use solana_sdk::pubkey::Pubkey;
 
 use crate::constants;
 
@@ -57,7 +58,8 @@ impl SwapEstimationParams {
             .checked_div(prices.collateral_token_price(is_from_long_side).min)?;
         let swap = if let Some(vi) = vi_for_swaps {
             let mut vi_map = BTreeMap::new();
-            if let Some(vi_addr) = market.meta.virtual_inventory_for_swaps {
+            let vi_addr = market.virtual_inventory_for_swaps;
+            if vi_addr != Pubkey::default() {
                 vi_map.insert(vi_addr, vi.clone());
             }
             market.with_vi_models(&mut vi_map, |market| {

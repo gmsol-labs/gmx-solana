@@ -10,11 +10,9 @@ use crate::{
     utils::zero_copy::try_deserialize_zero_copy_from_base64,
 };
 
-use gmsol_programs::{
-    gmsol_store::accounts::VirtualInventory,
-    model::{MarketModel, VirtualInventoryModel},
-};
+use gmsol_programs::model::{MarketModel, VirtualInventoryModel};
 use serde::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
@@ -219,11 +217,13 @@ impl JsMarketGraph {
         let market = self
             .graph
             .get_market(&market_token.parse()?)
-            .ok_or_else(|| crate::Error::from("Market not found"))?;
-        let vi_address = market
-            .meta
-            .virtual_inventory_for_swaps
-            .ok_or_else(|| crate::Error::from("Market has no virtual inventory for swaps"))?;
+            .ok_or_else(|| crate::Error::custom("Market not found"))?;
+        let vi_address = market.virtual_inventory_for_swaps;
+        if vi_address == Pubkey::default() {
+            return Err(crate::Error::custom(
+                "Market has no virtual inventory for swaps",
+            ));
+        }
         self.insert_vi_from_base64(&vi_address.to_string(), vi_data)?;
         Ok(())
     }

@@ -226,10 +226,8 @@ impl MarketGraph {
             .unwrap_or_else(|| Either::Right(self.markets.values()));
         for state in markets {
             let prices = self.get_prices(&state.market.meta);
-            let vi_for_swaps = state
-                .market
-                .meta
-                .virtual_inventory_for_swaps
+            let vi_for_swaps = (state.market.virtual_inventory_for_swaps != Pubkey::default())
+                .then_some(state.market.virtual_inventory_for_swaps)
                 .and_then(|vi_addr| self.vis.get(&vi_addr));
             let long_edge = self
                 .graph
