@@ -10,7 +10,10 @@ use crate::{
     utils::zero_copy::try_deserialize_zero_copy_from_base64,
 };
 
-use gmsol_programs::model::MarketModel;
+use gmsol_programs::{
+    gmsol_store::accounts::VirtualInventory,
+    model::{MarketModel, VirtualInventoryModel},
+};
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
@@ -180,6 +183,48 @@ impl JsMarketGraph {
     ) -> crate::Result<()> {
         self.graph
             .update_with_simulator(simulator, options.unwrap_or_default());
+        Ok(())
+    }
+
+    /// Insert virtual inventory from base64 encoded data.
+    pub fn insert_vi_from_base64(
+        &mut self,
+        vi_address: &str,
+        data: &str,
+    ) -> crate::Result<Option<String>> {
+        let vi = try_deserialize_zero_copy_from_base64(data)?;
+        let model = VirtualInventoryModel::from_parts(Arc::new(vi.0));
+        let old = self.graph.insert_vi(vi_address.parse()?, model);
+        Ok(old.map(|_| vi_address.to_string()))
+    }
+
+    /// Check if virtual inventory exists.
+    pub fn has_vi(&self, vi_address: &str) -> crate::Result<bool> {
+        Ok(self.graph.get_vi(&vi_address.parse()?).is_some())
+    }
+
+    /// Remove virtual inventory.
+    pub fn remove_vi(&mut self, vi_address: &str) -> crate::Result<Option<String>> {
+        let old = self.graph.remove_vi(&vi_address.parse()?);
+        Ok(old.map(|_| vi_address.to_string()))
+    }
+
+    /// Get all virtual inventory addresses.
+    pub fn vi_addresses(&self) -> Vec<String> {
+        self.graph.vis().map(|(addr, _)| addr.to_string()).collect()
+    }
+
+    /// Insert virtual inventory for a market by market token.
+    pub fn insert_vi_for_market(&mut self, market_token: &str, vi_data: &str) -> crate::Result<()> {
+        let market = self
+            .graph
+            .get_market(&market_token.parse()?)
+            .ok_or_else(|| crate::Error::from("Market not found"))?;
+        let vi_address = market
+            .meta
+            .virtual_inventory_for_swaps
+            .ok_or_else(|| crate::Error::from("Market has no virtual inventory for swaps"))?;
+        self.insert_vi_from_base64(&vi_address.to_string(), vi_data)?;
         Ok(())
     }
 

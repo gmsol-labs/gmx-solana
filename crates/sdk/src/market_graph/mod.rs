@@ -1,12 +1,15 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, BTreeMap, HashMap, HashSet},
     fmt,
     sync::Arc,
 };
 
 use either::Either;
 use gmsol_model::price::{Price, Prices};
-use gmsol_programs::{gmsol_store::types::MarketMeta, model::MarketModel};
+use gmsol_programs::{
+    gmsol_store::types::MarketMeta,
+    model::{MarketModel, VirtualInventoryModel},
+};
 use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     prelude::StableDiGraph,
@@ -141,6 +144,7 @@ pub struct MarketGraph {
     markets: HashMap<Pubkey, MarketState>,
     graph: Graph,
     config: MarketGraphConfig,
+    vis: BTreeMap<Pubkey, VirtualInventoryModel>,
 }
 
 type Distances = Vec<Option<Decimal>>;
@@ -161,6 +165,7 @@ impl MarketGraph {
             markets: Default::default(),
             graph: Default::default(),
             config,
+            vis: Default::default(),
         }
     }
 
@@ -191,22 +196,55 @@ impl MarketGraph {
         }
     }
 
+    /// Insert or update virtual inventory.
+    pub fn insert_vi(
+        &mut self,
+        vi_address: Pubkey,
+        vi: VirtualInventoryModel,
+    ) -> Option<VirtualInventoryModel> {
+        self.vis.insert(vi_address, vi)
+    }
+
+    /// Get virtual inventory by address.
+    pub fn get_vi(&self, vi_address: &Pubkey) -> Option<&VirtualInventoryModel> {
+        self.vis.get(vi_address)
+    }
+
+    /// Remove virtual inventory.
+    pub fn remove_vi(&mut self, vi_address: &Pubkey) -> Option<VirtualInventoryModel> {
+        self.vis.remove(vi_address)
+    }
+
+    /// Get all virtual inventory states.
+    pub fn vis(&self) -> impl Iterator<Item = (&Pubkey, &VirtualInventoryModel)> {
+        self.vis.iter()
+    }
+
     fn update_estimation(&mut self, only: Option<&Pubkey>) {
         let markets = only
             .map(|token| Either::Left(self.markets.get(token).into_iter()))
             .unwrap_or_else(|| Either::Right(self.markets.values()));
         for state in markets {
             let prices = self.get_prices(&state.market.meta);
+            let vi_for_swaps = state
+                .market
+                .meta
+                .virtual_inventory_for_swaps
+                .and_then(|vi_addr| self.vis.get(&vi_addr));
             let long_edge = self
                 .graph
                 .edge_weight_mut(state.long_edge)
                 .expect("internal: inconsistent market map");
-            long_edge.estimated = self.config.estimate(&state.market, true, prices);
+            long_edge.estimated = self
+                .config
+                .estimate(&state.market, true, prices, vi_for_swaps);
             let short_edge = self
                 .graph
                 .edge_weight_mut(state.short_edge)
                 .expect("internal: inconsistent market map");
-            short_edge.estimated = self.config.estimate(&state.market, false, prices);
+            short_edge.estimated = self
+                .config
+                .estimate(&state.market, false, prices, vi_for_swaps);
         }
     }
 
@@ -655,6 +693,10 @@ impl MarketGraph {
                 }
             }
         }
+
+        for (vi_address, vi) in simulator.vis() {
+            self.vis.insert(*vi_address, vi.clone());
+        }
     }
 
     /// Create a [`Simulator`].
@@ -707,7 +749,7 @@ impl MarketGraph {
             tokens,
             markets,
             Default::default(),
-            Default::default(),
+            self.vis.clone(),
         )
     }
 }

@@ -1,5 +1,7 @@
+use std::collections::BTreeMap;
+
 use gmsol_model::{price::Prices, utils::div_to_factor, MarketAction, SwapMarketMutExt};
-use gmsol_programs::model::MarketModel;
+use gmsol_programs::model::{MarketModel, VirtualInventoryModel};
 use rust_decimal::{Decimal, MathematicalOps};
 
 use crate::constants;
@@ -39,6 +41,7 @@ impl SwapEstimationParams {
         market: &MarketModel,
         is_from_long_side: bool,
         prices: Option<Prices<u128>>,
+        vi_for_swaps: Option<&VirtualInventoryModel>,
     ) -> Option<SwapEstimation> {
         if self.value == 0 {
             #[cfg(tracing)]
@@ -52,30 +55,61 @@ impl SwapEstimationParams {
         let token_in_amount = self
             .value
             .checked_div(prices.collateral_token_price(is_from_long_side).min)?;
-        let swap = market.with_vis_disabled(|market| {
-            market
-                .swap(is_from_long_side, token_in_amount, prices)
-                .inspect_err(|err| {
-                    #[cfg(tracing)]
-                    {
-                        tracing::trace!("estimation failed when creating swap: {err}");
-                    }
-                    _ = err;
-                })
-                .ok()
-                .and_then(|action| {
-                    action
-                        .execute()
-                        .inspect_err(|err| {
-                            #[cfg(tracing)]
-                            {
-                                tracing::trace!("estimation failed when executing swap: {err}");
-                            }
-                            _ = err;
-                        })
-                        .ok()
-                })
-        })?;
+        let swap = if let Some(vi) = vi_for_swaps {
+            let mut vi_map = BTreeMap::new();
+            if let Some(vi_addr) = market.meta.virtual_inventory_for_swaps {
+                vi_map.insert(vi_addr, vi.clone());
+            }
+            market.with_vi_models(&mut vi_map, |market| {
+                market
+                    .swap(is_from_long_side, token_in_amount, prices)
+                    .inspect_err(|err| {
+                        #[cfg(tracing)]
+                        {
+                            tracing::trace!("estimation failed when creating swap: {err}");
+                        }
+                        _ = err;
+                    })
+                    .ok()
+                    .and_then(|action| {
+                        action
+                            .execute()
+                            .inspect_err(|err| {
+                                #[cfg(tracing)]
+                                {
+                                    tracing::trace!("estimation failed when executing swap: {err}");
+                                }
+                                _ = err;
+                            })
+                            .ok()
+                    })
+            })?
+        } else {
+            market.with_vis_disabled(|market| {
+                market
+                    .swap(is_from_long_side, token_in_amount, prices)
+                    .inspect_err(|err| {
+                        #[cfg(tracing)]
+                        {
+                            tracing::trace!("estimation failed when creating swap: {err}");
+                        }
+                        _ = err;
+                    })
+                    .ok()
+                    .and_then(|action| {
+                        action
+                            .execute()
+                            .inspect_err(|err| {
+                                #[cfg(tracing)]
+                                {
+                                    tracing::trace!("estimation failed when executing swap: {err}");
+                                }
+                                _ = err;
+                            })
+                            .ok()
+                    })
+            })?
+        };
         let token_out_value = swap
             .token_out_amount()
             .checked_mul(prices.collateral_token_price(!is_from_long_side).max)?;
