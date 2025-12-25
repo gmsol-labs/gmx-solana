@@ -680,11 +680,23 @@ impl MarketGraph {
         simulator: &Simulator,
         options: UpdateGraphWithSimulatorOptions,
     ) {
-        for (_, market) in simulator.markets() {
-            self.insert_market(market.clone());
+        let update_vis = options.update_vis.unwrap_or(true);
+        let update_markets = options.update_markets.unwrap_or(true);
+        let update_token_prices = options.update_token_prices.unwrap_or_default();
+
+        if update_vis {
+            for (vi_address, vi) in simulator.vis() {
+                self.vis.insert(*vi_address, vi.clone());
+            }
         }
 
-        if options.update_token_prices.unwrap_or_default() {
+        if update_markets {
+            for (_, market) in simulator.markets() {
+                self.insert_market(market.clone());
+            }
+        }
+
+        if update_token_prices {
             for (token, state) in simulator.tokens() {
                 if let Some(price) = state.price() {
                     self.update_token_price_state(token, price.clone());
@@ -692,8 +704,8 @@ impl MarketGraph {
             }
         }
 
-        for (vi_address, vi) in simulator.vis() {
-            self.vis.insert(*vi_address, vi.clone());
+        if update_vis && !update_markets && !update_token_prices {
+            self.update_estimation(None);
         }
     }
 
@@ -774,6 +786,12 @@ pub struct UpdateGraphWithSimulatorOptions {
     /// Whether to update token prices with the simulator.
     #[cfg_attr(serde, serde(default))]
     pub update_token_prices: Option<bool>,
+    /// Whether to update markets with the simulator.
+    #[cfg_attr(serde, serde(default))]
+    pub update_markets: Option<bool>,
+    /// Whether to update virtual inventories with the simulator.
+    #[cfg_attr(serde, serde(default))]
+    pub update_vis: Option<bool>,
 }
 
 /// Best Swap Paths.
