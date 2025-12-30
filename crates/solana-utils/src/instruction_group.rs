@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     ops::Deref,
 };
 
@@ -311,11 +311,21 @@ impl AtomicGroup {
         luts: Option<&AddressLookupTables>,
         mut before_sign: impl FnMut(&VersionedMessage) -> crate::Result<()>,
     ) -> crate::Result<VersionedTransaction> {
+        let mut memo_signers = vec![];
+        if let Some(signers) = options.memo_signers.as_ref() {
+            let signers: BTreeSet<_> = signers.iter().collect();
+            for signer in signers {
+                if !self.signers.contains_key(signer) {
+                    memo_signers.push(NullSigner::new(signer));
+                }
+            }
+        }
         let message = self.message_with_blockhash_and_options(recent_blockhash, options, luts)?;
         (before_sign)(&message)?;
         let signers = self
             .signers
             .values()
+            .chain(memo_signers.iter())
             .map(|s| s as &dyn Signer)
             .chain(self.owned_signers.values().map(|s| s as &dyn Signer))
             .collect::<Vec<_>>();
