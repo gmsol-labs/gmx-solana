@@ -13,7 +13,7 @@ use crate::{
     AtomicGroup, ParallelGroup,
 };
 
-const DEFAULT_MEMO_COMPUTE_UNITS: u32 = 5_000;
+const DEFAULT_MEMO_COMPUTE_UNITS: u32 = 50_000;
 
 /// Transaction Group Options.
 #[derive(Debug, Clone)]
