@@ -125,9 +125,11 @@ impl<C> TransactionSigners<C> {
 }
 
 impl<C: Deref<Target = impl Signer + ?Sized>> TransactionSigners<C> {
-    /// Insert a signer.
-    pub fn insert(&mut self, signer: C) -> Option<C> {
-        self.signers.insert(signer.pubkey(), signer)
+    /// Inserts a signer.
+    ///
+    /// Returns `true` if this is a new signer.
+    pub fn insert(&mut self, signer: C) -> bool {
+        self.signers.insert(signer.pubkey(), signer).is_none()
     }
 
     /// Sign the given [`AtomicGroup`].

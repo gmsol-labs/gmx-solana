@@ -288,21 +288,28 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
 
     /// Build the [`Bundle`].
     pub fn build(self) -> crate::Result<Bundle<'a, C>> {
+        self.build_with_options(|options| {
+            Ok(TransactionGroupOptions {
+                max_transaction_size: options.max_packet_size.unwrap_or(TRANSACTION_SIZE_LIMIT),
+                max_instructions_per_tx: options.max_instructions_for_one_tx,
+                memo: None,
+                memo_signers: None,
+            })
+        })
+    }
+
+    /// Build [`Bundle`] with options builder `f`.
+    pub fn build_with_options(
+        self,
+        f: impl FnOnce(BundleOptions) -> crate::Result<TransactionGroupOptions>,
+    ) -> crate::Result<Bundle<'a, C>> {
         let Self {
             groups,
             options,
             ctx,
             luts,
         } = self;
-        let mut group = TransactionGroup::with_options_and_luts(
-            TransactionGroupOptions {
-                max_transaction_size: options.max_packet_size.unwrap_or(TRANSACTION_SIZE_LIMIT),
-                max_instructions_per_tx: options.max_instructions_for_one_tx,
-                memo: None,
-                memo_signers: None,
-            },
-            luts,
-        );
+        let mut group = TransactionGroup::with_options_and_luts(f(options)?, luts);
         for pg in groups {
             group.add(pg)?;
         }
@@ -378,6 +385,23 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
     /// Returns the inner [`TransactionGroup`].
     pub fn into_group(self) -> TransactionGroup {
         self.group
+    }
+
+    /// Consumes the [`Bundle`] and runs `f` with the inner [`TransactionGroup`] and [`TransactionSigners`].
+    pub fn with_inner<'a, T>(
+        &'a self,
+        f: impl FnOnce(&'a RpcClient, &'a TransactionGroup, TransactionSigners<&'a dyn Signer>) -> T,
+    ) -> T {
+        let Self { ctx, group } = self;
+        let Ctx {
+            client,
+            cfg_signers,
+            signers,
+        } = ctx;
+
+        let mut transaction_signers = cfg_signers.to_local();
+        transaction_signers.extend(signers.clone().into_values());
+        f(client, group, transaction_signers)
     }
 
     /// Estimate execution fee.
