@@ -10,6 +10,7 @@ use gmsol_programs::{
     gmsol_store::types::MarketMeta,
     model::{MarketModel, VirtualInventoryModel},
 };
+use gmsol_utils::pubkey::DEFAULT_PUBKEY;
 use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     prelude::StableDiGraph,
@@ -226,9 +227,11 @@ impl MarketGraph {
             .unwrap_or_else(|| Either::Right(self.markets.values()));
         for state in markets {
             let prices = self.get_prices(&state.market.meta);
-            let vi_for_swaps = (state.market.virtual_inventory_for_swaps != Pubkey::default())
+            let vi_for_swaps = (state.market.virtual_inventory_for_swaps != DEFAULT_PUBKEY)
                 .then_some(state.market.virtual_inventory_for_swaps)
-                .and_then(|vi_addr| self.vis.get(&vi_addr));
+                .and_then(|vi_addr| self.vis.get(&vi_addr))
+                .map(|vi| (state.market.virtual_inventory_for_swaps, vi));
+
             let long_edge = self
                 .graph
                 .edge_weight_mut(state.long_edge)

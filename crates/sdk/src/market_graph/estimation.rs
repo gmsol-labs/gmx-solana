@@ -42,7 +42,7 @@ impl SwapEstimationParams {
         market: &MarketModel,
         is_from_long_side: bool,
         prices: Option<Prices<u128>>,
-        vi_for_swaps: Option<&VirtualInventoryModel>,
+        vi_for_swaps: Option<(Pubkey, &VirtualInventoryModel)>,
     ) -> Option<SwapEstimation> {
         if self.value == 0 {
             #[cfg(tracing)]
@@ -56,62 +56,34 @@ impl SwapEstimationParams {
         let token_in_amount = self
             .value
             .checked_div(prices.collateral_token_price(is_from_long_side).min)?;
-        let swap = if let Some(vi) = vi_for_swaps {
-            let mut vi_map = BTreeMap::new();
-            let vi_addr = market.virtual_inventory_for_swaps;
-            if vi_addr != Pubkey::default() {
-                vi_map.insert(vi_addr, vi.clone());
-            }
-            market.with_vi_models(&mut vi_map, |market| {
-                market
-                    .swap(is_from_long_side, token_in_amount, prices)
-                    .inspect_err(|err| {
-                        #[cfg(tracing)]
-                        {
-                            tracing::trace!("estimation failed when creating swap: {err}");
-                        }
-                        _ = err;
-                    })
-                    .ok()
-                    .and_then(|action| {
-                        action
-                            .execute()
-                            .inspect_err(|err| {
-                                #[cfg(tracing)]
-                                {
-                                    tracing::trace!("estimation failed when executing swap: {err}");
-                                }
-                                _ = err;
-                            })
-                            .ok()
-                    })
-            })?
-        } else {
-            market.with_vis_disabled(|market| {
-                market
-                    .swap(is_from_long_side, token_in_amount, prices)
-                    .inspect_err(|err| {
-                        #[cfg(tracing)]
-                        {
-                            tracing::trace!("estimation failed when creating swap: {err}");
-                        }
-                        _ = err;
-                    })
-                    .ok()
-                    .and_then(|action| {
-                        action
-                            .execute()
-                            .inspect_err(|err| {
-                                #[cfg(tracing)]
-                                {
-                                    tracing::trace!("estimation failed when executing swap: {err}");
-                                }
-                                _ = err;
-                            })
-                            .ok()
-                    })
-            })?
-        };
+
+        let mut vi_map = vi_for_swaps.map(|(pubkey, vi)| BTreeMap::from([(pubkey, vi.clone())]));
+
+        let swap = market.with_vis_if(vi_map.as_mut(), |market| {
+            market
+                .swap(is_from_long_side, token_in_amount, prices)
+                .inspect_err(|err| {
+                    #[cfg(tracing)]
+                    {
+                        tracing::trace!("estimation failed when creating swap: {err}");
+                    }
+                    _ = err;
+                })
+                .ok()
+                .and_then(|action| {
+                    action
+                        .execute()
+                        .inspect_err(|err| {
+                            #[cfg(tracing)]
+                            {
+                                tracing::trace!("estimation failed when executing swap: {err}");
+                            }
+                            _ = err;
+                        })
+                        .ok()
+                })
+        })?;
+
         let token_out_value = swap
             .token_out_amount()
             .checked_mul(prices.collateral_token_price(!is_from_long_side).max)?;
