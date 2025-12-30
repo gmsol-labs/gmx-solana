@@ -680,8 +680,8 @@ impl MarketGraph {
         simulator: &Simulator,
         options: UpdateGraphWithSimulatorOptions,
     ) {
-        let update_vis = !options.not_update_vis;
-        let update_markets = !options.not_update_markets;
+        let update_vis = !options.skip_vis_update;
+        let update_markets = !options.skip_markets_update;
         let update_token_prices = options.update_token_prices;
 
         if update_vis {
@@ -788,10 +788,10 @@ pub struct UpdateGraphWithSimulatorOptions {
     pub update_token_prices: bool,
     /// Whether to not update markets with the simulator.
     #[cfg_attr(serde, serde(default))]
-    pub not_update_markets: bool,
+    pub skip_markets_update: bool,
     /// Whether to not update virtual inventories with the simulator.
     #[cfg_attr(serde, serde(default))]
-    pub not_update_vis: bool,
+    pub skip_vis_update: bool,
 }
 
 /// Best Swap Paths.
