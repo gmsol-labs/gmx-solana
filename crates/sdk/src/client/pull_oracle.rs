@@ -199,6 +199,11 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PriceUpdateInstructions<'a, C> 
         (&mut self.post, &mut self.close)
     }
 
+    /// Returns the inner [`BundleBuilder`].
+    pub fn split(self) -> (BundleBuilder<'a, C>, BundleBuilder<'a, C>) {
+        (self.post, self.close)
+    }
+
     /// Push a close instruction.
     #[allow(clippy::result_large_err)]
     pub fn try_push_close(
