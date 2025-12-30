@@ -203,7 +203,9 @@ impl MarketGraph {
         vi_address: Pubkey,
         vi: VirtualInventoryModel,
     ) -> Option<VirtualInventoryModel> {
-        self.vis.insert(vi_address, vi)
+        let old = self.vis.insert(vi_address, vi);
+        self.update_estimation(None);
+        old
     }
 
     /// Get virtual inventory by address.
