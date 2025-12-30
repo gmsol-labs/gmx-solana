@@ -174,6 +174,17 @@ impl MarketGraph {
     ///
     /// Return `true` if the market is newly inserted.
     pub fn insert_market(&mut self, market: MarketModel) -> bool {
+        self.insert_market_with_options(market, true)
+    }
+
+    /// Insert or update a market.
+    ///
+    /// Return `true` if the market is newly inserted.
+    pub fn insert_market_with_options(
+        &mut self,
+        market: MarketModel,
+        update_estimation: bool,
+    ) -> bool {
         let key = market.meta.market_token_mint;
         let (long_token_ix, short_token_ix) = self.insert_tokens_with_meta(&market.meta);
         match self.markets.entry(key) {
@@ -185,26 +196,33 @@ impl MarketGraph {
                     self.graph
                         .add_edge(short_token_ix, long_token_ix, Edge::new(key, None));
                 e.insert(MarketState::new(market, long_edge, short_edge));
-                self.update_estimation(Some(&key));
+                if update_estimation {
+                    self.update_estimation(Some(&key));
+                }
                 true
             }
             Entry::Occupied(mut e) => {
                 let state = e.get_mut();
                 state.market = market;
-                self.update_estimation(Some(&key));
+                if update_estimation {
+                    self.update_estimation(Some(&key));
+                }
                 false
             }
         }
     }
 
     /// Insert or update virtual inventory.
-    pub fn insert_vi(
+    pub fn insert_vi_options(
         &mut self,
         vi_address: Pubkey,
         vi: VirtualInventoryModel,
+        update_estimation: bool,
     ) -> Option<VirtualInventoryModel> {
         let old = self.vis.insert(vi_address, vi);
-        self.update_estimation(None);
+        if update_estimation {
+            self.update_estimation(None);
+        }
         old
     }
 
@@ -691,13 +709,13 @@ impl MarketGraph {
 
         if update_vis {
             for (vi_address, vi) in simulator.vis() {
-                self.vis.insert(*vi_address, vi.clone());
+                self.insert_vi_options(*vi_address, vi.clone(), false);
             }
         }
 
         if update_markets {
             for (_, market) in simulator.markets() {
-                self.insert_market(market.clone());
+                self.insert_market_with_options(market.clone(), false);
             }
         }
 
@@ -707,9 +725,7 @@ impl MarketGraph {
                     self.update_token_price_state(token, price.clone());
                 }
             }
-        }
-
-        if update_vis && !update_markets && !update_token_prices {
+        } else {
             self.update_estimation(None);
         }
     }

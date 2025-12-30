@@ -53,10 +53,22 @@ impl JsMarketGraph {
     }
 
     /// Insert market from base64 encoded data.
-    pub fn insert_market_from_base64(&mut self, data: &str, supply: u64) -> crate::Result<bool> {
+    pub fn insert_market_from_base64_with_options(
+        &mut self,
+        data: &str,
+        supply: u64,
+        update_estimation: bool,
+    ) -> crate::Result<bool> {
         let market = try_deserialize_zero_copy_from_base64(data)?.0;
         let model = MarketModel::from_parts(Arc::new(market), supply);
-        Ok(self.graph.insert_market(model))
+        Ok(self
+            .graph
+            .insert_market_with_options(model, update_estimation))
+    }
+
+    /// Insert market from base64 encoded data.
+    pub fn insert_market_from_base64(&mut self, data: &str, supply: u64) -> crate::Result<bool> {
+        self.insert_market_from_base64_with_options(data, supply, true)
     }
 
     /// Update token price.
@@ -189,10 +201,13 @@ impl JsMarketGraph {
         &mut self,
         vi_address: &str,
         data: &str,
+        update_estimation: bool,
     ) -> crate::Result<Option<String>> {
         let vi = try_deserialize_zero_copy_from_base64(data)?;
         let model = VirtualInventoryModel::from_parts(Arc::new(vi.0));
-        let old = self.graph.insert_vi(vi_address.parse()?, model);
+        let old = self
+            .graph
+            .insert_vi_options(vi_address.parse()?, model, update_estimation);
         Ok(old.map(|_| vi_address.to_string()))
     }
 
@@ -213,7 +228,12 @@ impl JsMarketGraph {
     }
 
     /// Insert virtual inventory for a market by market token.
-    pub fn insert_vi_for_market(&mut self, market_token: &str, vi_data: &str) -> crate::Result<()> {
+    pub fn insert_vi_for_market(
+        &mut self,
+        market_token: &str,
+        vi_data: &str,
+        update_estimation: bool,
+    ) -> crate::Result<()> {
         let market = self
             .graph
             .get_market(&market_token.parse()?)
@@ -224,7 +244,7 @@ impl JsMarketGraph {
                 "Market has no virtual inventory for swaps",
             ));
         }
-        self.insert_vi_from_base64(&vi_address.to_string(), vi_data)?;
+        self.insert_vi_from_base64(&vi_address.to_string(), vi_data, update_estimation)?;
         Ok(())
     }
 
