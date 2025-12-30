@@ -117,8 +117,9 @@ impl<C> Default for TransactionSigners<C> {
 }
 
 impl<C> TransactionSigners<C> {
-    fn project(&self, ag: &AtomicGroup) -> HashMap<Pubkey, &C> {
+    fn project(&self, ag: &AtomicGroup, extra_signers: &[Pubkey]) -> HashMap<Pubkey, &C> {
         ag.external_signers()
+            .chain(extra_signers)
             .filter_map(|pubkey| self.signers.get(pubkey).map(|s| (*pubkey, s)))
             .collect()
     }
@@ -142,7 +143,7 @@ impl<C: Deref<Target = impl Signer + ?Sized>> TransactionSigners<C> {
         allow_partial_sign: bool,
         before_sign: impl FnMut(&VersionedMessage) -> crate::Result<()>,
     ) -> crate::Result<VersionedTransaction> {
-        let signers = self.project(ag);
+        let signers = self.project(ag, options.memo_signers.as_deref().unwrap_or_default());
         let mut tx = ag.partially_signed_transaction_with_blockhash_and_options(
             recent_blockhash,
             options,
