@@ -163,6 +163,7 @@ pub struct ChainlinkPullOracle<'a, C> {
     gmsol: &'a crate::Client<C>,
     ctx: Arc<ChainlinkPullOracleFactory>,
     skip_feeds_preparation: bool,
+    authority: Option<&'a dyn Signer>,
 }
 
 impl<C> Clone for ChainlinkPullOracle<'_, C> {
@@ -187,7 +188,14 @@ impl<'a, C> ChainlinkPullOracle<'a, C> {
             gmsol,
             ctx,
             skip_feeds_preparation,
+            authority: None,
         }
+    }
+
+    /// Returns a new oracle with the given authority.
+    pub fn with_authority(mut self, authority: Option<&'a dyn Signer>) -> Self {
+        self.authority = authority;
+        self
     }
 }
 
@@ -275,12 +283,13 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
                         "feed account for the given `feed_id` is not provided, feed_id = {feed_id}"
                     ))
                 })?;
-                let rpc = self.gmsol.update_price_feed_with_chainlink(
+                let rpc = self.gmsol.update_price_feed_with_chainlink_and_authority(
                     &self.ctx.store,
                     feed,
                     &self.ctx.chainlink_program,
                     &self.ctx.access_controller,
                     &update.report_bytes()?,
+                    self.authority,
                 )?;
                 pg.add(rpc);
                 map.insert(feed_id, *feed);

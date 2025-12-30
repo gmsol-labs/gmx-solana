@@ -32,6 +32,18 @@ pub trait OracleOps<C> {
 
     /// Update price feed with chainlink.
     #[cfg(feature = "gmsol-chainlink-datastreams")]
+    fn update_price_feed_with_chainlink_and_authority<'a>(
+        &'a self,
+        store: &Pubkey,
+        price_feed: &Pubkey,
+        chainlink: &Pubkey,
+        access_controller: &Pubkey,
+        signed_report: &[u8],
+        authority: Option<&'a dyn Signer>,
+    ) -> crate::Result<TransactionBuilder<'a, C>>;
+
+    /// Update price feed with chainlink.
+    #[cfg(feature = "gmsol-chainlink-datastreams")]
     fn update_price_feed_with_chainlink(
         &self,
         store: &Pubkey,
@@ -39,7 +51,16 @@ pub trait OracleOps<C> {
         chainlink: &Pubkey,
         access_controller: &Pubkey,
         signed_report: &[u8],
-    ) -> crate::Result<TransactionBuilder<C>>;
+    ) -> crate::Result<TransactionBuilder<C>> {
+        self.update_price_feed_with_chainlink_and_authority(
+            store,
+            price_feed,
+            chainlink,
+            access_controller,
+            signed_report,
+            None,
+        )
+    }
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> OracleOps<C> for crate::Client<C> {
@@ -110,23 +131,26 @@ impl<C: Deref<Target = impl Signer> + Clone> OracleOps<C> for crate::Client<C> {
     }
 
     #[cfg(feature = "gmsol-chainlink-datastreams")]
-    fn update_price_feed_with_chainlink(
-        &self,
+    fn update_price_feed_with_chainlink_and_authority<'a>(
+        &'a self,
         store: &Pubkey,
         price_feed: &Pubkey,
         chainlink: &Pubkey,
         access_controller: &Pubkey,
         signed_report: &[u8],
-    ) -> crate::Result<TransactionBuilder<C>> {
+        authority: Option<&'a dyn Signer>,
+    ) -> crate::Result<TransactionBuilder<'a, C>> {
         use gmsol_chainlink_datastreams::utils::{
             find_config_account_pda, find_verifier_account_pda, Compressor,
         };
 
-        let authority = self.payer();
+        let (authority, rpc) = match authority {
+            Some(signer) => (signer.pubkey(), self.store_transaction().signer(signer)),
+            None => (self.payer(), self.store_transaction()),
+        };
         let verifier_account = find_verifier_account_pda(chainlink);
         let config_account = find_config_account_pda(signed_report, chainlink);
-        Ok(self
-            .store_transaction()
+        Ok(rpc
             .anchor_accounts(accounts::UpdatePriceFeedWithChainlink {
                 authority,
                 store: *store,
