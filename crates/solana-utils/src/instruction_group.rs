@@ -315,7 +315,7 @@ impl AtomicGroup {
         if let Some(signers) = options.memo_signers.as_ref() {
             let signers: BTreeSet<_> = signers.iter().collect();
             for signer in signers {
-                if !self.signers.contains_key(signer) {
+                if !self.signers.contains_key(signer) && !self.owned_signers.contains_key(signer) {
                     memo_signers.push(NullSigner::new(signer));
                 }
             }
