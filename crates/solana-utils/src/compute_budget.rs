@@ -73,6 +73,7 @@ impl ComputeBudget {
         &self,
         compute_unit_price_micro_lamports: Option<u64>,
         compute_unit_min_priority_lamports: Option<u64>,
+        extra_compute_units: u32,
     ) -> u64 {
         let mut price = compute_unit_price_micro_lamports.unwrap_or(self.price_micro_lamports);
         let min_priority_lamports =
@@ -80,15 +81,15 @@ impl ComputeBudget {
         if let Some(min_price) = min_priority_lamports.and_then(|min_lamports| {
             min_lamports
                 .checked_mul(Self::MICRO_LAMPORTS)?
-                .checked_div(self.budget_units() as u64)
+                .checked_div(self.budget_units(extra_compute_units) as u64)
         }) {
             price = price.max(min_price)
         }
         price
     }
 
-    fn budget_units(&self) -> u32 {
-        self.limit_units.min(Self::MAX_COMPUTE_UNIT)
+    fn budget_units(&self, extra_compute_units: u32) -> u32 {
+        (self.limit_units.saturating_add(extra_compute_units)).min(Self::MAX_COMPUTE_UNIT)
     }
 
     /// Build compute budget instructions.
@@ -97,12 +98,29 @@ impl ComputeBudget {
         compute_unit_price_micro_lamports: Option<u64>,
         compute_unit_min_priority_lamports: Option<u64>,
     ) -> Vec<Instruction> {
+        self.compute_budget_instructions_with_extra_units(
+            compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
+            0,
+        )
+    }
+
+    /// Build compute budget instructions with extra unit.
+    pub fn compute_budget_instructions_with_extra_units(
+        &self,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+        extra_compute_units: u32,
+    ) -> Vec<Instruction> {
         let price = self.budget_price(
             compute_unit_price_micro_lamports,
             compute_unit_min_priority_lamports,
+            extra_compute_units,
         );
         vec![
-            ComputeBudgetInstruction::set_compute_unit_limit(self.budget_units()),
+            ComputeBudgetInstruction::set_compute_unit_limit(
+                self.budget_units(extra_compute_units),
+            ),
             ComputeBudgetInstruction::set_compute_unit_price(price),
         ]
     }
@@ -123,10 +141,25 @@ impl ComputeBudget {
         compute_unit_price_micro_lamports: Option<u64>,
         compute_unit_min_priority_lamports: Option<u64>,
     ) -> u64 {
-        self.budget_units() as u64
+        self.fee_with_extra_units(
+            compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
+            0,
+        )
+    }
+
+    /// Estimate priority fee with extra units.
+    pub fn fee_with_extra_units(
+        &self,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+        extra_compute_units: u32,
+    ) -> u64 {
+        self.budget_units(extra_compute_units) as u64
             * self.budget_price(
                 compute_unit_price_micro_lamports,
                 compute_unit_min_priority_lamports,
+                extra_compute_units,
             )
             / Self::MICRO_LAMPORTS
     }

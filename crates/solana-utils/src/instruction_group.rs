@@ -59,6 +59,8 @@ pub struct GetInstructionsOptions {
     pub memo: Option<String>,
     /// If set, the signer list for the memo instruction will be replaced.
     pub memo_signers: Option<Vec<Pubkey>>,
+    /// Extra compute units.
+    pub extra_compute_units: u32,
 }
 
 /// Options for compute budget.
@@ -179,11 +181,14 @@ impl AtomicGroup {
         &self,
         compute_unit_price_micro_lamports: Option<u64>,
         compute_unit_min_priority_lamports: Option<u64>,
+        extra_compute_units: u32,
     ) -> Vec<Instruction> {
-        self.compute_budget.compute_budget_instructions(
-            compute_unit_price_micro_lamports,
-            compute_unit_min_priority_lamports,
-        )
+        self.compute_budget
+            .compute_budget_instructions_with_extra_units(
+                compute_unit_price_micro_lamports,
+                compute_unit_min_priority_lamports,
+                extra_compute_units,
+            )
     }
 
     /// Returns instructions.
@@ -197,6 +202,7 @@ impl AtomicGroup {
             self.compute_budget_instructions(
                 options.compute_budget.compute_unit_price_micro_lamports,
                 options.compute_budget.compute_unit_min_priority_lamports,
+                options.extra_compute_units,
             )
         };
         let memo_signers = match options.memo_signers.as_ref() {
@@ -338,6 +344,20 @@ impl AtomicGroup {
         compute_unit_price_micro_lamports: Option<u64>,
         compute_unit_min_priority_lamports: Option<u64>,
     ) -> u64 {
+        self.estimate_execution_fee_with_extra_units(
+            compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
+            0,
+        )
+    }
+
+    /// Estimates the execution fee of the result transaction with extra compute units.
+    pub fn estimate_execution_fee_with_extra_units(
+        &self,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+        extra_compute_units: u32,
+    ) -> u64 {
         let ixs = self
             .instructions_with_options(GetInstructionsOptions {
                 compute_budget: ComputeBudgetOptions {
@@ -356,9 +376,10 @@ impl AtomicGroup {
             .collect::<HashSet<_>>()
             .len() as u64;
         num_signers * 5_000
-            + self.compute_budget.fee(
+            + self.compute_budget.fee_with_extra_units(
                 compute_unit_price_micro_lamports,
                 compute_unit_min_priority_lamports,
+                extra_compute_units,
             )
     }
 }
@@ -487,12 +508,27 @@ impl ParallelGroup {
         compute_unit_price_micro_lamports: Option<u64>,
         compute_unit_min_priority_lamports: Option<u64>,
     ) -> u64 {
+        self.estimate_execution_fee_with_extra_units(
+            compute_unit_price_micro_lamports,
+            compute_unit_min_priority_lamports,
+            0,
+        )
+    }
+
+    /// Estiamtes the execution fee of the result transactions with extra units.
+    pub fn estimate_execution_fee_with_extra_units(
+        &self,
+        compute_unit_price_micro_lamports: Option<u64>,
+        compute_unit_min_priority_lamports: Option<u64>,
+        extra_compute_units: u32,
+    ) -> u64 {
         self.groups
             .iter()
             .map(|ag| {
-                ag.estimate_execution_fee(
+                ag.estimate_execution_fee_with_extra_units(
                     compute_unit_price_micro_lamports,
                     compute_unit_min_priority_lamports,
+                    extra_compute_units,
                 )
             })
             .sum()

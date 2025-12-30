@@ -13,6 +13,8 @@ use crate::{
     AtomicGroup, ParallelGroup,
 };
 
+const DEFAULT_MEMO_COMPUTE_UNITS: u32 = 5_000;
+
 /// Transaction Group Options.
 #[derive(Debug, Clone)]
 pub struct TransactionGroupOptions {
@@ -26,6 +28,8 @@ pub struct TransactionGroupOptions {
     pub memo: Option<String>,
     /// If set, the signer list for the memo instruction will be replaced.
     pub memo_signers: Option<Vec<Pubkey>>,
+    /// Extra compute units.
+    pub extra_compute_units: Option<u32>,
 }
 
 impl Default for TransactionGroupOptions {
@@ -35,6 +39,7 @@ impl Default for TransactionGroupOptions {
             max_instructions_per_tx: 14,
             memo: None,
             memo_signers: None,
+            extra_compute_units: None,
         }
     }
 }
@@ -45,6 +50,7 @@ impl TransactionGroupOptions {
             compute_budget: compute_budget.clone(),
             memo: self.memo.clone(),
             memo_signers: self.memo_signers.clone(),
+            extra_compute_units: self.extra_compute_units(),
         }
     }
 
@@ -135,6 +141,18 @@ impl TransactionGroupOptions {
         }
 
         merged
+    }
+
+    fn extra_compute_units(&self) -> u32 {
+        let default_extra_compute_units = match self.memo {
+            Some(_) => {
+                // TODO: estimate the default extra compute units based on the length of memo.
+                DEFAULT_MEMO_COMPUTE_UNITS
+            }
+            None => 0,
+        };
+        self.extra_compute_units
+            .unwrap_or(default_extra_compute_units)
     }
 }
 
@@ -304,12 +322,14 @@ impl TransactionGroup {
         compute_unit_price_micro_lamports: Option<u64>,
         compute_unit_min_priority_lamports: Option<u64>,
     ) -> u64 {
+        let extra_compute_units = self.options.extra_compute_units();
         self.groups
             .iter()
             .map(|pg| {
-                pg.estimate_execution_fee(
+                pg.estimate_execution_fee_with_extra_units(
                     compute_unit_price_micro_lamports,
                     compute_unit_min_priority_lamports,
+                    extra_compute_units,
                 )
             })
             .sum()

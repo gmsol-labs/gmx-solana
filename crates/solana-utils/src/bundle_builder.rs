@@ -294,6 +294,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
                 max_instructions_per_tx: options.max_instructions_for_one_tx,
                 memo: None,
                 memo_signers: None,
+                extra_compute_units: None,
             })
         })
     }
