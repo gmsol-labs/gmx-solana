@@ -22,10 +22,10 @@ pub struct TransactionGroupOptions {
     /// # Note
     /// - Compute budget instructions are ignored.
     pub max_instructions_per_tx: usize,
-    // /// Compute unit price in micro lamports.
-    // pub compute_unit_price_micro_lamports: Option<u64>,
     /// Memo for each transaction in this group.
     pub memo: Option<String>,
+    /// If set, the signer list for the memo instruction will be replaced.
+    pub memo_signers: Option<Vec<Pubkey>>,
 }
 
 impl Default for TransactionGroupOptions {
@@ -33,8 +33,8 @@ impl Default for TransactionGroupOptions {
         Self {
             max_transaction_size: PACKET_DATA_SIZE,
             max_instructions_per_tx: 14,
-            // compute_unit_price_micro_lamports: None,
             memo: None,
+            memo_signers: None,
         }
     }
 }
@@ -44,6 +44,7 @@ impl TransactionGroupOptions {
         GetInstructionsOptions {
             compute_budget: compute_budget.clone(),
             memo: self.memo.clone(),
+            memo_signers: self.memo_signers.clone(),
         }
     }
 

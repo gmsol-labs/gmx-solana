@@ -299,6 +299,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> BundleBuilder<'a, C> {
                 max_transaction_size: options.max_packet_size.unwrap_or(TRANSACTION_SIZE_LIMIT),
                 max_instructions_per_tx: options.max_instructions_for_one_tx,
                 memo: None,
+                memo_signers: None,
             },
             luts,
         );

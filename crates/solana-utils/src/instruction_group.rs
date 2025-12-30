@@ -57,6 +57,8 @@ pub struct GetInstructionsOptions {
     pub compute_budget: ComputeBudgetOptions,
     /// If set, a memo will be included in the final transaction.
     pub memo: Option<String>,
+    /// If set, the signer list for the memo instruction will be replaced.
+    pub memo_signers: Option<Vec<Pubkey>>,
 }
 
 /// Options for compute budget.
@@ -197,10 +199,14 @@ impl AtomicGroup {
                 options.compute_budget.compute_unit_min_priority_lamports,
             )
         };
+        let memo_signers = match options.memo_signers.as_ref() {
+            Some(signers) => signers.iter().collect(),
+            None => Vec::from([&self.payer]),
+        };
         let memo_instruction = options
             .memo
             .as_ref()
-            .map(|s| spl_memo::build_memo(s.as_bytes(), &[&self.payer]));
+            .map(|s| spl_memo::build_memo(s.as_bytes(), &memo_signers));
         compute_budget_instructions
             .into_iter()
             .chain(memo_instruction)
