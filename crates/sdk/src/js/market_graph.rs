@@ -10,8 +10,9 @@ use crate::{
     utils::zero_copy::try_deserialize_zero_copy_from_base64,
 };
 
-use gmsol_programs::model::MarketModel;
+use gmsol_programs::model::{MarketModel, VirtualInventoryModel};
 use serde::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
@@ -52,10 +53,22 @@ impl JsMarketGraph {
     }
 
     /// Insert market from base64 encoded data.
-    pub fn insert_market_from_base64(&mut self, data: &str, supply: u64) -> crate::Result<bool> {
+    pub fn insert_market_from_base64_with_options(
+        &mut self,
+        data: &str,
+        supply: u64,
+        update_estimation: bool,
+    ) -> crate::Result<bool> {
         let market = try_deserialize_zero_copy_from_base64(data)?.0;
         let model = MarketModel::from_parts(Arc::new(market), supply);
-        Ok(self.graph.insert_market(model))
+        Ok(self
+            .graph
+            .insert_market_with_options(model, update_estimation))
+    }
+
+    /// Insert market from base64 encoded data.
+    pub fn insert_market_from_base64(&mut self, data: &str, supply: u64) -> crate::Result<bool> {
+        self.insert_market_from_base64_with_options(data, supply, true)
     }
 
     /// Update token price.
@@ -180,6 +193,58 @@ impl JsMarketGraph {
     ) -> crate::Result<()> {
         self.graph
             .update_with_simulator(simulator, options.unwrap_or_default());
+        Ok(())
+    }
+
+    /// Insert virtual inventory from base64 encoded data.
+    pub fn insert_vi_from_base64(
+        &mut self,
+        vi_address: &str,
+        data: &str,
+        update_estimation: bool,
+    ) -> crate::Result<Option<String>> {
+        let vi = try_deserialize_zero_copy_from_base64(data)?;
+        let model = VirtualInventoryModel::from_parts(Arc::new(vi.0));
+        let old = self
+            .graph
+            .insert_vi_options(vi_address.parse()?, model, update_estimation);
+        Ok(old.map(|_| vi_address.to_string()))
+    }
+
+    /// Check if virtual inventory exists.
+    pub fn has_vi(&self, vi_address: &str) -> crate::Result<bool> {
+        Ok(self.graph.get_vi(&vi_address.parse()?).is_some())
+    }
+
+    /// Remove virtual inventory.
+    pub fn remove_vi(&mut self, vi_address: &str) -> crate::Result<Option<String>> {
+        let old = self.graph.remove_vi(&vi_address.parse()?);
+        Ok(old.map(|_| vi_address.to_string()))
+    }
+
+    /// Get all virtual inventory addresses.
+    pub fn vi_addresses(&self) -> Vec<String> {
+        self.graph.vis().map(|(addr, _)| addr.to_string()).collect()
+    }
+
+    /// Insert virtual inventory for a market by market token.
+    pub fn insert_vi_for_market(
+        &mut self,
+        market_token: &str,
+        vi_data: &str,
+        update_estimation: bool,
+    ) -> crate::Result<()> {
+        let market = self
+            .graph
+            .get_market(&market_token.parse()?)
+            .ok_or_else(|| crate::Error::custom("Market not found"))?;
+        let vi_address = market.virtual_inventory_for_swaps;
+        if vi_address == Pubkey::default() {
+            return Err(crate::Error::custom(
+                "Market has no virtual inventory for swaps",
+            ));
+        }
+        self.insert_vi_from_base64(&vi_address.to_string(), vi_data, update_estimation)?;
         Ok(())
     }
 

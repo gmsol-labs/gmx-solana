@@ -1,12 +1,16 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, BTreeMap, HashMap, HashSet},
     fmt,
     sync::Arc,
 };
 
 use either::Either;
 use gmsol_model::price::{Price, Prices};
-use gmsol_programs::{gmsol_store::types::MarketMeta, model::MarketModel};
+use gmsol_programs::{
+    gmsol_store::types::MarketMeta,
+    model::{MarketModel, VirtualInventoryModel},
+};
+use gmsol_utils::pubkey::DEFAULT_PUBKEY;
 use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     prelude::StableDiGraph,
@@ -141,6 +145,7 @@ pub struct MarketGraph {
     markets: HashMap<Pubkey, MarketState>,
     graph: Graph,
     config: MarketGraphConfig,
+    vis: BTreeMap<Pubkey, VirtualInventoryModel>,
 }
 
 type Distances = Vec<Option<Decimal>>;
@@ -161,6 +166,7 @@ impl MarketGraph {
             markets: Default::default(),
             graph: Default::default(),
             config,
+            vis: Default::default(),
         }
     }
 
@@ -168,6 +174,17 @@ impl MarketGraph {
     ///
     /// Return `true` if the market is newly inserted.
     pub fn insert_market(&mut self, market: MarketModel) -> bool {
+        self.insert_market_with_options(market, true)
+    }
+
+    /// Insert or update a market.
+    ///
+    /// Return `true` if the market is newly inserted.
+    pub fn insert_market_with_options(
+        &mut self,
+        market: MarketModel,
+        update_estimation: bool,
+    ) -> bool {
         let key = market.meta.market_token_mint;
         let (long_token_ix, short_token_ix) = self.insert_tokens_with_meta(&market.meta);
         match self.markets.entry(key) {
@@ -179,16 +196,49 @@ impl MarketGraph {
                     self.graph
                         .add_edge(short_token_ix, long_token_ix, Edge::new(key, None));
                 e.insert(MarketState::new(market, long_edge, short_edge));
-                self.update_estimation(Some(&key));
+                if update_estimation {
+                    self.update_estimation(Some(&key));
+                }
                 true
             }
             Entry::Occupied(mut e) => {
                 let state = e.get_mut();
                 state.market = market;
-                self.update_estimation(Some(&key));
+                if update_estimation {
+                    self.update_estimation(Some(&key));
+                }
                 false
             }
         }
+    }
+
+    /// Insert or update virtual inventory.
+    pub fn insert_vi_options(
+        &mut self,
+        vi_address: Pubkey,
+        vi: VirtualInventoryModel,
+        update_estimation: bool,
+    ) -> Option<VirtualInventoryModel> {
+        let old = self.vis.insert(vi_address, vi);
+        if update_estimation {
+            self.update_estimation(None);
+        }
+        old
+    }
+
+    /// Get virtual inventory by address.
+    pub fn get_vi(&self, vi_address: &Pubkey) -> Option<&VirtualInventoryModel> {
+        self.vis.get(vi_address)
+    }
+
+    /// Remove virtual inventory.
+    pub fn remove_vi(&mut self, vi_address: &Pubkey) -> Option<VirtualInventoryModel> {
+        self.vis.remove(vi_address)
+    }
+
+    /// Get all virtual inventory states.
+    pub fn vis(&self) -> impl Iterator<Item = (&Pubkey, &VirtualInventoryModel)> {
+        self.vis.iter()
     }
 
     fn update_estimation(&mut self, only: Option<&Pubkey>) {
@@ -197,16 +247,25 @@ impl MarketGraph {
             .unwrap_or_else(|| Either::Right(self.markets.values()));
         for state in markets {
             let prices = self.get_prices(&state.market.meta);
+            let vi_for_swaps = (state.market.virtual_inventory_for_swaps != DEFAULT_PUBKEY)
+                .then_some(state.market.virtual_inventory_for_swaps)
+                .and_then(|vi_addr| self.vis.get(&vi_addr))
+                .map(|vi| (state.market.virtual_inventory_for_swaps, vi));
+
             let long_edge = self
                 .graph
                 .edge_weight_mut(state.long_edge)
                 .expect("internal: inconsistent market map");
-            long_edge.estimated = self.config.estimate(&state.market, true, prices);
+            long_edge.estimated = self
+                .config
+                .estimate(&state.market, true, prices, vi_for_swaps);
             let short_edge = self
                 .graph
                 .edge_weight_mut(state.short_edge)
                 .expect("internal: inconsistent market map");
-            short_edge.estimated = self.config.estimate(&state.market, false, prices);
+            short_edge.estimated = self
+                .config
+                .estimate(&state.market, false, prices, vi_for_swaps);
         }
     }
 
@@ -644,16 +703,30 @@ impl MarketGraph {
         simulator: &Simulator,
         options: UpdateGraphWithSimulatorOptions,
     ) {
-        for (_, market) in simulator.markets() {
-            self.insert_market(market.clone());
+        let update_vis = !options.skip_vis_update;
+        let update_markets = !options.skip_markets_update;
+        let update_token_prices = options.update_token_prices;
+
+        if update_vis {
+            for (vi_address, vi) in simulator.vis() {
+                self.insert_vi_options(*vi_address, vi.clone(), false);
+            }
         }
 
-        if options.update_token_prices.unwrap_or_default() {
+        if update_markets {
+            for (_, market) in simulator.markets() {
+                self.insert_market_with_options(market.clone(), false);
+            }
+        }
+
+        if update_token_prices {
             for (token, state) in simulator.tokens() {
                 if let Some(price) = state.price() {
                     self.update_token_price_state(token, price.clone());
                 }
             }
+        } else {
+            self.update_estimation(None);
         }
     }
 
@@ -707,7 +780,7 @@ impl MarketGraph {
             tokens,
             markets,
             Default::default(),
-            Default::default(),
+            self.vis.clone(),
         )
     }
 }
@@ -733,7 +806,13 @@ pub struct CreateGraphSimulatorOptions {
 pub struct UpdateGraphWithSimulatorOptions {
     /// Whether to update token prices with the simulator.
     #[cfg_attr(serde, serde(default))]
-    pub update_token_prices: Option<bool>,
+    pub update_token_prices: bool,
+    /// Whether to not update markets with the simulator.
+    #[cfg_attr(serde, serde(default))]
+    pub skip_markets_update: bool,
+    /// Whether to not update virtual inventories with the simulator.
+    #[cfg_attr(serde, serde(default))]
+    pub skip_vis_update: bool,
 }
 
 /// Best Swap Paths.

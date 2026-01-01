@@ -1,6 +1,9 @@
+use std::collections::BTreeMap;
+
 use gmsol_model::{price::Prices, utils::div_to_factor, MarketAction, SwapMarketMutExt};
-use gmsol_programs::model::MarketModel;
+use gmsol_programs::model::{MarketModel, VirtualInventoryModel};
 use rust_decimal::{Decimal, MathematicalOps};
+use solana_sdk::pubkey::Pubkey;
 
 use crate::constants;
 
@@ -39,6 +42,7 @@ impl SwapEstimationParams {
         market: &MarketModel,
         is_from_long_side: bool,
         prices: Option<Prices<u128>>,
+        vi_for_swaps: Option<(Pubkey, &VirtualInventoryModel)>,
     ) -> Option<SwapEstimation> {
         if self.value == 0 {
             #[cfg(tracing)]
@@ -52,7 +56,10 @@ impl SwapEstimationParams {
         let token_in_amount = self
             .value
             .checked_div(prices.collateral_token_price(is_from_long_side).min)?;
-        let swap = market.with_vis_disabled(|market| {
+
+        let mut vi_map = vi_for_swaps.map(|(pubkey, vi)| BTreeMap::from([(pubkey, vi.clone())]));
+
+        let swap = market.with_vis_if(vi_map.as_mut(), |market| {
             market
                 .swap(is_from_long_side, token_in_amount, prices)
                 .inspect_err(|err| {
@@ -76,6 +83,7 @@ impl SwapEstimationParams {
                         .ok()
                 })
         })?;
+
         let token_out_value = swap
             .token_out_amount()
             .checked_mul(prices.collateral_token_price(!is_from_long_side).max)?;
