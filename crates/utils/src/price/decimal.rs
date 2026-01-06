@@ -117,7 +117,7 @@ impl Decimal {
             ans
         };
         Ok(Self {
-            value: value as u32,
+            value: value.try_into().map_err(|_| DecimalError::Overflow)?,
             decimal_multiplier,
         })
     }
@@ -273,5 +273,11 @@ mod tests {
         assert_eq!(fiat_eth_to_btc, 3847140);
         let fiat_eth_to_usdc = fiat_value_eth / price_usdc.to_unit_price();
         assert_eq!(fiat_eth_to_usdc, 2960410000);
+    }
+
+    #[test]
+    fn test_price_overflow() {
+        assert!(Decimal::try_from_price(u128::from(u32::MAX), 0, 0, 0).is_ok());
+        assert!(Decimal::try_from_price(u128::from(u32::MAX) + 1, 0, 0, 0).is_err());
     }
 }
