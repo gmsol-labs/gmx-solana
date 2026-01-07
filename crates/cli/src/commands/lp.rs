@@ -58,6 +58,15 @@ enum Command {
         #[arg(long)]
         controller_index: u64,
     },
+    /// Batch create LP token controllers for multiple token mints.
+    BatchCreateControllers {
+        /// LP token mint addresses.
+        #[arg(required = true, num_args = 1..)]
+        lp_token_mints: Vec<Pubkey>,
+        /// Controller index (same index for all controllers).
+        #[arg(long)]
+        controller_index: u64,
+    },
     /// Disable LP token controller for a specific token mint.
     DisableController {
         /// LP token mint address.
@@ -275,6 +284,32 @@ impl super::Command for Lp {
             } => client
                 .create_lp_token_controller(lp_token_mint, *controller_index)?
                 .into_bundle_with_options(options)?,
+            Command::BatchCreateControllers {
+                lp_token_mints,
+                controller_index,
+            } => {
+                if lp_token_mints.is_empty() {
+                    return Err(eyre::eyre!(
+                        "At least one LP token mint is required for batch creation"
+                    ));
+                }
+
+                let mut bundle = client.bundle_with_options(options);
+
+                tracing::info!(
+                    "Batch creating {} LP token controllers with index {controller_index}",
+                    lp_token_mints.len(),
+                );
+
+                for lp_token_mint in lp_token_mints {
+                    println!("Creating controller for LP token: {lp_token_mint}");
+                    let tx = client.create_lp_token_controller(lp_token_mint, *controller_index)?;
+                    bundle.push(tx)?;
+                }
+
+                client.send_or_serialize(bundle).await?;
+                return Ok(());
+            }
             Command::DisableController {
                 lp_token_mint,
                 controller_index,
