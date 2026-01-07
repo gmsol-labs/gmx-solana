@@ -5,8 +5,8 @@ pub mod programs {
     use crate::{untagged, value::UnknownOwnedData};
     use gmsol_programs::gmsol_store::{
         accounts::{
-            Deposit, GlvDeposit, GlvShift, GlvWithdrawal, Market, Order, Position, Shift, Store,
-            UserHeader, VirtualInventory, Withdrawal,
+            Deposit, Glv, GlvDeposit, GlvShift, GlvWithdrawal, Market, Order, Position, Shift,
+            Store, UserHeader, VirtualInventory, Withdrawal,
         },
         events::{
             BorrowingFeesUpdated, DepositExecuted, DepositRemoved, GlvDepositRemoved, GlvPricing,
@@ -28,6 +28,7 @@ pub mod programs {
     impl_decode_for_zero_copy!(GlvDeposit);
     impl_decode_for_zero_copy!(GlvWithdrawal);
     impl_decode_for_zero_copy!(GlvShift);
+    impl_decode_for_zero_copy!(Glv);
     impl_decode_for_zero_copy!(UserHeader);
 
     impl_decode_for_cpi_event!(DepositRemoved);
@@ -63,6 +64,7 @@ pub mod programs {
             GlvDeposit,
             GlvWithdrawal,
             GlvShift,
+            Glv,
             Store,
             Market,
             VirtualInventory,
