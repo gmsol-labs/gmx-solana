@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map, HashMap, HashSet},
+    collections::{btree_map, BTreeMap, HashSet},
     ops::Deref,
 };
 
@@ -8,7 +8,7 @@ use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey
 /// Address Lookup Tables.
 #[derive(Debug, Clone, Default)]
 pub struct AddressLookupTables {
-    pub(crate) luts: HashMap<Pubkey, Vec<Pubkey>>,
+    pub(crate) luts: BTreeMap<Pubkey, Vec<Pubkey>>,
 }
 
 impl AddressLookupTables {
@@ -62,7 +62,7 @@ impl Extend<(Pubkey, Vec<Pubkey>)> for AddressLookupTables {
 }
 
 impl IntoIterator for AddressLookupTables {
-    type IntoIter = hash_map::IntoIter<Pubkey, Vec<Pubkey>>;
+    type IntoIter = btree_map::IntoIter<Pubkey, Vec<Pubkey>>;
     type Item = (Pubkey, Vec<Pubkey>);
 
     fn into_iter(self) -> Self::IntoIter {
@@ -71,7 +71,7 @@ impl IntoIterator for AddressLookupTables {
 }
 
 impl Deref for AddressLookupTables {
-    type Target = HashMap<Pubkey, Vec<Pubkey>>;
+    type Target = BTreeMap<Pubkey, Vec<Pubkey>>;
 
     fn deref(&self) -> &Self::Target {
         &self.luts
