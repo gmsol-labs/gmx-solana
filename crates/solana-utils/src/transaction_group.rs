@@ -100,7 +100,12 @@ impl TransactionGroupOptions {
             return false;
         }
 
-        let size = x.transaction_size_after_merge(y, true, Some(luts), Default::default());
+        let size = x.transaction_size_after_merge(
+            y,
+            true,
+            Some(luts),
+            self.instruction_options(&Default::default()),
+        );
         if size > self.max_transaction_size {
             return false;
         }
