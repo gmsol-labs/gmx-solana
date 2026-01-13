@@ -99,7 +99,8 @@ pub struct UpdatePriceFeedWithChainlink<'info> {
 pub(crate) fn unchecked_update_price_feed_with_chainlink(
     ctx: Context<UpdatePriceFeedWithChainlink>,
     compressed_report: Vec<u8>,
-) -> Result<()> {
+    idempotent: bool,
+) -> Result<bool> {
     let accounts = ctx.accounts;
 
     require_eq!(
@@ -111,16 +112,17 @@ pub(crate) fn unchecked_update_price_feed_with_chainlink(
     let price = accounts.decode_and_validate_report(&compressed_report)?;
     accounts.verify_report(compressed_report)?;
 
-    accounts.price_feed.load_mut()?.update(
+    let updated = accounts.price_feed.load_mut()?.update(
         &price,
         *accounts
             .store
             .load()?
             .get_amount_by_key(AmountKey::OracleMaxFutureTimestampExcess)
             .ok_or_else(|| error!(CoreError::Unimplemented))?,
+        idempotent,
     )?;
 
-    Ok(())
+    Ok(updated)
 }
 
 impl<'info> internal::Authentication<'info> for UpdatePriceFeedWithChainlink<'info> {

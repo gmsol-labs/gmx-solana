@@ -1253,7 +1253,47 @@ pub mod gmsol_store {
         ctx: Context<UpdatePriceFeedWithChainlink>,
         compressed_report: Vec<u8>,
     ) -> Result<()> {
-        instructions::unchecked_update_price_feed_with_chainlink(ctx, compressed_report)
+        instructions::unchecked_update_price_feed_with_chainlink(ctx, compressed_report, false)?;
+        Ok(())
+    }
+
+    /// Updates the price data in a custom price feed account using a signed price report from
+    /// Chainlink Data Streams. The price feed must be configured to use the Chainlink Data Streams
+    /// provider.
+    ///
+    /// - Returns `Ok(true)` if the price feed is updated.
+    /// - Returns `Ok(false)` if the price report is valid but not newer than the last update.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](UpdatePriceFeedWithChainlink)*
+    ///
+    /// # Arguments
+    /// - `signed_report`: A signed price report from Chainlink Data Streams containing the price data.
+    ///
+    /// # Errors
+    /// - The [`authority`](UpdatePriceFeedWithChainlink::authority) must be a signer and have the
+    ///   PRICE_KEEPER role in the store.
+    /// - The [`store`](UpdatePriceFeedWithChainlink::store) must be an initialized store account
+    /// - The [`verifier_account`](UpdatePriceFeedWithChainlink::verifier_account) must be a valid
+    ///   Chainlink verifier account.
+    /// - The [`price_feed`](UpdatePriceFeedWithChainlink::price_feed) must be initialized, owned by
+    ///   the store, and authorized for the `authority`.
+    /// - The [`chainlink`](UpdatePriceFeedWithChainlink::chainlink) program ID must be trusted in the
+    ///   definition of the [`ChainlinkDataStreamsInterface`](gmsol_chainlink_datastreams::interface::ChainlinkDataStreamsInterface).
+    /// - The price feed must be configured to use [`ChainlinkDataStreams`](PriceProviderKind::ChainlinkDataStreams)
+    ///   as its provider.
+    /// - The `signed_report` must be:
+    ///   - Decodable as a valid Chainlink price report
+    ///   - Verifiable by the Chainlink Verifier Program
+    ///   - Contain valid data for creating a [`PriceFeedPrice`](states::oracle::PriceFeedPrice)
+    /// - The current slot and timestamp must be >= the feed's last update.
+    /// - The price data must meet all validity requirements (see the `update` method of [`PriceFeed`](states::oracle::PriceFeed)).
+    #[access_control(internal::Authenticate::only_price_keeper(&ctx))]
+    pub fn update_price_feed_with_chainlink_idempotent(
+        ctx: Context<UpdatePriceFeedWithChainlink>,
+        compressed_report: Vec<u8>,
+    ) -> Result<bool> {
+        instructions::unchecked_update_price_feed_with_chainlink(ctx, compressed_report, true)
     }
 
     // ===========================================

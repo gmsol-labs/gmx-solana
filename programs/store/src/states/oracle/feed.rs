@@ -65,7 +65,13 @@ impl PriceFeed {
         Ok(())
     }
 
-    pub(crate) fn update(&mut self, price: &PriceFeedPrice, max_future_excess: u64) -> Result<()> {
+    /// Returns whether the price is updated.
+    pub(crate) fn update(
+        &mut self,
+        price: &PriceFeedPrice,
+        max_future_excess: u64,
+        idempotent: bool,
+    ) -> Result<bool> {
         let clock = Clock::get()?;
         let slot = clock.slot;
         let current_ts = clock.unix_timestamp;
@@ -82,7 +88,14 @@ impl PriceFeed {
             CoreError::PreconditionsAreNotMet
         );
 
-        require_gte!(price.ts(), self.price.ts(), CoreError::InvalidArgument);
+        // If idempotent updates are allowed, skip older price updates.
+        let price_ts = price.ts();
+        let last_price_ts = self.price.ts();
+        if idempotent && price_ts < last_price_ts {
+            return Ok(false);
+        }
+
+        require_gte!(price_ts, last_price_ts, CoreError::InvalidArgument);
         require_gte!(
             current_ts.saturating_add_unsigned(max_future_excess),
             price.ts(),
@@ -108,7 +121,7 @@ impl PriceFeed {
         self.last_published_at = current_ts;
         self.price = *price;
 
-        Ok(())
+        Ok(true)
     }
 
     /// Get provider.
