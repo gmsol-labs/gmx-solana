@@ -206,6 +206,12 @@ impl JsMarketModel {
     pub fn js_clone(&self) -> Self {
         self.clone()
     }
+
+    /// Set order fee discount factor.
+    #[wasm_bindgen(js_name = setOrderFeeDiscountFactor)]
+    pub fn set_order_fee_discount_factor(&mut self, factor: u128) {
+        self.model.set_order_fee_discount_factor(factor);
+    }
 }
 
 impl From<MarketModel> for JsMarketModel {

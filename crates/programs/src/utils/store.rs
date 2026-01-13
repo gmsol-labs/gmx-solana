@@ -83,6 +83,45 @@ impl Store {
     }
 }
 
+#[cfg(feature = "model")]
+impl Store {
+    /// Get order fee discount factor.
+    pub fn order_fee_discount_factor(&self, rank: u8, is_referred: bool) -> crate::Result<u128> {
+        use crate::constants::{MARKET_DECIMALS, MARKET_USD_UNIT};
+        use gmsol_model::utils::apply_factor;
+
+        if (rank as u64) > self.gt.max_rank {
+            return Err(crate::Error::custom(format!(
+                "rank {rank} exceeds max_rank {}",
+                self.gt.max_rank
+            )));
+        }
+
+        let discount_factor_for_rank = self.gt.order_fee_discount_factors[rank as usize];
+
+        if is_referred {
+            let discount_factor_for_referred = self.factor.order_fee_discount_for_referred_user;
+
+            let complement_discount_factor_for_referred = MARKET_USD_UNIT
+                .checked_sub(discount_factor_for_referred)
+                .ok_or_else(|| crate::Error::custom("complement calculation overflow"))?;
+
+            let discount_factor = apply_factor::<_, { MARKET_DECIMALS }>(
+                &discount_factor_for_rank,
+                &complement_discount_factor_for_referred,
+            )
+            .and_then(|factor| discount_factor_for_referred.checked_add(factor))
+            .ok_or_else(|| crate::Error::custom("discount factor calculation overflow"))?;
+
+            debug_assert!(discount_factor <= MARKET_USD_UNIT);
+
+            Ok(discount_factor)
+        } else {
+            Ok(discount_factor_for_rank)
+        }
+    }
+}
+
 impl ReferralCodeV2 {
     /// The length of referral code.
     pub const LEN: usize = std::mem::size_of::<ReferralCodeBytes>();
@@ -707,5 +746,172 @@ mod utils {
         pub fn roles(&self) -> impl Iterator<Item = crate::Result<&str>> + '_ {
             self.roles.entries().map(|(_, value)| value.name())
         }
+    }
+}
+
+#[cfg(all(test, feature = "model"))]
+mod tests {
+    use super::*;
+    use crate::constants::MARKET_USD_UNIT;
+
+    /// Helper function to create a Store with specific GT and factor settings for testing.
+    fn create_test_store(
+        max_rank: u64,
+        order_fee_discount_factors: [u128; 16],
+        order_fee_discount_for_referred_user: u128,
+    ) -> Store {
+        let mut store: Store = Zeroable::zeroed();
+        store.gt.max_rank = max_rank;
+        store.gt.order_fee_discount_factors = order_fee_discount_factors;
+        store.factor.order_fee_discount_for_referred_user = order_fee_discount_for_referred_user;
+        store
+    }
+
+    #[test]
+    fn test_order_fee_discount_factor_rank_0_no_referral() {
+        // rank = 0, is_referred = false -> should return 0
+        let discount_factors = [0u128; 16];
+        let store = create_test_store(9, discount_factors, 0);
+
+        let factor = store.order_fee_discount_factor(0, false).unwrap();
+        assert_eq!(factor, 0, "rank 0 without referral should have 0 discount");
+    }
+
+    #[test]
+    fn test_order_fee_discount_factor_rank_1_no_referral() {
+        // rank = 1, is_referred = false -> should return 2.5%
+        let mut discount_factors = [0u128; 16];
+        discount_factors[1] = MARKET_USD_UNIT / 1_000 * 25; // 2.5%
+        let store = create_test_store(9, discount_factors, 0);
+
+        let factor = store.order_fee_discount_factor(1, false).unwrap();
+        let expected = MARKET_USD_UNIT / 1_000 * 25; // 2.5%
+        assert_eq!(
+            factor, expected,
+            "rank 1 without referral should have 2.5% discount"
+        );
+    }
+
+    #[test]
+    fn test_order_fee_discount_factor_rank_0_with_referral() {
+        // rank = 0, is_referred = true -> should return 10% (referred discount only)
+        let discount_factors = [0u128; 16];
+        let referred_discount = MARKET_USD_UNIT / 100 * 10; // 10%
+        let store = create_test_store(9, discount_factors, referred_discount);
+
+        let factor = store.order_fee_discount_factor(0, true).unwrap();
+        // Formula: 1 - (1 - 0) * (1 - 0.1) = 0.1 = 10%
+        assert_eq!(
+            factor, referred_discount,
+            "rank 0 with referral should have 10% discount"
+        );
+    }
+
+    #[test]
+    fn test_order_fee_discount_factor_rank_1_with_referral() {
+        // rank = 1, is_referred = true -> combined discount
+        // Formula: 1 - (1 - A) * (1 - B) = A + B * (1 - A) = 0.025 + 0.10 * (1 - 0.025) = 0.025 + 0.10 * 0.975 = 0.025 + 0.0975 = 0.1225 = 12.25%
+        // A = 2.5% (rank 1), B = 10% (referred)
+        let mut discount_factors = [0u128; 16];
+        let rank_discount = MARKET_USD_UNIT / 1_000 * 25; // 2.5%
+        discount_factors[1] = rank_discount;
+        let referred_discount = MARKET_USD_UNIT / 100 * 10; // 10%
+        let store = create_test_store(9, discount_factors, referred_discount);
+
+        let factor = store.order_fee_discount_factor(1, true).unwrap();
+
+        let complement = MARKET_USD_UNIT - referred_discount; // 1 - 10% = 90%
+        let expected = referred_discount + rank_discount * complement / MARKET_USD_UNIT;
+        assert_eq!(
+            factor, expected,
+            "rank 1 with referral should have combined discount (12.25%)"
+        );
+    }
+
+    #[test]
+    fn test_order_fee_discount_factor_max_rank() {
+        // Test with max_rank = 9, rank = 9
+        let mut discount_factors = [0u128; 16];
+        discount_factors[9] = MARKET_USD_UNIT / 1_000 * 225; // 22.5%
+        let store = create_test_store(9, discount_factors, 0);
+
+        let factor = store.order_fee_discount_factor(9, false).unwrap();
+        let expected = MARKET_USD_UNIT / 1_000 * 225;
+        assert_eq!(factor, expected, "max rank should have 22.5% discount");
+    }
+
+    #[test]
+    fn test_order_fee_discount_factor_rank_exceeds_max() {
+        // rank exceeds max_rank -> should return error
+        let discount_factors = [0u128; 16];
+        let store = create_test_store(9, discount_factors, 0);
+
+        let result = store.order_fee_discount_factor(10, false);
+        assert!(
+            result.is_err(),
+            "rank exceeding max_rank should return error"
+        );
+    }
+
+    #[test]
+    fn test_order_fee_discount_factor_full_setup() {
+        // Test with full setup matching the integration test:
+        // order_fee_discount_factors: [0, 25, 50, 75, 100, 125, 150, 175, 200, 225] * MARKET_USD_UNIT / 1_000
+        // OrderFeeDiscountForReferredUser: 10% (10 * MARKET_USD_UNIT / 100)
+        let discount_factors: [u128; 16] = [
+            0,
+            MARKET_USD_UNIT / 1_000 * 25,  // 2.5%
+            MARKET_USD_UNIT / 1_000 * 50,  // 5%
+            MARKET_USD_UNIT / 1_000 * 75,  // 7.5%
+            MARKET_USD_UNIT / 1_000 * 100, // 10%
+            MARKET_USD_UNIT / 1_000 * 125, // 12.5%
+            MARKET_USD_UNIT / 1_000 * 150, // 15%
+            MARKET_USD_UNIT / 1_000 * 175, // 17.5%
+            MARKET_USD_UNIT / 1_000 * 200, // 20%
+            MARKET_USD_UNIT / 1_000 * 225, // 22.5%
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        let referred_discount = MARKET_USD_UNIT / 100 * 10; // 10%
+        let store = create_test_store(9, discount_factors, referred_discount);
+
+        // Test rank 0, no referral
+        assert_eq!(store.order_fee_discount_factor(0, false).unwrap(), 0);
+
+        // Test rank 5, no referral (12.5%)
+        let expected_rank_5 = MARKET_USD_UNIT / 1_000 * 125;
+        assert_eq!(
+            store.order_fee_discount_factor(5, false).unwrap(),
+            expected_rank_5
+        );
+
+        // Test rank 5, with referral
+        // Formula: referred + rank_discount * (1 - referred) / UNIT = 10% + 12.5% * 90% = 10% + 11.25% = 21.25%
+        use crate::constants::MARKET_DECIMALS;
+        use gmsol_model::utils::apply_factor;
+        let complement = MARKET_USD_UNIT - referred_discount;
+        let expected_combined = referred_discount
+            + apply_factor::<_, { MARKET_DECIMALS }>(&expected_rank_5, &complement).unwrap();
+        assert_eq!(
+            store.order_fee_discount_factor(5, true).unwrap(),
+            expected_combined
+        );
+    }
+
+    #[test]
+    fn test_order_fee_discount_factor_high_discounts() {
+        let mut discount_factors = [0u128; 16];
+        discount_factors[0] = MARKET_USD_UNIT / 100 * 50; // 50%
+        let referred_discount = MARKET_USD_UNIT / 100 * 40; // 40%
+        let store = create_test_store(9, discount_factors, referred_discount);
+
+        // Combined: 1 - (1 - 0.5) * (1 - 0.4) = 1 - 0.5 * 0.6 = 1 - 0.3 = 0.7 = 70%
+        let factor = store.order_fee_discount_factor(0, true).unwrap();
+        let expected = MARKET_USD_UNIT / 100 * 70;
+        assert_eq!(factor, expected, "combined high discounts should be 70%");
     }
 }
