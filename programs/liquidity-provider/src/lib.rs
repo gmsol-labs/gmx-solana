@@ -1446,7 +1446,7 @@ fn get_gm_token_value_via_cpi<'info>(
         "max_after_deposit".to_string(), // Conservative pricing
         false,                           // maximize: false
         global_state.pricing_staleness_seconds,
-        false, // emit_event: false
+        true,
     )?;
 
     Ok(result.get())
@@ -1490,7 +1490,7 @@ fn get_glv_token_value_via_cpi<'info>(
         amount,
         false, // maximize: false for conservative pricing
         global_state.pricing_staleness_seconds,
-        false, // emit_event: false
+        true,
     )?;
 
     Ok(result.get())
