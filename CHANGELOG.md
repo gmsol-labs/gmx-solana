@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - programs(store): Refactor core GLV calculation logic to model crate.
 
+### Fixed
+
+- programs(utils): Prevented silent truncation in `Decimal::try_from_price`.
+
 ## [0.8.0] - 2025-10-24
 
 ### Breaking Changes
