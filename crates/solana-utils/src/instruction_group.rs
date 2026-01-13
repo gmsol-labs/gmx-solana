@@ -227,13 +227,11 @@ impl AtomicGroup {
         luts: Option<&AddressLookupTables>,
         options: GetInstructionsOptions,
     ) -> usize {
-        let addresses = luts.as_ref().map(|luts| luts.addresses());
-        crate::utils::transaction_size(
+        crate::utils::transaction_size_with_luts(
             self.payer,
             &self.instructions_with_options(options).collect::<Vec<_>>(),
             is_versioned_transaction,
-            addresses.as_ref(),
-            luts.as_ref().map(|luts| luts.len()).unwrap_or_default(),
+            luts,
         )
     }
 
@@ -245,8 +243,7 @@ impl AtomicGroup {
         luts: Option<&AddressLookupTables>,
         options: GetInstructionsOptions,
     ) -> usize {
-        let addresses = luts.as_ref().map(|luts| luts.addresses());
-        crate::utils::transaction_size(
+        crate::utils::transaction_size_with_luts(
             self.payer,
             &self
                 .instructions_with_options(options)
@@ -259,8 +256,7 @@ impl AtomicGroup {
                 }))
                 .collect::<Vec<_>>(),
             is_versioned_transaction,
-            addresses.as_ref(),
-            luts.as_ref().map(|luts| luts.len()).unwrap_or_default(),
+            luts,
         )
     }
 

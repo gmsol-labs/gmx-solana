@@ -8,5 +8,7 @@ pub mod inspect;
 pub mod with_slot;
 
 pub use self::{
-    inspect::inspect_transaction, transaction_size::transaction_size, with_slot::WithSlot,
+    inspect::inspect_transaction,
+    transaction_size::{transaction_size, transaction_size_with_luts},
+    with_slot::WithSlot,
 };
