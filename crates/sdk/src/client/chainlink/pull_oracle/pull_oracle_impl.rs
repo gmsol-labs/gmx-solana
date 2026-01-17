@@ -164,6 +164,7 @@ pub struct ChainlinkPullOracle<'a, C> {
     ctx: Arc<ChainlinkPullOracleFactory>,
     skip_feeds_preparation: bool,
     authority: Option<&'a dyn Signer>,
+    idempotent: bool,
 }
 
 impl<C> Clone for ChainlinkPullOracle<'_, C> {
@@ -189,12 +190,20 @@ impl<'a, C> ChainlinkPullOracle<'a, C> {
             ctx,
             skip_feeds_preparation,
             authority: None,
+            idempotent: true,
         }
     }
 
     /// Returns a new oracle with the given authority.
     pub fn with_authority(mut self, authority: Option<&'a dyn Signer>) -> Self {
         self.authority = authority;
+        self
+    }
+
+    /// Returns a new oracle with the given `idempotent` option,
+    /// which defaults to `true`.
+    pub fn with_idempotent(mut self, idempotent: bool) -> Self {
+        self.idempotent = idempotent;
         self
     }
 }
@@ -290,6 +299,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
                     &self.ctx.access_controller,
                     &update.report_bytes()?,
                     self.authority,
+                    self.idempotent,
                 )?;
                 pg.add(rpc);
                 map.insert(feed_id, *feed);

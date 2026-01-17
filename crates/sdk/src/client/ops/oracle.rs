@@ -40,6 +40,7 @@ pub trait OracleOps<C> {
         access_controller: &Pubkey,
         signed_report: &[u8],
         authority: Option<&'a dyn Signer>,
+        idempotent: bool,
     ) -> crate::Result<TransactionBuilder<'a, C>>;
 
     /// Update price feed with chainlink.
@@ -59,6 +60,7 @@ pub trait OracleOps<C> {
             access_controller,
             signed_report,
             None,
+            false,
         )
     }
 }
@@ -139,6 +141,7 @@ impl<C: Deref<Target = impl Signer> + Clone> OracleOps<C> for crate::Client<C> {
         access_controller: &Pubkey,
         signed_report: &[u8],
         authority: Option<&'a dyn Signer>,
+        idempotent: bool,
     ) -> crate::Result<TransactionBuilder<'a, C>> {
         use gmsol_chainlink_datastreams::utils::{
             find_config_account_pda, find_verifier_account_pda, Compressor,
@@ -150,19 +153,29 @@ impl<C: Deref<Target = impl Signer> + Clone> OracleOps<C> for crate::Client<C> {
         };
         let verifier_account = find_verifier_account_pda(chainlink);
         let config_account = find_config_account_pda(signed_report, chainlink);
-        Ok(rpc
-            .anchor_accounts(accounts::UpdatePriceFeedWithChainlink {
-                authority,
-                store: *store,
-                verifier_account,
-                access_controller: *access_controller,
-                config_account,
-                price_feed: *price_feed,
-                chainlink: *chainlink,
-            })
-            .anchor_args(args::UpdatePriceFeedWithChainlink {
+
+        let builder = rpc.anchor_accounts(accounts::UpdatePriceFeedWithChainlink {
+            authority,
+            store: *store,
+            verifier_account,
+            access_controller: *access_controller,
+            config_account,
+            price_feed: *price_feed,
+            chainlink: *chainlink,
+        });
+
+        if idempotent {
+            Ok(
+                builder.anchor_args(args::UpdatePriceFeedWithChainlinkIdempotent {
+                    compressed_report: Compressor::compress(signed_report)
+                        .map_err(crate::Error::custom)?,
+                }),
+            )
+        } else {
+            Ok(builder.anchor_args(args::UpdatePriceFeedWithChainlink {
                 compressed_report: Compressor::compress(signed_report)
                     .map_err(crate::Error::custom)?,
             }))
+        }
     }
 }
