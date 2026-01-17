@@ -10,6 +10,19 @@ use solana_sdk::{
     pubkey::Pubkey, signer::Signer, system_instruction::create_account, system_program,
 };
 
+/// Arguments for updating a Chainlink price feed.
+#[cfg(feature = "gmsol-chainlink-datastreams")]
+pub struct ChainlinkPriceFeedUpdateArgs<'a> {
+    /// Chainlink DataStreams program address.
+    pub chainlink: &'a Pubkey,
+    /// The address controller address.
+    pub access_controller: &'a Pubkey,
+    /// Signed report.
+    pub signed_report: &'a [u8],
+    /// Whether to update idempotently.
+    pub idempotent: bool,
+}
+
 /// Operations for oracle management.
 pub trait OracleOps<C> {
     /// Initialize [`Oracle`] account.
@@ -36,11 +49,8 @@ pub trait OracleOps<C> {
         &'a self,
         store: &Pubkey,
         price_feed: &Pubkey,
-        chainlink: &Pubkey,
-        access_controller: &Pubkey,
-        signed_report: &[u8],
+        args: ChainlinkPriceFeedUpdateArgs<'_>,
         authority: Option<&'a dyn Signer>,
-        idempotent: bool,
     ) -> crate::Result<TransactionBuilder<'a, C>>;
 
     /// Update price feed with chainlink.
@@ -56,11 +66,13 @@ pub trait OracleOps<C> {
         self.update_price_feed_with_chainlink_and_authority(
             store,
             price_feed,
-            chainlink,
-            access_controller,
-            signed_report,
+            ChainlinkPriceFeedUpdateArgs {
+                chainlink,
+                access_controller,
+                signed_report,
+                idempotent: false,
+            },
             None,
-            false,
         )
     }
 }
@@ -137,15 +149,19 @@ impl<C: Deref<Target = impl Signer> + Clone> OracleOps<C> for crate::Client<C> {
         &'a self,
         store: &Pubkey,
         price_feed: &Pubkey,
-        chainlink: &Pubkey,
-        access_controller: &Pubkey,
-        signed_report: &[u8],
+        args: ChainlinkPriceFeedUpdateArgs<'_>,
         authority: Option<&'a dyn Signer>,
-        idempotent: bool,
     ) -> crate::Result<TransactionBuilder<'a, C>> {
         use gmsol_chainlink_datastreams::utils::{
             find_config_account_pda, find_verifier_account_pda, Compressor,
         };
+
+        let ChainlinkPriceFeedUpdateArgs {
+            chainlink,
+            access_controller,
+            signed_report,
+            idempotent,
+        } = args;
 
         let (authority, rpc) = match authority {
             Some(signer) => (signer.pubkey(), self.store_transaction().signer(signer)),

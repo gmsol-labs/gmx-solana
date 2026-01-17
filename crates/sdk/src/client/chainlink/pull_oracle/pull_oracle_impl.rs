@@ -10,10 +10,13 @@ use gmsol_utils::oracle::PriceProviderKind;
 use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use time::OffsetDateTime;
 
-use crate::client::{
-    feeds_parser::{FeedAddressMap, Feeds},
-    ops::oracle::OracleOps,
-    pull_oracle::{FeedIds, PostPullOraclePrices, PriceUpdateInstructions, PullOracle},
+use crate::{
+    client::{
+        feeds_parser::{FeedAddressMap, Feeds},
+        ops::oracle::OracleOps,
+        pull_oracle::{FeedIds, PostPullOraclePrices, PriceUpdateInstructions, PullOracle},
+    },
+    ops::oracle::ChainlinkPriceFeedUpdateArgs,
 };
 
 use super::{client::ApiReportData, Client, FeedId};
@@ -295,11 +298,13 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
                 let rpc = self.gmsol.update_price_feed_with_chainlink_and_authority(
                     &self.ctx.store,
                     feed,
-                    &self.ctx.chainlink_program,
-                    &self.ctx.access_controller,
-                    &update.report_bytes()?,
+                    ChainlinkPriceFeedUpdateArgs {
+                        chainlink: &self.ctx.chainlink_program,
+                        access_controller: &self.ctx.access_controller,
+                        signed_report: &update.report_bytes()?,
+                        idempotent: self.idempotent,
+                    },
                     self.authority,
-                    self.idempotent,
                 )?;
                 pg.add(rpc);
                 map.insert(feed_id, *feed);
