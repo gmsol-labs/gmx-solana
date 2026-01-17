@@ -452,7 +452,12 @@ impl<'info> ExecuteIncreaseOrSwapOrderV2<'info> {
                 .amount(amount)
                 .decimals(token.decimals)
                 .token_mint(token.to_account_info())
-                .allow_closed(false)
+                // `allow_closed` is set to `true` to ensure that funds are returned
+                // to the owner even if the execution is initially permitted but
+                // later cancelled. Note that if execution is not permitted during
+                // non-trading hours, the transaction would have already been reverted,
+                // and therefore the transfer-out logic here would not be executed.
+                .allow_closed(true)
                 .event_emitter(*event_emitter)
                 .build()
                 .execute()?;
@@ -560,7 +565,11 @@ impl<'info> ExecuteIncreaseOrSwapOrderV2<'info> {
             .claimable_short_token_account_for_user(None)
             .claimable_pnl_token_account_for_holding(None)
             .transfer_out(transfer_out)
-            .allow_closed(false)
+            // `allow_closed` is set to `true` because when execution is permitted,
+            // the transfer output must also be allowed. This is required when
+            // depositing collateral into a position with claimable funding fees
+            // during non-trading hours.
+            .allow_closed(true)
             .event_emitter(*event_emitter)
             .build()
             .execute()?;
