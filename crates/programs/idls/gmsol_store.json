@@ -2,7 +2,7 @@
   "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo",
   "metadata": {
     "name": "gmsol_store",
-    "version": "0.8.0",
+    "version": "0.9.0",
     "spec": "0.1.0",
     "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
     "repository": "https://github.com/gmsol-labs/gmx-solana"
@@ -21584,6 +21584,111 @@
           "type": "bytes"
         }
       ]
+    },
+    {
+      "name": "update_price_feed_with_chainlink_idempotent",
+      "docs": [
+        "Updates the price data in a custom price feed account using a signed price report from",
+        "Chainlink Data Streams. The price feed must be configured to use the Chainlink Data Streams",
+        "provider.",
+        "",
+        "- Returns `Ok(true)` if the price feed is updated.",
+        "- Returns `Ok(false)` if the price report is valid but not newer than the last update.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](UpdatePriceFeedWithChainlink)*",
+        "",
+        "# Arguments",
+        "- `signed_report`: A signed price report from Chainlink Data Streams containing the price data.",
+        "",
+        "# Errors",
+        "- The [`authority`](UpdatePriceFeedWithChainlink::authority) must be a signer and have the",
+        "PRICE_KEEPER role in the store.",
+        "- The [`store`](UpdatePriceFeedWithChainlink::store) must be an initialized store account",
+        "- The [`verifier_account`](UpdatePriceFeedWithChainlink::verifier_account) must be a valid",
+        "Chainlink verifier account.",
+        "- The [`price_feed`](UpdatePriceFeedWithChainlink::price_feed) must be initialized, owned by",
+        "the store, and authorized for the `authority`.",
+        "- The [`chainlink`](UpdatePriceFeedWithChainlink::chainlink) program ID must be trusted in the",
+        "definition of the [`ChainlinkDataStreamsInterface`](gmsol_chainlink_datastreams::interface::ChainlinkDataStreamsInterface).",
+        "- The price feed must be configured to use [`ChainlinkDataStreams`](PriceProviderKind::ChainlinkDataStreams)",
+        "as its provider.",
+        "- The `signed_report` must be:",
+        "- Decodable as a valid Chainlink price report",
+        "- Verifiable by the Chainlink Verifier Program",
+        "- Contain valid data for creating a [`PriceFeedPrice`](states::oracle::PriceFeedPrice)",
+        "- The current slot and timestamp must be >= the feed's last update.",
+        "- The price data must meet all validity requirements (see the `update` method of [`PriceFeed`](states::oracle::PriceFeed))."
+      ],
+      "discriminator": [
+        192,
+        223,
+        140,
+        228,
+        52,
+        84,
+        138,
+        79
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority."
+          ],
+          "signer": true,
+          "relations": [
+            "price_feed"
+          ]
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "price_feed"
+          ]
+        },
+        {
+          "name": "verifier_account",
+          "docs": [
+            "Verifier Account."
+          ]
+        },
+        {
+          "name": "access_controller",
+          "docs": [
+            "Access Controller Account."
+          ]
+        },
+        {
+          "name": "config_account",
+          "docs": [
+            "Config Account."
+          ]
+        },
+        {
+          "name": "price_feed",
+          "docs": [
+            "Price Feed Account."
+          ],
+          "writable": true
+        },
+        {
+          "name": "chainlink",
+          "docs": [
+            "Chainlink Data Streams Program."
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "compressed_report",
+          "type": "bytes"
+        }
+      ],
+      "returns": "bool"
     },
     {
       "name": "update_token_metadata",

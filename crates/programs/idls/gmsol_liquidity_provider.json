@@ -2,7 +2,7 @@
   "address": "LPMWczEVgXyQ3979XaqqEttanCXmYGvtJqPVtw1PvC8",
   "metadata": {
     "name": "gmsol_liquidity_provider",
-    "version": "0.8.0",
+    "version": "0.9.0",
     "spec": "0.1.0",
     "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
     "repository": "https://github.com/gmsol-labs/gmx-solana"
