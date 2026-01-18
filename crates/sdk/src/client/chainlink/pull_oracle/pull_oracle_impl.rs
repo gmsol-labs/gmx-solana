@@ -10,10 +10,13 @@ use gmsol_utils::oracle::PriceProviderKind;
 use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use time::OffsetDateTime;
 
-use crate::client::{
-    feeds_parser::{FeedAddressMap, Feeds},
-    ops::oracle::OracleOps,
-    pull_oracle::{FeedIds, PostPullOraclePrices, PriceUpdateInstructions, PullOracle},
+use crate::{
+    client::{
+        feeds_parser::{FeedAddressMap, Feeds},
+        ops::oracle::OracleOps,
+        pull_oracle::{FeedIds, PostPullOraclePrices, PriceUpdateInstructions, PullOracle},
+    },
+    ops::oracle::ChainlinkPriceFeedUpdateArgs,
 };
 
 use super::{client::ApiReportData, Client, FeedId};
@@ -164,6 +167,7 @@ pub struct ChainlinkPullOracle<'a, C> {
     ctx: Arc<ChainlinkPullOracleFactory>,
     skip_feeds_preparation: bool,
     authority: Option<&'a dyn Signer>,
+    idempotent: bool,
 }
 
 impl<C> Clone for ChainlinkPullOracle<'_, C> {
@@ -189,12 +193,20 @@ impl<'a, C> ChainlinkPullOracle<'a, C> {
             ctx,
             skip_feeds_preparation,
             authority: None,
+            idempotent: true,
         }
     }
 
     /// Returns a new oracle with the given authority.
     pub fn with_authority(mut self, authority: Option<&'a dyn Signer>) -> Self {
         self.authority = authority;
+        self
+    }
+
+    /// Returns a new oracle with the given `idempotent` option,
+    /// which defaults to `true`.
+    pub fn with_idempotent(mut self, idempotent: bool) -> Self {
+        self.idempotent = idempotent;
         self
     }
 }
@@ -286,9 +298,12 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
                 let rpc = self.gmsol.update_price_feed_with_chainlink_and_authority(
                     &self.ctx.store,
                     feed,
-                    &self.ctx.chainlink_program,
-                    &self.ctx.access_controller,
-                    &update.report_bytes()?,
+                    ChainlinkPriceFeedUpdateArgs {
+                        chainlink: &self.ctx.chainlink_program,
+                        access_controller: &self.ctx.access_controller,
+                        signed_report: &update.report_bytes()?,
+                        idempotent: self.idempotent,
+                    },
                     self.authority,
                 )?;
                 pg.add(rpc);

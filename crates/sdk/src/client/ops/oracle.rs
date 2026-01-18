@@ -10,6 +10,19 @@ use solana_sdk::{
     pubkey::Pubkey, signer::Signer, system_instruction::create_account, system_program,
 };
 
+/// Arguments for updating a Chainlink price feed.
+#[cfg(feature = "gmsol-chainlink-datastreams")]
+pub struct ChainlinkPriceFeedUpdateArgs<'a> {
+    /// Chainlink DataStreams program address.
+    pub chainlink: &'a Pubkey,
+    /// The address controller address.
+    pub access_controller: &'a Pubkey,
+    /// Signed report.
+    pub signed_report: &'a [u8],
+    /// Whether to update idempotently.
+    pub idempotent: bool,
+}
+
 /// Operations for oracle management.
 pub trait OracleOps<C> {
     /// Initialize [`Oracle`] account.
@@ -36,9 +49,7 @@ pub trait OracleOps<C> {
         &'a self,
         store: &Pubkey,
         price_feed: &Pubkey,
-        chainlink: &Pubkey,
-        access_controller: &Pubkey,
-        signed_report: &[u8],
+        args: ChainlinkPriceFeedUpdateArgs<'_>,
         authority: Option<&'a dyn Signer>,
     ) -> crate::Result<TransactionBuilder<'a, C>>;
 
@@ -55,9 +66,12 @@ pub trait OracleOps<C> {
         self.update_price_feed_with_chainlink_and_authority(
             store,
             price_feed,
-            chainlink,
-            access_controller,
-            signed_report,
+            ChainlinkPriceFeedUpdateArgs {
+                chainlink,
+                access_controller,
+                signed_report,
+                idempotent: false,
+            },
             None,
         )
     }
@@ -135,14 +149,19 @@ impl<C: Deref<Target = impl Signer> + Clone> OracleOps<C> for crate::Client<C> {
         &'a self,
         store: &Pubkey,
         price_feed: &Pubkey,
-        chainlink: &Pubkey,
-        access_controller: &Pubkey,
-        signed_report: &[u8],
+        args: ChainlinkPriceFeedUpdateArgs<'_>,
         authority: Option<&'a dyn Signer>,
     ) -> crate::Result<TransactionBuilder<'a, C>> {
         use gmsol_chainlink_datastreams::utils::{
             find_config_account_pda, find_verifier_account_pda, Compressor,
         };
+
+        let ChainlinkPriceFeedUpdateArgs {
+            chainlink,
+            access_controller,
+            signed_report,
+            idempotent,
+        } = args;
 
         let (authority, rpc) = match authority {
             Some(signer) => (signer.pubkey(), self.store_transaction().signer(signer)),
@@ -150,19 +169,29 @@ impl<C: Deref<Target = impl Signer> + Clone> OracleOps<C> for crate::Client<C> {
         };
         let verifier_account = find_verifier_account_pda(chainlink);
         let config_account = find_config_account_pda(signed_report, chainlink);
-        Ok(rpc
-            .anchor_accounts(accounts::UpdatePriceFeedWithChainlink {
-                authority,
-                store: *store,
-                verifier_account,
-                access_controller: *access_controller,
-                config_account,
-                price_feed: *price_feed,
-                chainlink: *chainlink,
-            })
-            .anchor_args(args::UpdatePriceFeedWithChainlink {
+
+        let builder = rpc.anchor_accounts(accounts::UpdatePriceFeedWithChainlink {
+            authority,
+            store: *store,
+            verifier_account,
+            access_controller: *access_controller,
+            config_account,
+            price_feed: *price_feed,
+            chainlink: *chainlink,
+        });
+
+        if idempotent {
+            Ok(
+                builder.anchor_args(args::UpdatePriceFeedWithChainlinkIdempotent {
+                    compressed_report: Compressor::compress(signed_report)
+                        .map_err(crate::Error::custom)?,
+                }),
+            )
+        } else {
+            Ok(builder.anchor_args(args::UpdatePriceFeedWithChainlink {
                 compressed_report: Compressor::compress(signed_report)
                     .map_err(crate::Error::custom)?,
             }))
+        }
     }
 }
