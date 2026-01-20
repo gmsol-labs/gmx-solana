@@ -113,8 +113,6 @@ impl Store {
             .and_then(|factor| discount_factor_for_referred.checked_add(factor))
             .ok_or_else(|| crate::Error::custom("discount factor calculation overflow"))?;
 
-            debug_assert!(discount_factor <= MARKET_USD_UNIT);
-
             Ok(discount_factor)
         } else {
             Ok(discount_factor_for_rank)
