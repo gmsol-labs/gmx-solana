@@ -580,6 +580,15 @@ enum Command {
         #[clap(flatten)]
         args: CloseEmptyPositionsArgs,
     },
+    /// Update fees state.
+    #[cfg(all(feature = "execute", feature = "nightly-cli-update-fees-state"))]
+    UpdateFeesState {
+        #[command(flatten)]
+        args: executor::ExecutorArgs,
+        market_tokens: Vec<Pubkey>,
+        #[arg(long)]
+        parallel: Option<std::num::NonZeroUsize>,
+    },
 }
 
 #[derive(Debug, clap::Args)]
@@ -2373,6 +2382,61 @@ impl super::Command for Exchange {
                 }
 
                 bundle
+            }
+            #[cfg(all(feature = "execute", feature = "nightly-cli-update-fees-state"))]
+            Command::UpdateFeesState {
+                args,
+                market_tokens,
+                parallel,
+            } => {
+                ctx.require_not_serialize_only_mode()?;
+                ctx.require_not_ix_buffer_mode()?;
+
+                let executor = args.build(client).await?;
+                let oracle = ctx.config().oracle()?;
+
+                let market_tokens = if market_tokens.is_empty() {
+                    client
+                        .markets(store)
+                        .await?
+                        .values()
+                        .map(|m| m.meta.market_token_mint)
+                        .collect()
+                } else {
+                    market_tokens.clone()
+                };
+
+                let batch = parallel.map(|batch| batch.get()).unwrap_or(1);
+
+                let mut count = 0;
+                let total = market_tokens.len();
+                for market_tokens in market_tokens.chunks(batch) {
+                    use futures_util::StreamExt;
+
+                    let mut tasks = futures_util::stream::FuturesOrdered::new();
+                    for market_token in market_tokens {
+                        let builder = client.update_fees_state(store, oracle, market_token);
+                        let task = executor.execute(builder, options.clone());
+                        tasks.push_back(task);
+                    }
+                    let mut tasks = tasks.enumerate();
+                    while let Some((idx, result)) = tasks.next().await {
+                        count += 1;
+                        let market_token = market_tokens[idx];
+                        match result {
+                            Ok(()) => {
+                                println!(
+                                    "[{count}/{total}] ✅ Updated fees state for market `{market_token}`"
+                                );
+                            }
+                            Err(err) => {
+                                println!("[{count}/{total}] ❌ Failed to update fees state for market `{market_token}, err={err}`");
+                            }
+                        }
+                    }
+                }
+
+                return Ok(());
             }
         };
 

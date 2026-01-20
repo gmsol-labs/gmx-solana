@@ -26,6 +26,10 @@ switchboard = ["gmsol-sdk/switchboard"]
 execute = ["chainlink", "pyth", "switchboard"]
 chaoslabs-risk-oracle = ["gmsol-sdk/chaoslabs-risk-oracle"]
 
+# nightly features
+nightly = ["nightly-cli-update-fees-state"]
+nightly-cli-update-fees-state = []
+
 [dependencies]
 gmsol-sdk = { workspace = true, features = [
     "client",

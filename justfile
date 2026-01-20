@@ -96,8 +96,14 @@ setup-localnet keeper oracle="42" time_window="600":
 cli *ARGS:
   cargo run -p gmsol-cli --features {{CLI_FEATURES}} -- {{ARGS}}
 
+cli-nightly *ARGS:
+  cargo run -p gmsol-cli --features nightly,{{CLI_FEATURES}} -- {{ARGS}}
+
 cli-devnet *ARGS:
-  cargo run -p gmsol-cli --features devnet,{{CLI_FEATURES}} -- {{ARGS}}
+  cargo run -p gmsol-cli --features devnet,nightly,{{CLI_FEATURES}} -- {{ARGS}}
 
 install-cli *ARGS:
   cargo install --path crates/cli --features {{CLI_FEATURES}} --locked {{ARGS}}
+
+install-cli-nightly *ARGS:
+  cargo install --path crates/cli --features nightly,{{CLI_FEATURES}} --locked {{ARGS}}
