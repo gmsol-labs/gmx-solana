@@ -112,10 +112,12 @@ impl<'a> Executor<'a> {
         let compute_unit_price = send_bundle_options.compute_unit_price_micro_lamports;
         let compute_unit_min_priority_lamports =
             send_bundle_options.compute_unit_min_priority_lamports;
-        let chainlink = self
-            .chainlink
-            .as_ref()
-            .map(|(client, factory)| factory.clone().make_oracle(client, self.client, true));
+        let chainlink = self.chainlink.as_ref().map(|(client, factory)| {
+            factory
+                .clone()
+                .make_oracle(client, self.client, true)
+                .with_idempotent(false)
+        });
 
         let switchboard = self
             .switchboard
