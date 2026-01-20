@@ -116,6 +116,7 @@ impl<'a> Executor<'a> {
             factory
                 .clone()
                 .make_oracle(client, self.client, true)
+                // FIXME: should remove this after the `update_price_feed_with_chainlink_idempotent` instruction is available.
                 .with_idempotent(false)
         });
 
