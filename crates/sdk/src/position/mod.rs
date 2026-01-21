@@ -10,14 +10,34 @@ use crate::constants;
 /// Position status.
 pub mod status;
 
+/// Options for calculating position status.
+#[derive(Debug, Clone, Default)]
+pub struct CalculatePositionStatusOptions {
+    /// Whether to include virtual inventory impact.
+    pub include_virtual_inventory_impact: bool,
+}
+
 /// Position Calculations.
 pub trait PositionCalculations {
     /// Calculate position status.
-    fn status(&self, prices: &Prices<u128>) -> crate::Result<PositionStatus>;
+    fn status(&self, prices: &Prices<u128>) -> crate::Result<PositionStatus> {
+        self.status_with_options(prices, Default::default())
+    }
+
+    /// Calculate position status with options.
+    fn status_with_options(
+        &self,
+        prices: &Prices<u128>,
+        options: CalculatePositionStatusOptions,
+    ) -> crate::Result<PositionStatus>;
 }
 
 impl PositionCalculations for PositionModel {
-    fn status(&self, prices: &Prices<u128>) -> crate::Result<PositionStatus> {
+    fn status_with_options(
+        &self,
+        prices: &Prices<u128>,
+        options: CalculatePositionStatusOptions,
+    ) -> crate::Result<PositionStatus> {
         // collateral value
         let collateral_value = self.collateral_value(prices)?;
 
@@ -77,7 +97,8 @@ impl PositionCalculations for PositionModel {
 
         // net value = collateral value +  pending pnl - pending borrowing fee value - nagetive pending funding fee value - close order fee value let mut price_impact_value = self.position_price_impact(&size_delta_usd)?;
         let size_delta_usd = position_size_in_usd.to_opposite_signed()?;
-        let price_impact = self.position_price_impact(&size_delta_usd, true)?;
+        let price_impact =
+            self.position_price_impact(&size_delta_usd, options.include_virtual_inventory_impact)?;
 
         let mut price_impact_value = price_impact.value;
         if price_impact_value.is_negative() {
