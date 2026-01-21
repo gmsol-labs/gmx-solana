@@ -226,6 +226,7 @@ pub struct MarketModel {
     vi_for_swaps: Option<VirtualInventoryModel>,
     vi_for_positions: Option<VirtualInventoryModel>,
     disable_vis: bool,
+    order_fee_discount_factor: u128,
 }
 
 impl Deref for MarketModel {
@@ -246,6 +247,7 @@ impl MarketModel {
             vi_for_swaps: None,
             vi_for_positions: None,
             disable_vis: false,
+            order_fee_discount_factor: 0,
         }
     }
 
@@ -652,6 +654,11 @@ impl MarketModel {
         };
         PositionModel::new(self, Arc::new(position))
     }
+
+    /// Set order fee discount factor.
+    pub fn set_order_fee_discount_factor(&mut self, factor: u128) {
+        self.order_fee_discount_factor = factor;
+    }
 }
 
 /// Options for creating a position model.
@@ -990,7 +997,8 @@ impl gmsol_model::PerpMarket<{ constants::MARKET_DECIMALS }> for MarketModel {
             .fee_receiver_factor(self.config.order_fee_receiver_factor)
             .positive_impact_fee_factor(self.config.order_fee_factor_for_positive_impact)
             .negative_impact_fee_factor(self.config.order_fee_factor_for_negative_impact)
-            .build())
+            .build()
+            .with_discount_factor(self.order_fee_discount_factor))
     }
 
     fn min_collateral_factor_for_open_interest_multiplier(
