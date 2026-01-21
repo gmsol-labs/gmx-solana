@@ -6,7 +6,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     js::events::JsTradeEvent,
-    position::{status::PositionStatus, PositionCalculations},
+    position::{status::PositionStatus, CalculatePositionStatusOptions, PositionCalculations},
     utils::zero_copy::{
         try_deserialize_zero_copy, try_deserialize_zero_copy_from_base64_with_options,
     },
@@ -80,8 +80,23 @@ pub struct JsPositionModel {
 impl JsPositionModel {
     /// Get position status.
     pub fn status(&self, prices: Prices) -> crate::Result<PositionStatus> {
+        self.status_with_options(prices, None)
+    }
+
+    /// Get position status with options.
+    pub fn status_with_options(
+        &self,
+        prices: Prices,
+        include_virtual_inventory_impact: Option<bool>,
+    ) -> crate::Result<PositionStatus> {
         let prices = prices.into();
-        self.model.status(&prices)
+        self.model.status_with_options(
+            &prices,
+            CalculatePositionStatusOptions {
+                include_virtual_inventory_impact: include_virtual_inventory_impact
+                    .unwrap_or_default(),
+            },
+        )
     }
 
     /// Get position size.
