@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-02-04
+
 ### Added
 
 - sdk(sdk): Added deposit simulation.
@@ -16,16 +18,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added GLV withdrawal simulation.
 - sdk(sdk): Added JsGlv and JsGlvModel.
 - sdk(sdk): Added support for ChaosLabs Risk Oracle.
+- sdk(solana-utils): Added option to send transactions using JITO.
+- sdk(sdk): Added more support for virtual inventory.
+- sdk(sdk): Added support for useful GLV calculations.
+- sdk(sdk): Support changing chainlink pull oracle authority.
+- sdk(sdk): Added `PriceUpdateInstructions::split` function.
+- sdk(decode): Added `Glv` to `GMSOLAccountData`.
+- sdk(sdk): Added support for order fee discount.
 - cli: Added auto-creation support of multiple ALTs based on ALT limit for `alt extend` command.
 - cli: Added support for creating market config buffer from ChaosLabs Risk Oracle's recommandations.
+- cli: Added support for batch lp controller creation.
+- cli: Added `exchange update-fees-state` command.
+- programs(store): Added `update_price_feed_with_chainlink_idempotent` instruction.
 
 ### Changed
 
-- programs(store): Refactor core GLV calculation logic to model crate.
+- programs(store): Refactored core GLV calculation logic to model crate.
 
 ### Fixed
 
+- sdk(sdk): Corrected treasury program ID reference in `new_treasury_program` method.
+- sdk(sdk): Corrected cycle detection in fallback swap path algorithm.
+- sdk(solana-utils): Fixed bugs related to memo signers.
+- sdk(solana-utils): Use current instruction options in transaction size estimation.
+- cli: Fixed incorrect decimals used in glv config.
 - programs(utils): Prevented silent truncation in `Decimal::try_from_price`.
+- programs(liquidity-provider): Added missing pricing events.
+- programs(store): Allowed transfer out for increase orders permitted when market is closed.
 
 ## [0.8.0] - 2025-10-24
 
@@ -362,7 +381,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs: Changed the index type for `TreasuryVaultConfig` to `u16`.
 - programs: Replaced `ReferralCode` with `ReferralCodeV2`.
 - programs: Renamed the following structures to resolve IDL conflicts:
-
   - `SwapParams` -> `SwapActionParams`
   - `{Action}Params` -> `{Action}ActionParams` (e.g., `DepositParams` -> `DepositActionParams`)
   - `TokenAccounts` -> `{Action}TokenAccounts` (e.g., `DepositTokenAccounts`)
@@ -441,7 +459,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provided SDK (`gmsol`) and other utility crates.
 - Provided a command-line interface (`gmsol`).
 
-[unreleased]: https://github.com/gmsol-labs/gmx-solana/compare/v0.8.0...HEAD
+[unreleased]: https://github.com/gmsol-labs/gmx-solana/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.9.0
 [0.8.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.8.0
 [0.7.1]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.7.1
 [0.7.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.7.0
