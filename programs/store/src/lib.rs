@@ -4258,6 +4258,7 @@ pub enum CoreError {
     #[msg("failed to calculate GLV amount to mint")]
     FailedToCalculateGlvAmountToMint,
     /// Failed to calculate market token amount to burn.
+    #[msg("failed to calculate market token amount to burn")]
     FailedToCalculateMarketTokenAmountToBurn,
     /// Exceed max market token balance amount of GLV.
     #[msg("GLV max market token balance amount exceeded")]
