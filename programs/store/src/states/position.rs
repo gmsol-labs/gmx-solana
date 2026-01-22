@@ -121,7 +121,9 @@ impl Position {
     ) -> gmsol_model::Result<()> {
         let meta = market
             .validated_meta_with_options(&self.store, allow_closed)
-            .map_err(|_| gmsol_model::Error::InvalidPosition("invalid or disabled market"))?;
+            .map_err(|_| {
+                gmsol_model::Error::InvalidPosition("invalid, closed or disabled market")
+            })?;
 
         if meta.market_token_mint != self.market_token {
             return Err(gmsol_model::Error::InvalidPosition(

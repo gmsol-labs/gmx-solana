@@ -108,3 +108,14 @@ pub enum Error {
     #[error("unable to get funding factor when the open interest is empty")]
     UnableToGetFundingFactorEmptyOpenInterest,
 }
+
+/// Error message indicating a negative pool value during GLV pricing.
+pub const GLV_PRICING_NEGATIVE_POOL_VALUE_ERROR: &str = "negative pool value during GLV pricing";
+
+/// Error message indicating a failure to convert a market token amount to a GLV value.
+pub const GLV_PRICING_MARKET_TOKEN_TO_GLV_VALUE_ERROR: &str =
+    "failed to convert market token amount to GLV value";
+
+/// Error message indicating a failure to convert a GLV value to a market token amount.
+pub const GLV_PRICING_GLV_VALUE_TO_MARKET_TOKEN_ERROR: &str =
+    "failed to convert GLV value to market token amount";

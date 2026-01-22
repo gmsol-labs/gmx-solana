@@ -1136,10 +1136,14 @@ where
     match gmsol_model::glv::get_glv_value_for_market(prices, market, balance, maximize) {
         Ok(value) => Ok(value),
         Err(err) => match err {
-            gmsol_model::Error::InvalidPoolValue("negative for GLV pricing") => {
+            gmsol_model::Error::InvalidPoolValue(
+                gmsol_model::error::GLV_PRICING_NEGATIVE_POOL_VALUE_ERROR,
+            ) => {
                 err!(CoreError::GlvNegativeMarketPoolValue)
             }
-            gmsol_model::Error::Computation("converting market token amount to value") => {
+            gmsol_model::Error::Computation(
+                gmsol_model::error::GLV_PRICING_MARKET_TOKEN_TO_GLV_VALUE_ERROR,
+            ) => {
                 err!(CoreError::FailedToCalculateGlvValueForMarket)
             }
             err => Err(ModelError::from(err).into()),
@@ -1168,10 +1172,14 @@ where
     ) {
         Ok(amount) => Ok(amount),
         Err(err) => match err {
-            gmsol_model::Error::InvalidPoolValue("negative for GLV pricing") => {
+            gmsol_model::Error::InvalidPoolValue(
+                gmsol_model::error::GLV_PRICING_NEGATIVE_POOL_VALUE_ERROR,
+            ) => {
                 err!(CoreError::GlvNegativeMarketPoolValue)
             }
-            gmsol_model::Error::Computation("converting GLV value to market token amount") => {
+            gmsol_model::Error::Computation(
+                gmsol_model::error::GLV_PRICING_GLV_VALUE_TO_MARKET_TOKEN_ERROR,
+            ) => {
                 err!(CoreError::FailedToCalculateMarketTokenAmountToBurn)
             }
             err => Err(ModelError::from(err).into()),

@@ -46,12 +46,14 @@ where
     }
 
     if value.is_negative() {
-        return Err(crate::Error::InvalidPoolValue("negative for GLV pricing"));
+        return Err(crate::Error::InvalidPoolValue(
+            crate::error::GLV_PRICING_NEGATIVE_POOL_VALUE_ERROR,
+        ));
     }
 
     let glv_value = utils::market_token_amount_to_usd(&balance, &value.unsigned_abs(), &supply)
         .ok_or(crate::Error::Computation(
-            "converting market token amount to value",
+            crate::error::GLV_PRICING_MARKET_TOKEN_TO_GLV_VALUE_ERROR,
         ))?;
 
     Ok(GlvValueForMarket::new(glv_value, value, supply))
@@ -71,7 +73,9 @@ where
     let value = market.pool_value(prices, PnlFactorKind::MaxAfterWithdrawal, maximize)?;
 
     if value.is_negative() {
-        return Err(crate::Error::InvalidPoolValue("negative for GLV pricing"));
+        return Err(crate::Error::InvalidPoolValue(
+            crate::error::GLV_PRICING_NEGATIVE_POOL_VALUE_ERROR,
+        ));
     }
 
     let supply = market.total_supply();
@@ -83,7 +87,7 @@ where
         glv_value_to_amount_divisor,
     )
     .ok_or(crate::Error::Computation(
-        "converting GLV value to market token amount",
+        crate::error::GLV_PRICING_GLV_VALUE_TO_MARKET_TOKEN_ERROR,
     ))?;
 
     Ok(market_token_amount)
