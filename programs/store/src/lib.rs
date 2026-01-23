@@ -1262,7 +1262,7 @@ pub mod gmsol_store {
     /// provider.
     ///
     /// - Returns `Ok(true)` if the price feed is updated.
-    /// - Returns `Ok(false)` if the price report is valid but older than the last update.
+    /// - Returns `Ok(false)` if the price report is valid but older than the last update, provided no other errors occur.
     ///
     /// # Accounts
     /// *[See the documentation for the accounts.](UpdatePriceFeedWithChainlink)*
