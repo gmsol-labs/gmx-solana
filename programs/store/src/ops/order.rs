@@ -1041,14 +1041,14 @@ impl ExecuteOrderOperation<'_, '_> {
             | OrderKind::LimitIncrease
             | OrderKind::LimitDecrease
             | OrderKind::StopLossDecrease => {
-                let position_loader = self
-                    .position
-                    .as_ref()
-                    .ok_or(error!(CoreError::PositionIsRequired))?;
-                let event_loader = self
-                    .event
-                    .as_ref()
-                    .ok_or(error!(CoreError::EventBufferNotProvided))?;
+                let position_loader = self.position.as_ref().ok_or_else(|| {
+                    *should_throw_error = true;
+                    error!(CoreError::PositionIsRequired)
+                })?;
+                let event_loader = self.event.as_ref().ok_or_else(|| {
+                    *should_throw_error = true;
+                    error!(CoreError::EventBufferNotProvided)
+                })?;
                 {
                     let position = position_loader.load()?;
                     let mut event = event_loader.load_mut()?;

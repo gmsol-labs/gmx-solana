@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(utils): Prevented silent truncation in `Decimal::try_from_price`.
 - programs(liquidity-provider): Added missing pricing events.
 - programs(store): Allowed transfer out for increase orders permitted when market is closed.
+- programs(store): Ensured an error is always thrown when the required position or event buffer is missing for the `execute_increase_or_swap_order_v2` instruction.
 
 ## [0.8.0] - 2025-10-24
 
