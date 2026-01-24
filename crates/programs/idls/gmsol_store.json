@@ -21593,7 +21593,7 @@
         "provider.",
         "",
         "- Returns `Ok(true)` if the price feed is updated.",
-        "- Returns `Ok(false)` if the price report is valid but not newer than the last update.",
+        "- Returns `Ok(false)` if the price report is valid but older than the last update, provided no other errors occur.",
         "",
         "# Accounts",
         "*[See the documentation for the accounts.](UpdatePriceFeedWithChainlink)*",
@@ -23035,7 +23035,8 @@
     },
     {
       "code": 6114,
-      "name": "FailedToCalculateMarketTokenAmountToBurn"
+      "name": "FailedToCalculateMarketTokenAmountToBurn",
+      "msg": "failed to calculate market token amount to burn"
     },
     {
       "code": 6115,
