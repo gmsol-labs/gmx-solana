@@ -1,6 +1,6 @@
 [package]
 name = "gmsol-chainlink-datastreams"
-version = "0.9.0"
+version = "0.9.0-beta.2"
 edition.workspace = true
 license-file.workspace = true
 description.workspace = true
