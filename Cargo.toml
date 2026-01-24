@@ -61,7 +61,7 @@ pythnet-sdk = "2.3.1"
 rand = "0.7.3"
 reqwest = "0.12.15"
 reqwest-websocket = "0.4.3"
-ruint = { version = "1.17.2", default-features = false }
+ruint = { version = "1.15.0", default-features = false }
 rust-embed = "8.7.2"
 rust_decimal = { version = "1.34", default-features = false }
 rust_decimal_macros = { version = "1.34" }
