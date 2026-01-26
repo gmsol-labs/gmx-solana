@@ -1212,3 +1212,13 @@ impl gmsol_model::LiquidityMarketMut<{ constants::MARKET_DECIMALS }> for MarketM
         Ok(())
     }
 }
+
+impl MarketModel {
+    /// Test helper: get the disable_vis state.
+    ///
+    /// This method is intended for testing purposes only.
+    #[doc(hidden)]
+    pub fn is_vis_disabled_for_test(&self) -> bool {
+        self.disable_vis
+    }
+}
