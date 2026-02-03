@@ -29,7 +29,7 @@ pub struct ExecutorArgs {
     #[arg(long, default_value_t = 0)]
     feed_index: u16,
     /// Whether to enable idempotent price updates for Chainlink.
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false)]
     chainlink_idempotent: bool,
 }
 
