@@ -8,6 +8,7 @@ use typed_builder::TypedBuilder;
 
 use crate::{constants, glv::calculator::GlvCalculator};
 
+use super::error::standardize_simulation_error;
 use super::{SimulationOptions, Simulator};
 
 /// GLV withdrawal simulation output.
@@ -70,131 +71,134 @@ impl GlvWithdrawalSimulation<'_> {
         self,
         options: SimulationOptions,
     ) -> crate::Result<GlvWithdrawalSimulationOutput> {
-        let Self {
-            simulator,
-            params,
-            glv_token,
-            market_token,
-            long_receive_token,
-            long_swap_path,
-            short_receive_token,
-            short_swap_path,
-        } = self;
-
-        if params.glv_token_amount == 0 {
-            return Err(crate::Error::custom("[sim] empty GLV withdrawal"));
-        }
-
-        let (market, prices) = simulator.get_market_with_prices(market_token)?;
-        let meta = &market.meta;
-        let long_token = meta.long_token_mint;
-        let short_token = meta.short_token_mint;
-        let long_receive_token = long_receive_token.copied().unwrap_or(long_token);
-        let short_receive_token = short_receive_token.copied().unwrap_or(short_token);
-
-        // Calculate market token amount to withdrawal.
-        let glv_value = simulator.get_glv_value(glv_token, false)?;
-        let glv_supply = simulator.get_glv(glv_token).expect("must exist").supply();
-        let market_token_value = gmsol_model::utils::market_token_amount_to_usd(
-            &u128::from(params.glv_token_amount),
-            &glv_value,
-            &u128::from(glv_supply),
-        )
-        .ok_or(crate::Error::custom(
-            "[sim] failed to calculate market token value for GLV withdrawal",
-        ))?;
-
-        let market_token_amount = gmsol_model::glv::get_market_token_amount_for_glv_value(
-            &prices,
-            market,
-            market_token_value,
-            true,
-            constants::MARKET_USD_TO_AMOUNT_DIVISOR,
-        )?
-        .try_into()
-        .map_err(|_| crate::Error::custom("[sim] market token amount to withdraw overflow"))?;
-
-        simulator
-            .get_glv_mut(glv_token)
-            .expect("must exist")
-            .withdraw_from_glv(market_token, market_token_amount, params.glv_token_amount)?;
-
-        // Execute withdrawal.
-        let report = if options.disable_vis {
-            let market = simulator.get_market_mut(market_token).expect("must exist");
-            market.with_vis_disabled(|market| {
-                market
-                    .withdraw(u128::from(market_token_amount), prices)?
-                    .execute()
-            })?
-        } else {
-            let (market, vi_map) = simulator.get_market_and_vis_mut(market_token)?;
-            market.with_vi_models(vi_map, |market| {
-                market
-                    .withdraw(u128::from(market_token_amount), prices)?
-                    .execute()
-            })?
-        };
-
-        let (long_amount, short_amount) =
-            (*report.long_token_output(), *report.short_token_output());
-
-        // Execute swap for long side.
-        let (long_swaps, long_output_amount) = if long_amount == 0 {
-            (vec![], 0)
-        } else {
-            let swap_output = simulator.swap_along_path_with_options(
+        (|| {
+            let Self {
+                simulator,
+                params,
+                glv_token,
+                market_token,
+                long_receive_token,
                 long_swap_path,
-                &long_token,
-                long_amount,
-                options.clone(),
-            )?;
-
-            if swap_output.output_token != long_receive_token {
-                return Err(crate::Error::custom("[sim] invalid long swap path"));
-            }
-
-            (swap_output.reports, swap_output.amount)
-        };
-
-        let min_receive_amount = params.min_final_long_token_amount;
-        if long_output_amount < u128::from(min_receive_amount) {
-            return Err(crate::Error::custom(format!(
-                "[sim] insufficient long output amount: {long_output_amount} < {min_receive_amount}",
-            )));
-        }
-
-        // Execute swap for short side.
-        let (short_swaps, short_output_amount) = if short_amount == 0 {
-            (vec![], 0)
-        } else {
-            let swap_output = simulator.swap_along_path_with_options(
+                short_receive_token,
                 short_swap_path,
-                &short_token,
-                short_amount,
-                options.clone(),
-            )?;
+            } = self;
 
-            if swap_output.output_token != short_receive_token {
-                return Err(crate::Error::custom("[sim] invalid short swap path"));
+            if params.glv_token_amount == 0 {
+                return Err(crate::Error::custom("[sim] empty GLV withdrawal"));
             }
 
-            (swap_output.reports, swap_output.amount)
-        };
+            let (market, prices) = simulator.get_market_with_prices(market_token)?;
+            let meta = &market.meta;
+            let long_token = meta.long_token_mint;
+            let short_token = meta.short_token_mint;
+            let long_receive_token = long_receive_token.copied().unwrap_or(long_token);
+            let short_receive_token = short_receive_token.copied().unwrap_or(short_token);
 
-        let min_receive_amount = params.min_final_short_token_amount;
-        if short_output_amount < u128::from(min_receive_amount) {
-            return Err(crate::Error::custom(format!(
-                "[sim] insufficient short output amount: {short_output_amount} < {min_receive_amount}",
-            )));
-        }
+            // Calculate market token amount to withdrawal.
+            let glv_value = simulator.get_glv_value(glv_token, false)?;
+            let glv_supply = simulator.get_glv(glv_token).expect("must exist").supply();
+            let market_token_value = gmsol_model::utils::market_token_amount_to_usd(
+                &u128::from(params.glv_token_amount),
+                &glv_value,
+                &u128::from(glv_supply),
+            )
+            .ok_or(crate::Error::custom(
+                "[sim] failed to calculate market token value for GLV withdrawal",
+            ))?;
 
-        Ok(GlvWithdrawalSimulationOutput {
-            report: Box::new(report),
-            long_swaps,
-            short_swaps,
-            long_output_amount,
-            short_output_amount,
-        })
+            let market_token_amount = gmsol_model::glv::get_market_token_amount_for_glv_value(
+                &prices,
+                market,
+                market_token_value,
+                true,
+                constants::MARKET_USD_TO_AMOUNT_DIVISOR,
+            )?
+            .try_into()
+            .map_err(|_| crate::Error::custom("[sim] market token amount to withdraw overflow"))?;
+
+            simulator
+                .get_glv_mut(glv_token)
+                .expect("must exist")
+                .withdraw_from_glv(market_token, market_token_amount, params.glv_token_amount)?;
+
+            // Execute withdrawal.
+            let report = if options.disable_vis {
+                let market = simulator.get_market_mut(market_token).expect("must exist");
+                market.with_vis_disabled(|market| {
+                    market
+                        .withdraw(u128::from(market_token_amount), prices)?
+                        .execute()
+                })?
+            } else {
+                let (market, vi_map) = simulator.get_market_and_vis_mut(market_token)?;
+                market.with_vi_models(vi_map, |market| {
+                    market
+                        .withdraw(u128::from(market_token_amount), prices)?
+                        .execute()
+                })?
+            };
+
+            let (long_amount, short_amount) =
+                (*report.long_token_output(), *report.short_token_output());
+
+            // Execute swap for long side.
+            let (long_swaps, long_output_amount) = if long_amount == 0 {
+                (vec![], 0)
+            } else {
+                let swap_output = simulator.swap_along_path_with_options(
+                    long_swap_path,
+                    &long_token,
+                    long_amount,
+                    options.clone(),
+                )?;
+
+                if swap_output.output_token != long_receive_token {
+                    return Err(crate::Error::custom("[sim] invalid long swap path"));
+                }
+
+                (swap_output.reports, swap_output.amount)
+            };
+
+            let min_receive_amount = params.min_final_long_token_amount;
+            if long_output_amount < u128::from(min_receive_amount) {
+                return Err(crate::Error::custom(format!(
+                    "[sim] insufficient long output amount: {long_output_amount} < {min_receive_amount}",
+                )));
+            }
+
+            // Execute swap for short side.
+            let (short_swaps, short_output_amount) = if short_amount == 0 {
+                (vec![], 0)
+            } else {
+                let swap_output = simulator.swap_along_path_with_options(
+                    short_swap_path,
+                    &short_token,
+                    short_amount,
+                    options.clone(),
+                )?;
+
+                if swap_output.output_token != short_receive_token {
+                    return Err(crate::Error::custom("[sim] invalid short swap path"));
+                }
+
+                (swap_output.reports, swap_output.amount)
+            };
+
+            let min_receive_amount = params.min_final_short_token_amount;
+            if short_output_amount < u128::from(min_receive_amount) {
+                return Err(crate::Error::custom(format!(
+                    "[sim] insufficient short output amount: {short_output_amount} < {min_receive_amount}",
+                )));
+            }
+
+            Ok(GlvWithdrawalSimulationOutput {
+                report: Box::new(report),
+                long_swaps,
+                short_swaps,
+                long_output_amount,
+                short_output_amount,
+            })
+        })()
+        .map_err(standardize_simulation_error)
     }
 }
