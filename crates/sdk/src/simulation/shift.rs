@@ -6,6 +6,7 @@ use gmsol_programs::{gmsol_store::types::CreateShiftParams, model::SwapPricingKi
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
+use super::error::standardize_simulation_error;
 use super::{SimulationOptions, Simulator};
 
 /// Shift simulation output.
@@ -42,114 +43,131 @@ impl ShiftSimulation<'_> {
         self,
         options: SimulationOptions,
     ) -> crate::Result<ShiftSimulationOutput> {
-        let Self {
-            simulator,
-            params,
-            from_market_token,
-            to_market_token,
-        } = self;
+        (|| {
+            let Self {
+                simulator,
+                params,
+                from_market_token,
+                to_market_token,
+            } = self;
 
-        if params.from_market_token_amount == 0 {
-            return Err(crate::Error::custom("[sim] empty shift"));
-        }
+            if params.from_market_token_amount == 0 {
+                return Err(crate::Error::custom("[sim] empty shift"));
+            }
 
-        let (from_market, prices_for_from_market) =
-            simulator.get_market_with_prices(from_market_token)?;
-        let (to_market, prices_for_to_market) =
-            simulator.get_market_with_prices(to_market_token)?;
+            let (from_market, prices_for_from_market) =
+                simulator.get_market_with_prices(from_market_token)?;
+            let (to_market, prices_for_to_market) =
+                simulator.get_market_with_prices(to_market_token)?;
 
-        if from_market.meta.long_token_mint != to_market.meta.long_token_mint
-            || from_market.meta.short_token_mint != to_market.meta.short_token_mint
-        {
-            return Err(crate::Error::custom(format!(
-                "[sim] shift from `{from_market_token}` to `{to_market_token}` is impossible"
-            )));
-        }
+            if from_market.meta.long_token_mint != to_market.meta.long_token_mint
+                || from_market.meta.short_token_mint != to_market.meta.short_token_mint
+            {
+                return Err(crate::Error::custom(format!(
+                    "[sim] shift from `{from_market_token}` to `{to_market_token}` is impossible"
+                )));
+            }
 
-        // Execute withdrawal.
-        let withdraw = {
-            let (from_market, maybe_vi_map) = if options.disable_vis {
-                (
-                    simulator
-                        .get_market_mut(from_market_token)
-                        .expect("must exist"),
-                    None,
-                )
-            } else {
-                let (market, vi_map) = simulator.get_market_and_vis_mut(from_market_token)?;
-                (market, Some(vi_map))
+            // Execute withdrawal.
+            let withdraw = {
+                let (from_market, maybe_vi_map) = if options.disable_vis {
+                    (
+                        simulator
+                            .get_market_mut(from_market_token)
+                            .expect("must exist"),
+                        None,
+                    )
+                } else {
+                    let (market, vi_map) = simulator.get_market_and_vis_mut(from_market_token)?;
+                    (market, Some(vi_map))
+                };
+
+                from_market.with_swap_pricing(
+                    SwapPricingKind::Shift,
+                    |market| match maybe_vi_map {
+                        None => market.with_vis_disabled(|market| {
+                            market
+                                .withdraw(
+                                    params.from_market_token_amount.into(),
+                                    prices_for_from_market,
+                                )?
+                                .execute()
+                        }),
+                        Some(vi_map) => market.with_vi_models(vi_map, |market| {
+                            market
+                                .withdraw(
+                                    params.from_market_token_amount.into(),
+                                    prices_for_from_market,
+                                )?
+                                .execute()
+                        }),
+                    },
+                )?
             };
 
-            from_market.with_swap_pricing(SwapPricingKind::Shift, |market| match maybe_vi_map {
-                None => market.with_vis_disabled(|market| {
-                    market
-                        .withdraw(
-                            params.from_market_token_amount.into(),
-                            prices_for_from_market,
-                        )?
-                        .execute()
-                }),
-                Some(vi_map) => market.with_vi_models(vi_map, |market| {
-                    market
-                        .withdraw(
-                            params.from_market_token_amount.into(),
-                            prices_for_from_market,
-                        )?
-                        .execute()
-                }),
-            })?
-        };
+            let (long_token_amount, short_token_amount) = (
+                *withdraw.long_token_output(),
+                *withdraw.short_token_output(),
+            );
 
-        let (long_token_amount, short_token_amount) = (
-            *withdraw.long_token_output(),
-            *withdraw.short_token_output(),
-        );
+            if long_token_amount == 0 && short_token_amount == 0 {
+                return Err(crate::Error::custom(
+                    "[sim] shift cannot be completed due to empty withdrawal output",
+                ));
+            }
 
-        if long_token_amount == 0 && short_token_amount == 0 {
-            return Err(crate::Error::custom(
-                "[sim] shift cannot be completed due to empty withdrawal output",
-            ));
-        }
+            // Execute deposit.
+            let deposit = {
+                let (to_market, maybe_vi_map) = if options.disable_vis {
+                    (
+                        simulator
+                            .get_market_mut(to_market_token)
+                            .expect("must exist"),
+                        None,
+                    )
+                } else {
+                    let (market, vi_map) = simulator.get_market_and_vis_mut(to_market_token)?;
+                    (market, Some(vi_map))
+                };
 
-        // Execute deposit.
-        let deposit = {
-            let (to_market, maybe_vi_map) = if options.disable_vis {
-                (
-                    simulator
-                        .get_market_mut(to_market_token)
-                        .expect("must exist"),
-                    None,
-                )
-            } else {
-                let (market, vi_map) = simulator.get_market_and_vis_mut(to_market_token)?;
-                (market, Some(vi_map))
+                to_market.with_swap_pricing(
+                    SwapPricingKind::Shift,
+                    |market| match maybe_vi_map {
+                        None => market.with_vis_disabled(|market| {
+                            market
+                                .deposit(
+                                    long_token_amount,
+                                    short_token_amount,
+                                    prices_for_to_market,
+                                )?
+                                .execute()
+                        }),
+                        Some(vi_map) => market.with_vi_models(vi_map, |market| {
+                            market
+                                .deposit(
+                                    long_token_amount,
+                                    short_token_amount,
+                                    prices_for_to_market,
+                                )?
+                                .execute()
+                        }),
+                    },
+                )?
             };
 
-            to_market.with_swap_pricing(SwapPricingKind::Shift, |market| match maybe_vi_map {
-                None => market.with_vis_disabled(|market| {
-                    market
-                        .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
-                        .execute()
-                }),
-                Some(vi_map) => market.with_vi_models(vi_map, |market| {
-                    market
-                        .deposit(long_token_amount, short_token_amount, prices_for_to_market)?
-                        .execute()
-                }),
-            })?
-        };
+            let minted = deposit.minted();
+            let min_to_market_token_amount = params.min_to_market_token_amount;
+            if *minted < u128::from(min_to_market_token_amount) {
+                return Err(crate::Error::custom(format!(
+                    "[sim] insufficient output amount: {minted} < {min_to_market_token_amount}",
+                )));
+            }
 
-        let minted = deposit.minted();
-        let min_to_market_token_amount = params.min_to_market_token_amount;
-        if *minted < u128::from(min_to_market_token_amount) {
-            return Err(crate::Error::custom(format!(
-                "[sim] insufficient output amount: {minted} < {min_to_market_token_amount}",
-            )));
-        }
-
-        Ok(ShiftSimulationOutput {
-            withdraw: Box::new(withdraw),
-            deposit: Box::new(deposit),
-        })
+            Ok(ShiftSimulationOutput {
+                withdraw: Box::new(withdraw),
+                deposit: Box::new(deposit),
+            })
+        })()
+        .map_err(standardize_simulation_error)
     }
 }
