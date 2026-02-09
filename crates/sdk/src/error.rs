@@ -109,13 +109,13 @@ impl From<Error> for wasm_bindgen::JsValue {
             Error::Simulation(sim) => {
                 #[cfg(all(feature = "js", feature = "serde"))]
                 {
-                    return serde_wasm_bindgen::to_value(&sim)
-                        .unwrap_or_else(|_| wasm_bindgen::JsValue::from_str(&sim.message));
+                    serde_wasm_bindgen::to_value(&sim)
+                        .unwrap_or_else(|_| wasm_bindgen::JsValue::from_str(&sim.message))
                 }
 
                 #[cfg(not(all(feature = "js", feature = "serde")))]
                 {
-                    return wasm_bindgen::JsValue::from_str(&sim.message);
+                    wasm_bindgen::JsValue::from_str(&sim.message)
                 }
             }
             other => Self::from_str(&other.to_string()),
