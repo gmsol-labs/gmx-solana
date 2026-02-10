@@ -28,6 +28,9 @@ pub struct ExecutorArgs {
     /// Feed index.
     #[arg(long, default_value_t = 0)]
     feed_index: u16,
+    /// Whether to enable idempotent price updates for Chainlink.
+    #[arg(long, default_value_t = false)]
+    chainlink_idempotent: bool,
 }
 
 impl ExecutorArgs {
@@ -40,6 +43,7 @@ impl ExecutorArgs {
             self.oracle_testnet,
             self.feed_index,
             !self.disable_switchboard,
+            self.chainlink_idempotent,
         )
         .await
     }
@@ -51,6 +55,7 @@ pub(crate) struct Executor<'a> {
     pyth: PythPullOracle<LocalSignerRef>,
     hermes: Hermes,
     switchboard: Option<SwitchcboardPullOracleFactory>,
+    chainlink_idempotent: bool,
 }
 
 impl<'a> Executor<'a> {
@@ -59,6 +64,7 @@ impl<'a> Executor<'a> {
         testnet: bool,
         feed_index: u16,
         use_switchboard: bool,
+        chainlink_idempotent: bool,
     ) -> gmsol_sdk::Result<Self> {
         let store = &client.store;
         let pyth = PythPullOracle::try_new(client)?;
@@ -99,6 +105,7 @@ impl<'a> Executor<'a> {
             pyth,
             hermes: Default::default(),
             switchboard,
+            chainlink_idempotent,
         })
     }
 
@@ -116,8 +123,7 @@ impl<'a> Executor<'a> {
             factory
                 .clone()
                 .make_oracle(client, self.client, true)
-                // FIXME: should remove this after the `update_price_feed_with_chainlink_idempotent` instruction is available.
-                .with_idempotent(false)
+                .with_idempotent(self.chainlink_idempotent)
         });
 
         let switchboard = self
