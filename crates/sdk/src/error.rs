@@ -1,5 +1,6 @@
 pub(crate) use gmsol_programs::anchor_lang::prelude::Error as AnchorLangError;
 
+#[cfg(simulation)]
 use crate::simulation::SimulationError;
 
 /// SDK Error.
@@ -67,6 +68,7 @@ pub enum Error {
     ConvertInterger(#[from] std::num::TryFromIntError),
 
     /// Simulation error.
+    #[cfg(simulation)]
     #[error("simulation: {0:?}")]
     Simulation(SimulationError),
 }
@@ -106,6 +108,7 @@ impl From<AnchorLangError> for Error {
 impl From<Error> for wasm_bindgen::JsValue {
     fn from(value: Error) -> Self {
         match value {
+            #[cfg(simulation)]
             Error::Simulation(sim) => {
                 #[cfg(all(feature = "js", feature = "serde"))]
                 {
