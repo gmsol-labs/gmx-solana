@@ -14,19 +14,19 @@
 
 | Program                    | Last Audit Date | Version   |
 | -------------------------- | --------------- | --------- |
-| [gmsol-store]              | [2025-09-23]    | [7618169] |
-| [gmsol-treasury]           | [2025-09-23]    | [7618169] |
-| [gmsol-timelock]           | [2025-09-23]    | [7618169] |
-| [gmsol-competition]        | [2025-09-23]    | [7618169] |
-| [gmsol-liquidity-provider] | [2025-09-23]    | [7618169] |
+| [gmsol-store]              | [2026-01-20]    | [6a5e6b2] |
+| [gmsol-treasury]           | [2026-01-20]    | [6a5e6b2] |
+| [gmsol-timelock]           | [2026-01-20]    | [6a5e6b2] |
+| [gmsol-competition]        | [2026-01-20]    | [6a5e6b2] |
+| [gmsol-liquidity-provider] | [2026-01-20]    | [6a5e6b2] |
 
 [gmsol-store]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/store
 [gmsol-treasury]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/treasury
 [gmsol-timelock]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/timelock
 [gmsol-competition]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/competition
 [gmsol-liquidity-provider]: https://github.com/gmsol-labs/gmx-solana/tree/main/programs/liquidity-provider
-[2025-09-23]: https://github.com/gmsol-labs/gmx-solana-audits/blob/main/GMX_Solana_Audit_Report_September_23_2025_Zenith.pdf
-[7618169]: https://github.com/gmsol-labs/gmx-solana/commit/7618169dfda4858ec87890bb66a1caafc8dca08c
+[2026-01-20]: https://github.com/gmsol-labs/gmx-solana-audits/blob/main/GMX_Solana_Audit_Report_January_20_2026_Zenith.pdf
+[6a5e6b2]: https://github.com/gmsol-labs/gmx-solana/commit/6a5e6b24d72fcd216f8314db4ef651c575e7fa72
 
 ## Integration
 
