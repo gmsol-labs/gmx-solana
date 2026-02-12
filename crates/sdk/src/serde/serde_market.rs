@@ -324,7 +324,38 @@ impl SerdeMarketConfig {
 
         Ok(Self(map))
     }
+
+    /// Returns only differences from `target`.
+    pub fn diff(&self, target: &SerdeMarketConfig, partial: bool) -> SerdeMarketConfigDiff {
+        let mut map: IndexMap<_, _> = self
+            .0
+            .iter()
+            .filter_map(|(key, current)| {
+                if let Some(target) = target.0.get(key) {
+                    (*current != *target).then_some((Some(*current), Some(*target)))
+                } else if !partial {
+                    Some((Some(*current), None))
+                } else {
+                    None
+                }
+                .map(|v| (*key, v))
+            })
+            .collect();
+
+        for (key, target) in target.0.iter() {
+            if !self.0.contains_key(key) {
+                map.insert(*key, (None, Some(*target)));
+            }
+        }
+
+        SerdeMarketConfigDiff(map)
+    }
 }
+
+/// Differences between two [`SerdeMarketConfig`]s.
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone)]
+pub struct SerdeMarketConfigDiff(pub IndexMap<MarketConfigKey, (Option<Amount>, Option<Amount>)>);
 
 /// Serializable version of [`MarketConfigBuffer`].
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
