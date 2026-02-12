@@ -87,6 +87,12 @@ enum Command {
         /// The expected market token to use for this buffer.
         #[arg(long)]
         market_token: Pubkey,
+        /// Whether to show only the differences from the current configuration.
+        #[arg(long)]
+        diff: bool,
+        /// Overrides the comparison target.
+        #[arg(long)]
+        compare_to: Option<Pubkey>,
     },
     /// Create a new token map.
     CreateTokenMap {
@@ -479,6 +485,8 @@ impl super::Command for Market {
             Command::Buffer {
                 address,
                 market_token,
+                diff,
+                compare_to,
             } => {
                 let buffer = client
                     .account::<MarketConfigBuffer>(address)
@@ -488,19 +496,36 @@ impl super::Command for Market {
                 let market = client.market_by_token(store, market_token).await?;
                 let decimals = MarketDecimals::new(&market.meta.into(), &token_map)?;
                 let buffer = SerdeMarketConfigBuffer::from_market_config_buffer(&buffer, decimals)?;
-                println!(
-                    "{}",
-                    output.display_keyed_account(
-                        address,
-                        &buffer,
-                        DisplayOptions::table_projection([
-                            ("pubkey", "Address"),
-                            ("store", "Store"),
-                            ("authority", "Authority"),
-                            ("expiry", "Expiry"),
-                        ])
-                    )?
-                );
+                if *diff {
+                    let market_config = match compare_to {
+                        Some(target) => {
+                            let market = client.market_by_token(store, target).await?;
+                            let decimals = MarketDecimals::new(&market.meta.into(), &token_map)?;
+                            SerdeMarketConfig::from_market_config(&market.config, decimals)?
+                        }
+                        None => SerdeMarketConfig::from_market_config(&market.config, decimals)?,
+                    };
+                    let diff = market_config.diff(&buffer.config, true);
+                    println!(
+                        "{}",
+                        output.display_keyed_account(address, &diff, Default::default())?
+                    );
+                } else {
+                    println!(
+                        "{}",
+                        output.display_keyed_account(
+                            address,
+                            &buffer,
+                            DisplayOptions::table_projection([
+                                ("pubkey", "Address"),
+                                ("store", "Store"),
+                                ("authority", "Authority"),
+                                ("expiry", "Expiry"),
+                            ])
+                        )?
+                    );
+                }
+
                 return Ok(());
             }
             Command::CreateTokenMap { keypair } => {
