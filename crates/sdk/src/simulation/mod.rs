@@ -1,6 +1,9 @@
 /// Simulator.
 pub mod simulator;
 
+/// Simulation error.
+pub mod error;
+
 /// Order simulation.
 pub mod order;
 
@@ -20,3 +23,5 @@ pub mod glv_deposit;
 pub mod glv_withdrawal;
 
 pub use simulator::{SimulationOptions, Simulator, SwapOutput, TokenState};
+
+pub use error::{SimulationError, SimulationErrorCode};

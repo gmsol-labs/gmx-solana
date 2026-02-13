@@ -22,6 +22,7 @@ use typed_builder::TypedBuilder;
 
 use crate::builders::order::{CreateOrderKind, CreateOrderParams};
 
+use super::error::standardize_simulation_error;
 use super::simulator::{SimulationOptions, Simulator, SwapOutput};
 
 /// Order simulation output.
@@ -75,7 +76,7 @@ impl OrderSimulation<'_> {
         self,
         options: SimulationOptions,
     ) -> crate::Result<OrderSimulationOutput> {
-        match self.kind {
+        (match self.kind {
             CreateOrderKind::MarketIncrease | CreateOrderKind::LimitIncrease => {
                 self.increase(options)
             }
@@ -83,7 +84,8 @@ impl OrderSimulation<'_> {
             | CreateOrderKind::LimitDecrease
             | CreateOrderKind::StopLossDecrease => self.decrease(options),
             CreateOrderKind::MarketSwap | CreateOrderKind::LimitSwap => self.swap(options),
-        }
+        })
+        .map_err(standardize_simulation_error)
     }
 
     fn get_market(&self) -> crate::Result<&MarketModel> {
