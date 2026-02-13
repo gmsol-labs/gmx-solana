@@ -78,7 +78,21 @@ impl SimulationError {
     }
 
     pub fn from_sdk_error(err: &Error) -> Option<Self> {
-        let msg = err.to_string();
+        let msg_owned;
+        let msg: &str = match err {
+            Error::Custom(msg) | Error::Transport(msg) => msg.as_str(),
+            _ => {
+                msg_owned = err.to_string();
+                let msg = msg_owned.trim();
+                msg.strip_prefix("custom:")
+                    .or_else(|| msg.strip_prefix("transport:"))
+                    .map(|s| s.trim_start())
+                    .unwrap_or(msg)
+            }
+        };
+
+        let msg = msg.trim();
+
         let lower = msg.to_ascii_lowercase();
 
         if !(msg.starts_with("[sim]") || msg.starts_with("[swap]")) {
@@ -109,7 +123,7 @@ impl SimulationError {
             SimulationErrorCode::Unknown
         };
 
-        Some(Self::new(code, Some(msg)))
+        Some(Self::new(code, Some(msg.to_string())))
     }
 }
 
