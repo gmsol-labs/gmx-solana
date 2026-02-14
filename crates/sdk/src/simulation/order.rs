@@ -488,6 +488,7 @@ fn with_vi_models_if_some<T>(
     f: impl FnOnce(&mut PositionModel) -> crate::Result<T>,
 ) -> crate::Result<(T, PositionModel)> {
     let mut market: MarketModel = market.clone();
+    let should_update_market = vi_map.is_some();
     let (output, mut position) = market.with_vis_if(vi_map, |market_in_scope| {
         let mut position =
             make_position_model(market_in_scope, position, is_long, collateral_token)?;
@@ -495,7 +496,9 @@ fn with_vi_models_if_some<T>(
         *market_in_scope = position.market_model().clone();
         crate::Result::Ok((output, position))
     })?;
-    position.set_market_model(&market);
+    if should_update_market {
+        position.set_market_model(&market);
+    }
     Ok((output, position))
 }
 
@@ -515,5 +518,84 @@ fn make_position_model(
         None => Ok(market
             .clone()
             .into_empty_position(is_long, *collateral_token)?),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gmsol_model::BaseMarket;
+    use gmsol_programs::{bytemuck::Zeroable, gmsol_store::accounts::Market};
+
+    fn create_market_with_vi_address() -> Market {
+        let mut market: Market = Zeroable::zeroed();
+        market.virtual_inventory_for_positions = Pubkey::new_unique();
+        market
+    }
+
+    #[test]
+    fn test_disable_vis_state_preserved_when_vi_map_is_none() {
+        let market = create_market_with_vi_address();
+        let market_model = MarketModel::from_parts(Arc::new(market), 1_000_000_000);
+
+        let long_token = market_model.meta.long_token_mint;
+        let is_long = true;
+
+        let result = with_vi_models_if_some(
+            &market_model,
+            None,
+            None,
+            is_long,
+            &long_token,
+            |_position_model| Ok(()),
+        );
+
+        assert!(result.is_ok());
+        let (_output, position) = result.unwrap();
+
+        assert!(
+            position.market_model().is_vis_disabled_for_test(),
+            "When vi_map = None, returned position's disable_vis should be true"
+        );
+    }
+
+    #[test]
+    fn test_vi_validation_fails_when_disable_vis_is_wrong() {
+        let market = create_market_with_vi_address();
+        let market_model = MarketModel::from_parts(Arc::new(market), 1_000_000_000);
+
+        let result = market_model.virtual_inventory_for_positions_pool();
+
+        match result {
+            Err(err) => {
+                assert!(
+                    err.to_string().contains(
+                        "virtual inventory for positions should be present but is missing"
+                    ),
+                    "Unexpected error: {err}"
+                );
+            }
+            Ok(_) => {
+                panic!("Should fail when has VI address but no VI data and disable_vis = false");
+            }
+        }
+    }
+
+    #[test]
+    fn test_vi_validation_skipped_when_vis_disabled() {
+        let market = create_market_with_vi_address();
+        let mut market_model = MarketModel::from_parts(Arc::new(market), 1_000_000_000);
+
+        let is_disabled_in_closure =
+            market_model.with_vis_disabled(|m| m.is_vis_disabled_for_test());
+
+        assert!(
+            is_disabled_in_closure,
+            "disable_vis should be true inside closure"
+        );
+        assert!(
+            !market_model.is_vis_disabled_for_test(),
+            "disable_vis should be restored after closure"
+        );
     }
 }
