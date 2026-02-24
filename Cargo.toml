@@ -115,6 +115,7 @@ solana-security-txt = "1.1.1"
 jito-sdk-rust = "0.3.2"
 uuid = "1.10.0"
 libsecp256k1 = "0.7.1"
+gql_client = "1.1.0"
 
 [workspace.dependencies.chainlink-data-streams-report]
 version = "1.0.3"

@@ -27,8 +27,9 @@ execute = ["chainlink", "pyth", "switchboard"]
 chaoslabs-risk-oracle = ["gmsol-sdk/chaoslabs-risk-oracle"]
 
 # nightly features
-nightly = ["nightly-cli-update-fees-state"]
+nightly = ["nightly-cli-update-fees-state", "nightly-cli-market-graph"]
 nightly-cli-update-fees-state = []
+nightly-cli-market-graph = ["gql_client"]
 
 [dependencies]
 gmsol-sdk = { workspace = true, features = [
@@ -76,6 +77,7 @@ tracing-subscriber = { workspace = true, optional = true, features = [
     "env-filter",
 ] }
 solana-remote-wallet = { workspace = true, optional = true }
+gql_client = { workspace = true, optional = true }
 
 [build-dependencies]
 vergen-git2 = { workspace = true, features = ["build", "cargo", "rustc"] }

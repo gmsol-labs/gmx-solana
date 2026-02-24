@@ -61,6 +61,9 @@ mod timelock;
 mod treasury;
 mod user;
 
+#[cfg(feature = "nightly-cli-market-graph")]
+mod graph;
+
 /// Utils for command implementations.
 pub mod utils;
 
@@ -98,6 +101,8 @@ pub enum Commands {
     Lp(Lp),
     /// Inspect protocol data.
     Inspect(Inspect),
+    #[cfg(feature = "nightly-cli-market-graph")]
+    Graph(graph::Graph),
     /// Miscellaneous useful commands.
     Other(Other),
 }

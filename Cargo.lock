@@ -2340,6 +2340,7 @@ dependencies = [
  "figment",
  "futures-util",
  "gmsol-sdk",
+ "gql_client",
  "hex",
  "humantime",
  "indexmap 2.10.0",
@@ -2681,6 +2682,18 @@ dependencies = [
  "rand 0.8.5",
  "smallvec",
  "spinning_top",
+]
+
+[[package]]
+name = "gql_client"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4642704b9650be83d5a0eae63da30acb4c87a2de195a921f79a910d0566285c0"
+dependencies = [
+ "log",
+ "reqwest 0.12.22",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
