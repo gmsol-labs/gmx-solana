@@ -99,7 +99,7 @@ impl MarketConfig {
     pub(super) fn init(&mut self) {
         self.swap_impact_exponent = constants::DEFAULT_SWAP_IMPACT_EXPONENT;
         self.swap_impact_positive_factor = constants::DEFAULT_SWAP_IMPACT_POSITIVE_FACTOR;
-        self.swap_impact_positive_factor = constants::DEFAULT_SWAP_IMPACT_NEGATIVE_FACTOR;
+        self.swap_impact_negative_factor = constants::DEFAULT_SWAP_IMPACT_NEGATIVE_FACTOR;
 
         self.swap_fee_receiver_factor = constants::DEFAULT_RECEIVER_FACTOR;
         self.swap_fee_factor_for_positive_impact =
@@ -576,6 +576,31 @@ impl MarketConfig {
 }
 
 gmsol_utils::flags!(MarketConfigFlag, MAX_MARKET_CONFIG_FLAGS, u128);
+
+#[cfg(test)]
+mod tests {
+    use bytemuck::Zeroable;
+
+    use super::*;
+
+    #[test]
+    fn init_resets_swap_impact_factors() {
+        let mut config = MarketConfig::zeroed();
+        config.swap_impact_positive_factor = 11;
+        config.swap_impact_negative_factor = 22;
+
+        config.init();
+
+        assert_eq!(
+            config.swap_impact_positive_factor,
+            constants::DEFAULT_SWAP_IMPACT_POSITIVE_FACTOR
+        );
+        assert_eq!(
+            config.swap_impact_negative_factor,
+            constants::DEFAULT_SWAP_IMPACT_NEGATIVE_FACTOR
+        );
+    }
+}
 
 /// An entry of the config buffer.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
