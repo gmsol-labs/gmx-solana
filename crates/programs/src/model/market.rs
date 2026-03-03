@@ -246,7 +246,7 @@ impl MarketModel {
             swap_pricing: Default::default(),
             vi_for_swaps: None,
             vi_for_positions: None,
-            disable_vis: false,
+            disable_vis: true,
             order_fee_discount_factor: 0,
         }
     }
@@ -335,6 +335,7 @@ impl MarketModel {
             vi_for_positions_key: Option<Pubkey>,
             loaded_from_map_for_swaps: bool,
             loaded_from_map_for_positions: bool,
+            original_disable_vis: bool,
         }
 
         impl Drop for ViModelsGuard<'_> {
@@ -343,6 +344,7 @@ impl MarketModel {
                 // This includes:
                 // 1. Moving VI models back to vi_map
                 // 2. Setting vi_for_* to None in the model (via take())
+                // 3. Restoring the original disable_vis state
                 if self.loaded_from_map_for_swaps {
                     if let (Some(key), Some(vi_for_swaps_model)) =
                         (self.vi_for_swaps_key, self.model.vi_for_swaps.take())
@@ -358,6 +360,7 @@ impl MarketModel {
                         self.vi_map.insert(key, vi_for_positions_model);
                     }
                 }
+                self.model.disable_vis = self.original_disable_vis;
             }
         }
 
@@ -392,6 +395,10 @@ impl MarketModel {
             }
         }
 
+        // Enable VI validation while VI models are attached.
+        let original_disable_vis = self.disable_vis;
+        self.disable_vis = false;
+
         // Use a scope block to limit guard's lifetime to f's execution only.
         // This ensures:
         // 1. Panic safety: guard drop will restore VI models even if f panics
@@ -404,9 +411,10 @@ impl MarketModel {
                 vi_for_positions_key,
                 loaded_from_map_for_swaps,
                 loaded_from_map_for_positions,
+                original_disable_vis,
             };
             (f)(guard.model)
-            // guard is dropped here, restoring VI models to vi_map
+            // guard is dropped here, restoring VI models to vi_map and disable_vis state
         }
     }
 
@@ -1210,15 +1218,5 @@ impl gmsol_model::LiquidityMarketMut<{ constants::MARKET_DECIMALS }> for MarketM
             .ok_or(gmsol_model::Error::Overflow)?;
         self.supply = new_supply;
         Ok(())
-    }
-}
-
-impl MarketModel {
-    /// Test helper: get the disable_vis state.
-    ///
-    /// This method is intended for testing purposes only.
-    #[doc(hidden)]
-    pub fn is_vis_disabled_for_test(&self) -> bool {
-        self.disable_vis
     }
 }
