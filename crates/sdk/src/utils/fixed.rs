@@ -163,22 +163,33 @@ pub fn signed_fixed_to_decimal(num: i128, decimals: u8) -> Option<Decimal> {
     }
 }
 
+/// Rescale and return the mantissa, returning an error if the scale was truncated by `Decimal::rescale`.
+fn rescale_to_mantissa(mut amount: rust_decimal::Decimal, decimals: u8) -> crate::Result<i128> {
+    let target_scale = decimals as u32;
+    amount.rescale(target_scale);
+    if amount.scale() != target_scale {
+        return Err(crate::Error::custom(
+            "decimal value too large to rescale without truncation",
+        ));
+    }
+    Ok(amount.mantissa())
+}
+
 /// Convert a [`Decimal`] to `u64` amount.
-pub fn decimal_to_amount(mut amount: rust_decimal::Decimal, decimals: u8) -> crate::Result<u64> {
-    amount.rescale(decimals as u32);
-    let amount = amount.mantissa().try_into().map_err(crate::Error::custom)?;
-    Ok(amount)
+pub fn decimal_to_amount(amount: rust_decimal::Decimal, decimals: u8) -> crate::Result<u64> {
+    rescale_to_mantissa(amount, decimals)?
+        .try_into()
+        .map_err(crate::Error::custom)
 }
 
 /// Convert a [`Decimal`] to `i128` value.
-pub fn decimal_to_signed_value(mut amount: rust_decimal::Decimal, decimals: u8) -> i128 {
-    amount.rescale(decimals as u32);
-    amount.mantissa()
+pub fn decimal_to_signed_value(amount: rust_decimal::Decimal, decimals: u8) -> crate::Result<i128> {
+    rescale_to_mantissa(amount, decimals)
 }
 
 /// Convert a [`Decimal`] to `u128` value.
 pub fn decimal_to_value(amount: rust_decimal::Decimal, decimals: u8) -> crate::Result<u128> {
-    decimal_to_signed_value(amount, decimals)
+    rescale_to_mantissa(amount, decimals)?
         .try_into()
         .map_err(crate::Error::custom)
 }
@@ -292,5 +303,24 @@ mod tests {
         );
 
         assert_eq!(unsigned_amount_to_decimal(u64::MAX, 48), Decimal::ZERO);
+    }
+
+    #[test]
+    fn test_rescale_truncation_is_rejected() {
+        assert!(decimal_to_signed_value(dec!(1234567891), 20).is_err());
+        assert!(decimal_to_amount(dec!(1234567891), 20).is_err());
+        assert!(decimal_to_value(dec!(1234567891), 20).is_err());
+    }
+
+    #[test]
+    fn test_rescale_no_truncation() {
+        assert_eq!(decimal_to_signed_value(dec!(1.5), 6).unwrap(), 1_500_000);
+        assert_eq!(decimal_to_amount(dec!(1.5), 6).unwrap(), 1_500_000u64);
+        assert_eq!(decimal_to_value(dec!(1.5), 6).unwrap(), 1_500_000u128);
+    }
+
+    #[test]
+    fn test_decimal_to_value_rejects_negative() {
+        assert!(decimal_to_value(dec!(-1.5), 6).is_err());
     }
 }
