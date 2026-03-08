@@ -76,60 +76,16 @@ impl SimulationError {
             details,
         }
     }
-
-    pub fn from_sdk_error(err: &Error) -> Option<Self> {
-        let msg_owned;
-        let msg: &str = match err {
-            Error::Custom(msg) | Error::Transport(msg) => msg.as_str(),
-            _ => {
-                msg_owned = err.to_string();
-                let msg = msg_owned.trim();
-                msg.strip_prefix("custom:")
-                    .or_else(|| msg.strip_prefix("transport:"))
-                    .map(|s| s.trim_start())
-                    .unwrap_or(msg)
-            }
-        };
-
-        let msg = msg.trim();
-
-        let lower = msg.to_ascii_lowercase();
-
-        if !(msg.starts_with("[sim]") || msg.starts_with("[swap]")) {
-            return None;
-        }
-
-        let code = if lower.contains("market") && lower.contains("not found") {
-            SimulationErrorCode::MarketNotFound
-        } else if lower.contains("prices") && lower.contains("not ready") {
-            SimulationErrorCode::PricesNotReady
-        } else if lower.contains("price") && lower.contains("not ready") {
-            SimulationErrorCode::PriceNotReady
-        } else if lower.contains("invalid") && lower.contains("swap path") {
-            SimulationErrorCode::InvalidSwapPath
-        } else if lower.contains("trigger price") && lower.contains("required") {
-            SimulationErrorCode::TriggerPriceRequired
-        } else if lower.contains("empty deposit") {
-            SimulationErrorCode::EmptyDeposit
-        } else if lower.contains("empty withdrawal") {
-            SimulationErrorCode::EmptyWithdrawal
-        } else if lower.contains("empty shift") {
-            SimulationErrorCode::EmptyShift
-        } else if lower.contains("shift") && lower.contains("impossible") {
-            SimulationErrorCode::ShiftImpossible
-        } else if lower.contains("insufficient") && lower.contains("output") {
-            SimulationErrorCode::InsufficientOutputAmount
-        } else {
-            SimulationErrorCode::Unknown
-        };
-
-        Some(Self::new(code, Some(msg.to_string())))
-    }
 }
 
-pub(crate) fn standardize_simulation_error(err: Error) -> Error {
-    match SimulationError::from_sdk_error(&err) {
-        Some(sim) => Error::Simulation(sim),
-        None => err,
+pub(crate) fn sim_error(_code: SimulationErrorCode, details: String) -> Error {
+    #[cfg(nightly_simulation_errors)]
+    {
+        Error::Simulation(SimulationError::new(_code, Some(details)))
+    }
+
+    #[cfg(not(nightly_simulation_errors))]
+    {
+        Error::custom(details)
     }
 }

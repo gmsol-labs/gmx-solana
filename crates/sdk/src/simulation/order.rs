@@ -9,7 +9,7 @@ use gmsol_model::{
     num::MulDiv,
     price::Price,
     utils::apply_factor,
-    MarketAction, PositionMutExt,
+    MarketAction, Position as _, PositionMutExt,
 };
 use gmsol_programs::{
     constants::{MARKET_DECIMALS, MARKET_USD_UNIT},
@@ -22,7 +22,7 @@ use typed_builder::TypedBuilder;
 
 use crate::builders::order::{CreateOrderKind, CreateOrderParams};
 
-use super::error::standardize_simulation_error;
+use super::error::{sim_error, SimulationErrorCode};
 use super::simulator::{SimulationOptions, Simulator, SwapOutput};
 
 /// Order simulation output.
@@ -76,7 +76,7 @@ impl OrderSimulation<'_> {
         self,
         options: SimulationOptions,
     ) -> crate::Result<OrderSimulationOutput> {
-        (match self.kind {
+        match self.kind {
             CreateOrderKind::MarketIncrease | CreateOrderKind::LimitIncrease => {
                 self.increase(options)
             }
@@ -84,16 +84,16 @@ impl OrderSimulation<'_> {
             | CreateOrderKind::LimitDecrease
             | CreateOrderKind::StopLossDecrease => self.decrease(options),
             CreateOrderKind::MarketSwap | CreateOrderKind::LimitSwap => self.swap(options),
-        })
-        .map_err(standardize_simulation_error)
+        }
     }
 
     fn get_market(&self) -> crate::Result<&MarketModel> {
         let market_token = &self.params.market_token;
         self.simulator.get_market(market_token).ok_or_else(|| {
-            crate::Error::custom(format!(
-                "[sim] market `{market_token}` not found in the simulator"
-            ))
+            sim_error(
+                SimulationErrorCode::MarketNotFound,
+                format!("[sim] market `{market_token}` not found in the simulator"),
+            )
         })
     }
 
@@ -106,7 +106,10 @@ impl OrderSimulation<'_> {
             | CreateOrderKind::LimitDecrease
             | CreateOrderKind::StopLossDecrease => {
                 let Some(trigger_price) = self.params.trigger_price else {
-                    return Err(crate::Error::custom("[sim] trigger price is required"));
+                    return Err(sim_error(
+                        SimulationErrorCode::TriggerPriceRequired,
+                        "[sim] trigger price is required".to_string(),
+                    ));
                 };
                 let token = self.get_market()?.meta.index_token_mint;
                 let price = Price {
@@ -122,10 +125,16 @@ impl OrderSimulation<'_> {
                 let swap_in_amount = self.params.amount;
                 let swap_out_amount = self.params.min_output;
                 let swap_in_price = self.simulator.get_price(&swap_in).ok_or_else(|| {
-                    crate::Error::custom(format!("[sim] price for {swap_in} is not ready"))
+                    sim_error(
+                        SimulationErrorCode::PriceNotReady,
+                        format!("[sim] price for {swap_in} is not ready"),
+                    )
                 })?;
                 let swap_out_price = self.simulator.get_price(&swap_out).ok_or_else(|| {
-                    crate::Error::custom(format!("[sim] price for {swap_out} is not ready"))
+                    sim_error(
+                        SimulationErrorCode::PriceNotReady,
+                        format!("[sim] price for {swap_out} is not ready"),
+                    )
                 })?;
                 let slippage = options
                     .limit_swap_slippage
@@ -134,18 +143,23 @@ impl OrderSimulation<'_> {
                     let mut swap_in_price = swap_out_amount
                         .checked_mul_div_ceil(&swap_out_price.max, &swap_in_amount)
                         .ok_or_else(|| {
-                            crate::Error::custom(
-                                "failed to calculate trigger price for swap in token",
+                            sim_error(
+                                SimulationErrorCode::Unknown,
+                                "failed to calculate trigger price for swap in token".to_string(),
                             )
                         })?;
                     let factor = MARKET_USD_UNIT.checked_add(slippage).ok_or_else(|| {
-                        crate::Error::custom(
-                            "[sim] failed to calculate factor for applying slippage",
+                        sim_error(
+                            SimulationErrorCode::Unknown,
+                            "[sim] failed to calculate factor for applying slippage".to_string(),
                         )
                     })?;
                     swap_in_price = apply_factor::<_, { MARKET_DECIMALS }>(&swap_in_price, &factor)
                         .ok_or_else(|| {
-                            crate::Error::custom("[sim] failed to apply slippage to swap in price")
+                            sim_error(
+                                SimulationErrorCode::Unknown,
+                                "[sim] failed to apply slippage to swap in price".to_string(),
+                            )
                         })?;
                     self.simulator.insert_price(
                         &swap_in,
@@ -156,22 +170,25 @@ impl OrderSimulation<'_> {
                     )?;
                 } else {
                     let factor = MARKET_USD_UNIT.checked_sub(slippage).ok_or_else(|| {
-                        crate::Error::custom(
-                            "[sim] failed to calculate factor for applying slippage",
+                        sim_error(
+                            SimulationErrorCode::Unknown,
+                            "[sim] failed to calculate factor for applying slippage".to_string(),
                         )
                     })?;
                     let mut swap_out_price = swap_in_amount
                         .checked_mul_div_ceil(&swap_in_price.min, &swap_out_amount)
                         .ok_or_else(|| {
-                            crate::Error::custom(
-                                "failed to calculate trigger price for swap out token",
+                            sim_error(
+                                SimulationErrorCode::Unknown,
+                                "failed to calculate trigger price for swap out token".to_string(),
                             )
                         })?;
                     swap_out_price =
                         apply_factor::<_, { MARKET_DECIMALS }>(&swap_out_price, &factor)
                             .ok_or_else(|| {
-                                crate::Error::custom(
-                                    "[sim] failed to apply slippage to swap out price",
+                                sim_error(
+                                    SimulationErrorCode::Unknown,
+                                    "[sim] failed to apply slippage to swap out price".to_string(),
                                 )
                             })?;
                     self.simulator.insert_price(
@@ -204,7 +221,10 @@ impl OrderSimulation<'_> {
 
         if matches!(kind, CreateOrderKind::LimitIncrease) && !options.skip_limit_price_validation {
             let Some(trigger_price) = params.trigger_price else {
-                return Err(crate::Error::custom("[sim] trigger price is required"));
+                return Err(sim_error(
+                    SimulationErrorCode::TriggerPriceRequired,
+                    "[sim] trigger price is required".to_string(),
+                ));
             };
 
             // Validate with trigger price.
@@ -212,16 +232,22 @@ impl OrderSimulation<'_> {
             if params.is_long {
                 let price = index_price.pick_price(true);
                 if *price > trigger_price {
-                    return Err(crate::Error::custom(format!(
-                        "[sim] index price must be <= trigger price for a increase-long order, but {price} > {trigger_price}."
-                    )));
+                    return Err(sim_error(
+                        SimulationErrorCode::Unknown,
+                        format!(
+                            "[sim] index price must be <= trigger price for a increase-long order, but {price} > {trigger_price}."
+                        ),
+                    ));
                 }
             } else {
                 let price = index_price.pick_price(false);
                 if *price < trigger_price {
-                    return Err(crate::Error::custom(format!(
-                        "[sim] index price must be >= trigger price for a increase-short order, but {price} < {trigger_price}."
-                    )));
+                    return Err(sim_error(
+                        SimulationErrorCode::Unknown,
+                        format!(
+                            "[sim] index price must be >= trigger price for a increase-short order, but {price} < {trigger_price}."
+                        ),
+                    ));
                 }
             }
         }
@@ -234,17 +260,23 @@ impl OrderSimulation<'_> {
             options.clone(),
         )?;
         if swap_output.output_token() != collateral_or_swap_out_token {
-            return Err(crate::Error::custom("[sim] invalid swap path"));
+            return Err(sim_error(
+                SimulationErrorCode::InvalidSwapPath,
+                "[sim] invalid swap path".to_string(),
+            ));
         }
 
         // Execute the increase against a cloned market model, while VI state
         // is managed exclusively via the simulator's global VI map.
         let market_snapshot = {
             let market = simulator.get_market(&params.market_token).ok_or_else(|| {
-                crate::Error::custom(format!(
-                    "[sim] market `{}` not found in the simulator",
-                    params.market_token
-                ))
+                sim_error(
+                    SimulationErrorCode::MarketNotFound,
+                    format!(
+                        "[sim] market `{}` not found in the simulator",
+                        params.market_token
+                    ),
+                )
             })?;
             market.clone()
         };
@@ -306,41 +338,59 @@ impl OrderSimulation<'_> {
             match kind {
                 CreateOrderKind::LimitDecrease => {
                     let Some(trigger_price) = params.trigger_price else {
-                        return Err(crate::Error::custom("[sim] trigger price is required"));
+                        return Err(sim_error(
+                            SimulationErrorCode::TriggerPriceRequired,
+                            "[sim] trigger price is required".to_string(),
+                        ));
                     };
                     if is_long {
                         let price = index_price.pick_price(false);
                         if *price < trigger_price {
-                            return Err(crate::Error::custom(format!(
-                            "[sim] index price must be >= trigger price for a limit-decrease-long order, but {price} < {trigger_price}."
-                        )));
+                            return Err(sim_error(
+                                SimulationErrorCode::Unknown,
+                                format!(
+                                    "[sim] index price must be >= trigger price for a limit-decrease-long order, but {price} < {trigger_price}."
+                                ),
+                            ));
                         }
                     } else {
                         let price = index_price.pick_price(true);
                         if *price > trigger_price {
-                            return Err(crate::Error::custom(format!(
-                            "[sim] index price must be <= trigger price for a limit-decrease-short order, but {price} > {trigger_price}."
-                        )));
+                            return Err(sim_error(
+                                SimulationErrorCode::Unknown,
+                                format!(
+                                    "[sim] index price must be <= trigger price for a limit-decrease-short order, but {price} > {trigger_price}."
+                                ),
+                            ));
                         }
                     }
                 }
                 CreateOrderKind::StopLossDecrease => {
                     let Some(trigger_price) = params.trigger_price else {
-                        return Err(crate::Error::custom("[sim] trigger price is required"));
+                        return Err(sim_error(
+                            SimulationErrorCode::TriggerPriceRequired,
+                            "[sim] trigger price is required".to_string(),
+                        ));
                     };
                     if is_long {
                         let price = index_price.pick_price(false);
                         if *price > trigger_price {
-                            return Err(crate::Error::custom(format!(
-                            "[sim] index price must be <= trigger price for a stop-loss-decrease-long order, but {price} > {trigger_price}."
-                        )));
+                            return Err(sim_error(
+                                SimulationErrorCode::Unknown,
+                                format!(
+                                    "[sim] index price must be <= trigger price for a stop-loss-decrease-long order, but {price} > {trigger_price}."
+                                ),
+                            ));
                         }
                     } else {
                         let price = index_price.pick_price(true);
                         if *price < trigger_price {
-                            return Err(crate::Error::custom(format!(
-                            "[sim] index price must be >= trigger price for a stop-loss-decrease-short order, but {price} < {trigger_price}."
-                        )));
+                            return Err(sim_error(
+                                SimulationErrorCode::Unknown,
+                                format!(
+                                    "[sim] index price must be >= trigger price for a stop-loss-decrease-short order, but {price} < {trigger_price}."
+                                ),
+                            ));
                         }
                     }
                 }
@@ -349,22 +399,29 @@ impl OrderSimulation<'_> {
         }
 
         let Some(position) = position else {
-            return Err(crate::Error::custom(
-                "[sim] position must be provided for decrease order",
+            return Err(sim_error(
+                SimulationErrorCode::Unknown,
+                "[sim] position must be provided for decrease order".to_string(),
             ));
         };
         if position.collateral_token != *collateral_or_swap_out_token {
-            return Err(crate::Error::custom("[sim] collateral token mismatched"));
+            return Err(sim_error(
+                SimulationErrorCode::Unknown,
+                "[sim] collateral token mismatched".to_string(),
+            ));
         }
 
         // Execute the decrease against a cloned market model, while VI state
         // is managed exclusively via the simulator's global VI map.
         let market_snapshot = {
             let market = simulator.get_market(&params.market_token).ok_or_else(|| {
-                crate::Error::custom(format!(
-                    "[sim] market `{}` not found in the simulator",
-                    params.market_token
-                ))
+                sim_error(
+                    SimulationErrorCode::MarketNotFound,
+                    format!(
+                        "[sim] market `{}` not found in the simulator",
+                        params.market_token
+                    ),
+                )
             })?;
             market.clone()
         };
@@ -423,10 +480,13 @@ impl OrderSimulation<'_> {
             )?;
             let receive_token = receive_token.unwrap_or(collateral_or_swap_out_token);
             if swap_output.output_token() != receive_token {
-                return Err(crate::Error::custom(format!(
-                    "[sim] invalid swap path: output_token={}, receive_token={receive_token}",
-                    swap_output.output_token()
-                )));
+                return Err(sim_error(
+                    SimulationErrorCode::InvalidSwapPath,
+                    format!(
+                        "[sim] invalid swap path: output_token={}, receive_token={receive_token}",
+                        swap_output.output_token()
+                    ),
+                ));
             }
             // Ensure the market model of the position is in-sync with the simulator's.
             position.set_market_model(
@@ -466,14 +526,22 @@ impl OrderSimulation<'_> {
             options.clone(),
         )?;
         if swap_output.output_token() != collateral_or_swap_out_token {
-            return Err(crate::Error::custom("[sim] invalid swap path"));
+            return Err(sim_error(
+                SimulationErrorCode::InvalidSwapPath,
+                "[sim] invalid swap path".to_string(),
+            ));
         }
 
         if matches!(kind, CreateOrderKind::LimitSwap) && !options.skip_limit_price_validation {
             let output_amount = swap_output.amount();
             let min_output_amount = params.min_output;
             if output_amount < min_output_amount {
-                return Err(crate::Error::custom(format!("[sim] the limit swap output is too low, {output_amount} < min_output = {min_output_amount}. Has the limit price been reached?")));
+                return Err(sim_error(
+                    SimulationErrorCode::InsufficientOutputAmount,
+                    format!(
+                        "[sim] the limit swap output is too low, {output_amount} < min_output = {min_output_amount}. Has the limit price been reached?"
+                    ),
+                ));
             }
         }
 
@@ -507,15 +575,39 @@ fn make_position_model(
     is_long: bool,
     collateral_token: &Pubkey,
 ) -> crate::Result<PositionModel> {
+    let position_model = make_position_model_from_position(market, position, collateral_token)?
+        .ok_or_else(|| {
+            sim_error(
+                SimulationErrorCode::Unknown,
+                "[sim] position must be provided for decrease order".to_string(),
+            )
+        })?;
+
+    if position_model.is_long() != is_long {
+        return Err(sim_error(
+            SimulationErrorCode::Unknown,
+            "[sim] position kind mismatched".to_string(),
+        ));
+    }
+
+    Ok(position_model)
+}
+
+fn make_position_model_from_position(
+    market: &MarketModel,
+    position: Option<&Arc<Position>>,
+    collateral_token: &Pubkey,
+) -> crate::Result<Option<PositionModel>> {
     match position {
         Some(position) => {
             if position.collateral_token != *collateral_token {
-                return Err(crate::Error::custom("[sim] collateral token mismatched"));
+                return Err(sim_error(
+                    SimulationErrorCode::Unknown,
+                    "[sim] collateral token mismatched".to_string(),
+                ));
             }
-            Ok(PositionModel::new(market.clone(), position.clone())?)
+            Ok(Some(PositionModel::new(market.clone(), position.clone())?))
         }
-        None => Ok(market
-            .clone()
-            .into_empty_position(is_long, *collateral_token)?),
+        None => Ok(None),
     }
 }
