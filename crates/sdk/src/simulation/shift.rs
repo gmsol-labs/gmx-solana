@@ -6,6 +6,7 @@ use gmsol_programs::{gmsol_store::types::CreateShiftParams, model::SwapPricingKi
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
+use super::error::{sim_error, SimulationErrorCode};
 use super::{SimulationOptions, Simulator};
 
 /// Shift simulation output.
@@ -50,7 +51,10 @@ impl ShiftSimulation<'_> {
         } = self;
 
         if params.from_market_token_amount == 0 {
-            return Err(crate::Error::custom("[sim] empty shift"));
+            return Err(sim_error(
+                SimulationErrorCode::EmptyShift,
+                "[sim] empty shift".to_string(),
+            ));
         }
 
         let (from_market, prices_for_from_market) =
@@ -61,9 +65,12 @@ impl ShiftSimulation<'_> {
         if from_market.meta.long_token_mint != to_market.meta.long_token_mint
             || from_market.meta.short_token_mint != to_market.meta.short_token_mint
         {
-            return Err(crate::Error::custom(format!(
-                "[sim] shift from `{from_market_token}` to `{to_market_token}` is impossible"
-            )));
+            return Err(sim_error(
+                SimulationErrorCode::ShiftImpossible,
+                format!(
+                    "[sim] shift from `{from_market_token}` to `{to_market_token}` is impossible"
+                ),
+            ));
         }
 
         // Execute withdrawal.
@@ -106,8 +113,9 @@ impl ShiftSimulation<'_> {
         );
 
         if long_token_amount == 0 && short_token_amount == 0 {
-            return Err(crate::Error::custom(
-                "[sim] shift cannot be completed due to empty withdrawal output",
+            return Err(sim_error(
+                SimulationErrorCode::ShiftImpossible,
+                "[sim] shift cannot be completed due to empty withdrawal output".to_string(),
             ));
         }
 
@@ -142,9 +150,12 @@ impl ShiftSimulation<'_> {
         let minted = deposit.minted();
         let min_to_market_token_amount = params.min_to_market_token_amount;
         if *minted < u128::from(min_to_market_token_amount) {
-            return Err(crate::Error::custom(format!(
-                "[sim] insufficient output amount: {minted} < {min_to_market_token_amount}",
-            )));
+            return Err(sim_error(
+                SimulationErrorCode::InsufficientOutputAmount,
+                format!(
+                    "[sim] insufficient output amount: {minted} < {min_to_market_token_amount}",
+                ),
+            ));
         }
 
         Ok(ShiftSimulationOutput {
