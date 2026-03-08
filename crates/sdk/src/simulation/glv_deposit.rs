@@ -8,7 +8,7 @@ use typed_builder::TypedBuilder;
 
 use crate::{glv::calculator::GlvCalculator, simulation::deposit::DepositSimulation};
 
-use super::error::standardize_simulation_error;
+use super::error::{sim_error, SimulationErrorCode};
 use super::{deposit::DepositSimulationOutput, SimulationOptions, Simulator};
 
 /// GLV deposit simulation output.
@@ -123,18 +123,28 @@ impl GlvDepositSimulation<'_> {
                         .unwrap_or(0)
                         .try_into()
                         .map_err(|_| {
-                            crate::Error::custom("[sim] normal deposit output amount overflow")
+                            sim_error(
+                                SimulationErrorCode::Unknown,
+                                "[sim] normal deposit output amount overflow".to_string(),
+                            )
                         })?,
                 )
-                .ok_or(crate::Error::custom("[sim] market token amount overflow"))?;
+                .ok_or(sim_error(
+                    SimulationErrorCode::Unknown,
+                    "[sim] market token amount overflow".to_string(),
+                ))?;
 
             if market_token_amount == 0 {
                 if is_deposit_empty {
-                    return Err(crate::Error::custom(
-                        "[sim] insufficient deposit output amount",
+                    return Err(sim_error(
+                        SimulationErrorCode::InsufficientOutputAmount,
+                        "[sim] insufficient deposit output amount".to_string(),
                     ));
                 } else {
-                    return Err(crate::Error::custom("[sim] empty GLV deposit"));
+                    return Err(sim_error(
+                        SimulationErrorCode::EmptyDeposit,
+                        "[sim] empty GLV deposit".to_string(),
+                    ));
                 }
             }
 
@@ -155,9 +165,10 @@ impl GlvDepositSimulation<'_> {
 
             let min_glv_token_amount = params.min_glv_token_amount;
             if minted < min_glv_token_amount {
-                return Err(crate::Error::custom(format!(
-                    "[sim] insufficient output amount: {minted} < {min_glv_token_amount}",
-                )));
+                return Err(sim_error(
+                    SimulationErrorCode::InsufficientOutputAmount,
+                    format!("[sim] insufficient output amount: {minted} < {min_glv_token_amount}"),
+                ));
             }
 
             match deposit_output {
@@ -182,6 +193,5 @@ impl GlvDepositSimulation<'_> {
                 }),
             }
         })()
-        .map_err(standardize_simulation_error)
     }
 }

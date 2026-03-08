@@ -6,7 +6,7 @@ use gmsol_programs::gmsol_store::types::CreateWithdrawalParams;
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
-use super::error::standardize_simulation_error;
+use super::error::{sim_error, SimulationErrorCode};
 use super::{SimulationOptions, Simulator};
 
 /// Withdrawal simulation output.
@@ -80,7 +80,10 @@ impl WithdrawalSimulation<'_> {
             } = self;
 
             if params.market_token_amount == 0 {
-                return Err(crate::Error::custom("[sim] empty withdrawal"));
+                return Err(sim_error(
+                    SimulationErrorCode::EmptyWithdrawal,
+                    "[sim] empty withdrawal".to_string(),
+                ));
             }
 
             let prices = simulator.get_prices_for_market(market_token)?;
@@ -128,7 +131,10 @@ impl WithdrawalSimulation<'_> {
                 )?;
 
                 if swap_output.output_token != long_receive_token {
-                    return Err(crate::Error::custom("[sim] invalid long swap path"));
+                    return Err(sim_error(
+                        SimulationErrorCode::InvalidSwapPath,
+                        "[sim] invalid long swap path".to_string(),
+                    ));
                 }
 
                 (swap_output.reports, swap_output.amount)
@@ -136,9 +142,12 @@ impl WithdrawalSimulation<'_> {
 
             let min_receive_amount = params.min_long_token_amount;
             if long_output_amount < u128::from(min_receive_amount) {
-                return Err(crate::Error::custom(format!(
-                    "[sim] insufficient long output amount: {long_output_amount} < {min_receive_amount}",
-                )));
+                return Err(sim_error(
+                    SimulationErrorCode::InsufficientOutputAmount,
+                    format!(
+                        "[sim] insufficient long output amount: {long_output_amount} < {min_receive_amount}",
+                    ),
+                ));
             }
 
             // Execute swap for short side.
@@ -153,7 +162,10 @@ impl WithdrawalSimulation<'_> {
                 )?;
 
                 if swap_output.output_token != short_receive_token {
-                    return Err(crate::Error::custom("[sim] invalid short swap path"));
+                    return Err(sim_error(
+                        SimulationErrorCode::InvalidSwapPath,
+                        "[sim] invalid short swap path".to_string(),
+                    ));
                 }
 
                 (swap_output.reports, swap_output.amount)
@@ -161,9 +173,12 @@ impl WithdrawalSimulation<'_> {
 
             let min_receive_amount = params.min_short_token_amount;
             if short_output_amount < u128::from(min_receive_amount) {
-                return Err(crate::Error::custom(format!(
-                    "[sim] insufficient short output amount: {short_output_amount} < {min_receive_amount}",
-                )));
+                return Err(sim_error(
+                    SimulationErrorCode::InsufficientOutputAmount,
+                    format!(
+                        "[sim] insufficient short output amount: {short_output_amount} < {min_receive_amount}",
+                    ),
+                ));
             }
 
             Ok(WithdrawalSimulationOutput {
@@ -174,6 +189,5 @@ impl WithdrawalSimulation<'_> {
                 short_output_amount,
             })
         })()
-        .map_err(standardize_simulation_error)
     }
 }

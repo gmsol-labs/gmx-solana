@@ -1,5 +1,6 @@
 use gmsol_model::{
     action::{swap::SwapReport, withdraw::WithdrawReport},
+    num::MulDiv,
     LiquidityMarketMutExt, MarketAction,
 };
 use gmsol_programs::gmsol_store::types::CreateGlvWithdrawalParams;
@@ -8,7 +9,7 @@ use typed_builder::TypedBuilder;
 
 use crate::{constants, glv::calculator::GlvCalculator};
 
-use super::error::standardize_simulation_error;
+use super::error::{sim_error, SimulationErrorCode};
 use super::{SimulationOptions, Simulator};
 
 /// GLV withdrawal simulation output.
@@ -84,7 +85,10 @@ impl GlvWithdrawalSimulation<'_> {
             } = self;
 
             if params.glv_token_amount == 0 {
-                return Err(crate::Error::custom("[sim] empty GLV withdrawal"));
+                return Err(sim_error(
+                    SimulationErrorCode::EmptyWithdrawal,
+                    "[sim] empty GLV withdrawal".to_string(),
+                ));
             }
 
             let (market, prices) = simulator.get_market_with_prices(market_token)?;
@@ -102,19 +106,29 @@ impl GlvWithdrawalSimulation<'_> {
                 &glv_value,
                 &u128::from(glv_supply),
             )
-            .ok_or(crate::Error::custom(
-                "[sim] failed to calculate market token value for GLV withdrawal",
+            .ok_or(sim_error(
+                SimulationErrorCode::Unknown,
+                "[sim] failed to calculate market token value for GLV withdrawal".to_string(),
             ))?;
 
-            let market_token_amount = gmsol_model::glv::get_market_token_amount_for_glv_value(
-                &prices,
-                market,
-                market_token_value,
-                true,
-                constants::MARKET_USD_TO_AMOUNT_DIVISOR,
-            )?
-            .try_into()
-            .map_err(|_| crate::Error::custom("[sim] market token amount to withdraw overflow"))?;
+            let market_token_amount: u64 = market_token_value
+                .checked_mul_div(
+                    &prices.index_token_price.pick_price(true),
+                    &constants::MARKET_USD_TO_AMOUNT_DIVISOR,
+                )
+                .ok_or_else(|| {
+                    sim_error(
+                        SimulationErrorCode::Unknown,
+                        "[sim] failed to calculate market token amount to withdraw".to_string(),
+                    )
+                })?
+                .try_into()
+                .map_err(|_| {
+                    sim_error(
+                        SimulationErrorCode::Unknown,
+                        "[sim] market token amount to withdraw overflow".to_string(),
+                    )
+                })?;
 
             simulator
                 .get_glv_mut(glv_token)
@@ -153,7 +167,10 @@ impl GlvWithdrawalSimulation<'_> {
                 )?;
 
                 if swap_output.output_token != long_receive_token {
-                    return Err(crate::Error::custom("[sim] invalid long swap path"));
+                    return Err(sim_error(
+                        SimulationErrorCode::InvalidSwapPath,
+                        "[sim] invalid long swap path".to_string(),
+                    ));
                 }
 
                 (swap_output.reports, swap_output.amount)
@@ -161,9 +178,12 @@ impl GlvWithdrawalSimulation<'_> {
 
             let min_receive_amount = params.min_final_long_token_amount;
             if long_output_amount < u128::from(min_receive_amount) {
-                return Err(crate::Error::custom(format!(
-                    "[sim] insufficient long output amount: {long_output_amount} < {min_receive_amount}",
-                )));
+                return Err(sim_error(
+                    SimulationErrorCode::InsufficientOutputAmount,
+                    format!(
+                        "[sim] insufficient long output amount: {long_output_amount} < {min_receive_amount}",
+                    ),
+                ));
             }
 
             // Execute swap for short side.
@@ -178,7 +198,10 @@ impl GlvWithdrawalSimulation<'_> {
                 )?;
 
                 if swap_output.output_token != short_receive_token {
-                    return Err(crate::Error::custom("[sim] invalid short swap path"));
+                    return Err(sim_error(
+                        SimulationErrorCode::InvalidSwapPath,
+                        "[sim] invalid short swap path".to_string(),
+                    ));
                 }
 
                 (swap_output.reports, swap_output.amount)
@@ -186,9 +209,12 @@ impl GlvWithdrawalSimulation<'_> {
 
             let min_receive_amount = params.min_final_short_token_amount;
             if short_output_amount < u128::from(min_receive_amount) {
-                return Err(crate::Error::custom(format!(
-                    "[sim] insufficient short output amount: {short_output_amount} < {min_receive_amount}",
-                )));
+                return Err(sim_error(
+                    SimulationErrorCode::InsufficientOutputAmount,
+                    format!(
+                        "[sim] insufficient short output amount: {short_output_amount} < {min_receive_amount}",
+                    ),
+                ));
             }
 
             Ok(GlvWithdrawalSimulationOutput {
@@ -199,6 +225,5 @@ impl GlvWithdrawalSimulation<'_> {
                 short_output_amount,
             })
         })()
-        .map_err(standardize_simulation_error)
     }
 }
