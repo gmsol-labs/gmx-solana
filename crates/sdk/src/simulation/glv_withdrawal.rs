@@ -113,7 +113,7 @@ impl GlvWithdrawalSimulation<'_> {
         let index_price = prices.index_token_price.pick_price(true);
 
         let market_token_amount: u64 = market_token_value
-            .checked_mul_div(&index_price, &constants::MARKET_USD_TO_AMOUNT_DIVISOR)
+            .checked_mul_div(index_price, &constants::MARKET_USD_TO_AMOUNT_DIVISOR)
             .ok_or_else(|| {
                 sim_error(
                     SimulationErrorCode::Unknown,
