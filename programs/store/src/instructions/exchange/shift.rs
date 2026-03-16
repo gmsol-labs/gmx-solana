@@ -51,7 +51,7 @@ pub struct CreateShift<'info> {
     #[account(constraint = from_market.load()?.meta().market_token_mint == from_market_token.key() @ CoreError::MarketTokenMintMismatched)]
     pub from_market_token: Box<Account<'info, Mint>>,
     /// To market token.
-    #[account(constraint = from_market.load()?.meta().market_token_mint == from_market_token.key() @ CoreError::MarketTokenMintMismatched)]
+    #[account(constraint = to_market.load()?.meta().market_token_mint == to_market_token.key() @ CoreError::MarketTokenMintMismatched)]
     pub to_market_token: Box<Account<'info, Mint>>,
     /// The escrow account for the from market tokens.
     #[account(
