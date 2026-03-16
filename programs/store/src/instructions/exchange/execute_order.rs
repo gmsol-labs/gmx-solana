@@ -358,7 +358,7 @@ impl<'info> ExecuteIncreaseOrSwapOrderV2<'info> {
         let executed = transfer_out.executed();
         if executed {
             accounts.order.load_mut()?.header.completed()?;
-            accounts.process_transfer_out(remaining_accounts, &transfer_out, &event_emitter)?;
+            accounts.process_transfer_out(&transfer_out, &event_emitter)?;
         } else {
             accounts.order.load_mut()?.header.cancelled()?;
             accounts.transfer_tokens_out(remaining_accounts, &event_emitter)?;
@@ -527,24 +527,18 @@ impl<'info> ExecuteIncreaseOrSwapOrderV2<'info> {
     #[inline(never)]
     fn process_transfer_out(
         &self,
-        remaining_accounts: &'info [AccountInfo<'info>],
         transfer_out: &TransferOut,
         event_emitter: &EventEmitter<'_, 'info>,
     ) -> Result<()> {
         let is_pnl_token_long_token = self.order.load()?.params.side()?.is_long();
-        let final_output_market = self
-            .order
-            .load()?
-            .swap
-            .find_and_unpack_last_market(&self.store.key(), true, remaining_accounts)?
-            .unwrap_or(self.market.clone());
         ProcessTransferOutOperation::builder()
             .token_program(self.token_program.to_account_info())
             .store(&self.store)
             .market(&self.market)
             .is_pnl_token_long_token(is_pnl_token_long_token)
             .final_output_token(self.final_output_token.as_deref())
-            .final_output_market(&final_output_market)
+            // CHECK: For increase or swap orders, the final output market must match the order's market.
+            .final_output_market(&self.market)
             .final_output_token_account(
                 self.final_output_token_escrow
                     .as_ref()
