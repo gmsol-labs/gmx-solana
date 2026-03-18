@@ -575,13 +575,8 @@ fn make_position_model(
     is_long: bool,
     collateral_token: &Pubkey,
 ) -> crate::Result<PositionModel> {
-    let position_model = make_position_model_from_position(market, position, collateral_token)?
-        .ok_or_else(|| {
-            sim_error(
-                SimulationErrorCode::Unknown,
-                "[sim] position must be provided for decrease order".to_string(),
-            )
-        })?;
+    let position_model =
+        make_position_model_from_position(market, position, is_long, collateral_token)?;
 
     if position_model.is_long() != is_long {
         return Err(sim_error(
@@ -596,8 +591,9 @@ fn make_position_model(
 fn make_position_model_from_position(
     market: &MarketModel,
     position: Option<&Arc<Position>>,
+    is_long: bool,
     collateral_token: &Pubkey,
-) -> crate::Result<Option<PositionModel>> {
+) -> crate::Result<PositionModel> {
     match position {
         Some(position) => {
             if position.collateral_token != *collateral_token {
@@ -606,8 +602,10 @@ fn make_position_model_from_position(
                     "[sim] collateral token mismatched".to_string(),
                 ));
             }
-            Ok(Some(PositionModel::new(market.clone(), position.clone())?))
+            Ok(PositionModel::new(market.clone(), position.clone())?)
         }
-        None => Ok(None),
+        None => Ok(market
+            .clone()
+            .into_empty_position(is_long, *collateral_token)?),
     }
 }
