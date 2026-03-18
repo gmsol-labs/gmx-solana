@@ -173,7 +173,7 @@ impl Value {
     }
 
     /// Convert to `i128`.
-    pub fn to_i128(&self) -> i128 {
+    pub fn to_i128(&self) -> crate::Result<i128> {
         decimal_to_signed_value(self.0, MARKET_DECIMALS)
     }
 
