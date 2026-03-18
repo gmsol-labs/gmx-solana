@@ -99,7 +99,7 @@ address = "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX"
 
 # Wormhole Guardian Set account
 [[test.validator.clone]]
-address = "5gxPdahvSzcKySxXxPuRXZZ9s6h8hZ88XDVKavWpaQGn"
+address = "HTczusLJSAhMJKYrxLjSUUyW7YDsBuyfBG8Tj1KJsgni"
 
 # Pyth Config account
 [[test.validator.clone]]
