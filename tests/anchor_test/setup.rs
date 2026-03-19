@@ -163,6 +163,19 @@ impl Deployment {
     /// Market selector for first deposit test.
     pub const SELECT_FIRST_DEPOSIT_MARKET: [&'static str; 3] = ["fBTC", "USDG", "WSOL"];
 
+    pub const TOKEN_FOR_SWAP_TEST: &'static str = "qBTC";
+
+    /// Market selector for cross-market swap source test.
+    pub const SELECT_SWAP_SOURCE_MARKET: [&'static str; 3] =
+        [Self::TOKEN_FOR_SWAP_TEST, Self::TOKEN_FOR_SWAP_TEST, "USDG"];
+
+    /// Market selector for cross-market swap destination test.
+    pub const SELECT_SWAP_TARGET_MARKET: [&'static str; 3] = [
+        Self::TOKEN_FOR_SWAP_TEST,
+        Self::TOKEN_FOR_SWAP_TEST,
+        Self::TOKEN_FOR_SWAP_TEST,
+    ];
+
     const SOL_PYTH_FEED_ID: [u8; 32] = [
         0xef, 0x0d, 0x8b, 0x6f, 0xda, 0x2c, 0xeb, 0xa4, 0x1d, 0xa1, 0x5d, 0x40, 0x95, 0xd1, 0xda,
         0x39, 0x2a, 0x0d, 0x2f, 0x8e, 0xd0, 0xc6, 0xc7, 0xbc, 0x0f, 0x4c, 0xfa, 0xc8, 0xc2, 0x80,
@@ -291,6 +304,16 @@ impl Deployment {
                 },
             ),
             (
+                Self::TOKEN_FOR_SWAP_TEST,
+                TokenConfig {
+                    provider: PriceProviderKind::Pyth,
+                    decimals: 6,
+                    feed_id: Pubkey::new_from_array(Self::BTC_PYTH_FEED_ID),
+                    precision: 3,
+                    max_deviation_factor: Some(MAX_DEVIATION_FACTOR),
+                },
+            ),
+            (
                 "fETH",
                 TokenConfig {
                     provider: PriceProviderKind::ChainlinkDataStreams,
@@ -340,6 +363,10 @@ impl Deployment {
             // For first deposit test only
             Self::SELECT_FIRST_DEPOSIT_MARKET,
             ["fETH", "fETH", "USDH"],
+            // For cross-market swap source test only
+            Self::SELECT_SWAP_SOURCE_MARKET,
+            // For cross-market swap destination test only
+            Self::SELECT_SWAP_TARGET_MARKET,
         ])
         .await?;
         self.initialize_glv("fBTC", "USDG").await?;
