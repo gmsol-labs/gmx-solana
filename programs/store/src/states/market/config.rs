@@ -99,7 +99,7 @@ impl MarketConfig {
     pub(super) fn init(&mut self) {
         self.swap_impact_exponent = constants::DEFAULT_SWAP_IMPACT_EXPONENT;
         self.swap_impact_positive_factor = constants::DEFAULT_SWAP_IMPACT_POSITIVE_FACTOR;
-        self.swap_impact_positive_factor = constants::DEFAULT_SWAP_IMPACT_NEGATIVE_FACTOR;
+        self.swap_impact_negative_factor = constants::DEFAULT_SWAP_IMPACT_NEGATIVE_FACTOR;
 
         self.swap_fee_receiver_factor = constants::DEFAULT_RECEIVER_FACTOR;
         self.swap_fee_factor_for_positive_impact =
