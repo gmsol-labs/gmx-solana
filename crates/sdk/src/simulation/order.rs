@@ -9,7 +9,7 @@ use gmsol_model::{
     num::MulDiv,
     price::Price,
     utils::apply_factor,
-    MarketAction, Position as _, PositionMutExt,
+    MarketAction, PositionMutExt,
 };
 use gmsol_programs::{
     constants::{MARKET_DECIMALS, MARKET_USD_UNIT},
