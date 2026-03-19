@@ -332,6 +332,10 @@ impl CreateSwapOrderOperation<'_, '_> {
             self.common.params.initial_collateral_delta_amount,
             CoreError::NotEnoughTokenAmount
         );
+        require_gte!(self.common.swap_path.len(), 1, {
+            msg!("cannot create no-op swap order");
+            CoreError::InvalidSwapPathLength
+        });
         require!(
             self.common
                 .market
@@ -1275,6 +1279,10 @@ impl ExecuteOrderOperation<'_, '_> {
                 params.initial_collateral_delta_amount != 0,
                 CoreError::EmptyOrder
             );
+            require_gte!(order.swap().primary_length(), 1, {
+                msg!("cannot execute a no-op swap order");
+                CoreError::InvalidSwapPathLength
+            });
         } else {
             unreachable!()
         }
