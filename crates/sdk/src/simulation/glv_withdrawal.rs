@@ -110,23 +110,20 @@ impl GlvWithdrawalSimulation<'_> {
             "[sim] failed to calculate market token value for GLV withdrawal".to_string(),
         ))?;
 
-        let index_price = prices.index_token_price.pick_price(true);
-
-        let market_token_amount: u64 = market_token_value
-            .checked_mul_div(index_price, &constants::MARKET_USD_TO_AMOUNT_DIVISOR)
-            .ok_or_else(|| {
-                sim_error(
-                    SimulationErrorCode::Unknown,
-                    "[sim] failed to calculate market token amount to withdraw".to_string(),
-                )
-            })?
-            .try_into()
-            .map_err(|_| {
-                sim_error(
-                    SimulationErrorCode::Unknown,
-                    "[sim] market token amount to withdraw overflow".to_string(),
-                )
-            })?;
+        let market_token_amount = gmsol_model::glv::get_market_token_amount_for_glv_value(
+            &prices,
+            market,
+            market_token_value,
+            true,
+            constants::MARKET_USD_TO_AMOUNT_DIVISOR,
+        )?
+        .try_into()
+        .map_err(|_| {
+            sim_error(
+                SimulationErrorCode::Unknown,
+                "[sim] market token amount to withdraw overflow".to_string(),
+            )
+        })?;
 
         simulator
             .get_glv_mut(glv_token)
