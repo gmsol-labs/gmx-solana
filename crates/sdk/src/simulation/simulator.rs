@@ -26,6 +26,7 @@ use crate::{
 
 use super::{
     deposit::{DepositSimulation, DepositSimulationBuilder},
+    error::{sim_error, SimulationErrorCode},
     glv_deposit::{GlvDepositSimulation, GlvDepositSimulationBuilder},
     glv_withdrawal::{GlvWithdrawalSimulation, GlvWithdrawalSimulationBuilder},
     order::OrderSimulationBuilder,
@@ -170,9 +171,10 @@ impl Simulator {
         price: Arc<Price<u128>>,
     ) -> crate::Result<&mut Self> {
         let state = self.tokens.get_mut(token).ok_or_else(|| {
-            crate::Error::custom(format!(
-                "[sim] token `{token}` is not found in the simulator"
-            ))
+            sim_error(
+                SimulationErrorCode::Unknown,
+                format!("[sim] token `{token}` is not found in the simulator"),
+            )
         })?;
         state.price = Some(price);
         Ok(self)
@@ -195,15 +197,17 @@ impl Simulator {
         market_token: &Pubkey,
     ) -> crate::Result<(Prices<u128>, &MarketMeta)> {
         let market = self.markets.get(market_token).ok_or_else(|| {
-            crate::Error::custom(format!(
-                "[sim] market `{market_token}` not found in the simulator"
-            ))
+            sim_error(
+                SimulationErrorCode::MarketNotFound,
+                format!("[sim] market `{market_token}` not found in the simulator"),
+            )
         })?;
         let meta = &market.meta;
         let prices = self.get_prices(meta).ok_or_else(|| {
-            crate::Error::custom(format!(
-                "[sim] prices for market `{market_token}` are not ready in the simulator"
-            ))
+            sim_error(
+                SimulationErrorCode::PricesNotReady,
+                format!("[sim] prices for market `{market_token}` are not ready in the simulator"),
+            )
         })?;
         Ok((prices, meta))
     }
@@ -221,9 +225,10 @@ impl Simulator {
     ) -> crate::Result<(&MarketModel, Prices<u128>)> {
         let prices = self.get_prices_for_market(market_token)?;
         let market = self.get_market(market_token).ok_or_else(|| {
-            crate::Error::custom(format!(
-                "[sim] market `{market_token}` not found in the simulator"
-            ))
+            sim_error(
+                SimulationErrorCode::MarketNotFound,
+                format!("[sim] market `{market_token}` not found in the simulator"),
+            )
         })?;
         Ok((market, prices))
     }
@@ -247,9 +252,10 @@ impl Simulator {
         } = self;
 
         let market = markets.get_mut(market_token).ok_or_else(|| {
-            crate::Error::custom(format!(
-                "[sim] market `{market_token}` not found in the simulator"
-            ))
+            sim_error(
+                SimulationErrorCode::MarketNotFound,
+                format!("[sim] market `{market_token}` not found in the simulator"),
+            )
         })?;
 
         Ok((market, vis))
@@ -315,9 +321,10 @@ impl Simulator {
             let (market, maybe_vi_map) = if options.disable_vis {
                 (
                     self.get_market_mut(market_token).ok_or_else(|| {
-                        crate::Error::custom(format!(
-                            "[sim] market `{market_token}` not found in the simulator"
-                        ))
+                        sim_error(
+                            SimulationErrorCode::MarketNotFound,
+                            format!("[sim] market `{market_token}` not found in the simulator"),
+                        )
                     })?,
                     None,
                 )
@@ -328,9 +335,10 @@ impl Simulator {
 
             let meta = &market.meta;
             if meta.long_token_mint == meta.short_token_mint {
-                return Err(crate::Error::custom(format!(
-                    "[swap] `{market_token}` is not a swappable market"
-                )));
+                return Err(sim_error(
+                    SimulationErrorCode::InvalidSwapPath,
+                    format!("[swap] `{market_token}` is not a swappable market"),
+                ));
             }
             let is_token_in_long = if meta.long_token_mint == current_token {
                 current_token = meta.short_token_mint;
@@ -339,9 +347,10 @@ impl Simulator {
                 current_token = meta.long_token_mint;
                 false
             } else {
-                return Err(crate::Error::custom(format!(
-                    "[swap] invalid swap step. Current step: {market_token}"
-                )));
+                return Err(sim_error(
+                    SimulationErrorCode::InvalidSwapPath,
+                    format!("[swap] invalid swap step. Current step: {market_token}"),
+                ));
             };
             let report = match maybe_vi_map {
                 None => market.with_vis_disabled(|market| {

@@ -6,6 +6,7 @@ use gmsol_programs::gmsol_store::types::CreateDepositParams;
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
+use super::error::{sim_error, SimulationErrorCode};
 use super::{SimulationOptions, Simulator};
 
 /// Deposit simulation output.
@@ -66,7 +67,10 @@ impl DepositSimulation<'_> {
         } = self;
 
         if params.initial_long_token_amount == 0 && params.initial_short_token_amount == 0 {
-            return Err(crate::Error::custom("[sim] empty deposit"));
+            return Err(sim_error(
+                SimulationErrorCode::EmptyDeposit,
+                "[sim] empty deposit".to_string(),
+            ));
         }
 
         let (prices, meta) = simulator.get_prices_and_meta_for_market(market_token)?;
@@ -84,7 +88,10 @@ impl DepositSimulation<'_> {
             options.clone(),
         )?;
         if long_swap_output.output_token != long_token {
-            return Err(crate::Error::custom("[sim] invalid long swap path"));
+            return Err(sim_error(
+                SimulationErrorCode::InvalidSwapPath,
+                "[sim] invalid long swap path".to_string(),
+            ));
         }
 
         let short_swap_output = simulator.swap_along_path_with_options(
@@ -94,7 +101,10 @@ impl DepositSimulation<'_> {
             options.clone(),
         )?;
         if short_swap_output.output_token != short_token {
-            return Err(crate::Error::custom("[sim] invalid short swap path"));
+            return Err(sim_error(
+                SimulationErrorCode::InvalidSwapPath,
+                "[sim] invalid short swap path".to_string(),
+            ));
         }
 
         // Execute deposit.
@@ -119,9 +129,10 @@ impl DepositSimulation<'_> {
         let minted = report.minted();
         let min_market_token_amount = u128::from(params.min_market_token_amount);
         if *minted < min_market_token_amount {
-            return Err(crate::Error::custom(format!(
-                "[sim] insufficient output amount: {minted} < {min_market_token_amount}",
-            )));
+            return Err(sim_error(
+                SimulationErrorCode::InsufficientOutputAmount,
+                format!("[sim] insufficient output amount: {minted} < {min_market_token_amount}"),
+            ));
         }
 
         Ok(DepositSimulationOutput {
