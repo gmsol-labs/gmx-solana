@@ -332,7 +332,7 @@ impl CreateSwapOrderOperation<'_, '_> {
             self.common.params.initial_collateral_delta_amount,
             CoreError::NotEnoughTokenAmount
         );
-        require_gte!(self.common.swap_path.len(), 1, {
+        require_gte!(self.common.params.swap_path_length, 1, {
             msg!("cannot create no-op swap order");
             CoreError::InvalidSwapPathLength
         });
