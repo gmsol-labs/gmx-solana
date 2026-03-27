@@ -517,3 +517,83 @@ fn make_position_model(
             .into_empty_position(is_long, *collateral_token)?),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gmsol_model::BaseMarket;
+    use gmsol_programs::{bytemuck::Zeroable, gmsol_store::accounts::Market};
+
+    fn create_market_with_vi_address() -> Market {
+        let mut market: Market = Zeroable::zeroed();
+        market.virtual_inventory_for_positions = Pubkey::new_unique();
+        market
+    }
+
+    #[test]
+    fn test_from_parts_defaults_to_vis_disabled() {
+        let market = create_market_with_vi_address();
+        let market_model = MarketModel::from_parts(Arc::new(market), 1_000_000_000);
+
+        let result = market_model.virtual_inventory_for_positions_pool();
+        assert!(
+            result.is_ok(),
+            "from_parts should default to disable_vis=true, making VI access safe"
+        );
+        assert!(
+            result.unwrap().is_none(),
+            "VI pool should be None when no VI data is attached"
+        );
+    }
+
+    #[test]
+    fn test_with_vi_models_if_some_safe_when_vi_map_is_none() {
+        let market = create_market_with_vi_address();
+        let market_model = MarketModel::from_parts(Arc::new(market), 1_000_000_000);
+
+        let long_token = market_model.meta.long_token_mint;
+        let is_long = true;
+
+        let result = with_vi_models_if_some(
+            &market_model,
+            None,
+            None,
+            is_long,
+            &long_token,
+            |_position_model| Ok(()),
+        );
+
+        assert!(
+            result.is_ok(),
+            "with_vi_models_if_some should succeed when vi_map is None"
+        );
+
+        let (_output, position) = result.unwrap();
+        let vi_pool_result = position
+            .market_model()
+            .virtual_inventory_for_positions_pool();
+        assert!(
+            vi_pool_result.is_ok(),
+            "Returned position's market should be safe to access VI pool"
+        );
+    }
+
+    #[test]
+    fn test_with_vi_models_enables_validation_inside_closure() {
+        let market = create_market_with_vi_address();
+        let mut market_model = MarketModel::from_parts(Arc::new(market), 1_000_000_000);
+
+        let mut vi_map = BTreeMap::new();
+        let validation_failed = market_model.with_vi_models(&mut vi_map, |m| {
+            m.virtual_inventory_for_positions_pool()
+                .map(|_| ())
+                .is_err()
+        });
+
+        assert!(
+            validation_failed,
+            "with_vi_models should enable VI validation; \
+             missing VI data for a configured address should error inside the closure"
+        );
+    }
+}
