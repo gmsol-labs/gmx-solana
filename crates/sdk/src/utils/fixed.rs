@@ -163,16 +163,34 @@ pub fn signed_fixed_to_decimal(num: i128, decimals: u8) -> Option<Decimal> {
     }
 }
 
-/// Rescale and return the mantissa, returning an error if the scale was truncated by `Decimal::rescale`.
-fn rescale_to_mantissa(mut amount: rust_decimal::Decimal, decimals: u8) -> crate::Result<i128> {
-    let target_scale = decimals as u32;
-    amount.rescale(target_scale);
-    if amount.scale() != target_scale {
-        return Err(crate::Error::custom(
-            "decimal value too large to rescale without truncation",
-        ));
+/// Rescale and return the mantissa, compensating for any truncation
+/// that `Decimal::rescale` may silently introduce.
+///
+/// When `rescale` cannot reach the target scale (because the mantissa is too
+/// large for `Decimal`'s internal 96-bit representation), the actual scale
+/// will be smaller than requested. In that case we multiply the mantissa by
+/// `10^(target_scale - actual_scale)` to produce the correct fixed-point value.
+fn rescale_to_mantissa(mut value: rust_decimal::Decimal, decimals: u8) -> crate::Result<i128> {
+    use std::cmp::Ordering;
+    let decimals = u32::from(decimals);
+    value.rescale(decimals);
+    let scale = value.scale();
+    let mantissa = value.mantissa();
+    match scale.cmp(&decimals) {
+        Ordering::Less if mantissa == 0 => Ok(0),
+        Ordering::Less => 10i128
+            .checked_pow(decimals - scale)
+            .and_then(|m| mantissa.checked_mul(m))
+            .ok_or_else(|| {
+                crate::Error::custom(format!(
+                    "`value` is too big: value={value}, decimals={decimals}"
+                ))
+            }),
+        Ordering::Equal => Ok(mantissa),
+        Ordering::Greater => Err(crate::Error::custom(format!(
+            "invalid scale: value={value}, decimals={decimals}"
+        ))),
     }
-    Ok(amount.mantissa())
 }
 
 /// Convert a [`Decimal`] to `u64` amount.
@@ -188,10 +206,31 @@ pub fn decimal_to_signed_value(amount: rust_decimal::Decimal, decimals: u8) -> c
 }
 
 /// Convert a [`Decimal`] to `u128` value.
+///
+/// Uses `u128` arithmetic for the compensation to cover the full unsigned range,
+/// avoiding the `i128` intermediate overflow for values in `(i128::MAX, u128::MAX]`.
 pub fn decimal_to_value(amount: rust_decimal::Decimal, decimals: u8) -> crate::Result<u128> {
-    rescale_to_mantissa(amount, decimals)?
-        .try_into()
-        .map_err(crate::Error::custom)
+    use std::cmp::Ordering;
+    let decimals = u32::from(decimals);
+    let mut value = amount;
+    value.rescale(decimals);
+    let scale = value.scale();
+    let mantissa: u128 = value.mantissa().try_into().map_err(crate::Error::custom)?;
+    match scale.cmp(&decimals) {
+        Ordering::Less if mantissa == 0 => Ok(0),
+        Ordering::Less => 10u128
+            .checked_pow(decimals - scale)
+            .and_then(|m| mantissa.checked_mul(m))
+            .ok_or_else(|| {
+                crate::Error::custom(format!(
+                    "`value` is too big: value={amount}, decimals={decimals}"
+                ))
+            }),
+        Ordering::Equal => Ok(mantissa),
+        Ordering::Greater => Err(crate::Error::custom(format!(
+            "invalid scale: value={amount}, decimals={decimals}"
+        ))),
+    }
 }
 
 #[cfg(test)]
@@ -306,10 +345,35 @@ mod tests {
     }
 
     #[test]
-    fn test_rescale_truncation_is_rejected() {
-        assert!(decimal_to_signed_value(dec!(1234567891), 20).is_err());
+    fn test_rescale_truncation_is_compensated() {
+        // dec!(1234567891).rescale(20) => scale=19 (truncated by 1)
+        // Compensated: mantissa * 10^1 = 1234567891 * 10^20
+        let expected = 123_456_789_100_000_000_000_000_000_000i128;
+        assert_eq!(
+            decimal_to_signed_value(dec!(1234567891), 20).unwrap(),
+            expected,
+        );
+        assert_eq!(
+            decimal_to_value(dec!(1234567891), 20).unwrap(),
+            expected as u128,
+        );
+        // The compensated value exceeds u64::MAX, so decimal_to_amount fails.
         assert!(decimal_to_amount(dec!(1234567891), 20).is_err());
-        assert!(decimal_to_value(dec!(1234567891), 20).is_err());
+    }
+
+    #[test]
+    fn test_rescale_compensation_overflow() {
+        // dec!(1234567891) with decimals=30 triggers truncation compensation
+        // that overflows i128 (1234567891 * 10^30 > i128::MAX).
+        assert!(decimal_to_signed_value(dec!(1234567891), 30).is_err());
+    }
+
+    #[test]
+    fn test_rescale_large_decimals_returns_error() {
+        // decimals=255 (u8::MAX) must return Err, not panic from pow overflow.
+        assert!(decimal_to_signed_value(dec!(1), u8::MAX).is_err());
+        assert!(decimal_to_amount(dec!(1), u8::MAX).is_err());
+        assert!(decimal_to_value(dec!(1), u8::MAX).is_err());
     }
 
     #[test]
@@ -322,5 +386,12 @@ mod tests {
     #[test]
     fn test_decimal_to_value_rejects_negative() {
         assert!(decimal_to_value(dec!(-1.5), 6).is_err());
+    }
+
+    #[test]
+    fn test_zero_with_large_decimals() {
+        assert_eq!(decimal_to_signed_value(Decimal::ZERO, u8::MAX).unwrap(), 0);
+        assert_eq!(decimal_to_amount(Decimal::ZERO, u8::MAX).unwrap(), 0u64);
+        assert_eq!(decimal_to_value(Decimal::ZERO, u8::MAX).unwrap(), 0u128);
     }
 }
