@@ -237,6 +237,10 @@ fn validate_path<'info>(
 
         let market = market.load()?;
         let meta = market.validated_meta(store)?;
+        require_neq!(meta.long_token_mint, meta.short_token_mint, {
+            msg!("cannot include a no-op swap step");
+            CoreError::InvalidSwapPath
+        });
         if current == meta.long_token_mint {
             current = meta.short_token_mint;
         } else if current == meta.short_token_mint {

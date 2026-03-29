@@ -218,6 +218,14 @@ impl<'a, 'info> SwapMarkets<'a, 'info> {
                 .market_meta()
                 .to_token_side(token_in)
                 .map_err(CoreError::from)?;
+            let token_out = *market
+                .market_meta()
+                .opposite_token(token_in)
+                .map_err(CoreError::from)?;
+            require_neq!(*token_in, token_out, {
+                msg!("cannot include a no-op swap step");
+                CoreError::InvalidArgument
+            });
             let prices = oracle.market_prices(market)?;
             // Update borrowing state.
             {
@@ -239,10 +247,7 @@ impl<'a, 'info> SwapMarkets<'a, 'info> {
                 .map_err(ModelError::from)?
                 .execute()
                 .map_err(ModelError::from)?;
-            *token_in = *market
-                .market_meta()
-                .opposite_token(token_in)
-                .map_err(CoreError::from)?;
+            *token_in = token_out;
             *token_in_amount = (*report.token_out_amount())
                 .try_into()
                 .map_err(|_| error!(CoreError::TokenAmountOverflow))?;
@@ -477,6 +482,14 @@ where
             .market_meta()
             .to_token_side(token_in)
             .map_err(CoreError::from)?;
+        let token_out = *current
+            .market_meta()
+            .opposite_token(token_in)
+            .map_err(CoreError::from)?;
+        require_neq!(*token_in, token_out, {
+            msg!("cannot include a no-op swap step");
+            CoreError::InvalidArgument
+        });
         let prices = oracle.market_prices(*current)?;
         let report = current
             .swap(side, (*token_in_amount).into(), prices)
@@ -486,10 +499,7 @@ where
         *token_in_amount = (*report.token_out_amount())
             .try_into()
             .map_err(|_| error!(CoreError::TokenAmountOverflow))?;
-        *token_in = *current
-            .market_meta()
-            .opposite_token(token_in)
-            .map_err(CoreError::from)?;
+        *token_in = token_out;
         msg!("[Swap] swapped in current market");
         event_emitter.emit_cpi(&SwapExecuted::new(self.rev(), self.current(), report, None))?;
         Ok(())
