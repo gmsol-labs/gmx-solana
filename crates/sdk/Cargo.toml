@@ -89,13 +89,10 @@ openssl-vendored = [
     "gmsol-solana-utils/openssl-vendored",
 ]
 http-rpc-sender = ["gmsol-solana-utils/http-rpc-sender"]
-chaoslabs-risk-oracle = [
-    "client",
-    "reqwest",
-    "serde",
-    "uuid",
-    "libsecp256k1",
-]
+chaoslabs-risk-oracle = ["client", "reqwest", "serde", "uuid", "libsecp256k1"]
+
+# nightly features
+nightly = []
 
 [dependencies]
 gmsol-utils = { workspace = true, features = ["enum-iter", "debug", "display"] }

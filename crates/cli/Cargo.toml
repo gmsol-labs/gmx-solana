@@ -27,7 +27,11 @@ execute = ["chainlink", "pyth", "switchboard"]
 chaoslabs-risk-oracle = ["gmsol-sdk/chaoslabs-risk-oracle"]
 
 # nightly features
-nightly = ["nightly-cli-update-fees-state", "nightly-cli-market-graph"]
+nightly = [
+    "gmsol-sdk/nightly",
+    "nightly-cli-update-fees-state",
+    "nightly-cli-market-graph",
+]
 nightly-cli-update-fees-state = []
 nightly-cli-market-graph = ["gql_client"]
 
