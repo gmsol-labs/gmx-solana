@@ -92,7 +92,8 @@ http-rpc-sender = ["gmsol-solana-utils/http-rpc-sender"]
 chaoslabs-risk-oracle = ["client", "reqwest", "serde", "uuid", "libsecp256k1"]
 
 # nightly features
-nightly = []
+nightly = ["nightly-chainlink-page-api"]
+nightly-chainlink-page-api = []
 
 [dependencies]
 gmsol-utils = { workspace = true, features = ["enum-iter", "debug", "display"] }

@@ -30,6 +30,8 @@ enum Path {
     ReportsBulk,
     Feeds,
     Websocket,
+    #[cfg(feature = "nightly-chainlink-page-api")]
+    ReportsPage,
 }
 
 impl Path {
@@ -39,6 +41,8 @@ impl Path {
             Self::ReportsBulk => "/api/v1/reports/bulk",
             Self::Feeds => "/api/v1/feeds",
             Self::Websocket => "/api/v1/ws",
+            #[cfg(feature = "nightly-chainlink-page-api")]
+            Self::ReportsPage => "/api/v1/reports/page",
         }
     }
 }
@@ -244,6 +248,42 @@ impl Client {
         Ok(reports)
     }
 
+    /// Return multiple sequential reports for a single stream ID, starting at a given timestamp.
+    ///
+    /// # Arguments
+    ///
+    /// * `stream_id` - The ID of the stream to get reports from.
+    /// * `start_timestamp` - The unix timestamp (in seconds) for the first report.
+    /// * `limit` - The maximum number of reports to return.
+    #[cfg(feature = "nightly-chainlink-page-api")]
+    pub async fn page_reports(
+        &self,
+        stream_id: &str,
+        start_timestamp: i64,
+        limit: Option<u32>,
+    ) -> crate::Result<ApiReports> {
+        let start_timestamp_str = start_timestamp.to_string();
+        let limit_str = limit.map(|l| l.to_string());
+        let query = match limit_str.as_deref() {
+            Some(limit) => vec![
+                ("feedID", stream_id),
+                ("startTimestamp", &start_timestamp_str),
+                ("limit", limit),
+            ],
+            None => vec![
+                ("feedID", stream_id),
+                ("startTimestamp", &start_timestamp_str),
+            ],
+        };
+        let reports = self
+            .get(Path::ReportsPage, &query, true)?
+            .send()
+            .await?
+            .json()
+            .await?;
+        Ok(reports)
+    }
+
     /// Subscribe to report updates using websocket.
     pub async fn subscribe(
         &self,
@@ -411,5 +451,22 @@ mod tests {
             signature,
             "37190febe20b6f3662f6abbfa3a7085ad705ac64e88bde8c1a01a635859e6cf7"
         );
+    }
+
+    #[cfg(feature = "nightly-chainlink-page-api")]
+    #[tokio::test]
+    async fn test_page_reports() -> eyre::Result<()> {
+        const FEED_ID: &str = "0x0003d338ea2ac3be9e026033b1aa601673c37bab5e13851c59966f9f820754d6";
+
+        let Ok(client) = Client::from_testnet_defaults() else {
+            // Ignore if the envs are not set.
+            return Ok(());
+        };
+        let start_timestamp =
+            (time::OffsetDateTime::now_utc() - time::Duration::weeks(1)).unix_timestamp();
+        let reports = client.page_reports(FEED_ID, start_timestamp, None).await?;
+        assert!(!reports.is_empty());
+        assert_eq!(reports[0].observations_timestamp, start_timestamp);
+        Ok(())
     }
 }
