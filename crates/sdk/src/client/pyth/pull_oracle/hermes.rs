@@ -25,6 +25,10 @@ pub const PRICE_STREAM: &str = "/v2/updates/price/stream";
 /// The endpoint of latest price update.
 pub const PRICE_LATEST: &str = "/v2/updates/price/latest";
 
+/// The endpoint of price update at a specific publish time.
+#[cfg(feature = "nightly-pyth-historical-api")]
+pub const PRICE_HISTORICAL: &str = "/v2/updates/price/";
+
 /// Hermes Client.
 #[derive(Debug, Clone)]
 pub struct Hermes {
@@ -78,6 +82,29 @@ impl Hermes {
         let update = self
             .client
             .get(self.base.join(PRICE_LATEST).map_err(crate::Error::custom)?)
+            .query(&params)
+            .send()
+            .await?
+            .json()
+            .await?;
+        Ok(update)
+    }
+
+    /// Get price updates at a specific publish time.
+    ///
+    /// Returns the first update whose `publish_time` is >= the provided value.
+    #[cfg(feature = "nightly-pyth-historical-api")]
+    pub async fn historical_price_updates(
+        &self,
+        feed_ids: impl IntoIterator<Item = &Identifier>,
+        publish_time: i64,
+        encoding: Option<EncodingType>,
+    ) -> crate::Result<PriceUpdate> {
+        let params = get_query(feed_ids, encoding);
+        let path = format!("{PRICE_HISTORICAL}{publish_time}");
+        let update = self
+            .client
+            .get(self.base.join(&path).map_err(crate::Error::custom)?)
             .query(&params)
             .send()
             .await?
@@ -318,4 +345,32 @@ fn get_query<'a>(
         .map(|id| ("ids[]", id.to_hex()))
         .chain(encoding.map(|encoding| ("encoding", encoding.to_string())))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "nightly-pyth-historical-api")]
+    #[tokio::test]
+    async fn test_historical_price_updates() -> eyre::Result<()> {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        // ETH/USD feed
+        let feed_id = Identifier::from_hex(
+            "ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
+        )
+        .unwrap();
+
+        let hermes = Hermes::default();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
+        let publish_time = now - 300;
+        let update = hermes
+            .historical_price_updates(&[feed_id], publish_time, None)
+            .await?;
+        assert!(!update.parsed().is_empty());
+        let first = &update.parsed()[0];
+        assert!(first.price().publish_time() >= publish_time);
+        Ok(())
+    }
 }
