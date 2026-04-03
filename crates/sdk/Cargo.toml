@@ -19,6 +19,13 @@ timelock = ["gmsol-programs/timelock", "gmsol-utils/instruction"]
 competition = ["gmsol-programs/competition"]
 liquidity-provider = ["gmsol-programs/liquidity-provider"]
 devnet = ["gmsol-utils/devnet", "switchboard-on-demand-client?/devnet"]
+
+# nightly features
+nightly-simulation-errors = ["simulation"]
+nightly = [
+    "nightly-simulation-errors",
+]
+
 js = [
     "simulation",
     "market-graph",

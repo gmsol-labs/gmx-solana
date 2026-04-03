@@ -10,5 +10,6 @@ fn main() {
         competition: { feature = "competition" },
         liquidity_provider: { feature = "liquidity-provider" },
         simulation: { feature = "simulation" },
+        nightly_simulation_errors: { feature = "nightly-simulation-errors" },
     }
 }
