@@ -1,5 +1,6 @@
 use anchor_spl::token::TokenAccount;
 use gmsol_sdk::client::ops::ExchangeOps;
+use gmsol_store::CoreError;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
 
@@ -256,6 +257,37 @@ async fn cross_market_swap_order_mints_withdrawable_phantom_inventory() -> eyre:
         order_payout,
         vault_delta_after_execute,
         "observed cross-market swap accounting deltas"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn create_swap_with_empty_path_should_fail() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let client = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let store = &deployment.store;
+    let fbtc = deployment.token("fBTC").expect("must exist");
+    let market_token = deployment.market_token("fBTC","fBTC","USDG").expect("must exist");
+
+    deployment
+    .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, 100_000)
+    .await?;
+
+
+    let (rpc, _order) = client
+        .market_swap(store, market_token, false, &fbtc.address, 100_000, [])
+        .build_with_address()
+        .await?;
+
+    let err = rpc
+        .send()
+        .await
+        .expect_err("empty swap_path, can't create order");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::InvalidSwapPathLength.into())
     );
 
     Ok(())
