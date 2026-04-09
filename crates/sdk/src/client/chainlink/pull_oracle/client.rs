@@ -349,6 +349,12 @@ impl ApiReport {
     }
 }
 
+impl From<ApiReportData> for ApiReport {
+    fn from(report: ApiReportData) -> Self {
+        Self { report }
+    }
+}
+
 impl Deref for ApiReport {
     type Target = ApiReportData;
 
