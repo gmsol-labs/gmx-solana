@@ -1143,9 +1143,9 @@ dependencies = [
 
 [[package]]
 name = "chainlink-data-streams-report"
-version = "1.0.3"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35e670ff5a12a6b7f00ce20d69f7743c394417798824c48cd3dc185600287f00"
+checksum = "fa8863173d96be52f974296b565f50515b4d8104e9311b2d3eeb9154387c6d8f"
 dependencies = [
  "hex",
  "num-bigint 0.4.6",
