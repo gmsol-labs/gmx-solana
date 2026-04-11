@@ -325,6 +325,18 @@ fn decode_market_status(market_status: u32) -> Result<MarketStatus, DecodeError>
     }
 }
 
+fn decode_extended_market_status(market_status: u32) -> Result<ExtendedMarketStatus, DecodeError> {
+    match market_status {
+        0 => Ok(ExtendedMarketStatus::Unknown),
+        1 => Ok(ExtendedMarketStatus::PreMarket),
+        2 => Ok(ExtendedMarketStatus::RegularHours),
+        3 => Ok(ExtendedMarketStatus::PostMarket),
+        4 => Ok(ExtendedMarketStatus::Overnight),
+        5 => Ok(ExtendedMarketStatus::Closed),
+        _ => Err(DecodeError::InvalidData),
+    }
+}
+
 /// Decode full report.
 pub fn decode_full_report(payload: &[u8]) -> Result<([[u8; 32]; 3], &[u8]), ReportError> {
     if payload.len() < 128 {
@@ -398,6 +410,35 @@ mod tests {
             MarketStatus::from(ExtendedMarketStatus::Overnight),
             MarketStatus::Closed
         );
+    }
+
+    #[test]
+    fn test_decode_extended_market_status() {
+        assert_eq!(
+            decode_extended_market_status(0).unwrap(),
+            ExtendedMarketStatus::Unknown
+        );
+        assert_eq!(
+            decode_extended_market_status(1).unwrap(),
+            ExtendedMarketStatus::PreMarket
+        );
+        assert_eq!(
+            decode_extended_market_status(2).unwrap(),
+            ExtendedMarketStatus::RegularHours
+        );
+        assert_eq!(
+            decode_extended_market_status(3).unwrap(),
+            ExtendedMarketStatus::PostMarket
+        );
+        assert_eq!(
+            decode_extended_market_status(4).unwrap(),
+            ExtendedMarketStatus::Overnight
+        );
+        assert_eq!(
+            decode_extended_market_status(5).unwrap(),
+            ExtendedMarketStatus::Closed
+        );
+        assert!(decode_extended_market_status(6).is_err());
     }
 
     #[test]
