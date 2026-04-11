@@ -621,10 +621,7 @@ mod tests {
         assert_eq!(report.valid_from_timestamp, 1775903228);
         assert_eq!(report.observations_timestamp, 1775903228);
         assert_eq!(report.expires_at, 1778495228);
-        assert_eq!(
-            report.last_update_timestamp(),
-            Some(1775903227584000000)
-        );
+        assert_eq!(report.last_update_timestamp(), Some(1775903227584000000));
 
         // XAU ~4749.305 USD/oz (18 decimals)
         let mid = U192::from_limbs([0x75d8d69a8a928000, 0x0000000000000101, 0]);
