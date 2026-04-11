@@ -486,6 +486,163 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_v11() {
+        use chainlink_data_streams_report::report::v11::ReportDataV11;
+        use num_bigint::BigInt;
+
+        // Build a v11 feed_id (first two bytes 0x000b = 11)
+        let mut feed_id_bytes = [0u8; 32];
+        feed_id_bytes[0] = 0x00;
+        feed_id_bytes[1] = 0x0b;
+        let feed_id = ID(feed_id_bytes);
+
+        let multiplier: BigInt = "1000000000000000000".parse().unwrap();
+
+        let report_data = ReportDataV11 {
+            feed_id,
+            valid_from_timestamp: 1000,
+            observations_timestamp: 1000,
+            native_fee: BigInt::from(100),
+            link_fee: BigInt::from(200),
+            expires_at: 1100,
+            mid: BigInt::from(50000) * &multiplier,
+            last_seen_timestamp_ns: 1_000_000_000_000,
+            bid: BigInt::from(49900) * &multiplier,
+            bid_volume: BigInt::from(1000) * &multiplier,
+            ask: BigInt::from(50100) * &multiplier,
+            ask_volume: BigInt::from(2000) * &multiplier,
+            last_traded_price: BigInt::from(50050) * &multiplier,
+            market_status: 2, // RegularHours
+        };
+
+        let encoded = report_data.abi_encode().unwrap();
+        let report = decode(&encoded).unwrap();
+
+        assert_eq!(report.valid_from_timestamp, 1000);
+        assert_eq!(report.observations_timestamp, 1000);
+        assert_eq!(report.expires_at, 1100);
+        assert_eq!(report.last_update_timestamp(), Some(1_000_000_000_000));
+        assert_eq!(report.market_status(), MarketStatus::Open);
+        assert_eq!(
+            report.extended_market_status(),
+            Some(ExtendedMarketStatus::RegularHours)
+        );
+        assert!(report.non_negative_price().is_some());
+        assert!(report.non_negative_bid().is_some());
+        assert!(report.non_negative_ask().is_some());
+    }
+
+    #[test]
+    fn test_decode_v11_pre_market() {
+        use chainlink_data_streams_report::report::v11::ReportDataV11;
+        use num_bigint::BigInt;
+
+        let mut feed_id_bytes = [0u8; 32];
+        feed_id_bytes[0] = 0x00;
+        feed_id_bytes[1] = 0x0b;
+        let feed_id = ID(feed_id_bytes);
+
+        let multiplier: BigInt = "1000000000000000000".parse().unwrap();
+
+        let report_data = ReportDataV11 {
+            feed_id,
+            valid_from_timestamp: 1000,
+            observations_timestamp: 1000,
+            native_fee: BigInt::from(100),
+            link_fee: BigInt::from(200),
+            expires_at: 1100,
+            mid: BigInt::from(50000) * &multiplier,
+            last_seen_timestamp_ns: 1_000_000_000_000,
+            bid: BigInt::from(49900) * &multiplier,
+            bid_volume: BigInt::from(1000) * &multiplier,
+            ask: BigInt::from(50100) * &multiplier,
+            ask_volume: BigInt::from(2000) * &multiplier,
+            last_traded_price: BigInt::from(50050) * &multiplier,
+            market_status: 1, // PreMarket
+        };
+
+        let encoded = report_data.abi_encode().unwrap();
+        let report = decode(&encoded).unwrap();
+
+        // PreMarket should map to Closed
+        assert_eq!(report.market_status(), MarketStatus::Closed);
+        assert_eq!(
+            report.extended_market_status(),
+            Some(ExtendedMarketStatus::PreMarket)
+        );
+    }
+
+    #[test]
+    fn test_decode_v11_xau_full_report() {
+        let data = hex::decode(
+            "00094baebfda9b87680d8e59aa20a3e565126640ee7caeab3cd965e5568b17ee\
+             00000000000000000000000000000000000000000000000000000000028b3ce1\
+             0000000000000000000000000000000000000000000000000000000400000001\
+             00000000000000000000000000000000000000000000000000000000000000e0\
+             00000000000000000000000000000000000000000000000000000000000002c0\
+             00000000000000000000000000000000000000000000000000000000000003a0\
+             0000000001010000000000000000000000000000000000000000000000000000\
+             00000000000000000000000000000000000000000000000000000000000001c0\
+             000b3e56e8bc2103b83a76d318d029870ddf1498e34799d8a8d8f0f8531043ee\
+             0000000000000000000000000000000000000000000000000000000069da21fc\
+             0000000000000000000000000000000000000000000000000000000069da21fc\
+             000000000000000000000000000000000000000000000000000081c4db3df35e\
+             000000000000000000000000000000000000000000000000007e12e62b190a11\
+             000000000000000000000000000000000000000000000000000000006a01aefc\
+             00000000000000000000000000000000000000000000010175d8d69a8a928000\
+             00000000000000000000000000000000000000000000000018a546938b9d3000\
+             00000000000000000000000000000000000000000000010175c7132152b20000\
+             0000000000000000000000000000000000000000000000000000000000000000\
+             00000000000000000000000000000000000000000000010175ea9a13c2730000\
+             0000000000000000000000000000000000000000000000000000000000000000\
+             0000000000000000000000000000000000000000000000000000000000000000\
+             0000000000000000000000000000000000000000000000000000000000000005\
+             0000000000000000000000000000000000000000000000000000000000000006\
+             6c3a39eee12d41f87aeccace61ff0453ae6111ff7140b5c75d2d1d4254548fc7\
+             8900dd42a6d372b7a513e5ff06fe9dd991d3cba2c17b2939ca15f0d357de22d0\
+             958e9c66ab7ec8cc2ef40d576d88fca7ebf5e3fa93eabfeead7c6fbdc79c0ccd\
+             4ce1314d213381ffd674ef45ce236d93856792b3083edab3824200b61c3ff296\
+             1157194419bd3d335e05aeba5cf215c149e99b35e3b94c56f0823857c6be8876\
+             9e6ae9bfd866fdffd00cec07df9bae6898127a05b4814d99d1ec19e6ed3ece1e\
+             0000000000000000000000000000000000000000000000000000000000000006\
+             6447235cd963678f24357b66cabc60c754ac85d8842de68dd944dd5edf10411b\
+             3e525596ffca4cd293e70417f368975a86c6b19eb3beeeaae448331031d53ea8\
+             06f25696623f998c7d76c2f63b2cb381dc942e958aec27490860ace7621db0a6\
+             4be64a0c0a5dc0fe2b4dcc1f6c7b06e868f2a3a293a92eab2aafcab600620d0e\
+             6e3101ecc5a78c3737143af85a8e88e2f981dfa19f12e21cc9571ec5b25cce0b\
+             52bffa484bc92862dc203c129efbe9187b627c4148a768e5dbc705116740fd11",
+        )
+        .unwrap();
+        let (_, data) = decode_full_report(&data).unwrap();
+        let report = decode(data).unwrap();
+
+        // XAU v11 feed
+        assert_eq!(report.feed_id.0[0..2], [0x00, 0x0b]); // version 11
+        assert_eq!(report.valid_from_timestamp, 1775903228);
+        assert_eq!(report.observations_timestamp, 1775903228);
+        assert_eq!(report.expires_at, 1778495228);
+        assert_eq!(
+            report.last_update_timestamp(),
+            Some(1775903227584000000)
+        );
+
+        // XAU ~4749.305 USD/oz (18 decimals)
+        let mid = U192::from_limbs([0x75d8d69a8a928000, 0x0000000000000101, 0]);
+        let bid = U192::from_limbs([0x75c7132152b20000, 0x0000000000000101, 0]);
+        let ask = U192::from_limbs([0x75ea9a13c2730000, 0x0000000000000101, 0]);
+        assert!(report.non_negative_price() == Some(mid));
+        assert!(report.non_negative_bid() == Some(bid));
+        assert!(report.non_negative_ask() == Some(ask));
+
+        // market_status=5 -> Closed
+        assert_eq!(report.market_status(), MarketStatus::Closed);
+        assert_eq!(
+            report.extended_market_status(),
+            Some(ExtendedMarketStatus::Closed)
+        );
+    }
+
+    #[test]
     fn test_decode() {
         let data = hex::decode(
             "\
