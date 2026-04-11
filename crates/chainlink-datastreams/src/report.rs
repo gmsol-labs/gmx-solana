@@ -6,8 +6,8 @@ use ruint::aliases::U192;
 use chainlink_data_streams_report::{
     feed_id::ID,
     report::{
-        base::ReportError, v2::ReportDataV2, v3::ReportDataV3, v4::ReportDataV4, v7::ReportDataV7,
-        v8::ReportDataV8,
+        base::ReportError, v11::ReportDataV11, v2::ReportDataV2, v3::ReportDataV3,
+        v4::ReportDataV4, v7::ReportDataV7, v8::ReportDataV8,
     },
 };
 
@@ -34,6 +34,7 @@ pub struct Report {
     /// Simulated price impact of a sell order up to the X% depth of liquidity utilisation (8 or 18 decimals).
     ask: Signed,
     market_status: MarketStatus,
+    extended_market_status: Option<ExtendedMarketStatus>,
 }
 
 /// Market status.
@@ -100,8 +101,23 @@ impl Report {
     }
 
     /// Returns the market status.
+    ///
+    /// For v11 reports, this is derived from [`ExtendedMarketStatus`]:
+    /// only [`ExtendedMarketStatus::RegularHours`] maps to [`MarketStatus::Open`];
+    /// all other states map to [`MarketStatus::Closed`].
+    /// This is a compatibility trade-off — downstream consumers that need
+    /// finer-grained control should use [`Self::extended_market_status()`] instead.
     pub fn market_status(&self) -> MarketStatus {
         self.market_status
+    }
+
+    /// Returns extended market status (v11 only).
+    ///
+    /// Downstream consumers can use this for finer-grained trading decisions
+    /// instead of relying on [`Self::market_status()`], which is a compatibility
+    /// trade-off that collapses all non-regular-hours states to [`MarketStatus::Closed`].
+    pub fn extended_market_status(&self) -> Option<ExtendedMarketStatus> {
+        self.extended_market_status
     }
 
     /// Returns timestamp of the last valid price update, in **nanoseconds**.
@@ -131,6 +147,7 @@ impl fmt::Debug for Report {
             .field("bid", self.bid.1.as_limbs())
             .field("ask", self.ask.1.as_limbs())
             .field("market_status", &self.market_status)
+            .field("extended_market_status", &self.extended_market_status)
             .finish()
     }
 }
@@ -190,6 +207,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 bid: price,
                 ask: price,
                 market_status: MarketStatus::Open,
+                extended_market_status: None,
             })
         }
         3 => {
@@ -206,6 +224,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 bid: bigint_to_signed(report.bid)?,
                 ask: bigint_to_signed(report.ask)?,
                 market_status: MarketStatus::Open,
+                extended_market_status: None,
             })
         }
         4 => {
@@ -225,6 +244,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 bid: price,
                 ask: price,
                 market_status: decode_market_status(report.market_status)?,
+                extended_market_status: None,
             })
         }
         7 => {
@@ -243,6 +263,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 bid: price,
                 ask: price,
                 market_status: MarketStatus::Open,
+                extended_market_status: None,
             })
         }
         8 => {
@@ -260,6 +281,29 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 bid: price,
                 ask: price,
                 market_status: decode_market_status(report.market_status)?,
+                extended_market_status: None,
+            })
+        }
+        11 => {
+            let report = ReportDataV11::decode(data)?;
+            let extended = decode_extended_market_status(report.market_status)?;
+            let market_status = MarketStatus::from(extended);
+            let price = bigint_to_signed(report.mid)?;
+            let bid = bigint_to_signed(report.bid)?;
+            let ask = bigint_to_signed(report.ask)?;
+            Ok(Report {
+                feed_id: report.feed_id,
+                valid_from_timestamp: report.valid_from_timestamp,
+                observations_timestamp: report.observations_timestamp,
+                last_update_timestamp: Some(report.last_seen_timestamp_ns),
+                native_fee: bigint_to_u192(report.native_fee)?,
+                link_fee: bigint_to_u192(report.link_fee)?,
+                expires_at: report.expires_at,
+                price,
+                bid,
+                ask,
+                market_status,
+                extended_market_status: Some(extended),
             })
         }
         version => Err(DecodeError::UnsupportedVersion(version)),
