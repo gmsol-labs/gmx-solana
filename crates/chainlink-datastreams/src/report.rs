@@ -47,6 +47,37 @@ pub enum MarketStatus {
     Open,
 }
 
+/// Extended market status (v11 only).
+///
+/// Downstream consumers can use this for finer-grained trading decisions
+/// instead of relying on [`MarketStatus`], which is a compatibility trade-off
+/// that collapses all non-regular-hours states to [`MarketStatus::Closed`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExtendedMarketStatus {
+    /// Unknown.
+    Unknown,
+    /// Pre-market.
+    PreMarket,
+    /// Regular trading hours.
+    RegularHours,
+    /// Post-market.
+    PostMarket,
+    /// Overnight.
+    Overnight,
+    /// Closed.
+    Closed,
+}
+
+impl From<ExtendedMarketStatus> for MarketStatus {
+    fn from(ext: ExtendedMarketStatus) -> Self {
+        match ext {
+            ExtendedMarketStatus::Unknown => MarketStatus::Unknown,
+            ExtendedMarketStatus::RegularHours => MarketStatus::Open,
+            _ => MarketStatus::Closed,
+        }
+    }
+}
+
 impl Report {
     /// Decimals.
     pub const DECIMALS: u8 = 18;
@@ -340,6 +371,34 @@ pub fn decode_full_report(payload: &[u8]) -> Result<([[u8; 32]; 3], &[u8]), Repo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_extended_market_status_to_market_status() {
+        assert_eq!(
+            MarketStatus::from(ExtendedMarketStatus::Unknown),
+            MarketStatus::Unknown
+        );
+        assert_eq!(
+            MarketStatus::from(ExtendedMarketStatus::RegularHours),
+            MarketStatus::Open
+        );
+        assert_eq!(
+            MarketStatus::from(ExtendedMarketStatus::Closed),
+            MarketStatus::Closed
+        );
+        assert_eq!(
+            MarketStatus::from(ExtendedMarketStatus::PreMarket),
+            MarketStatus::Closed
+        );
+        assert_eq!(
+            MarketStatus::from(ExtendedMarketStatus::PostMarket),
+            MarketStatus::Closed
+        );
+        assert_eq!(
+            MarketStatus::from(ExtendedMarketStatus::Overnight),
+            MarketStatus::Closed
+        );
+    }
 
     #[test]
     fn test_decode() {
