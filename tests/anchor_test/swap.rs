@@ -269,9 +269,12 @@ async fn create_swap_with_empty_path_should_fail() -> eyre::Result<()> {
     let client = deployment.user_client(Deployment::DEFAULT_USER)?;
     let store = &deployment.store;
     let fbtc = deployment.token("fBTC").expect("must exist");
+
+    // Initialize the market independently so this test does not rely on
+    // any other test having run first.
     let market_token = deployment
-        .market_token("fBTC", "fBTC", "USDG")
-        .expect("must exist");
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_000, 6_000_000_000, true)
+        .await?;
 
     deployment
         .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, 100_000)
