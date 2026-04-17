@@ -269,6 +269,7 @@ async fn create_swap_with_empty_path_should_fail() -> eyre::Result<()> {
     let client = deployment.user_client(Deployment::DEFAULT_USER)?;
     let store = &deployment.store;
     let fbtc = deployment.token("fBTC").expect("must exist");
+    let swap_amount = 100_000;
 
     // Initialize the market independently so this test does not rely on
     // any other test having run first.
@@ -277,11 +278,11 @@ async fn create_swap_with_empty_path_should_fail() -> eyre::Result<()> {
         .await?;
 
     deployment
-        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, 100_000)
+        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, swap_amount + 17)
         .await?;
 
     let (rpc, _order) = client
-        .market_swap(store, market_token, false, &fbtc.address, 100_000, [])
+        .market_swap(store, market_token, false, &fbtc.address, swap_amount, [])
         .build_with_address()
         .await?;
 
