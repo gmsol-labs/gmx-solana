@@ -177,7 +177,6 @@ fn rescale_to_mantissa(mut value: rust_decimal::Decimal, decimals: u8) -> crate:
     let scale = value.scale();
     let mantissa = value.mantissa();
     match scale.cmp(&decimals) {
-        Ordering::Less if mantissa == 0 => Ok(0),
         Ordering::Less => 10i128
             .checked_pow(decimals - scale)
             .and_then(|m| mantissa.checked_mul(m))
@@ -206,31 +205,10 @@ pub fn decimal_to_signed_value(amount: rust_decimal::Decimal, decimals: u8) -> c
 }
 
 /// Convert a [`Decimal`] to `u128` value.
-///
-/// Uses `u128` arithmetic for the compensation to cover the full unsigned range,
-/// avoiding the `i128` intermediate overflow for values in `(i128::MAX, u128::MAX]`.
 pub fn decimal_to_value(amount: rust_decimal::Decimal, decimals: u8) -> crate::Result<u128> {
-    use std::cmp::Ordering;
-    let decimals = u32::from(decimals);
-    let mut value = amount;
-    value.rescale(decimals);
-    let scale = value.scale();
-    let mantissa: u128 = value.mantissa().try_into().map_err(crate::Error::custom)?;
-    match scale.cmp(&decimals) {
-        Ordering::Less if mantissa == 0 => Ok(0),
-        Ordering::Less => 10u128
-            .checked_pow(decimals - scale)
-            .and_then(|m| mantissa.checked_mul(m))
-            .ok_or_else(|| {
-                crate::Error::custom(format!(
-                    "`value` is too big: value={amount}, decimals={decimals}"
-                ))
-            }),
-        Ordering::Equal => Ok(mantissa),
-        Ordering::Greater => Err(crate::Error::custom(format!(
-            "invalid scale: value={amount}, decimals={decimals}"
-        ))),
-    }
+    decimal_to_signed_value(amount, decimals)?
+        .try_into()
+        .map_err(crate::Error::custom)
 }
 
 #[cfg(test)]
@@ -390,8 +368,8 @@ mod tests {
 
     #[test]
     fn test_zero_with_large_decimals() {
-        assert_eq!(decimal_to_signed_value(Decimal::ZERO, u8::MAX).unwrap(), 0);
-        assert_eq!(decimal_to_amount(Decimal::ZERO, u8::MAX).unwrap(), 0u64);
-        assert_eq!(decimal_to_value(Decimal::ZERO, u8::MAX).unwrap(), 0u128);
+        assert!(decimal_to_signed_value(Decimal::ZERO, u8::MAX).is_err());
+        assert!(decimal_to_amount(Decimal::ZERO, u8::MAX).is_err());
+        assert!(decimal_to_value(Decimal::ZERO, u8::MAX).is_err());
     }
 }
