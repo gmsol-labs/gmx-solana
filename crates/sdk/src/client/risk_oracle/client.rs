@@ -23,7 +23,7 @@ impl ChaosClient {
         Ok(Self {
             base_url,
             api_key,
-            http: reqwest::Client::new(),
+            http: crate::client::http_timeout::bounded_rest_client(),
         })
     }
 

@@ -149,7 +149,7 @@ impl Client {
         Ok(Self {
             base: base.into_url()?,
             ws_base: ws_base.into_url()?,
-            client: reqwest::Client::new(),
+            client: crate::client::http_timeout::streaming_http_client(),
             credential: Arc::new(credential),
         })
     }
@@ -202,7 +202,10 @@ impl Client {
     where
         T: Serialize,
     {
-        self.get_inner(path, query, sign, false)
+        Ok(
+            self.get_inner(path, query, sign, false)?
+                .timeout(crate::client::http_timeout::REST_REQUEST_TIMEOUT),
+        )
     }
 
     /// Get available feeds.

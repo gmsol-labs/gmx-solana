@@ -31,6 +31,14 @@ pub mod instruction_buffer;
 /// Program IDs.
 pub mod program_ids;
 
+/// Default HTTP timeouts for oracle and similar outbound clients.
+#[cfg(any(
+    feature = "pyth",
+    feature = "chainlink",
+    feature = "chaoslabs-risk-oracle"
+))]
+pub(crate) mod http_timeout;
+
 /// Chainlink support.
 #[cfg(feature = "chainlink")]
 pub mod chainlink;

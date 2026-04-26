@@ -32,7 +32,7 @@ pub struct HttpRpcSender {
 impl HttpRpcSender {
     /// Create an HTTP RPC sender with default reqwest client.
     pub fn new(url: impl ToString) -> Self {
-        Self::new_with_client(url, Default::default())
+        Self::new_with_client(url, default_rpc_client())
     }
 
     /// Create an HTTP RPC sender.
@@ -50,6 +50,16 @@ impl HttpRpcSender {
     pub fn default_headers() -> header::HeaderMap {
         header::HeaderMap::new()
     }
+}
+
+fn default_rpc_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(180))
+        .pool_idle_timeout(Duration::from_secs(90))
+        .tcp_keepalive(Duration::from_secs(60))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
 }
 
 struct StatsUpdater<'a> {

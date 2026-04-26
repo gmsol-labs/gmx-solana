@@ -14,7 +14,7 @@ use reqwest::{Client, IntoUrl, Url};
 
 pub use pyth_sdk::Identifier;
 
-use crate::client::pyth::pubkey_to_identifier;
+use crate::client::{http_timeout, pyth::pubkey_to_identifier};
 
 /// Default base URL for Hermes.
 pub const DEFAULT_HERMES_BASE: &str = "https://hermes.pyth.network";
@@ -41,7 +41,7 @@ impl Hermes {
     pub fn try_new(base: impl IntoUrl) -> crate::Result<Self> {
         Ok(Self {
             base: base.into_url()?,
-            client: Client::new(),
+            client: http_timeout::streaming_http_client(),
         })
     }
 
@@ -83,6 +83,7 @@ impl Hermes {
             .client
             .get(self.base.join(PRICE_LATEST).map_err(crate::Error::custom)?)
             .query(&params)
+            .timeout(http_timeout::REST_REQUEST_TIMEOUT)
             .send()
             .await?
             .json()
@@ -106,6 +107,7 @@ impl Hermes {
             .client
             .get(self.base.join(&path).map_err(crate::Error::custom)?)
             .query(&params)
+            .timeout(http_timeout::REST_REQUEST_TIMEOUT)
             .send()
             .await?
             .json()
@@ -182,7 +184,7 @@ impl Default for Hermes {
     fn default() -> Self {
         Self {
             base: DEFAULT_HERMES_BASE.parse().unwrap(),
-            client: Default::default(),
+            client: http_timeout::streaming_http_client(),
         }
     }
 }
