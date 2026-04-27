@@ -6,8 +6,8 @@ use ruint::aliases::U192;
 use chainlink_data_streams_report::{
     feed_id::ID,
     report::{
-        base::ReportError, v2::ReportDataV2, v3::ReportDataV3, v4::ReportDataV4, v7::ReportDataV7,
-        v8::ReportDataV8,
+        base::ReportError, v11::ReportDataV11, v2::ReportDataV2, v3::ReportDataV3,
+        v4::ReportDataV4, v7::ReportDataV7, v8::ReportDataV8,
     },
 };
 
@@ -34,6 +34,7 @@ pub struct Report {
     /// Simulated price impact of a sell order up to the X% depth of liquidity utilisation (8 or 18 decimals).
     ask: Signed,
     market_status: MarketStatus,
+    extended_market_status: Option<ExtendedMarketStatus>,
 }
 
 /// Market status.
@@ -45,6 +46,37 @@ pub enum MarketStatus {
     Closed,
     /// Open.
     Open,
+}
+
+/// Extended market status (v11 only).
+///
+/// Downstream consumers can use this for finer-grained trading decisions
+/// instead of relying on [`MarketStatus`], which is a compatibility trade-off
+/// that collapses all non-regular-hours states to [`MarketStatus::Closed`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExtendedMarketStatus {
+    /// Unknown.
+    Unknown,
+    /// Pre-market.
+    PreMarket,
+    /// Regular trading hours.
+    RegularHours,
+    /// Post-market.
+    PostMarket,
+    /// Overnight.
+    Overnight,
+    /// Closed.
+    Closed,
+}
+
+impl From<ExtendedMarketStatus> for MarketStatus {
+    fn from(ext: ExtendedMarketStatus) -> Self {
+        match ext {
+            ExtendedMarketStatus::Unknown => MarketStatus::Unknown,
+            ExtendedMarketStatus::RegularHours => MarketStatus::Open,
+            _ => MarketStatus::Closed,
+        }
+    }
 }
 
 impl Report {
@@ -69,8 +101,23 @@ impl Report {
     }
 
     /// Returns the market status.
+    ///
+    /// For v11 reports, this is derived from [`ExtendedMarketStatus`]:
+    /// only [`ExtendedMarketStatus::RegularHours`] maps to [`MarketStatus::Open`];
+    /// all other states map to [`MarketStatus::Closed`].
+    /// This is a compatibility trade-off — downstream consumers that need
+    /// finer-grained control should use [`Self::extended_market_status()`] instead.
     pub fn market_status(&self) -> MarketStatus {
         self.market_status
+    }
+
+    /// Returns extended market status (v11 only).
+    ///
+    /// Downstream consumers can use this for finer-grained trading decisions
+    /// instead of relying on [`Self::market_status()`], which is a compatibility
+    /// trade-off that collapses all non-regular-hours states to [`MarketStatus::Closed`].
+    pub fn extended_market_status(&self) -> Option<ExtendedMarketStatus> {
+        self.extended_market_status
     }
 
     /// Returns timestamp of the last valid price update, in **nanoseconds**.
@@ -100,6 +147,7 @@ impl fmt::Debug for Report {
             .field("bid", self.bid.1.as_limbs())
             .field("ask", self.ask.1.as_limbs())
             .field("market_status", &self.market_status)
+            .field("extended_market_status", &self.extended_market_status)
             .finish()
     }
 }
@@ -159,6 +207,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 bid: price,
                 ask: price,
                 market_status: MarketStatus::Open,
+                extended_market_status: None,
             })
         }
         3 => {
@@ -175,6 +224,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 bid: bigint_to_signed(report.bid)?,
                 ask: bigint_to_signed(report.ask)?,
                 market_status: MarketStatus::Open,
+                extended_market_status: None,
             })
         }
         4 => {
@@ -194,6 +244,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 bid: price,
                 ask: price,
                 market_status: decode_market_status(report.market_status)?,
+                extended_market_status: None,
             })
         }
         7 => {
@@ -212,6 +263,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 bid: price,
                 ask: price,
                 market_status: MarketStatus::Open,
+                extended_market_status: None,
             })
         }
         8 => {
@@ -229,6 +281,30 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 bid: price,
                 ask: price,
                 market_status: decode_market_status(report.market_status)?,
+                extended_market_status: None,
+            })
+        }
+        11 => {
+            let report = ReportDataV11::decode(data)?;
+            let extended = decode_extended_market_status(report.market_status)?;
+            let market_status = MarketStatus::from(extended);
+            let price = bigint_to_signed(report.mid)?;
+            let bid = bigint_to_signed(report.bid)?;
+            let ask = bigint_to_signed(report.ask)?;
+            // `bid_volume`, `ask_volume` and `last_traded_price` are ignored.
+            Ok(Report {
+                feed_id: report.feed_id,
+                valid_from_timestamp: report.valid_from_timestamp,
+                observations_timestamp: report.observations_timestamp,
+                last_update_timestamp: Some(report.last_seen_timestamp_ns),
+                native_fee: bigint_to_u192(report.native_fee)?,
+                link_fee: bigint_to_u192(report.link_fee)?,
+                expires_at: report.expires_at,
+                price,
+                bid,
+                ask,
+                market_status,
+                extended_market_status: Some(extended),
             })
         }
         version => Err(DecodeError::UnsupportedVersion(version)),
@@ -294,6 +370,18 @@ fn decode_market_status(market_status: u32) -> Result<MarketStatus, DecodeError>
     }
 }
 
+fn decode_extended_market_status(market_status: u32) -> Result<ExtendedMarketStatus, DecodeError> {
+    match market_status {
+        0 => Ok(ExtendedMarketStatus::Unknown),
+        1 => Ok(ExtendedMarketStatus::PreMarket),
+        2 => Ok(ExtendedMarketStatus::RegularHours),
+        3 => Ok(ExtendedMarketStatus::PostMarket),
+        4 => Ok(ExtendedMarketStatus::Overnight),
+        5 => Ok(ExtendedMarketStatus::Closed),
+        _ => Err(DecodeError::InvalidData),
+    }
+}
+
 /// Decode full report.
 pub fn decode_full_report(payload: &[u8]) -> Result<([[u8; 32]; 3], &[u8]), ReportError> {
     if payload.len() < 128 {
@@ -340,6 +428,217 @@ pub fn decode_full_report(payload: &[u8]) -> Result<([[u8; 32]; 3], &[u8]), Repo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_extended_market_status_to_market_status() {
+        assert_eq!(
+            MarketStatus::from(ExtendedMarketStatus::Unknown),
+            MarketStatus::Unknown
+        );
+        assert_eq!(
+            MarketStatus::from(ExtendedMarketStatus::RegularHours),
+            MarketStatus::Open
+        );
+        assert_eq!(
+            MarketStatus::from(ExtendedMarketStatus::Closed),
+            MarketStatus::Closed
+        );
+        assert_eq!(
+            MarketStatus::from(ExtendedMarketStatus::PreMarket),
+            MarketStatus::Closed
+        );
+        assert_eq!(
+            MarketStatus::from(ExtendedMarketStatus::PostMarket),
+            MarketStatus::Closed
+        );
+        assert_eq!(
+            MarketStatus::from(ExtendedMarketStatus::Overnight),
+            MarketStatus::Closed
+        );
+    }
+
+    #[test]
+    fn test_decode_extended_market_status() {
+        assert_eq!(
+            decode_extended_market_status(0).unwrap(),
+            ExtendedMarketStatus::Unknown
+        );
+        assert_eq!(
+            decode_extended_market_status(1).unwrap(),
+            ExtendedMarketStatus::PreMarket
+        );
+        assert_eq!(
+            decode_extended_market_status(2).unwrap(),
+            ExtendedMarketStatus::RegularHours
+        );
+        assert_eq!(
+            decode_extended_market_status(3).unwrap(),
+            ExtendedMarketStatus::PostMarket
+        );
+        assert_eq!(
+            decode_extended_market_status(4).unwrap(),
+            ExtendedMarketStatus::Overnight
+        );
+        assert_eq!(
+            decode_extended_market_status(5).unwrap(),
+            ExtendedMarketStatus::Closed
+        );
+        assert!(decode_extended_market_status(6).is_err());
+    }
+
+    #[test]
+    fn test_decode_v11() {
+        use chainlink_data_streams_report::report::v11::ReportDataV11;
+        use num_bigint::BigInt;
+
+        // Build a v11 feed_id (first two bytes 0x000b = 11)
+        let mut feed_id_bytes = [0u8; 32];
+        feed_id_bytes[0] = 0x00;
+        feed_id_bytes[1] = 0x0b;
+        let feed_id = ID(feed_id_bytes);
+
+        let multiplier: BigInt = "1000000000000000000".parse().unwrap();
+
+        let report_data = ReportDataV11 {
+            feed_id,
+            valid_from_timestamp: 1000,
+            observations_timestamp: 1000,
+            native_fee: BigInt::from(100),
+            link_fee: BigInt::from(200),
+            expires_at: 1100,
+            mid: BigInt::from(50000) * &multiplier,
+            last_seen_timestamp_ns: 1_000_000_000_000,
+            bid: BigInt::from(49900) * &multiplier,
+            bid_volume: BigInt::from(1000) * &multiplier,
+            ask: BigInt::from(50100) * &multiplier,
+            ask_volume: BigInt::from(2000) * &multiplier,
+            last_traded_price: BigInt::from(50050) * &multiplier,
+            market_status: 2, // RegularHours
+        };
+
+        let encoded = report_data.abi_encode().unwrap();
+        let report = decode(&encoded).unwrap();
+
+        assert_eq!(report.valid_from_timestamp, 1000);
+        assert_eq!(report.observations_timestamp, 1000);
+        assert_eq!(report.expires_at, 1100);
+        assert_eq!(report.last_update_timestamp(), Some(1_000_000_000_000));
+        assert_eq!(report.market_status(), MarketStatus::Open);
+        assert_eq!(
+            report.extended_market_status(),
+            Some(ExtendedMarketStatus::RegularHours)
+        );
+        assert!(report.non_negative_price().is_some());
+        assert!(report.non_negative_bid().is_some());
+        assert!(report.non_negative_ask().is_some());
+    }
+
+    #[test]
+    fn test_decode_v11_pre_market() {
+        use chainlink_data_streams_report::report::v11::ReportDataV11;
+        use num_bigint::BigInt;
+
+        let mut feed_id_bytes = [0u8; 32];
+        feed_id_bytes[0] = 0x00;
+        feed_id_bytes[1] = 0x0b;
+        let feed_id = ID(feed_id_bytes);
+
+        let multiplier: BigInt = "1000000000000000000".parse().unwrap();
+
+        let report_data = ReportDataV11 {
+            feed_id,
+            valid_from_timestamp: 1000,
+            observations_timestamp: 1000,
+            native_fee: BigInt::from(100),
+            link_fee: BigInt::from(200),
+            expires_at: 1100,
+            mid: BigInt::from(50000) * &multiplier,
+            last_seen_timestamp_ns: 1_000_000_000_000,
+            bid: BigInt::from(49900) * &multiplier,
+            bid_volume: BigInt::from(1000) * &multiplier,
+            ask: BigInt::from(50100) * &multiplier,
+            ask_volume: BigInt::from(2000) * &multiplier,
+            last_traded_price: BigInt::from(50050) * &multiplier,
+            market_status: 1, // PreMarket
+        };
+
+        let encoded = report_data.abi_encode().unwrap();
+        let report = decode(&encoded).unwrap();
+
+        // PreMarket should map to Closed
+        assert_eq!(report.market_status(), MarketStatus::Closed);
+        assert_eq!(
+            report.extended_market_status(),
+            Some(ExtendedMarketStatus::PreMarket)
+        );
+    }
+
+    #[test]
+    fn test_decode_v11_xau_full_report() {
+        let data = hex::decode(
+            "00094baebfda9b87680d8e59aa20a3e565126640ee7caeab3cd965e5568b17ee\
+             00000000000000000000000000000000000000000000000000000000028b3ce1\
+             0000000000000000000000000000000000000000000000000000000400000001\
+             00000000000000000000000000000000000000000000000000000000000000e0\
+             00000000000000000000000000000000000000000000000000000000000002c0\
+             00000000000000000000000000000000000000000000000000000000000003a0\
+             0000000001010000000000000000000000000000000000000000000000000000\
+             00000000000000000000000000000000000000000000000000000000000001c0\
+             000b3e56e8bc2103b83a76d318d029870ddf1498e34799d8a8d8f0f8531043ee\
+             0000000000000000000000000000000000000000000000000000000069da21fc\
+             0000000000000000000000000000000000000000000000000000000069da21fc\
+             000000000000000000000000000000000000000000000000000081c4db3df35e\
+             000000000000000000000000000000000000000000000000007e12e62b190a11\
+             000000000000000000000000000000000000000000000000000000006a01aefc\
+             00000000000000000000000000000000000000000000010175d8d69a8a928000\
+             00000000000000000000000000000000000000000000000018a546938b9d3000\
+             00000000000000000000000000000000000000000000010175c7132152b20000\
+             0000000000000000000000000000000000000000000000000000000000000000\
+             00000000000000000000000000000000000000000000010175ea9a13c2730000\
+             0000000000000000000000000000000000000000000000000000000000000000\
+             0000000000000000000000000000000000000000000000000000000000000000\
+             0000000000000000000000000000000000000000000000000000000000000005\
+             0000000000000000000000000000000000000000000000000000000000000006\
+             6c3a39eee12d41f87aeccace61ff0453ae6111ff7140b5c75d2d1d4254548fc7\
+             8900dd42a6d372b7a513e5ff06fe9dd991d3cba2c17b2939ca15f0d357de22d0\
+             958e9c66ab7ec8cc2ef40d576d88fca7ebf5e3fa93eabfeead7c6fbdc79c0ccd\
+             4ce1314d213381ffd674ef45ce236d93856792b3083edab3824200b61c3ff296\
+             1157194419bd3d335e05aeba5cf215c149e99b35e3b94c56f0823857c6be8876\
+             9e6ae9bfd866fdffd00cec07df9bae6898127a05b4814d99d1ec19e6ed3ece1e\
+             0000000000000000000000000000000000000000000000000000000000000006\
+             6447235cd963678f24357b66cabc60c754ac85d8842de68dd944dd5edf10411b\
+             3e525596ffca4cd293e70417f368975a86c6b19eb3beeeaae448331031d53ea8\
+             06f25696623f998c7d76c2f63b2cb381dc942e958aec27490860ace7621db0a6\
+             4be64a0c0a5dc0fe2b4dcc1f6c7b06e868f2a3a293a92eab2aafcab600620d0e\
+             6e3101ecc5a78c3737143af85a8e88e2f981dfa19f12e21cc9571ec5b25cce0b\
+             52bffa484bc92862dc203c129efbe9187b627c4148a768e5dbc705116740fd11",
+        )
+        .unwrap();
+        let (_, data) = decode_full_report(&data).unwrap();
+        let report = decode(data).unwrap();
+
+        // XAU v11 feed
+        assert_eq!(report.feed_id.0[0..2], [0x00, 0x0b]); // version 11
+        assert_eq!(report.valid_from_timestamp, 1775903228);
+        assert_eq!(report.observations_timestamp, 1775903228);
+        assert_eq!(report.expires_at, 1778495228);
+        assert_eq!(report.last_update_timestamp(), Some(1775903227584000000));
+
+        // XAU ~4749.305 USD/oz (18 decimals)
+        let mid = U192::from_limbs([0x75d8d69a8a928000, 0x0000000000000101, 0]);
+        let bid = U192::from_limbs([0x75c7132152b20000, 0x0000000000000101, 0]);
+        let ask = U192::from_limbs([0x75ea9a13c2730000, 0x0000000000000101, 0]);
+        assert!(report.non_negative_price() == Some(mid));
+        assert!(report.non_negative_bid() == Some(bid));
+        assert!(report.non_negative_ask() == Some(ask));
+
+        // market_status=5 -> Closed
+        assert_eq!(report.market_status(), MarketStatus::Closed);
+        assert_eq!(
+            report.extended_market_status(),
+            Some(ExtendedMarketStatus::Closed)
+        );
+    }
 
     #[test]
     fn test_decode() {
