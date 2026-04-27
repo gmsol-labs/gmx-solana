@@ -291,6 +291,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
             let price = bigint_to_signed(report.mid)?;
             let bid = bigint_to_signed(report.bid)?;
             let ask = bigint_to_signed(report.ask)?;
+            // `bid_volume`, `ask_volume` and `last_traded_price` are ignored.
             Ok(Report {
                 feed_id: report.feed_id,
                 valid_from_timestamp: report.valid_from_timestamp,
