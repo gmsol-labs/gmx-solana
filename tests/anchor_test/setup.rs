@@ -379,6 +379,8 @@ impl Deployment {
 
         self.initialize_lp_token_controllers().await?;
 
+        self.initialize_gt_incentive().await?;
+
         self.initialize_claim_fees_sleep().await?;
 
         self.initialize_callback().await?;
@@ -555,6 +557,26 @@ impl Deployment {
                 return Err(err.into());
             }
         }
+
+        Ok(())
+    }
+
+    async fn initialize_gt_incentive(&mut self) -> eyre::Result<()> {
+        use gmsol_gt_incentive as gt_incentive;
+
+        let client = self.user_client(Self::DEFAULT_KEEPER)?;
+
+        let init_ix = client
+            .store_transaction()
+            .program(gt_incentive::ID)
+            .anchor_args(gt_incentive::instruction::Initialize {})
+            .anchor_accounts(gt_incentive::accounts::Initialize {
+                authority: client.payer(),
+                system_program: system_program::ID,
+            });
+
+        let signature = init_ix.send().await?;
+        tracing::info!(%signature, "initialized gt-incentive program");
 
         Ok(())
     }

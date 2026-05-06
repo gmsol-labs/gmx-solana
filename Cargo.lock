@@ -2403,6 +2403,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gmsol-gt-incentive"
+version = "0.9.1"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "gmsol-programs",
+ "gmsol-utils",
+]
+
+[[package]]
 name = "gmsol-liquidity-provider"
 version = "0.9.1"
 dependencies = [
@@ -2595,6 +2605,7 @@ dependencies = [
  "gmsol-callback",
  "gmsol-chainlink-datastreams",
  "gmsol-competition",
+ "gmsol-gt-incentive",
  "gmsol-liquidity-provider",
  "gmsol-mock-chainlink-verifier",
  "gmsol-programs",

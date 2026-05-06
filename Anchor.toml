@@ -15,6 +15,7 @@ gmsol_mock_chainlink_verifier = "4nMxSRfeW7W2zFbN8FJ4YDvuTzEzCo1e6GzJxJLnDUoZ"
 gmsol_callback = "9JtQ9fBS91b2YxmHXNeGE8ipQYhLd2DRGGZSV8SPTJGw"
 gmsol_competition = "2AxuNr6euZPKQbTwNsLBjzFTZFAevA85F4PW9m9Dv8pc"
 gmsol_liquidity_provider = "LPMWczEVgXyQ3979XaqqEttanCXmYGvtJqPVtw1PvC8"
+gmsol_gt_incentive = "6iMXVSjiBf75ce9QaUVRnpsUikW8SZm8EaPVGDPfsCso"
 
 [registry]
 url = "https://api.apr.dev"

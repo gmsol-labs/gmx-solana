@@ -1,0 +1,31 @@
+[package]
+name = "gmsol-gt-incentive"
+version = "0.9.1"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "gmsol_gt_incentive"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+anchor-debug = ["anchor-lang/anchor-debug"]
+debug = []
+debug-msg = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+mock = []
+multi-store = []
+devnet = []
+test-only = []
+migration = []
+
+[dependencies]
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true, features = ["token", "token_2022"] }
+gmsol-programs = { workspace = true }
+gmsol-utils = { workspace = true, features = ["security-txt"] }

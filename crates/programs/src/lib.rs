@@ -11,6 +11,8 @@ anchor_lang::declare_program!(gmsol_timelock);
 anchor_lang::declare_program!(gmsol_competition);
 #[cfg(feature = "liquidity-provider")]
 anchor_lang::declare_program!(gmsol_liquidity_provider);
+#[cfg(feature = "gt-incentive")]
+anchor_lang::declare_program!(gmsol_gt_incentive);
 
 /// Constants.
 pub mod constants;
