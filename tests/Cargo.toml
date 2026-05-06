@@ -18,6 +18,7 @@ gmsol-sdk = { workspace = true, features = [
     "pyth",
     "decode",
     "liquidity-provider",
+    "gt-incentive",
 ] }
 gmsol-programs = { workspace = true, features = [
     "model",
@@ -34,6 +35,7 @@ gmsol-callback = { workspace = true, features = ["no-entrypoint", "debug"] }
 gmsol-competition = { workspace = true, features = ["no-entrypoint", "debug"] }
 gmsol-chainlink-datastreams = { workspace = true }
 gmsol-liquidity-provider = { workspace = true, features = ["no-entrypoint", "debug"] }
+gmsol-gt-incentive = { workspace = true, features = ["no-entrypoint", "debug"] }
 
 tokio = { workspace = true, features = ["full"] }
 rand = { workspace = true }

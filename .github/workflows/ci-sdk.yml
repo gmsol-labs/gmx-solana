@@ -22,7 +22,7 @@ env:
   rust_clippy: "1.88"
   rust_min: "1.86"
   libudev: "1.0"
-  exclude_packages: "--exclude gmsol-store --exclude gmsol-treasury --exclude gmsol-timelock --exclude gmsol-competition --exclude gmsol-callback --exclude gmsol-mock-chainlink-verifier --exclude gmsol-liquidity-provider --exclude gmsol-tests"
+  exclude_packages: "--exclude gmsol-store --exclude gmsol-treasury --exclude gmsol-timelock --exclude gmsol-competition --exclude gmsol-callback --exclude gmsol-mock-chainlink-verifier --exclude gmsol-liquidity-provider --exclude gmsol-gt-incentive --exclude gmsol-tests"
 
 defaults:
   run:

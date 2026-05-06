@@ -28,3 +28,5 @@ mod callback;
 mod competition;
 
 mod liquidity_provider;
+
+mod gt_incentive;
