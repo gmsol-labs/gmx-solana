@@ -14,18 +14,27 @@ cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
-anchor-debug = ["anchor-lang/anchor-debug"]
-debug = []
+anchor-debug = ["anchor-lang/anchor-debug", "gmsol-store/anchor-debug"]
+debug = ["gmsol-store/debug", "derive_more", "gmsol-utils/debug"]
 debug-msg = []
-idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+idl-build = [
+    "anchor-lang/idl-build",
+    "anchor-spl/idl-build",
+    "gmsol-store/idl-build",
+    "gmsol-utils/idl-build",
+]
 mock = []
-multi-store = []
-devnet = []
-test-only = []
-migration = []
+multi-store = ["gmsol-store/multi-store"]
+devnet = ["gmsol-store/devnet", "gmsol-utils/devnet"]
+test-only = ["gmsol-store/test-only"]
+migration = ["gmsol-store/migration"]
 
 [dependencies]
 anchor-lang = { workspace = true }
 anchor-spl = { workspace = true, features = ["token", "token_2022"] }
 gmsol-programs = { workspace = true }
 gmsol-utils = { workspace = true, features = ["security-txt"] }
+gmsol-store = { workspace = true, features = ["cpi"] }
+bytemuck = { workspace = true }
+num_enum = { workspace = true }
+derive_more = { workspace = true, optional = true }

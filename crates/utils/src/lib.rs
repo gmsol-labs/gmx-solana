@@ -51,6 +51,9 @@ pub mod config;
 /// Utils for GT.
 pub mod gt;
 
+/// Definitions related to airdrop.
+pub mod airdrop;
+
 /// Definitions related to roles.
 pub mod role;
 

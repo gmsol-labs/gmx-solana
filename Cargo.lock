@@ -2408,8 +2408,12 @@ version = "0.9.1"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
+ "bytemuck",
+ "derive_more",
  "gmsol-programs",
+ "gmsol-store",
  "gmsol-utils",
+ "num_enum",
 ]
 
 [[package]]
