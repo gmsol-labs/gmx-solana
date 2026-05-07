@@ -2,25 +2,1045 @@
   "address": "6iMXVSjiBf75ce9QaUVRnpsUikW8SZm8EaPVGDPfsCso",
   "metadata": {
     "name": "gmsol_gt_incentive",
-    "version": "0.9.0",
+    "version": "0.9.1",
     "spec": "0.1.0",
     "description": "Created with Anchor"
   },
   "instructions": [
     {
-      "name": "initialize",
-      "discriminator": [
-        175,
-        175,
-        109,
-        31,
-        13,
-        152,
-        155,
-        237
+      "name": "add_airdrop_target",
+      "docs": [
+        "Add a recipient to an airdrop's target list. (S1.2)"
       ],
-      "accounts": [],
+      "discriminator": [
+        75,
+        152,
+        88,
+        217,
+        53,
+        187,
+        178,
+        74
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "docs": [
+            "The operator who created the airdrop and pays for the new target account."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "store"
+        },
+        {
+          "name": "airdrop_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  105,
+                  114,
+                  100,
+                  114,
+                  111,
+                  112,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              }
+            ]
+          }
+        },
+        {
+          "name": "airdrop",
+          "writable": true
+        },
+        {
+          "name": "airdrop_target",
+          "docs": [
+            "The new target account. Created here. PDA derivation guarantees uniqueness per (airdrop, recipient)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  105,
+                  114,
+                  100,
+                  114,
+                  111,
+                  112,
+                  95,
+                  116,
+                  97,
+                  114,
+                  103,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "airdrop"
+              },
+              {
+                "kind": "arg",
+                "path": "recipient"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "recipient",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "approve_airdrop",
+      "docs": [
+        "Approve an airdrop. Caller must be Gov AND hold the `GT_CONTROLLER` role. (S1.4)"
+      ],
+      "discriminator": [
+        76,
+        175,
+        25,
+        61,
+        71,
+        204,
+        79,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The Gov authority. Must match `airdrop_config.gov` AND hold `GT_CONTROLLER` role",
+            "in the store (the latter enforced by `access_control`)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store"
+        },
+        {
+          "name": "airdrop_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  105,
+                  114,
+                  100,
+                  114,
+                  111,
+                  112,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              }
+            ]
+          }
+        },
+        {
+          "name": "airdrop",
+          "writable": true
+        },
+        {
+          "name": "store_program",
+          "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
+        }
+      ],
       "args": []
+    },
+    {
+      "name": "claim_airdrop_target",
+      "docs": [
+        "Claim GT from an approved airdrop. (S1.5)"
+      ],
+      "discriminator": [
+        249,
+        180,
+        165,
+        83,
+        156,
+        1,
+        165,
+        0
+      ],
+      "accounts": [
+        {
+          "name": "claimer",
+          "docs": [
+            "The recipient who claims their GT."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "writable": true
+        },
+        {
+          "name": "airdrop"
+        },
+        {
+          "name": "airdrop_target",
+          "docs": [
+            "PDA seeds tie this target to (airdrop, claimer); a wrong claimer can't pass."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  105,
+                  114,
+                  100,
+                  114,
+                  111,
+                  112,
+                  95,
+                  116,
+                  97,
+                  114,
+                  103,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "airdrop"
+              },
+              {
+                "kind": "account",
+                "path": "claimer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "gt_authority",
+          "docs": [
+            "PDA that holds the `GT_CONTROLLER` role and signs the mint CPI.",
+            "The admin must `grant_role(this_pda, GT_CONTROLLER)` once at setup."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "docs": [
+            "The claimer's UserHeader (in store program). Validated by store via the mint CPI."
+          ],
+          "writable": true
+        },
+        {
+          "name": "store_event_authority"
+        },
+        {
+          "name": "store_program",
+          "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "complete_airdrop",
+      "docs": [
+        "Mark an airdrop's target list as complete. (S1.3)"
+      ],
+      "discriminator": [
+        191,
+        54,
+        51,
+        66,
+        248,
+        18,
+        35,
+        57
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "signer": true
+        },
+        {
+          "name": "store"
+        },
+        {
+          "name": "airdrop_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  105,
+                  114,
+                  100,
+                  114,
+                  111,
+                  112,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              }
+            ]
+          }
+        },
+        {
+          "name": "airdrop",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_airdrop",
+      "docs": [
+        "Create a new airdrop. (S1.1)"
+      ],
+      "discriminator": [
+        227,
+        135,
+        208,
+        66,
+        137,
+        177,
+        80,
+        94
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "docs": [
+            "The operator creating this airdrop, who pays for the new account."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "store"
+        },
+        {
+          "name": "airdrop_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  105,
+                  114,
+                  100,
+                  114,
+                  111,
+                  112,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              }
+            ]
+          }
+        },
+        {
+          "name": "airdrop",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  105,
+                  114,
+                  100,
+                  114,
+                  111,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": {
+            "array": [
+              "u8",
+              8
+            ]
+          }
+        },
+        {
+          "name": "duration",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_airdrop_config",
+      "docs": [
+        "Initialize the [`AirdropConfig`] singleton.",
+        "",
+        "# Arguments",
+        "- `gov`: The Gov authority address. Must hold the `GT_CONTROLLER` role",
+        "to approve airdrops later."
+      ],
+      "discriminator": [
+        160,
+        68,
+        127,
+        205,
+        130,
+        205,
+        156,
+        94
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The admin authority. Must be the store admin (verified via CPI)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "The store this airdrop config belongs to."
+          ]
+        },
+        {
+          "name": "airdrop_config",
+          "docs": [
+            "The airdrop config PDA to be created."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  105,
+                  114,
+                  100,
+                  114,
+                  111,
+                  112,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              }
+            ]
+          }
+        },
+        {
+          "name": "store_program",
+          "docs": [
+            "The store program (for CPI admin check)."
+          ],
+          "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "gov",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_airdrop_operator",
+      "docs": [
+        "Add a new operator or update an existing one in the [`AirdropConfig`]."
+      ],
+      "discriminator": [
+        109,
+        136,
+        159,
+        53,
+        128,
+        204,
+        185,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "store"
+        },
+        {
+          "name": "airdrop_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  105,
+                  114,
+                  100,
+                  114,
+                  111,
+                  112,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              }
+            ]
+          }
+        },
+        {
+          "name": "store_program",
+          "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
+        }
+      ],
+      "args": [
+        {
+          "name": "operator",
+          "type": "pubkey"
+        },
+        {
+          "name": "timelock_secs",
+          "type": "u64"
+        },
+        {
+          "name": "max_airdrop_amount",
+          "type": "u64"
+        },
+        {
+          "name": "is_enabled",
+          "type": "bool"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Airdrop",
+      "discriminator": [
+        31,
+        112,
+        159,
+        158,
+        124,
+        237,
+        9,
+        241
+      ]
+    },
+    {
+      "name": "AirdropConfig",
+      "discriminator": [
+        194,
+        149,
+        223,
+        142,
+        42,
+        98,
+        128,
+        16
+      ]
+    },
+    {
+      "name": "AirdropTarget",
+      "discriminator": [
+        5,
+        69,
+        29,
+        119,
+        93,
+        238,
+        76,
+        83
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "Airdrop",
+      "docs": [
+        "Represents a single airdrop campaign.",
+        "",
+        "PDA seeds: `[SEED, store, operator, nonce]`"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "flags",
+            "type": {
+              "defined": {
+                "name": "AirdropFlagContainer"
+              }
+            }
+          },
+          {
+            "name": "padding_0",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          },
+          {
+            "name": "store",
+            "docs": [
+              "The store this airdrop belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "operator",
+            "docs": [
+              "The operator who created this airdrop."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "expiry",
+            "docs": [
+              "Unix timestamp after which this airdrop expires."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "claimable_at",
+            "docs": [
+              "Unix timestamp after which users may claim (set at approval time: now + T)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "total_amount",
+            "docs": [
+              "Running total of GT across all uploaded targets."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "target_count",
+            "docs": [
+              "Number of targets uploaded so far."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "Random nonce that makes this PDA unique per operator."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "AirdropConfig",
+      "docs": [
+        "Global singleton config for the GT airdrop system.",
+        "",
+        "PDA seeds: `[SEED, store]`"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "flags",
+            "type": {
+              "defined": {
+                "name": "AirdropConfigFlagContainer"
+              }
+            }
+          },
+          {
+            "name": "operator_count",
+            "type": "u8"
+          },
+          {
+            "name": "padding_0",
+            "type": {
+              "array": [
+                "u8",
+                5
+              ]
+            }
+          },
+          {
+            "name": "store",
+            "docs": [
+              "The store this config belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "gov",
+            "docs": [
+              "The Gov address that is allowed to approve airdrops.",
+              "Must hold GT_CONTROLLER role in the store's RoleStore."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "operators",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "OperatorEntry"
+                  }
+                },
+                16
+              ]
+            }
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "AirdropConfigFlagContainer",
+      "docs": [
+        "Flags container generated by the macro."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "value",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AirdropFlagContainer",
+      "docs": [
+        "Flags container generated by the macro."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "value",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AirdropTarget",
+      "docs": [
+        "Represents a single recipient in an airdrop campaign.",
+        "",
+        "PDA seeds: `[SEED, airdrop, recipient]`",
+        "",
+        "The PDA derivation guarantees that each recipient appears at most once per airdrop."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "flags",
+            "type": {
+              "defined": {
+                "name": "AirdropTargetFlagContainer"
+              }
+            }
+          },
+          {
+            "name": "padding_0",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          },
+          {
+            "name": "airdrop",
+            "docs": [
+              "The airdrop this target belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "docs": [
+              "The recipient's wallet address."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Amount of GT to mint when claimed."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "AirdropTargetFlagContainer",
+      "docs": [
+        "Flags container generated by the macro."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "value",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OperatorEntry",
+      "docs": [
+        "A single operator entry inside [`AirdropConfig`].",
+        "",
+        "Each operator is granted a timelock delay and a per-airdrop GT cap."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "The operator's wallet address."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "timelock_secs",
+            "docs": [
+              "Timelock delay in seconds granted to this operator (T in the spec)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_airdrop_amount",
+            "docs": [
+              "Max GT amount this operator may distribute in a single airdrop (N in the spec)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_enabled",
+            "docs": [
+              "Whether this operator is currently enabled."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u8",
+                7
+              ]
+            }
+          }
+        ]
+      }
     }
   ]
 }

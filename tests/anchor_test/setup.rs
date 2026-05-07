@@ -564,19 +564,52 @@ impl Deployment {
     async fn initialize_gt_incentive(&mut self) -> eyre::Result<()> {
         use gmsol_gt_incentive as gt_incentive;
 
-        let client = self.user_client(Self::DEFAULT_KEEPER)?;
+        // Use the keeper's pubkey as Gov. The keeper has already been granted
+        // the GT_CONTROLLER role in `initialize_roles`, so it can call
+        // `approve_airdrop` in tests.
+        let keeper_client = self.user_client(Self::DEFAULT_KEEPER)?;
+        let gov = keeper_client.payer();
 
-        let init_ix = client
+        // Compute the airdrop_config PDA.
+        let (airdrop_config, _) = Pubkey::find_program_address(
+            &[b"airdrop_config", self.store.as_ref()],
+            &gt_incentive::ID,
+        );
+
+        // Compute the gt_authority PDA. This PDA signs the mint CPI from
+        // `claim_airdrop_target`, so it must hold the GT_CONTROLLER role.
+        let (gt_authority, _) =
+            Pubkey::find_program_address(&[b"gt_authority"], &gt_incentive::ID);
+
+        // Admin (self.client) calls `initialize_airdrop_config` since it
+        // requires the store's admin role.
+        let admin = &self.client;
+        let init_ix = admin
             .store_transaction()
             .program(gt_incentive::ID)
-            .anchor_args(gt_incentive::instruction::Initialize {})
-            .anchor_accounts(gt_incentive::accounts::Initialize {
-                authority: client.payer(),
+            .anchor_args(gt_incentive::instruction::InitializeAirdropConfig { gov })
+            .anchor_accounts(gt_incentive::accounts::InitializeAirdropConfig {
+                authority: admin.payer(),
+                store: self.store,
+                airdrop_config,
+                store_program: gmsol_store::ID,
                 system_program: system_program::ID,
             });
-
         let signature = init_ix.send().await?;
-        tracing::info!(%signature, "initialized gt-incentive program");
+        tracing::info!(
+            %signature, %gov, %airdrop_config,
+            "initialized airdrop config"
+        );
+
+        // Grant GT_CONTROLLER to the gt_authority PDA so the mint CPI from
+        // `claim_airdrop_target` can sign as it.
+        let grant_ix =
+            admin.grant_role(&self.store, &gt_authority, RoleKey::GT_CONTROLLER);
+        let signature = grant_ix.send().await?;
+        tracing::info!(
+            %signature, %gt_authority,
+            "granted GT_CONTROLLER to gt_authority PDA"
+        );
 
         Ok(())
     }
