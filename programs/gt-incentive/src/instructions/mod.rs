@@ -7,6 +7,10 @@ use gmsol_store::{
 };
 use gmsol_utils::InitSpace;
 
+use crate::events::{
+    AirdropApproved, AirdropClaimed, AirdropCompleted, AirdropCreated, AirdropOperatorUpdated,
+    AirdropTargetAdded,
+};
 use crate::states::{Airdrop, AirdropConfig, AirdropTarget, GT_AUTHORITY_SEED};
 
 // ============================================================================
@@ -93,8 +97,18 @@ impl UpdateAirdropOperator<'_> {
         max_airdrop_amount: u64,
         is_enabled: bool,
     ) -> Result<()> {
-        let mut config = ctx.accounts.airdrop_config.load_mut()?;
-        config.upsert_operator(&operator, timelock_secs, max_airdrop_amount, is_enabled)?;
+        {
+            let mut config = ctx.accounts.airdrop_config.load_mut()?;
+            config.upsert_operator(&operator, timelock_secs, max_airdrop_amount, is_enabled)?;
+        }
+        emit!(AirdropOperatorUpdated::new(
+            ctx.accounts.store.key(),
+            ctx.accounts.authority.key(),
+            operator,
+            timelock_secs,
+            max_airdrop_amount,
+            is_enabled,
+        )?);
         Ok(())
     }
 }
@@ -169,14 +183,24 @@ impl CreateAirdrop<'_> {
             .checked_add(i64::try_from(duration).map_err(|_| error!(CoreError::ValueOverflow))?)
             .ok_or_else(|| error!(CoreError::ValueOverflow))?;
 
-        let mut airdrop = ctx.accounts.airdrop.load_init()?;
-        airdrop.init(
-            ctx.bumps.airdrop,
-            &ctx.accounts.store.key(),
-            ctx.accounts.operator.key,
+        {
+            let mut airdrop = ctx.accounts.airdrop.load_init()?;
+            airdrop.init(
+                ctx.bumps.airdrop,
+                &ctx.accounts.store.key(),
+                ctx.accounts.operator.key,
+                nonce,
+                expiry,
+            )?;
+        }
+
+        emit!(AirdropCreated::new(
+            ctx.accounts.store.key(),
+            ctx.accounts.airdrop.key(),
+            *ctx.accounts.operator.key,
             nonce,
             expiry,
-        )?;
+        )?);
 
         Ok(())
     }
@@ -258,6 +282,12 @@ impl AddAirdropTarget<'_> {
 
         ctx.accounts.airdrop.load_mut()?.add_target(amount)?;
 
+        emit!(AirdropTargetAdded::new(
+            ctx.accounts.airdrop.key(),
+            recipient,
+            amount,
+        )?);
+
         Ok(())
     }
 }
@@ -309,6 +339,16 @@ impl CompleteAirdrop<'_> {
         );
 
         ctx.accounts.airdrop.load_mut()?.mark_complete()?;
+
+        let (total_amount, target_count) = {
+            let airdrop = ctx.accounts.airdrop.load()?;
+            (airdrop.total_amount(), airdrop.target_count())
+        };
+        emit!(AirdropCompleted::new(
+            ctx.accounts.airdrop.key(),
+            total_amount,
+            target_count,
+        )?);
 
         Ok(())
     }
@@ -372,6 +412,13 @@ impl ApproveAirdrop<'_> {
         );
 
         ctx.accounts.airdrop.load_mut()?.approve(timelock_secs)?;
+
+        let claimable_at = ctx.accounts.airdrop.load()?.claimable_at();
+        emit!(AirdropApproved::new(
+            ctx.accounts.airdrop.key(),
+            *ctx.accounts.authority.key,
+            claimable_at,
+        )?);
 
         Ok(())
     }
@@ -483,6 +530,12 @@ impl ClaimAirdropTarget<'_> {
             ),
             amount,
         )?;
+
+        emit!(AirdropClaimed::new(
+            ctx.accounts.airdrop.key(),
+            *ctx.accounts.claimer.key,
+            amount,
+        )?);
 
         Ok(())
     }
