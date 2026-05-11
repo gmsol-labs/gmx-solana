@@ -88,7 +88,10 @@ impl AirdropConfig {
 
     /// Initialize this config.
     pub(crate) fn init(&mut self, bump: u8, store: &Pubkey, gov: &Pubkey) -> Result<()> {
-        require!(!self.is_initialized(), CoreError::PreconditionsAreNotMet);
+        require!(
+            !self.is_initialized(),
+            CoreError::AirdropConfigAlreadyInitialized
+        );
         self.bump = bump;
         self.store = *store;
         self.gov = *gov;
@@ -202,7 +205,7 @@ impl Airdrop {
         nonce: [u8; 8],
         expiry: i64,
     ) -> Result<()> {
-        require!(!self.is_initialized(), CoreError::PreconditionsAreNotMet);
+        require!(!self.is_initialized(), CoreError::AirdropAlreadyInitialized);
         self.bump = bump;
         self.store = *store;
         self.operator = *operator;
@@ -250,52 +253,40 @@ impl Airdrop {
 
     /// Validate that this airdrop is still active (can receive targets or be marked complete).
     pub(crate) fn validate_active(&self) -> Result<()> {
-        require!(self.is_initialized(), CoreError::PreconditionsAreNotMet);
-        require!(!self.is_complete(), CoreError::PreconditionsAreNotMet);
-        require!(!self.is_approved(), CoreError::PreconditionsAreNotMet);
-        require!(!self.is_cancelled(), CoreError::PreconditionsAreNotMet);
+        require!(self.is_initialized(), CoreError::AirdropNotInitialized);
+        require!(!self.is_complete(), CoreError::AirdropAlreadyComplete);
+        require!(!self.is_approved(), CoreError::AirdropAlreadyApproved);
+        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
         let clock = Clock::get()?;
-        require_gt!(
-            self.expiry,
-            clock.unix_timestamp,
-            CoreError::PreconditionsAreNotMet
-        );
+        require_gt!(self.expiry, clock.unix_timestamp, CoreError::AirdropExpired);
         Ok(())
     }
 
     /// Validate that this airdrop is ready for approval.
     pub(crate) fn validate_approvable(&self) -> Result<()> {
-        require!(self.is_initialized(), CoreError::PreconditionsAreNotMet);
-        require!(self.is_complete(), CoreError::PreconditionsAreNotMet);
-        require!(!self.is_approved(), CoreError::PreconditionsAreNotMet);
-        require!(!self.is_cancelled(), CoreError::PreconditionsAreNotMet);
-        require_gt!(self.target_count, 0, CoreError::PreconditionsAreNotMet);
+        require!(self.is_initialized(), CoreError::AirdropNotInitialized);
+        require!(self.is_complete(), CoreError::AirdropNotComplete);
+        require!(!self.is_approved(), CoreError::AirdropAlreadyApproved);
+        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
+        require_gt!(self.target_count, 0, CoreError::AirdropHasNoTargets);
         let clock = Clock::get()?;
-        require_gt!(
-            self.expiry,
-            clock.unix_timestamp,
-            CoreError::PreconditionsAreNotMet
-        );
+        require_gt!(self.expiry, clock.unix_timestamp, CoreError::AirdropExpired);
         Ok(())
     }
 
     /// Validate that users may claim from this airdrop right now.
     pub(crate) fn validate_claimable(&self) -> Result<()> {
-        require!(self.is_initialized(), CoreError::PreconditionsAreNotMet);
-        require!(self.is_complete(), CoreError::PreconditionsAreNotMet);
-        require!(self.is_approved(), CoreError::PreconditionsAreNotMet);
-        require!(!self.is_cancelled(), CoreError::PreconditionsAreNotMet);
+        require!(self.is_initialized(), CoreError::AirdropNotInitialized);
+        require!(self.is_complete(), CoreError::AirdropNotComplete);
+        require!(self.is_approved(), CoreError::AirdropNotApproved);
+        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
         let clock = Clock::get()?;
         require_gte!(
             clock.unix_timestamp,
             self.claimable_at,
-            CoreError::PreconditionsAreNotMet
+            CoreError::AirdropTimelockNotElapsed
         );
-        require_gt!(
-            self.expiry,
-            clock.unix_timestamp,
-            CoreError::PreconditionsAreNotMet
-        );
+        require_gt!(self.expiry, clock.unix_timestamp, CoreError::AirdropExpired);
         Ok(())
     }
 
@@ -315,7 +306,7 @@ impl Airdrop {
     /// Mark the target list as complete.
     pub(crate) fn mark_complete(&mut self) -> Result<()> {
         self.validate_active()?;
-        require_gt!(self.target_count, 0, CoreError::PreconditionsAreNotMet);
+        require_gt!(self.target_count, 0, CoreError::AirdropHasNoTargets);
         self.flags.set_flag(AirdropFlag::Complete, true);
         Ok(())
     }
@@ -330,7 +321,7 @@ impl Airdrop {
                 i64::try_from(timelock_secs).map_err(|_| error!(CoreError::ValueOverflow))?,
             )
             .ok_or_else(|| error!(CoreError::ValueOverflow))?;
-        require_gte!(self.expiry, claimable_at, CoreError::PreconditionsAreNotMet);
+        require_gte!(self.expiry, claimable_at, CoreError::AirdropExpiryTooClose);
         self.claimable_at = claimable_at;
         self.flags.set_flag(AirdropFlag::Approved, true);
         Ok(())
@@ -373,7 +364,10 @@ impl AirdropTarget {
         recipient: &Pubkey,
         amount: u64,
     ) -> Result<()> {
-        require!(!self.is_initialized(), CoreError::PreconditionsAreNotMet);
+        require!(
+            !self.is_initialized(),
+            CoreError::AirdropTargetAlreadyInitialized
+        );
         require_gt!(amount, 0, CoreError::InvalidArgument);
         self.bump = bump;
         self.airdrop = *airdrop;
@@ -401,8 +395,11 @@ impl AirdropTarget {
 
     /// Mark this target as claimed.
     pub(crate) fn claim(&mut self) -> Result<()> {
-        require!(self.is_initialized(), CoreError::PreconditionsAreNotMet);
-        require!(!self.is_claimed(), CoreError::PreconditionsAreNotMet);
+        require!(
+            self.is_initialized(),
+            CoreError::AirdropTargetNotInitialized
+        );
+        require!(!self.is_claimed(), CoreError::AirdropTargetAlreadyClaimed);
         self.flags.set_flag(AirdropTargetFlag::Claimed, true);
         Ok(())
     }
