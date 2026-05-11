@@ -40,11 +40,7 @@ impl InitializeAirdropConfig<'_> {
     /// CHECK: only the store admin is allowed to invoke (enforced via `access_control`).
     pub(crate) fn invoke_unchecked(ctx: Context<Self>, gov: Pubkey) -> Result<()> {
         let mut config = ctx.accounts.airdrop_config.load_init()?;
-        config.init(
-            ctx.bumps.airdrop_config,
-            &ctx.accounts.store.key(),
-            &gov,
-        )?;
+        config.init(ctx.bumps.airdrop_config, &ctx.accounts.store.key(), &gov)?;
         Ok(())
     }
 }
@@ -170,7 +166,7 @@ impl CreateAirdrop<'_> {
         let clock = Clock::get()?;
         let expiry = clock
             .unix_timestamp
-            .checked_add(duration as i64)
+            .checked_add(i64::try_from(duration).map_err(|_| error!(CoreError::ValueOverflow))?)
             .ok_or_else(|| error!(CoreError::ValueOverflow))?;
 
         let mut airdrop = ctx.accounts.airdrop.load_init()?;

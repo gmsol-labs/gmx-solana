@@ -88,10 +88,7 @@ impl AirdropConfig {
 
     /// Initialize this config.
     pub(crate) fn init(&mut self, bump: u8, store: &Pubkey, gov: &Pubkey) -> Result<()> {
-        require!(
-            !self.is_initialized(),
-            CoreError::PreconditionsAreNotMet
-        );
+        require!(!self.is_initialized(), CoreError::PreconditionsAreNotMet);
         self.bump = bump;
         self.store = *store;
         self.gov = *gov;
@@ -284,6 +281,7 @@ impl Airdrop {
 
     /// Validate that users may claim from this airdrop right now.
     pub(crate) fn validate_claimable(&self) -> Result<()> {
+        require!(self.is_initialized(), CoreError::PreconditionsAreNotMet);
         require!(self.is_complete(), CoreError::PreconditionsAreNotMet);
         require!(self.is_approved(), CoreError::PreconditionsAreNotMet);
         require!(!self.is_cancelled(), CoreError::PreconditionsAreNotMet);
@@ -328,13 +326,11 @@ impl Airdrop {
         let clock = Clock::get()?;
         let claimable_at = clock
             .unix_timestamp
-            .checked_add(timelock_secs as i64)
+            .checked_add(
+                i64::try_from(timelock_secs).map_err(|_| error!(CoreError::ValueOverflow))?,
+            )
             .ok_or_else(|| error!(CoreError::ValueOverflow))?;
-        require_gte!(
-            self.expiry,
-            claimable_at,
-            CoreError::PreconditionsAreNotMet
-        );
+        require_gte!(self.expiry, claimable_at, CoreError::PreconditionsAreNotMet);
         self.claimable_at = claimable_at;
         self.flags.set_flag(AirdropFlag::Approved, true);
         Ok(())
