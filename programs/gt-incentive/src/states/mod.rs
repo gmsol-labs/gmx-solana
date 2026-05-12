@@ -254,9 +254,12 @@ impl Airdrop {
     /// Validate that this airdrop is still active (can receive targets or be marked complete).
     pub(crate) fn validate_active(&self) -> Result<()> {
         require!(self.is_initialized(), CoreError::AirdropNotInitialized);
+        // `Cancelled` is a sticky terminal flag — report it ahead of any
+        // intermediate state checks so callers get the truth ("this
+        // campaign is dead") instead of a downstream detail.
+        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
         require!(!self.is_complete(), CoreError::AirdropAlreadyComplete);
         require!(!self.is_approved(), CoreError::AirdropAlreadyApproved);
-        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
         let clock = Clock::get()?;
         require_gt!(self.expiry, clock.unix_timestamp, CoreError::AirdropExpired);
         Ok(())
@@ -265,9 +268,9 @@ impl Airdrop {
     /// Validate that this airdrop is ready for approval.
     pub(crate) fn validate_approvable(&self) -> Result<()> {
         require!(self.is_initialized(), CoreError::AirdropNotInitialized);
+        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
         require!(self.is_complete(), CoreError::AirdropNotComplete);
         require!(!self.is_approved(), CoreError::AirdropAlreadyApproved);
-        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
         require_gt!(self.target_count, 0, CoreError::AirdropHasNoTargets);
         let clock = Clock::get()?;
         require_gt!(self.expiry, clock.unix_timestamp, CoreError::AirdropExpired);
@@ -277,9 +280,9 @@ impl Airdrop {
     /// Validate that users may claim from this airdrop right now.
     pub(crate) fn validate_claimable(&self) -> Result<()> {
         require!(self.is_initialized(), CoreError::AirdropNotInitialized);
+        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
         require!(self.is_complete(), CoreError::AirdropNotComplete);
         require!(self.is_approved(), CoreError::AirdropNotApproved);
-        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
         let clock = Clock::get()?;
         require_gte!(
             clock.unix_timestamp,
@@ -324,6 +327,16 @@ impl Airdrop {
         require_gte!(self.expiry, claimable_at, CoreError::AirdropExpiryTooClose);
         self.claimable_at = claimable_at;
         self.flags.set_flag(AirdropFlag::Approved, true);
+        Ok(())
+    }
+
+    /// Cancel this airdrop. Only valid before approval; existing data is
+    /// preserved so a subsequent `close` flow can refund rent to the operator.
+    pub(crate) fn cancel(&mut self) -> Result<()> {
+        require!(self.is_initialized(), CoreError::AirdropNotInitialized);
+        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
+        require!(!self.is_approved(), CoreError::AirdropAlreadyApproved);
+        self.flags.set_flag(AirdropFlag::Cancelled, true);
         Ok(())
     }
 }

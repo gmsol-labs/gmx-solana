@@ -627,7 +627,7 @@ async fn test_claim_before_timelock_fails() -> eyre::Result<()> {
 
     assert_eq!(
         gmsol_sdk::Error::from(err).anchor_error_code(),
-        Some(CoreError::PreconditionsAreNotMet.into())
+        Some(CoreError::AirdropTimelockNotElapsed.into())
     );
     Ok(())
 }
@@ -787,7 +787,471 @@ async fn test_claim_double_spend_rejected() -> eyre::Result<()> {
 
     assert_eq!(
         gmsol_sdk::Error::from(err).anchor_error_code(),
-        Some(CoreError::PreconditionsAreNotMet.into())
+        Some(CoreError::AirdropTargetAlreadyClaimed.into())
     );
+    Ok(())
+}
+
+/// Cancel happy path: every subsequent state-changing op is blocked.
+///
+/// Rationale: cancel must be a sticky terminal state before approval, not
+/// a transient "paused" mode. If any of add_target / complete / approve
+/// could re-activate a cancelled campaign, the operator's "I changed my
+/// mind" escape hatch becomes a footgun.
+#[tokio::test]
+async fn test_cancel_blocks_subsequent_ops() -> eyre::Result<()> {
+    let _serial = serial_lock().lock().await;
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("test_cancel_blocks_subsequent_ops");
+    let _enter = span.enter();
+
+    let admin = &deployment.client;
+    let store = deployment.store;
+    let gov_client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let gov = gov_client.payer();
+    let operator_client = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let operator = operator_client.payer();
+    let recipient = deployment.user_client(Deployment::USER_1)?.payer();
+    // A second pubkey for the post-cancel add attempt — any address works,
+    // we only need it to differ from `recipient` so the PDA derivation is new.
+    let recipient_2 = admin.payer();
+
+    let airdrop_config = airdrop_config_pda(&store);
+
+    admin
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::UpdateAirdropOperator {
+            operator,
+            timelock_secs: 3,
+            max_airdrop_amount: 1_000_000,
+            is_enabled: true,
+        })
+        .anchor_accounts(gt_incentive::accounts::UpdateAirdropOperator {
+            authority: admin.payer(),
+            store,
+            airdrop_config,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await?;
+
+    let nonce: [u8; 8] = [0xc1, 0, 0, 0, 0, 0, 0, 0];
+    let airdrop = airdrop_pda(&store, &operator, &nonce);
+
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CreateAirdrop {
+            nonce,
+            duration: 60,
+        })
+        .anchor_accounts(gt_incentive::accounts::CreateAirdrop {
+            operator,
+            store,
+            airdrop_config,
+            airdrop,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::AddAirdropTarget {
+            recipient,
+            amount: 100,
+        })
+        .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
+            operator,
+            store,
+            airdrop_config,
+            airdrop,
+            airdrop_target: airdrop_target_pda(&airdrop, &recipient),
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+
+    // Cancel: this is the new instruction under test.
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CancelAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::CancelAirdrop {
+            operator,
+            store,
+            airdrop,
+        })
+        .send()
+        .await?;
+
+    // After cancel, add_target must fail.
+    let err = operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::AddAirdropTarget {
+            recipient: recipient_2,
+            amount: 100,
+        })
+        .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
+            operator,
+            store,
+            airdrop_config,
+            airdrop,
+            airdrop_target: airdrop_target_pda(&airdrop, &recipient_2),
+            system_program: system_program::ID,
+        })
+        .send()
+        .await
+        .expect_err("add_target after cancel should fail");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::AirdropCancelled.into())
+    );
+
+    // complete_airdrop must fail.
+    let err = operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CompleteAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::CompleteAirdrop {
+            operator,
+            store,
+            airdrop_config,
+            airdrop,
+        })
+        .send()
+        .await
+        .expect_err("complete after cancel should fail");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::AirdropCancelled.into())
+    );
+
+    // approve_airdrop must fail.
+    let err = gov_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::ApproveAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::ApproveAirdrop {
+            authority: gov,
+            store,
+            airdrop_config,
+            airdrop,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await
+        .expect_err("approve after cancel should fail");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::AirdropCancelled.into())
+    );
+
+    Ok(())
+}
+
+/// Cancel must fail once the airdrop has been approved.
+///
+/// Rationale: approval is the handoff point from operator to gov. After
+/// that, only gov should be able to halt the campaign — the operator
+/// cannot retroactively undo a governance-sanctioned distribution.
+#[tokio::test]
+async fn test_cancel_after_approve_fails() -> eyre::Result<()> {
+    let _serial = serial_lock().lock().await;
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("test_cancel_after_approve_fails");
+    let _enter = span.enter();
+
+    let admin = &deployment.client;
+    let store = deployment.store;
+    let gov_client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let gov = gov_client.payer();
+    let operator_client = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let operator = operator_client.payer();
+    let recipient = deployment.user_client(Deployment::USER_1)?.payer();
+
+    let airdrop_config = airdrop_config_pda(&store);
+
+    admin
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::UpdateAirdropOperator {
+            operator,
+            timelock_secs: 3,
+            max_airdrop_amount: 1_000_000,
+            is_enabled: true,
+        })
+        .anchor_accounts(gt_incentive::accounts::UpdateAirdropOperator {
+            authority: admin.payer(),
+            store,
+            airdrop_config,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await?;
+
+    let nonce: [u8; 8] = [0xc2, 0, 0, 0, 0, 0, 0, 0];
+    let airdrop = airdrop_pda(&store, &operator, &nonce);
+
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CreateAirdrop {
+            nonce,
+            duration: 600,
+        })
+        .anchor_accounts(gt_incentive::accounts::CreateAirdrop {
+            operator,
+            store,
+            airdrop_config,
+            airdrop,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::AddAirdropTarget {
+            recipient,
+            amount: 100,
+        })
+        .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
+            operator,
+            store,
+            airdrop_config,
+            airdrop,
+            airdrop_target: airdrop_target_pda(&airdrop, &recipient),
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CompleteAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::CompleteAirdrop {
+            operator,
+            store,
+            airdrop_config,
+            airdrop,
+        })
+        .send()
+        .await?;
+    gov_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::ApproveAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::ApproveAirdrop {
+            authority: gov,
+            store,
+            airdrop_config,
+            airdrop,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await?;
+
+    // Operator attempts to cancel an approved airdrop: must fail.
+    let err = operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CancelAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::CancelAirdrop {
+            operator,
+            store,
+            airdrop,
+        })
+        .send()
+        .await
+        .expect_err("cancel after approve should fail");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::AirdropAlreadyApproved.into())
+    );
+
+    Ok(())
+}
+
+/// Only the original operator may cancel an airdrop.
+///
+/// Rationale: the PDA seeds embed `operator.key()`, so a different signer
+/// derives a different PDA. This is the entire auth boundary — without
+/// it any funded address could cancel anyone else's campaign. This test
+/// pins the boundary so a future refactor can't accidentally drop the
+/// operator out of the seeds.
+#[tokio::test]
+async fn test_non_operator_cancel_rejected() -> eyre::Result<()> {
+    let _serial = serial_lock().lock().await;
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("test_non_operator_cancel_rejected");
+    let _enter = span.enter();
+
+    let admin = &deployment.client;
+    let store = deployment.store;
+    let operator_client = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let operator = operator_client.payer();
+    let attacker_client = deployment.user_client(Deployment::USER_1)?;
+    let attacker = attacker_client.payer();
+
+    let airdrop_config = airdrop_config_pda(&store);
+
+    admin
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::UpdateAirdropOperator {
+            operator,
+            timelock_secs: 3,
+            max_airdrop_amount: 1_000_000,
+            is_enabled: true,
+        })
+        .anchor_accounts(gt_incentive::accounts::UpdateAirdropOperator {
+            authority: admin.payer(),
+            store,
+            airdrop_config,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await?;
+
+    let nonce: [u8; 8] = [0xc3, 0, 0, 0, 0, 0, 0, 0];
+    let airdrop = airdrop_pda(&store, &operator, &nonce);
+
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CreateAirdrop {
+            nonce,
+            duration: 60,
+        })
+        .anchor_accounts(gt_incentive::accounts::CreateAirdrop {
+            operator,
+            store,
+            airdrop_config,
+            airdrop,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+
+    // Attacker signs as themselves and passes their own key as operator.
+    // The PDA derived from (store, attacker.key(), nonce) does not match
+    // the actual airdrop account, so Anchor's seed constraint rejects.
+    let err = attacker_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CancelAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::CancelAirdrop {
+            operator: attacker,
+            store,
+            airdrop,
+        })
+        .send()
+        .await
+        .expect_err("non-operator cancel should fail");
+    // 2006 = anchor_lang::error::ErrorCode::ConstraintSeeds.
+    assert_eq!(gmsol_sdk::Error::from(err).anchor_error_code(), Some(2006));
+
+    Ok(())
+}
+
+/// A disabled operator must still be able to cancel their own airdrop.
+///
+/// Rationale: without this escape hatch the admin's disable / cap-lower
+/// powers become a way to permanently strand operator rent (Bug 2 + Bug 4
+/// interaction). `cancel_airdrop` deliberately does not consult
+/// `is_enabled`, and this test pins that decision.
+#[tokio::test]
+async fn test_disabled_operator_can_cancel() -> eyre::Result<()> {
+    let _serial = serial_lock().lock().await;
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("test_disabled_operator_can_cancel");
+    let _enter = span.enter();
+
+    let admin = &deployment.client;
+    let store = deployment.store;
+    let operator_client = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let operator = operator_client.payer();
+
+    let airdrop_config = airdrop_config_pda(&store);
+
+    // Enable the operator long enough to create an airdrop.
+    admin
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::UpdateAirdropOperator {
+            operator,
+            timelock_secs: 3,
+            max_airdrop_amount: 1_000_000,
+            is_enabled: true,
+        })
+        .anchor_accounts(gt_incentive::accounts::UpdateAirdropOperator {
+            authority: admin.payer(),
+            store,
+            airdrop_config,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await?;
+
+    let nonce: [u8; 8] = [0xc4, 0, 0, 0, 0, 0, 0, 0];
+    let airdrop = airdrop_pda(&store, &operator, &nonce);
+
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CreateAirdrop {
+            nonce,
+            duration: 60,
+        })
+        .anchor_accounts(gt_incentive::accounts::CreateAirdrop {
+            operator,
+            store,
+            airdrop_config,
+            airdrop,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+
+    // Admin disables the operator after the airdrop is live.
+    admin
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::UpdateAirdropOperator {
+            operator,
+            timelock_secs: 3,
+            max_airdrop_amount: 1_000_000,
+            is_enabled: false,
+        })
+        .anchor_accounts(gt_incentive::accounts::UpdateAirdropOperator {
+            authority: admin.payer(),
+            store,
+            airdrop_config,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await?;
+
+    // Cancel still succeeds — the instruction does not consult the config.
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CancelAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::CancelAirdrop {
+            operator,
+            store,
+            airdrop,
+        })
+        .send()
+        .await?;
+
     Ok(())
 }

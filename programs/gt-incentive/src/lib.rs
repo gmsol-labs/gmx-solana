@@ -80,6 +80,16 @@ pub mod gmsol_gt_incentive {
     pub fn claim_airdrop_target(ctx: Context<ClaimAirdropTarget>) -> Result<()> {
         ClaimAirdropTarget::invoke(ctx)
     }
+
+    /// Cancel an airdrop before approval. Caller must be the original operator.
+    ///
+    /// Operator authority is enforced by the PDA seeds (a different signer
+    /// derives a different PDA), so no store-level access control is required.
+    /// Still callable when the operator has been disabled in the config so the
+    /// operator always has a path to abandon an in-flight airdrop.
+    pub fn cancel_airdrop(ctx: Context<CancelAirdrop>) -> Result<()> {
+        CancelAirdrop::invoke(ctx)
+    }
 }
 
 #[cfg(not(feature = "no-entrypoint"))]

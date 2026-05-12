@@ -8,8 +8,8 @@ use gmsol_store::{
 use gmsol_utils::InitSpace;
 
 use crate::events::{
-    AirdropApproved, AirdropClaimed, AirdropCompleted, AirdropCreated, AirdropOperatorUpdated,
-    AirdropTargetAdded,
+    AirdropApproved, AirdropCancelled, AirdropClaimed, AirdropCompleted, AirdropCreated,
+    AirdropOperatorUpdated, AirdropTargetAdded,
 };
 use crate::states::{Airdrop, AirdropConfig, AirdropTarget, GT_AUTHORITY_SEED};
 
@@ -535,6 +535,48 @@ impl ClaimAirdropTarget<'_> {
             ctx.accounts.airdrop.key(),
             *ctx.accounts.claimer.key,
             amount,
+        )?);
+
+        Ok(())
+    }
+}
+
+// ============================================================================
+// 8. cancel_airdrop (operator) - abort before approval
+// ============================================================================
+
+/// Accounts definition for [`cancel_airdrop`](crate::gmsol_gt_incentive::cancel_airdrop).
+///
+/// The PDA seeds for `airdrop` include `operator.key()`, so a different
+/// signer would derive a different PDA and fail the seed check before
+/// the instruction body runs. No explicit `require_keys_eq!` is needed.
+#[derive(Accounts)]
+pub struct CancelAirdrop<'info> {
+    /// The operator who originally created this airdrop.
+    pub operator: Signer<'info>,
+    /// CHECK: only used to scope to a specific store.
+    pub store: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        constraint = airdrop.load()?.store == store.key() @ CoreError::StoreMismatched,
+        seeds = [
+            Airdrop::SEED,
+            store.key().as_ref(),
+            operator.key().as_ref(),
+            &airdrop.load()?.nonce,
+        ],
+        bump = airdrop.load()?.bump,
+    )]
+    pub airdrop: AccountLoader<'info, Airdrop>,
+}
+
+impl CancelAirdrop<'_> {
+    pub(crate) fn invoke(ctx: Context<Self>) -> Result<()> {
+        ctx.accounts.airdrop.load_mut()?.cancel()?;
+
+        emit!(AirdropCancelled::new(
+            ctx.accounts.airdrop.key(),
+            *ctx.accounts.operator.key,
         )?);
 
         Ok(())

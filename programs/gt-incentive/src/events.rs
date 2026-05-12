@@ -123,6 +123,24 @@ impl AirdropApproved {
     }
 }
 
+/// Emitted when the operator cancels their airdrop before approval.
+#[event]
+pub struct AirdropCancelled {
+    pub ts: i64,
+    pub airdrop: Pubkey,
+    pub authority: Pubkey,
+}
+
+impl AirdropCancelled {
+    pub(crate) fn new(airdrop: Pubkey, authority: Pubkey) -> Result<Self> {
+        Ok(Self {
+            ts: Clock::get()?.unix_timestamp,
+            airdrop,
+            authority,
+        })
+    }
+}
+
 /// Emitted when a recipient claims their GT from an approved airdrop (S1.5).
 #[event]
 pub struct AirdropClaimed {
