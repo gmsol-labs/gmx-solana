@@ -164,11 +164,14 @@ pub struct CreateAirdrop<'info> {
 
 impl CreateAirdrop<'_> {
     pub(crate) fn invoke(ctx: Context<Self>, nonce: [u8; 8], duration: u64) -> Result<()> {
-        let timelock_secs = {
+        // Snapshot the operator's current T and N. After this point the
+        // airdrop is decoupled from the config — `add_airdrop_target`,
+        // `complete_airdrop`, and `approve_airdrop` all read from the
+        // stored snapshot, not the live operator entry.
+        let (timelock_secs, max_airdrop_amount) = {
             let config = ctx.accounts.airdrop_config.load()?;
-            config
-                .get_enabled_operator(ctx.accounts.operator.key)?
-                .timelock_secs
+            let op = config.get_enabled_operator(ctx.accounts.operator.key)?;
+            (op.timelock_secs, op.max_airdrop_amount)
         };
 
         // S1.1: duration must be >= 2T.
@@ -191,6 +194,8 @@ impl CreateAirdrop<'_> {
                 ctx.accounts.operator.key,
                 nonce,
                 expiry,
+                max_airdrop_amount,
+                timelock_secs,
             )?;
         }
 
@@ -220,13 +225,6 @@ pub struct AddAirdropTarget<'info> {
     /// CHECK: only used to scope to a specific store.
     pub store: UncheckedAccount<'info>,
     #[account(
-        constraint = airdrop_config.load()?.is_initialized() @ CoreError::AirdropConfigNotInitialized,
-        constraint = airdrop_config.load()?.store == store.key() @ CoreError::StoreMismatched,
-        seeds = [AirdropConfig::SEED, store.key().as_ref()],
-        bump = airdrop_config.load()?.bump,
-    )]
-    pub airdrop_config: AccountLoader<'info, AirdropConfig>,
-    #[account(
         mut,
         constraint = airdrop.load()?.store == store.key() @ CoreError::StoreMismatched,
         seeds = [
@@ -252,12 +250,11 @@ pub struct AddAirdropTarget<'info> {
 
 impl AddAirdropTarget<'_> {
     pub(crate) fn invoke(ctx: Context<Self>, recipient: Pubkey, amount: u64) -> Result<()> {
-        let max_amount = {
-            let config = ctx.accounts.airdrop_config.load()?;
-            config
-                .get_enabled_operator(ctx.accounts.operator.key)?
-                .max_airdrop_amount
-        };
+        // `max_airdrop_amount` is read from the snapshot stored on the
+        // airdrop at create time, not from the live operator config —
+        // a later admin change to the operator's cap does not break
+        // an already-running campaign.
+        let max_amount = ctx.accounts.airdrop.load()?.max_airdrop_amount();
 
         ctx.accounts.airdrop.load()?.validate_active()?;
 
@@ -303,13 +300,6 @@ pub struct CompleteAirdrop<'info> {
     /// CHECK: only used to scope to a specific store.
     pub store: UncheckedAccount<'info>,
     #[account(
-        constraint = airdrop_config.load()?.is_initialized() @ CoreError::AirdropConfigNotInitialized,
-        constraint = airdrop_config.load()?.store == store.key() @ CoreError::StoreMismatched,
-        seeds = [AirdropConfig::SEED, store.key().as_ref()],
-        bump = airdrop_config.load()?.bump,
-    )]
-    pub airdrop_config: AccountLoader<'info, AirdropConfig>,
-    #[account(
         mut,
         constraint = airdrop.load()?.store == store.key() @ CoreError::StoreMismatched,
         seeds = [
@@ -325,12 +315,9 @@ pub struct CompleteAirdrop<'info> {
 
 impl CompleteAirdrop<'_> {
     pub(crate) fn invoke(ctx: Context<Self>) -> Result<()> {
-        let max_amount = {
-            let config = ctx.accounts.airdrop_config.load()?;
-            config
-                .get_enabled_operator(ctx.accounts.operator.key)?
-                .max_airdrop_amount
-        };
+        // Read the cap from the snapshot stored on the airdrop, not the
+        // live operator config.
+        let max_amount = ctx.accounts.airdrop.load()?.max_airdrop_amount();
 
         require_gte!(
             max_amount,
@@ -398,12 +385,9 @@ impl ApproveAirdrop<'_> {
             CoreError::PermissionDenied
         );
 
-        let (timelock_secs, max_amount) = {
-            let config = ctx.accounts.airdrop_config.load()?;
-            let operator = *ctx.accounts.airdrop.load()?.operator();
-            let op = config.get_enabled_operator(&operator)?;
-            (op.timelock_secs, op.max_airdrop_amount)
-        };
+        // Read N from the snapshot stored on the airdrop; T is read
+        // inside `Airdrop::approve` for the same reason.
+        let max_amount = ctx.accounts.airdrop.load()?.max_airdrop_amount();
 
         require_gte!(
             max_amount,
@@ -411,7 +395,7 @@ impl ApproveAirdrop<'_> {
             CoreError::InvalidArgument
         );
 
-        ctx.accounts.airdrop.load_mut()?.approve(timelock_secs)?;
+        ctx.accounts.airdrop.load_mut()?.approve()?;
 
         let claimable_at = ctx.accounts.airdrop.load()?.claimable_at();
         emit!(AirdropApproved::new(

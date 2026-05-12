@@ -183,10 +183,17 @@ pub struct Airdrop {
     pub(crate) total_amount: u64,
     /// Number of targets uploaded so far.
     pub(crate) target_count: u64,
+    /// Snapshot of the operator's per-airdrop GT cap (N) at create time.
+    /// All downstream checks read this value, not the live config, so
+    /// later changes to the operator's entry do not affect this campaign.
+    pub(crate) max_airdrop_amount: u64,
+    /// Snapshot of the operator's timelock (T) at create time. Used by
+    /// `approve` to compute `claimable_at = now + T`.
+    pub(crate) timelock_secs: u64,
     /// Random nonce that makes this PDA unique per operator.
     pub(crate) nonce: [u8; 8],
     #[cfg_attr(feature = "debug", debug(skip))]
-    reserved: [u8; 128],
+    reserved: [u8; 112],
 }
 
 impl InitSpace for Airdrop {
@@ -197,6 +204,10 @@ impl Airdrop {
     pub const SEED: &'static [u8] = b"airdrop";
 
     /// Initialize a new airdrop.
+    ///
+    /// `max_airdrop_amount` and `timelock_secs` are snapshots of the
+    /// operator's config entry at this moment; subsequent state checks
+    /// read these stored values instead of the live config.
     pub(crate) fn init(
         &mut self,
         bump: u8,
@@ -204,6 +215,8 @@ impl Airdrop {
         operator: &Pubkey,
         nonce: [u8; 8],
         expiry: i64,
+        max_airdrop_amount: u64,
+        timelock_secs: u64,
     ) -> Result<()> {
         require!(!self.is_initialized(), CoreError::AirdropAlreadyInitialized);
         self.bump = bump;
@@ -211,6 +224,8 @@ impl Airdrop {
         self.operator = *operator;
         self.nonce = nonce;
         self.expiry = expiry;
+        self.max_airdrop_amount = max_airdrop_amount;
+        self.timelock_secs = timelock_secs;
         self.flags.set_flag(AirdropFlag::Initialized, true);
         Ok(())
     }
@@ -249,6 +264,16 @@ impl Airdrop {
 
     pub fn target_count(&self) -> u64 {
         self.target_count
+    }
+
+    /// Snapshot of the operator's per-airdrop GT cap at create time.
+    pub fn max_airdrop_amount(&self) -> u64 {
+        self.max_airdrop_amount
+    }
+
+    /// Snapshot of the operator's timelock at create time.
+    pub fn timelock_secs(&self) -> u64 {
+        self.timelock_secs
     }
 
     /// Validate that this airdrop is still active (can receive targets or be marked complete).
@@ -314,9 +339,11 @@ impl Airdrop {
         Ok(())
     }
 
-    /// Approve this airdrop. Sets `claimable_at = now + timelock_secs`.
-    pub(crate) fn approve(&mut self, timelock_secs: u64) -> Result<()> {
+    /// Approve this airdrop. Sets `claimable_at = now + timelock_secs`,
+    /// using the timelock value snapshotted at create time.
+    pub(crate) fn approve(&mut self) -> Result<()> {
         self.validate_approvable()?;
+        let timelock_secs = self.timelock_secs;
         let clock = Clock::get()?;
         let claimable_at = clock
             .unix_timestamp

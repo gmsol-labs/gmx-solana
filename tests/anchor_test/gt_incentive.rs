@@ -1,7 +1,8 @@
 use crate::anchor_test::setup::{current_deployment, Deployment};
 use gmsol_gt_incentive as gt_incentive;
-use gmsol_sdk::client::ops::UserOps;
+use gmsol_sdk::client::ops::{RoleOps, UserOps};
 use gmsol_store::CoreError;
+use gmsol_utils::role::RoleKey;
 use solana_sdk::{pubkey::Pubkey, system_program};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -149,7 +150,6 @@ async fn test_full_airdrop_flow() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
             operator,
             store,
-            airdrop_config,
             airdrop,
             airdrop_target,
             system_program: system_program::ID,
@@ -165,7 +165,6 @@ async fn test_full_airdrop_flow() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::CompleteAirdrop {
             operator,
             store,
-            airdrop_config,
             airdrop,
         })
         .send()
@@ -353,7 +352,6 @@ async fn test_add_target_exceeds_max_amount() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
             operator,
             store,
-            airdrop_config,
             airdrop,
             airdrop_target: airdrop_target_pda(&airdrop, &recipient1),
             system_program: system_program::ID,
@@ -372,7 +370,6 @@ async fn test_add_target_exceeds_max_amount() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
             operator,
             store,
-            airdrop_config,
             airdrop,
             airdrop_target: airdrop_target_pda(&airdrop, &recipient2),
             system_program: system_program::ID,
@@ -459,7 +456,6 @@ async fn test_duplicate_recipient_rejected() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
             operator,
             store,
-            airdrop_config,
             airdrop,
             airdrop_target: airdrop_target_pda(&airdrop, &recipient),
             system_program: system_program::ID,
@@ -478,7 +474,6 @@ async fn test_duplicate_recipient_rejected() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
             operator,
             store,
-            airdrop_config,
             airdrop,
             airdrop_target: airdrop_target_pda(&airdrop, &recipient),
             system_program: system_program::ID,
@@ -568,7 +563,6 @@ async fn test_claim_before_timelock_fails() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
             operator,
             store,
-            airdrop_config,
             airdrop,
             airdrop_target,
             system_program: system_program::ID,
@@ -582,7 +576,6 @@ async fn test_claim_before_timelock_fails() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::CompleteAirdrop {
             operator,
             store,
-            airdrop_config,
             airdrop,
         })
         .send()
@@ -708,7 +701,6 @@ async fn test_claim_double_spend_rejected() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
             operator,
             store,
-            airdrop_config,
             airdrop,
             airdrop_target,
             system_program: system_program::ID,
@@ -722,7 +714,6 @@ async fn test_claim_double_spend_rejected() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::CompleteAirdrop {
             operator,
             store,
-            airdrop_config,
             airdrop,
         })
         .send()
@@ -867,7 +858,6 @@ async fn test_cancel_blocks_subsequent_ops() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
             operator,
             store,
-            airdrop_config,
             airdrop,
             airdrop_target: airdrop_target_pda(&airdrop, &recipient),
             system_program: system_program::ID,
@@ -899,7 +889,6 @@ async fn test_cancel_blocks_subsequent_ops() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
             operator,
             store,
-            airdrop_config,
             airdrop,
             airdrop_target: airdrop_target_pda(&airdrop, &recipient_2),
             system_program: system_program::ID,
@@ -920,7 +909,6 @@ async fn test_cancel_blocks_subsequent_ops() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::CompleteAirdrop {
             operator,
             store,
-            airdrop_config,
             airdrop,
         })
         .send()
@@ -1024,7 +1012,6 @@ async fn test_cancel_after_approve_fails() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
             operator,
             store,
-            airdrop_config,
             airdrop,
             airdrop_target: airdrop_target_pda(&airdrop, &recipient),
             system_program: system_program::ID,
@@ -1038,7 +1025,6 @@ async fn test_cancel_after_approve_fails() -> eyre::Result<()> {
         .anchor_accounts(gt_incentive::accounts::CompleteAirdrop {
             operator,
             store,
-            airdrop_config,
             airdrop,
         })
         .send()
@@ -1249,6 +1235,499 @@ async fn test_disabled_operator_can_cancel() -> eyre::Result<()> {
             operator,
             store,
             airdrop,
+        })
+        .send()
+        .await?;
+
+    Ok(())
+}
+
+/// S1.5 expiry boundary: claiming after `expiry` must fail.
+///
+/// Rationale: expiry is the contract's "this campaign is over" deadline.
+/// If a recipient could still claim past expiry, the operator's GT cap
+/// becomes effectively unbounded over time — anyone with a pre-approved
+/// target could come back years later and mint. This test pins the
+/// expiry check so it can't be removed by a careless refactor.
+#[tokio::test]
+async fn test_claim_after_expiry_fails() -> eyre::Result<()> {
+    let _serial = serial_lock().lock().await;
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("test_claim_after_expiry_fails");
+    let _enter = span.enter();
+
+    let admin = &deployment.client;
+    let store = deployment.store;
+    let gov_client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let gov = gov_client.payer();
+    let operator_client = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let operator = operator_client.payer();
+    let recipient_client = deployment.user_client(Deployment::USER_1)?;
+    let recipient = recipient_client.payer();
+
+    let airdrop_config = airdrop_config_pda(&store);
+    let gt_authority = gt_authority_pda();
+    let store_event_authority = store_event_authority_pda();
+
+    // T = 3s, duration = 10s. With ~2s of setup overhead before approve,
+    // claimable_at lands at ~5s and expiry at ~10s — sleeping 10s past
+    // approve safely lands after expiry while keeping claim_at < now
+    // (so the timelock check passes and expiry is the one that trips).
+    admin
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::UpdateAirdropOperator {
+            operator,
+            timelock_secs: 3,
+            max_airdrop_amount: 1_000_000,
+            is_enabled: true,
+        })
+        .anchor_accounts(gt_incentive::accounts::UpdateAirdropOperator {
+            authority: admin.payer(),
+            store,
+            airdrop_config,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await?;
+
+    let nonce: [u8; 8] = [0xd1, 0, 0, 0, 0, 0, 0, 0];
+    let airdrop = airdrop_pda(&store, &operator, &nonce);
+    let airdrop_target = airdrop_target_pda(&airdrop, &recipient);
+
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CreateAirdrop {
+            nonce,
+            duration: 10,
+        })
+        .anchor_accounts(gt_incentive::accounts::CreateAirdrop {
+            operator,
+            store,
+            airdrop_config,
+            airdrop,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::AddAirdropTarget {
+            recipient,
+            amount: 100,
+        })
+        .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
+            operator,
+            store,
+            airdrop,
+            airdrop_target,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CompleteAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::CompleteAirdrop {
+            operator,
+            store,
+            airdrop,
+        })
+        .send()
+        .await?;
+    gov_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::ApproveAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::ApproveAirdrop {
+            authority: gov,
+            store,
+            airdrop_config,
+            airdrop,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await?;
+
+    // Prepare user upfront so the only thing left after sleep is the claim.
+    recipient_client
+        .prepare_user(&store)?
+        .send_without_preflight()
+        .await?;
+
+    // Sleep past expiry. `now > expiry` is what we want to trip; keeping
+    // it well past also keeps the test resilient to validator clock drift.
+    sleep(Duration::from_secs(10)).await;
+
+    let err = recipient_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::ClaimAirdropTarget {})
+        .anchor_accounts(gt_incentive::accounts::ClaimAirdropTarget {
+            claimer: recipient,
+            store,
+            airdrop,
+            airdrop_target,
+            gt_authority,
+            user: user_pda(&store, &recipient),
+            store_event_authority,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await
+        .expect_err("claim after expiry should fail");
+
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::AirdropExpired.into())
+    );
+    Ok(())
+}
+
+/// S1.4 auth boundary: holding the `GT_CONTROLLER` role is not enough to
+/// approve — the signer must additionally be `airdrop_config.gov`.
+///
+/// Rationale: `GT_CONTROLLER` is shared with anything that mints GT
+/// (claim flows, liquidity-provider GlobalState PDAs, etc.). If any
+/// holder could approve airdrops, the configured gov authority becomes
+/// just one of many — defeating the whole point of a designated gov.
+/// The contract enforces this via `require_keys_eq!(authority, gov)`
+/// inside `approve_airdrop`'s body, after the role check. This test
+/// grants a non-gov address the role and asserts that approve still
+/// rejects, then revokes the role to keep the role table clean for
+/// downstream tests.
+#[tokio::test]
+async fn test_non_gov_with_role_cannot_approve() -> eyre::Result<()> {
+    let _serial = serial_lock().lock().await;
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("test_non_gov_with_role_cannot_approve");
+    let _enter = span.enter();
+
+    let admin = &deployment.client;
+    let store = deployment.store;
+    let operator_client = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let operator = operator_client.payer();
+    // USER_1 will be granted GT_CONTROLLER but is not config.gov.
+    let imposter_client = deployment.user_client(Deployment::USER_1)?;
+    let imposter = imposter_client.payer();
+    let recipient = admin.payer();
+
+    let airdrop_config = airdrop_config_pda(&store);
+
+    admin
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::UpdateAirdropOperator {
+            operator,
+            timelock_secs: 3,
+            max_airdrop_amount: 1_000_000,
+            is_enabled: true,
+        })
+        .anchor_accounts(gt_incentive::accounts::UpdateAirdropOperator {
+            authority: admin.payer(),
+            store,
+            airdrop_config,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await?;
+
+    let nonce: [u8; 8] = [0xd2, 0, 0, 0, 0, 0, 0, 0];
+    let airdrop = airdrop_pda(&store, &operator, &nonce);
+    let airdrop_target = airdrop_target_pda(&airdrop, &recipient);
+
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CreateAirdrop {
+            nonce,
+            duration: 60,
+        })
+        .anchor_accounts(gt_incentive::accounts::CreateAirdrop {
+            operator,
+            store,
+            airdrop_config,
+            airdrop,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::AddAirdropTarget {
+            recipient,
+            amount: 100,
+        })
+        .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
+            operator,
+            store,
+            airdrop,
+            airdrop_target,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CompleteAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::CompleteAirdrop {
+            operator,
+            store,
+            airdrop,
+        })
+        .send()
+        .await?;
+
+    // Grant GT_CONTROLLER to the imposter so the `#[access_control]` check
+    // passes — that way we exercise the `require_keys_eq!(authority, gov)`
+    // line inside the instruction body, not the role check before it.
+    admin
+        .grant_role(&store, &imposter, RoleKey::GT_CONTROLLER)
+        .send()
+        .await?;
+
+    let err = imposter_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::ApproveAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::ApproveAirdrop {
+            authority: imposter,
+            store,
+            airdrop_config,
+            airdrop,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await
+        .expect_err("approve by GT_CONTROLLER holder that is not gov should fail");
+
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::PermissionDenied.into())
+    );
+
+    // Revoke so the role table is in its original state for downstream tests.
+    admin
+        .revoke_role(&store, &imposter, RoleKey::GT_CONTROLLER)
+        .send()
+        .await?;
+
+    Ok(())
+}
+
+/// Admin-only boundary: a non-admin signer cannot mutate the operator table.
+///
+/// Rationale: `update_airdrop_operator` is the only knob for adding /
+/// disabling / re-tuning operators. If anyone could call it, the
+/// per-operator timelock and amount cap (the contract's last line of
+/// defense against a runaway distribution) could be set arbitrarily.
+/// The check is `#[access_control(CpiAuthenticate::only_admin)]`, which
+/// maps an admin-role failure to `CoreError::PermissionDenied` via the
+/// `CpiAuthentication::on_error` implementation.
+#[tokio::test]
+async fn test_non_admin_cannot_update_operator() -> eyre::Result<()> {
+    let _serial = serial_lock().lock().await;
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("test_non_admin_cannot_update_operator");
+    let _enter = span.enter();
+
+    let store = deployment.store;
+    // USER_1 is funded and able to pay tx fees, but holds no roles.
+    let non_admin_client = deployment.user_client(Deployment::USER_1)?;
+    let non_admin = non_admin_client.payer();
+    // Some pubkey to upsert — the value is irrelevant since the tx must
+    // fail before any state is touched.
+    let target_operator = deployment.user_client(Deployment::DEFAULT_USER)?.payer();
+
+    let airdrop_config = airdrop_config_pda(&store);
+
+    let err = non_admin_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::UpdateAirdropOperator {
+            operator: target_operator,
+            timelock_secs: 1,
+            max_airdrop_amount: 1,
+            is_enabled: true,
+        })
+        .anchor_accounts(gt_incentive::accounts::UpdateAirdropOperator {
+            authority: non_admin,
+            store,
+            airdrop_config,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await
+        .expect_err("non-admin update_airdrop_operator should fail");
+
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::PermissionDenied.into())
+    );
+    Ok(())
+}
+
+/// Bug 4 fix: lowering an operator's cap after they have already created
+/// an airdrop must not break the in-flight campaign.
+///
+/// Rationale: `Airdrop` snapshots the operator's `max_airdrop_amount`
+/// and `timelock_secs` at create time, and every downstream check reads
+/// the stored snapshot. Without this, an admin could (intentionally or
+/// not) brick an operator's work by lowering the config cap below the
+/// already-staged total — and combined with the rent-recovery gap that
+/// would strand the operator's deposit forever.
+///
+/// The test walks the full happy path with a max of 1000, mid-flight
+/// drops the live config cap to 100, then continues add_target /
+/// complete / approve. Without the snapshot, every step after the cap
+/// drop would fail; with it, all four must succeed.
+#[tokio::test]
+async fn test_snapshot_isolates_inflight_from_max_change() -> eyre::Result<()> {
+    let _serial = serial_lock().lock().await;
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("test_snapshot_isolates_inflight_from_max_change");
+    let _enter = span.enter();
+
+    let admin = &deployment.client;
+    let store = deployment.store;
+    let gov_client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let gov = gov_client.payer();
+    let operator_client = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let operator = operator_client.payer();
+    let recipient_1 = deployment.user_client(Deployment::USER_1)?.payer();
+    // Any pubkey different from recipient_1 — claim is not exercised here.
+    let recipient_2 = admin.payer();
+
+    let airdrop_config = airdrop_config_pda(&store);
+
+    // Snapshot a max of 1000 at create time.
+    admin
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::UpdateAirdropOperator {
+            operator,
+            timelock_secs: 3,
+            max_airdrop_amount: 1_000,
+            is_enabled: true,
+        })
+        .anchor_accounts(gt_incentive::accounts::UpdateAirdropOperator {
+            authority: admin.payer(),
+            store,
+            airdrop_config,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await?;
+
+    let nonce: [u8; 8] = [0xe1, 0, 0, 0, 0, 0, 0, 0];
+    let airdrop = airdrop_pda(&store, &operator, &nonce);
+
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CreateAirdrop {
+            nonce,
+            duration: 60,
+        })
+        .anchor_accounts(gt_incentive::accounts::CreateAirdrop {
+            operator,
+            store,
+            airdrop_config,
+            airdrop,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+
+    // Stage the first target under the original cap.
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::AddAirdropTarget {
+            recipient: recipient_1,
+            amount: 600,
+        })
+        .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
+            operator,
+            store,
+            airdrop,
+            airdrop_target: airdrop_target_pda(&airdrop, &recipient_1),
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+
+    // Admin drops the live cap to 100 — well below the already-staged
+    // 600 and the planned-total 800. Without snapshotting, this would
+    // brick every subsequent state transition for this airdrop.
+    admin
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::UpdateAirdropOperator {
+            operator,
+            timelock_secs: 3,
+            max_airdrop_amount: 100,
+            is_enabled: true,
+        })
+        .anchor_accounts(gt_incentive::accounts::UpdateAirdropOperator {
+            authority: admin.payer(),
+            store,
+            airdrop_config,
+            store_program: gmsol_store::ID,
+        })
+        .send()
+        .await?;
+
+    // Continue adding under the snapshotted cap (600 + 200 = 800 ≤ 1000).
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::AddAirdropTarget {
+            recipient: recipient_2,
+            amount: 200,
+        })
+        .anchor_accounts(gt_incentive::accounts::AddAirdropTarget {
+            operator,
+            store,
+            airdrop,
+            airdrop_target: airdrop_target_pda(&airdrop, &recipient_2),
+            system_program: system_program::ID,
+        })
+        .send()
+        .await?;
+
+    // Complete and approve also see the snapshot, not the live 100.
+    operator_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::CompleteAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::CompleteAirdrop {
+            operator,
+            store,
+            airdrop,
+        })
+        .send()
+        .await?;
+
+    gov_client
+        .store_transaction()
+        .program(gt_incentive::ID)
+        .anchor_args(gt_incentive::instruction::ApproveAirdrop {})
+        .anchor_accounts(gt_incentive::accounts::ApproveAirdrop {
+            authority: gov,
+            store,
+            airdrop_config,
+            airdrop,
+            store_program: gmsol_store::ID,
         })
         .send()
         .await?;
