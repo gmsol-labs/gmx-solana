@@ -2,10 +2,12 @@ use anchor_lang::prelude::*;
 use gmsol_store::utils::CpiAuthenticate;
 use gmsol_utils::role::RoleKey;
 
+pub mod error;
 pub mod events;
 pub mod instructions;
 pub mod states;
 
+pub use error::GtIncentiveError;
 pub use events::*;
 pub use instructions::*;
 pub use states::*;

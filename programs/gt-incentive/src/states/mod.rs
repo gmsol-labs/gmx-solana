@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
 use gmsol_store::CoreError;
+
+use crate::error::GtIncentiveError;
 use gmsol_utils::{
     airdrop::{
         AirdropConfigFlag, AirdropFlag, AirdropTargetFlag, MAX_AIRDROP_CONFIG_FLAGS,
@@ -90,7 +92,7 @@ impl AirdropConfig {
     pub(crate) fn init(&mut self, bump: u8, store: &Pubkey, gov: &Pubkey) -> Result<()> {
         require!(
             !self.is_initialized(),
-            CoreError::AirdropConfigAlreadyInitialized
+            GtIncentiveError::AirdropConfigAlreadyInitialized
         );
         self.bump = bump;
         self.store = *store;
@@ -218,7 +220,7 @@ impl Airdrop {
         max_airdrop_amount: u64,
         timelock_secs: u64,
     ) -> Result<()> {
-        require!(!self.is_initialized(), CoreError::AirdropAlreadyInitialized);
+        require!(!self.is_initialized(), GtIncentiveError::AirdropAlreadyInitialized);
         self.bump = bump;
         self.store = *store;
         self.operator = *operator;
@@ -278,43 +280,43 @@ impl Airdrop {
 
     /// Validate that this airdrop is still active (can receive targets or be marked complete).
     pub(crate) fn validate_active(&self) -> Result<()> {
-        require!(self.is_initialized(), CoreError::AirdropNotInitialized);
+        require!(self.is_initialized(), GtIncentiveError::AirdropNotInitialized);
         // `Cancelled` is a sticky terminal flag — report it ahead of any
         // intermediate state checks so callers get the truth ("this
         // campaign is dead") instead of a downstream detail.
-        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
-        require!(!self.is_complete(), CoreError::AirdropAlreadyComplete);
-        require!(!self.is_approved(), CoreError::AirdropAlreadyApproved);
+        require!(!self.is_cancelled(), GtIncentiveError::AirdropCancelled);
+        require!(!self.is_complete(), GtIncentiveError::AirdropAlreadyComplete);
+        require!(!self.is_approved(), GtIncentiveError::AirdropAlreadyApproved);
         let clock = Clock::get()?;
-        require_gt!(self.expiry, clock.unix_timestamp, CoreError::AirdropExpired);
+        require_gt!(self.expiry, clock.unix_timestamp, GtIncentiveError::AirdropExpired);
         Ok(())
     }
 
     /// Validate that this airdrop is ready for approval.
     pub(crate) fn validate_approvable(&self) -> Result<()> {
-        require!(self.is_initialized(), CoreError::AirdropNotInitialized);
-        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
-        require!(self.is_complete(), CoreError::AirdropNotComplete);
-        require!(!self.is_approved(), CoreError::AirdropAlreadyApproved);
-        require_gt!(self.target_count, 0, CoreError::AirdropHasNoTargets);
+        require!(self.is_initialized(), GtIncentiveError::AirdropNotInitialized);
+        require!(!self.is_cancelled(), GtIncentiveError::AirdropCancelled);
+        require!(self.is_complete(), GtIncentiveError::AirdropNotComplete);
+        require!(!self.is_approved(), GtIncentiveError::AirdropAlreadyApproved);
+        require_gt!(self.target_count, 0, GtIncentiveError::AirdropHasNoTargets);
         let clock = Clock::get()?;
-        require_gt!(self.expiry, clock.unix_timestamp, CoreError::AirdropExpired);
+        require_gt!(self.expiry, clock.unix_timestamp, GtIncentiveError::AirdropExpired);
         Ok(())
     }
 
     /// Validate that users may claim from this airdrop right now.
     pub(crate) fn validate_claimable(&self) -> Result<()> {
-        require!(self.is_initialized(), CoreError::AirdropNotInitialized);
-        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
-        require!(self.is_complete(), CoreError::AirdropNotComplete);
-        require!(self.is_approved(), CoreError::AirdropNotApproved);
+        require!(self.is_initialized(), GtIncentiveError::AirdropNotInitialized);
+        require!(!self.is_cancelled(), GtIncentiveError::AirdropCancelled);
+        require!(self.is_complete(), GtIncentiveError::AirdropNotComplete);
+        require!(self.is_approved(), GtIncentiveError::AirdropNotApproved);
         let clock = Clock::get()?;
         require_gte!(
             clock.unix_timestamp,
             self.claimable_at,
-            CoreError::AirdropTimelockNotElapsed
+            GtIncentiveError::AirdropTimelockNotElapsed
         );
-        require_gt!(self.expiry, clock.unix_timestamp, CoreError::AirdropExpired);
+        require_gt!(self.expiry, clock.unix_timestamp, GtIncentiveError::AirdropExpired);
         Ok(())
     }
 
@@ -334,7 +336,7 @@ impl Airdrop {
     /// Mark the target list as complete.
     pub(crate) fn mark_complete(&mut self) -> Result<()> {
         self.validate_active()?;
-        require_gt!(self.target_count, 0, CoreError::AirdropHasNoTargets);
+        require_gt!(self.target_count, 0, GtIncentiveError::AirdropHasNoTargets);
         self.flags.set_flag(AirdropFlag::Complete, true);
         Ok(())
     }
@@ -351,7 +353,7 @@ impl Airdrop {
                 i64::try_from(timelock_secs).map_err(|_| error!(CoreError::ValueOverflow))?,
             )
             .ok_or_else(|| error!(CoreError::ValueOverflow))?;
-        require_gte!(self.expiry, claimable_at, CoreError::AirdropExpiryTooClose);
+        require_gte!(self.expiry, claimable_at, GtIncentiveError::AirdropExpiryTooClose);
         self.claimable_at = claimable_at;
         self.flags.set_flag(AirdropFlag::Approved, true);
         Ok(())
@@ -360,9 +362,9 @@ impl Airdrop {
     /// Cancel this airdrop. Only valid before approval; existing data is
     /// preserved so a subsequent `close` flow can refund rent to the operator.
     pub(crate) fn cancel(&mut self) -> Result<()> {
-        require!(self.is_initialized(), CoreError::AirdropNotInitialized);
-        require!(!self.is_cancelled(), CoreError::AirdropCancelled);
-        require!(!self.is_approved(), CoreError::AirdropAlreadyApproved);
+        require!(self.is_initialized(), GtIncentiveError::AirdropNotInitialized);
+        require!(!self.is_cancelled(), GtIncentiveError::AirdropCancelled);
+        require!(!self.is_approved(), GtIncentiveError::AirdropAlreadyApproved);
         self.flags.set_flag(AirdropFlag::Cancelled, true);
         Ok(())
     }
@@ -406,7 +408,7 @@ impl AirdropTarget {
     ) -> Result<()> {
         require!(
             !self.is_initialized(),
-            CoreError::AirdropTargetAlreadyInitialized
+            GtIncentiveError::AirdropTargetAlreadyInitialized
         );
         require_gt!(amount, 0, CoreError::InvalidArgument);
         self.bump = bump;
@@ -437,9 +439,9 @@ impl AirdropTarget {
     pub(crate) fn claim(&mut self) -> Result<()> {
         require!(
             self.is_initialized(),
-            CoreError::AirdropTargetNotInitialized
+            GtIncentiveError::AirdropTargetNotInitialized
         );
-        require!(!self.is_claimed(), CoreError::AirdropTargetAlreadyClaimed);
+        require!(!self.is_claimed(), GtIncentiveError::AirdropTargetAlreadyClaimed);
         self.flags.set_flag(AirdropTargetFlag::Claimed, true);
         Ok(())
     }

@@ -1,5 +1,5 @@
 use crate::anchor_test::setup::{current_deployment, Deployment};
-use gmsol_gt_incentive as gt_incentive;
+use gmsol_gt_incentive::{self as gt_incentive, GtIncentiveError};
 use gmsol_sdk::client::ops::{RoleOps, UserOps};
 use gmsol_store::CoreError;
 use gmsol_utils::role::RoleKey;
@@ -620,7 +620,7 @@ async fn test_claim_before_timelock_fails() -> eyre::Result<()> {
 
     assert_eq!(
         gmsol_sdk::Error::from(err).anchor_error_code(),
-        Some(CoreError::AirdropTimelockNotElapsed.into())
+        Some(GtIncentiveError::AirdropTimelockNotElapsed.into())
     );
     Ok(())
 }
@@ -778,7 +778,7 @@ async fn test_claim_double_spend_rejected() -> eyre::Result<()> {
 
     assert_eq!(
         gmsol_sdk::Error::from(err).anchor_error_code(),
-        Some(CoreError::AirdropTargetAlreadyClaimed.into())
+        Some(GtIncentiveError::AirdropTargetAlreadyClaimed.into())
     );
     Ok(())
 }
@@ -898,7 +898,7 @@ async fn test_cancel_blocks_subsequent_ops() -> eyre::Result<()> {
         .expect_err("add_target after cancel should fail");
     assert_eq!(
         gmsol_sdk::Error::from(err).anchor_error_code(),
-        Some(CoreError::AirdropCancelled.into())
+        Some(GtIncentiveError::AirdropCancelled.into())
     );
 
     // complete_airdrop must fail.
@@ -916,7 +916,7 @@ async fn test_cancel_blocks_subsequent_ops() -> eyre::Result<()> {
         .expect_err("complete after cancel should fail");
     assert_eq!(
         gmsol_sdk::Error::from(err).anchor_error_code(),
-        Some(CoreError::AirdropCancelled.into())
+        Some(GtIncentiveError::AirdropCancelled.into())
     );
 
     // approve_airdrop must fail.
@@ -936,7 +936,7 @@ async fn test_cancel_blocks_subsequent_ops() -> eyre::Result<()> {
         .expect_err("approve after cancel should fail");
     assert_eq!(
         gmsol_sdk::Error::from(err).anchor_error_code(),
-        Some(CoreError::AirdropCancelled.into())
+        Some(GtIncentiveError::AirdropCancelled.into())
     );
 
     Ok(())
@@ -1058,7 +1058,7 @@ async fn test_cancel_after_approve_fails() -> eyre::Result<()> {
         .expect_err("cancel after approve should fail");
     assert_eq!(
         gmsol_sdk::Error::from(err).anchor_error_code(),
-        Some(CoreError::AirdropAlreadyApproved.into())
+        Some(GtIncentiveError::AirdropAlreadyApproved.into())
     );
 
     Ok(())
@@ -1383,7 +1383,7 @@ async fn test_claim_after_expiry_fails() -> eyre::Result<()> {
 
     assert_eq!(
         gmsol_sdk::Error::from(err).anchor_error_code(),
-        Some(CoreError::AirdropExpired.into())
+        Some(GtIncentiveError::AirdropExpired.into())
     );
     Ok(())
 }

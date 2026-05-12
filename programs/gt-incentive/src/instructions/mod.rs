@@ -7,6 +7,7 @@ use gmsol_store::{
 };
 use gmsol_utils::InitSpace;
 
+use crate::error::GtIncentiveError;
 use crate::events::{
     AirdropApproved, AirdropCancelled, AirdropClaimed, AirdropCompleted, AirdropCreated,
     AirdropOperatorUpdated, AirdropTargetAdded,
@@ -79,7 +80,7 @@ pub struct UpdateAirdropOperator<'info> {
     pub store: UncheckedAccount<'info>,
     #[account(
         mut,
-        constraint = airdrop_config.load()?.is_initialized() @ CoreError::AirdropConfigNotInitialized,
+        constraint = airdrop_config.load()?.is_initialized() @ GtIncentiveError::AirdropConfigNotInitialized,
         constraint = airdrop_config.load()?.store == store.key() @ CoreError::StoreMismatched,
         seeds = [AirdropConfig::SEED, store.key().as_ref()],
         bump = airdrop_config.load()?.bump,
@@ -145,7 +146,7 @@ pub struct CreateAirdrop<'info> {
     /// CHECK: only used to scope the airdrop to a specific store.
     pub store: UncheckedAccount<'info>,
     #[account(
-        constraint = airdrop_config.load()?.is_initialized() @ CoreError::AirdropConfigNotInitialized,
+        constraint = airdrop_config.load()?.is_initialized() @ GtIncentiveError::AirdropConfigNotInitialized,
         constraint = airdrop_config.load()?.store == store.key() @ CoreError::StoreMismatched,
         seeds = [AirdropConfig::SEED, store.key().as_ref()],
         bump = airdrop_config.load()?.bump,
@@ -354,7 +355,7 @@ pub struct ApproveAirdrop<'info> {
     /// CHECK: validated by `CpiAuthenticate::only` via CPI to store.
     pub store: UncheckedAccount<'info>,
     #[account(
-        constraint = airdrop_config.load()?.is_initialized() @ CoreError::AirdropConfigNotInitialized,
+        constraint = airdrop_config.load()?.is_initialized() @ GtIncentiveError::AirdropConfigNotInitialized,
         constraint = airdrop_config.load()?.store == store.key() @ CoreError::StoreMismatched,
         seeds = [AirdropConfig::SEED, store.key().as_ref()],
         bump = airdrop_config.load()?.bump,
