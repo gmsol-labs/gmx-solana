@@ -386,6 +386,9 @@ impl ApproveAirdrop<'_> {
             CoreError::PermissionDenied
         );
 
+        let operator = *ctx.accounts.airdrop.load()?.operator();
+        ctx.accounts.airdrop_config.load()?.get_enabled_operator(&operator)?;
+
         // Read N from the snapshot stored on the airdrop; T is read
         // inside `Airdrop::approve` for the same reason.
         let max_amount = ctx.accounts.airdrop.load()?.max_airdrop_amount();
