@@ -404,23 +404,36 @@ pub fn decode_full_report(payload: &[u8]) -> Result<([[u8; 32]; 3], &[u8]), Repo
             .map_err(|_| ReportError::ParseError("offset as usize"))?,
     );
 
-    if offset < 128 || offset >= payload.len() {
+    if offset < 128 {
         return Err(ReportError::InvalidLength("offset"));
+    }
+
+    // End of the length word; checked to guard against `usize` overflow as well
+    // as out-of-range slicing into `payload`.
+    let length_end = offset
+        .checked_add(Report::WORD_SIZE)
+        .ok_or(ReportError::InvalidLength("offset + WORD_SIZE overflow"))?;
+    if length_end > payload.len() {
+        return Err(ReportError::InvalidLength("length word out of range"));
     }
 
     // Decode the length of the bytes reportBlob data
     let length = usize::from_be_bytes(
-        payload[offset..offset + 32][24..Report::WORD_SIZE] // Length value is stored as Little Endian
+        payload[offset..length_end][24..Report::WORD_SIZE] // Length value is stored as Little Endian
             .try_into()
             .map_err(|_| ReportError::ParseError("length as usize"))?,
     );
 
-    if offset + Report::WORD_SIZE + length > payload.len() {
+    // End of the blob; attacker-controlled `length` may overflow `usize`.
+    let blob_end = length_end
+        .checked_add(length)
+        .ok_or(ReportError::InvalidLength("length_end + length overflow"))?;
+    if blob_end > payload.len() {
         return Err(ReportError::InvalidLength("bytes data"));
     }
 
     // Decode the remainder of the payload (actual bytes reportBlob data)
-    let report_blob = &payload[offset + Report::WORD_SIZE..offset + Report::WORD_SIZE + length];
+    let report_blob = &payload[length_end..blob_end];
 
     Ok((report_context, report_blob))
 }
@@ -677,5 +690,50 @@ mod tests {
         assert!(report.ask == (true, U192::from(1445876300000000000u64)));
         assert_eq!(report.valid_from_timestamp, 1730606208);
         assert_eq!(report.observations_timestamp, 1730606208);
+    }
+
+    #[test]
+    fn test_decode_full_report_payload_too_short() {
+        let payload = vec![0u8; 127];
+        let err = decode_full_report(&payload).unwrap_err();
+        assert!(matches!(err, ReportError::DataTooShort(_)));
+    }
+
+    #[test]
+    fn test_decode_full_report_offset_below_128() {
+        let mut payload = vec![0u8; 256];
+        payload[120..128].copy_from_slice(&100u64.to_be_bytes());
+        let err = decode_full_report(&payload).unwrap_err();
+        assert!(matches!(err, ReportError::InvalidLength(_)));
+    }
+
+    #[test]
+    fn test_decode_full_report_length_word_out_of_range() {
+        // offset is in [128, payload.len()) but offset + 32 exceeds payload.len(),
+        // so slicing `payload[offset..offset + 32]` would panic without the guard.
+        let mut payload = vec![0u8; 144];
+        payload[120..128].copy_from_slice(&130u64.to_be_bytes());
+        let err = decode_full_report(&payload).unwrap_err();
+        assert!(matches!(err, ReportError::InvalidLength(_)));
+    }
+
+    #[test]
+    fn test_decode_full_report_blob_exceeds_payload() {
+        let mut payload = vec![0u8; 200];
+        payload[120..128].copy_from_slice(&128u64.to_be_bytes());
+        payload[128 + 24..128 + 32].copy_from_slice(&1000u64.to_be_bytes());
+        let err = decode_full_report(&payload).unwrap_err();
+        assert!(matches!(err, ReportError::InvalidLength(_)));
+    }
+
+    #[test]
+    fn test_decode_full_report_length_overflow() {
+        // Attacker-controlled length triggers `length_end + length` overflow;
+        // must surface as InvalidLength rather than wrapping or panicking.
+        let mut payload = vec![0u8; 160];
+        payload[120..128].copy_from_slice(&128u64.to_be_bytes());
+        payload[128 + 24..128 + 32].copy_from_slice(&u64::MAX.to_be_bytes());
+        let err = decode_full_report(&payload).unwrap_err();
+        assert!(matches!(err, ReportError::InvalidLength(_)));
     }
 }
