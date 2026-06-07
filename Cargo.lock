@@ -2404,7 +2404,7 @@ dependencies = [
 
 [[package]]
 name = "gmsol-gt-incentive"
-version = "0.9.1"
+version = "0.11.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",

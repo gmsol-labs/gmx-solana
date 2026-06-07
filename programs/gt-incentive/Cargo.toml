@@ -1,8 +1,13 @@
 [package]
 name = "gmsol-gt-incentive"
-version = "0.9.1"
-description = "Created with Anchor"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+description.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/gmsol-gt-incentive"
+readme.workspace = true
+keywords.workspace = true
 
 [lib]
 crate-type = ["cdylib", "lib"]
