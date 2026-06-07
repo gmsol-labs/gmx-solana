@@ -156,6 +156,10 @@ path = "programs/competition"
 version = "0.11.0"
 path = "programs/liquidity-provider"
 
+[workspace.dependencies.gmsol-gt-incentive]
+version = "0.11.0"
+path = "programs/gt-incentive"
+
 [workspace.dependencies.gmsol-decode]
 version = "0.11.0"
 path = "crates/decode"

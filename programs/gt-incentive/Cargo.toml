@@ -1,0 +1,36 @@
+[package]
+name = "gmsol-gt-incentive"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+description.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/gmsol-gt-incentive"
+readme.workspace = true
+keywords.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "gmsol_gt_incentive"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+anchor-debug = ["anchor-lang/anchor-debug"]
+debug = []
+debug-msg = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+mock = []
+multi-store = []
+devnet = []
+test-only = []
+migration = []
+
+[dependencies]
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true, features = ["token", "token_2022"] }
+gmsol-programs = { workspace = true }
+gmsol-utils = { workspace = true, features = ["security-txt"] }
