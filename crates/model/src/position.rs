@@ -333,6 +333,27 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
         Ok(collateral_value)
     }
 
+    /// Calculate size delta in tokens when decreased by the given delta size.
+    fn size_delta_in_tokens(&self, size_delta_usd: &Self::Num) -> crate::Result<Self::Num> {
+        let size_delta_in_tokens = if *self.size_in_usd() == *size_delta_usd {
+            self.size_in_tokens().clone()
+        } else if self.is_long() {
+            self.size_in_tokens()
+                .checked_mul_div_ceil(size_delta_usd, self.size_in_usd())
+                .ok_or(crate::Error::Computation(
+                    "calculating size delta in tokens for long",
+                ))?
+        } else {
+            self.size_in_tokens()
+                .checked_mul_div(size_delta_usd, self.size_in_usd())
+                .ok_or(crate::Error::Computation(
+                    "calculating size delta in tokens for short",
+                ))?
+        };
+
+        Ok(size_delta_in_tokens)
+    }
+
     /// Calculate the pnl value when decreased by the given delta size.
     ///
     /// Returns `(pnl_value, uncapped_pnl_value, size_delta_in_tokens)`
@@ -395,21 +416,7 @@ pub trait PositionExt<const DECIMALS: u8>: Position<DECIMALS> {
             }
         }
 
-        let size_delta_in_tokens = if *self.size_in_usd() == *size_delta_usd {
-            self.size_in_tokens().clone()
-        } else if self.is_long() {
-            self.size_in_tokens()
-                .checked_mul_div_ceil(size_delta_usd, self.size_in_usd())
-                .ok_or(crate::Error::Computation(
-                    "calculating size delta in tokens for long",
-                ))?
-        } else {
-            self.size_in_tokens()
-                .checked_mul_div(size_delta_usd, self.size_in_usd())
-                .ok_or(crate::Error::Computation(
-                    "calculating size delta in tokens for short",
-                ))?
-        };
+        let size_delta_in_tokens = self.size_delta_in_tokens(size_delta_usd)?;
 
         let pnl_usd = size_delta_in_tokens
             .checked_mul_div_with_signed_numerator(&total_pnl, self.size_in_tokens())
