@@ -7,6 +7,15 @@ use crate::{
     utils::internal,
     CoreError,
 };
+cfg_if::cfg_if! {
+    if #[cfg(feature = "test-only")] {
+        const UNKNOWN_AS_CLOSED: bool = true;
+        const ENABLE_EXTENDED_STATUS: bool = true;
+    } else {
+        const UNKNOWN_AS_CLOSED: bool = false;
+        const ENABLE_EXTENDED_STATUS: bool = false;
+    }
+}
 
 /// The accounts definition for [`initialize_price_feed`](crate::initialize_price_feed) instruction.
 #[derive(Accounts)]
@@ -109,7 +118,11 @@ pub(crate) fn unchecked_update_price_feed_with_chainlink(
         CoreError::InvalidArgument
     );
 
-    let price = accounts.decode_and_validate_report(&compressed_report)?;
+    let price = accounts.decode_and_validate_report(
+        &compressed_report,
+        UNKNOWN_AS_CLOSED,
+        ENABLE_EXTENDED_STATUS,
+    )?;
     accounts.verify_report(compressed_report)?;
 
     let updated = accounts.price_feed.load_mut()?.update(
@@ -136,7 +149,12 @@ impl<'info> internal::Authentication<'info> for UpdatePriceFeedWithChainlink<'in
 }
 
 impl UpdatePriceFeedWithChainlink<'_> {
-    fn decode_and_validate_report(&self, compressed_full_report: &[u8]) -> Result<PriceFeedPrice> {
+    fn decode_and_validate_report(
+        &self,
+        compressed_full_report: &[u8],
+        unknown_as_closed: bool,
+        enable_extended_status: bool,
+    ) -> Result<PriceFeedPrice> {
         use gmsol_chainlink_datastreams::{
             report::decode_compressed_full_report, Error as ChainlinkError, FromChainlinkReport,
         };
@@ -159,17 +177,18 @@ impl UpdatePriceFeedWithChainlink<'_> {
             CoreError::InvalidPriceReport
         );
 
-        PriceFeedPrice::from_chainlink_report(&report).map_err(|err| {
-            msg!("Invalid report: {}", err);
-            let err = match err {
-                ChainlinkError::NegativePrice(_) => CoreError::NegativePriceIsNotSupported,
-                ChainlinkError::InvalidRange(_) | ChainlinkError::UnknownMarketStatus => {
-                    CoreError::InvalidPriceReport
-                }
-                ChainlinkError::Overflow(_) => CoreError::PriceOverflow,
-            };
-            error!(err)
-        })
+        PriceFeedPrice::from_chainlink_report(&report, unknown_as_closed, enable_extended_status)
+            .map_err(|err| {
+                msg!("Invalid report: {}", err);
+                let err = match err {
+                    ChainlinkError::NegativePrice(_) => CoreError::NegativePriceIsNotSupported,
+                    ChainlinkError::InvalidRange(_) | ChainlinkError::UnknownMarketStatus => {
+                        CoreError::InvalidPriceReport
+                    }
+                    ChainlinkError::Overflow(_) => CoreError::PriceOverflow,
+                };
+                error!(err)
+            })
     }
 
     fn verify_report(&self, signed_report: Vec<u8>) -> Result<()> {
