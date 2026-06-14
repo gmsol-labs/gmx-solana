@@ -18,7 +18,8 @@ const NANOS_PER_SECOND_U32: u32 = 1_000_000_000;
 pub struct PriceFeedPrice {
     decimals: u8,
     flags: PriceFlagContainer,
-    padding: [u8; 2],
+    extended_market_status_value: u8,
+    padding: [u8; 1],
     last_update_diff: u32,
     ts: i64,
     price: u128,
@@ -39,7 +40,8 @@ impl PriceFeedPrice {
         Self {
             decimals,
             flags: Default::default(),
-            padding: [0; 2],
+            extended_market_status_value: u8::from(ExtendedMarketStatus::Disabled),
+            padding: [0; 1],
             last_update_diff,
             ts,
             price,
@@ -169,15 +171,60 @@ impl PriceFeedPrice {
         let precision = token_config.precision();
         Decimal::try_from_price(self.price, self.decimals, token_decimals, precision)
     }
+
+    /// Sets the extended market status, storing it as its raw `u8` representation.
+    pub fn set_extended_market_status(&mut self, extended_market_status: ExtendedMarketStatus) {
+        self.extended_market_status_value = u8::from(extended_market_status);
+    }
+
+    /// Returns the extended market status.
+    ///
+    /// An invalid value will be mapped to [`ExtendedMarketStatus::Disabled`].
+    pub fn extended_market_status(&self) -> ExtendedMarketStatus {
+        // Invalid or unparseable values are mapped to `Disabled`, not `Unknown`,
+        // because `Unknown` carries a distinct, deliberate meaning: the market is
+        // *known* to be in an indeterminate state.
+        self.extended_market_status_value
+            .try_into()
+            .unwrap_or(ExtendedMarketStatus::Disabled)
+    }
+}
+
+/// Extended Market Status
+#[non_exhaustive]
+#[repr(u8)]
+#[derive(Clone, Copy, num_enum::IntoPrimitive, num_enum::TryFromPrimitive, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+pub enum ExtendedMarketStatus {
+    /// Disabled.
+    Disabled = 0,
+    /// Unknown.
+    Unknown = 1,
+    /// Pre-market.
+    PreMarket = 2,
+    /// Regular trading hours.
+    RegularHours = 3,
+    /// Post-market.
+    PostMarket = 4,
+    /// Overnight.
+    Overnight = 5,
+    /// Closed.
+    Closed = 6,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn new_price_for_test() -> PriceFeedPrice {
+        PriceFeedPrice::new(0, 0, 1, 1, 1, 0)
+    }
+
     #[test]
     fn test_is_market_open_in_nanoseconds() {
-        let mut price = PriceFeedPrice::new(0, 0, 1, 1, 1, 0);
+        let mut price = new_price_for_test();
         assert!(!price.is_market_open(i64::MAX, 0));
         price.set_flag(PriceFlag::Open, true);
         assert!(price.is_market_open(i64::MAX, 0));
@@ -211,7 +258,7 @@ mod tests {
 
     #[test]
     fn test_is_market_open_in_seconds() {
-        let mut price = PriceFeedPrice::new(0, 0, 1, 1, 1, 0);
+        let mut price = new_price_for_test();
         assert!(!price.is_market_open(i64::MAX, 0));
         price.set_flag(PriceFlag::Open, true);
         assert!(price.is_market_open(i64::MAX, 0));
@@ -240,5 +287,45 @@ mod tests {
         let current = i64::MAX - diff as i64;
         assert!(!price.is_market_open(current, u32::MAX - diff - 1));
         assert!(price.is_market_open(current, u32::MAX - diff));
+    }
+
+    #[test]
+    #[cfg(feature = "debug")]
+    fn test_default_extended_market_status() {
+        assert_eq!(u8::from(ExtendedMarketStatus::Disabled), 0);
+
+        let price = new_price_for_test();
+        assert_eq!(price.extended_market_status_value, 0);
+        assert_eq!(
+            price.extended_market_status(),
+            ExtendedMarketStatus::Disabled
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "debug")]
+    fn test_set_extended_market_status() {
+        let mut price = new_price_for_test();
+
+        for status in [
+            ExtendedMarketStatus::Disabled,
+            ExtendedMarketStatus::Unknown,
+            ExtendedMarketStatus::PreMarket,
+            ExtendedMarketStatus::RegularHours,
+            ExtendedMarketStatus::PostMarket,
+            ExtendedMarketStatus::Overnight,
+            ExtendedMarketStatus::Closed,
+        ] {
+            price.set_extended_market_status(status);
+            assert_eq!(price.extended_market_status(), status);
+        }
+
+        for invalid_status in 7..u8::MAX {
+            price.extended_market_status_value = invalid_status;
+            assert_eq!(
+                price.extended_market_status(),
+                ExtendedMarketStatus::Disabled
+            );
+        }
     }
 }

@@ -1,11 +1,18 @@
-use gmsol_utils::price::{feed_price::PriceFeedPrice, find_divisor_decimals, PriceFlag, TEN, U192};
+use gmsol_utils::price::{
+    feed_price::{ExtendedMarketStatus, PriceFeedPrice},
+    find_divisor_decimals, PriceFlag, TEN, U192,
+};
 
 use crate::{report::MarketStatus, Report};
 
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 
 impl super::FromChainlinkReport for PriceFeedPrice {
-    fn from_chainlink_report(report: &Report) -> Result<Self, crate::Error> {
+    fn from_chainlink_report(
+        report: &Report,
+        unknown_as_closed: bool,
+        enable_extended_status: bool,
+    ) -> Result<Self, crate::Error> {
         let price = report
             .non_negative_price()
             .ok_or(crate::Error::NegativePrice("price"))?;
@@ -35,7 +42,13 @@ impl super::FromChainlinkReport for PriceFeedPrice {
 
         let mut is_open = match report.market_status() {
             MarketStatus::Unknown => {
-                return Err(crate::Error::UnknownMarketStatus);
+                if report.extended_market_status().is_some() && enable_extended_status {
+                    true
+                } else if unknown_as_closed {
+                    false
+                } else {
+                    return Err(crate::Error::UnknownMarketStatus);
+                }
             }
             MarketStatus::Closed => false,
             MarketStatus::Open => true,
@@ -98,6 +111,25 @@ impl super::FromChainlinkReport for PriceFeedPrice {
             price.set_flag(PriceFlag::LastUpdateDiffSecs, true);
         }
 
+        if let Some(extended) = report.extended_market_status() {
+            if enable_extended_status {
+                price.set_extended_market_status(extended.into());
+            }
+        }
+
         Ok(price)
+    }
+}
+
+impl From<crate::report::ExtendedMarketStatus> for ExtendedMarketStatus {
+    fn from(value: crate::report::ExtendedMarketStatus) -> Self {
+        match value {
+            crate::report::ExtendedMarketStatus::Unknown => Self::Unknown,
+            crate::report::ExtendedMarketStatus::PreMarket => Self::PreMarket,
+            crate::report::ExtendedMarketStatus::RegularHours => Self::RegularHours,
+            crate::report::ExtendedMarketStatus::PostMarket => Self::PostMarket,
+            crate::report::ExtendedMarketStatus::Overnight => Self::Overnight,
+            crate::report::ExtendedMarketStatus::Closed => Self::Closed,
+        }
     }
 }

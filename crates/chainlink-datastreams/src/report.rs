@@ -69,16 +69,6 @@ pub enum ExtendedMarketStatus {
     Closed,
 }
 
-impl From<ExtendedMarketStatus> for MarketStatus {
-    fn from(ext: ExtendedMarketStatus) -> Self {
-        match ext {
-            ExtendedMarketStatus::Unknown => MarketStatus::Unknown,
-            ExtendedMarketStatus::RegularHours => MarketStatus::Open,
-            _ => MarketStatus::Closed,
-        }
-    }
-}
-
 impl Report {
     /// Decimals.
     pub const DECIMALS: u8 = 18;
@@ -287,7 +277,6 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
         11 => {
             let report = ReportDataV11::decode(data)?;
             let extended = decode_extended_market_status(report.market_status)?;
-            let market_status = MarketStatus::from(extended);
             let price = bigint_to_signed(report.mid)?;
             let bid = bigint_to_signed(report.bid)?;
             let ask = bigint_to_signed(report.ask)?;
@@ -303,7 +292,9 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 price,
                 bid,
                 ask,
-                market_status,
+                // For v11, map the regular market status to unknown and defer
+                // to downstream, which resolves it from the extended market status.
+                market_status: MarketStatus::Unknown,
                 extended_market_status: Some(extended),
             })
         }
@@ -441,34 +432,6 @@ pub fn decode_full_report(payload: &[u8]) -> Result<([[u8; 32]; 3], &[u8]), Repo
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_extended_market_status_to_market_status() {
-        assert_eq!(
-            MarketStatus::from(ExtendedMarketStatus::Unknown),
-            MarketStatus::Unknown
-        );
-        assert_eq!(
-            MarketStatus::from(ExtendedMarketStatus::RegularHours),
-            MarketStatus::Open
-        );
-        assert_eq!(
-            MarketStatus::from(ExtendedMarketStatus::Closed),
-            MarketStatus::Closed
-        );
-        assert_eq!(
-            MarketStatus::from(ExtendedMarketStatus::PreMarket),
-            MarketStatus::Closed
-        );
-        assert_eq!(
-            MarketStatus::from(ExtendedMarketStatus::PostMarket),
-            MarketStatus::Closed
-        );
-        assert_eq!(
-            MarketStatus::from(ExtendedMarketStatus::Overnight),
-            MarketStatus::Closed
-        );
-    }
 
     #[test]
     fn test_decode_extended_market_status() {
