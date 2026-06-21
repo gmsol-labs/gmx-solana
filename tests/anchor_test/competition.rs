@@ -50,7 +50,7 @@ async fn competition() -> eyre::Result<()> {
         .get_block_time(slot)
         .await
         .unwrap_or_else(|_| OffsetDateTime::now_utc().unix_timestamp());
-    let start_time = now + 1;
+    let start_time = now + 5;
     let competition = Pubkey::find_program_address(
         &[COMPETITION_SEED, payer.as_ref(), &start_time.to_le_bytes()],
         &COMPETITION_PROGRAM_ID,
@@ -85,7 +85,7 @@ async fn competition() -> eyre::Result<()> {
     tracing::info!(%signature, "initialized competition");
 
     // Wait for competition to start
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    tokio::time::sleep(Duration::from_secs(8)).await;
 
     // Verify competition initialization
     let competition_account = client
