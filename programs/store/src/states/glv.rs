@@ -153,6 +153,7 @@ impl Glv {
         self.shift_min_interval_secs = constants::DEFAULT_GLV_MIN_SHIFT_INTERVAL_SECS;
         self.shift_max_price_impact_factor = constants::DEFAULT_GLV_MAX_SHIFT_PRICE_IMPACT_FACTOR;
         self.shift_min_value = constants::DEFAULT_GLV_MIN_SHIFT_VALUE;
+        self.min_tokens_for_first_deposit = constants::DEFAULT_GLV_MIN_TOKENS_FOR_FIRST_DEPOSIT;
 
         require_gte!(
             Self::MAX_ALLOWED_NUMBER_OF_MARKETS,
@@ -241,6 +242,10 @@ impl Glv {
 
     pub(crate) fn update_config(&mut self, params: &UpdateGlvParams) -> Result<()> {
         if let Some(amount) = params.min_tokens_for_first_deposit {
+            if amount == 0 {
+                msg!("[CHECK] min_tokens_for_first_deposit must be non-zero");
+                return err!(CoreError::InvalidArgument);
+            }
             require_neq!(
                 self.min_tokens_for_first_deposit,
                 amount,
@@ -1153,5 +1158,33 @@ impl Borrow<Shift> for GlvShift {
 impl BorrowMut<Shift> for GlvShift {
     fn borrow_mut(&mut self) -> &mut Shift {
         &mut self.shift
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytemuck::Zeroable;
+
+    #[test]
+    fn update_config_rejects_zero_min_tokens_for_first_deposit() {
+        let mut glv = Glv::zeroed();
+        let params = UpdateGlvParams {
+            min_tokens_for_first_deposit: Some(0),
+            ..Default::default()
+        };
+        let err = glv.update_config(&params).unwrap_err();
+        assert_eq!(err, error!(CoreError::InvalidArgument));
+    }
+
+    #[test]
+    fn update_config_accepts_non_zero_min_tokens_for_first_deposit() {
+        let mut glv = Glv::zeroed();
+        let params = UpdateGlvParams {
+            min_tokens_for_first_deposit: Some(5),
+            ..Default::default()
+        };
+        glv.update_config(&params).unwrap();
+        assert_eq!(glv.min_tokens_for_first_deposit, 5);
     }
 }
