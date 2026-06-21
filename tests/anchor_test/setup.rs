@@ -413,6 +413,8 @@ impl Deployment {
         )
         .await?;
 
+        self.seed_first_deposits().await?;
+
         Ok(())
     }
 
@@ -1877,6 +1879,74 @@ impl Deployment {
         oracle.prepare_feeds(gmsol, feed_ids).await?;
 
         Ok(Arc::new(oracle))
+    }
+
+    async fn seed_first_deposits(&mut self) -> eyre::Result<()> {
+        let first_deposit_market = self
+            .market_token(
+                Self::SELECT_FIRST_DEPOSIT_MARKET[0],
+                Self::SELECT_FIRST_DEPOSIT_MARKET[1],
+                Self::SELECT_FIRST_DEPOSIT_MARKET[2],
+            )
+            .copied();
+
+        let seed_amount = 2_000_000_000u64;
+        let min_market_token = 1_000_000_000u64;
+
+        // Collect all (market_token_pubkey, long_token_name) pairs to avoid borrow conflicts
+        // in the loop (since we call &mut self methods during the loop body).
+        let markets: Vec<(Pubkey, String)> = self
+            .market_tokens
+            .iter()
+            .map(|(name, token)| (*token, name[1].clone()))
+            .collect();
+
+        for (market_token, long_token) in &markets {
+            if first_deposit_market == Some(*market_token) {
+                // Leave SELECT_FIRST_DEPOSIT_MARKET unseeded so the dedicated
+                // first_deposit test can still exercise the supply-0 path.
+                continue;
+            }
+            self.mint_or_transfer_to_user(&long_token, Self::DEFAULT_USER, seed_amount)
+                .await?;
+            let client = self.user_client(Self::DEFAULT_USER)?;
+            let keeper = self.user_client(Self::DEFAULT_KEEPER)?;
+            let (rpc, deposit) = client
+                .create_first_deposit(&self.store, market_token)
+                .long_token(seed_amount, None, None)
+                .min_market_token(min_market_token)
+                .build_with_address()
+                .await?;
+            rpc.send_without_preflight().await?;
+            let mut builder =
+                keeper.execute_deposit(&self.store, &self.oracle(), &deposit, false);
+            self.execute_with_pyth(&mut builder, None, false, true).await?;
+        }
+
+        // Seed the GLV first deposit after all GM markets are seeded (the GLV's
+        // underlying GM market must be at supply > 0 before this deposit goes to
+        // the vault rather than the first-deposit receiver).
+        let glv_token = self.glv_token;
+        let market_token = *self
+            .market_token("fBTC", "fBTC", "USDG")
+            .ok_or_eyre("glv market fBTC/fBTC/USDG not found")?;
+        let client = self.user_client(Self::DEFAULT_USER)?;
+        let keeper = self.user_client(Self::DEFAULT_KEEPER)?;
+        let first_deposit_owner = client.find_first_deposit_owner_address();
+        self.mint_or_transfer_to_user("fBTC", Self::DEFAULT_USER, 2_000_000_000)
+            .await?;
+        let (rpc, glv_deposit) = client
+            .create_glv_deposit(&self.store, &glv_token, &market_token)
+            .long_token_deposit(2_000_000_000, None, None)
+            .receiver(Some(first_deposit_owner))
+            .min_glv_token_amount(1_000_000_000)
+            .build_with_address()
+            .await?;
+        rpc.send_without_preflight().await?;
+        let mut execute = keeper.execute_glv_deposit(&self.oracle(), &glv_deposit, false);
+        self.execute_with_pyth(&mut execute, None, false, true).await?;
+
+        Ok(())
     }
 }
 
