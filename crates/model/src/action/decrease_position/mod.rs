@@ -677,6 +677,24 @@ where
         }
 
         // Update open interest.
+        //
+        // Open interest is updated by exactly `-size_delta_usd` / `-size_delta_in_tokens`,
+        // which requires that the position's `size_in_usd` / `size_in_tokens` changed by
+        // exactly these amounts above. This holds because:
+        //   1. Partial decrease (the `!should_remove` branch): the sizes are set via
+        //      `checked_sub` to `size_in_usd - size_delta_usd` and
+        //      `size_in_tokens - size_delta_in_tokens`.
+        //   2. Full close (`should_remove`): both sizes are zeroed, which matches the
+        //      deltas iff the close is full on both dimensions. `check_partial_close`
+        //      (via `is_remaining_size_too_small`) promotes the order to a full close
+        //      (`size_delta_usd = size_in_usd`) whenever either the remaining
+        //      `size_in_usd` would fall below `min_position_size_usd` or
+        //      `size_delta_in_tokens(size_delta_usd) >= size_in_tokens` (i.e. the
+        //      decrease would zero out the tokens). Hence a non-full close leaves both
+        //      `size_in_usd` and `size_in_tokens` strictly positive, so `should_remove`
+        //      is reached only on a close that is full on both dimensions, and the same
+        //      `size_delta_in_tokens` helper guarantees `size_delta_in_tokens ==
+        //      size_in_tokens` there.
         self.position.update_open_interest(
             &self.size_delta_usd.to_opposite_signed()?,
             &execution.size_delta_in_tokens.to_opposite_signed()?,
