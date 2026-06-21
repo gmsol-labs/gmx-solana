@@ -364,6 +364,15 @@ impl Market {
         self.get_config_by_key_mut(key)
     }
 
+    /// Validate a single market-config `(key, value)` write.
+    pub(crate) fn validate_config_value(key: MarketConfigKey, value: Factor) -> Result<()> {
+        if matches!(key, MarketConfigKey::MinTokensForFirstDeposit) && value == 0 {
+            msg!("[CHECK] min_tokens_for_first_deposit must be non-zero");
+            return err!(CoreError::InvalidArgument);
+        }
+        Ok(())
+    }
+
     /// Get config mutably by key.
     pub(crate) fn get_config_by_key_mut(&mut self, key: MarketConfigKey) -> Result<&mut Factor> {
         self.config
@@ -419,11 +428,12 @@ impl Market {
     pub fn update_config_with_buffer(&mut self, buffer: &MarketConfigBuffer) -> Result<()> {
         for entry in buffer.iter() {
             let key = entry.key()?;
+            let new_value = entry.value();
+            Self::validate_config_value(key, new_value)?;
             let current_value = self
                 .config
                 .get_mut(key)
                 .ok_or_else(|| error!(CoreError::Unimplemented))?;
-            let new_value = entry.value();
             *current_value = new_value;
         }
         Ok(())
@@ -977,5 +987,22 @@ mod tests {
             .expect("failed to serialize `EventOtherState`");
 
         assert_eq!(data, event_data);
+    }
+
+    #[test]
+    fn validate_config_value_rejects_zero_min_tokens_for_first_deposit() {
+        let err = Market::validate_config_value(MarketConfigKey::MinTokensForFirstDeposit, 0)
+            .unwrap_err();
+        assert_eq!(err, error!(CoreError::InvalidArgument));
+    }
+
+    #[test]
+    fn validate_config_value_allows_non_zero_min_tokens_for_first_deposit() {
+        Market::validate_config_value(MarketConfigKey::MinTokensForFirstDeposit, 1).unwrap();
+    }
+
+    #[test]
+    fn validate_config_value_allows_zero_for_other_keys() {
+        Market::validate_config_value(MarketConfigKey::MaxOpenInterestForLong, 0).unwrap();
     }
 }

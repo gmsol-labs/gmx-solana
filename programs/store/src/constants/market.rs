@@ -142,7 +142,8 @@ pub const DEFAULT_MAX_OPEN_INTEREST_FOR_LONG: Factor = 450_000 * super::MARKET_U
 pub const DEFAULT_MAX_OPEN_INTEREST_FOR_SHORT: Factor = 450_000 * super::MARKET_USD_UNIT;
 
 /// Default min tokens for first deposit.
-pub const DEFAULT_MIN_TOKENS_FOR_FIRST_DEPOSIT: Factor = 0;
+pub const DEFAULT_MIN_TOKENS_FOR_FIRST_DEPOSIT: Factor =
+    10u128.pow(super::MARKET_TOKEN_DECIMALS as u32);
 
 /// Default skip borrowing fee for smaller side.
 pub const DEFAULT_SKIP_BORROWING_FEE_FOR_SMALLER_SIDE: bool = true;

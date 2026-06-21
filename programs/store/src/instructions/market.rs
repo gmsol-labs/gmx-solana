@@ -365,6 +365,7 @@ pub(crate) fn unchecked_update_market_config(
         msg!("[CHECK] checking permissions for updating `{}`", key);
         internal::Authenticate::only_market_keeper(&ctx)?;
     }
+    Market::validate_config_value(key, value)?;
     *ctx.accounts.market.load_mut()?.get_config_by_key_mut(key)? = value;
     msg!(
         "{}: set {} = {}",
