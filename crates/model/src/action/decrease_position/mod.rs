@@ -289,17 +289,33 @@ where
             }
 
             if *self.position.size_in_usd() > self.size_delta_usd
-                && self
-                    .position
-                    .size_in_usd()
-                    .checked_sub(&self.size_delta_usd)
-                    .expect("must success")
-                    < *params.min_position_size_usd()
+                && self.is_remaining_size_too_small(params.min_position_size_usd())?
             {
                 self.size_delta_usd = self.position.size_in_usd().clone();
             }
         }
         Ok(())
+    }
+
+    fn is_remaining_size_too_small(&self, min_position_size_usd: &P::Num) -> crate::Result<bool> {
+        if self
+            .position
+            .size_in_usd()
+            .checked_sub(&self.size_delta_usd)
+            .ok_or(crate::Error::Computation(
+                "calculating remaining size_in_usd",
+            ))?
+            < *min_position_size_usd
+        {
+            return Ok(true);
+        }
+
+        // Check whether closing could drive size_in_tokens to 0; in that case
+        // we also consider the remaining size too small.
+        // In practice, size_in_tokens >= size_delta_in_tokens should hold here;
+        // this is only to avoid making too many assumptions.
+        Ok(*self.position.size_in_tokens()
+            <= self.position.size_delta_in_tokens(&self.size_delta_usd)?)
     }
 
     fn check_close(&mut self) -> crate::Result<()> {
