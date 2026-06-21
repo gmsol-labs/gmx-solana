@@ -472,7 +472,9 @@ fn do_push_token_map<'info>(
                     new_rent_minimum.saturating_sub(current_lamports),
                 )?;
             }
-            token_map_loader.as_ref().realloc(new_space, false)?;
+            // NOTE: zero_init is set to true as a tentative fix for the realloc issue.
+            // If this proves correct, replace this note with an explanation of the root cause.
+            token_map_loader.as_ref().realloc(new_space, true)?;
         }
     }
 
