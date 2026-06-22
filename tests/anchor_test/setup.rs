@@ -75,6 +75,14 @@ const ENV_GMSOL_EXTRA_USERS: &str = "GMSOL_EXTRA_USERS";
 
 const MAX_DEVIATION_FACTOR: u128 = MARKET_USD_UNIT / 100_000;
 
+const PYTH_FETCH_MAX_RETRIES: usize = 3;
+const PYTH_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
+
+/// Delay before fetching Pyth prices so the validator clock advances past the
+/// action's creation time; otherwise the freshly fetched price can be rejected
+/// on-chain as `OracleTimestampsAreSmallerThanRequired`.
+const PYTH_EXECUTE_CLOCK_ADVANCE_DELAY: Duration = Duration::from_secs(5);
+
 /// Deployment.
 pub struct Deployment {
     rng: StdRng,
@@ -1717,11 +1725,29 @@ impl Deployment {
     where
         T: PullOraclePriceConsumer + MakeBundleBuilder<'a, SignerRef>,
     {
-        sleep(Duration::from_secs(2)).await;
+        sleep(PYTH_EXECUTE_CLOCK_ADVANCE_DELAY).await;
 
-        let oracle = PythPullOracleWithHermes::from_parts(&self.client, &self.hermes, &self.pyth);
-        let res = WithPullOracle::new(oracle, execute, None)
-            .await?
+        let mut with_oracle = {
+            let mut attempt = 0;
+            loop {
+                let oracle =
+                    PythPullOracleWithHermes::from_parts(&self.client, &self.hermes, &self.pyth);
+                // `execute` is `&mut T` and `WithPullOracle::new` takes the
+                // consumer by value, so reborrow with `&mut *execute` to keep
+                // `execute` usable across retry iterations.
+                match WithPullOracle::new(oracle, &mut *execute, None).await {
+                    Ok(with_oracle) => break with_oracle,
+                    Err(err) if attempt < PYTH_FETCH_MAX_RETRIES => {
+                        attempt += 1;
+                        tracing::warn!(%err, attempt, "pyth fetch failed, retrying");
+                        sleep(PYTH_FETCH_RETRY_DELAY).await;
+                    }
+                    Err(err) => return Err(err),
+                }
+            }
+        };
+
+        let res = with_oracle
             .build()
             .await?
             .build()?
