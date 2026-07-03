@@ -6,7 +6,7 @@ use gmsol_programs::{gmsol_store::types::CreateShiftParams, model::SwapPricingKi
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
-use super::{SimulationOptions, Simulator};
+use super::{SimulationError, SimulationErrorCode, SimulationOptions, Simulator};
 
 /// Shift simulation output.
 #[derive(Debug)]
@@ -50,7 +50,9 @@ impl ShiftSimulation<'_> {
         } = self;
 
         if params.from_market_token_amount == 0 {
-            return Err(crate::Error::custom("[sim] empty shift"));
+            return Err(
+                SimulationError::new(SimulationErrorCode::EmptyShift, "[sim] empty shift").into(),
+            );
         }
 
         let (from_market, prices_for_from_market) =

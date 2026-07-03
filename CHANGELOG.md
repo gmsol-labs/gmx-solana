@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- sdk(js): The `simulate_*` methods of `Simulator` now throw structured `SimulationError` values (`{ code, message, details }`) instead of plain strings.
+
+### Added
+
+- sdk(sdk): Added `SimulationError` and `SimulationErrorCode` with stable codes and messages for simulation failures.
+
 ## [0.9.0] - 2026-02-04
 
 ### Added

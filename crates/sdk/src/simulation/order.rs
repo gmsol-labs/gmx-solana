@@ -22,7 +22,10 @@ use typed_builder::TypedBuilder;
 
 use crate::builders::order::{CreateOrderKind, CreateOrderParams};
 
-use super::simulator::{SimulationOptions, Simulator, SwapOutput};
+use super::{
+    error::SimulationError,
+    simulator::{SimulationOptions, Simulator, SwapOutput},
+};
 
 /// Order simulation output.
 #[derive(Debug)]
@@ -119,12 +122,14 @@ impl OrderSimulation<'_> {
                 let swap_out = *self.collateral_or_swap_out_token;
                 let swap_in_amount = self.params.amount;
                 let swap_out_amount = self.params.min_output;
-                let swap_in_price = self.simulator.get_price(&swap_in).ok_or_else(|| {
-                    crate::Error::custom(format!("[sim] price for {swap_in} is not ready"))
-                })?;
-                let swap_out_price = self.simulator.get_price(&swap_out).ok_or_else(|| {
-                    crate::Error::custom(format!("[sim] price for {swap_out} is not ready"))
-                })?;
+                let swap_in_price = self
+                    .simulator
+                    .get_price(&swap_in)
+                    .ok_or_else(|| SimulationError::price_not_ready(&swap_in))?;
+                let swap_out_price = self
+                    .simulator
+                    .get_price(&swap_out)
+                    .ok_or_else(|| SimulationError::price_not_ready(&swap_out))?;
                 let slippage = options
                     .limit_swap_slippage
                     .unwrap_or(DEFAULT_LIMIT_SWAP_SLIPPAGE);
@@ -232,7 +237,7 @@ impl OrderSimulation<'_> {
             options.clone(),
         )?;
         if swap_output.output_token() != collateral_or_swap_out_token {
-            return Err(crate::Error::custom("[sim] invalid swap path"));
+            return Err(SimulationError::invalid_swap_path("[sim] invalid swap path").into());
         }
 
         // Execute the increase against a cloned market model, while VI state
@@ -464,7 +469,7 @@ impl OrderSimulation<'_> {
             options.clone(),
         )?;
         if swap_output.output_token() != collateral_or_swap_out_token {
-            return Err(crate::Error::custom("[sim] invalid swap path"));
+            return Err(SimulationError::invalid_swap_path("[sim] invalid swap path").into());
         }
 
         if matches!(kind, CreateOrderKind::LimitSwap) && !options.skip_limit_price_validation {

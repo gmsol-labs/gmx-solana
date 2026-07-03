@@ -16,7 +16,7 @@ use crate::{
     js::glv::JsGlvModel,
     market::Value,
     serde::StringPubkey,
-    simulation::{order::UpdatePriceOptions, SimulationOptions, Simulator},
+    simulation::{order::UpdatePriceOptions, SimulationError, SimulationOptions, Simulator},
 };
 
 use crate::js::{
@@ -145,9 +145,11 @@ impl JsSimulator {
     pub fn disable_vis(&self) -> bool {
         self.disable_vis
     }
+}
 
+impl JsSimulator {
     /// Simulate an order execution.
-    pub fn simulate_order(
+    fn simulate_order_impl(
         &mut self,
         args: SimulateOrderArgs,
         position: Option<JsPosition>,
@@ -189,7 +191,7 @@ impl JsSimulator {
     }
 
     /// Simulate a deposit execution.
-    pub fn simulate_deposit(
+    fn simulate_deposit_impl(
         &mut self,
         args: SimulateDepositArgs,
     ) -> crate::Result<JsDepositSimulationOutput> {
@@ -227,7 +229,7 @@ impl JsSimulator {
     }
 
     /// Simulate a withdrawal execution.
-    pub fn simulate_withdrawal(
+    fn simulate_withdrawal_impl(
         &mut self,
         args: SimulateWithdrawalArgs,
     ) -> crate::Result<JsWithdrawalSimulationOutput> {
@@ -271,7 +273,7 @@ impl JsSimulator {
     }
 
     /// Simulate a shift execution.
-    pub fn simulate_shift(
+    fn simulate_shift_impl(
         &mut self,
         args: SimulateShiftArgs,
     ) -> crate::Result<JsShiftSimulationOutput> {
@@ -304,7 +306,7 @@ impl JsSimulator {
     }
 
     /// Simulate a GLV deposit execution.
-    pub fn simulate_glv_deposit(
+    fn simulate_glv_deposit_impl(
         &mut self,
         args: SimulateGlvDepositArgs,
     ) -> crate::Result<JsGlvDepositSimulationOutput> {
@@ -348,7 +350,7 @@ impl JsSimulator {
     }
 
     /// Simulate a GLV withdrawal execution.
-    pub fn simulate_glv_withdrawal(
+    fn simulate_glv_withdrawal_impl(
         &mut self,
         args: SimulateGlvWithdrawalArgs,
     ) -> crate::Result<JsGlvWithdrawalSimulationOutput> {
@@ -391,7 +393,10 @@ impl JsSimulator {
 
         Ok(JsGlvWithdrawalSimulationOutput { output })
     }
+}
 
+#[wasm_bindgen(js_class = Simulator)]
+impl JsSimulator {
     /// Create a clone of this simulator.
     #[wasm_bindgen(js_name = clone)]
     pub fn js_clone(&self) -> Self {
@@ -407,6 +412,79 @@ impl JsSimulator {
     pub fn get_glv_token_value(&self, args: GetGlvTokenValueArgs) -> crate::Result<u128> {
         self.simulator
             .get_glv_token_value(&args.glv_token, args.amount.try_into()?, args.maximize)
+    }
+
+    /// Simulate an order execution.
+    ///
+    /// # Errors
+    /// Throws a [`SimulationError`] with a stable code and message on failure.
+    pub fn simulate_order(
+        &mut self,
+        args: SimulateOrderArgs,
+        position: Option<JsPosition>,
+    ) -> Result<JsOrderSimulationOutput, SimulationError> {
+        self.simulate_order_impl(args, position)
+            .map_err(SimulationError::from)
+    }
+
+    /// Simulate a deposit execution.
+    ///
+    /// # Errors
+    /// Throws a [`SimulationError`] with a stable code and message on failure.
+    pub fn simulate_deposit(
+        &mut self,
+        args: SimulateDepositArgs,
+    ) -> Result<JsDepositSimulationOutput, SimulationError> {
+        self.simulate_deposit_impl(args)
+            .map_err(SimulationError::from)
+    }
+
+    /// Simulate a withdrawal execution.
+    ///
+    /// # Errors
+    /// Throws a [`SimulationError`] with a stable code and message on failure.
+    pub fn simulate_withdrawal(
+        &mut self,
+        args: SimulateWithdrawalArgs,
+    ) -> Result<JsWithdrawalSimulationOutput, SimulationError> {
+        self.simulate_withdrawal_impl(args)
+            .map_err(SimulationError::from)
+    }
+
+    /// Simulate a shift execution.
+    ///
+    /// # Errors
+    /// Throws a [`SimulationError`] with a stable code and message on failure.
+    pub fn simulate_shift(
+        &mut self,
+        args: SimulateShiftArgs,
+    ) -> Result<JsShiftSimulationOutput, SimulationError> {
+        self.simulate_shift_impl(args)
+            .map_err(SimulationError::from)
+    }
+
+    /// Simulate a GLV deposit execution.
+    ///
+    /// # Errors
+    /// Throws a [`SimulationError`] with a stable code and message on failure.
+    pub fn simulate_glv_deposit(
+        &mut self,
+        args: SimulateGlvDepositArgs,
+    ) -> Result<JsGlvDepositSimulationOutput, SimulationError> {
+        self.simulate_glv_deposit_impl(args)
+            .map_err(SimulationError::from)
+    }
+
+    /// Simulate a GLV withdrawal execution.
+    ///
+    /// # Errors
+    /// Throws a [`SimulationError`] with a stable code and message on failure.
+    pub fn simulate_glv_withdrawal(
+        &mut self,
+        args: SimulateGlvWithdrawalArgs,
+    ) -> Result<JsGlvWithdrawalSimulationOutput, SimulationError> {
+        self.simulate_glv_withdrawal_impl(args)
+            .map_err(SimulationError::from)
     }
 }
 
