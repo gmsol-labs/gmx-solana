@@ -23,12 +23,6 @@ pub struct EncodedRecommendation {
     pub recovery_id: u8,
 }
 
-#[derive(Debug, Clone)]
-pub struct PerMarketUpdates {
-    pub market: Pubkey,
-    pub entries: Vec<(String, u128)>,
-}
-
 impl EncodedRecommendation {
     pub fn market_pubkey(&self) -> crate::Result<Pubkey> {
         Pubkey::try_from(self.market_address.as_str()).map_err(crate::Error::custom)
@@ -56,29 +50,4 @@ pub fn map_key(chaos_key: &str, parameter_name: &str) -> Option<MarketConfigKey>
         },
         _ => None,
     }
-}
-
-pub fn to_per_market_updates(
-    items: &[EncodedRecommendation],
-) -> crate::Result<Vec<PerMarketUpdates>> {
-    use std::collections::BTreeMap;
-
-    let mut grouped: BTreeMap<Pubkey, Vec<(String, u128)>> = BTreeMap::new();
-
-    for rec in items {
-        let market = rec.market_pubkey()?;
-        for (k, v) in &rec.new_values {
-            if let Some(dst) = map_key(k, &rec.parameter_name) {
-                grouped
-                    .entry(market)
-                    .or_default()
-                    .push((dst.to_string(), (*v).into()));
-            }
-        }
-    }
-
-    Ok(grouped
-        .into_iter()
-        .map(|(market, entries)| PerMarketUpdates { market, entries })
-        .collect())
 }

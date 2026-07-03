@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- sdk(sdk): Removed unused ChaosLabs Risk Oracle helpers: `ChaosClient::from_env`, `to_per_market_updates`, `PerMarketUpdates` and `RiskOracleApplier`.
+
 ## [0.9.0] - 2026-02-04
 
 ### Added
