@@ -544,10 +544,10 @@ impl MarketModel {
 
         match (market_has_vi, model_has_vi) {
             (true, false) => Err(gmsol_model::Error::InvalidArgument(
-                "virtual inventory for swaps should be present but is missing",
+                crate::constants::VI_FOR_SWAPS_MISSING_ERROR,
             )),
             (false, true) => Err(gmsol_model::Error::InvalidArgument(
-                "virtual inventory for swaps should not be present but is provided",
+                crate::constants::VI_FOR_SWAPS_UNEXPECTED_ERROR,
             )),
             _ => Ok(()),
         }
@@ -569,10 +569,10 @@ impl MarketModel {
 
         match (market_has_vi, model_has_vi) {
             (true, false) => Err(gmsol_model::Error::InvalidArgument(
-                "virtual inventory for positions should be present but is missing",
+                crate::constants::VI_FOR_POSITIONS_MISSING_ERROR,
             )),
             (false, true) => Err(gmsol_model::Error::InvalidArgument(
-                "virtual inventory for positions should not be present but is provided",
+                crate::constants::VI_FOR_POSITIONS_UNEXPECTED_ERROR,
             )),
             _ => Ok(()),
         }

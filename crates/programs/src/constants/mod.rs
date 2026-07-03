@@ -25,3 +25,19 @@ pub const NUM_MARKET_FLAGS: usize = 8;
 
 /// Max length of the role anme.
 pub const MAX_ROLE_NAME_LEN: usize = 32;
+
+/// Error message indicating the virtual inventory for swaps is required but missing.
+pub const VI_FOR_SWAPS_MISSING_ERROR: &str =
+    "virtual inventory for swaps should be present but is missing";
+
+/// Error message indicating the virtual inventory for swaps is provided but not expected.
+pub const VI_FOR_SWAPS_UNEXPECTED_ERROR: &str =
+    "virtual inventory for swaps should not be present but is provided";
+
+/// Error message indicating the virtual inventory for positions is required but missing.
+pub const VI_FOR_POSITIONS_MISSING_ERROR: &str =
+    "virtual inventory for positions should be present but is missing";
+
+/// Error message indicating the virtual inventory for positions is provided but not expected.
+pub const VI_FOR_POSITIONS_UNEXPECTED_ERROR: &str =
+    "virtual inventory for positions should not be present but is provided";
