@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::Mint;
+use gmsol_utils::price::market_status::MarketStatusFlag;
 use gmsol_utils::token_config::TokenConfigFlag;
 
 use crate::{
@@ -197,6 +198,53 @@ impl ToggleTokenConfig<'_> {
 }
 
 impl<'info> internal::Authentication<'info> for ToggleTokenConfig<'info> {
+    fn authority(&self) -> &Signer<'info> {
+        &self.authority
+    }
+
+    fn store(&self) -> &AccountLoader<'info, Store> {
+        &self.store
+    }
+}
+
+/// The accounts definition for [`set_token_config_market_status_flag`](crate::gmsol_store::set_token_config_market_status_flag).
+#[derive(Accounts)]
+pub struct SetTokenConfigMarketStatusFlag<'info> {
+    /// The authority of the instruction.
+    pub authority: Signer<'info>,
+    /// The store that owns the token map.
+    pub store: AccountLoader<'info, Store>,
+    /// The token map to update.
+    #[account(mut, has_one = store)]
+    pub token_map: AccountLoader<'info, TokenMapHeader>,
+    /// The token whose config will be updated.
+    /// CHECK: used only as the key into the token map; not deserialized.
+    pub token: UncheckedAccount<'info>,
+}
+
+impl SetTokenConfigMarketStatusFlag<'_> {
+    /// Set a per-token market-status flag, returning the previous value.
+    ///
+    /// ## CHECK
+    /// - Only [`MARKET_KEEPER`](crate::states::RoleKey::MARKET_KEEPER) can perform this action.
+    pub(crate) fn invoke_unchecked(
+        ctx: Context<Self>,
+        flag: MarketStatusFlag,
+        enable: bool,
+    ) -> Result<bool> {
+        let token = ctx.accounts.token.key();
+        let previous = ctx
+            .accounts
+            .token_map
+            .load_token_map_mut()?
+            .get_mut(&token)
+            .ok_or_else(|| error!(CoreError::NotFound))?
+            .set_market_status_flag(flag, enable);
+        Ok(previous)
+    }
+}
+
+impl<'info> internal::Authentication<'info> for SetTokenConfigMarketStatusFlag<'info> {
     fn authority(&self) -> &Signer<'info> {
         &self.authority
     }
