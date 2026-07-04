@@ -10,7 +10,4 @@ pub enum Error {
     /// Overflow.
     #[error("overflow: {0}")]
     Overflow(&'static str),
-    /// Unknown market status.
-    #[error("unknown market status")]
-    UnknownMarketStatus,
 }

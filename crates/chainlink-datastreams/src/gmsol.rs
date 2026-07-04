@@ -7,10 +7,7 @@ use crate::{report::MarketStatus, Report};
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 
 impl super::FromChainlinkReport for PriceFeedPrice {
-    fn from_chainlink_report(
-        report: &Report,
-        enable_market_status: bool,
-    ) -> Result<Self, crate::Error> {
+    fn from_chainlink_report(report: &Report) -> Result<Self, crate::Error> {
         let price = report
             .non_negative_price()
             .ok_or(crate::Error::NegativePrice("price"))?;
@@ -38,13 +35,9 @@ impl super::FromChainlinkReport for PriceFeedPrice {
 
         debug_assert!(!divisor.is_zero());
 
-        // A coarse Unknown is only accepted when persisting the status (legacy path).
-        if !enable_market_status && report.market_status() == Some(MarketStatus::Unknown) {
-            return Err(crate::Error::UnknownMarketStatus);
-        }
         // Base openness: closed only when the coarse status is Closed and there is
-        // no granular extended status to defer to (persist path only).
-        let mut is_open = (enable_market_status && report.extended_market_status().is_some())
+        // no granular extended status to defer to.
+        let mut is_open = report.extended_market_status().is_some()
             || report.market_status() != Some(MarketStatus::Closed);
 
         let observations_timestamp = report.observations_timestamp;
@@ -104,9 +97,7 @@ impl super::FromChainlinkReport for PriceFeedPrice {
             price.set_flag(PriceFlag::LastUpdateDiffSecs, true);
         }
 
-        if enable_market_status {
-            price.set_market_status(canonical_market_status(report));
-        }
+        price.set_market_status(canonical_market_status(report));
 
         Ok(price)
     }
@@ -187,32 +178,23 @@ mod tests {
     }
 
     #[test]
-    fn disabled_keeps_legacy_behavior() {
-        // RegularHours (=2) with feature off: coarse-open, status not stored.
-        let report = v11_report(2);
-        let price = PriceFeedPrice::from_chainlink_report(&report, false).unwrap();
-        assert!(price.market_status() == FeedMarketStatus::Disabled);
-        assert!(price.is_market_open(1000, u32::MAX, MarketStatusFlagContainer::default()));
-    }
-
-    #[test]
-    fn enabled_stores_status_and_defers() {
-        // RegularHours with feature on: stored, open via default flags.
+    fn stores_status_and_defers() {
+        // RegularHours: stored, open via default flags.
         let open = v11_report(2);
-        let price = PriceFeedPrice::from_chainlink_report(&open, true).unwrap();
+        let price = PriceFeedPrice::from_chainlink_report(&open).unwrap();
         assert!(price.market_status() == FeedMarketStatus::RegularHours);
         assert!(price.is_market_open(1000, u32::MAX, MarketStatusFlagContainer::default()));
 
-        // Closed (=5) with feature on: stored, closed via default flags.
+        // Closed (=5): stored, closed via default flags.
         let closed = v11_report(5);
-        let price = PriceFeedPrice::from_chainlink_report(&closed, true).unwrap();
+        let price = PriceFeedPrice::from_chainlink_report(&closed).unwrap();
         assert!(price.market_status() == FeedMarketStatus::Closed);
         assert!(!price.is_market_open(1000, u32::MAX, MarketStatusFlagContainer::default()));
 
         // RegularHours but the token halts it.
         let mut halt = MarketStatusFlagContainer::default();
         halt.set_flag(MarketStatusFlag::HaltRegularHours, true);
-        let price = PriceFeedPrice::from_chainlink_report(&open, true).unwrap();
+        let price = PriceFeedPrice::from_chainlink_report(&open).unwrap();
         assert!(!price.is_market_open(1000, u32::MAX, halt));
     }
 
@@ -279,7 +261,7 @@ mod tests {
     fn v8_closed_is_hard_closed_even_with_allow_closed() {
         // v8 explicitly Closed: base is closed at write; no flag can reopen it.
         let closed = v8_report(1); // 1 -> Closed
-        let price = PriceFeedPrice::from_chainlink_report(&closed, true).unwrap();
+        let price = PriceFeedPrice::from_chainlink_report(&closed).unwrap();
         assert!(price.market_status() == FeedMarketStatus::Closed);
         let mut allow_closed = MarketStatusFlagContainer::default();
         allow_closed.set_flag(MarketStatusFlag::AllowClosed, true);
@@ -287,7 +269,7 @@ mod tests {
 
         // v8 Open: base open; default flags keep it open.
         let open = v8_report(2); // 2 -> Open
-        let price = PriceFeedPrice::from_chainlink_report(&open, true).unwrap();
+        let price = PriceFeedPrice::from_chainlink_report(&open).unwrap();
         assert!(price.market_status() == FeedMarketStatus::RegularHours);
         assert!(price.is_market_open(1000, u32::MAX, MarketStatusFlagContainer::default()));
     }

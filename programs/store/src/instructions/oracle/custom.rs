@@ -8,10 +8,6 @@ use crate::{
     CoreError,
 };
 
-/// Compile-time global switch for persisting/deferring market status.
-/// ON at launch; flip to `false` to fall back to legacy write-side openness.
-const ENABLE_MARKET_STATUS: bool = true;
-
 /// The accounts definition for [`initialize_price_feed`](crate::initialize_price_feed) instruction.
 #[derive(Accounts)]
 #[instruction(index: u16, provider: u8, token: Pubkey)]
@@ -113,7 +109,7 @@ pub(crate) fn unchecked_update_price_feed_with_chainlink(
         CoreError::InvalidArgument
     );
 
-    let price = accounts.decode_and_validate_report(&compressed_report, ENABLE_MARKET_STATUS)?;
+    let price = accounts.decode_and_validate_report(&compressed_report)?;
     accounts.verify_report(compressed_report)?;
 
     let updated = accounts.price_feed.load_mut()?.update(
@@ -140,11 +136,7 @@ impl<'info> internal::Authentication<'info> for UpdatePriceFeedWithChainlink<'in
 }
 
 impl UpdatePriceFeedWithChainlink<'_> {
-    fn decode_and_validate_report(
-        &self,
-        compressed_full_report: &[u8],
-        enable_market_status: bool,
-    ) -> Result<PriceFeedPrice> {
+    fn decode_and_validate_report(&self, compressed_full_report: &[u8]) -> Result<PriceFeedPrice> {
         use gmsol_chainlink_datastreams::{
             report::decode_compressed_full_report, Error as ChainlinkError, FromChainlinkReport,
         };
@@ -167,13 +159,11 @@ impl UpdatePriceFeedWithChainlink<'_> {
             CoreError::InvalidPriceReport
         );
 
-        PriceFeedPrice::from_chainlink_report(&report, enable_market_status).map_err(|err| {
+        PriceFeedPrice::from_chainlink_report(&report).map_err(|err| {
             msg!("Invalid report: {}", err);
             let err = match err {
                 ChainlinkError::NegativePrice(_) => CoreError::NegativePriceIsNotSupported,
-                ChainlinkError::InvalidRange(_) | ChainlinkError::UnknownMarketStatus => {
-                    CoreError::InvalidPriceReport
-                }
+                ChainlinkError::InvalidRange(_) => CoreError::InvalidPriceReport,
                 ChainlinkError::Overflow(_) => CoreError::PriceOverflow,
             };
             error!(err)
