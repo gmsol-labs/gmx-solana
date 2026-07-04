@@ -39,19 +39,24 @@ pub enum MarketStatus {
 #[repr(u8)]
 #[non_exhaustive]
 pub enum MarketStatusFlag {
-    /// Force RegularHours closed.
-    HaltRegularHours,
+    /// Allow trading while the status is Unknown.
+    AllowUnknown,
     /// Allow trading during pre-market.
     AllowPreMarket,
+    /// Force RegularHours closed. RegularHours is the one status open by
+    /// default (all-zero policy), so this is the inverted flag ("Halt", not
+    /// "Allow").
+    HaltRegularHours,
     /// Allow trading during post-market.
     AllowPostMarket,
     /// Allow trading overnight.
     AllowOvernight,
     /// Allow trading while the status is Closed.
     AllowClosed,
-    /// Allow trading while the status is Unknown.
-    AllowUnknown,
     // CHECK: should have no more than `MAX_MARKET_STATUS_FLAGS` of flags.
+    // CHECK: append-only. Each variant's position is a persisted bitmap bit
+    // (see `MarketStatusFlagContainer`); only add new flags at the end, never
+    // reorder or remove, or stored `TokenConfig` flags will be misread.
 }
 
 crate::flags!(MarketStatusFlag, MAX_MARKET_STATUS_FLAGS, u8);
@@ -80,12 +85,12 @@ impl MarketStatus {
         };
         match self {
             Self::Disabled => MarketOpenness::Skip,
-            Self::RegularHours => open_if(!flags.get_flag(MarketStatusFlag::HaltRegularHours)),
+            Self::Unknown => open_if(flags.get_flag(MarketStatusFlag::AllowUnknown)),
             Self::PreMarket => open_if(flags.get_flag(MarketStatusFlag::AllowPreMarket)),
+            Self::RegularHours => open_if(!flags.get_flag(MarketStatusFlag::HaltRegularHours)),
             Self::PostMarket => open_if(flags.get_flag(MarketStatusFlag::AllowPostMarket)),
             Self::Overnight => open_if(flags.get_flag(MarketStatusFlag::AllowOvernight)),
             Self::Closed => open_if(flags.get_flag(MarketStatusFlag::AllowClosed)),
-            Self::Unknown => open_if(flags.get_flag(MarketStatusFlag::AllowUnknown)),
         }
     }
 }
@@ -129,11 +134,11 @@ mod tests {
         ));
 
         for (flag, status) in [
+            (MarketStatusFlag::AllowUnknown, MarketStatus::Unknown),
             (MarketStatusFlag::AllowPreMarket, MarketStatus::PreMarket),
             (MarketStatusFlag::AllowPostMarket, MarketStatus::PostMarket),
             (MarketStatusFlag::AllowOvernight, MarketStatus::Overnight),
             (MarketStatusFlag::AllowClosed, MarketStatus::Closed),
-            (MarketStatusFlag::AllowUnknown, MarketStatus::Unknown),
         ] {
             let mut f = flags();
             f.set_flag(flag, true);
