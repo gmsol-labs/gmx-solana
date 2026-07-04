@@ -3,6 +3,7 @@ use anchor_lang::prelude::zero_copy;
 use crate::{
     price::{
         decimal::{Decimal, DecimalError},
+        market_status::MarketStatus,
         Price, PriceFlag, MAX_PRICE_FLAG,
     },
     token_config::TokenConfig,
@@ -18,7 +19,8 @@ const NANOS_PER_SECOND_U32: u32 = 1_000_000_000;
 pub struct PriceFeedPrice {
     decimals: u8,
     flags: PriceFlagContainer,
-    padding: [u8; 2],
+    market_status_value: u8,
+    padding: [u8; 1],
     last_update_diff: u32,
     ts: i64,
     price: u128,
@@ -39,7 +41,8 @@ impl PriceFeedPrice {
         Self {
             decimals,
             flags: Default::default(),
-            padding: [0; 2],
+            market_status_value: u8::from(MarketStatus::Disabled),
+            padding: [0; 1],
             last_update_diff,
             ts,
             price,
@@ -149,6 +152,16 @@ impl PriceFeedPrice {
                 .saturating_sub(current_diff)
     }
 
+    /// Returns the market status. An invalid stored value maps to [`MarketStatus::Disabled`].
+    pub fn market_status(&self) -> MarketStatus {
+        MarketStatus::try_from(self.market_status_value).unwrap_or(MarketStatus::Disabled)
+    }
+
+    /// Sets the market status.
+    pub fn set_market_status(&mut self, market_status: MarketStatus) {
+        self.market_status_value = u8::from(market_status);
+    }
+
     /// Try converting to [`Price`].
     pub fn try_to_price(&self, token_config: &TokenConfig) -> Result<Price, DecimalError> {
         let token_decimals = token_config.token_decimals();
@@ -174,6 +187,37 @@ impl PriceFeedPrice {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn market_status_round_trip() {
+        let mut price = PriceFeedPrice::new(0, 0, 1, 1, 1, 0);
+        for status in [
+            MarketStatus::Disabled,
+            MarketStatus::Unknown,
+            MarketStatus::PreMarket,
+            MarketStatus::RegularHours,
+            MarketStatus::PostMarket,
+            MarketStatus::Overnight,
+            MarketStatus::Closed,
+        ] {
+            price.set_market_status(status);
+            assert!(price.market_status() == status);
+        }
+    }
+
+    #[test]
+    fn market_status_invalid_maps_to_disabled() {
+        let mut price = PriceFeedPrice::new(0, 0, 1, 1, 1, 0);
+        price.market_status_value = 99;
+        assert!(price.market_status() == MarketStatus::Disabled);
+    }
+
+    #[test]
+    fn zeroed_price_market_status_is_disabled() {
+        use bytemuck::Zeroable;
+        let price = PriceFeedPrice::zeroed();
+        assert!(price.market_status() == MarketStatus::Disabled);
+    }
 
     #[test]
     fn test_is_market_open_in_nanoseconds() {
