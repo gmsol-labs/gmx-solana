@@ -263,9 +263,9 @@ impl TokenConfig {
         self.market_status_flags
     }
 
-    /// Sets a per-token market-status flag.
-    pub fn set_market_status_flag(&mut self, flag: MarketStatusFlag, enable: bool) {
-        self.market_status_flags.set_flag(flag, enable);
+    /// Sets a per-token market-status flag, returning the previous value.
+    pub fn set_market_status_flag(&mut self, flag: MarketStatusFlag, enable: bool) -> bool {
+        self.market_status_flags.set_flag(flag, enable)
     }
 }
 
