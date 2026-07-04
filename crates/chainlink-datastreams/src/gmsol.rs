@@ -38,18 +38,14 @@ impl super::FromChainlinkReport for PriceFeedPrice {
 
         debug_assert!(!divisor.is_zero());
 
-        let mut is_open = if enable_market_status {
-            // Defer openness to the consumer; freshness still applies below.
-            true
-        } else {
-            match report.market_status() {
-                MarketStatus::Unknown => {
-                    return Err(crate::Error::UnknownMarketStatus);
-                }
-                MarketStatus::Closed => false,
-                MarketStatus::Open => true,
-            }
-        };
+        // A coarse Unknown is only accepted when persisting the status (legacy path).
+        if !enable_market_status && report.market_status() == Some(MarketStatus::Unknown) {
+            return Err(crate::Error::UnknownMarketStatus);
+        }
+        // Base openness: closed only when the coarse status is Closed and there is
+        // no granular extended status to defer to (persist path only).
+        let mut is_open = (enable_market_status && report.extended_market_status().is_some())
+            || report.market_status() != Some(MarketStatus::Closed);
 
         let observations_timestamp = report.observations_timestamp;
 
@@ -130,31 +126,26 @@ impl From<ExtendedMarketStatus> for FeedMarketStatus {
 }
 
 fn canonical_market_status(report: &Report) -> FeedMarketStatus {
-    canonical(
-        report.version(),
-        report.market_status(),
-        report.extended_market_status(),
-    )
+    canonical(report.market_status(), report.extended_market_status())
 }
 
+/// Maps a decoded report to the canonical [`FeedMarketStatus`].
+///
+/// A granular extended status is authoritative. Otherwise the decoder tells us
+/// whether the report has a coarse market status at all: `Some` is mapped, and
+/// `None` (no market-status concept) persists nothing.
 fn canonical(
-    version: u16,
-    coarse: MarketStatus,
+    coarse: Option<MarketStatus>,
     extended: Option<ExtendedMarketStatus>,
 ) -> FeedMarketStatus {
-    // Only v11 carries an extended status; when present it is authoritative.
     if let Some(extended) = extended {
         return extended.into();
     }
-    match version {
-        // v4 / v8 carry a coarse RWA market status.
-        4 | 8 => match coarse {
-            MarketStatus::Open => FeedMarketStatus::RegularHours,
-            MarketStatus::Closed => FeedMarketStatus::Closed,
-            MarketStatus::Unknown => FeedMarketStatus::Unknown,
-        },
-        // Other versions (crypto: v2/v3/v7) carry no market-status field.
-        _ => FeedMarketStatus::Disabled,
+    match coarse {
+        Some(MarketStatus::Open) => FeedMarketStatus::RegularHours,
+        Some(MarketStatus::Closed) => FeedMarketStatus::Closed,
+        Some(MarketStatus::Unknown) => FeedMarketStatus::Unknown,
+        None => FeedMarketStatus::Disabled,
     }
 }
 
@@ -246,20 +237,58 @@ mod tests {
     }
 
     #[test]
-    fn canonical_resolves_by_version_and_extended() {
-        // v11: granular extended status wins (extended is `Some`).
+    fn canonical_resolves_coarse_and_extended() {
+        // Granular extended status wins.
         assert!(
             canonical(
-                11,
-                MarketStatus::Open,
+                Some(MarketStatus::Open),
                 Some(ExtendedMarketStatus::PreMarket)
             ) == FeedMarketStatus::PreMarket
         );
-        // v4 / v8: coarse status maps.
-        assert!(canonical(8, MarketStatus::Open, None) == FeedMarketStatus::RegularHours);
-        assert!(canonical(8, MarketStatus::Closed, None) == FeedMarketStatus::Closed);
-        assert!(canonical(4, MarketStatus::Unknown, None) == FeedMarketStatus::Unknown);
-        // crypto (no market-status field): disabled.
-        assert!(canonical(3, MarketStatus::Open, None) == FeedMarketStatus::Disabled);
+        // Coarse status maps.
+        assert!(canonical(Some(MarketStatus::Open), None) == FeedMarketStatus::RegularHours);
+        assert!(canonical(Some(MarketStatus::Closed), None) == FeedMarketStatus::Closed);
+        assert!(canonical(Some(MarketStatus::Unknown), None) == FeedMarketStatus::Unknown);
+        // No market-status concept.
+        assert!(canonical(None, None) == FeedMarketStatus::Disabled);
+    }
+
+    fn v8_report(market_status: u32) -> Report {
+        use chainlink_data_streams_report::report::v8::ReportDataV8;
+        use num_bigint::BigInt;
+
+        let mut feed_id_bytes = [0u8; 32];
+        feed_id_bytes[1] = 0x08; // version 8
+        let feed_id = chainlink_data_streams_report::feed_id::ID(feed_id_bytes);
+        let m: BigInt = "1000000000000000000".parse().unwrap();
+        let data = ReportDataV8 {
+            feed_id,
+            valid_from_timestamp: 1000,
+            observations_timestamp: 1000,
+            native_fee: BigInt::from(100),
+            link_fee: BigInt::from(200),
+            expires_at: 1100,
+            last_update_timestamp: 1_000_000_000_000,
+            mid_price: BigInt::from(50000) * &m,
+            market_status,
+        };
+        crate::report::decode(&data.abi_encode().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn v8_closed_is_hard_closed_even_with_allow_closed() {
+        // v8 explicitly Closed: base is closed at write; no flag can reopen it.
+        let closed = v8_report(1); // 1 -> Closed
+        let price = PriceFeedPrice::from_chainlink_report(&closed, true).unwrap();
+        assert!(price.market_status() == FeedMarketStatus::Closed);
+        let mut allow_closed = MarketStatusFlagContainer::default();
+        allow_closed.set_flag(MarketStatusFlag::AllowClosed, true);
+        assert!(!price.is_market_open(1000, u32::MAX, allow_closed));
+
+        // v8 Open: base open; default flags keep it open.
+        let open = v8_report(2); // 2 -> Open
+        let price = PriceFeedPrice::from_chainlink_report(&open, true).unwrap();
+        assert!(price.market_status() == FeedMarketStatus::RegularHours);
+        assert!(price.is_market_open(1000, u32::MAX, MarketStatusFlagContainer::default()));
     }
 }

@@ -33,7 +33,7 @@ pub struct Report {
     bid: Signed,
     /// Simulated price impact of a sell order up to the X% depth of liquidity utilisation (8 or 18 decimals).
     ask: Signed,
-    market_status: MarketStatus,
+    market_status: Option<MarketStatus>,
     extended_market_status: Option<ExtendedMarketStatus>,
 }
 
@@ -100,14 +100,14 @@ impl Report {
         non_negative(self.ask)
     }
 
-    /// Returns the market status.
+    /// Returns the coarse market status, or `None` for reports that carry no
+    /// market-status concept (e.g. crypto feeds).
     ///
-    /// For v11 reports, this is derived from [`ExtendedMarketStatus`]:
-    /// only [`ExtendedMarketStatus::RegularHours`] maps to [`MarketStatus::Open`];
-    /// all other states map to [`MarketStatus::Closed`].
-    /// This is a compatibility trade-off — downstream consumers that need
-    /// finer-grained control should use [`Self::extended_market_status()`] instead.
-    pub fn market_status(&self) -> MarketStatus {
+    /// Reports that expose a granular extended status derive this coarse value
+    /// from it via [`From`] (a compatibility trade-off); consumers that need
+    /// finer-grained control should use [`Self::extended_market_status()`]
+    /// instead.
+    pub fn market_status(&self) -> Option<MarketStatus> {
         self.market_status
     }
 
@@ -130,11 +130,6 @@ impl Report {
     /// Returns the expiry timestamp for the report.
     pub fn expires_at(&self) -> u32 {
         self.expires_at
-    }
-
-    /// Returns the report schema version.
-    pub fn version(&self) -> u16 {
-        decode_version(&self.feed_id)
     }
 }
 
@@ -211,7 +206,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 // Bid and ask values are not available for the report schema v2.
                 bid: price,
                 ask: price,
-                market_status: MarketStatus::Open,
+                market_status: None,
                 extended_market_status: None,
             })
         }
@@ -228,7 +223,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 price: bigint_to_signed(report.benchmark_price)?,
                 bid: bigint_to_signed(report.bid)?,
                 ask: bigint_to_signed(report.ask)?,
-                market_status: MarketStatus::Open,
+                market_status: None,
                 extended_market_status: None,
             })
         }
@@ -248,7 +243,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 // of the RWA report schema (v4).
                 bid: price,
                 ask: price,
-                market_status: decode_market_status(report.market_status)?,
+                market_status: Some(decode_market_status(report.market_status)?),
                 extended_market_status: None,
             })
         }
@@ -267,7 +262,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 // Bid and ask values are not available for the report schema v7.
                 bid: price,
                 ask: price,
-                market_status: MarketStatus::Open,
+                market_status: None,
                 extended_market_status: None,
             })
         }
@@ -285,14 +280,14 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 price,
                 bid: price,
                 ask: price,
-                market_status: decode_market_status(report.market_status)?,
+                market_status: Some(decode_market_status(report.market_status)?),
                 extended_market_status: None,
             })
         }
         11 => {
             let report = ReportDataV11::decode(data)?;
             let extended = decode_extended_market_status(report.market_status)?;
-            let market_status = MarketStatus::from(extended);
+            let market_status = Some(MarketStatus::from(extended));
             let price = bigint_to_signed(report.mid)?;
             let bid = bigint_to_signed(report.bid)?;
             let ask = bigint_to_signed(report.ask)?;
@@ -541,7 +536,7 @@ mod tests {
         assert_eq!(report.observations_timestamp, 1000);
         assert_eq!(report.expires_at, 1100);
         assert_eq!(report.last_update_timestamp(), Some(1_000_000_000_000));
-        assert_eq!(report.market_status(), MarketStatus::Open);
+        assert_eq!(report.market_status(), Some(MarketStatus::Open));
         assert_eq!(
             report.extended_market_status(),
             Some(ExtendedMarketStatus::RegularHours)
@@ -584,7 +579,7 @@ mod tests {
         let report = decode(&encoded).unwrap();
 
         // PreMarket should map to Closed
-        assert_eq!(report.market_status(), MarketStatus::Closed);
+        assert_eq!(report.market_status(), Some(MarketStatus::Closed));
         assert_eq!(
             report.extended_market_status(),
             Some(ExtendedMarketStatus::PreMarket)
@@ -651,7 +646,7 @@ mod tests {
         assert!(report.non_negative_ask() == Some(ask));
 
         // market_status=5 -> Closed
-        assert_eq!(report.market_status(), MarketStatus::Closed);
+        assert_eq!(report.market_status(), Some(MarketStatus::Closed));
         assert_eq!(
             report.extended_market_status(),
             Some(ExtendedMarketStatus::Closed)
