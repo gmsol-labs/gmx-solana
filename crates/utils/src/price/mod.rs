@@ -4,9 +4,13 @@ pub mod decimal;
 /// Price Feed Price.
 pub mod feed_price;
 
+/// Market status.
+pub mod market_status;
+
 pub use self::{
     decimal::{Decimal, DecimalError},
     feed_price::PriceFeedPrice,
+    market_status::{MarketOpenness, MarketStatus, MarketStatusFlag, MarketStatusFlagContainer},
 };
 use anchor_lang::prelude::*;
 
