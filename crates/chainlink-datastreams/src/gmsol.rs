@@ -2,7 +2,7 @@ use gmsol_utils::price::market_status::MarketStatus as FeedMarketStatus;
 use gmsol_utils::price::{feed_price::PriceFeedPrice, find_divisor_decimals, PriceFlag, TEN, U192};
 
 use crate::report::ExtendedMarketStatus;
-use crate::{report::MarketStatus, Report};
+use crate::Report;
 
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 
@@ -125,34 +125,18 @@ impl From<ExtendedMarketStatus> for FeedMarketStatus {
     }
 }
 
+/// Maps a decoded report to the canonical [`FeedMarketStatus`]: the granular
+/// status if the report defines one, else `Disabled`.
 fn canonical_market_status(report: &Report) -> FeedMarketStatus {
-    canonical(report.market_status(), report.extended_market_status())
-}
-
-/// Maps a decoded report to the canonical [`FeedMarketStatus`].
-///
-/// A granular extended status is authoritative. Otherwise the decoder tells us
-/// whether the report has a coarse market status at all: `Some` is mapped, and
-/// `None` (no market-status concept) persists nothing.
-fn canonical(
-    coarse: Option<MarketStatus>,
-    extended: Option<ExtendedMarketStatus>,
-) -> FeedMarketStatus {
-    if let Some(extended) = extended {
-        return extended.into();
-    }
-    match coarse {
-        Some(MarketStatus::Open) => FeedMarketStatus::RegularHours,
-        Some(MarketStatus::Closed) => FeedMarketStatus::Closed,
-        Some(MarketStatus::Unknown) => FeedMarketStatus::Unknown,
-        None => FeedMarketStatus::Disabled,
-    }
+    report
+        .extended_market_status()
+        .map_or(FeedMarketStatus::Disabled, FeedMarketStatus::from)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::report::{ExtendedMarketStatus, MarketStatus};
+    use crate::report::ExtendedMarketStatus;
     use gmsol_utils::price::market_status::MarketStatus as FeedMarketStatus;
 
     use crate::FromChainlinkReport;
@@ -225,23 +209,6 @@ mod tests {
             FeedMarketStatus::from(ExtendedMarketStatus::Overnight) == FeedMarketStatus::Overnight
         );
         assert!(FeedMarketStatus::from(ExtendedMarketStatus::Closed) == FeedMarketStatus::Closed);
-    }
-
-    #[test]
-    fn canonical_resolves_coarse_and_extended() {
-        // Granular extended status wins.
-        assert!(
-            canonical(
-                Some(MarketStatus::Open),
-                Some(ExtendedMarketStatus::PreMarket)
-            ) == FeedMarketStatus::PreMarket
-        );
-        // Coarse status maps.
-        assert!(canonical(Some(MarketStatus::Open), None) == FeedMarketStatus::RegularHours);
-        assert!(canonical(Some(MarketStatus::Closed), None) == FeedMarketStatus::Closed);
-        assert!(canonical(Some(MarketStatus::Unknown), None) == FeedMarketStatus::Unknown);
-        // No market-status concept.
-        assert!(canonical(None, None) == FeedMarketStatus::Disabled);
     }
 
     fn v8_report(market_status: u32) -> Report {
