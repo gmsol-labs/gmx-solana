@@ -163,9 +163,7 @@ impl UpdatePriceFeedWithChainlink<'_> {
             msg!("Invalid report: {}", err);
             let err = match err {
                 ChainlinkError::NegativePrice(_) => CoreError::NegativePriceIsNotSupported,
-                ChainlinkError::InvalidRange(_) | ChainlinkError::UnknownMarketStatus => {
-                    CoreError::InvalidPriceReport
-                }
+                ChainlinkError::InvalidRange(_) => CoreError::InvalidPriceReport,
                 ChainlinkError::Overflow(_) => CoreError::PriceOverflow,
             };
             error!(err)
