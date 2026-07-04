@@ -162,7 +162,11 @@ impl PriceFeed {
 
         let current = clock.unix_timestamp;
         let heartbeat_duration = token_config.heartbeat_duration();
-        let is_open = self.price.is_market_open(current, heartbeat_duration);
+        let is_open = self.price.is_market_open(
+            current,
+            heartbeat_duration,
+            token_config.market_status_flags(),
+        );
 
         if !allow_closed {
             require!(is_open, CoreError::MarketNotOpen);
