@@ -28,5 +28,5 @@ pub use report::Report;
 /// Type that can be created from [`Report`].
 pub trait FromChainlinkReport: Sized {
     /// Create from [`Report`].
-    fn from_chainlink_report(report: &Report) -> Result<Self, Error>;
+    fn from_chainlink_report(report: &Report, enable_market_status: bool) -> Result<Self, Error>;
 }
