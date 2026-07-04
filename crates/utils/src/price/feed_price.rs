@@ -3,7 +3,7 @@ use anchor_lang::prelude::zero_copy;
 use crate::{
     price::{
         decimal::{Decimal, DecimalError},
-        market_status::MarketStatus,
+        market_status::{MarketOpenness, MarketStatus, MarketStatusFlagContainer},
         Price, PriceFlag, MAX_PRICE_FLAG,
     },
     token_config::TokenConfig,
@@ -113,8 +113,16 @@ impl PriceFeedPrice {
         &self.price
     }
 
-    /// Returns whether the market is open.
-    pub fn is_market_open(&self, current_timestamp: i64, market_close_timeout: u32) -> bool {
+    /// Returns whether the market is open for the given per-token flags.
+    pub fn is_market_open(
+        &self,
+        current_timestamp: i64,
+        market_close_timeout: u32,
+        flags: MarketStatusFlagContainer,
+    ) -> bool {
+        if let MarketOpenness::Closed = self.market_status().openness(flags) {
+            return false;
+        }
         if !self.flags.get_flag(PriceFlag::Open) {
             return false;
         }
@@ -222,43 +230,53 @@ mod tests {
     #[test]
     fn test_is_market_open_in_nanoseconds() {
         let mut price = PriceFeedPrice::new(0, 0, 1, 1, 1, 0);
-        assert!(!price.is_market_open(i64::MAX, 0));
+        assert!(!price.is_market_open(i64::MAX, 0, MarketStatusFlagContainer::default()));
         price.set_flag(PriceFlag::Open, true);
-        assert!(price.is_market_open(i64::MAX, 0));
+        assert!(price.is_market_open(i64::MAX, 0, MarketStatusFlagContainer::default()));
 
         price.set_flag(PriceFlag::LastUpdateDiffEnabled, true);
         price.last_update_diff = u32::MAX;
 
         price.ts = i64::MIN;
-        assert!(!price.is_market_open(i64::MAX, u32::MAX));
+        assert!(!price.is_market_open(i64::MAX, u32::MAX, MarketStatusFlagContainer::default()));
 
         price.ts = i64::MAX;
-        assert!(price.is_market_open(i64::MIN, 0));
+        assert!(price.is_market_open(i64::MIN, 0, MarketStatusFlagContainer::default()));
 
         let delay = 10i64;
         price.ts = i64::MAX - delay;
-        assert!(!price.is_market_open(i64::MAX, u32::MAX / NANOS_PER_SECOND_U32 + delay as u32));
+        assert!(!price.is_market_open(
+            i64::MAX,
+            u32::MAX / NANOS_PER_SECOND_U32 + delay as u32,
+            MarketStatusFlagContainer::default()
+        ));
         assert!(price.is_market_open(
             i64::MAX,
-            u32::MAX.div_ceil(NANOS_PER_SECOND_U32) + delay as u32
+            u32::MAX.div_ceil(NANOS_PER_SECOND_U32) + delay as u32,
+            MarketStatusFlagContainer::default()
         ));
 
         let diff = 1i64;
         price.ts = i64::MAX;
         let current = i64::MAX - diff;
-        assert!(!price.is_market_open(current, u32::MAX / NANOS_PER_SECOND_U32 - diff as u32));
+        assert!(!price.is_market_open(
+            current,
+            u32::MAX / NANOS_PER_SECOND_U32 - diff as u32,
+            MarketStatusFlagContainer::default()
+        ));
         assert!(price.is_market_open(
             current,
-            u32::MAX.div_ceil(NANOS_PER_SECOND_U32) - diff as u32
+            u32::MAX.div_ceil(NANOS_PER_SECOND_U32) - diff as u32,
+            MarketStatusFlagContainer::default()
         ));
     }
 
     #[test]
     fn test_is_market_open_in_seconds() {
         let mut price = PriceFeedPrice::new(0, 0, 1, 1, 1, 0);
-        assert!(!price.is_market_open(i64::MAX, 0));
+        assert!(!price.is_market_open(i64::MAX, 0, MarketStatusFlagContainer::default()));
         price.set_flag(PriceFlag::Open, true);
-        assert!(price.is_market_open(i64::MAX, 0));
+        assert!(price.is_market_open(i64::MAX, 0, MarketStatusFlagContainer::default()));
 
         price.set_flag(PriceFlag::LastUpdateDiffEnabled, true);
         price.set_flag(PriceFlag::LastUpdateDiffSecs, true);
@@ -266,23 +284,52 @@ mod tests {
         price.last_update_diff = u32::MAX;
 
         price.ts = i64::MIN;
-        assert!(!price.is_market_open(i64::MAX, u32::MAX));
+        assert!(!price.is_market_open(i64::MAX, u32::MAX, MarketStatusFlagContainer::default()));
 
         price.ts = i64::MAX;
-        assert!(price.is_market_open(i64::MIN, 0));
+        assert!(price.is_market_open(i64::MIN, 0, MarketStatusFlagContainer::default()));
 
         let delay = 10u32;
         let max_diff = u32::MAX - delay;
         price.last_update_diff = max_diff;
         price.ts = i64::MAX - delay as i64;
-        assert!(!price.is_market_open(i64::MAX, u32::MAX - 1));
-        assert!(price.is_market_open(i64::MAX, u32::MAX));
+        assert!(!price.is_market_open(
+            i64::MAX,
+            u32::MAX - 1,
+            MarketStatusFlagContainer::default()
+        ));
+        assert!(price.is_market_open(i64::MAX, u32::MAX, MarketStatusFlagContainer::default()));
 
         let diff = 1u32;
         price.last_update_diff = u32::MAX;
         price.ts = i64::MAX;
         let current = i64::MAX - diff as i64;
-        assert!(!price.is_market_open(current, u32::MAX - diff - 1));
-        assert!(price.is_market_open(current, u32::MAX - diff));
+        assert!(!price.is_market_open(
+            current,
+            u32::MAX - diff - 1,
+            MarketStatusFlagContainer::default()
+        ));
+        assert!(price.is_market_open(
+            current,
+            u32::MAX - diff,
+            MarketStatusFlagContainer::default()
+        ));
+    }
+
+    #[test]
+    fn is_market_open_closed_status_is_closed_even_when_fresh() {
+        let mut price = PriceFeedPrice::new(0, 0, 1, 1, 1, 0);
+        price.set_flag(PriceFlag::Open, true);
+        price.set_market_status(MarketStatus::Closed);
+        assert!(!price.is_market_open(0, u32::MAX, MarketStatusFlagContainer::default()));
+    }
+
+    #[test]
+    fn is_market_open_regular_hours_follows_base() {
+        let mut price = PriceFeedPrice::new(0, 0, 1, 1, 1, 0);
+        price.set_market_status(MarketStatus::RegularHours);
+        assert!(!price.is_market_open(0, u32::MAX, MarketStatusFlagContainer::default()));
+        price.set_flag(PriceFlag::Open, true);
+        assert!(price.is_market_open(0, u32::MAX, MarketStatusFlagContainer::default()));
     }
 }
