@@ -257,6 +257,7 @@ declare_id!("Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo");
 #[program]
 /// Instructions definitions of the GMSOL Store Program.
 pub mod gmsol_store {
+    use gmsol_utils::price::market_status::MarketStatusFlag;
     use gmsol_utils::token_config::TokenConfigFlag;
 
     use super::*;
@@ -877,6 +878,44 @@ pub mod gmsol_store {
             TokenConfigFlag::AllowPriceAdjustment,
             enable,
         )
+    }
+
+    /// Set a per-token market-status flag.
+    ///
+    /// # Accounts
+    /// [*See the documentation for the accounts*](SetTokenConfigMarketStatusFlag).
+    ///
+    /// # Arguments
+    /// - `flag`: The [`MarketStatusFlag`] index to set.
+    /// - `enable`: Enable or disable the flag.
+    ///
+    /// # Errors
+    /// - The [`authority`](SetTokenConfigMarketStatusFlag::authority) must be a
+    ///   signer and a MARKET_KEEPER in the given store.
+    /// - The [`token`](SetTokenConfigMarketStatusFlag::token) must exist in the token map.
+    /// - `flag` must be a valid [`MarketStatusFlag`] value.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn set_token_config_market_status_flag(
+        ctx: Context<SetTokenConfigMarketStatusFlag>,
+        flag: u8,
+        enable: bool,
+    ) -> Result<()> {
+        let token = ctx.accounts.token.key();
+        let authorized =
+            ctx.accounts.store.load()?.token_map() == Some(&ctx.accounts.token_map.key());
+        let market_status_flag =
+            MarketStatusFlag::try_from(flag).map_err(|_| error!(CoreError::InvalidArgument))?;
+        let previous =
+            SetTokenConfigMarketStatusFlag::invoke_unchecked(ctx, market_status_flag, enable)?;
+        msg!(
+            "set market status flag: token={}, flag={}, {} -> {}, authorized_token_map={}",
+            token,
+            flag,
+            previous,
+            enable,
+            authorized,
+        );
+        Ok(())
     }
 
     /// Set the expected provider for the given token.
