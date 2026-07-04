@@ -35,10 +35,12 @@ impl super::FromChainlinkReport for PriceFeedPrice {
 
         debug_assert!(!divisor.is_zero());
 
-        // Base openness: closed only when the coarse status is Closed and there is
-        // no granular extended status to defer to.
-        let mut is_open = report.extended_market_status().is_some()
-            || report.market_status() != Some(MarketStatus::Closed);
+        // Defer openness to the consumer (per-token flags); only freshness (below)
+        // can still force closed. Some v11 feeds are 24/7 and keep publishing
+        // valid prices even while their (extended) status is Unknown or Closed, so
+        // whether to trade then is a per-token policy. On v8 this is unobserved and
+        // AllowClosed is generally not advised, but staleness backstops it either way.
+        let mut is_open = true;
 
         let observations_timestamp = report.observations_timestamp;
 
@@ -97,6 +99,13 @@ impl super::FromChainlinkReport for PriceFeedPrice {
             price.set_flag(PriceFlag::LastUpdateDiffSecs, true);
         }
 
+        // Persisting the status here is what makes the `is_open` change
+        // migration-free. Base openness only flips closed -> open for prices this
+        // code writes, and any report that was previously coarse-closed gets a
+        // non-Disabled status here. So an old account (Open=false, status
+        // Disabled) resolves closed via the base flag, and a new one (Open=true,
+        // status Closed) resolves closed via the status — either version of a
+        // stored price yields the same verdict at read time.
         price.set_market_status(canonical_market_status(report));
 
         Ok(price)
@@ -258,19 +267,20 @@ mod tests {
     }
 
     #[test]
-    fn v8_closed_is_hard_closed_even_with_allow_closed() {
-        // v8 explicitly Closed: base is closed at write; no flag can reopen it.
+    fn allow_closed_opens_a_reported_closed_market() {
         let closed = v8_report(1); // 1 -> Closed
         let price = PriceFeedPrice::from_chainlink_report(&closed).unwrap();
         assert!(price.market_status() == FeedMarketStatus::Closed);
+
+        // Default flags: a reported Closed stays closed.
+        assert!(!price.is_market_open(1000, u32::MAX, MarketStatusFlagContainer::default()));
+
+        // AllowClosed opens it while the price is fresh...
         let mut allow_closed = MarketStatusFlagContainer::default();
         allow_closed.set_flag(MarketStatusFlag::AllowClosed, true);
-        assert!(!price.is_market_open(1000, u32::MAX, allow_closed));
+        assert!(price.is_market_open(1000, u32::MAX, allow_closed));
 
-        // v8 Open: base open; default flags keep it open.
-        let open = v8_report(2); // 2 -> Open
-        let price = PriceFeedPrice::from_chainlink_report(&open).unwrap();
-        assert!(price.market_status() == FeedMarketStatus::RegularHours);
-        assert!(price.is_market_open(1000, u32::MAX, MarketStatusFlagContainer::default()));
+        // ...but staleness closes it regardless of the flag.
+        assert!(!price.is_market_open(i64::MAX, 0, allow_closed));
     }
 }

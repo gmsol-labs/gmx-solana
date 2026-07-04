@@ -36,10 +36,11 @@ pub enum MarketStatus {
 /// Each flag names the deviation from the default, so all-zero (unconfigured)
 /// resolves to: RegularHours open, every other status closed.
 ///
-/// These flags only modify openness on top of the feed's base openness (its
-/// `Open` flag plus freshness): a resolved status can close a market whose base
-/// is open, but no flag can reopen a base that is already closed (stale, or a
-/// report that reported closed).
+/// These flags resolve openness from the stored status per token: any status,
+/// including a reported `Closed`, can be configured open or closed. Freshness is
+/// the only hard floor — a stale price is always closed regardless of any flag.
+/// (`AllowClosed` on a v8 feed is generally not advised, but staleness still
+/// backstops it.)
 #[derive(IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[non_exhaustive]
