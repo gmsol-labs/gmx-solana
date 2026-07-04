@@ -131,6 +131,11 @@ impl Report {
     pub fn expires_at(&self) -> u32 {
         self.expires_at
     }
+
+    /// Returns the report schema version.
+    pub fn version(&self) -> u16 {
+        decode_version(&self.feed_id)
+    }
 }
 
 impl fmt::Debug for Report {

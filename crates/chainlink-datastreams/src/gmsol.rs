@@ -1,5 +1,7 @@
+use gmsol_utils::price::market_status::MarketStatus as FeedMarketStatus;
 use gmsol_utils::price::{feed_price::PriceFeedPrice, find_divisor_decimals, PriceFlag, TEN, U192};
 
+use crate::report::ExtendedMarketStatus;
 use crate::{report::MarketStatus, Report};
 
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
@@ -99,5 +101,94 @@ impl super::FromChainlinkReport for PriceFeedPrice {
         }
 
         Ok(price)
+    }
+}
+
+impl From<ExtendedMarketStatus> for FeedMarketStatus {
+    fn from(value: ExtendedMarketStatus) -> Self {
+        match value {
+            ExtendedMarketStatus::Unknown => Self::Unknown,
+            ExtendedMarketStatus::PreMarket => Self::PreMarket,
+            ExtendedMarketStatus::RegularHours => Self::RegularHours,
+            ExtendedMarketStatus::PostMarket => Self::PostMarket,
+            ExtendedMarketStatus::Overnight => Self::Overnight,
+            ExtendedMarketStatus::Closed => Self::Closed,
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn canonical_market_status(report: &Report) -> FeedMarketStatus {
+    canonical(
+        report.version(),
+        report.market_status(),
+        report.extended_market_status(),
+    )
+}
+
+#[allow(dead_code)]
+fn canonical(
+    version: u16,
+    coarse: MarketStatus,
+    extended: Option<ExtendedMarketStatus>,
+) -> FeedMarketStatus {
+    // Only v11 carries an extended status; when present it is authoritative.
+    if let Some(extended) = extended {
+        return extended.into();
+    }
+    match version {
+        // v4 / v8 carry a coarse RWA market status.
+        4 | 8 => match coarse {
+            MarketStatus::Open => FeedMarketStatus::RegularHours,
+            MarketStatus::Closed => FeedMarketStatus::Closed,
+            MarketStatus::Unknown => FeedMarketStatus::Unknown,
+        },
+        // Other versions (crypto: v2/v3/v7) carry no market-status field.
+        _ => FeedMarketStatus::Disabled,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::report::{ExtendedMarketStatus, MarketStatus};
+    use gmsol_utils::price::market_status::MarketStatus as FeedMarketStatus;
+
+    #[test]
+    fn from_extended_maps_each_variant() {
+        assert!(FeedMarketStatus::from(ExtendedMarketStatus::Unknown) == FeedMarketStatus::Unknown);
+        assert!(
+            FeedMarketStatus::from(ExtendedMarketStatus::PreMarket) == FeedMarketStatus::PreMarket
+        );
+        assert!(
+            FeedMarketStatus::from(ExtendedMarketStatus::RegularHours)
+                == FeedMarketStatus::RegularHours
+        );
+        assert!(
+            FeedMarketStatus::from(ExtendedMarketStatus::PostMarket)
+                == FeedMarketStatus::PostMarket
+        );
+        assert!(
+            FeedMarketStatus::from(ExtendedMarketStatus::Overnight) == FeedMarketStatus::Overnight
+        );
+        assert!(FeedMarketStatus::from(ExtendedMarketStatus::Closed) == FeedMarketStatus::Closed);
+    }
+
+    #[test]
+    fn canonical_resolves_by_version_and_extended() {
+        // v11: granular extended status wins (extended is `Some`).
+        assert!(
+            canonical(
+                11,
+                MarketStatus::Open,
+                Some(ExtendedMarketStatus::PreMarket)
+            ) == FeedMarketStatus::PreMarket
+        );
+        // v4 / v8: coarse status maps.
+        assert!(canonical(8, MarketStatus::Open, None) == FeedMarketStatus::RegularHours);
+        assert!(canonical(8, MarketStatus::Closed, None) == FeedMarketStatus::Closed);
+        assert!(canonical(4, MarketStatus::Unknown, None) == FeedMarketStatus::Unknown);
+        // crypto (no market-status field): disabled.
+        assert!(canonical(3, MarketStatus::Open, None) == FeedMarketStatus::Disabled);
     }
 }
