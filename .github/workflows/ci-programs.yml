@@ -1,0 +1,71 @@
+on:
+  push:
+    branches:
+      - main
+      - v*
+  pull_request:
+    branches:
+      - main
+      - v*
+
+name: CI for Programs
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  RUST_BACKTRACE: 1
+  rust_stable: "1.88"
+  solana_version: "2.1.21"
+  anchor_version: "0.31.1"
+  libudev: "1.0"
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  # NOT part of ci-sdk.yml's tests-pass on purpose: the validator clones
+  # accounts from devnet and tests fetch live Pyth data, so failures have a
+  # structural floor. Treat results as signal, not a gate.
+  test-programs:
+    name: test programs
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: libudev-dev
+          version: ${{ env.libudev }}
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+      - name: Install just
+        uses: taiki-e/install-action@just
+      - name: Install Solana ${{ env.solana_version }}
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.solana_version }}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      - name: Install Anchor ${{ env.anchor_version }}
+        run: npm install -g "@coral-xyz/anchor-cli@${{ env.anchor_version }}"
+      - name: Create test wallet
+        run: solana-keygen new --no-bip39-passphrase --silent
+      - uses: Swatinem/rust-cache@v2
+      - name: "just test-programs (one retry)"
+        run: just test-programs || { echo "::warning::first attempt failed, retrying once"; just test-programs; }
+      - name: Upload anchor logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anchor-logs
+          path: |
+            .anchor/program-logs/
+            .anchor/test-ledger/*.log
+          if-no-files-found: ignore
