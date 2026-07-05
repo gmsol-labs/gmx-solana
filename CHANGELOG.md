@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - cli: Added the `set-market-status-flag` command.
 - cli: Added options for market buffer comparison.
 - cli: Added an option to enable idempotent price updates.
+- just: Added the guardian-set check and rotate recipes (backed by a new xtask).
 
 ### Changed
 
