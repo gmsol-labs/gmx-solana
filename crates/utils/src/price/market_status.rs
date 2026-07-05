@@ -13,7 +13,7 @@ pub const MAX_MARKET_STATUS_FLAGS: usize = 8;
 #[derive(Clone, Copy, PartialEq, Eq, IntoPrimitive, TryFromPrimitive)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum MarketStatus {
     /// No market-status information (skip).
     Disabled = 0,
