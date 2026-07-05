@@ -55,7 +55,16 @@ jobs:
           sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.solana_version }}/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
       - name: Install Anchor ${{ env.anchor_version }}
-        run: npm install -g "@coral-xyz/anchor-cli@${{ env.anchor_version }}"
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL "https://github.com/coral-xyz/anchor/releases/download/v${{ env.anchor_version }}/anchor-${{ env.anchor_version }}-x86_64-unknown-linux-gnu" -o "$HOME/.local/bin/anchor"
+          chmod +x "$HOME/.local/bin/anchor"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Verify toolchain versions
+        run: |
+          solana --version
+          anchor --version
+          anchor --version | grep -q "anchor-cli ${{ env.anchor_version }}"
       - name: Create test wallet
         run: solana-keygen new --no-bip39-passphrase --silent
       - uses: Swatinem/rust-cache@v2
