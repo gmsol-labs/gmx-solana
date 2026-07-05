@@ -83,15 +83,61 @@ fn cmd_check() -> ExitCode {
     }
 }
 
+fn cmd_rotate() -> ExitCode {
+    let contents = match read_anchor_toml() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let rpc = anchor_toml::validator_url(&contents).unwrap_or_else(|| DEFAULT_RPC.to_string());
+
+    let detected = match guardian_set::detect(&rpc, MAX_PROBE) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("error: could not query guardian sets: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let interior = anchor_toml::render_interior(&detected.existing, detected.active, |i| {
+        guardian_set::guardian_set_address(i).to_string()
+    });
+    let updated = match anchor_toml::splice_managed_block(&contents, &interior) {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if updated == contents {
+        println!(
+            "guardian set {} already current; no change.",
+            detected.active
+        );
+        return ExitCode::SUCCESS;
+    }
+    if let Err(e) = std::fs::write(ANCHOR_TOML, &updated) {
+        eprintln!("error: failed to write {ANCHOR_TOML}: {e}");
+        return ExitCode::FAILURE;
+    }
+    let previous = detected.active.saturating_sub(1);
+    println!(
+        "updated {ANCHOR_TOML}: guardian set {} active, {previous} kept as previous \
+         (older commented). Review and commit.",
+        detected.active
+    );
+    ExitCode::SUCCESS
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.command {
         Command::GuardianSet { action } => match action {
             GuardianSetAction::Check => cmd_check(),
-            GuardianSetAction::Rotate => {
-                println!("rotate: not implemented yet");
-                ExitCode::SUCCESS
-            }
+            GuardianSetAction::Rotate => cmd_rotate(),
         },
     }
 }
