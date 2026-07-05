@@ -2,9 +2,10 @@
   "address": "6iMXVSjiBf75ce9QaUVRnpsUikW8SZm8EaPVGDPfsCso",
   "metadata": {
     "name": "gmsol_gt_incentive",
-    "version": "0.9.0",
+    "version": "0.11.0",
     "spec": "0.1.0",
-    "description": "Created with Anchor"
+    "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
+    "repository": "https://github.com/gmsol-labs/gmx-solana"
   },
   "instructions": [
     {
@@ -19,7 +20,17 @@
         155,
         237
       ],
-      "accounts": [],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
       "args": []
     }
   ]

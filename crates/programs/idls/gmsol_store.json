@@ -2,7 +2,7 @@
   "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo",
   "metadata": {
     "name": "gmsol_store",
-    "version": "0.10.0",
+    "version": "0.11.0",
     "spec": "0.1.0",
     "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
     "repository": "https://github.com/gmsol-labs/gmx-solana"
@@ -19632,6 +19632,76 @@
       ]
     },
     {
+      "name": "set_token_config_market_status_flag",
+      "docs": [
+        "Set a per-token market-status flag.",
+        "",
+        "# Accounts",
+        "[*See the documentation for the accounts*](SetTokenConfigMarketStatusFlag).",
+        "",
+        "# Arguments",
+        "- `flag`: The [`MarketStatusFlag`] index to set.",
+        "- `enable`: Enable or disable the flag.",
+        "",
+        "# Errors",
+        "- The [`authority`](SetTokenConfigMarketStatusFlag::authority) must be a",
+        "signer and a MARKET_KEEPER in the given store.",
+        "- The [`token`](SetTokenConfigMarketStatusFlag::token) must exist in the token map.",
+        "- `flag` must be a valid [`MarketStatusFlag`] value."
+      ],
+      "discriminator": [
+        84,
+        94,
+        162,
+        83,
+        177,
+        154,
+        240,
+        104
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The authority of the instruction."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "The store that owns the token map."
+          ],
+          "relations": [
+            "token_map"
+          ]
+        },
+        {
+          "name": "token_map",
+          "docs": [
+            "The token map to update."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token",
+          "docs": [
+            "The token whose config will be updated."
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "flag",
+          "type": "u8"
+        },
+        {
+          "name": "enable",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "set_token_map",
       "docs": [
         "Set the token map address for the store.",
@@ -30163,11 +30233,15 @@
             }
           },
           {
+            "name": "market_status_value",
+            "type": "u8"
+          },
+          {
             "name": "padding",
             "type": {
               "array": [
                 "u8",
-                2
+                1
               ]
             }
           },
