@@ -91,9 +91,8 @@ pub struct TokenConfig {
     pub feeds: [FeedConfig; MAX_FEEDS],
     /// Heartbeat duration.
     pub heartbeat_duration: u32,
-    market_status_flags: MarketStatusFlagContainer,
     #[cfg_attr(feature = "debug", debug(skip))]
-    reserved: [u8; 31],
+    reserved: [u8; 32],
 }
 
 #[cfg(feature = "display")]
@@ -146,6 +145,9 @@ impl TokenConfig {
     }
 
     /// Set feed config.
+    ///
+    /// Note: this replaces the whole [`FeedConfig`], including its
+    /// market-status flags.
     pub fn set_feed_config(
         &mut self,
         kind: &PriceProviderKind,
@@ -256,16 +258,6 @@ impl TokenConfig {
     /// Get token name.
     pub fn name(&self) -> TokenConfigResult<&str> {
         Ok(bytes_to_fixed_str(&self.name)?)
-    }
-
-    /// Returns the per-token market-status flags.
-    pub fn market_status_flags(&self) -> MarketStatusFlagContainer {
-        self.market_status_flags
-    }
-
-    /// Sets a per-token market-status flag, returning the previous value.
-    pub fn set_market_status_flag(&mut self, flag: MarketStatusFlag, enable: bool) -> bool {
-        self.market_status_flags.set_flag(flag, enable)
     }
 }
 
@@ -696,29 +688,6 @@ mod market_status_tests {
     use super::*;
     use crate::price::market_status::{MarketOpenness, MarketStatus, MarketStatusFlag};
     use bytemuck::Zeroable;
-
-    #[test]
-    fn default_flags_open_regular_hours() {
-        let config = TokenConfig::zeroed();
-        assert!(matches!(
-            MarketStatus::RegularHours.openness(config.market_status_flags()),
-            MarketOpenness::Open
-        ));
-        assert!(matches!(
-            MarketStatus::PreMarket.openness(config.market_status_flags()),
-            MarketOpenness::Closed
-        ));
-    }
-
-    #[test]
-    fn set_flag_round_trip() {
-        let mut config = TokenConfig::zeroed();
-        config.set_market_status_flag(MarketStatusFlag::AllowPreMarket, true);
-        assert!(matches!(
-            MarketStatus::PreMarket.openness(config.market_status_flags()),
-            MarketOpenness::Open
-        ));
-    }
 
     #[test]
     fn feed_default_flags_open_regular_hours() {

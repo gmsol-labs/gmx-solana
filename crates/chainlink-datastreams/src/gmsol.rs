@@ -35,10 +35,10 @@ impl super::FromChainlinkReport for PriceFeedPrice {
 
         debug_assert!(!divisor.is_zero());
 
-        // Defer openness to the consumer (per-token flags); only freshness (below)
+        // Defer openness to the consumer (per-feed flags); only freshness (below)
         // can still force closed. Some v11 feeds are 24/7 and keep publishing
         // valid prices even while their (extended) status is Unknown or Closed, so
-        // whether to trade then is a per-token policy. On v8 this is unobserved and
+        // whether to trade then is a per-feed policy. On v8 this is unobserved and
         // AllowClosed is generally not advised, but staleness backstops it either way.
         let mut is_open = true;
 
