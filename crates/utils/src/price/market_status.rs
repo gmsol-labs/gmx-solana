@@ -13,7 +13,7 @@ pub const MAX_MARKET_STATUS_FLAGS: usize = 8;
 #[derive(Clone, Copy, PartialEq, Eq, IntoPrimitive, TryFromPrimitive)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum MarketStatus {
     /// No market-status information (skip).
     Disabled = 0,
@@ -41,9 +41,12 @@ pub enum MarketStatus {
 /// the only hard floor — a stale price is always closed regardless of any flag.
 /// (`AllowClosed` on a v8 feed is generally not advised, but staleness still
 /// backstops it.)
-#[derive(IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, PartialEq, Eq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[non_exhaustive]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+#[cfg_attr(feature = "clap", clap(rename_all = "snake_case"))]
 pub enum MarketStatusFlag {
     /// Allow trading while the status is Unknown.
     AllowUnknown,
