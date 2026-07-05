@@ -97,37 +97,35 @@ address = "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE"
 [[test.validator.clone]]
 address = "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX"
 
-# Wormhole Guardian Set account (index = 0)
-[[test.validator.clone]]
-address = "C7RmcKdjeFscYSyekkmCjvHcnBQd7qJDkeB9RmRtuB3L"
-
+# BEGIN guardian-sets (managed by xtask; run `just rotate-guardian-set`)
 # Wormhole Guardian Set account (index = 1)
-[[test.validator.clone]]
-address = "8d9szTd157GKCLcxBqiLUgB7mek3v65rbsy2ErRyjwQ5"
+# [[test.validator.clone]]
+# address = "8d9szTd157GKCLcxBqiLUgB7mek3v65rbsy2ErRyjwQ5"
 
 # Wormhole Guardian Set account (index = 2)
-[[test.validator.clone]]
-address = "izDSKeLVBe4fT3HawjGfnwbMwUQSw1LLoFG9QvZ9Asz"
+# [[test.validator.clone]]
+# address = "izDSKeLVBe4fT3HawjGfnwbMwUQSw1LLoFG9QvZ9Asz"
 
 # Wormhole Guardian Set account (index = 3)
-[[test.validator.clone]]
-address = "D2JSt6eTTzsmmap3HtCmcQCM3gBcsz6EiB36zYWNRN3k"
+# [[test.validator.clone]]
+# address = "D2JSt6eTTzsmmap3HtCmcQCM3gBcsz6EiB36zYWNRN3k"
 
 # Wormhole Guardian Set account (index = 4)
-[[test.validator.clone]]
-address = "5gxPdahvSzcKySxXxPuRXZZ9s6h8hZ88XDVKavWpaQGn"
+# [[test.validator.clone]]
+# address = "5gxPdahvSzcKySxXxPuRXZZ9s6h8hZ88XDVKavWpaQGn"
 
 # Wormhole Guardian Set account (index = 5)
-[[test.validator.clone]]
-address = "HTczusLJSAhMJKYrxLjSUUyW7YDsBuyfBG8Tj1KJsgni"
+# [[test.validator.clone]]
+# address = "HTczusLJSAhMJKYrxLjSUUyW7YDsBuyfBG8Tj1KJsgni"
 
 # Wormhole Guardian Set account (index = 6)
 [[test.validator.clone]]
 address = "HstYgN21fgNmutTVXjBw54n4ryvP3WrCFbMAjnbdbTzf"
 
-# # Wormhole Guardian Set account (index = 7)
-# [[test.validator.clone]]
-# address = "6GaHgiaQg9Pg346xHq9m7vQ9rJtnH83gQKqJoiAxQa7D"
+# Wormhole Guardian Set account (index = 7)
+[[test.validator.clone]]
+address = "6GaHgiaQg9Pg346xHq9m7vQ9rJtnH83gQKqJoiAxQa7D"
+# END guardian-sets
 
 # Pyth Config account
 [[test.validator.clone]]
