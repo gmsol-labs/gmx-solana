@@ -36,10 +36,16 @@ test: test-crates test-programs
 test-crates:
   cargo test --features {{FEATURES}}
 
-test-programs *ARGS:
+check-guardian-set:
+  cargo xtask guardian-set check
+
+rotate-guardian-set:
+  cargo xtask guardian-set rotate
+
+test-programs *ARGS: check-guardian-set
   anchor test {{ARGS}} -- --features mock --features {{DEVNET_FEATURES}}
 
-test-programs-debug *ARGS:
+test-programs-debug *ARGS: check-guardian-set
   anchor test {{ARGS}} -- --features mock,debug-msg --features {{DEVNET_FEATURES}}
 
 it config="scripts/resources/config/integration_test.toml":
