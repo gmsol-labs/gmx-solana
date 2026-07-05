@@ -17,6 +17,8 @@ mod shift;
 
 mod market;
 
+mod market_status;
+
 mod glv;
 
 mod oracle;
