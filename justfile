@@ -42,6 +42,9 @@ check-guardian-set:
 rotate-guardian-set:
   cargo xtask guardian-set rotate
 
+build-test-programs:
+  anchor build -- --features mock --features {{DEVNET_FEATURES}}
+
 test-programs *ARGS: check-guardian-set
   anchor test {{ARGS}} -- --features mock --features {{DEVNET_FEATURES}}
 
