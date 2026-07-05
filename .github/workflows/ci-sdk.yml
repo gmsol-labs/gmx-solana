@@ -41,6 +41,7 @@ jobs:
       - fmt
       - minrust
       - features
+      - test
     steps:
       - run: exit 0
 
@@ -133,3 +134,33 @@ jobs:
         # depth 2 (pairwise) takes ~35 min and dominates PR latency; PRs check
         # each feature alone, pushes to main keep the full pairwise sweep
         run: cargo hack check --workspace ${{ env.exclude_packages }} --feature-powerset --depth ${{ github.event_name == 'pull_request' && '1' || '2' }} --keep-going
+
+  test:
+    name: test crates
+    needs: basics
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: libudev-dev
+          version: ${{ env.libudev }}
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+      - name: Install just
+        uses: taiki-e/install-action@just
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: Create placeholder wallet file
+        # gmsol-cli's wallet::tests::test_parse_url_or_path canonicalizes
+        # ~/.config/solana/id.json and fails when the file does not exist
+        run: mkdir -p ~/.config/solana && touch ~/.config/solana/id.json
+      - name: "just test-crates"
+        run: just test-crates
+        env:
+          RUSTFLAGS: "" # remove -Dwarnings: program crates are not warning-gated (excluded from clippy)
