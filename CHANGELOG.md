@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-22
+
+### Breaking Changes
+
+- programs(utils): Changed `PriceFeedPrice::is_market_open` to take market status flags (signature change).
+- sdk(chainlink-datastreams): Removed the `Error::UnknownMarketStatus` variant; an unknown market status no longer fails report conversion.
+
+### Added
+
+- programs(utils): Added market status and feed-level market status flags for price feeds.
+- programs(store): Added the `set_feed_config_market_status_flag` instruction.
+- programs(store): Persisted market status and deferred market openness evaluation.
+- sdk(chainlink-datastreams): Added v11 report decoding.
+- sdk(sdk): Added an operation for setting feed market status flags.
+- cli: Added the `set-market-status-flag` command.
+- cli: Added options for market buffer comparison.
+- cli: Added an option to enable idempotent price updates.
+
+### Changed
+
+- sdk(sdk): Changed Decimal-to-integer conversions to compensate for truncated scale.
+
+### Fixed
+
+- programs(store): Reallocated the token map account with `zero_init` enabled.
+- programs(store): Forbade no-op swaps.
+- model: Treated a decrease that zeroes `size_in_tokens` as a full close.
+- sdk(chainlink-datastreams): Guarded `decode_full_report` against malformed ABI offsets.
+
+### Deprecated
+
+- sdk(chainlink-datastreams): Deprecated `Report::market_status` in favor of `extended_market_status`.
+
+## [0.9.1] - 2026-03-18
+
+### Fixed
+
+- programs(store): Corrected the final output market for increase and swap orders.
+- programs(store): Corrected market config initialization to set `swap_impact_negative_factor`.
+- programs(store): Corrected the `to_market_token` constraint when creating shifts.
+
 ## [0.9.0] - 2026-02-04
 
 ### Added
@@ -460,7 +501,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provided SDK (`gmsol`) and other utility crates.
 - Provided a command-line interface (`gmsol`).
 
-[unreleased]: https://github.com/gmsol-labs/gmx-solana/compare/v0.9.0...HEAD
+[unreleased]: https://github.com/gmsol-labs/gmx-solana/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.10.0
+[0.9.1]: https://github.com/gmsol-labs/gmx-solana/releases/tag/programs-v0.9.1
 [0.9.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.9.0
 [0.8.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.8.0
 [0.7.1]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.7.1
