@@ -156,6 +156,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+      - name: Create placeholder wallet file
+        # gmsol-cli's wallet::tests::test_parse_url_or_path canonicalizes
+        # ~/.config/solana/id.json and fails when the file does not exist
+        run: mkdir -p ~/.config/solana && touch ~/.config/solana/id.json
       - name: "just test-crates"
         run: just test-crates
         env:
