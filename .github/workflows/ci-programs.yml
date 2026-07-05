@@ -70,8 +70,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      - name: "just test-programs (one retry)"
-        run: just test-programs || { echo "::warning::first attempt failed, retrying once"; pkill -f solana-test-validator || true; sleep 2; just test-programs; }
+          # keep workspace crates (the SBF program builds) in the cache, and
+          # cache the solana platform-tools download as well
+          cache-workspace-crates: true
+          cache-directories: |
+            ~/.cache/solana
+      - name: Build programs
+        run: just build-test-programs
+      - name: "just test-programs (one retry, skip build)"
+        run: just test-programs --skip-build || { echo "::warning::first attempt failed, retrying once"; pkill -f solana-test-validator || true; sleep 2; just test-programs --skip-build; }
       - name: Upload anchor logs
         if: failure()
         uses: actions/upload-artifact@v4
