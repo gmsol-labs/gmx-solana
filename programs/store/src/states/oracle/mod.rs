@@ -407,7 +407,9 @@ impl OraclePrice {
                 parsed.ok_or_else(|| error!(CoreError::Internal))?
             }
             PriceProviderKind::Pyth => {
-                // `allow_closed` is not used for Pyth, since all Pyth feeds are considered open.
+                // Market status is not supported by this provider: prices are always
+                // treated as open (as if the status were `MarketStatus::Disabled`), so
+                // `allow_closed` and per-feed market-status flags have no effect here.
                 Pyth::check_and_get_price(clock, token_config, account, feed_id)?
             }
             PriceProviderKind::Chainlink => {
@@ -415,7 +417,9 @@ impl OraclePrice {
                 return err!(CoreError::Deprecated);
             }
             PriceProviderKind::Switchboard => {
-                // `allow_closed` is not used for Switchboard, since all Switchboard feeds are considered open.
+                // Market status is not supported by this provider: prices are always
+                // treated as open (as if the status were `MarketStatus::Disabled`), so
+                // `allow_closed` and per-feed market-status flags have no effect here.
                 require_keys_eq!(*feed_id, account.key(), CoreError::InvalidPriceFeedAccount);
                 Switchboard::check_and_get_price(clock, token_config, account)?
             }

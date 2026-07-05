@@ -157,15 +157,21 @@ impl PriceFeed {
             provider
         );
 
-        let feed_id = token_config.get_feed(&provider).map_err(CoreError::from)?;
-        require_keys_eq!(self.feed_id, feed_id, CoreError::InvalidPriceFeedAccount);
+        let feed_config = token_config
+            .get_feed_config(&provider)
+            .map_err(CoreError::from)?;
+        require_keys_eq!(
+            self.feed_id,
+            *feed_config.feed(),
+            CoreError::InvalidPriceFeedAccount
+        );
 
         let current = clock.unix_timestamp;
         let heartbeat_duration = token_config.heartbeat_duration();
         let is_open = self.price.is_market_open(
             current,
             heartbeat_duration,
-            token_config.market_status_flags(),
+            feed_config.market_status_flags(),
         );
 
         if !allow_closed {

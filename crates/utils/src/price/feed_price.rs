@@ -113,7 +113,7 @@ impl PriceFeedPrice {
         &self.price
     }
 
-    /// Returns whether the market is open for the given per-token flags.
+    /// Returns whether the market is open for the given per-feed flags.
     pub fn is_market_open(
         &self,
         current_timestamp: i64,

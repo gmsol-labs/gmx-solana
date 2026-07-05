@@ -207,9 +207,9 @@ impl<'info> internal::Authentication<'info> for ToggleTokenConfig<'info> {
     }
 }
 
-/// The accounts definition for [`set_token_config_market_status_flag`](crate::gmsol_store::set_token_config_market_status_flag).
+/// The accounts definition for [`set_feed_config_market_status_flag`](crate::gmsol_store::set_feed_config_market_status_flag).
 #[derive(Accounts)]
-pub struct SetTokenConfigMarketStatusFlag<'info> {
+pub struct SetFeedConfigMarketStatusFlag<'info> {
     /// The authority of the instruction.
     pub authority: Signer<'info>,
     /// The store that owns the token map.
@@ -217,18 +217,20 @@ pub struct SetTokenConfigMarketStatusFlag<'info> {
     /// The token map to update.
     #[account(mut, has_one = store)]
     pub token_map: AccountLoader<'info, TokenMapHeader>,
-    /// The token whose config will be updated.
+    /// The token whose feed config will be updated.
     /// CHECK: used only as the key into the token map; not deserialized.
     pub token: UncheckedAccount<'info>,
 }
 
-impl SetTokenConfigMarketStatusFlag<'_> {
-    /// Set a per-token market-status flag, returning the previous value.
+impl SetFeedConfigMarketStatusFlag<'_> {
+    /// Set a market-status flag on the feed config of the given provider,
+    /// returning the previous value.
     ///
     /// ## CHECK
     /// - Only [`MARKET_KEEPER`](crate::states::RoleKey::MARKET_KEEPER) can perform this action.
     pub(crate) fn invoke_unchecked(
         ctx: Context<Self>,
+        provider: &PriceProviderKind,
         flag: MarketStatusFlag,
         enable: bool,
     ) -> Result<bool> {
@@ -239,12 +241,15 @@ impl SetTokenConfigMarketStatusFlag<'_> {
             .load_token_map_mut()?
             .get_mut(&token)
             .ok_or_else(|| error!(CoreError::NotFound))?
+            .get_feed_config_mut(provider)
+            .map_err(CoreError::from)
+            .map_err(|err| error!(err))?
             .set_market_status_flag(flag, enable);
         Ok(previous)
     }
 }
 
-impl<'info> internal::Authentication<'info> for SetTokenConfigMarketStatusFlag<'info> {
+impl<'info> internal::Authentication<'info> for SetFeedConfigMarketStatusFlag<'info> {
     fn authority(&self) -> &Signer<'info> {
         &self.authority
     }
@@ -347,6 +352,7 @@ impl SetFeedConfig<'_> {
             .map_err(CoreError::from)
             .map_err(|err| error!(err))?;
 
+        let previous_feed = *feed_config.feed();
         let mut new_config = *feed_config;
 
         if let Some(feed) = feed {
@@ -369,6 +375,13 @@ impl SetFeedConfig<'_> {
         }
 
         *feed_config = new_config;
+
+        if *new_config.feed() != previous_feed {
+            msg!(
+                "[Set Feed Config] feed changed: market status flags are NOT reset (current: {})",
+                new_config.market_status_flags().into_value(),
+            );
+        }
 
         Ok(())
     }
