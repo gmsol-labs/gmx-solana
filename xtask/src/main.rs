@@ -7,6 +7,8 @@ use clap::{Parser, Subcommand};
 
 const ANCHOR_TOML: &str = "Anchor.toml";
 const DEFAULT_RPC: &str = "https://api.devnet.solana.com";
+// Probe ceiling. Kept well under getMultipleAccounts' 100-address cap; growing it past
+// ~100 would require batching detect's RPC call.
 const MAX_PROBE: u32 = 15;
 
 /// Developer tasks for gmx-solana.

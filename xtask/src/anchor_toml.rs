@@ -146,6 +146,13 @@ suffix line
     }
 
     #[test]
+    fn splice_does_not_double_newline_when_interior_already_ends_with_one() {
+        let out = splice_managed_block(SAMPLE, "NEW INTERIOR\n").unwrap();
+        assert!(out.contains(&format!("NEW INTERIOR\n{END_MARKER}")));
+        assert!(!out.contains(&format!("NEW INTERIOR\n\n{END_MARKER}")));
+    }
+
+    #[test]
     fn renders_active_and_previous_uncommented() {
         let out = render_interior(&[5, 6, 7], 7, |i| format!("ADDR{i}"));
         // index 7 (active) uncommented
@@ -154,5 +161,21 @@ suffix line
         assert!(out.contains("# Wormhole Guardian Set account (index = 6)\n[[test.validator.clone]]\naddress = \"ADDR6\""));
         // index 5 (older) commented
         assert!(out.contains("# Wormhole Guardian Set account (index = 5)\n# [[test.validator.clone]]\n# address = \"ADDR5\""));
+    }
+
+    #[test]
+    fn render_interior_sorts_ascending_regardless_of_input_order() {
+        let out = render_interior(&[7, 5, 6], 6, |i| format!("ADDR{i}"));
+        let pos5 = out
+            .find("# Wormhole Guardian Set account (index = 5)")
+            .unwrap();
+        let pos6 = out
+            .find("# Wormhole Guardian Set account (index = 6)")
+            .unwrap();
+        let pos7 = out
+            .find("# Wormhole Guardian Set account (index = 7)")
+            .unwrap();
+        assert!(pos5 < pos6, "expected index 5 to appear before index 6");
+        assert!(pos6 < pos7, "expected index 6 to appear before index 7");
     }
 }

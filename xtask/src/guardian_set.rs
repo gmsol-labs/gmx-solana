@@ -48,6 +48,12 @@ pub fn detect(rpc_url: &str, max_probe: u32) -> Result<Detected> {
         .copied()
         .max()
         .context("no guardian-set accounts found on cluster")?;
+    if existing.contains(&max_probe) {
+        eprintln!(
+            "warning: highest probed guardian-set index ({max_probe}) exists; a newer set \
+             may be unprobed. Raise MAX_PROBE in xtask if a rotation is not detected."
+        );
+    }
     Ok(Detected { active, existing })
 }
 
