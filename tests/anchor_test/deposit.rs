@@ -227,8 +227,11 @@ async fn first_deposit() -> eyre::Result<()> {
     let amount = 1_000_000_013;
     let min_amount = 1u64;
 
+    // Three deposits are created below, each escrowing `amount`; the first one
+    // intentionally fails execution and is never cancelled, so its escrow is
+    // not refunded within this test.
     deployment
-        .mint_or_transfer_to_user(long_token, Deployment::DEFAULT_USER, amount * 2)
+        .mint_or_transfer_to_user(long_token, Deployment::DEFAULT_USER, amount * 3)
         .await?;
 
     let signature = keeper
