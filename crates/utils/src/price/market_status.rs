@@ -31,12 +31,12 @@ pub enum MarketStatus {
     Closed = 6,
 }
 
-/// Per-token market-status policy flags.
+/// Per-feed market-status policy flags.
 ///
 /// Each flag names the deviation from the default, so all-zero (unconfigured)
 /// resolves to: RegularHours open, every other status closed.
 ///
-/// These flags resolve openness from the stored status per token: any status,
+/// These flags resolve openness from the stored status per feed: any status,
 /// including a reported `Closed`, can be configured open or closed. Freshness is
 /// the only hard floor — a stale price is always closed regardless of any flag.
 /// (`AllowClosed` on a v8 feed is generally not advised, but staleness still
@@ -62,12 +62,12 @@ pub enum MarketStatusFlag {
     // CHECK: should have no more than `MAX_MARKET_STATUS_FLAGS` of flags.
     // CHECK: append-only. Each variant's position is a persisted bitmap bit
     // (see `MarketStatusFlagContainer`); only add new flags at the end, never
-    // reorder or remove, or stored `TokenConfig` flags will be misread.
+    // reorder or remove, or stored `FeedConfig` flags will be misread.
 }
 
 crate::flags!(MarketStatusFlag, MAX_MARKET_STATUS_FLAGS, u8);
 
-/// Resolved openness of a market status under a per-token policy.
+/// Resolved openness of a market status under a per-feed policy.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub enum MarketOpenness {
@@ -80,7 +80,7 @@ pub enum MarketOpenness {
 }
 
 impl MarketStatus {
-    /// Resolve openness under the given per-token flags.
+    /// Resolve openness under the given per-feed flags.
     pub fn openness(self, flags: MarketStatusFlagContainer) -> MarketOpenness {
         let open_if = |open: bool| {
             if open {

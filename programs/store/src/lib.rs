@@ -84,6 +84,7 @@
 //! - [`toggle_token_config`]: Enable or disable a token config of the given token map.
 //! - [`set_expected_provider`]: Set the expected provider for the given token.
 //! - [`set_feed_config_v2`]: Set the feed config of the given provider for the given token.
+//! - [`set_feed_config_market_status_flag`]: Set a market-status flag on the feed config of the given provider for the given token.
 //! - [`is_token_config_enabled`](gmsol_store::is_token_config_enabled): Check if the config for the given token is enabled.
 //! - [`token_expected_provider`](gmsol_store::token_expected_provider): Get the expected provider set for the given token.
 //! - [`token_feed`](gmsol_store::token_feed): Get the feed address of the given provider set for the given token.
@@ -880,36 +881,52 @@ pub mod gmsol_store {
         )
     }
 
-    /// Set a per-token market-status flag.
+    /// Set a market-status flag on the feed config of the given provider for
+    /// the given token.
     ///
     /// # Accounts
-    /// [*See the documentation for the accounts*](SetTokenConfigMarketStatusFlag).
+    /// [*See the documentation for the accounts*](SetFeedConfigMarketStatusFlag).
     ///
     /// # Arguments
+    /// - `provider`: The index of the provider whose feed config will be updated.
+    ///   Must be a valid [`PriceProviderKind`] value.
     /// - `flag`: The [`MarketStatusFlag`] index to set.
     /// - `enable`: Enable or disable the flag.
     ///
     /// # Errors
-    /// - The [`authority`](SetTokenConfigMarketStatusFlag::authority) must be a
+    /// - The [`authority`](SetFeedConfigMarketStatusFlag::authority) must be a
     ///   signer and a MARKET_KEEPER in the given store.
-    /// - The [`token`](SetTokenConfigMarketStatusFlag::token) must exist in the token map.
+    /// - The [`token`](SetFeedConfigMarketStatusFlag::token) must exist in the token map.
+    /// - The `provider` index must correspond to a valid [`PriceProviderKind`].
+    /// - The feed config of the `provider` for the `token` must be initialized.
     /// - `flag` must be a valid [`MarketStatusFlag`] value.
     #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
-    pub fn set_token_config_market_status_flag(
-        ctx: Context<SetTokenConfigMarketStatusFlag>,
+    pub fn set_feed_config_market_status_flag(
+        ctx: Context<SetFeedConfigMarketStatusFlag>,
+        provider: u8,
         flag: u8,
         enable: bool,
     ) -> Result<()> {
         let token = ctx.accounts.token.key();
         let authorized =
             ctx.accounts.store.load()?.token_map() == Some(&ctx.accounts.token_map.key());
+        let kind = PriceProviderKind::try_from(provider)
+            .map_err(|_| CoreError::InvalidProviderKindIndex)?;
         let market_status_flag =
             MarketStatusFlag::try_from(flag).map_err(|_| error!(CoreError::InvalidArgument))?;
-        let previous =
-            SetTokenConfigMarketStatusFlag::invoke_unchecked(ctx, market_status_flag, enable)?;
+        if !matches!(kind, PriceProviderKind::ChainlinkDataStreams) {
+            msg!("set market status flag: note: this provider does not report market status; the flag has no effect for now");
+        }
+        let previous = SetFeedConfigMarketStatusFlag::invoke_unchecked(
+            ctx,
+            &kind,
+            market_status_flag,
+            enable,
+        )?;
         msg!(
-            "set market status flag: token={}, flag={}, {} -> {}, authorized_token_map={}",
+            "set market status flag: token={}, provider={}, flag={}, {} -> {}, authorized_token_map={}",
             token,
+            kind,
             flag,
             previous,
             enable,
