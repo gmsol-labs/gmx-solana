@@ -139,7 +139,7 @@ jobs:
     name: test crates
     needs: basics
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - name: Cache apt packages
@@ -154,6 +154,8 @@ jobs:
       - name: Install just
         uses: taiki-e/install-action@just
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - name: "just test-crates"
         run: just test-crates
         env:
