@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, num::NonZeroUsize, path::PathBuf};
 
 use anchor_spl::associated_token::get_associated_token_address;
+use clap::ValueEnum;
 use either::Either;
 use eyre::OptionExt;
 use gmsol_sdk::{
@@ -9,6 +10,7 @@ use gmsol_sdk::{
         config::FactorKey,
         market::{MarketConfigFlag, VirtualInventoryFlag},
         oracle::PriceProviderKind,
+        price::market_status::MarketStatusFlag,
         token_config::{
             TokenMapAccess, UpdateTokenConfigParams, DEFAULT_HEARTBEAT_DURATION, DEFAULT_PRECISION,
             DEFAULT_TIMESTAMP_ADJUSTMENT,
@@ -122,6 +124,23 @@ enum Command {
         token: Pubkey,
         #[command(flatten)]
         toggle: ToggleValue,
+    },
+    /// Set market-status flags on the feed configs of the given tokens.
+    SetMarketStatusFlag {
+        #[arg(long)]
+        token_map: Option<Pubkey>,
+        /// The provider whose feed configs will be updated.
+        #[arg(long)]
+        provider: PriceProviderKind,
+        /// Market-status flags to enable (repeat or comma-separate).
+        #[arg(long, value_delimiter = ',')]
+        enable: Vec<MarketStatusFlag>,
+        /// Market-status flags to disable (repeat or comma-separate).
+        #[arg(long, value_delimiter = ',')]
+        disable: Vec<MarketStatusFlag>,
+        /// The tokens to update.
+        #[arg(required = true)]
+        tokens: Vec<Pubkey>,
     },
     /// Toggle the token price adjustment for the given token.
     ToggleTokenPriceAdjustment {
@@ -571,6 +590,45 @@ impl super::Command for Market {
                 client
                     .toggle_token_config(store, &token_map_address, token, toggle.is_enable())
                     .into_bundle_with_options(options)?
+            }
+            Command::SetMarketStatusFlag {
+                token_map,
+                provider,
+                enable,
+                disable,
+                tokens,
+            } => {
+                if enable.is_empty() && disable.is_empty() {
+                    eyre::bail!("at least one `--enable` or `--disable` flag must be provided");
+                }
+                if let Some(flag) = enable.iter().find(|flag| disable.contains(flag)) {
+                    eyre::bail!(
+                        "`{}` appears in both `--enable` and `--disable`",
+                        flag.to_possible_value()
+                            .expect("no skipped variants")
+                            .get_name()
+                    );
+                }
+                let token_map_address = token_map_address(client, token_map.as_ref()).await?;
+                let mut bundle = client.bundle_with_options(options);
+                for token in tokens {
+                    for (flag, value) in enable
+                        .iter()
+                        .map(|flag| (flag, true))
+                        .chain(disable.iter().map(|flag| (flag, false)))
+                    {
+                        let rpc = client.set_feed_config_market_status_flag(
+                            store,
+                            &token_map_address,
+                            token,
+                            *provider,
+                            *flag,
+                            value,
+                        );
+                        bundle.push(rpc)?;
+                    }
+                }
+                bundle
             }
             Command::ToggleTokenPriceAdjustment {
                 token,
