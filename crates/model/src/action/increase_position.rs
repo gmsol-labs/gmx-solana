@@ -518,6 +518,8 @@ where
         // Update borrowing fee state.
         *self.position.borrowing_factor_mut() = next_position_borrowing_factor;
 
+        // Unlike `DecreasePosition`, sizes here grow unconditionally by exactly these
+        // deltas (added just above), so open interest stays consistent by construction.
         self.position.update_open_interest(
             &self.params.size_delta_usd.to_signed()?,
             &execution.size_delta_in_tokens.to_signed()?,

@@ -48,11 +48,10 @@ pub enum MarketStatus {
     Open,
 }
 
-/// Extended market status (v11 only).
+/// The market status.
 ///
-/// Downstream consumers can use this for finer-grained trading decisions
-/// instead of relying on [`MarketStatus`], which is a compatibility trade-off
-/// that collapses all non-regular-hours states to [`MarketStatus::Closed`].
+/// This is the granular status carried by every report that defines a market
+/// status; prefer it over the deprecated coarse [`MarketStatus`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExtendedMarketStatus {
     /// Unknown.
@@ -69,12 +68,12 @@ pub enum ExtendedMarketStatus {
     Closed,
 }
 
-impl From<ExtendedMarketStatus> for MarketStatus {
-    fn from(ext: ExtendedMarketStatus) -> Self {
-        match ext {
-            ExtendedMarketStatus::Unknown => MarketStatus::Unknown,
-            ExtendedMarketStatus::RegularHours => MarketStatus::Open,
-            _ => MarketStatus::Closed,
+impl From<MarketStatus> for ExtendedMarketStatus {
+    fn from(status: MarketStatus) -> Self {
+        match status {
+            MarketStatus::Unknown => ExtendedMarketStatus::Unknown,
+            MarketStatus::Closed => ExtendedMarketStatus::Closed,
+            MarketStatus::Open => ExtendedMarketStatus::RegularHours,
         }
     }
 }
@@ -100,13 +99,8 @@ impl Report {
         non_negative(self.ask)
     }
 
-    /// Returns the market status.
-    ///
-    /// For v11 reports, this is derived from [`ExtendedMarketStatus`]:
-    /// only [`ExtendedMarketStatus::RegularHours`] maps to [`MarketStatus::Open`];
-    /// all other states map to [`MarketStatus::Closed`].
-    /// This is a compatibility trade-off — downstream consumers that need
-    /// finer-grained control should use [`Self::extended_market_status()`] instead.
+    /// Returns the coarse market status.
+    #[deprecated(since = "0.10.0", note = "use `extended_market_status` instead")]
     pub fn market_status(&self) -> MarketStatus {
         self.market_status
     }
@@ -230,6 +224,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
         4 => {
             let report = ReportDataV4::decode(data)?;
             let price = bigint_to_signed(report.price)?;
+            let market_status = decode_market_status(report.market_status)?;
             Ok(Report {
                 feed_id: report.feed_id,
                 valid_from_timestamp: report.valid_from_timestamp,
@@ -243,8 +238,8 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 // of the RWA report schema (v4).
                 bid: price,
                 ask: price,
-                market_status: decode_market_status(report.market_status)?,
-                extended_market_status: None,
+                market_status,
+                extended_market_status: Some(market_status.into()),
             })
         }
         7 => {
@@ -269,6 +264,7 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
         8 => {
             let report = ReportDataV8::decode(data)?;
             let price = bigint_to_signed(report.mid_price)?;
+            let market_status = decode_market_status(report.market_status)?;
             Ok(Report {
                 feed_id: report.feed_id,
                 valid_from_timestamp: report.valid_from_timestamp,
@@ -280,14 +276,13 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 price,
                 bid: price,
                 ask: price,
-                market_status: decode_market_status(report.market_status)?,
-                extended_market_status: None,
+                market_status,
+                extended_market_status: Some(market_status.into()),
             })
         }
         11 => {
             let report = ReportDataV11::decode(data)?;
             let extended = decode_extended_market_status(report.market_status)?;
-            let market_status = MarketStatus::from(extended);
             let price = bigint_to_signed(report.mid)?;
             let bid = bigint_to_signed(report.bid)?;
             let ask = bigint_to_signed(report.ask)?;
@@ -303,7 +298,9 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 price,
                 bid,
                 ask,
-                market_status,
+                // v11 has no coarse status of its own; force the deprecated
+                // field to Unknown so consumers use `extended_market_status`.
+                market_status: MarketStatus::Unknown,
                 extended_market_status: Some(extended),
             })
         }
@@ -443,30 +440,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_extended_market_status_to_market_status() {
+    fn test_market_status_to_extended() {
         assert_eq!(
-            MarketStatus::from(ExtendedMarketStatus::Unknown),
-            MarketStatus::Unknown
+            ExtendedMarketStatus::from(MarketStatus::Unknown),
+            ExtendedMarketStatus::Unknown
         );
         assert_eq!(
-            MarketStatus::from(ExtendedMarketStatus::RegularHours),
-            MarketStatus::Open
+            ExtendedMarketStatus::from(MarketStatus::Closed),
+            ExtendedMarketStatus::Closed
         );
         assert_eq!(
-            MarketStatus::from(ExtendedMarketStatus::Closed),
-            MarketStatus::Closed
-        );
-        assert_eq!(
-            MarketStatus::from(ExtendedMarketStatus::PreMarket),
-            MarketStatus::Closed
-        );
-        assert_eq!(
-            MarketStatus::from(ExtendedMarketStatus::PostMarket),
-            MarketStatus::Closed
-        );
-        assert_eq!(
-            MarketStatus::from(ExtendedMarketStatus::Overnight),
-            MarketStatus::Closed
+            ExtendedMarketStatus::from(MarketStatus::Open),
+            ExtendedMarketStatus::RegularHours
         );
     }
 
@@ -500,6 +485,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_decode_v11() {
         use chainlink_data_streams_report::report::v11::ReportDataV11;
         use num_bigint::BigInt;
@@ -536,7 +522,7 @@ mod tests {
         assert_eq!(report.observations_timestamp, 1000);
         assert_eq!(report.expires_at, 1100);
         assert_eq!(report.last_update_timestamp(), Some(1_000_000_000_000));
-        assert_eq!(report.market_status(), MarketStatus::Open);
+        assert_eq!(report.market_status(), MarketStatus::Unknown);
         assert_eq!(
             report.extended_market_status(),
             Some(ExtendedMarketStatus::RegularHours)
@@ -547,6 +533,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_decode_v11_pre_market() {
         use chainlink_data_streams_report::report::v11::ReportDataV11;
         use num_bigint::BigInt;
@@ -579,7 +566,7 @@ mod tests {
         let report = decode(&encoded).unwrap();
 
         // PreMarket should map to Closed
-        assert_eq!(report.market_status(), MarketStatus::Closed);
+        assert_eq!(report.market_status(), MarketStatus::Unknown);
         assert_eq!(
             report.extended_market_status(),
             Some(ExtendedMarketStatus::PreMarket)
@@ -587,6 +574,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_decode_v11_xau_full_report() {
         let data = hex::decode(
             "00094baebfda9b87680d8e59aa20a3e565126640ee7caeab3cd965e5568b17ee\
@@ -646,7 +634,7 @@ mod tests {
         assert!(report.non_negative_ask() == Some(ask));
 
         // market_status=5 -> Closed
-        assert_eq!(report.market_status(), MarketStatus::Closed);
+        assert_eq!(report.market_status(), MarketStatus::Unknown);
         assert_eq!(
             report.extended_market_status(),
             Some(ExtendedMarketStatus::Closed)
