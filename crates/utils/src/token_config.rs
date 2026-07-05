@@ -288,9 +288,10 @@ pub struct FeedConfig {
     /// The maximum allowed deviation ratio from the mid-price.
     /// A value of `0` means no restriction is applied.
     max_deviation_ratio: u32,
+    market_status_flags: MarketStatusFlagContainer,
     #[cfg_attr(feature = "debug", debug(skip))]
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 24],
+    reserved: [u8; 23],
 }
 
 #[cfg(feature = "display")]
@@ -315,6 +316,7 @@ impl FeedConfig {
             feed,
             timestamp_adjustment: DEFAULT_TIMESTAMP_ADJUSTMENT,
             max_deviation_ratio: DEFAULT_MAX_DEVIATION_RATIO,
+            market_status_flags: Default::default(),
             reserved: Default::default(),
         }
     }
@@ -370,6 +372,16 @@ impl FeedConfig {
         } else {
             Some(u128::from(ratio) * Self::RATIO_MULTIPLIER)
         }
+    }
+
+    /// Returns the per-feed market-status flags.
+    pub fn market_status_flags(&self) -> MarketStatusFlagContainer {
+        self.market_status_flags
+    }
+
+    /// Sets a per-feed market-status flag, returning the previous value.
+    pub fn set_market_status_flag(&mut self, flag: MarketStatusFlag, enable: bool) -> bool {
+        self.market_status_flags.set_flag(flag, enable)
     }
 }
 
@@ -706,5 +718,29 @@ mod market_status_tests {
             MarketStatus::PreMarket.openness(config.market_status_flags()),
             MarketOpenness::Open
         ));
+    }
+
+    #[test]
+    fn feed_default_flags_open_regular_hours() {
+        let config = FeedConfig::zeroed();
+        assert!(matches!(
+            MarketStatus::RegularHours.openness(config.market_status_flags()),
+            MarketOpenness::Open
+        ));
+        assert!(matches!(
+            MarketStatus::PreMarket.openness(config.market_status_flags()),
+            MarketOpenness::Closed
+        ));
+    }
+
+    #[test]
+    fn feed_set_flag_round_trip() {
+        let mut config = FeedConfig::zeroed();
+        assert!(!config.set_market_status_flag(MarketStatusFlag::AllowPreMarket, true));
+        assert!(matches!(
+            MarketStatus::PreMarket.openness(config.market_status_flags()),
+            MarketOpenness::Open
+        ));
+        assert!(config.set_market_status_flag(MarketStatusFlag::AllowPreMarket, false));
     }
 }
