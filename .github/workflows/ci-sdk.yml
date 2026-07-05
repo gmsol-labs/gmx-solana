@@ -130,4 +130,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
       - name: check --feature-powerset
-        run: cargo hack check --workspace ${{ env.exclude_packages }} --feature-powerset --depth 2 --keep-going
+        # depth 2 (pairwise) takes ~35 min and dominates PR latency; PRs check
+        # each feature alone, pushes to main keep the full pairwise sweep
+        run: cargo hack check --workspace ${{ env.exclude_packages }} --feature-powerset --depth ${{ github.event_name == 'pull_request' && '1' || '2' }} --keep-going
