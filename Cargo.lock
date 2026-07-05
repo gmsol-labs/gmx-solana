@@ -9048,8 +9048,8 @@ dependencies = [
 name = "xtask"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "clap",
+ "eyre",
  "solana-client",
  "solana-sdk",
  "toml 0.8.23",

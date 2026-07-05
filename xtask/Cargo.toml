@@ -5,8 +5,8 @@ edition.workspace = true
 publish = false
 
 [dependencies]
-anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
+eyre = { workspace = true }
 solana-sdk = { workspace = true }
 solana-client = { workspace = true }
 toml = { workspace = true }

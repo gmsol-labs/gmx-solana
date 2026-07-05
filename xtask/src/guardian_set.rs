@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use anyhow::{Context, Result};
+use eyre::{eyre, OptionExt, Result};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 
@@ -37,7 +37,7 @@ pub fn detect(rpc_url: &str, max_probe: u32) -> Result<Detected> {
     let addresses: Vec<Pubkey> = indices.iter().map(|&i| guardian_set_address(i)).collect();
     let accounts = client
         .get_multiple_accounts(&addresses)
-        .with_context(|| format!("getMultipleAccounts against {rpc_url}"))?;
+        .map_err(|e| eyre!("getMultipleAccounts against {rpc_url}: {e}"))?;
     let existing: Vec<u32> = indices
         .iter()
         .zip(accounts.iter())
@@ -47,7 +47,7 @@ pub fn detect(rpc_url: &str, max_probe: u32) -> Result<Detected> {
         .iter()
         .copied()
         .max()
-        .context("no guardian-set accounts found on cluster")?;
+        .ok_or_eyre("no guardian-set accounts found on cluster")?;
     if existing.contains(&max_probe) {
         eprintln!(
             "warning: highest probed guardian-set index ({max_probe}) exists; a newer set \

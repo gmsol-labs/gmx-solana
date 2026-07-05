@@ -36,9 +36,9 @@ enum GuardianSetAction {
     Rotate,
 }
 
-fn read_anchor_toml() -> anyhow::Result<String> {
+fn read_anchor_toml() -> eyre::Result<String> {
     std::fs::read_to_string(ANCHOR_TOML)
-        .map_err(|e| anyhow::anyhow!("failed to read {ANCHOR_TOML}: {e}"))
+        .map_err(|e| eyre::eyre!("failed to read {ANCHOR_TOML}: {e}"))
 }
 
 fn cmd_check() -> ExitCode {

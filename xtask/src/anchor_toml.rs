@@ -1,6 +1,6 @@
 // Pure text helpers for the Anchor.toml managed guardian-set block.
 
-use anyhow::{bail, Result};
+use eyre::{bail, OptionExt, Result};
 
 pub const BEGIN_MARKER: &str =
     "# BEGIN guardian-sets (managed by xtask; run `just rotate-guardian-set`)";
@@ -49,11 +49,11 @@ pub fn splice_managed_block(contents: &str, new_interior: &str) -> Result<String
 pub fn uncommented_addresses(contents: &str) -> Result<Vec<String>> {
     let begin = contents
         .find(BEGIN_MARKER)
-        .ok_or_else(|| anyhow::anyhow!("managed guardian-set block not found"))?;
+        .ok_or_eyre("managed guardian-set block not found")?;
     let end = contents[begin..]
         .find(END_MARKER)
         .map(|i| begin + i)
-        .ok_or_else(|| anyhow::anyhow!("managed guardian-set block malformed"))?;
+        .ok_or_eyre("managed guardian-set block malformed")?;
     let mut addrs = Vec::new();
     for line in contents[begin..end].lines() {
         let trimmed = line.trim_start();
