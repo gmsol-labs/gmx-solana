@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- sdk(solana-utils): Added `Bundle::send_all_with_opts_detailed`, returning one `Result` per transaction with stable bundle indices.
+
+### Changed
+
+- sdk(solana-utils): Restored the original two-argument `Bundle::send_all_with_opts` signature; it now wraps the detailed API and compresses successful signatures into the legacy return format.
+
 ## [0.10.0] - 2026-07-22
 
 ### Breaking Changes
