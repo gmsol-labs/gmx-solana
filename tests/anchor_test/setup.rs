@@ -106,6 +106,9 @@ pub struct Deployment {
     oracle: Keypair,
     /// GLV mint.
     pub glv_token: Pubkey,
+    /// GLV mint of the many-markets GLV
+    /// (see [`Self::MANY_MARKETS_GLV_MAX_MARKET_COUNT`]).
+    pub many_markets_glv_token: Pubkey,
     /// Tokens.
     tokens: HashMap<String, Token>,
     /// Synthetic tokens.
@@ -184,6 +187,30 @@ impl Deployment {
         Self::TOKEN_FOR_SWAP_TEST,
     ];
 
+    /// GLV index of the many-markets GLV used by the GLV deposit
+    /// market-count ramp test.
+    pub const MANY_MARKETS_GLV_INDEX: u16 = 1;
+
+    /// Number of candidate markets created for the many-markets GLV. The GLV
+    /// itself is initialized with only the first two markets; the ramp test
+    /// inserts the remaining ones one by one.
+    pub const MANY_MARKETS_GLV_MAX_MARKET_COUNT: usize = 40;
+
+    /// Returns the name of the synthetic index token used by the `idx`-th market
+    /// of the many-markets GLV.
+    pub fn many_markets_glv_index_token(idx: usize) -> String {
+        format!("fI{idx:02}")
+    }
+
+    /// Returns the market selector for the `idx`-th market of the many-markets GLV.
+    pub fn many_markets_glv_market(idx: usize) -> [String; 3] {
+        [
+            Self::many_markets_glv_index_token(idx),
+            "fBTC".to_string(),
+            "USDG".to_string(),
+        ]
+    }
+
     const SOL_PYTH_FEED_ID: [u8; 32] = [
         0xef, 0x0d, 0x8b, 0x6f, 0xda, 0x2c, 0xeb, 0xa4, 0x1d, 0xa1, 0x5d, 0x40, 0x95, 0xd1, 0xda,
         0x39, 0x2a, 0x0d, 0x2f, 0x8e, 0xd0, 0xc6, 0xc7, 0xbc, 0x0f, 0x4c, 0xfa, 0xc8, 0xc2, 0x80,
@@ -246,6 +273,7 @@ impl Deployment {
             token_map,
             oracle,
             glv_token: Default::default(),
+            many_markets_glv_token: Default::default(),
             tokens: Default::default(),
             synthetic_tokens: Default::default(),
             market_tokens: Default::default(),
@@ -354,6 +382,19 @@ impl Deployment {
                 max_deviation_factor: Some(MAX_DEVIATION_FACTOR),
             },
         )]);
+        self.add_synthetic_tokens((1..=Self::MANY_MARKETS_GLV_MAX_MARKET_COUNT).map(|idx| {
+            (
+                Self::many_markets_glv_index_token(idx),
+                Pubkey::new_unique(),
+                TokenConfig {
+                    provider: PriceProviderKind::Pyth,
+                    decimals: 9,
+                    feed_id: Pubkey::new_from_array(Self::SOL_PYTH_FEED_ID),
+                    precision: 4,
+                    max_deviation_factor: Some(MAX_DEVIATION_FACTOR),
+                },
+            )
+        }));
         // self.create_token_accounts().await?;
         self.initialize_store().await?;
         self.initialize_token_map().await?;
@@ -378,6 +419,15 @@ impl Deployment {
         ])
         .await?;
         self.initialize_glv("fBTC", "USDG").await?;
+
+        // The markets for the many-markets GLV are created after the primary GLV
+        // is initialized, so that the primary GLV keeps collecting only the two
+        // original fBTC/USDG markets.
+        self.initialize_markets(
+            (1..=Self::MANY_MARKETS_GLV_MAX_MARKET_COUNT).map(Self::many_markets_glv_market),
+        )
+        .await?;
+        self.initialize_many_markets_glv().await?;
 
         self.initialize_alts().await?;
 
@@ -1154,6 +1204,21 @@ impl Deployment {
             );
         }
 
+        // Cover the many-markets GLV addresses so that its execute transactions
+        // stay within the packet size limit.
+        {
+            use anchor_spl::associated_token::get_associated_token_address;
+
+            let glv = self.client.find_glv_address(&self.many_markets_glv_token);
+            addresses.push(glv);
+            addresses.push(self.many_markets_glv_token);
+            for idx in 1..=Self::MANY_MARKETS_GLV_MAX_MARKET_COUNT {
+                let name = Self::many_markets_glv_market(idx);
+                let market_token = self.market_tokens[&name];
+                addresses.push(get_associated_token_address(&glv, &market_token));
+            }
+        }
+
         let signatures = self
             .client
             .extend_alt(&self.market_alt.key, addresses.clone(), None)?
@@ -1211,6 +1276,54 @@ impl Deployment {
                 tracing::error!(%err, %glv_token, "enabling GLV deposit failed, signatures: {signatures:#?}");
             }
         }
+
+        Ok(())
+    }
+
+    async fn initialize_many_markets_glv(&mut self) -> eyre::Result<()> {
+        let keeper = self.user_client(Self::DEFAULT_KEEPER)?;
+
+        // The GLV starts with only the first two markets; the GLV deposit
+        // market-count ramp test inserts the remaining candidate markets one
+        // by one.
+        let market_tokens = (1..=2)
+            .map(|idx| {
+                let name = Self::many_markets_glv_market(idx);
+                self.market_tokens
+                    .get(&name)
+                    .copied()
+                    .ok_or_eyre("market for the many-markets GLV is not initialized")
+            })
+            .collect::<eyre::Result<Vec<_>>>()?;
+
+        let (rpc, glv_token) = keeper.initialize_glv(
+            &self.store,
+            Self::MANY_MARKETS_GLV_INDEX,
+            market_tokens.iter().copied(),
+        )?;
+        let signature = rpc.send_without_preflight().await?;
+        tracing::info!(%signature, %glv_token, "initialized the many-markets GLV token");
+        self.many_markets_glv_token = glv_token;
+
+        let mut txn = keeper.bundle();
+        for market_token in &market_tokens {
+            txn.push(keeper.toggle_glv_market_flag(
+                &self.store,
+                &glv_token,
+                market_token,
+                GlvMarketFlag::IsDepositAllowed,
+                true,
+            ))?;
+        }
+        let signatures = txn
+            .build()?
+            .send_all(true)
+            .await
+            .map_err(|(signatures, err)| {
+                tracing::error!(%glv_token, "enabling many-markets GLV deposit failed, signatures: {signatures:#?}");
+                err
+            })?;
+        tracing::info!(%glv_token, "many-markets GLV deposit enabled, signatures: {signatures:#?}");
 
         Ok(())
     }
@@ -1412,7 +1525,9 @@ impl Deployment {
     }
 
     async fn fund_users(&self) -> eyre::Result<()> {
-        const LAMPORTS: u64 = 2_000_000_000;
+        // The keeper pays the rent for the candidate markets of the
+        // many-markets GLV, which does not fit in the previous budget of 2 SOL.
+        const LAMPORTS: u64 = 20_000_000_000;
 
         let client = self.client.store_program().rpc();
         let payer = self.client.payer();
