@@ -10,10 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - sdk(solana-utils): Added `Bundle::send_all_with_opts_detailed`, returning one `Result` per transaction with stable bundle indices.
+- sdk(solana-utils): Added `Error::SendAborted` for unsent transactions after an early bundle abort.
+- sdk(solana-utils): Made `compress_send_results` public so callers can map detailed results to the legacy signature list.
 
 ### Changed
 
-- sdk(solana-utils): Restored the original two-argument `Bundle::send_all_with_opts` signature; it now wraps the detailed API and compresses successful signatures into the legacy return format.
+- sdk(solana-utils): Kept the two-argument `Bundle::send_all_with_opts` as a deprecated compatibility wrapper around the detailed API. It still returns the compressed success-signature list, and when multiple transactions fail it returns the **last** real send error (matching prior overwrite semantics; `SendAborted` placeholders are ignored).
 
 ## [0.10.0] - 2026-07-22
 

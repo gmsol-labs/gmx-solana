@@ -423,7 +423,7 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
         skip_preflight: bool,
     ) -> Result<Vec<Signature>, (Vec<Signature>, crate::Error)> {
         match self
-            .send_all_with_opts(
+            .send_all_with_opts_detailed(
                 SendBundleOptions {
                     config: RpcSendTransactionConfig {
                         skip_preflight,
@@ -435,17 +435,20 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
             )
             .await
         {
-            Ok(signatures) => Ok(signatures
-                .into_iter()
-                .map(|with_slot| with_slot.into_value())
-                .collect()),
-            Err((signatures, err)) => Err((
-                signatures
+            Ok(results) => match compress_send_results(results) {
+                Ok(signatures) => Ok(signatures
                     .into_iter()
                     .map(|with_slot| with_slot.into_value())
-                    .collect(),
-                err,
-            )),
+                    .collect()),
+                Err((signatures, err)) => Err((
+                    signatures
+                        .into_iter()
+                        .map(|with_slot| with_slot.into_value())
+                        .collect(),
+                    err,
+                )),
+            },
+            Err(err) => Err((vec![], err)),
         }
     }
 
@@ -520,8 +523,18 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
 
     /// Send all in order with the given options and returns the signatures of the success transactions.
     ///
-    /// This is a compatibility wrapper around [`Self::send_all_with_opts_detailed`].
+    /// Compatibility wrapper around [`Self::send_all_with_opts_detailed`]. Prefer the detailed
+    /// API when you need per-transaction outcomes (stable bundle indices).
+    ///
+    /// Legacy behavior is preserved: successful signatures are collected in send order, and when
+    /// multiple transactions fail the returned error is the **last** real send failure (not
+    /// [`crate::Error::SendAborted`] placeholders for unsent txs).
+    ///
     /// `before_sign` runs once per built transaction, before it is signed.
+    #[deprecated(
+        since = "0.11.0",
+        note = "use `send_all_with_opts_detailed` for per-tx results; this wrapper keeps the legacy compressed signature list"
+    )]
     pub async fn send_all_with_opts(
         self,
         opts: SendBundleOptions,
@@ -534,10 +547,18 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
     }
 }
 
-type SendAllSignaturesResult =
+/// Result type returned by [`compress_send_results`] and the deprecated
+/// [`Bundle::send_all_with_opts`].
+pub type SendAllSignaturesResult =
     Result<Vec<WithSlot<Signature>>, (Vec<WithSlot<Signature>>, crate::Error)>;
 
-fn compress_send_results(
+/// Compress detailed per-tx results into the legacy success-signature list.
+///
+/// Matches pre-detailed `send_all_with_opts` semantics: each real failure overwrites
+/// the pending error (last failure wins and gets returned). [`crate::Error::SendAborted`] entries are
+/// ignored when selecting the returned error so early-abort padding does not replace
+/// the real failure.
+pub fn compress_send_results(
     results: Vec<Result<WithSlot<Signature>, crate::Error>>,
 ) -> SendAllSignaturesResult {
     let mut signatures = Vec::new();
@@ -545,8 +566,8 @@ fn compress_send_results(
     for result in results {
         match result {
             Ok(signature) => signatures.push(signature),
-            Err(err) if error.is_none() => error = Some(err),
-            Err(_) => {}
+            Err(crate::Error::SendAborted { .. }) => {}
+            Err(err) => error = Some(err),
         }
     }
     match error {
@@ -652,7 +673,18 @@ mod tests {
     }
 
     #[test]
-    fn compress_send_results_first_failure() {
+    fn compress_send_results_last_real_failure_wins() {
+        // Legacy continue_on_error=true overwrote `error` on every failure.
+        let results = vec![ok_sig(1), err_msg("first"), ok_sig(3), err_msg("last")];
+        let (sigs, err) = compress_send_results(results).unwrap_err();
+        assert_eq!(sigs.len(), 2);
+        assert_eq!(sigs[0].slot(), 1);
+        assert_eq!(sigs[1].slot(), 3);
+        assert_eq!(err.to_string(), "custom: last");
+    }
+
+    #[test]
+    fn compress_send_results_ignores_send_aborted_padding() {
         let failed_at = 0;
         let results = vec![
             err_msg("first"),
