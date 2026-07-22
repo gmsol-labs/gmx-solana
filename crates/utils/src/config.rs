@@ -146,6 +146,8 @@ pub enum FactorKey {
     OracleRefPriceDeviation,
     /// Order fee discount for referred user.
     OrderFeeDiscountForReferredUser,
+    /// Max builder fee factor.
+    MaxBuilderFeeFactor,
 }
 
 /// Address keys.
