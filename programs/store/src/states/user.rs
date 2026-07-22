@@ -31,9 +31,24 @@ pub struct UserHeader {
     pub(crate) referral: Referral,
     /// GT State.
     pub(crate) gt: UserGtState,
+    /// The builder fee factor advertised by this user as a builder.
+    pub(crate) builder_fee_factor: u128,
     #[cfg_attr(feature = "debug", debug(skip))]
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 128],
+    reserved: [u8; 112],
+}
+
+// The builder fee factor is carved out of previously reserved bytes: the
+// total size and the offsets of all fields must remain unchanged.
+static_assertions::const_assert_eq!(std::mem::size_of::<UserHeader>(), 512);
+static_assertions::const_assert_eq!(std::mem::offset_of!(UserHeader, builder_fee_factor), 384);
+static_assertions::const_assert_eq!(std::mem::offset_of!(UserHeader, reserved), 400);
+
+impl UserHeader {
+    /// Get the builder fee factor advertised by this user as a builder.
+    pub fn builder_fee_factor(&self) -> u128 {
+        self.builder_fee_factor
+    }
 }
 
 gmsol_utils::flags!(UserFlag, MAX_USER_FLAGS, u8);
