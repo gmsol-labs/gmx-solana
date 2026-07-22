@@ -325,9 +325,38 @@ pub struct Order {
     pub(crate) gt_reward: u64,
     #[cfg_attr(feature = "debug", debug(skip))]
     padding_1: [u8; 8],
+    /// The builder fee beneficiary (the builder's User Account address).
+    pub(crate) builder: Pubkey,
+    /// The checkpointed builder fee factor.
+    pub(crate) builder_fee_factor: u128,
+    /// The builder fee amount pending settlement, denominated in the
+    /// collateral token.
+    pub(crate) builder_fee_amount: u64,
     #[cfg_attr(feature = "debug", debug(skip))]
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 128],
+    reserved: [u8; 72],
+}
+
+// The builder fee fields are carved out of previously reserved bytes: the
+// total size and the offsets of all fields must remain unchanged.
+static_assertions::const_assert_eq!(std::mem::size_of::<Order>(), 2464);
+static_assertions::const_assert_eq!(std::mem::offset_of!(Order, builder), 2336);
+static_assertions::const_assert_eq!(std::mem::offset_of!(Order, builder_fee_factor), 2368);
+static_assertions::const_assert_eq!(std::mem::offset_of!(Order, builder_fee_amount), 2384);
+static_assertions::const_assert_eq!(std::mem::offset_of!(Order, reserved), 2392);
+
+impl Order {
+    pub fn builder(&self) -> Option<&Pubkey> {
+        crate::utils::pubkey::optional_address(&self.builder)
+    }
+
+    pub fn builder_fee_factor(&self) -> u128 {
+        self.builder_fee_factor
+    }
+
+    pub fn builder_fee_amount(&self) -> u64 {
+        self.builder_fee_amount
+    }
 }
 
 impl Seed for Order {
