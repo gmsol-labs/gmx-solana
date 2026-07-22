@@ -610,4 +610,131 @@ mod tests {
         println!("{position:#?}");
         Ok(())
     }
+
+    fn market_for_builder_fee_tests() -> crate::Result<TestMarket<u64, 9>> {
+        let mut market = TestMarket::<u64, 9>::default();
+        let prices = Prices::new_for_test(120, 120, 1);
+        market.deposit(1_000_000_000, 0, prices)?.execute()?;
+        market.deposit(0, 1_000_000_000, prices)?.execute()?;
+        Ok(market)
+    }
+
+    #[test]
+    fn builder_fee_zero_factor_is_identity() -> crate::Result<()> {
+        let market = market_for_builder_fee_tests()?;
+        let position = TestPosition::long(true);
+
+        let run = |factor: Option<u64>| -> crate::Result<(String, String, String)> {
+            let mut market = market.clone();
+            let mut position = position;
+            let report = position
+                .ops(&mut market)
+                .increase(
+                    Prices::new_for_test(123, 123, 1),
+                    100_000_000,
+                    8_000_000_000,
+                    None,
+                )?
+                .with_builder_fee_factor(factor)
+                .execute()?;
+            Ok((
+                format!("{report:?}"),
+                format!("{market:?}"),
+                format!("{position:?}"),
+            ))
+        };
+
+        let baseline = run(None)?;
+        let with_zero_factor = run(Some(0))?;
+        assert_eq!(baseline, with_zero_factor);
+        Ok(())
+    }
+
+    #[test]
+    fn builder_fee_charged_on_increase() -> crate::Result<()> {
+        const SIZE_DELTA_USD: u64 = 8_000_000_000;
+        const FACTOR: u64 = 5_000_000; // 0.5%
+        const COLLATERAL_PRICE: u64 = 123;
+
+        let market = market_for_builder_fee_tests()?;
+        let position = TestPosition::long(true);
+
+        let run = |factor: Option<u64>| {
+            let mut market = market.clone();
+            let mut position = position;
+            position
+                .ops(&mut market)
+                .increase(
+                    Prices::new_for_test(123, 123, 1),
+                    100_000_000,
+                    SIZE_DELTA_USD,
+                    None,
+                )?
+                .with_builder_fee_factor(factor)
+                .execute()
+        };
+
+        let baseline = run(None)?;
+        let report = run(Some(FACTOR))?;
+
+        assert!(baseline.fees().builder_fees().fee_value().is_zero());
+        assert!(baseline.fees().builder_fees().fee_amount().is_zero());
+
+        // The fee value is the size delta with the factor applied, and the
+        // amount is converted with the min collateral token price, rounding
+        // down, in parity with the order fee computation.
+        let expected_value =
+            crate::utils::apply_factor::<u64, 9>(&SIZE_DELTA_USD, &FACTOR).unwrap();
+        let expected_amount = expected_value / COLLATERAL_PRICE;
+        assert!(!expected_amount.is_zero());
+        let builder_fees = report.fees().builder_fees();
+        assert_eq!(*builder_fees.fee_value(), expected_value);
+        assert_eq!(*builder_fees.fee_amount(), expected_amount);
+
+        // The order fee is unaffected by the builder fee.
+        assert_eq!(
+            baseline.fees().order_fees().fee_value(),
+            report.fees().order_fees().fee_value()
+        );
+        assert_eq!(
+            baseline
+                .fees()
+                .order_fees()
+                .fee_amounts()
+                .fee_amount_for_pool(),
+            report
+                .fees()
+                .order_fees()
+                .fee_amounts()
+                .fee_amount_for_pool()
+        );
+        assert_eq!(
+            baseline
+                .fees()
+                .order_fees()
+                .fee_amounts()
+                .fee_amount_for_receiver(),
+            report
+                .fees()
+                .order_fees()
+                .fee_amounts()
+                .fee_amount_for_receiver()
+        );
+
+        // The builder fee does not mint GT: the paid order and borrowing fee
+        // value must be unchanged.
+        assert_eq!(
+            baseline.fees().paid_order_and_borrowing_fee_value(),
+            report.fees().paid_order_and_borrowing_fee_value()
+        );
+
+        // The collateral added to the position is reduced by exactly the
+        // builder fee amount.
+        assert_eq!(
+            *baseline.collateral_delta_amount() - *report.collateral_delta_amount(),
+            expected_amount as i64
+        );
+
+        Ok(())
+    }
 }

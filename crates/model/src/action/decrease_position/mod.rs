@@ -836,4 +836,145 @@ mod tests {
         println!("{market:#?}");
         Ok(())
     }
+
+    #[test]
+    fn builder_fee_charged_on_decrease() -> crate::Result<()> {
+        const SIZE_DELTA_USD: u64 = 4_000_000_000;
+        const FACTOR: u64 = 5_000_000; // 0.5%
+        const COLLATERAL_PRICE: u64 = 125;
+
+        let mut market = TestMarket::<u64, 9>::default();
+        let prices = Prices::new_for_test(120, 120, 1);
+        market.deposit(1_000_000_000, 0, prices)?.execute()?;
+        market.deposit(0, 1_000_000_000, prices)?.execute()?;
+        let mut position = TestPosition::long(true);
+        let _ = position
+            .ops(&mut market)
+            .increase(
+                Prices::new_for_test(123, 123, 1),
+                100_000_000,
+                8_000_000_000,
+                None,
+            )?
+            .execute()?;
+
+        let run = |factor: Option<u64>| {
+            let mut market = market.clone();
+            let mut position = position;
+            position
+                .ops(&mut market)
+                .decrease(
+                    Prices::new_for_test(125, 125, 1),
+                    SIZE_DELTA_USD,
+                    None,
+                    50_000_000,
+                    Default::default(),
+                )?
+                .with_builder_fee_factor(factor)
+                .execute()
+        };
+
+        let baseline = run(None)?;
+        let report = run(Some(FACTOR))?;
+
+        assert!(baseline.fees().builder_fees().fee_value().is_zero());
+        assert!(baseline.fees().builder_fees().fee_amount().is_zero());
+
+        // Computation parity with the order fee: value from the size delta
+        // with the factor applied, amount converted with the min collateral
+        // token price, rounding down.
+        let expected_value =
+            crate::utils::apply_factor::<u64, 9>(&SIZE_DELTA_USD, &FACTOR).unwrap();
+        let expected_amount = expected_value / COLLATERAL_PRICE;
+        assert!(!expected_amount.is_zero());
+        let builder_fees = report.fees().builder_fees();
+        assert_eq!(*builder_fees.fee_value(), expected_value);
+        assert_eq!(*builder_fees.fee_amount(), expected_amount);
+
+        // The order fee is unaffected by the builder fee.
+        assert_eq!(
+            baseline.fees().order_fees().fee_value(),
+            report.fees().order_fees().fee_value()
+        );
+
+        // The builder fee is paid at the order-fee rung, from the output:
+        // the output amount is reduced by exactly the builder fee amount.
+        assert_eq!(
+            *baseline.output_amount() - expected_amount,
+            *report.output_amount()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn builder_fee_cancelled_with_order_fee_on_shortfall() -> crate::Result<()> {
+        // Use a position with short-token collateral and long-token profit:
+        // fees must be paid in the collateral (output) token, and a builder
+        // fee exceeding the remaining collateral forces a partial payment
+        // from the secondary output, which cancels the fees entirely (the
+        // paid amount is credited to the pool instead) — the same semantics
+        // as an order-fee shortfall.
+        const SIZE_DELTA_USD: u64 = 8_000_000_000;
+        const FACTOR: u64 = 400_000_000; // 40%
+
+        let mut market = TestMarket::<u64, 9>::default();
+        let prices = Prices::new_for_test(120, 120, 1);
+        market.deposit(1_000_000_000, 0, prices)?.execute()?;
+        market.deposit(0, 6_000_000_000, prices)?.execute()?;
+        let mut position = TestPosition::long(false);
+        let _ = position
+            .ops(&mut market)
+            .increase(prices, 3_000_000_000, SIZE_DELTA_USD, None)?
+            .execute()?;
+
+        let run = |factor: Option<u64>| {
+            let mut market = market.clone();
+            let mut position = position;
+            position
+                .ops(&mut market)
+                .decrease(
+                    Prices::new_for_test(240, 240, 1),
+                    SIZE_DELTA_USD,
+                    None,
+                    0,
+                    Default::default(),
+                )?
+                .with_builder_fee_factor(factor)
+                .execute()
+        };
+
+        // Without the builder fee, the order fee is payable and charged.
+        let baseline = run(None)?;
+        assert!(!baseline.fees().order_fees().fee_value().is_zero());
+        assert!(!baseline
+            .fees()
+            .order_fees()
+            .fee_amounts()
+            .fee_amount_for_pool()
+            .is_zero());
+
+        // With the oversized builder fee, the full close still executes, but
+        // both the order fee and the builder fee are cancelled.
+        let report = run(Some(FACTOR))?;
+        assert!(report.should_remove());
+        assert!(report.insolvent_close_step().is_none());
+        let fees = report.fees();
+        assert!(fees.builder_fees().fee_value().is_zero());
+        assert!(fees.builder_fees().fee_amount().is_zero());
+        assert!(fees.order_fees().fee_value().is_zero());
+        assert!(fees
+            .order_fees()
+            .fee_amounts()
+            .fee_amount_for_pool()
+            .is_zero());
+        assert!(fees
+            .order_fees()
+            .fee_amounts()
+            .fee_amount_for_receiver()
+            .is_zero());
+        assert!(fees.paid_order_and_borrowing_fee_value().is_zero());
+
+        Ok(())
+    }
 }
