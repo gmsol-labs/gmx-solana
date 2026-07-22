@@ -397,6 +397,30 @@ impl Store {
         }
     }
 
+    /// Is the builder fee feature enabled for the given action.
+    /// [`toggle_feature`](crate::gmsol_store::toggle_feature).
+    pub fn is_builder_fee_feature_enabled(&self, action: ActionDisabledFlag) -> bool {
+        matches!(
+            self.get_feature_disabled(DomainDisabledFlag::BuilderFee, action),
+            Some(false)
+        )
+    }
+
+    /// Validate whether the builder fee feature is enabled for the given
+    /// action. See [`is_builder_fee_feature_enabled`](Self::is_builder_fee_feature_enabled)
+    /// for the default behavior.
+    pub fn validate_builder_fee_feature_enabled(&self, action: ActionDisabledFlag) -> Result<()> {
+        if self.is_builder_fee_feature_enabled(action) {
+            Ok(())
+        } else {
+            msg!(
+                "Feature `{}` is not enabled (builder fee features are disabled by default)",
+                display_feature(DomainDisabledFlag::BuilderFee, action)
+            );
+            err!(CoreError::FeatureDisabled)
+        }
+    }
+
     /// Set features disabled.
     pub(crate) fn set_feature_disabled(
         &mut self,

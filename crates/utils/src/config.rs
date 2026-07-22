@@ -50,6 +50,8 @@ pub enum DomainDisabledFlag {
     GlvWithdrawal = 13,
     /// GLV shift.
     GlvShift = 14,
+    /// Builder fee.
+    BuilderFee = 15,
 }
 
 impl TryFrom<OrderKind> for DomainDisabledFlag {
