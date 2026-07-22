@@ -619,8 +619,9 @@ impl Amounts {
 pub struct Factors {
     pub(crate) oracle_ref_price_deviation: Factor,
     pub(crate) order_fee_discount_for_referred_user: Factor,
+    pub(crate) max_builder_fee_factor: Factor,
     #[cfg_attr(feature = "debug", debug(skip))]
-    reserved: [Factor; 64],
+    reserved: [Factor; 63],
 }
 
 impl Factors {
@@ -635,6 +636,7 @@ impl Factors {
             FactorKey::OrderFeeDiscountForReferredUser => {
                 &self.order_fee_discount_for_referred_user
             }
+            FactorKey::MaxBuilderFeeFactor => &self.max_builder_fee_factor,
             _ => return None,
         };
         Some(value)
@@ -647,6 +649,7 @@ impl Factors {
             FactorKey::OrderFeeDiscountForReferredUser => {
                 &mut self.order_fee_discount_for_referred_user
             }
+            FactorKey::MaxBuilderFeeFactor => &mut self.max_builder_fee_factor,
             _ => return None,
         };
         Some(value)
