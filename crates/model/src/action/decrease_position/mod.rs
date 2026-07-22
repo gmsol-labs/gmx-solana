@@ -3,7 +3,7 @@ use num_traits::{CheckedAdd, CheckedDiv, CheckedSub, Zero};
 use crate::{
     market::{PerpMarket, PerpMarketExt, SwapMarketMutExt},
     num::{MulDiv, Unsigned},
-    params::fee::PositionFees,
+    params::fee::{BuilderFees, PositionFees},
     pool::delta::PriceImpact,
     position::{
         CollateralDelta, Position, PositionExt, PositionMut, PositionMutExt, PositionStateExt,
@@ -34,6 +34,7 @@ pub struct DecreasePosition<P: Position<DECIMALS>, const DECIMALS: u8> {
     params: DecreasePositionParams<P::Num>,
     withdrawable_collateral_amount: P::Num,
     size_delta_usd: P::Num,
+    builder_fee_factor: Option<P::Num>,
 }
 
 /// Swap Type for the decrease position action.
@@ -209,12 +210,19 @@ where
                 .min(position.collateral_amount().clone()),
             size_delta_usd,
             position,
+            builder_fee_factor: None,
         })
     }
 
     /// Set the swap type.
     pub fn set_swap(mut self, kind: DecreasePositionSwapType) -> Self {
         self.params.swap = kind;
+        self
+    }
+
+    /// Set the builder fee factor.
+    pub fn with_builder_fee_factor(mut self, factor: Option<P::Num>) -> Self {
+        self.builder_fee_factor = factor;
         self
     }
 
@@ -384,6 +392,16 @@ where
             price_impact.balance_change,
             self.params.is_liquidation_order(),
         )?;
+
+        if let Some(factor) = &self.builder_fee_factor {
+            fees = fees.set_builder_fees(BuilderFees::try_new(
+                self.params
+                    .prices
+                    .collateral_token_price(is_output_token_long),
+                &self.size_delta_usd,
+                factor,
+            )?);
+        }
 
         let remaining_collateral_amount = self.position.collateral_amount().clone();
 
