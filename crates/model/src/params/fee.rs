@@ -139,6 +139,7 @@ impl<T> FeeParams<T> {
             borrowing: Default::default(),
             funding: Default::default(),
             liquidation: Default::default(),
+            builder: Default::default(),
         })
     }
 }
@@ -673,6 +674,47 @@ impl<T> LiquidationFees<T> {
     }
 }
 
+/// Builder Fees.
+///
+/// Unlike other fees, the entire amount is paid to the builder, so there is
+/// no pool / receiver split.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "anchor-lang",
+    derive(anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize)
+)]
+#[derive(Debug, Clone, Copy)]
+pub struct BuilderFees<T> {
+    fee_value: T,
+    fee_amount: T,
+}
+
+#[cfg(feature = "gmsol-utils")]
+impl<T: gmsol_utils::InitSpace> gmsol_utils::InitSpace for BuilderFees<T> {
+    const INIT_SPACE: usize = 2 * T::INIT_SPACE;
+}
+
+impl<T> BuilderFees<T> {
+    /// Get builder fee amount.
+    pub fn fee_amount(&self) -> &T {
+        &self.fee_amount
+    }
+
+    /// Get builder fee value.
+    pub fn fee_value(&self) -> &T {
+        &self.fee_value
+    }
+}
+
+impl<T: Zero> Default for BuilderFees<T> {
+    fn default() -> Self {
+        Self {
+            fee_value: Zero::zero(),
+            fee_amount: Zero::zero(),
+        }
+    }
+}
+
 /// Position Fees.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -686,6 +728,7 @@ pub struct PositionFees<T> {
     borrowing: BorrowingFees<T>,
     funding: FundingFees<T>,
     liquidation: Option<LiquidationFees<T>>,
+    builder: BuilderFees<T>,
 }
 
 #[cfg(feature = "gmsol-utils")]
@@ -695,7 +738,8 @@ impl<T: gmsol_utils::InitSpace> gmsol_utils::InitSpace for PositionFees<T> {
         + BorrowingFees::<T>::INIT_SPACE
         + FundingFees::<T>::INIT_SPACE
         + 1
-        + LiquidationFees::<T>::INIT_SPACE;
+        + LiquidationFees::<T>::INIT_SPACE
+        + BuilderFees::<T>::INIT_SPACE;
 }
 
 impl<T> PositionFees<T> {
@@ -766,6 +810,11 @@ impl<T> PositionFees<T> {
         self.liquidation.as_ref()
     }
 
+    /// Get builder fees.
+    pub fn builder_fees(&self) -> &BuilderFees<T> {
+        &self.builder
+    }
+
     /// Get total cost amount in collateral tokens.
     pub fn total_cost_amount(&self) -> crate::Result<T>
     where
@@ -814,6 +863,7 @@ impl<T> PositionFees<T> {
         self.order = Default::default();
         self.borrowing = BorrowingFees::default();
         self.liquidation = None;
+        self.builder = Default::default();
     }
 
     /// Set borrowing fees.
@@ -865,6 +915,7 @@ impl<T: Zero> Default for PositionFees<T> {
             borrowing: Default::default(),
             funding: Default::default(),
             liquidation: None,
+            builder: Default::default(),
         }
     }
 }
