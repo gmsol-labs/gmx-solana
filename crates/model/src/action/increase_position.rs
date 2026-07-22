@@ -4,7 +4,7 @@ use std::fmt;
 use crate::{
     market::{BaseMarketExt, BaseMarketMutExt, PerpMarketExt, PositionImpactMarketMutExt},
     num::Unsigned,
-    params::fee::PositionFees,
+    params::fee::{BuilderFees, PositionFees},
     pool::delta::PriceImpact,
     position::{CollateralDelta, Position, PositionExt},
     price::{Price, Prices},
@@ -18,6 +18,7 @@ use super::MarketAction;
 pub struct IncreasePosition<P: Position<DECIMALS>, const DECIMALS: u8> {
     position: P,
     params: IncreasePositionParams<P::Num>,
+    builder_fee_factor: Option<P::Num>,
 }
 
 /// Increase Position Params.
@@ -229,7 +230,14 @@ where
                 acceptable_price,
                 prices,
             },
+            builder_fee_factor: None,
         })
+    }
+
+    /// Set the builder fee factor.
+    pub fn with_builder_fee_factor(mut self, factor: Option<P::Num>) -> Self {
+        self.builder_fee_factor = factor;
+        self
     }
 
     fn initialize_position_if_empty(&mut self) -> crate::Result<()> {
@@ -370,12 +378,20 @@ where
 
         let mut collateral_delta_amount = self.params.collateral_increment_amount.to_signed()?;
 
-        let fees = self.position.position_fees(
+        let mut fees = self.position.position_fees(
             self.collateral_price(),
             &self.params.size_delta_usd,
             price_impact.balance_change,
             false,
         )?;
+
+        if let Some(factor) = &self.builder_fee_factor {
+            fees = fees.set_builder_fees(BuilderFees::try_new(
+                self.collateral_price(),
+                &self.params.size_delta_usd,
+                factor,
+            )?);
+        }
 
         collateral_delta_amount = collateral_delta_amount
             .checked_sub(&fees.total_cost_amount()?.to_signed()?)

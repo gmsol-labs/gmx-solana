@@ -695,6 +695,31 @@ impl<T: gmsol_utils::InitSpace> gmsol_utils::InitSpace for BuilderFees<T> {
 }
 
 impl<T> BuilderFees<T> {
+    /// Compute builder fees for the given size delta with the given factor.
+    pub(crate) fn try_new<const DECIMALS: u8>(
+        collateral_token_price: &Price<T>,
+        size_delta_usd: &T,
+        factor: &T,
+    ) -> crate::Result<Self>
+    where
+        T: FixedPointOps<DECIMALS>,
+    {
+        if collateral_token_price.has_zero() {
+            return Err(crate::Error::InvalidPrices);
+        }
+
+        let fee_value = utils::apply_factor(size_delta_usd, factor)
+            .ok_or(crate::Error::Computation("calculating builder fee value"))?;
+        let fee_amount = fee_value
+            .checked_div(collateral_token_price.pick_price(false))
+            .ok_or(crate::Error::Computation("calculating builder fee amount"))?;
+
+        Ok(Self {
+            fee_value,
+            fee_amount,
+        })
+    }
+
     /// Get builder fee amount.
     pub fn fee_amount(&self) -> &T {
         &self.fee_amount
@@ -842,6 +867,7 @@ impl<T> PositionFees<T> {
                     Some(acc)
                 }
             })
+            .and_then(|acc| acc.checked_add(self.builder.fee_amount()))
             .ok_or(crate::Error::Computation(
                 "overflow while calculating total cost excluding funding",
             ))
@@ -897,6 +923,12 @@ impl<T> PositionFees<T> {
     /// Set funding fees.
     pub fn set_funding_fees(mut self, fees: FundingFees<T>) -> Self {
         self.funding = fees;
+        self
+    }
+
+    /// Set builder fees.
+    pub fn set_builder_fees(mut self, fees: BuilderFees<T>) -> Self {
+        self.builder = fees;
         self
     }
 
