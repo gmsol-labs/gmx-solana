@@ -3,7 +3,7 @@ use anchor_spl::token::{transfer_checked, Token, TokenAccount, TransferChecked};
 use anchor_spl::token_interface::Mint;
 
 use crate::{
-    events::{BuilderFeeSettled, EventEmitter},
+    events::{BuilderFeeClaimed, BuilderFeeSettled, EventEmitter},
     states::{builder_fee::BuilderFeeTokenController, user::UserHeader, Order, Seed, Store},
     utils::internal,
     CoreError,
@@ -173,6 +173,99 @@ pub(crate) fn settle_builder_fee(ctx: Context<SettleBuilderFee>) -> Result<()> {
             &ctx.accounts.order.key(),
             &ctx.accounts.builder_user.key(),
             &ctx.accounts.collateral_token.key(),
+            amount,
+        )?,
+    )?;
+
+    Ok(())
+}
+
+/// The accounts definition for [`claim_builder_fees`](crate::gmsol_store::claim_builder_fees).
+#[event_cpi]
+#[derive(Accounts)]
+pub struct ClaimBuilderFees<'info> {
+    /// The owner of the builder's User Account.
+    pub owner: Signer<'info>,
+    /// Store.
+    pub store: AccountLoader<'info, Store>,
+    /// The builder's User Account.
+    #[account(
+        has_one = store,
+        has_one = owner,
+        constraint = builder_user.load()?.is_initialized() @ CoreError::InvalidUserAccount,
+        seeds = [UserHeader::SEED, store.key().as_ref(), owner.key().as_ref()],
+        bump = builder_user.load()?.bump,
+    )]
+    pub builder_user: AccountLoader<'info, UserHeader>,
+    /// The per-token access control account.
+    ///
+    /// Currently it is only required to exist: it is the hook for future
+    /// access control on builder fee withdrawal (e.g. a withdrawal timelock).
+    #[account(
+        seeds = [
+            BuilderFeeTokenController::SEED,
+            store.key().as_ref(),
+            token.key().as_ref(),
+        ],
+        bump = controller.load()?.bump,
+    )]
+    pub controller: AccountLoader<'info, BuilderFeeTokenController>,
+    /// The token to claim.
+    pub token: InterfaceAccount<'info, Mint>,
+    /// The builder's claim vault: the associated token account of the token
+    /// owned by the builder's User Account.
+    #[account(
+        mut,
+        associated_token::mint = token,
+        associated_token::authority = builder_user,
+    )]
+    pub claim_vault: Account<'info, TokenAccount>,
+    /// The destination token account.
+    #[account(mut, token::mint = token)]
+    pub receiver_vault: Account<'info, TokenAccount>,
+    /// Token program.
+    pub token_program: Program<'info, Token>,
+}
+
+/// Claim the settled builder fees from the claim vault.
+pub(crate) fn claim_builder_fees(ctx: Context<ClaimBuilderFees>) -> Result<()> {
+    let amount = ctx.accounts.claim_vault.amount;
+
+    // Nothing to claim is an explicit no-op.
+    if amount == 0 {
+        return Ok(());
+    }
+
+    let store = ctx.accounts.store.key();
+    let owner = ctx.accounts.owner.key();
+    let bump_bytes = [ctx.accounts.builder_user.load()?.bump];
+    let seeds: [&[u8]; 4] = [
+        UserHeader::SEED,
+        store.as_ref(),
+        owner.as_ref(),
+        &bump_bytes,
+    ];
+    transfer_checked(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            TransferChecked {
+                from: ctx.accounts.claim_vault.to_account_info(),
+                mint: ctx.accounts.token.to_account_info(),
+                to: ctx.accounts.receiver_vault.to_account_info(),
+                authority: ctx.accounts.builder_user.to_account_info(),
+            },
+        )
+        .with_signer(&[&seeds]),
+        amount,
+        ctx.accounts.token.decimals,
+    )?;
+
+    EventEmitter::new(&ctx.accounts.event_authority, ctx.bumps.event_authority).emit_cpi(
+        &BuilderFeeClaimed::new(
+            &store,
+            &ctx.accounts.builder_user.key(),
+            &ctx.accounts.token.key(),
+            &ctx.accounts.receiver_vault.key(),
             amount,
         )?,
     )?;
