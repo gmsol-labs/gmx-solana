@@ -4386,6 +4386,12 @@ pub enum CoreError {
     /// Market is closed.
     #[msg("market is closed")]
     MarketClosed,
+    // ===========================================
+    //             Builder Fee Errors
+    // ===========================================
+    /// Unsettled builder fee.
+    #[msg("there is an unsettled builder fee")]
+    UnsettledBuilderFee,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]
