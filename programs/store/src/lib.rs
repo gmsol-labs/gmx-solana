@@ -159,6 +159,7 @@
 //! - [`execute_increase_or_swap_order_v2`]: Execute an order by keepers.
 //! - [`execute_decrease_order_v2`]: Execute a decrease order by keepers.
 //! - [`close_order_v2`]: Close an order, either by the owner or by keepers.
+//! - [`settle_builder_fee`](gmsol_store::settle_builder_fee): Settle the pending builder fee of an order.
 //! - [`cancel_order_if_no_position`]: Cancel an order if the position does not exist.
 //! - [`liquidate`]: Perform a liquidation by keepers.
 //! - [`auto_deleverage`]: Perform an ADL by keepers.
@@ -1849,6 +1850,34 @@ pub mod gmsol_store {
         ctx: Context<InitializeBuilderFeeTokenController>,
     ) -> Result<()> {
         instructions::unchecked_initialize_builder_fee_token_controller(ctx)
+    }
+
+    /// Settle the pending builder fee of the given order.
+    ///
+    /// This instruction is permissionless and idempotent: when the pending
+    /// builder fee amount is zero, it is an explicit no-op — no CPI is
+    /// performed and no state is updated. Otherwise, the fee is transferred
+    /// from the order's escrow into the builder's claim vault (the ATA owned
+    /// by the builder's User Account) and the pending amount is reset to zero.
+    ///
+    /// # Accounts
+    /// [*See the documentation for the accounts.*](SettleBuilderFee)
+    ///
+    /// # Errors
+    /// - The [`store`](SettleBuilderFee::store) must be an initialized store account.
+    /// - The [`order`](SettleBuilderFee::order) must be an initialized order account owned by
+    ///   the given store.
+    /// - When the pending amount is non-zero:
+    ///   - The [`builder_user`](SettleBuilderFee::builder_user) must be the builder's initialized
+    ///     User Account recorded on the order.
+    ///   - The [`collateral_token`](SettleBuilderFee::collateral_token) must be the collateral
+    ///     token of the order.
+    ///   - The [`escrow`](SettleBuilderFee::escrow) must be the order's escrow account for the
+    ///     collateral token.
+    ///   - The [`claim_vault`](SettleBuilderFee::claim_vault) must be the ATA of the collateral
+    ///     token owned by the builder's User Account.
+    pub fn settle_builder_fee(ctx: Context<SettleBuilderFee>) -> Result<()> {
+        instructions::settle_builder_fee(ctx)
     }
 
     /// Prepare a claimable account to receive tokens during order execution.
