@@ -25,7 +25,10 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "cargo test --test anchor --features anchor-test -- $GMSOL_TEST $EXTRA_CARGO_ARGS"
+# `RUST_LOG` is scoped to the test process here on purpose: exporting it in the
+# environment would also reach the spawned `solana-test-validator` and break its
+# startup. Set `GMSOL_TEST_LOG` (e.g. to `error,anchor=info`) to see the test logs.
+test = "RUST_LOG=${GMSOL_TEST_LOG:-error} cargo test --test anchor --features anchor-test -- $GMSOL_TEST $EXTRA_CARGO_ARGS"
 
 [test]
 startup_wait = 15000

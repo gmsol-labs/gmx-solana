@@ -1,5 +1,6 @@
 use gmsol_programs::anchor_lang;
 use gmsol_sdk::client::ops::{ExchangeOps, GlvOps};
+use gmsol_sdk::utils::zero_copy::ZeroCopy;
 use gmsol_store::CoreError;
 use tracing::Instrument;
 
@@ -153,6 +154,123 @@ async fn glv_deposit() -> eyre::Result<()> {
         .send_without_preflight()
         .await?;
     tracing::info!(%signature, %market_token, "restored market config in the GLV");
+
+    Ok(())
+}
+
+/// Ramp up the number of markets in the many-markets GLV one by one, executing
+/// a GLV deposit at every count, to find the market count at which the
+/// execution starts to fail.
+///
+/// The test does not fail when a limit is found; it reports the last
+/// successful market count and the error via tracing instead.
+#[tokio::test]
+async fn glv_deposit_with_increasing_markets() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("glv_deposit_with_increasing_markets");
+    let _enter = span.enter();
+
+    let user = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+    let glv_token = &deployment.many_markets_glv_token;
+    let market_token = deployment
+        .market_token(&Deployment::many_markets_glv_index_token(1), "fBTC", "USDG")
+        .unwrap();
+
+    let long_token_amount = 1_000;
+
+    deployment
+        .mint_or_transfer_to_user(
+            "fBTC",
+            Deployment::DEFAULT_USER,
+            Deployment::MANY_MARKETS_GLV_MAX_MARKET_COUNT as u64 * long_token_amount,
+        )
+        .await?;
+
+    let glv = keeper
+        .account::<ZeroCopy<gmsol_programs::gmsol_store::accounts::Glv>>(
+            &keeper.find_glv_address(glv_token),
+        )
+        .await?
+        .expect("the many-markets GLV must exist")
+        .0;
+    let initial_count = glv.market_tokens().count();
+    assert_eq!(initial_count, 2);
+
+    for count in initial_count..=Deployment::MANY_MARKETS_GLV_MAX_MARKET_COUNT {
+        if count > initial_count {
+            let market_token_to_insert = deployment
+                .market_token(
+                    &Deployment::many_markets_glv_index_token(count),
+                    "fBTC",
+                    "USDG",
+                )
+                .unwrap();
+            let signature = keeper
+                .insert_glv_market(store, glv_token, market_token_to_insert, None)
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, %market_token_to_insert, "inserted market {count} into the GLV");
+        }
+
+        let (rpc, deposit) = user
+            .create_glv_deposit(store, glv_token, market_token)
+            .long_token_deposit(long_token_amount, None, None)
+            .build_with_address()
+            .await?;
+        let signature = rpc.send_without_preflight().await?;
+        tracing::info!(%signature, %deposit, "created a glv deposit with {count} markets");
+
+        let mut execute = keeper.execute_glv_deposit(oracle, &deposit, false);
+        let result = deployment
+            .execute_with_pyth(
+                execute
+                    .add_alt(deployment.common_alt().clone())
+                    .add_alt(deployment.market_alt().clone()),
+                None,
+                false,
+                true,
+            )
+            .instrument(tracing::info_span!("executing glv deposit", glv_deposit=%deposit, %count))
+            .await;
+
+        match result {
+            Ok(()) => {
+                tracing::info!("glv deposit executed successfully with {count} markets");
+            }
+            Err(err) => {
+                tracing::warn!(
+                    %err,
+                    "glv deposit execution failed with {count} markets; last successful market count = {}",
+                    count - 1,
+                );
+                // Close the pending deposit so that it does not leak into
+                // other tests.
+                match user.close_glv_deposit(&deposit).build().await {
+                    Ok(txn) => {
+                        let _ = txn.send_without_preflight().await;
+                    }
+                    Err(err) => {
+                        tracing::warn!(%err, "failed to build the close instruction for the pending deposit");
+                    }
+                }
+                assert!(
+                    count > initial_count,
+                    "executing a glv deposit must work with the initial market count: {err}"
+                );
+                return Ok(());
+            }
+        }
+    }
+
+    tracing::info!(
+        "glv deposit executed successfully with all {} markets",
+        Deployment::MANY_MARKETS_GLV_MAX_MARKET_COUNT
+    );
 
     Ok(())
 }
