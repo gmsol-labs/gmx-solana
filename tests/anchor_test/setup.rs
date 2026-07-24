@@ -30,7 +30,7 @@ use gmsol_sdk::{
     Client,
 };
 use gmsol_solana_utils::{
-    bundle_builder::{BundleBuilder, SendBundleOptions},
+    bundle_builder::{compress_send_results, BundleBuilder, SendBundleOptions},
     cluster::Cluster,
     make_bundle_builder::MakeBundleBuilder,
     signer::{shared_signer, SignerRef},
@@ -842,7 +842,7 @@ impl Deployment {
 
         match builder
             .build()?
-            .send_all_with_opts(
+            .send_all_with_opts_detailed(
                 SendBundleOptions {
                     config: RpcSendTransactionConfig {
                         skip_preflight: true,
@@ -854,11 +854,16 @@ impl Deployment {
             )
             .await
         {
-            Ok(signatures) => {
-                tracing::info!("created token accounts with {signatures:#?}");
-            }
-            Err((signatures, err)) => {
-                tracing::error!(%err, "failed to create token accounts, successful txns: {signatures:#?}");
+            Ok(results) => match compress_send_results(results) {
+                Ok(signatures) => {
+                    tracing::info!("created token accounts with {signatures:#?}");
+                }
+                Err((signatures, err)) => {
+                    tracing::error!(%err, "failed to create token accounts, successful txns: {signatures:#?}");
+                }
+            },
+            Err(err) => {
+                tracing::error!(%err, "failed to create token accounts");
             }
         }
 
@@ -1747,11 +1752,11 @@ impl Deployment {
             }
         };
 
-        let res = with_oracle
+        match with_oracle
             .build()
             .await?
             .build()?
-            .send_all_with_opts(
+            .send_all_with_opts_detailed(
                 SendBundleOptions {
                     compute_unit_price_micro_lamports,
                     disable_error_tracing: !enable_tracing,
@@ -1763,23 +1768,26 @@ impl Deployment {
                 },
                 default_before_sign,
             )
-            .await;
-        match res {
-            Ok(signatures) => {
-                if enable_tracing {
-                    tracing::info!("executed, txns={signatures:?}");
+            .await
+        {
+            Ok(results) => match compress_send_results(results) {
+                Ok(signatures) => {
+                    if enable_tracing {
+                        tracing::info!("executed, txns={signatures:?}");
+                    }
+
+                    Ok(())
                 }
 
-                Ok(())
-            }
+                Err((signatures, err)) => {
+                    if enable_tracing {
+                        tracing::error!(%err, "executed, txns={signatures:?}");
+                    }
 
-            Err((signatures, err)) => {
-                if enable_tracing {
-                    tracing::error!(%err, "executed, txns={signatures:?}");
+                    Err(err.into())
                 }
-
-                Err(err.into())
-            }
+            },
+            Err(err) => Err(err.into()),
         }
     }
 

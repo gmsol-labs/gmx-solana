@@ -2,7 +2,7 @@
   "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo",
   "metadata": {
     "name": "gmsol_store",
-    "version": "0.10.0",
+    "version": "0.11.0",
     "spec": "0.1.0",
     "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
     "repository": "https://github.com/gmsol-labs/gmx-solana"
@@ -19119,6 +19119,85 @@
       ]
     },
     {
+      "name": "set_feed_config_market_status_flag",
+      "docs": [
+        "Set a market-status flag on the feed config of the given provider for",
+        "the given token.",
+        "",
+        "# Accounts",
+        "[*See the documentation for the accounts*](SetFeedConfigMarketStatusFlag).",
+        "",
+        "# Arguments",
+        "- `provider`: The index of the provider whose feed config will be updated.",
+        "Must be a valid [`PriceProviderKind`] value.",
+        "- `flag`: The [`MarketStatusFlag`] index to set.",
+        "- `enable`: Enable or disable the flag.",
+        "",
+        "# Errors",
+        "- The [`authority`](SetFeedConfigMarketStatusFlag::authority) must be a",
+        "signer and a MARKET_KEEPER in the given store.",
+        "- The [`token`](SetFeedConfigMarketStatusFlag::token) must exist in the token map.",
+        "- The `provider` index must correspond to a valid [`PriceProviderKind`].",
+        "- The feed config of the `provider` for the `token` must be initialized.",
+        "- `flag` must be a valid [`MarketStatusFlag`] value."
+      ],
+      "discriminator": [
+        180,
+        215,
+        165,
+        2,
+        25,
+        121,
+        62,
+        71
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The authority of the instruction."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "The store that owns the token map."
+          ],
+          "relations": [
+            "token_map"
+          ]
+        },
+        {
+          "name": "token_map",
+          "docs": [
+            "The token map to update."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token",
+          "docs": [
+            "The token whose feed config will be updated."
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "provider",
+          "type": "u8"
+        },
+        {
+          "name": "flag",
+          "type": "u8"
+        },
+        {
+          "name": "enable",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "set_feed_config_v2",
       "docs": [
         "Set the feed config of the given provider for the given token.",
@@ -30163,11 +30242,15 @@
             }
           },
           {
+            "name": "market_status_value",
+            "type": "u8"
+          },
+          {
             "name": "padding",
             "type": {
               "array": [
                 "u8",
-                2
+                1
               ]
             }
           },
