@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - sdk(solana-utils): Kept the two-argument `Bundle::send_all_with_opts` as a deprecated compatibility wrapper around the detailed API. It still returns the compressed success-signature list, and when multiple transactions fail it returns the **last** real send error (matching prior overwrite semantics; `SendAborted` placeholders are ignored).
 
+### Removed
+
+- sdk(sdk): Removed unused ChaosLabs Risk Oracle helpers: `ChaosClient::from_env`, `to_per_market_updates`, `PerMarketUpdates` and `RiskOracleApplier`.
+
 ## [0.10.0] - 2026-07-22
 
 ### Breaking Changes

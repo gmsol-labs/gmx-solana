@@ -27,13 +27,6 @@ impl ChaosClient {
         })
     }
 
-    pub fn from_env() -> crate::Result<Self> {
-        let base = std::env::var("CHAOS_BASE_URL")
-            .unwrap_or_else(|_| "https://oracle.chaoslabs.co".to_string());
-        let api_key = std::env::var("CHAOS_API_KEY").ok();
-        Self::try_new(&base, api_key)
-    }
-
     pub async fn fetch_latest_recommendations(
         &self,
         protocol: &str,
