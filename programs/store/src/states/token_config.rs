@@ -108,6 +108,9 @@ impl TokenConfigExt for TokenConfig {
             .collect::<Vec<_>>()
             .try_into()
             .map_err(|_| error!(CoreError::InvalidArgument))?;
+        if !init {
+            msg!("[Token Config] feeds are rebuilt: market status flags and max deviation ratios are reset");
+        }
         self.expected_provider = expected_provider.unwrap_or(PriceProviderKind::default() as u8);
         self.heartbeat_duration = heartbeat_duration;
         Ok(())

@@ -423,7 +423,7 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
         skip_preflight: bool,
     ) -> Result<Vec<Signature>, (Vec<Signature>, crate::Error)> {
         match self
-            .send_all_with_opts(
+            .send_all_with_opts_detailed(
                 SendBundleOptions {
                     config: RpcSendTransactionConfig {
                         skip_preflight,
@@ -435,26 +435,37 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
             )
             .await
         {
-            Ok(signatures) => Ok(signatures
-                .into_iter()
-                .map(|with_slot| with_slot.into_value())
-                .collect()),
-            Err((signatures, err)) => Err((
-                signatures
+            Ok(results) => match compress_send_results(results) {
+                Ok(signatures) => Ok(signatures
                     .into_iter()
                     .map(|with_slot| with_slot.into_value())
-                    .collect(),
-                err,
-            )),
+                    .collect()),
+                Err((signatures, err)) => Err((
+                    signatures
+                        .into_iter()
+                        .map(|with_slot| with_slot.into_value())
+                        .collect(),
+                    err,
+                )),
+            },
+            Err(err) => Err((vec![], err)),
         }
     }
 
-    /// Send all in order with the given options and returns the signatures of the success transactions.
-    pub async fn send_all_with_opts(
+    /// Send all transactions and return one result per bundle index.
+    ///
+    /// The returned vector has the same length as the number of transactions in the
+    /// bundle. Index `i` corresponds to transaction `i` in build order (flat across
+    /// parallel batches). Each entry is `Ok(signature)` when that transaction was sent
+    /// and confirmed, or `Err(error)` when it failed. When `continue_on_error` is
+    /// `false`, remaining unsent transactions are reported as [`crate::Error::SendAborted`].
+    ///
+    /// `before_sign` runs once per built transaction, before it is signed.
+    pub async fn send_all_with_opts_detailed(
         self,
         opts: SendBundleOptions,
         before_sign: impl FnMut(&VersionedMessage) -> crate::Result<()>,
-    ) -> Result<Vec<WithSlot<Signature>>, (Vec<WithSlot<Signature>>, crate::Error)> {
+    ) -> Result<Vec<Result<WithSlot<Signature>, crate::Error>>, crate::Error> {
         let SendBundleOptions {
             without_compute_budget,
             compute_unit_price_micro_lamports,
@@ -481,7 +492,7 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
         let latest_hash = client
             .get_latest_blockhash()
             .await
-            .map_err(|err| (vec![], Box::new(err).into()))?;
+            .map_err(|err| -> crate::Error { Box::new(err).into() })?;
 
         let mut transaction_signers = cfg_signers.to_local();
         transaction_signers.extend(signers.into_values());
@@ -498,9 +509,8 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
                 },
                 before_sign,
             )
-            .collect::<crate::Result<Vec<_>>>()
-            .map_err(|err| (vec![], err))?;
-        send_all_txns(
+            .collect::<crate::Result<Vec<_>>>()?;
+        Ok(send_all_txns_detailed(
             &client,
             txns,
             config,
@@ -508,24 +518,79 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
             !disable_error_tracing,
             inspector_cluster,
         )
-        .await
+        .await)
+    }
+
+    /// Send all in order with the given options and returns the signatures of the success transactions.
+    ///
+    /// Compatibility wrapper around [`Self::send_all_with_opts_detailed`]. Prefer the detailed
+    /// API when you need per-transaction outcomes (stable bundle indices).
+    ///
+    /// Legacy behavior is preserved: successful signatures are collected in send order, and when
+    /// multiple transactions fail the returned error is the **last** real send failure (not
+    /// [`crate::Error::SendAborted`] placeholders for unsent txs).
+    ///
+    /// `before_sign` runs once per built transaction, before it is signed.
+    #[deprecated(
+        since = "0.11.0",
+        note = "use `send_all_with_opts_detailed` for per-tx results; this wrapper keeps the legacy compressed signature list"
+    )]
+    pub async fn send_all_with_opts(
+        self,
+        opts: SendBundleOptions,
+        before_sign: impl FnMut(&VersionedMessage) -> crate::Result<()>,
+    ) -> SendAllSignaturesResult {
+        match self.send_all_with_opts_detailed(opts, before_sign).await {
+            Ok(results) => compress_send_results(results),
+            Err(err) => Err((vec![], err)),
+        }
     }
 }
 
-async fn send_all_txns(
+/// Result type returned by [`compress_send_results`] and the deprecated
+/// [`Bundle::send_all_with_opts`].
+pub type SendAllSignaturesResult =
+    Result<Vec<WithSlot<Signature>>, (Vec<WithSlot<Signature>>, crate::Error)>;
+
+/// Compress detailed per-tx results into the legacy success-signature list.
+///
+/// Matches pre-detailed `send_all_with_opts` semantics: each real failure overwrites
+/// the pending error (last failure wins and gets returned). [`crate::Error::SendAborted`] entries are
+/// ignored when selecting the returned error so early-abort padding does not replace
+/// the real failure.
+pub fn compress_send_results(
+    results: Vec<Result<WithSlot<Signature>, crate::Error>>,
+) -> SendAllSignaturesResult {
+    let mut signatures = Vec::new();
+    let mut error = None;
+    for result in results {
+        match result {
+            Ok(signature) => signatures.push(signature),
+            Err(crate::Error::SendAborted { .. }) => {}
+            Err(err) => error = Some(err),
+        }
+    }
+    match error {
+        None => Ok(signatures),
+        Some(err) => Err((signatures, err)),
+    }
+}
+
+async fn send_all_txns_detailed(
     client: &RpcClient,
     txns: Vec<Vec<VersionedTransaction>>,
     config: RpcSendTransactionConfig,
     continue_on_error: bool,
     enable_tracing: bool,
     inspector_cluster: Option<Cluster>,
-) -> Result<Vec<WithSlot<Signature>>, (Vec<WithSlot<Signature>>, crate::Error)> {
+) -> Vec<Result<WithSlot<Signature>, crate::Error>> {
     let size = txns.iter().map(|txns| txns.len()).sum();
-    let mut signatures = Vec::with_capacity(size);
-    let mut error = None;
-    for (batch_idx, txns) in txns.into_iter().enumerate() {
+    let mut results = Vec::with_capacity(size);
+    let mut failed_at = None;
+    'batches: for (batch_idx, txns) in txns.into_iter().enumerate() {
         let mut batch = txns
-            .iter().enumerate()
+            .iter()
+            .enumerate()
             .map(|(idx, txn)| {
                 tracing::debug!(
                     %batch_idx,
@@ -537,9 +602,7 @@ async fn send_all_txns(
                 client
                     .send_and_confirm_transaction_with_config(txn, config)
                     .then(move |res| match res {
-                        Ok(signature) => {
-                            std::future::ready(Ok(signature))
-                        }
+                        Ok(signature) => std::future::ready(Ok(signature)),
                         Err(err) => {
                             if enable_tracing {
                                 let cluster = inspector_cluster
@@ -557,18 +620,79 @@ async fn send_all_txns(
             .collect::<FuturesOrdered<_>>();
         while let Some(res) = batch.next().await {
             match res {
-                Ok(signature) => signatures.push(signature),
+                Ok(signature) => results.push(Ok(signature)),
                 Err(err) => {
-                    error = Some(Box::new(err).into());
+                    let err: crate::Error = Box::new(err).into();
+                    let index = results.len();
+                    results.push(Err(err));
                     if !continue_on_error {
-                        break;
+                        failed_at = Some(index);
+                        break 'batches;
                     }
                 }
             }
         }
     }
-    match error {
-        None => Ok(signatures),
-        Some(err) => Err((signatures, err)),
+    if let Some(failed_at) = failed_at {
+        while results.len() < size {
+            results.push(Err(crate::Error::SendAborted { failed_at }));
+        }
+    }
+    results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ok_sig(slot: u64) -> Result<WithSlot<Signature>, crate::Error> {
+        Ok(WithSlot::new(slot, Signature::new_unique()))
+    }
+
+    fn err_msg(msg: &str) -> Result<WithSlot<Signature>, crate::Error> {
+        Err(crate::Error::custom(msg))
+    }
+
+    #[test]
+    fn compress_send_results_all_ok() {
+        let results = vec![ok_sig(1), ok_sig(2), ok_sig(3)];
+        let compressed = compress_send_results(results).unwrap();
+        assert_eq!(compressed.len(), 3);
+        assert_eq!(compressed[0].slot(), 1);
+        assert_eq!(compressed[2].slot(), 3);
+    }
+
+    #[test]
+    fn compress_send_results_partial_failure() {
+        let results = vec![ok_sig(1), err_msg("middle"), ok_sig(3)];
+        let (sigs, err) = compress_send_results(results).unwrap_err();
+        assert_eq!(sigs.len(), 2);
+        assert_eq!(sigs[0].slot(), 1);
+        assert_eq!(sigs[1].slot(), 3);
+        assert_eq!(err.to_string(), "custom: middle");
+    }
+
+    #[test]
+    fn compress_send_results_last_real_failure_wins() {
+        // Legacy continue_on_error=true overwrote `error` on every failure.
+        let results = vec![ok_sig(1), err_msg("first"), ok_sig(3), err_msg("last")];
+        let (sigs, err) = compress_send_results(results).unwrap_err();
+        assert_eq!(sigs.len(), 2);
+        assert_eq!(sigs[0].slot(), 1);
+        assert_eq!(sigs[1].slot(), 3);
+        assert_eq!(err.to_string(), "custom: last");
+    }
+
+    #[test]
+    fn compress_send_results_ignores_send_aborted_padding() {
+        let failed_at = 0;
+        let results = vec![
+            err_msg("first"),
+            Err(crate::Error::SendAborted { failed_at }),
+            Err(crate::Error::SendAborted { failed_at }),
+        ];
+        let (sigs, err) = compress_send_results(results).unwrap_err();
+        assert!(sigs.is_empty());
+        assert_eq!(err.to_string(), "custom: first");
     }
 }

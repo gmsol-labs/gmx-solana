@@ -14,7 +14,9 @@ use gmsol_sdk::{
     ops::{AddressLookupTableOps, TimelockOps},
     programs::anchor_lang::prelude::Pubkey,
     solana_utils::{
-        bundle_builder::{Bundle, BundleBuilder, BundleOptions, SendBundleOptions},
+        bundle_builder::{
+            compress_send_results, Bundle, BundleBuilder, BundleOptions, SendBundleOptions,
+        },
         instruction_group::{ComputeBudgetOptions, GetInstructionsOptions},
         signer::LocalSignerRef,
         solana_client::rpc_config::RpcSendTransactionConfig,
@@ -471,13 +473,16 @@ impl CommandClient {
         let bundle = bundle.build()?;
         let steps = bundle.len();
         match bundle
-            .send_all_with_opts(self.send_bundle_options(), |m| {
+            .send_all_with_opts_detailed(self.send_bundle_options(), |m| {
                 before_sign(&mut idx, steps, self.verbose, m)
             })
             .await
         {
-            Ok(signatures) => (callback)(signatures, None, steps)?,
-            Err((signatures, error)) => (callback)(signatures, Some(error.into()), steps)?,
+            Ok(results) => match compress_send_results(results) {
+                Ok(signatures) => (callback)(signatures, None, steps)?,
+                Err((signatures, error)) => (callback)(signatures, Some(error.into()), steps)?,
+            },
+            Err(error) => (callback)(vec![], Some(error.into()), steps)?,
         }
         Ok(())
     }

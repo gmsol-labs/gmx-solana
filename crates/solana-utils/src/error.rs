@@ -31,6 +31,12 @@ pub enum Error {
     /// Custom error.
     #[error("custom: {0}")]
     Custom(String),
+    /// Remaining transactions were not sent after an earlier failure.
+    #[error("send aborted after transaction {failed_at} failed")]
+    SendAborted {
+        /// Index of the transaction whose failure stopped the bundle send.
+        failed_at: usize,
+    },
     /// RPC client error.
     #[cfg(feature = "solana-rpc-client-api")]
     #[error("rpc-client-api: {0}")]

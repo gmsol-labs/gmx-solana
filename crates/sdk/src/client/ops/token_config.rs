@@ -2,7 +2,10 @@ use std::ops::Deref;
 
 use gmsol_programs::gmsol_store::client::{accounts, args};
 use gmsol_solana_utils::transaction_builder::TransactionBuilder;
-use gmsol_utils::{oracle::PriceProviderKind, token_config::UpdateTokenConfigParams};
+use gmsol_utils::{
+    oracle::PriceProviderKind, price::market_status::MarketStatusFlag,
+    token_config::UpdateTokenConfigParams,
+};
 use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
 
 use crate::{serde::StringPubkey, utils::Value};
@@ -49,6 +52,18 @@ pub trait TokenConfigOps<C> {
         store: &Pubkey,
         token_map: &Pubkey,
         token: &Pubkey,
+        enable: bool,
+    ) -> TransactionBuilder<C>;
+
+    /// Set a market-status flag on the feed config of the given provider for
+    /// the given token.
+    fn set_feed_config_market_status_flag(
+        &self,
+        store: &Pubkey,
+        token_map: &Pubkey,
+        token: &Pubkey,
+        provider: PriceProviderKind,
+        flag: MarketStatusFlag,
         enable: bool,
     ) -> TransactionBuilder<C>;
 
@@ -172,6 +187,30 @@ impl<C: Deref<Target = impl Signer> + Clone> TokenConfigOps<C> for crate::Client
             })
             .anchor_args(args::ToggleTokenConfig {
                 token: *token,
+                enable,
+            })
+    }
+
+    fn set_feed_config_market_status_flag(
+        &self,
+        store: &Pubkey,
+        token_map: &Pubkey,
+        token: &Pubkey,
+        provider: PriceProviderKind,
+        flag: MarketStatusFlag,
+        enable: bool,
+    ) -> TransactionBuilder<C> {
+        let authority = self.payer();
+        self.store_transaction()
+            .anchor_accounts(accounts::SetFeedConfigMarketStatusFlag {
+                authority,
+                store: *store,
+                token_map: *token_map,
+                token: *token,
+            })
+            .anchor_args(args::SetFeedConfigMarketStatusFlag {
+                provider: provider.into(),
+                flag: flag.into(),
                 enable,
             })
     }
