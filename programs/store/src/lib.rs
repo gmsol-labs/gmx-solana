@@ -127,6 +127,8 @@
 //!
 //! #### Instructions for token accounts
 //! - [`initialize_market_vault`]: Initialize the market vault for the given token.
+//! - [`initialize_builder_fee_token_controller`]: Initialize the per-token access control
+//!   account for builder fees.
 //! - [`use_claimable_account`]: Prepare a claimable account to receive tokens during the order execution.
 //! - [`close_empty_claimable_account`]: Close a empty claimable account.
 //! - [`prepare_associated_token_account`](gmsol_store::prepare_associated_token_account): Prepare an ATA.
@@ -1824,6 +1826,29 @@ pub mod gmsol_store {
     #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
     pub fn initialize_market_vault(ctx: Context<InitializeMarketVault>) -> Result<()> {
         instructions::unchecked_initialize_market_vault(ctx)
+    }
+
+    /// Initialize the per-token access control account for builder fees.
+    ///
+    /// Its existence is required before a builder fee denominated in the given
+    /// token can be set on an order. The account currently carries no behavior:
+    /// it is a placeholder intended to support future access control on builder
+    /// fee withdrawal (e.g. a withdrawal timelock).
+    ///
+    /// # Accounts
+    /// [*See the documentation for the accounts.*](InitializeBuilderFeeTokenController)
+    ///
+    /// # Errors
+    /// - The [`authority`](InitializeBuilderFeeTokenController::authority) must be a signer and have
+    ///   MARKET_KEEPER permissions in the store.
+    /// - The [`store`](InitializeBuilderFeeTokenController::store) must be an initialized store account.
+    /// - The [`controller`](InitializeBuilderFeeTokenController::controller) must be an uninitialized
+    ///   account and its address must match the PDA derived from the expected seeds.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn initialize_builder_fee_token_controller(
+        ctx: Context<InitializeBuilderFeeTokenController>,
+    ) -> Result<()> {
+        instructions::unchecked_initialize_builder_fee_token_controller(ctx)
     }
 
     /// Prepare a claimable account to receive tokens during order execution.

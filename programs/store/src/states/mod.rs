@@ -46,6 +46,9 @@ pub mod gt;
 /// Definitions related to callback.
 pub mod callback;
 
+/// Definitions related to builder fees.
+pub mod builder_fee;
+
 /// Permission stores and related definitions.
 pub mod permissions;
 
