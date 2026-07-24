@@ -1,3 +1,6 @@
+/// Standardized simulation errors.
+pub mod error;
+
 /// Simulator.
 pub mod simulator;
 
@@ -19,4 +22,5 @@ pub mod glv_deposit;
 /// GLV withdrawal simulation.
 pub mod glv_withdrawal;
 
+pub use error::{SimulationError, SimulationErrorCode};
 pub use simulator::{SimulationOptions, Simulator, SwapOutput, TokenState};

@@ -8,7 +8,10 @@ use typed_builder::TypedBuilder;
 
 use crate::{glv::calculator::GlvCalculator, simulation::deposit::DepositSimulation};
 
-use super::{deposit::DepositSimulationOutput, SimulationOptions, Simulator};
+use super::{
+    deposit::DepositSimulationOutput, SimulationError, SimulationErrorCode, SimulationOptions,
+    Simulator,
+};
 
 /// GLV deposit simulation output.
 #[derive(Debug)]
@@ -132,7 +135,11 @@ impl GlvDepositSimulation<'_> {
                     "[sim] insufficient deposit output amount",
                 ));
             } else {
-                return Err(crate::Error::custom("[sim] empty GLV deposit"));
+                return Err(SimulationError::new(
+                    SimulationErrorCode::EmptyGlvDeposit,
+                    "[sim] empty GLV deposit",
+                )
+                .into());
             }
         }
 

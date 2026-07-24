@@ -8,7 +8,7 @@ use typed_builder::TypedBuilder;
 
 use crate::{constants, glv::calculator::GlvCalculator};
 
-use super::{SimulationOptions, Simulator};
+use super::{SimulationError, SimulationErrorCode, SimulationOptions, Simulator};
 
 /// GLV withdrawal simulation output.
 #[derive(Debug)]
@@ -82,7 +82,11 @@ impl GlvWithdrawalSimulation<'_> {
         } = self;
 
         if params.glv_token_amount == 0 {
-            return Err(crate::Error::custom("[sim] empty GLV withdrawal"));
+            return Err(SimulationError::new(
+                SimulationErrorCode::EmptyGlvWithdrawal,
+                "[sim] empty GLV withdrawal",
+            )
+            .into());
         }
 
         let (market, prices) = simulator.get_market_with_prices(market_token)?;
@@ -151,7 +155,9 @@ impl GlvWithdrawalSimulation<'_> {
             )?;
 
             if swap_output.output_token != long_receive_token {
-                return Err(crate::Error::custom("[sim] invalid long swap path"));
+                return Err(
+                    SimulationError::invalid_swap_path("[sim] invalid long swap path").into(),
+                );
             }
 
             (swap_output.reports, swap_output.amount)
@@ -176,7 +182,9 @@ impl GlvWithdrawalSimulation<'_> {
             )?;
 
             if swap_output.output_token != short_receive_token {
-                return Err(crate::Error::custom("[sim] invalid short swap path"));
+                return Err(
+                    SimulationError::invalid_swap_path("[sim] invalid short swap path").into(),
+                );
             }
 
             (swap_output.reports, swap_output.amount)

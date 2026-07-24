@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- sdk(js): The `simulate_*` methods of `Simulator` now throw structured `SimulationError` values (`{ code, message, details }`) instead of plain strings.
+
 ### Added
 
+- sdk(sdk): Added `SimulationError` and `SimulationErrorCode` with stable codes and messages for simulation failures.
 - sdk(solana-utils): Added `Bundle::send_all_with_opts_detailed`, returning one `Result` per transaction with stable bundle indices.
 - sdk(solana-utils): Added `Error::SendAborted` for unsent transactions after an early bundle abort.
 - sdk(solana-utils): Made `compress_send_results` public so callers can map detailed results to the legacy signature list.
