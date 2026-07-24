@@ -13,6 +13,8 @@ mod swap;
 
 mod user;
 
+mod builder_fee;
+
 mod shift;
 
 mod market;
