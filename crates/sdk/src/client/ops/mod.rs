@@ -31,6 +31,9 @@ pub mod token_config;
 /// Operations for user account.
 pub mod user;
 
+/// Operations for builder fees.
+pub mod builder_fee;
+
 /// Operations for timelock.
 pub mod timelock;
 
@@ -58,6 +61,7 @@ pub mod virtual_inventory;
 pub mod liquidity_provider;
 
 pub use alt::AddressLookupTableOps;
+pub use builder_fee::BuilderFeeOps;
 pub use config::ConfigOps;
 pub use exchange::ExchangeOps;
 pub use glv::GlvOps;

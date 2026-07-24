@@ -1013,6 +1013,294 @@
       "returns": "bool"
     },
     {
+      "name": "claim_builder_fees",
+      "docs": [
+        "Claim the settled builder fees from the claim vault.",
+        "",
+        "The entire balance of the claim vault is transferred to the given",
+        "destination token account. An empty claim vault is an explicit no-op.",
+        "",
+        "In the future, this instruction is expected to enforce access control",
+        "via the per-token access control account (e.g. a withdrawal timelock),",
+        "which is currently only required to exist.",
+        "",
+        "# Accounts",
+        "[*See the documentation for the accounts.*](ClaimBuilderFees)",
+        "",
+        "# Errors",
+        "- The [`owner`](ClaimBuilderFees::owner) must be a signer and the owner of the builder's",
+        "User Account.",
+        "- The [`store`](ClaimBuilderFees::store) must be an initialized store account.",
+        "- The [`builder_user`](ClaimBuilderFees::builder_user) must be an initialized User Account",
+        "owned by the given store.",
+        "- The [`controller`](ClaimBuilderFees::controller) must be the initialized per-token access",
+        "control account for the given token.",
+        "- The [`claim_vault`](ClaimBuilderFees::claim_vault) must be the ATA of the token owned by",
+        "the builder's User Account.",
+        "- The [`receiver_vault`](ClaimBuilderFees::receiver_vault) must be a token account of the",
+        "given token."
+      ],
+      "discriminator": [
+        207,
+        194,
+        126,
+        184,
+        118,
+        67,
+        225,
+        181
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "The owner of the builder's User Account."
+          ],
+          "signer": true,
+          "relations": [
+            "builder_user"
+          ]
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "builder_user"
+          ]
+        },
+        {
+          "name": "builder_user",
+          "docs": [
+            "The builder's User Account."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "controller",
+          "docs": [
+            "The per-token access control account.",
+            "",
+            "Currently it is only required to exist: it is the hook for future",
+            "access control on builder fee withdrawal (e.g. a withdrawal timelock)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  105,
+                  108,
+                  100,
+                  101,
+                  114,
+                  95,
+                  102,
+                  101,
+                  101,
+                  95,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "token"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token",
+          "docs": [
+            "The token to claim."
+          ]
+        },
+        {
+          "name": "claim_vault",
+          "docs": [
+            "The builder's claim vault: the associated token account of the token",
+            "owned by the builder's User Account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "builder_user"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "receiver_vault",
+          "docs": [
+            "The destination token account."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claim_fees_from_market",
       "docs": [
         "Claim fees from the given market.",
@@ -14960,6 +15248,119 @@
       ]
     },
     {
+      "name": "initialize_builder_fee_token_controller",
+      "docs": [
+        "Initialize the per-token access control account for builder fees.",
+        "",
+        "Its existence is required before a builder fee denominated in the given",
+        "token can be set on an order. The account currently carries no behavior:",
+        "it is a placeholder intended to support future access control on builder",
+        "fee withdrawal (e.g. a withdrawal timelock).",
+        "",
+        "# Accounts",
+        "[*See the documentation for the accounts.*](InitializeBuilderFeeTokenController)",
+        "",
+        "# Errors",
+        "- The [`authority`](InitializeBuilderFeeTokenController::authority) must be a signer and have",
+        "MARKET_KEEPER permissions in the store.",
+        "- The [`store`](InitializeBuilderFeeTokenController::store) must be an initialized store account.",
+        "- The [`controller`](InitializeBuilderFeeTokenController::controller) must be an uninitialized",
+        "account and its address must match the PDA derived from the expected seeds."
+      ],
+      "discriminator": [
+        185,
+        89,
+        57,
+        240,
+        216,
+        180,
+        23,
+        23
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The caller."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ]
+        },
+        {
+          "name": "token_mint",
+          "docs": [
+            "The token mint to initialize the controller for."
+          ]
+        },
+        {
+          "name": "controller",
+          "docs": [
+            "The controller account to initialize."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  105,
+                  108,
+                  100,
+                  101,
+                  114,
+                  95,
+                  102,
+                  101,
+                  101,
+                  95,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System program."
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initialize_callback_authority",
       "docs": [
         "Initialize the [`CallbackAuthority`](crate::states::callback::CallbackAuthority) account."
@@ -19771,6 +20172,217 @@
       "args": []
     },
     {
+      "name": "settle_builder_fee",
+      "docs": [
+        "Settle the pending builder fee of the given order.",
+        "",
+        "This instruction is permissionless and idempotent: when the pending",
+        "builder fee amount is zero, it is an explicit no-op — no CPI is",
+        "performed and no state is updated. Otherwise, the fee is transferred",
+        "from the order's escrow into the builder's claim vault (the ATA owned",
+        "by the builder's User Account) and the pending amount is reset to zero.",
+        "",
+        "# Accounts",
+        "[*See the documentation for the accounts.*](SettleBuilderFee)",
+        "",
+        "# Errors",
+        "- The [`store`](SettleBuilderFee::store) must be an initialized store account.",
+        "- The [`order`](SettleBuilderFee::order) must be an initialized order account owned by",
+        "the given store.",
+        "- When the pending amount is non-zero:",
+        "- The [`builder_user`](SettleBuilderFee::builder_user) must be the builder's initialized",
+        "User Account recorded on the order.",
+        "- The [`collateral_token`](SettleBuilderFee::collateral_token) must be the collateral",
+        "token of the order.",
+        "- The [`escrow`](SettleBuilderFee::escrow) must be the order's escrow account for the",
+        "collateral token.",
+        "- The [`claim_vault`](SettleBuilderFee::claim_vault) must be the ATA of the collateral",
+        "token owned by the builder's User Account."
+      ],
+      "discriminator": [
+        209,
+        56,
+        167,
+        214,
+        184,
+        197,
+        10,
+        10
+      ],
+      "accounts": [
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "builder_user"
+          ]
+        },
+        {
+          "name": "order",
+          "docs": [
+            "The order whose builder fee is to be settled."
+          ],
+          "writable": true
+        },
+        {
+          "name": "builder_user",
+          "docs": [
+            "The builder's User Account."
+          ]
+        },
+        {
+          "name": "collateral_token",
+          "docs": [
+            "The token the builder fee is denominated in (the collateral token of",
+            "the order)."
+          ]
+        },
+        {
+          "name": "escrow",
+          "docs": [
+            "The order's escrow account for the collateral token."
+          ],
+          "writable": true
+        },
+        {
+          "name": "claim_vault",
+          "docs": [
+            "The builder's claim vault: the associated token account of the",
+            "collateral token owned by the builder's User Account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "builder_user"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "collateral_token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "toggle_feature",
       "docs": [
         "Enable or disable a feature in this deployment.",
@@ -21928,6 +22540,19 @@
   ],
   "accounts": [
     {
+      "name": "BuilderFeeTokenController",
+      "discriminator": [
+        85,
+        146,
+        253,
+        108,
+        157,
+        178,
+        205,
+        146
+      ]
+    },
+    {
       "name": "CallbackAuthority",
       "discriminator": [
         21,
@@ -22226,6 +22851,32 @@
         216,
         237,
         151
+      ]
+    },
+    {
+      "name": "BuilderFeeClaimed",
+      "discriminator": [
+        173,
+        137,
+        231,
+        148,
+        184,
+        179,
+        14,
+        141
+      ]
+    },
+    {
+      "name": "BuilderFeeSettled",
+      "discriminator": [
+        92,
+        156,
+        185,
+        185,
+        199,
+        171,
+        24,
+        82
       ]
     },
     {
@@ -23181,6 +23832,11 @@
       "code": 6127,
       "name": "MarketClosed",
       "msg": "market is closed"
+    },
+    {
+      "code": 6128,
+      "name": "UnsettledBuilderFee",
+      "msg": "there is an unsettled builder fee"
     }
   ],
   "types": [
@@ -23550,6 +24206,224 @@
                   }
                 ]
               }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuilderFeeClaimed",
+      "docs": [
+        "An event indicating that builder fees have been claimed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ts",
+            "docs": [
+              "Timestamp."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "slot",
+            "docs": [
+              "Slot."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "store",
+            "docs": [
+              "Store."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "builder",
+            "docs": [
+              "The builder's user account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "token",
+            "docs": [
+              "The token claimed."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "receiver",
+            "docs": [
+              "The destination token account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "The claimed amount."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuilderFeeSettled",
+      "docs": [
+        "An event indicating that a builder fee has been settled."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ts",
+            "docs": [
+              "Timestamp."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "slot",
+            "docs": [
+              "Slot."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "store",
+            "docs": [
+              "Store."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "order",
+            "docs": [
+              "Order."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "builder",
+            "docs": [
+              "The builder's user account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "token",
+            "docs": [
+              "The token the fee is denominated in."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "The settled fee amount."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuilderFeeTokenController",
+      "docs": [
+        "Per-token access control account for builder fees.",
+        "",
+        "One account exists per `(store, token_mint)` pair, and its existence is",
+        "required before a builder fee denominated in that token can be set on an",
+        "order.",
+        "",
+        "This account is currently a placeholder and carries no behavior: it is",
+        "intended to support future access control on builder fee withdrawal",
+        "(e.g. a withdrawal timelock)."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "padding_0",
+            "type": {
+              "array": [
+                "u8",
+                14
+              ]
+            }
+          },
+          {
+            "name": "store",
+            "docs": [
+              "The store."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "token_mint",
+            "docs": [
+              "The token mint this controller is for."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                176
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuilderFees",
+      "docs": [
+        "Builder Fees.",
+        "",
+        "Unlike other fees, the entire amount is paid to the builder, so there is",
+        "no pool / receiver split."
+      ],
+      "generics": [
+        {
+          "kind": "type",
+          "name": "T"
+        }
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fee_value",
+            "type": {
+              "generic": "T"
+            }
+          },
+          {
+            "name": "fee_amount",
+            "type": {
+              "generic": "T"
             }
           }
         ]
@@ -25530,11 +26404,15 @@
             "type": "u128"
           },
           {
+            "name": "max_builder_fee_factor",
+            "type": "u128"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u128",
-                64
+                63
               ]
             }
           }
@@ -28620,11 +29498,33 @@
             }
           },
           {
+            "name": "builder",
+            "docs": [
+              "The builder fee beneficiary (the builder's User Account address)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "builder_fee_factor",
+            "docs": [
+              "The checkpointed builder fee factor."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "builder_fee_amount",
+            "docs": [
+              "The builder fee amount pending settlement, denominated in the",
+              "collateral token."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                128
+                72
               ]
             }
           }
@@ -29946,6 +30846,22 @@
                     }
                   ]
                 }
+              }
+            }
+          },
+          {
+            "name": "builder",
+            "type": {
+              "defined": {
+                "name": "BuilderFees",
+                "generics": [
+                  {
+                    "kind": "type",
+                    "type": {
+                      "generic": "T"
+                    }
+                  }
+                ]
               }
             }
           }
@@ -32847,11 +33763,18 @@
             }
           },
           {
+            "name": "builder_fee_factor",
+            "docs": [
+              "The builder fee factor advertised by this user as a builder."
+            ],
+            "type": "u128"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                128
+                112
               ]
             }
           }
