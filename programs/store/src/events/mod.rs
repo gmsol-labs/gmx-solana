@@ -25,6 +25,10 @@ mod market;
 /// GT events.
 mod gt;
 
+/// Builder fee events.
+mod builder_fee;
+
+pub use builder_fee::*;
 pub use deposit::*;
 pub use glv::*;
 pub use gt::*;

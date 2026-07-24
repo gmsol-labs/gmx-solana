@@ -74,6 +74,9 @@ pub const USER_SEED: &[u8] = b"user";
 /// Seed for [`ReferralCodeV2`](store_accounts::ReferralCodeV2).
 pub const REFERRAL_CODE_SEED: &[u8] = b"referral_code";
 
+/// Seed for [`BuilderFeeTokenController`](store_accounts::BuilderFeeTokenController).
+pub const BUILDER_FEE_TOKEN_CONTROLLER_SEED: &[u8] = b"builder_fee_token_controller";
+
 /// Seed for GLV token mint.
 pub const GLV_TOKEN_SEED: &[u8] = b"glv_token";
 
@@ -330,6 +333,22 @@ pub fn find_user_address(
 ) -> (Pubkey, u8) {
     Pubkey::find_program_address(
         &[USER_SEED, store.as_ref(), owner.as_ref()],
+        store_program_id,
+    )
+}
+
+/// Find PDA for [`BuilderFeeTokenController`](store_accounts::BuilderFeeTokenController) account.
+pub fn find_builder_fee_token_controller_address(
+    store: &Pubkey,
+    token_mint: &Pubkey,
+    store_program_id: &Pubkey,
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[
+            BUILDER_FEE_TOKEN_CONTROLLER_SEED,
+            store.as_ref(),
+            token_mint.as_ref(),
+        ],
         store_program_id,
     )
 }

@@ -127,6 +127,8 @@
 //!
 //! #### Instructions for token accounts
 //! - [`initialize_market_vault`]: Initialize the market vault for the given token.
+//! - [`initialize_builder_fee_token_controller`]: Initialize the per-token access control
+//!   account for builder fees.
 //! - [`use_claimable_account`]: Prepare a claimable account to receive tokens during the order execution.
 //! - [`close_empty_claimable_account`]: Close a empty claimable account.
 //! - [`prepare_associated_token_account`](gmsol_store::prepare_associated_token_account): Prepare an ATA.
@@ -157,6 +159,8 @@
 //! - [`execute_increase_or_swap_order_v2`]: Execute an order by keepers.
 //! - [`execute_decrease_order_v2`]: Execute a decrease order by keepers.
 //! - [`close_order_v2`]: Close an order, either by the owner or by keepers.
+//! - [`settle_builder_fee`](gmsol_store::settle_builder_fee): Settle the pending builder fee of an order.
+//! - [`claim_builder_fees`](gmsol_store::claim_builder_fees): Claim the settled builder fees from the claim vault.
 //! - [`cancel_order_if_no_position`]: Cancel an order if the position does not exist.
 //! - [`liquidate`]: Perform a liquidation by keepers.
 //! - [`auto_deleverage`]: Perform an ADL by keepers.
@@ -1824,6 +1828,85 @@ pub mod gmsol_store {
     #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
     pub fn initialize_market_vault(ctx: Context<InitializeMarketVault>) -> Result<()> {
         instructions::unchecked_initialize_market_vault(ctx)
+    }
+
+    /// Initialize the per-token access control account for builder fees.
+    ///
+    /// Its existence is required before a builder fee denominated in the given
+    /// token can be set on an order. The account currently carries no behavior:
+    /// it is a placeholder intended to support future access control on builder
+    /// fee withdrawal (e.g. a withdrawal timelock).
+    ///
+    /// # Accounts
+    /// [*See the documentation for the accounts.*](InitializeBuilderFeeTokenController)
+    ///
+    /// # Errors
+    /// - The [`authority`](InitializeBuilderFeeTokenController::authority) must be a signer and have
+    ///   MARKET_KEEPER permissions in the store.
+    /// - The [`store`](InitializeBuilderFeeTokenController::store) must be an initialized store account.
+    /// - The [`controller`](InitializeBuilderFeeTokenController::controller) must be an uninitialized
+    ///   account and its address must match the PDA derived from the expected seeds.
+    #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
+    pub fn initialize_builder_fee_token_controller(
+        ctx: Context<InitializeBuilderFeeTokenController>,
+    ) -> Result<()> {
+        instructions::unchecked_initialize_builder_fee_token_controller(ctx)
+    }
+
+    /// Settle the pending builder fee of the given order.
+    ///
+    /// This instruction is permissionless and idempotent: when the pending
+    /// builder fee amount is zero, it is an explicit no-op — no CPI is
+    /// performed and no state is updated. Otherwise, the fee is transferred
+    /// from the order's escrow into the builder's claim vault (the ATA owned
+    /// by the builder's User Account) and the pending amount is reset to zero.
+    ///
+    /// # Accounts
+    /// [*See the documentation for the accounts.*](SettleBuilderFee)
+    ///
+    /// # Errors
+    /// - The [`store`](SettleBuilderFee::store) must be an initialized store account.
+    /// - The [`order`](SettleBuilderFee::order) must be an initialized order account owned by
+    ///   the given store.
+    /// - When the pending amount is non-zero:
+    ///   - The [`builder_user`](SettleBuilderFee::builder_user) must be the builder's initialized
+    ///     User Account recorded on the order.
+    ///   - The [`collateral_token`](SettleBuilderFee::collateral_token) must be the collateral
+    ///     token of the order.
+    ///   - The [`escrow`](SettleBuilderFee::escrow) must be the order's escrow account for the
+    ///     collateral token.
+    ///   - The [`claim_vault`](SettleBuilderFee::claim_vault) must be the ATA of the collateral
+    ///     token owned by the builder's User Account.
+    pub fn settle_builder_fee(ctx: Context<SettleBuilderFee>) -> Result<()> {
+        instructions::settle_builder_fee(ctx)
+    }
+
+    /// Claim the settled builder fees from the claim vault.
+    ///
+    /// The entire balance of the claim vault is transferred to the given
+    /// destination token account. An empty claim vault is an explicit no-op.
+    ///
+    /// In the future, this instruction is expected to enforce access control
+    /// via the per-token access control account (e.g. a withdrawal timelock),
+    /// which is currently only required to exist.
+    ///
+    /// # Accounts
+    /// [*See the documentation for the accounts.*](ClaimBuilderFees)
+    ///
+    /// # Errors
+    /// - The [`owner`](ClaimBuilderFees::owner) must be a signer and the owner of the builder's
+    ///   User Account.
+    /// - The [`store`](ClaimBuilderFees::store) must be an initialized store account.
+    /// - The [`builder_user`](ClaimBuilderFees::builder_user) must be an initialized User Account
+    ///   owned by the given store.
+    /// - The [`controller`](ClaimBuilderFees::controller) must be the initialized per-token access
+    ///   control account for the given token.
+    /// - The [`claim_vault`](ClaimBuilderFees::claim_vault) must be the ATA of the token owned by
+    ///   the builder's User Account.
+    /// - The [`receiver_vault`](ClaimBuilderFees::receiver_vault) must be a token account of the
+    ///   given token.
+    pub fn claim_builder_fees(ctx: Context<ClaimBuilderFees>) -> Result<()> {
+        instructions::claim_builder_fees(ctx)
     }
 
     /// Prepare a claimable account to receive tokens during order execution.
@@ -4361,6 +4444,12 @@ pub enum CoreError {
     /// Market is closed.
     #[msg("market is closed")]
     MarketClosed,
+    // ===========================================
+    //             Builder Fee Errors
+    // ===========================================
+    /// Unsettled builder fee.
+    #[msg("there is an unsettled builder fee")]
+    UnsettledBuilderFee,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]
