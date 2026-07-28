@@ -28,7 +28,7 @@ use gmsol_sdk::{
     },
     serde::{
         serde_market::{SerdeMarket, SerdeMarketConfig, SerdeMarketConfigBuffer},
-        serde_token_map::SerdeTokenConfig,
+        serde_token_map::{SerdeMarketStatusFlags, SerdeTokenConfig},
         StringPubkey,
     },
     solana_utils::{
@@ -424,7 +424,7 @@ impl super::Command for Market {
 
                 if let Some(token) = token {
                     let config = token_map.get(token).ok_or_eyre("token not found")?;
-                    let serialized = SerdeTokenConfig::try_from(config)?;
+                    let serialized = TokenConfigDisplay::new(SerdeTokenConfig::try_from(config)?);
                     println!(
                         "{}",
                         output.display_keyed_account(
@@ -443,13 +443,16 @@ impl super::Command for Market {
                                     "feeds.chainlink_data_streams.timestamp_adjustment",
                                     "Chainlink TS Adj",
                                 ),
+                                ("market_status.chainlink_data_streams", "Chainlink Status",),
                                 ("feeds.pyth.feed_id", "Pyth Feed"),
                                 ("feeds.pyth.timestamp_adjustment", "Pyth TS Adj",),
+                                ("market_status.pyth", "Pyth Status"),
                                 ("feeds.switchboard.feed_id", "Switchboard Feed"),
                                 (
                                     "feeds.switchboard.timestamp_adjustment",
                                     "Switchboard TS Adj",
                                 ),
+                                ("market_status.switchboard", "Switchboard Status",),
                             ])
                         )?
                     );
@@ -1690,6 +1693,59 @@ struct TokenMetadata {
     uri: String,
     #[serde(default)]
     init: bool,
+}
+
+/// [`SerdeTokenConfig`] augmented with a joined, human-readable summary of
+/// each feed's market-status flags, for CLI display only.
+#[derive(serde::Serialize)]
+struct TokenConfigDisplay {
+    #[serde(flatten)]
+    config: SerdeTokenConfig,
+    market_status: IndexMap<PriceProviderKind, String>,
+}
+
+impl TokenConfigDisplay {
+    fn new(config: SerdeTokenConfig) -> Self {
+        let market_status = config
+            .feeds
+            .iter()
+            .map(|(kind, feed)| (*kind, market_status_summary(&feed.market_status)))
+            .collect();
+        Self {
+            config,
+            market_status,
+        }
+    }
+}
+
+/// Join the set `allow_*` flags into a comma-separated summary, e.g.
+/// `"allow_unknown, halt_regular_hours"`, or `"-"` if none are set.
+fn market_status_summary(flags: &SerdeMarketStatusFlags) -> String {
+    let mut names = Vec::new();
+    if flags.allow_unknown {
+        names.push("allow_unknown");
+    }
+    if flags.allow_pre_market {
+        names.push("allow_pre_market");
+    }
+    if flags.halt_regular_hours {
+        names.push("halt_regular_hours");
+    }
+    if flags.allow_post_market {
+        names.push("allow_post_market");
+    }
+    if flags.allow_overnight {
+        names.push("allow_overnight");
+    }
+    if flags.allow_closed {
+        names.push("allow_closed");
+    }
+
+    if names.is_empty() {
+        "-".to_string()
+    } else {
+        names.join(", ")
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
