@@ -443,16 +443,19 @@ impl super::Command for Market {
                                     "feeds.chainlink_data_streams.timestamp_adjustment",
                                     "Chainlink TS Adj",
                                 ),
-                                ("market_status.chainlink_data_streams", "Chainlink Status",),
+                                (
+                                    "market_status_summary.chainlink_data_streams",
+                                    "Chainlink Status",
+                                ),
                                 ("feeds.pyth.feed_id", "Pyth Feed"),
                                 ("feeds.pyth.timestamp_adjustment", "Pyth TS Adj",),
-                                ("market_status.pyth", "Pyth Status"),
+                                ("market_status_summary.pyth", "Pyth Status"),
                                 ("feeds.switchboard.feed_id", "Switchboard Feed"),
                                 (
                                     "feeds.switchboard.timestamp_adjustment",
                                     "Switchboard TS Adj",
                                 ),
-                                ("market_status.switchboard", "Switchboard Status",),
+                                ("market_status_summary.switchboard", "Switchboard Status",),
                             ])
                         )?
                     );
@@ -1701,19 +1704,19 @@ struct TokenMetadata {
 struct TokenConfigDisplay {
     #[serde(flatten)]
     config: SerdeTokenConfig,
-    market_status: IndexMap<PriceProviderKind, String>,
+    market_status_summary: IndexMap<PriceProviderKind, String>,
 }
 
 impl TokenConfigDisplay {
     fn new(config: SerdeTokenConfig) -> Self {
-        let market_status = config
+        let market_status_summary = config
             .feeds
             .iter()
             .map(|(kind, feed)| (*kind, market_status_summary(&feed.market_status)))
             .collect();
         Self {
             config,
-            market_status,
+            market_status_summary,
         }
     }
 }
@@ -1778,5 +1781,116 @@ impl SerdeVirtualInventory {
             short_decimals: vi.short_amount_decimals,
             for_swaps,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gmsol_sdk::serde::serde_token_map::{Encoding, SerdeFeedConfig};
+
+    #[allow(clippy::too_many_arguments)]
+    fn flags(
+        allow_unknown: bool,
+        allow_pre_market: bool,
+        halt_regular_hours: bool,
+        allow_post_market: bool,
+        allow_overnight: bool,
+        allow_closed: bool,
+    ) -> SerdeMarketStatusFlags {
+        SerdeMarketStatusFlags {
+            allow_unknown,
+            allow_pre_market,
+            halt_regular_hours,
+            allow_post_market,
+            allow_overnight,
+            allow_closed,
+        }
+    }
+
+    #[test]
+    fn market_status_summary_none_set() {
+        let flags = flags(false, false, false, false, false, false);
+        assert_eq!(market_status_summary(&flags), "-");
+    }
+
+    #[test]
+    fn market_status_summary_joins_set_flags_in_declaration_order() {
+        let flags = flags(true, false, true, false, false, false);
+        assert_eq!(
+            market_status_summary(&flags),
+            "allow_unknown, halt_regular_hours"
+        );
+    }
+
+    #[test]
+    fn market_status_summary_all_set() {
+        let flags = flags(true, true, true, true, true, true);
+        assert_eq!(
+            market_status_summary(&flags),
+            "allow_unknown, allow_pre_market, halt_regular_hours, allow_post_market, allow_overnight, allow_closed"
+        );
+    }
+
+    fn feed_config(
+        feed_id: &str,
+        feed_id_encoding: Encoding,
+        market_status: SerdeMarketStatusFlags,
+    ) -> SerdeFeedConfig {
+        SerdeFeedConfig {
+            feed_id: feed_id.to_string(),
+            feed_id_encoding,
+            timestamp_adjustment: 5,
+            max_deviation_factor: None,
+            market_status,
+        }
+    }
+
+    #[test]
+    fn token_config_display_summarizes_each_provider() {
+        let mut feeds = IndexMap::new();
+        feeds.insert(
+            PriceProviderKind::Pyth,
+            feed_config(
+                "0xabc123",
+                Encoding::Hex,
+                flags(false, true, true, false, false, false),
+            ),
+        );
+        feeds.insert(
+            PriceProviderKind::Switchboard,
+            feed_config(
+                "3M3KHmARtcRUmMBHwsvhCM3xB4gyPWjXfrPUFm2ELk9K",
+                Encoding::Base58,
+                flags(false, false, false, false, false, false),
+            ),
+        );
+
+        let config = SerdeTokenConfig {
+            name: "fBTC".to_string(),
+            is_enabled: true,
+            is_synthetic: false,
+            token_decimals: 8,
+            price_precision: 4,
+            expected_provider: PriceProviderKind::Pyth,
+            feeds,
+            heartbeat_duration: 60,
+        };
+
+        let display = TokenConfigDisplay::new(config);
+        assert_eq!(
+            display
+                .market_status_summary
+                .get(&PriceProviderKind::Pyth)
+                .unwrap(),
+            "allow_pre_market, halt_regular_hours"
+        );
+        assert_eq!(
+            display
+                .market_status_summary
+                .get(&PriceProviderKind::Switchboard)
+                .unwrap(),
+            "-"
+        );
     }
 }
