@@ -153,9 +153,7 @@ macro_rules! impl_fixed_map {
                     self.binary_search(&key).ok().map(|index| {
                         let value = std::mem::take(&mut self.data[index].value);
                         let len = self.len();
-                        for i in index..len {
-                            self.data[i] = self.data[i + 1];
-                        }
+                        self.data.copy_within(index + 1..len, index);
                         self.data[len - 1] = [<$map Entry>]::default();
                         self.count -= 1;
                         value
@@ -290,5 +288,39 @@ mod tests {
         assert_eq!(map.insert(&address_1, 789), None);
 
         assert_eq!(map.len(), 2);
+    }
+
+    #[test]
+    fn test_remove_at_full_capacity() {
+        let mut map = RolesMap::default();
+        let mut keys = Vec::new();
+
+        // Fill the map to its fixed capacity (len == 32).
+        for i in 0..32u64 {
+            let key = Pubkey::new_unique();
+            assert_eq!(map.insert(&key, i), None);
+            keys.push(key);
+        }
+        assert_eq!(map.len(), 32);
+
+        // Removing at full capacity must succeed; the final shift used to read one
+        // past the fixed array and panic.
+        assert_eq!(map.remove(&keys[10]), Some(10));
+        assert_eq!(map.len(), 31);
+        assert_eq!(map.get(&keys[10]), None);
+
+        // Every surviving entry keeps its value after the left shift.
+        for (i, key) in keys.iter().enumerate() {
+            if i == 10 {
+                continue;
+            }
+            assert_eq!(map.get(key), Some(&(i as u64)));
+        }
+
+        // The freed slot is reusable.
+        let new_key = Pubkey::new_unique();
+        assert_eq!(map.insert(&new_key, 999), None);
+        assert_eq!(map.len(), 32);
+        assert_eq!(map.get(&new_key), Some(&999));
     }
 }
