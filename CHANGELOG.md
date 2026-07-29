@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- programs(utils): Fixed an out-of-bounds read in `fixed_map`'s `remove` that aborted the instruction when removing an entry from a map at full capacity.
+
 ## [0.10.0] - 2026-07-22
 
 ### Breaking Changes
