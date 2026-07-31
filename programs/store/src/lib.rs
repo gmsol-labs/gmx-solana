@@ -892,12 +892,20 @@ pub mod gmsol_store {
     ///   Must be a valid [`PriceProviderKind`] value.
     /// - `flag`: The [`MarketStatusFlag`] index to set.
     /// - `enable`: Enable or disable the flag.
+    /// - `allow_pending`: When `enable` is `true` and the `provider` is not
+    ///   [`ChainlinkDataStreams`](PriceProviderKind::ChainlinkDataStreams), the flag
+    ///   is stored as pending, pre-staged policy that has no effect while the
+    ///   provider does not report market status, instead of being rejected.
+    ///   Ignored otherwise.
     ///
     /// # Errors
     /// - The [`authority`](SetFeedConfigMarketStatusFlag::authority) must be a
     ///   signer and a MARKET_KEEPER in the given store.
     /// - The [`token`](SetFeedConfigMarketStatusFlag::token) must exist in the token map.
     /// - The `provider` index must correspond to a valid [`PriceProviderKind`].
+    /// - When `enable` is `true`, the `provider` must be
+    ///   [`ChainlinkDataStreams`](PriceProviderKind::ChainlinkDataStreams) unless
+    ///   `allow_pending` is set, since other providers do not report market status.
     /// - The feed config of the `provider` for the `token` must be initialized.
     /// - `flag` must be a valid [`MarketStatusFlag`] value.
     #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
@@ -906,6 +914,7 @@ pub mod gmsol_store {
         provider: u8,
         flag: u8,
         enable: bool,
+        allow_pending: bool,
     ) -> Result<()> {
         let token = ctx.accounts.token.key();
         let authorized =
@@ -914,8 +923,13 @@ pub mod gmsol_store {
             .map_err(|_| CoreError::InvalidProviderKindIndex)?;
         let market_status_flag =
             MarketStatusFlag::try_from(flag).map_err(|_| error!(CoreError::InvalidArgument))?;
-        if !matches!(kind, PriceProviderKind::ChainlinkDataStreams) {
-            msg!("set market status flag: note: this provider does not report market status; the flag has no effect for now");
+        let is_chainlink_data_streams = matches!(kind, PriceProviderKind::ChainlinkDataStreams);
+        require!(
+            !enable || is_chainlink_data_streams || allow_pending,
+            CoreError::ProviderDoesNotSupportMarketStatus
+        );
+        if enable && !is_chainlink_data_streams {
+            msg!("set market status flag: note: this provider does not report market status; the flag is stored as pending policy with no effect for now");
         }
         let previous = SetFeedConfigMarketStatusFlag::invoke_unchecked(
             ctx,
@@ -4361,6 +4375,12 @@ pub enum CoreError {
     /// Market is closed.
     #[msg("market is closed")]
     MarketClosed,
+    // ===========================================
+    //              Oracle Errors (2)
+    // ===========================================
+    /// Provider does not support market status.
+    #[msg("this price provider does not support market status")]
+    ProviderDoesNotSupportMarketStatus,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]

@@ -57,6 +57,11 @@ pub trait TokenConfigOps<C> {
 
     /// Set a market-status flag on the feed config of the given provider for
     /// the given token.
+    ///
+    /// When `enable` is `true` and `provider` is not `ChainlinkDataStreams`,
+    /// the call is rejected unless `allow_pending` is set, in which case the
+    /// flag is stored as pending, pre-staged policy with no effect for now.
+    #[allow(clippy::too_many_arguments)]
     fn set_feed_config_market_status_flag(
         &self,
         store: &Pubkey,
@@ -65,6 +70,7 @@ pub trait TokenConfigOps<C> {
         provider: PriceProviderKind,
         flag: MarketStatusFlag,
         enable: bool,
+        allow_pending: bool,
     ) -> TransactionBuilder<C>;
 
     /// Toggle token price adjustment.
@@ -199,6 +205,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TokenConfigOps<C> for crate::Client
         provider: PriceProviderKind,
         flag: MarketStatusFlag,
         enable: bool,
+        allow_pending: bool,
     ) -> TransactionBuilder<C> {
         let authority = self.payer();
         self.store_transaction()
@@ -212,6 +219,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TokenConfigOps<C> for crate::Client
                 provider: provider.into(),
                 flag: flag.into(),
                 enable,
+                allow_pending,
             })
     }
 

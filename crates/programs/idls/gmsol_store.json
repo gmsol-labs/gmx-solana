@@ -19132,12 +19132,20 @@
         "Must be a valid [`PriceProviderKind`] value.",
         "- `flag`: The [`MarketStatusFlag`] index to set.",
         "- `enable`: Enable or disable the flag.",
+        "- `allow_pending`: When `enable` is `true` and the `provider` is not",
+        "[`ChainlinkDataStreams`](PriceProviderKind::ChainlinkDataStreams), the flag",
+        "is stored as pending, pre-staged policy that has no effect while the",
+        "provider does not report market status, instead of being rejected.",
+        "Ignored otherwise.",
         "",
         "# Errors",
         "- The [`authority`](SetFeedConfigMarketStatusFlag::authority) must be a",
         "signer and a MARKET_KEEPER in the given store.",
         "- The [`token`](SetFeedConfigMarketStatusFlag::token) must exist in the token map.",
         "- The `provider` index must correspond to a valid [`PriceProviderKind`].",
+        "- When `enable` is `true`, the `provider` must be",
+        "[`ChainlinkDataStreams`](PriceProviderKind::ChainlinkDataStreams) unless",
+        "`allow_pending` is set, since other providers do not report market status.",
         "- The feed config of the `provider` for the `token` must be initialized.",
         "- `flag` must be a valid [`MarketStatusFlag`] value."
       ],
@@ -19193,6 +19201,10 @@
         },
         {
           "name": "enable",
+          "type": "bool"
+        },
+        {
+          "name": "allow_pending",
           "type": "bool"
         }
       ]
@@ -23181,6 +23193,11 @@
       "code": 6127,
       "name": "MarketClosed",
       "msg": "market is closed"
+    },
+    {
+      "code": 6128,
+      "name": "ProviderDoesNotSupportMarketStatus",
+      "msg": "this price provider does not support market status"
     }
   ],
   "types": [

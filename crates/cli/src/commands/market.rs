@@ -138,6 +138,10 @@ enum Command {
         /// Market-status flags to disable (repeat or comma-separate).
         #[arg(long, value_delimiter = ',')]
         disable: Vec<MarketStatusFlag>,
+        /// Allow enabling flags for a provider that does not report market status,
+        /// storing them as pending, pre-staged policy with no effect for now.
+        #[arg(long)]
+        allow_pending: bool,
         /// The tokens to update.
         #[arg(required = true)]
         tokens: Vec<Pubkey>,
@@ -602,6 +606,7 @@ impl super::Command for Market {
                 provider,
                 enable,
                 disable,
+                allow_pending,
                 tokens,
             } => {
                 if enable.is_empty() && disable.is_empty() {
@@ -630,6 +635,7 @@ impl super::Command for Market {
                             *provider,
                             *flag,
                             value,
+                            *allow_pending,
                         );
                         bundle.push(rpc)?;
                     }

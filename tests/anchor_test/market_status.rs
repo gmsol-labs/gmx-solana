@@ -24,7 +24,7 @@ async fn set_feed_config_market_status_flag() -> eyre::Result<()> {
 
     // Only a MARKET_KEEPER can set the flag.
     let err = user
-        .set_feed_config_market_status_flag(store, &token_map, &token, provider, flag, true)
+        .set_feed_config_market_status_flag(store, &token_map, &token, provider, flag, true, false)
         .send()
         .await
         .expect_err("should throw error when called by a non-market-keeper");
@@ -35,7 +35,7 @@ async fn set_feed_config_market_status_flag() -> eyre::Result<()> {
 
     // Enable the flag and read it back from the token map.
     let signature = keeper
-        .set_feed_config_market_status_flag(store, &token_map, &token, provider, flag, true)
+        .set_feed_config_market_status_flag(store, &token_map, &token, provider, flag, true, false)
         .send_without_preflight()
         .await?;
     tracing::info!(%signature, "enabled the flag");
@@ -49,7 +49,7 @@ async fn set_feed_config_market_status_flag() -> eyre::Result<()> {
 
     // Disable the flag and read it back.
     let signature = keeper
-        .set_feed_config_market_status_flag(store, &token_map, &token, provider, flag, false)
+        .set_feed_config_market_status_flag(store, &token_map, &token, provider, flag, false, false)
         .send_without_preflight()
         .await?;
     tracing::info!(%signature, "disabled the flag");
@@ -61,7 +61,8 @@ async fn set_feed_config_market_status_flag() -> eyre::Result<()> {
         .expect("must exist");
     assert!(!feed_config.market_status_flags().get_flag(flag));
 
-    // Setting a flag for a provider without a configured feed fails.
+    // Setting a flag for a provider without a configured feed fails, even
+    // with `allow_pending` set.
     let err = keeper
         .set_feed_config_market_status_flag(
             store,
@@ -69,6 +70,7 @@ async fn set_feed_config_market_status_flag() -> eyre::Result<()> {
             &token,
             PriceProviderKind::Switchboard,
             flag,
+            true,
             true,
         )
         .send()
@@ -79,8 +81,28 @@ async fn set_feed_config_market_status_flag() -> eyre::Result<()> {
         Some(CoreError::NotFound.into())
     );
 
-    // Providers that do not report market status are still accepted.
+    // Providers that do not report market status are rejected by default.
     let pyth_token = deployment.token("fBTC").expect("must exist").address;
+    let err = keeper
+        .set_feed_config_market_status_flag(
+            store,
+            &token_map,
+            &pyth_token,
+            PriceProviderKind::Pyth,
+            flag,
+            true,
+            false,
+        )
+        .send()
+        .await
+        .expect_err("should throw error for a provider that does not support market status");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::ProviderDoesNotSupportMarketStatus.into())
+    );
+
+    // ...unless `allow_pending` is set, in which case the flag is stored as
+    // pending, pre-staged policy.
     let signature = keeper
         .set_feed_config_market_status_flag(
             store,
@@ -89,10 +111,33 @@ async fn set_feed_config_market_status_flag() -> eyre::Result<()> {
             PriceProviderKind::Pyth,
             flag,
             true,
+            true,
         )
         .send_without_preflight()
         .await?;
-    tracing::info!(%signature, "enabled the flag for a non-status provider");
+    tracing::info!(%signature, "enabled the flag as pending policy for a non-status provider");
+    let map = keeper.token_map(&token_map).await?;
+    let feed_config = map
+        .get(&pyth_token)
+        .expect("must exist")
+        .get_feed_config(&PriceProviderKind::Pyth)
+        .expect("must exist");
+    assert!(feed_config.market_status_flags().get_flag(flag));
+
+    // Disabling never requires `allow_pending`, even for a non-status provider.
+    let signature = keeper
+        .set_feed_config_market_status_flag(
+            store,
+            &token_map,
+            &pyth_token,
+            PriceProviderKind::Pyth,
+            flag,
+            false,
+            false,
+        )
+        .send_without_preflight()
+        .await?;
+    tracing::info!(%signature, "disabled the pending policy flag for a non-status provider");
 
     Ok(())
 }

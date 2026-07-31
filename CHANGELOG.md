@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(solana-utils): Added `Bundle::send_all_with_opts_detailed`, returning one `Result` per transaction with stable bundle indices.
 - sdk(solana-utils): Added `Error::SendAborted` for unsent transactions after an early bundle abort.
 - sdk(solana-utils): Made `compress_send_results` public so callers can map detailed results to the legacy signature list.
+- programs(store): Added an `allow_pending` argument to `set_feed_config_market_status_flag`. When set, it lets a `MARKET_KEEPER` enable a flag for a provider that does not report market status, storing it as pending, pre-staged policy instead of being rejected.
 
 ### Changed
 
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - programs(utils): Fixed an out-of-bounds read in `fixed_map`'s `remove` that aborted the instruction when removing an entry from a map at full capacity.
+- programs(store): `set_feed_config_market_status_flag` now rejects providers other than `ChainlinkDataStreams` with `CoreError::ProviderDoesNotSupportMarketStatus` instead of silently accepting a flag that would never take effect.
 
 ## [0.10.0] - 2026-07-22
 
