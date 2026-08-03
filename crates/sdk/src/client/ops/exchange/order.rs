@@ -54,9 +54,13 @@ pub const EXECUTE_ORDER_COMPUTE_BUDGET: u32 = 400_000;
 
 /// Optional per-component CU limits for [`ExecuteOrderBuilder`].
 ///
-/// When unset, prepare/close keep the default builder budget (200k) and execute
-/// uses [`EXECUTE_ORDER_COMPUTE_BUDGET`].
+/// When unset on the builder, prepare/close keep the default builder budget (200k)
+/// and execute uses [`EXECUTE_ORDER_COMPUTE_BUDGET`].
+///
+/// [`Default`] is the recommended override (30k / 200k / 30k).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
 pub struct ExecuteOrderComputeBudgets {
     /// CU limit for `prepare_trade_event_buffer`.
     pub prepare_event_buffer: u32,
@@ -64,6 +68,16 @@ pub struct ExecuteOrderComputeBudgets {
     pub execute: u32,
     /// CU limit for `close_order` when merged into the fill.
     pub close: u32,
+}
+
+impl Default for ExecuteOrderComputeBudgets {
+    fn default() -> Self {
+        Self {
+            prepare_event_buffer: 30_000,
+            execute: 200_000,
+            close: 30_000,
+        }
+    }
 }
 
 /// The compute budget for `position_cut` instruction.
@@ -2363,11 +2377,10 @@ mod tests {
 
     #[test]
     fn override_budgets_are_applied_per_component() {
-        let budgets = ExecuteOrderComputeBudgets {
-            prepare_event_buffer: 30_000,
-            execute: 200_000,
-            close: 30_000,
-        };
+        let budgets = ExecuteOrderComputeBudgets::default();
+        assert_eq!(budgets.prepare_event_buffer, 30_000);
+        assert_eq!(budgets.execute, 200_000);
+        assert_eq!(budgets.close, 30_000);
 
         let payer = Arc::new(Keypair::new());
         let cfg = Config::new(Cluster::Mainnet, payer, CommitmentConfig::confirmed());
