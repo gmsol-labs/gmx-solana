@@ -56,7 +56,7 @@ pub const EXECUTE_ORDER_COMPUTE_BUDGET: u32 = 400_000;
 ///
 /// When unset, prepare/close keep the default builder budget (200k) and execute
 /// uses [`EXECUTE_ORDER_COMPUTE_BUDGET`].
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExecuteOrderComputeBudgets {
     /// CU limit for `prepare_trade_event_buffer`.
     pub prepare_event_buffer: u32,
@@ -2332,5 +2332,82 @@ impl<C> SetExecutionFee for UpdateAdlBuilder<'_, C> {
 
     fn set_execution_fee(&mut self, _lamports: u64) -> &mut Self {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gmsol_solana_utils::{
+        cluster::Cluster,
+        transaction_builder::{Config, TransactionBuilder},
+    };
+    use solana_sdk::{commitment_config::CommitmentConfig, signature::Keypair};
+    use std::sync::Arc;
+
+    fn default_fill_sum() -> u32 {
+        ComputeBudget::default().limit()
+            + EXECUTE_ORDER_COMPUTE_BUDGET
+            + ComputeBudget::default().limit()
+    }
+
+    #[test]
+    fn unset_override_keeps_default_execute_cu() {
+        let budgets: Option<ExecuteOrderComputeBudgets> = None;
+        let execute_cu = budgets
+            .map(|b| b.execute)
+            .unwrap_or(EXECUTE_ORDER_COMPUTE_BUDGET);
+        assert_eq!(execute_cu, 400_000);
+        assert_eq!(default_fill_sum(), 800_000);
+    }
+
+    #[test]
+    fn override_budgets_are_applied_per_component() {
+        let budgets = ExecuteOrderComputeBudgets {
+            prepare_event_buffer: 30_000,
+            execute: 200_000,
+            close: 30_000,
+        };
+
+        let payer = Arc::new(Keypair::new());
+        let cfg = Config::new(Cluster::Mainnet, payer, CommitmentConfig::confirmed());
+        let program_id = Pubkey::new_unique();
+
+        let mut prepare = TransactionBuilder::new(program_id, &cfg);
+        // Matches build_txns: only set when override is present.
+        prepare
+            .compute_budget_mut()
+            .set_limit(budgets.prepare_event_buffer);
+
+        let mut execute = TransactionBuilder::new(program_id, &cfg);
+        execute.compute_budget_mut().set_limit(budgets.execute);
+
+        let mut close = TransactionBuilder::new(program_id, &cfg);
+        close.compute_budget_mut().set_limit(budgets.close);
+
+        let mut merged = prepare.merge(execute).merge(close);
+        assert_eq!(
+            merged.compute_budget_mut().limit(),
+            budgets.prepare_event_buffer + budgets.execute + budgets.close
+        );
+        assert_eq!(merged.compute_budget_mut().limit(), 260_000);
+    }
+
+    #[test]
+    fn unset_prepare_and_close_keep_default_200k_on_merge() {
+        let payer = Arc::new(Keypair::new());
+        let cfg = Config::new(Cluster::Mainnet, payer, CommitmentConfig::confirmed());
+        let program_id = Pubkey::new_unique();
+
+        // No set_limit on prepare/close — same as build_txns when compute_budgets is None.
+        let prepare = TransactionBuilder::new(program_id, &cfg);
+        let mut execute = TransactionBuilder::new(program_id, &cfg);
+        execute
+            .compute_budget_mut()
+            .set_limit(EXECUTE_ORDER_COMPUTE_BUDGET);
+        let close = TransactionBuilder::new(program_id, &cfg);
+
+        let mut merged = prepare.merge(execute).merge(close);
+        assert_eq!(merged.compute_budget_mut().limit(), 800_000);
     }
 }
