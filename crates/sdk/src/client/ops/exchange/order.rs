@@ -52,6 +52,20 @@ use super::{ExchangeOps, VirtualInventoryCollector};
 /// Compute unit limit for `execute_order`
 pub const EXECUTE_ORDER_COMPUTE_BUDGET: u32 = 400_000;
 
+/// Optional per-component CU limits for [`ExecuteOrderBuilder`].
+///
+/// When unset, prepare/close keep the default builder budget (200k) and execute
+/// uses [`EXECUTE_ORDER_COMPUTE_BUDGET`].
+#[derive(Debug, Clone, Copy)]
+pub struct ExecuteOrderComputeBudgets {
+    /// CU limit for `prepare_trade_event_buffer`.
+    pub prepare_event_buffer: u32,
+    /// CU limit for `execute_order`.
+    pub execute: u32,
+    /// CU limit for `close_order` when merged into the fill.
+    pub close: u32,
+}
+
 /// The compute budget for `position_cut` instruction.
 pub const POSITION_CUT_COMPUTE_BUDGET: u32 = 400_000;
 
@@ -726,6 +740,7 @@ pub struct ExecuteOrderBuilder<'a, C> {
     close: bool,
     event_buffer_index: u16,
     alts: HashMap<Pubkey, Vec<Pubkey>>,
+    compute_budgets: Option<ExecuteOrderComputeBudgets>,
 }
 
 /// Hint for executing order.
@@ -839,7 +854,16 @@ where
             close: true,
             event_buffer_index: 0,
             alts: Default::default(),
+            compute_budgets: None,
         })
+    }
+
+    /// Override CU limits for prepare / execute / close at construction time.
+    ///
+    /// When unset, behavior matches the previous defaults (200k / 400k / 200k).
+    pub fn compute_budgets(&mut self, budgets: ExecuteOrderComputeBudgets) -> &mut Self {
+        self.compute_budgets = Some(budgets);
+        self
     }
 
     /// Set whether to close order after execution.
@@ -1175,6 +1199,10 @@ where
                 }),
         };
 
+        let execute_cu = self
+            .compute_budgets
+            .map(|b| b.execute)
+            .unwrap_or(EXECUTE_ORDER_COMPUTE_BUDGET);
         execute_order = execute_order
             .accounts(
                 feeds
@@ -1183,11 +1211,11 @@ where
                     .chain(virtual_inventories)
                     .collect::<Vec<_>>(),
             )
-            .compute_budget(ComputeBudget::default().with_limit(EXECUTE_ORDER_COMPUTE_BUDGET))
+            .compute_budget(ComputeBudget::default().with_limit(execute_cu))
             .lookup_tables(self.alts.clone());
 
         if !is_swap {
-            let prepare_event_buffer = self
+            let mut prepare_event_buffer = self
                 .client
                 .store_transaction()
                 .anchor_accounts(accounts::PrepareTradeEventBuffer {
@@ -1199,11 +1227,16 @@ where
                 .anchor_args(args::PrepareTradeEventBuffer {
                     index: self.event_buffer_index,
                 });
+            if let Some(budgets) = self.compute_budgets {
+                prepare_event_buffer
+                    .compute_budget_mut()
+                    .set_limit(budgets.prepare_event_buffer);
+            }
             execute_order = prepare_event_buffer.merge(execute_order);
         }
 
         if self.close {
-            let close = self
+            let mut close = self
                 .client
                 .close_order(&self.order)?
                 .reason("executed")
@@ -1223,6 +1256,9 @@ where
                 })
                 .build()
                 .await?;
+            if let Some(budgets) = self.compute_budgets {
+                close.compute_budget_mut().set_limit(budgets.close);
+            }
             execute_order = execute_order.merge(close);
         }
 
