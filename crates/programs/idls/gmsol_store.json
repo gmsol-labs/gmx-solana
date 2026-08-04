@@ -19138,6 +19138,8 @@
         "signer and a MARKET_KEEPER in the given store.",
         "- The [`token`](SetFeedConfigMarketStatusFlag::token) must exist in the token map.",
         "- The `provider` index must correspond to a valid [`PriceProviderKind`].",
+        "- The `provider` must be [`PriceProviderKind::ChainlinkDataStreams`];",
+        "market status flags are not yet supported for other providers.",
         "- The feed config of the `provider` for the `token` must be initialized.",
         "- `flag` must be a valid [`MarketStatusFlag`] value."
       ],
@@ -23181,6 +23183,11 @@
       "code": 6127,
       "name": "MarketClosed",
       "msg": "market is closed"
+    },
+    {
+      "code": 6128,
+      "name": "ProviderDoesNotSupportMarketStatus",
+      "msg": "market status flags are not yet supported for this price provider"
     }
   ],
   "types": [
