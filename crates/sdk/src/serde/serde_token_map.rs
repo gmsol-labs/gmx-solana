@@ -1,5 +1,6 @@
 use gmsol_utils::{
     oracle::PriceProviderKind,
+    price::{MarketStatusFlag, MarketStatusFlagContainer},
     token_config::{FeedConfig, TokenConfig},
 };
 use indexmap::IndexMap;
@@ -78,24 +79,30 @@ pub struct SerdeFeedConfig {
     /// Max deviation factor.
     #[cfg_attr(serde, serde(default))]
     pub max_deviation_factor: Option<Value>,
+    /// Market status flags
+    #[cfg_attr(serde, serde(default))]
+    pub market_status: SerdeMarketStatusFlags,
 }
 
 impl SerdeFeedConfig {
     /// Create from [`FeedConfig`].
     pub fn from_feed_config(kind: PriceProviderKind, config: &FeedConfig) -> Self {
         let max_deviation_factor = config.max_deviation_factor().map(Value::from_u128);
+        let market_status = SerdeMarketStatusFlags::from_container(config.market_status_flags());
         match kind {
             PriceProviderKind::Pyth | PriceProviderKind::ChainlinkDataStreams => Self {
                 feed_id_encoding: Encoding::Hex,
                 feed_id: format!("0x{}", hex::encode(config.feed())),
                 timestamp_adjustment: config.timestamp_adjustment(),
                 max_deviation_factor,
+                market_status,
             },
             _ => Self {
                 feed_id_encoding: Encoding::Base58,
                 feed_id: config.feed().to_string(),
                 timestamp_adjustment: config.timestamp_adjustment(),
                 max_deviation_factor,
+                market_status,
             },
         }
     }
@@ -105,6 +112,30 @@ impl SerdeFeedConfig {
         match self.feed_id_encoding {
             Encoding::Hex => format!("0x{}", self.feed_id),
             Encoding::Base58 => self.feed_id.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
+pub struct SerdeMarketStatusFlags {
+    pub allow_unknown: bool,
+    pub allow_pre_market: bool,
+    pub halt_regular_hours: bool,
+    pub allow_post_market: bool,
+    pub allow_overnight: bool,
+    pub allow_closed: bool,
+}
+
+impl SerdeMarketStatusFlags {
+    pub fn from_container(container: MarketStatusFlagContainer) -> Self {
+        Self {
+            allow_unknown: container.get_flag(MarketStatusFlag::AllowUnknown),
+            allow_pre_market: container.get_flag(MarketStatusFlag::AllowPreMarket),
+            halt_regular_hours: container.get_flag(MarketStatusFlag::HaltRegularHours),
+            allow_post_market: container.get_flag(MarketStatusFlag::AllowPostMarket),
+            allow_overnight: container.get_flag(MarketStatusFlag::AllowOvernight),
+            allow_closed: container.get_flag(MarketStatusFlag::AllowClosed),
         }
     }
 }

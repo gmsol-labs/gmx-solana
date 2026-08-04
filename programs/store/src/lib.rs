@@ -898,6 +898,8 @@ pub mod gmsol_store {
     ///   signer and a MARKET_KEEPER in the given store.
     /// - The [`token`](SetFeedConfigMarketStatusFlag::token) must exist in the token map.
     /// - The `provider` index must correspond to a valid [`PriceProviderKind`].
+    /// - The `provider` must be [`PriceProviderKind::ChainlinkDataStreams`];
+    ///   market status flags are not yet supported for other providers.
     /// - The feed config of the `provider` for the `token` must be initialized.
     /// - `flag` must be a valid [`MarketStatusFlag`] value.
     #[access_control(internal::Authenticate::only_market_keeper(&ctx))]
@@ -912,11 +914,13 @@ pub mod gmsol_store {
             ctx.accounts.store.load()?.token_map() == Some(&ctx.accounts.token_map.key());
         let kind = PriceProviderKind::try_from(provider)
             .map_err(|_| CoreError::InvalidProviderKindIndex)?;
+        require_eq!(
+            kind,
+            PriceProviderKind::ChainlinkDataStreams,
+            CoreError::ProviderDoesNotSupportMarketStatus
+        );
         let market_status_flag =
             MarketStatusFlag::try_from(flag).map_err(|_| error!(CoreError::InvalidArgument))?;
-        if !matches!(kind, PriceProviderKind::ChainlinkDataStreams) {
-            msg!("set market status flag: note: this provider does not report market status; the flag has no effect for now");
-        }
         let previous = SetFeedConfigMarketStatusFlag::invoke_unchecked(
             ctx,
             &kind,
@@ -4361,6 +4365,13 @@ pub enum CoreError {
     /// Market is closed.
     #[msg("market is closed")]
     MarketClosed,
+    // ===========================================
+    //              Oracle Errors (2)
+    // ===========================================
+    /// Market status flags are not yet supported for this price provider.
+    #[msg("market status flags are not yet supported for this price provider")]
+    ProviderDoesNotSupportMarketStatus,
+    // NOTE: New variants must be appended here to keep existing error codes stable.
 }
 
 #[cfg(not(feature = "no-entrypoint"))]

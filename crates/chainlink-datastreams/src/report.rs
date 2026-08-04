@@ -7,7 +7,7 @@ use chainlink_data_streams_report::{
     feed_id::ID,
     report::{
         base::ReportError, v11::ReportDataV11, v2::ReportDataV2, v3::ReportDataV3,
-        v4::ReportDataV4, v7::ReportDataV7, v8::ReportDataV8,
+        v7::ReportDataV7, v8::ReportDataV8,
     },
 };
 
@@ -100,16 +100,20 @@ impl Report {
     }
 
     /// Returns the coarse market status.
+    ///
+    /// For v11 reports this is always [`MarketStatus::Unknown`], regardless of
+    /// the actual status; use [`Self::extended_market_status()`] instead.
     #[deprecated(since = "0.10.0", note = "use `extended_market_status` instead")]
     pub fn market_status(&self) -> MarketStatus {
         self.market_status
     }
 
-    /// Returns extended market status (v11 only).
+    /// Returns the canonical market status.
     ///
-    /// Downstream consumers can use this for finer-grained trading decisions
-    /// instead of relying on [`Self::market_status()`], which is a compatibility
-    /// trade-off that collapses all non-regular-hours states to [`MarketStatus::Closed`].
+    /// This is `Some` for every report schema that defines a market status
+    /// (currently v8 and v11), and `None` for schemas that do not.
+    /// Downstream consumers should base trading decisions on this status
+    /// instead of the deprecated coarse [`Self::market_status()`].
     pub fn extended_market_status(&self) -> Option<ExtendedMarketStatus> {
         self.extended_market_status
     }
@@ -219,27 +223,6 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 ask: bigint_to_signed(report.ask)?,
                 market_status: MarketStatus::Open,
                 extended_market_status: None,
-            })
-        }
-        4 => {
-            let report = ReportDataV4::decode(data)?;
-            let price = bigint_to_signed(report.price)?;
-            let market_status = decode_market_status(report.market_status)?;
-            Ok(Report {
-                feed_id: report.feed_id,
-                valid_from_timestamp: report.valid_from_timestamp,
-                observations_timestamp: report.observations_timestamp,
-                last_update_timestamp: None,
-                native_fee: bigint_to_u192(report.native_fee)?,
-                link_fee: bigint_to_u192(report.link_fee)?,
-                expires_at: report.expires_at,
-                price,
-                // Bid and ask values are not available for the first iteration
-                // of the RWA report schema (v4).
-                bid: price,
-                ask: price,
-                market_status,
-                extended_market_status: Some(market_status.into()),
             })
         }
         7 => {
@@ -565,7 +548,8 @@ mod tests {
         let encoded = report_data.abi_encode().unwrap();
         let report = decode(&encoded).unwrap();
 
-        // PreMarket should map to Closed
+        // The coarse status is forced to Unknown for v11; the extended
+        // status carries PreMarket.
         assert_eq!(report.market_status(), MarketStatus::Unknown);
         assert_eq!(
             report.extended_market_status(),
@@ -633,7 +617,8 @@ mod tests {
         assert!(report.non_negative_bid() == Some(bid));
         assert!(report.non_negative_ask() == Some(ask));
 
-        // market_status=5 -> Closed
+        // market_status=5 -> extended Closed; the coarse status is forced
+        // to Unknown for v11.
         assert_eq!(report.market_status(), MarketStatus::Unknown);
         assert_eq!(
             report.extended_market_status(),
