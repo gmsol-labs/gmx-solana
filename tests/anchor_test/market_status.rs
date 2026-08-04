@@ -61,13 +61,15 @@ async fn set_feed_config_market_status_flag() -> eyre::Result<()> {
         .expect("must exist");
     assert!(!feed_config.market_status_flags().get_flag(flag));
 
+    let pyth_token = deployment.token("fBTC").expect("must exist").address;
+
     // Setting a flag for a provider without a configured feed fails.
     let err = keeper
         .set_feed_config_market_status_flag(
             store,
             &token_map,
-            &token,
-            PriceProviderKind::Switchboard,
+            &pyth_token,
+            PriceProviderKind::ChainlinkDataStreams,
             flag,
             true,
         )
@@ -79,9 +81,8 @@ async fn set_feed_config_market_status_flag() -> eyre::Result<()> {
         Some(CoreError::NotFound.into())
     );
 
-    // Providers that do not report market status are still accepted.
-    let pyth_token = deployment.token("fBTC").expect("must exist").address;
-    let signature = keeper
+    // Providers that do not report market status are rejected.
+    let err = keeper
         .set_feed_config_market_status_flag(
             store,
             &token_map,
@@ -90,9 +91,13 @@ async fn set_feed_config_market_status_flag() -> eyre::Result<()> {
             flag,
             true,
         )
-        .send_without_preflight()
-        .await?;
-    tracing::info!(%signature, "enabled the flag for a non-status provider");
+        .send()
+        .await
+        .expect_err("should throw error for a provider that does not support market status");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::ProviderDoesNotSupportMarketStatus.into())
+    );
 
     Ok(())
 }
