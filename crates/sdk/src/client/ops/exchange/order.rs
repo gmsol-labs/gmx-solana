@@ -52,33 +52,8 @@ use super::{ExchangeOps, VirtualInventoryCollector};
 /// Compute unit limit for `execute_order`
 pub const EXECUTE_ORDER_COMPUTE_BUDGET: u32 = 400_000;
 
-/// Optional per-component CU limits for [`ExecuteOrderBuilder`].
-///
-/// When unset on the builder, prepare/close keep the default builder budget (200k)
-/// and execute uses [`EXECUTE_ORDER_COMPUTE_BUDGET`].
-///
-/// [`Default`] is the recommended override (30k / 200k / 30k).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(default))]
-pub struct ExecuteOrderComputeBudgets {
-    /// CU limit for `prepare_trade_event_buffer`.
-    pub prepare_event_buffer: u32,
-    /// CU limit for `execute_order`.
-    pub execute: u32,
-    /// CU limit for `close_order` when merged into the fill.
-    pub close: u32,
-}
-
-impl Default for ExecuteOrderComputeBudgets {
-    fn default() -> Self {
-        Self {
-            prepare_event_buffer: 30_000,
-            execute: 200_000,
-            close: 30_000,
-        }
-    }
-}
+/// Compute unit limit for market `execute_order` fills.
+pub const MARKET_EXECUTE_ORDER_COMPUTE_BUDGET: u32 = 100_000;
 
 /// The compute budget for `position_cut` instruction.
 pub const POSITION_CUT_COMPUTE_BUDGET: u32 = 400_000;
@@ -754,7 +729,6 @@ pub struct ExecuteOrderBuilder<'a, C> {
     close: bool,
     event_buffer_index: u16,
     alts: HashMap<Pubkey, Vec<Pubkey>>,
-    compute_budgets: Option<ExecuteOrderComputeBudgets>,
 }
 
 /// Hint for executing order.
@@ -868,16 +842,7 @@ where
             close: true,
             event_buffer_index: 0,
             alts: Default::default(),
-            compute_budgets: None,
         })
-    }
-
-    /// Override CU limits for prepare / execute / close at construction time.
-    ///
-    /// When unset, behavior matches the previous defaults (200k / 400k / 200k).
-    pub fn compute_budgets(&mut self, budgets: ExecuteOrderComputeBudgets) -> &mut Self {
-        self.compute_budgets = Some(budgets);
-        self
     }
 
     /// Set whether to close order after execution.
@@ -1213,10 +1178,11 @@ where
                 }),
         };
 
-        let execute_cu = self
-            .compute_budgets
-            .map(|b| b.execute)
-            .unwrap_or(EXECUTE_ORDER_COMPUTE_BUDGET);
+        let execute_cu = if kind.is_market() {
+            MARKET_EXECUTE_ORDER_COMPUTE_BUDGET
+        } else {
+            EXECUTE_ORDER_COMPUTE_BUDGET
+        };
         execute_order = execute_order
             .accounts(
                 feeds
@@ -1229,7 +1195,7 @@ where
             .lookup_tables(self.alts.clone());
 
         if !is_swap {
-            let mut prepare_event_buffer = self
+            let prepare_event_buffer = self
                 .client
                 .store_transaction()
                 .anchor_accounts(accounts::PrepareTradeEventBuffer {
@@ -1241,16 +1207,11 @@ where
                 .anchor_args(args::PrepareTradeEventBuffer {
                     index: self.event_buffer_index,
                 });
-            if let Some(budgets) = self.compute_budgets {
-                prepare_event_buffer
-                    .compute_budget_mut()
-                    .set_limit(budgets.prepare_event_buffer);
-            }
             execute_order = prepare_event_buffer.merge(execute_order);
         }
 
         if self.close {
-            let mut close = self
+            let close = self
                 .client
                 .close_order(&self.order)?
                 .reason("executed")
@@ -1270,9 +1231,6 @@ where
                 })
                 .build()
                 .await?;
-            if let Some(budgets) = self.compute_budgets {
-                close.compute_budget_mut().set_limit(budgets.close);
-            }
             execute_order = execute_order.merge(close);
         }
 
@@ -2346,81 +2304,5 @@ impl<C> SetExecutionFee for UpdateAdlBuilder<'_, C> {
 
     fn set_execution_fee(&mut self, _lamports: u64) -> &mut Self {
         self
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use gmsol_solana_utils::{
-        cluster::Cluster,
-        transaction_builder::{Config, TransactionBuilder},
-    };
-    use solana_sdk::{commitment_config::CommitmentConfig, signature::Keypair};
-    use std::sync::Arc;
-
-    fn default_fill_sum() -> u32 {
-        ComputeBudget::default().limit()
-            + EXECUTE_ORDER_COMPUTE_BUDGET
-            + ComputeBudget::default().limit()
-    }
-
-    #[test]
-    fn unset_override_keeps_default_execute_cu() {
-        let budgets: Option<ExecuteOrderComputeBudgets> = None;
-        let execute_cu = budgets
-            .map(|b| b.execute)
-            .unwrap_or(EXECUTE_ORDER_COMPUTE_BUDGET);
-        assert_eq!(execute_cu, 400_000);
-        assert_eq!(default_fill_sum(), 800_000);
-    }
-
-    #[test]
-    fn override_budgets_are_applied_per_component() {
-        let budgets = ExecuteOrderComputeBudgets::default();
-        assert_eq!(budgets.prepare_event_buffer, 30_000);
-        assert_eq!(budgets.execute, 200_000);
-        assert_eq!(budgets.close, 30_000);
-
-        let payer = Arc::new(Keypair::new());
-        let cfg = Config::new(Cluster::Mainnet, payer, CommitmentConfig::confirmed());
-        let program_id = Pubkey::new_unique();
-
-        let mut prepare = TransactionBuilder::new(program_id, &cfg);
-        // Matches build_txns: only set when override is present.
-        prepare
-            .compute_budget_mut()
-            .set_limit(budgets.prepare_event_buffer);
-
-        let mut execute = TransactionBuilder::new(program_id, &cfg);
-        execute.compute_budget_mut().set_limit(budgets.execute);
-
-        let mut close = TransactionBuilder::new(program_id, &cfg);
-        close.compute_budget_mut().set_limit(budgets.close);
-
-        let mut merged = prepare.merge(execute).merge(close);
-        assert_eq!(
-            merged.compute_budget_mut().limit(),
-            budgets.prepare_event_buffer + budgets.execute + budgets.close
-        );
-        assert_eq!(merged.compute_budget_mut().limit(), 260_000);
-    }
-
-    #[test]
-    fn unset_prepare_and_close_keep_default_200k_on_merge() {
-        let payer = Arc::new(Keypair::new());
-        let cfg = Config::new(Cluster::Mainnet, payer, CommitmentConfig::confirmed());
-        let program_id = Pubkey::new_unique();
-
-        // No set_limit on prepare/close — same as build_txns when compute_budgets is None.
-        let prepare = TransactionBuilder::new(program_id, &cfg);
-        let mut execute = TransactionBuilder::new(program_id, &cfg);
-        execute
-            .compute_budget_mut()
-            .set_limit(EXECUTE_ORDER_COMPUTE_BUDGET);
-        let close = TransactionBuilder::new(program_id, &cfg);
-
-        let mut merged = prepare.merge(execute).merge(close);
-        assert_eq!(merged.compute_budget_mut().limit(), 800_000);
     }
 }
