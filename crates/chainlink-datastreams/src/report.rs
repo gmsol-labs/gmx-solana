@@ -7,7 +7,7 @@ use chainlink_data_streams_report::{
     feed_id::ID,
     report::{
         base::ReportError, v11::ReportDataV11, v2::ReportDataV2, v3::ReportDataV3,
-        v4::ReportDataV4, v7::ReportDataV7, v8::ReportDataV8,
+        v7::ReportDataV7, v8::ReportDataV8,
     },
 };
 
