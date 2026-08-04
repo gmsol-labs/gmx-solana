@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - programs(utils): Changed `PriceFeedPrice::is_market_open` to take market status flags (signature change).
 - sdk(chainlink-datastreams): Removed the `Error::UnknownMarketStatus` variant; an unknown market status no longer fails report conversion.
+- sdk(chainlink-datastreams): Removed support for the v4 report schema.
 
 ### Added
 
