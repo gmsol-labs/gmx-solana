@@ -7,11 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- programs(utils): Fixed an out-of-bounds read in `fixed_map`'s `remove` that aborted the instruction when removing an entry from a map at full capacity.
-
-## [0.10.0] - 2026-07-22
+## [0.10.0] - 2026-08-12
 
 ### Breaking Changes
 
@@ -41,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Forbade no-op swaps.
 - model: Treated a decrease that zeroes `size_in_tokens` as a full close.
 - sdk(chainlink-datastreams): Guarded `decode_full_report` against malformed ABI offsets.
+- programs(utils): Fixed an out-of-bounds read in `fixed_map`'s `remove` that aborted the instruction when removing an entry from a map at full capacity.
 
 ### Deprecated
 
