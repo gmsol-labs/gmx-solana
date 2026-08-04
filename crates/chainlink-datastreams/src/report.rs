@@ -7,7 +7,7 @@ use chainlink_data_streams_report::{
     feed_id::ID,
     report::{
         base::ReportError, v11::ReportDataV11, v2::ReportDataV2, v3::ReportDataV3,
-        v4::ReportDataV4, v7::ReportDataV7, v8::ReportDataV8,
+        v7::ReportDataV7, v8::ReportDataV8,
     },
 };
 
@@ -219,27 +219,6 @@ pub fn decode(data: &[u8]) -> Result<Report, DecodeError> {
                 ask: bigint_to_signed(report.ask)?,
                 market_status: MarketStatus::Open,
                 extended_market_status: None,
-            })
-        }
-        4 => {
-            let report = ReportDataV4::decode(data)?;
-            let price = bigint_to_signed(report.price)?;
-            let market_status = decode_market_status(report.market_status)?;
-            Ok(Report {
-                feed_id: report.feed_id,
-                valid_from_timestamp: report.valid_from_timestamp,
-                observations_timestamp: report.observations_timestamp,
-                last_update_timestamp: None,
-                native_fee: bigint_to_u192(report.native_fee)?,
-                link_fee: bigint_to_u192(report.link_fee)?,
-                expires_at: report.expires_at,
-                price,
-                // Bid and ask values are not available for the first iteration
-                // of the RWA report schema (v4).
-                bid: price,
-                ask: price,
-                market_status,
-                extended_market_status: Some(market_status.into()),
             })
         }
         7 => {
