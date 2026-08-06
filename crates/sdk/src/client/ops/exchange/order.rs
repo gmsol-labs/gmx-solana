@@ -52,6 +52,21 @@ use super::{ExchangeOps, VirtualInventoryCollector};
 /// Compute unit limit for `execute_order`
 pub const EXECUTE_ORDER_COMPUTE_BUDGET: u32 = 400_000;
 
+/// Compute unit limit for market `execute_order` fills.
+pub const MARKET_EXECUTE_ORDER_COMPUTE_BUDGET: u32 = 350_000;
+
+/// Compute unit limit for market-order `prepare_trade_event_buffer`.
+pub const MARKET_PREPARE_EVENT_BUFFER_COMPUTE_BUDGET: u32 = 20_000;
+
+/// Compute unit limit for market-order `close_order`.
+pub const MARKET_CLOSE_ORDER_COMPUTE_BUDGET: u32 = 150_000;
+
+/// Compute unit limit for market-order claimable account setup (pre).
+pub const MARKET_CLAIMABLE_PRE_COMPUTE_BUDGET: u32 = 90_000;
+
+/// Compute unit limit for market-order claimable account cleanup (post).
+pub const MARKET_CLAIMABLE_POST_COMPUTE_BUDGET: u32 = 70_000;
+
 /// The compute budget for `position_cut` instruction.
 pub const POSITION_CUT_COMPUTE_BUDGET: u32 = 400_000;
 
@@ -1175,6 +1190,12 @@ where
                 }),
         };
 
+        let is_market = kind.is_market();
+        let execute_cu = if is_market {
+            MARKET_EXECUTE_ORDER_COMPUTE_BUDGET
+        } else {
+            EXECUTE_ORDER_COMPUTE_BUDGET
+        };
         execute_order = execute_order
             .accounts(
                 feeds
@@ -1183,11 +1204,11 @@ where
                     .chain(virtual_inventories)
                     .collect::<Vec<_>>(),
             )
-            .compute_budget(ComputeBudget::default().with_limit(EXECUTE_ORDER_COMPUTE_BUDGET))
+            .compute_budget(ComputeBudget::default().with_limit(execute_cu))
             .lookup_tables(self.alts.clone());
 
         if !is_swap {
-            let prepare_event_buffer = self
+            let mut prepare_event_buffer = self
                 .client
                 .store_transaction()
                 .anchor_accounts(accounts::PrepareTradeEventBuffer {
@@ -1199,11 +1220,16 @@ where
                 .anchor_args(args::PrepareTradeEventBuffer {
                     index: self.event_buffer_index,
                 });
+            if is_market {
+                prepare_event_buffer = prepare_event_buffer.compute_budget(
+                    ComputeBudget::default().with_limit(MARKET_PREPARE_EVENT_BUFFER_COMPUTE_BUDGET),
+                );
+            }
             execute_order = prepare_event_buffer.merge(execute_order);
         }
 
         if self.close {
-            let close = self
+            let mut close = self
                 .client
                 .close_order(&self.order)?
                 .reason("executed")
@@ -1223,6 +1249,11 @@ where
                 })
                 .build()
                 .await?;
+            if is_market {
+                close = close.compute_budget(
+                    ComputeBudget::default().with_limit(MARKET_CLOSE_ORDER_COMPUTE_BUDGET),
+                );
+            }
             execute_order = execute_order.merge(close);
         }
 
@@ -1248,7 +1279,15 @@ where
             );
         }
 
-        let (pre_builder, post_builder) = builder.build(self.client);
+        let (mut pre_builder, mut post_builder) = builder.build(self.client);
+        if is_market {
+            pre_builder = pre_builder.compute_budget(
+                ComputeBudget::default().with_limit(MARKET_CLAIMABLE_PRE_COMPUTE_BUDGET),
+            );
+            post_builder = post_builder.compute_budget(
+                ComputeBudget::default().with_limit(MARKET_CLAIMABLE_POST_COMPUTE_BUDGET),
+            );
+        }
 
         let mut bundle = self.client.bundle_with_options(options);
         bundle
