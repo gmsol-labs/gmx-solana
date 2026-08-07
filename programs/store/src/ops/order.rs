@@ -5,8 +5,8 @@ use gmsol_model::{
     action::decrease_position::{DecreasePositionFlags, DecreasePositionSwapType},
     num::Unsigned,
     price::{Price, Prices},
-    BaseMarket, BaseMarketExt, MarketAction, PnlFactorKind, Position as _, PositionMut,
-    PositionMutExt, PositionState, PositionStateExt,
+    BaseMarket, BaseMarketExt, MarketAction, PnlFactorKind, Position as _, PositionExt,
+    PositionMut, PositionMutExt, PositionState, PositionStateExt,
 };
 use gmsol_utils::action::ActionCallbackKind;
 use typed_builder::TypedBuilder;
@@ -1085,6 +1085,9 @@ impl ExecuteOrderOperation<'_, '_> {
                             &mut transfer_out,
                             &mut *event_loader.load_mut()?,
                             &mut *self.order.load_mut()?,
+                            // TODO(builder-fee): read the snapshot factor from
+                            // the order once it is captured at order creation.
+                            0,
                         )?;
                         (false, paid_fee_value)
                     }
@@ -1662,6 +1665,7 @@ fn execute_increase_position(
     transfer_out: &mut TransferOut,
     event: &mut TradeData,
     order: &mut Order,
+    builder_fee_factor: u128,
 ) -> Result<u128> {
     let params = &order.params;
 
@@ -1689,6 +1693,25 @@ fn execute_increase_position(
     // Here, `min_output` refers to the minimum amount of collateral tokens expected
     // after the swap.
     order.validate_output_amount(collateral_increment_amount.into())?;
+
+    // Builder fee is charged in the collateral token, after the pay token
+    // has already been swapped into it, so the fee itself is priced with
+    // the collateral price already in scope and can be skimmed through
+    // the normal output-amount path.
+    let (collateral_increment_amount, builder_fee_amount) =
+        apply_builder_fee_to_collateral_increment(
+            collateral_increment_amount,
+            params.size_delta_value,
+            builder_fee_factor,
+            position.collateral_price(&prices),
+        )?;
+    transfer_out.transfer_out(false, builder_fee_amount as u64)?;
+    if builder_fee_amount != 0 {
+        msg!(
+            "[Order] builder fee (collateral token) = {}",
+            builder_fee_amount
+        );
+    }
 
     // Increase position.
     let (long_amount, short_amount, paid_order_fee_value) = {
