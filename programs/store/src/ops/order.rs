@@ -1101,6 +1101,9 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut *self.order.load_mut()?,
                         true,
                         Some(SecondaryOrderType::Liquidation),
+                        // TODO(builder-fee): read the snapshot factor from
+                        // the order once it is captured at order creation.
+                        0,
                     )?,
                     OrderKind::AutoDeleveraging => execute_decrease_position(
                         self.oracle,
@@ -1112,6 +1115,9 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut *self.order.load_mut()?,
                         true,
                         Some(SecondaryOrderType::AutoDeleveraging),
+                        // TODO(builder-fee): read the snapshot factor from
+                        // the order once it is captured at order creation.
+                        0,
                     )?,
                     OrderKind::MarketDecrease
                     | OrderKind::LimitDecrease
@@ -1125,6 +1131,9 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut *self.order.load_mut()?,
                         false,
                         None,
+                        // TODO(builder-fee): read the snapshot factor from
+                        // the order once it is captured at order creation.
+                        0,
                     )?,
                     _ => unreachable!(),
                 };
@@ -1911,13 +1920,26 @@ fn execute_decrease_position(
     order: &mut Order,
     is_insolvent_close_allowed: bool,
     secondary_order_type: Option<SecondaryOrderType>,
+    builder_fee_factor: u128,
 ) -> Result<(RemovePosition, u128)> {
     // Decrease position.
-    let report = {
+    let (report, builder_fee_estimate) = {
         let params = &order.params;
         let decrease_position_swap_type = params.decrease_position_swap_type()?;
-        let collateral_withdrawal_amount = params.initial_collateral_delta_amount as u128;
         let size_delta_usd = params.size_delta_value;
+        // Builder fee is charged in the collateral token, after the
+        // model's internal PnL<->collateral swap layer but before the
+        // swap into the order's receive token. Fold it into the
+        // withdrawal amount so it can still be paid out of collateral
+        // even when the position is closed at a loss.
+        let (collateral_withdrawal_amount, builder_fee_estimate) =
+            apply_builder_fee_to_collateral_withdrawal(
+                params.initial_collateral_delta_amount as u128,
+                size_delta_usd,
+                builder_fee_factor,
+                position.collateral_price(&prices),
+                decrease_position_swap_type,
+            )?;
         let acceptable_price = params.acceptable_price;
         let is_liquidation_order =
             matches!(secondary_order_type, Some(SecondaryOrderType::Liquidation));
@@ -1996,9 +2018,20 @@ fn execute_decrease_position(
         }
 
         event.update_with_decrease_report(&report, &prices)?;
-        report
+        (report, builder_fee_estimate)
     };
     let should_remove_position = report.should_remove();
+
+    // Skim the builder fee back out of the collateral-token output,
+    // before it is swapped into the order's receive token.
+    let (output_amount_after_builder_fee, builder_fee_amount) =
+        skim_builder_fee_from_output(*report.output_amount(), builder_fee_estimate);
+    if builder_fee_amount != 0 {
+        msg!(
+            "[Order] builder fee (collateral token) = {}",
+            builder_fee_amount
+        );
+    }
 
     // Perform swaps.
     {
@@ -2009,7 +2042,7 @@ fn execute_decrease_position(
         );
         let (is_output_token_long, output_amount, secondary_output_amount) = (
             report.is_output_token_long(),
-            (*report.output_amount())
+            output_amount_after_builder_fee
                 .try_into()
                 .map_err(|_| error!(CoreError::TokenAmountOverflow))?,
             (*report.secondary_output_amount())
