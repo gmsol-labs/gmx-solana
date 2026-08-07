@@ -4248,6 +4248,12 @@ pub enum CoreError {
     /// but the token amounts are not merged together.
     #[msg("same output tokens not merged")]
     SameOutputTokensNotMerged,
+    /// A decrease order with a non-zero builder fee used a decrease
+    /// position swap type that would move the entire collateral-token
+    /// output into the PnL token, leaving nothing to collect the fee
+    /// from.
+    #[msg("this decrease position swap type is not allowed together with a builder fee")]
+    BuilderFeeSwapTypeNotAllowed,
     /// Event buffer is not provided.
     #[msg("event buffer is not provided")]
     EventBufferNotProvided,
