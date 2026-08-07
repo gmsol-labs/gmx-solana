@@ -1501,8 +1501,9 @@ mod builder_fee_math_tests {
         let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
         let factor = constants::MARKET_USD_UNIT / 2_000; // 5 bps
         let unit_price = 2 * constants::MARKET_USD_UNIT;
-        let fee = compute_builder_fee_amount(size_delta_usd, factor, &price(unit_price, unit_price))
-            .unwrap();
+        let fee =
+            compute_builder_fee_amount(size_delta_usd, factor, &price(unit_price, unit_price))
+                .unwrap();
         assert_eq!(fee, 25);
     }
 
@@ -1511,8 +1512,9 @@ mod builder_fee_math_tests {
         let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
         let factor = constants::MARKET_USD_UNIT / 2_000; // 5 bps => $50 fee value
         let unit_price = 3 * constants::MARKET_USD_UNIT;
-        let fee = compute_builder_fee_amount(size_delta_usd, factor, &price(unit_price, unit_price))
-            .unwrap();
+        let fee =
+            compute_builder_fee_amount(size_delta_usd, factor, &price(unit_price, unit_price))
+                .unwrap();
         // 50 / 3 = 16.67, rounded up.
         assert_eq!(fee, 17);
     }
@@ -1573,6 +1575,82 @@ fn execute_swap(
     }
     transfer_out.transfer_out(false, swap_out_amount)?;
     Ok(())
+}
+
+/// Reduces an increase order's collateral increment by the builder fee,
+/// computed and charged in the collateral token after the pay token has
+/// already been swapped into it. Returns the reduced collateral
+/// increment together with the fee actually charged (after shortfall
+/// clamping).
+fn apply_builder_fee_to_collateral_increment(
+    collateral_increment_amount: u64,
+    size_delta_usd: u128,
+    builder_fee_factor: u128,
+    collateral_price: &Price<u128>,
+) -> Result<(u64, u128)> {
+    let fee = compute_builder_fee_amount(size_delta_usd, builder_fee_factor, collateral_price)?;
+    let fee = clamp_builder_fee_amount(fee, collateral_increment_amount.into());
+    let collateral_increment_after_fee = collateral_increment_amount
+        .checked_sub(fee as u64)
+        .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+    Ok((collateral_increment_after_fee, fee))
+}
+
+#[cfg(test)]
+mod increase_builder_fee_tests {
+    use super::*;
+
+    fn price(unit_price: u128) -> Price<u128> {
+        Price {
+            min: unit_price,
+            max: unit_price,
+        }
+    }
+
+    #[test]
+    fn zero_factor_leaves_collateral_increment_unchanged() {
+        let (collateral_increment_after_fee, fee) = apply_builder_fee_to_collateral_increment(
+            1_000,
+            100_000 * constants::MARKET_USD_UNIT,
+            0,
+            &price(2 * constants::MARKET_USD_UNIT),
+        )
+        .unwrap();
+        assert_eq!(fee, 0);
+        assert_eq!(collateral_increment_after_fee, 1_000);
+    }
+
+    #[test]
+    fn reduces_collateral_increment_by_fee() {
+        // $100,000 size, 5 bps factor => $50 fee value, at $2/unit => 25 units.
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let (collateral_increment_after_fee, fee) = apply_builder_fee_to_collateral_increment(
+            1_000,
+            size_delta_usd,
+            factor,
+            &price(2 * constants::MARKET_USD_UNIT),
+        )
+        .unwrap();
+        assert_eq!(fee, 25);
+        assert_eq!(collateral_increment_after_fee, 975);
+    }
+
+    #[test]
+    fn fee_larger_than_collateral_increment_clamps_to_it() {
+        // Same fee value as above (25 units), but the swap only produced 10 units.
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let (collateral_increment_after_fee, fee) = apply_builder_fee_to_collateral_increment(
+            10,
+            size_delta_usd,
+            factor,
+            &price(2 * constants::MARKET_USD_UNIT),
+        )
+        .unwrap();
+        assert_eq!(fee, 10);
+        assert_eq!(collateral_increment_after_fee, 0);
+    }
 }
 
 #[inline(never)]
