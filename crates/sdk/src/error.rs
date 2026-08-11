@@ -60,6 +60,10 @@ pub enum Error {
     /// Market closed error.
     #[error("market closed: {0}")]
     MarketClosed(String),
+    /// Simulation error.
+    #[cfg(simulation)]
+    #[error("simulation: {0}")]
+    Simulation(crate::simulation::SimulationError),
     /// Convert integer error.
     #[error(transparent)]
     ConvertInterger(#[from] std::num::TryFromIntError),
@@ -87,6 +91,13 @@ impl Error {
     /// Create a [`MarketClosed`](Error::MarketClosed) error.
     pub fn market_closed(msg: impl ToString) -> Self {
         Self::MarketClosed(msg.to_string())
+    }
+}
+
+#[cfg(simulation)]
+impl From<crate::simulation::SimulationError> for Error {
+    fn from(value: crate::simulation::SimulationError) -> Self {
+        Self::Simulation(value)
     }
 }
 

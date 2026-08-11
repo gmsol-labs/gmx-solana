@@ -6,7 +6,7 @@ use gmsol_programs::gmsol_store::types::CreateWithdrawalParams;
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
-use super::{SimulationOptions, Simulator};
+use super::{SimulationError, SimulationErrorCode, SimulationOptions, Simulator};
 
 /// Withdrawal simulation output.
 #[derive(Debug)]
@@ -78,7 +78,11 @@ impl WithdrawalSimulation<'_> {
         } = self;
 
         if params.market_token_amount == 0 {
-            return Err(crate::Error::custom("[sim] empty withdrawal"));
+            return Err(SimulationError::new(
+                SimulationErrorCode::EmptyWithdrawal,
+                "[sim] empty withdrawal",
+            )
+            .into());
         }
 
         let prices = simulator.get_prices_for_market(market_token)?;
@@ -126,7 +130,9 @@ impl WithdrawalSimulation<'_> {
             )?;
 
             if swap_output.output_token != long_receive_token {
-                return Err(crate::Error::custom("[sim] invalid long swap path"));
+                return Err(
+                    SimulationError::invalid_swap_path("[sim] invalid long swap path").into(),
+                );
             }
 
             (swap_output.reports, swap_output.amount)
@@ -151,7 +157,9 @@ impl WithdrawalSimulation<'_> {
             )?;
 
             if swap_output.output_token != short_receive_token {
-                return Err(crate::Error::custom("[sim] invalid short swap path"));
+                return Err(
+                    SimulationError::invalid_swap_path("[sim] invalid short swap path").into(),
+                );
             }
 
             (swap_output.reports, swap_output.amount)

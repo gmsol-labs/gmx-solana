@@ -6,7 +6,7 @@ use gmsol_programs::gmsol_store::types::CreateDepositParams;
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
-use super::{SimulationOptions, Simulator};
+use super::{SimulationError, SimulationErrorCode, SimulationOptions, Simulator};
 
 /// Deposit simulation output.
 #[derive(Debug)]
@@ -66,7 +66,11 @@ impl DepositSimulation<'_> {
         } = self;
 
         if params.initial_long_token_amount == 0 && params.initial_short_token_amount == 0 {
-            return Err(crate::Error::custom("[sim] empty deposit"));
+            return Err(SimulationError::new(
+                SimulationErrorCode::EmptyDeposit,
+                "[sim] empty deposit",
+            )
+            .into());
         }
 
         let (prices, meta) = simulator.get_prices_and_meta_for_market(market_token)?;
@@ -84,7 +88,7 @@ impl DepositSimulation<'_> {
             options.clone(),
         )?;
         if long_swap_output.output_token != long_token {
-            return Err(crate::Error::custom("[sim] invalid long swap path"));
+            return Err(SimulationError::invalid_swap_path("[sim] invalid long swap path").into());
         }
 
         let short_swap_output = simulator.swap_along_path_with_options(
@@ -94,7 +98,7 @@ impl DepositSimulation<'_> {
             options.clone(),
         )?;
         if short_swap_output.output_token != short_token {
-            return Err(crate::Error::custom("[sim] invalid short swap path"));
+            return Err(SimulationError::invalid_swap_path("[sim] invalid short swap path").into());
         }
 
         // Execute deposit.
