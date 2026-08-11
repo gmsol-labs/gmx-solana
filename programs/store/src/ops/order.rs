@@ -4,7 +4,7 @@ use gmsol_callback::interface::ActionKind;
 use gmsol_model::{
     action::decrease_position::{DecreasePositionFlags, DecreasePositionSwapType},
     num::Unsigned,
-    price::Prices,
+    price::{Price, Prices},
     BaseMarket, BaseMarketExt, MarketAction, PnlFactorKind, Position as _, PositionMut,
     PositionMutExt, PositionState, PositionStateExt,
 };
@@ -12,6 +12,7 @@ use gmsol_utils::action::ActionCallbackKind;
 use typed_builder::TypedBuilder;
 
 use crate::{
+    constants,
     events::{EventEmitter, OrderUpdated, PositionDecreased, PositionIncreased, TradeData},
     states::{
         callback::CallbackAuthority,
@@ -1468,6 +1469,39 @@ impl ValidateOracleTime for ExecuteOrderOperation<'_, '_> {
 }
 
 #[inline(never)]
+/// Computes a builder fee amount, denominated in the token of `price`,
+/// from `size_delta_usd` and the builder's fee `factor`.
+///
+/// The amount is rounded up so the fee is never under-collected. Returns
+/// `0` without touching `price` if `factor` is zero, so callers don't need
+/// a meaningful price when no builder fee applies.
+fn compute_builder_fee_amount(
+    size_delta_usd: u128,
+    factor: u128,
+    price: &Price<u128>,
+) -> Result<u128> {
+    if factor == 0 {
+        return Ok(0);
+    }
+
+    let fee_value = gmsol_model::utils::apply_factor::<_, { constants::MARKET_DECIMALS }>(
+        &size_delta_usd,
+        &factor,
+    )
+    .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+
+    fee_value
+        .checked_round_up_div(price.pick_price(false))
+        .ok_or_else(|| error!(CoreError::TokenAmountOverflow))
+}
+
+/// Clamps a computed builder fee down to at most `available`, so a
+/// builder fee never turns an otherwise-fillable order into a hard
+/// failure.
+fn clamp_builder_fee_amount(fee_amount: u128, available: u128) -> u128 {
+    fee_amount.min(available)
+}
+
 fn execute_swap(
     should_throw_error: &mut bool,
     oracle: &Oracle,
@@ -2048,5 +2082,59 @@ impl PositionCutOperation<'_, '_> {
             .build()
             .execute()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn price(min: u128, max: u128) -> Price<u128> {
+        Price { min, max }
+    }
+
+    #[test]
+    fn zero_builder_fee_factor_yields_zero_fee_without_needing_a_price() {
+        let fee = compute_builder_fee_amount(1_000_000, 0, &price(0, 0)).unwrap();
+        assert_eq!(fee, 0);
+    }
+
+    #[test]
+    fn computes_expected_builder_fee_amount() {
+        // $100,000 size, 5 bps factor => $50 fee value, at $2/unit => 25 units.
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000; // 5 bps
+        let unit_price = 2 * constants::MARKET_USD_UNIT;
+        let fee =
+            compute_builder_fee_amount(size_delta_usd, factor, &price(unit_price, unit_price))
+                .unwrap();
+        assert_eq!(fee, 25);
+    }
+
+    #[test]
+    fn builder_fee_amount_rounds_up_on_remainder() {
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000; // 5 bps => $50 fee value
+        let unit_price = 3 * constants::MARKET_USD_UNIT;
+        let fee =
+            compute_builder_fee_amount(size_delta_usd, factor, &price(unit_price, unit_price))
+                .unwrap();
+        // 50 / 3 = 16.67, rounded up.
+        assert_eq!(fee, 17);
+    }
+
+    #[test]
+    fn builder_fee_shortfall_clamps_to_available() {
+        assert_eq!(clamp_builder_fee_amount(1_000, 100), 100);
+    }
+
+    #[test]
+    fn builder_fee_clamps_to_zero_when_nothing_is_available() {
+        assert_eq!(clamp_builder_fee_amount(1_000, 0), 0);
+    }
+
+    #[test]
+    fn builder_fee_within_available_is_unchanged() {
+        assert_eq!(clamp_builder_fee_amount(10, 100), 10);
     }
 }
