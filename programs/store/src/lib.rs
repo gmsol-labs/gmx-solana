@@ -4432,6 +4432,12 @@ pub enum CoreError {
     /// fee; settle it first via `settle_builder_fee`.
     #[msg("order has an unsettled builder fee")]
     UnsettledBuilderFee,
+    /// An increase order's collateral increment cannot fully cover the
+    /// builder fee. Unlike decrease, increase has no equivalent of
+    /// "complete anyway at a loss" to fall back on, so this cancels the
+    /// order instead of charging a partial fee.
+    #[msg("builder fee exceeds the collateral increment")]
+    BuilderFeeExceedsCollateral,
     // NOTE: New variants must be appended here to keep existing error codes stable.
 }
 

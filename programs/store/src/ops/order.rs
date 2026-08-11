@@ -1544,6 +1544,39 @@ fn execute_swap(
     Ok(())
 }
 
+/// Charges the builder fee against an increase order's collateral
+/// increment, in the collateral token, after the pay token has already
+/// been swapped into it. Returns the reduced collateral increment
+/// together with the fee actually charged.
+///
+/// Unlike the decrease path, underpayment here is not tolerated: an
+/// increase order has no equivalent of "complete the close anyway, at a
+/// loss" to fall back on, so if the collateral increment can't fully
+/// cover the fee, this returns an error instead of charging a partial
+/// amount. The caller propagates this as a soft failure (the order is
+/// cancelled), not a transaction revert.
+fn charge_builder_fee_on_collateral_increment(
+    collateral_increment_amount: u64,
+    size_delta_usd: u128,
+    builder_fee_factor: u128,
+    collateral_price: &Price<u128>,
+) -> Result<(u64, u64)> {
+    let payable_amount =
+        compute_builder_fee_amount(size_delta_usd, builder_fee_factor, collateral_price)?;
+    let payable_amount_u64 =
+        u64::try_from(payable_amount).map_err(|_| error!(CoreError::TokenAmountOverflow))?;
+    require_gte!(
+        collateral_increment_amount,
+        payable_amount_u64,
+        CoreError::BuilderFeeExceedsCollateral
+    );
+    // The assertion above guarantees the subtraction succeeds.
+    let collateral_increment_after_fee = collateral_increment_amount
+        .checked_sub(payable_amount_u64)
+        .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+    Ok((collateral_increment_after_fee, payable_amount_u64))
+}
+
 #[inline(never)]
 fn execute_increase_position(
     oracle: &Oracle,
@@ -2136,5 +2169,77 @@ mod tests {
     #[test]
     fn builder_fee_within_available_is_unchanged() {
         assert_eq!(clamp_builder_fee_amount(10, 100), 10);
+    }
+
+    #[test]
+    fn zero_builder_fee_factor_leaves_collateral_increment_unchanged() {
+        let (collateral_increment_after_fee, fee) = charge_builder_fee_on_collateral_increment(
+            1_000,
+            100_000 * constants::MARKET_USD_UNIT,
+            0,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+        )
+        .unwrap();
+        assert_eq!(fee, 0);
+        assert_eq!(collateral_increment_after_fee, 1_000);
+    }
+
+    #[test]
+    fn charges_expected_builder_fee_on_collateral_increment() {
+        // $100,000 size, 5 bps factor => $50 fee value, at $2/unit => 25 units.
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let (collateral_increment_after_fee, fee) = charge_builder_fee_on_collateral_increment(
+            1_000,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+        )
+        .unwrap();
+        assert_eq!(fee, 25);
+        assert_eq!(collateral_increment_after_fee, 975);
+    }
+
+    #[test]
+    fn exact_builder_fee_consumes_the_whole_collateral_increment() {
+        // Fee equals the entire collateral increment: allowed, leaves 0.
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let (collateral_increment_after_fee, fee) = charge_builder_fee_on_collateral_increment(
+            25,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+        )
+        .unwrap();
+        assert_eq!(fee, 25);
+        assert_eq!(collateral_increment_after_fee, 0);
+    }
+
+    #[test]
+    fn builder_fee_underpayment_errors_instead_of_clamping() {
+        // Same fee value as above (25 units), but the swap only produced 10 units.
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let err = charge_builder_fee_on_collateral_increment(
+            10,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+        )
+        .unwrap_err();
+        assert_eq!(err, error!(CoreError::BuilderFeeExceedsCollateral));
     }
 }
