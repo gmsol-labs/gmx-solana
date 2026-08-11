@@ -217,6 +217,60 @@ impl InitSpace for InsufficientFundingFeePayment {
 
 impl Event for InsufficientFundingFeePayment {}
 
+/// An event indicating that a builder fee has been charged.
+///
+/// Only emitted when the order's builder fee factor is non-zero. Emitted
+/// even when `paid_amount` is `0` (e.g. fully clamped away by a
+/// shortfall), so indexers can distinguish "no builder attached" from
+/// "builder attached but nothing was collectible" by whether this event
+/// is present at all.
+#[event]
+#[cfg_attr(feature = "debug", derive(Debug))]
+#[derive(Clone, InitSpace)]
+pub struct BuilderFeeCharged {
+    /// Timestamp.
+    pub ts: i64,
+    /// Slot.
+    pub slot: u64,
+    /// Store.
+    pub store: Pubkey,
+    /// Market token.
+    pub market_token: Pubkey,
+    /// The token the builder fee is denominated and paid in.
+    pub token: Pubkey,
+    /// The computed builder fee amount, before shortfall clamping.
+    pub payable_amount: u128,
+    /// The amount actually charged, after shortfall clamping.
+    pub paid_amount: u128,
+}
+
+impl BuilderFeeCharged {
+    pub(crate) fn new(
+        store: &Pubkey,
+        market_token: &Pubkey,
+        token: &Pubkey,
+        payable_amount: u128,
+        paid_amount: u128,
+    ) -> Result<Self> {
+        let clock = Clock::get()?;
+        Ok(Self {
+            ts: clock.unix_timestamp,
+            slot: clock.slot,
+            store: *store,
+            market_token: *market_token,
+            token: *token,
+            payable_amount,
+            paid_amount,
+        })
+    }
+}
+
+impl InitSpace for BuilderFeeCharged {
+    const INIT_SPACE: usize = <Self as Space>::INIT_SPACE;
+}
+
+impl Event for BuilderFeeCharged {}
+
 /// Order parameters for event.
 #[cfg_attr(feature = "debug", derive(Debug))]
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
