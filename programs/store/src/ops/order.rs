@@ -149,7 +149,7 @@ impl<'a, 'info> CreateOrderOperation<'a, 'info> {
     ) -> CreateIncreaseOrderOperationBuilder<
         'a,
         'info,
-        ((CreateOrderOperation<'a, 'info>,), (), (), (), ()),
+        ((CreateOrderOperation<'a, 'info>,), (), (), (), (), (), ()),
     > {
         CreateIncreaseOrderOperation::builder().common(self)
     }
@@ -356,6 +356,20 @@ pub(crate) struct CreateIncreaseOrderOperation<'a, 'info> {
     initial_collateral_token: &'a Account<'info, TokenAccount>,
     long_token: &'a Account<'info, TokenAccount>,
     short_token: &'a Account<'info, TokenAccount>,
+    /// The final output token mint, always provided by the instruction.
+    ///
+    /// It is validated to be the collateral token in
+    /// [`init_increase`](OrderActionParams::init_increase).
+    final_output_token: &'a Account<'info, Mint>,
+    /// The escrow for the final output token.
+    ///
+    /// Optional for increase orders: clients that do not intend to use a builder fee can keep
+    /// omitting it, and the order's final output token is then left uninitialized, exactly as
+    /// before this account was read at all. When it is provided, both halves of
+    /// [`OrderTokenAccounts::final_output_token`] are initialized from it. The account is
+    /// constrained to be the ATA of `final_output_token` owned by the order, so no further
+    /// validation of the escrow itself is needed here.
+    final_output_token_escrow: Option<&'a Account<'info, TokenAccount>>,
 }
 
 impl CreateIncreaseOrderOperation<'_, '_> {
@@ -376,11 +390,15 @@ impl CreateIncreaseOrderOperation<'_, '_> {
                     .init(self.initial_collateral_token);
                 tokens.long_token.init(self.long_token);
                 tokens.short_token.init(self.short_token);
+                if let Some(escrow) = self.final_output_token_escrow {
+                    tokens.final_output_token.init(escrow);
+                }
                 params.init_increase(
                     create.is_long,
                     create.kind,
                     self.position.key(),
                     collateral_token,
+                    self.final_output_token.key(),
                     create.initial_collateral_delta_amount,
                     create.size_delta_value,
                     create.trigger_price,
@@ -1499,6 +1517,26 @@ fn execute_increase_position(
     event: &mut TradeData,
     order: &mut Order,
 ) -> Result<u128> {
+    // The builder fee is charged in the order's final output token, so for an increase order that
+    // token, and therefore the escrow it is paid out of, must belong to the position's collateral
+    // token. Orders created before the final output token was initialized at creation time carry
+    // `None` here and are skipped, otherwise every one of them would stop executing.
+    //
+    // The escrow itself needs no check: the account passed to the execute instruction is
+    // constrained to equal the one stored on the order, and to be the ATA of the passed final
+    // output token mint. Since an ATA address determines its mint, a mismatching mint cannot get
+    // this far.
+    //
+    // Once the builder fee lands, `set_builder_fee` is what requires the escrow to be present, so
+    // that is what makes this validation run for every fee-bearing order.
+    if let Some(final_output_token) = order.tokens.final_output_token.token() {
+        require_keys_eq!(
+            final_output_token,
+            *position.collateral_token(),
+            CoreError::TokenMintMismatched
+        );
+    }
+
     let params = &order.params;
 
     // Perform swap.

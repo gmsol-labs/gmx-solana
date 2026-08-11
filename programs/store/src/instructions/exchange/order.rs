@@ -259,7 +259,11 @@ pub struct CreateOrderV2<'info> {
     )]
     pub initial_collateral_token_escrow: Option<Box<Account<'info, TokenAccount>>>,
     /// Final output token escrow account.
-    /// Only required by decrease and swap orders.
+    ///
+    /// Required by decrease and swap orders. Optional for increase orders: when provided, it is
+    /// recorded on the order and becomes the account a builder fee would be paid out of, and when
+    /// omitted the order's final output token is left uninitialized, so no builder fee can be set
+    /// on it later.
     #[account(
         mut,
         associated_token::mint = final_output_token,
@@ -422,6 +426,8 @@ impl<'info> internal::Create<'info, Order> for CreateOrderV2<'info> {
                     .initial_collateral_token(initial_collateral.as_ref())
                     .long_token(long_token.as_ref())
                     .short_token(short_token.as_ref())
+                    .final_output_token(&self.final_output_token)
+                    .final_output_token_escrow(self.final_output_token_escrow.as_deref())
                     .build()
                     .execute()?;
             }

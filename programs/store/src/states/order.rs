@@ -751,6 +751,7 @@ impl OrderActionParams {
         kind: OrderKind,
         position: Pubkey,
         collateral_token: Pubkey,
+        final_output_token: Pubkey,
         initial_collateral_delta_amount: u64,
         size_delta_value: u128,
         trigger_price: Option<u128>,
@@ -758,6 +759,15 @@ impl OrderActionParams {
         min_output: Option<u128>,
         valid_from_ts: Option<i64>,
     ) -> Result<()> {
+        // The builder fee is charged in the order's final output token, so for an increase order
+        // that token has to be the position's collateral token. This is the choke point every
+        // increase-order creation path goes through, so validating here covers all of them.
+        require_keys_eq!(
+            final_output_token,
+            collateral_token,
+            CoreError::TokenMintMismatched
+        );
+
         self.kind = kind.into();
         self.side = if is_long {
             OrderSide::Long

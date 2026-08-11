@@ -9,12 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- sdk(sdk): Added `CreateOrderBuilder::prepare_final_output_token_escrow`, opting an increase order into providing its final output token escrow at creation. The escrow is what a builder fee would be paid out of, so an increase order created without it cannot be given one. Off by default, leaving the previous behavior unchanged.
 - sdk(solana-utils): Added `Bundle::send_all_with_opts_detailed`, returning one `Result` per transaction with stable bundle indices.
 - sdk(solana-utils): Added `Error::SendAborted` for unsent transactions after an early bundle abort.
 - sdk(solana-utils): Made `compress_send_results` public so callers can map detailed results to the legacy signature list.
 
 ### Changed
 
+- programs(store): An increase order now initializes its final output token at creation when the escrow is provided, and its final output token must equal the position's collateral token. Creating one with a different final output token used to succeed and silently ignore the value; it now reverts. Existing orders with an uninitialized final output token keep executing unchanged.
 - sdk(solana-utils): Kept the two-argument `Bundle::send_all_with_opts` as a deprecated compatibility wrapper around the detailed API. It still returns the compressed success-signature list, and when multiple transactions fail it returns the **last** real send error (matching prior overwrite semantics; `SendAborted` placeholders are ignored).
 
 ## [0.10.0] - 2026-08-12
