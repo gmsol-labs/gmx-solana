@@ -31,9 +31,12 @@ pub struct UserHeader {
     pub(crate) referral: Referral,
     /// GT State.
     pub(crate) gt: UserGtState,
+    /// This user's builder fee factor, as a builder. `0` means the user
+    /// has not advertised a rate.
+    pub(crate) builder_fee_factor: u128,
     #[cfg_attr(feature = "debug", debug(skip))]
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 128],
+    reserved: [u8; 112],
 }
 
 gmsol_utils::flags!(UserFlag, MAX_USER_FLAGS, u8);
@@ -148,6 +151,11 @@ impl UserHeader {
     /// Get GT state.
     pub fn gt(&self) -> &UserGtState {
         &self.gt
+    }
+
+    /// Get this user's builder fee factor, as a builder.
+    pub fn builder_fee_factor(&self) -> u128 {
+        self.builder_fee_factor
     }
 }
 
@@ -338,5 +346,36 @@ impl UserGtState {
     /// Get GT balance.
     pub fn amount(&self) -> u64 {
         self.amount
+    }
+}
+
+#[cfg(test)]
+mod builder_fee_layout_tests {
+    use super::*;
+
+    // Captured from the layout before `builder_fee_factor` was carved out
+    // of `reserved`. These must never change.
+    const OLD_SIZE: usize = 512;
+    const GT_OFFSET: usize = 224;
+    const OLD_RESERVED_OFFSET: usize = 384;
+
+    #[test]
+    fn existing_fields_keep_their_offsets_and_size_is_unchanged() {
+        assert_eq!(std::mem::size_of::<UserHeader>(), OLD_SIZE);
+        assert_eq!(std::mem::offset_of!(UserHeader, gt), GT_OFFSET);
+    }
+
+    #[test]
+    fn builder_fee_factor_is_carved_from_the_old_reserved_region_with_correct_alignment() {
+        let offset = std::mem::offset_of!(UserHeader, builder_fee_factor);
+        assert_eq!(offset, OLD_RESERVED_OFFSET);
+        // u128 requires 16-byte alignment.
+        assert_eq!(offset % 16, 0);
+        // No new fields introduced beyond what the old reserved region
+        // covered.
+        assert!(
+            std::mem::offset_of!(UserHeader, reserved) + std::mem::size_of::<[u8; 112]>()
+                <= OLD_SIZE
+        );
     }
 }
