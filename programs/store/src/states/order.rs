@@ -1001,4 +1001,16 @@ mod builder_fee_layout_tests {
             std::mem::offset_of!(Order, reserved) + std::mem::size_of::<[u8; 72]>() <= OLD_SIZE
         );
     }
+
+    #[test]
+    fn existing_zeroed_accounts_read_as_no_builder_fee() {
+        // Every existing on-chain `Order` account has zero bytes
+        // throughout what used to be its `reserved` region, so
+        // reinterpreting one under the new layout must read the new
+        // fields as "no builder fee attached", not fail to deserialize.
+        let order: Order = bytemuck::Zeroable::zeroed();
+        assert_eq!(order.builder(), None);
+        assert_eq!(order.builder_fee_factor(), 0);
+        assert_eq!(order.builder_fee_amount(), 0);
+    }
 }

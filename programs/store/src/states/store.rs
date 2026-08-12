@@ -698,6 +698,14 @@ mod factors_layout_tests {
                 <= OLD_SIZE
         );
     }
+
+    #[test]
+    fn existing_zeroed_stores_read_max_builder_fee_factor_as_zero() {
+        // Every existing on-chain `Store` account has zero bytes
+        // throughout what used to be `Factors::reserved`.
+        let factors: Factors = bytemuck::Zeroable::zeroed();
+        assert_eq!(factors.get(&FactorKey::MaxBuilderFeeFactor), Some(&0u128));
+    }
 }
 
 /// Addresses.

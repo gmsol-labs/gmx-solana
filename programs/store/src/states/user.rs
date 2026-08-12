@@ -389,4 +389,12 @@ mod builder_fee_layout_tests {
                 <= OLD_SIZE
         );
     }
+
+    #[test]
+    fn existing_zeroed_accounts_read_as_no_builder_fee_factor() {
+        // Every existing on-chain `UserHeader` account has zero bytes
+        // throughout what used to be its `reserved` region.
+        let user: UserHeader = bytemuck::Zeroable::zeroed();
+        assert_eq!(user.builder_fee_factor(), 0);
+    }
 }
