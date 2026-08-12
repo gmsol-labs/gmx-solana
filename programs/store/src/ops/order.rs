@@ -5,15 +5,18 @@ use gmsol_model::{
     action::decrease_position::{DecreasePositionFlags, DecreasePositionSwapType},
     num::Unsigned,
     price::{Price, Prices},
-    BaseMarket, BaseMarketExt, MarketAction, PnlFactorKind, Position as _, PositionMut,
-    PositionMutExt, PositionState, PositionStateExt,
+    BaseMarket, BaseMarketExt, MarketAction, PnlFactorKind, Position as _, PositionExt,
+    PositionMut, PositionMutExt, PositionState, PositionStateExt,
 };
 use gmsol_utils::action::ActionCallbackKind;
 use typed_builder::TypedBuilder;
 
 use crate::{
     constants,
-    events::{EventEmitter, OrderUpdated, PositionDecreased, PositionIncreased, TradeData},
+    events::{
+        BuilderFeeCharged, EventEmitter, OrderUpdated, PositionDecreased, PositionIncreased,
+        TradeData,
+    },
     states::{
         callback::CallbackAuthority,
         common::{
@@ -1106,6 +1109,9 @@ impl ExecuteOrderOperation<'_, '_> {
                             &mut transfer_out,
                             &mut *event_loader.load_mut()?,
                             &mut *self.order.load_mut()?,
+                            // TODO(builder-fee): read the snapshot factor from
+                            // the order once it is captured at order creation.
+                            0,
                         )?;
                         (false, paid_fee_value)
                     }
@@ -1586,6 +1592,7 @@ fn execute_increase_position(
     transfer_out: &mut TransferOut,
     event: &mut TradeData,
     order: &mut Order,
+    builder_fee_factor: u128,
 ) -> Result<u128> {
     // The builder fee is charged in the order's final output token, so for an increase order that
     // token, and therefore the escrow it is paid out of, must belong to the position's collateral
@@ -1633,6 +1640,60 @@ fn execute_increase_position(
     // Here, `min_output` refers to the minimum amount of collateral tokens expected
     // after the swap.
     order.validate_output_amount(collateral_increment_amount.into())?;
+
+    // Builder fee is charged in the collateral token, after the pay token
+    // has already been swapped into it, and is deducted from
+    // `collateral_increment_amount` before it is fed into
+    // `position.increase()` below. Because of that, the withheld amount
+    // never enters any market's balances (it is counted only into
+    // `TransferOut`'s final-output-token bucket), so
+    // `validate_market_balances` further down does not need to be
+    // adjusted to cover it.
+    let collateral_increment_amount = if builder_fee_factor != 0 {
+        // Initializing the final output token is optional for increase
+        // orders (see `CreateIncreaseOrderOperation`), so an order whose
+        // creator did not opt in carries `None` here and cannot pay a fee.
+        // The check at the top of this function already rejects a `Some`
+        // that disagrees with the collateral token, so this is the same
+        // condition stated positively, and it is what the fee branch
+        // actually depends on.
+        let final_output_token = order
+            .tokens
+            .final_output_token
+            .token()
+            .ok_or_else(|| error!(CoreError::BuilderFeeFinalOutputTokenMismatch))?;
+        require_keys_eq!(
+            final_output_token,
+            *position.collateral_token(),
+            CoreError::BuilderFeeFinalOutputTokenMismatch
+        );
+
+        let (collateral_increment_amount, payable_amount) =
+            charge_builder_fee_on_collateral_increment(
+                collateral_increment_amount,
+                params.size_delta_value,
+                builder_fee_factor,
+                position.collateral_price(&prices),
+            )?;
+
+        // TODO(builder-fee): accumulate `payable_amount` into
+        // `order.builder_fee_amount` once that field exists.
+        transfer_out.transfer_out(false, payable_amount)?;
+        position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
+            order.header().store(),
+            &position.market().market_meta().market_token_mint,
+            position.collateral_token(),
+            payable_amount.into(),
+            // Underpayment errors out above rather than charging a partial
+            // amount, so the paid amount always equals the payable amount
+            // here.
+            payable_amount.into(),
+        )?)?;
+
+        collateral_increment_amount
+    } else {
+        collateral_increment_amount
+    };
 
     // Increase position.
     let (long_amount, short_amount, paid_order_fee_value) = {

@@ -4438,6 +4438,12 @@ pub enum CoreError {
     /// order instead of charging a partial fee.
     #[msg("builder fee exceeds the collateral increment")]
     BuilderFeeExceedsCollateral,
+    /// A non-zero builder fee is being charged on an increase order that
+    /// has no final output token. Initializing it is optional for
+    /// increase orders, and the builder fee is charged in it, so an order
+    /// that never opted in cannot pay one.
+    #[msg("builder fee requires the final output token to equal the collateral token")]
+    BuilderFeeFinalOutputTokenMismatch,
     // NOTE: New variants must be appended here to keep existing error codes stable.
 }
 
