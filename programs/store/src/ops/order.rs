@@ -1740,6 +1740,60 @@ fn execute_increase_position(
     Ok(paid_order_fee_value)
 }
 
+/// Folds an estimate of the builder fee, denominated in the collateral
+/// token, into a decrease order's collateral withdrawal amount, so it can
+/// still be paid even when the position is closed at a loss. Returns the
+/// withdrawal amount including the estimate.
+///
+/// This is only an estimate used to size how much extra collateral to
+/// pull out of the position; the amount actually charged is computed
+/// afterwards, in the final output token, once it's known how much of
+/// that token the withdrawal (and any subsequent swap) actually produced.
+///
+/// Also rejects [`DecreasePositionSwapType::CollateralToPnlToken`]
+/// whenever a builder fee factor is set. This is different from ordinary
+/// underpayment: `NoSwap` can *sometimes* leave less in the final output
+/// token bucket than the fee needs (when the pnl token differs from the
+/// final output token), which is tolerated the same way any other
+/// decrease-side shortfall is. `CollateralToPnlToken`, however,
+/// deterministically moves the *entire* collateral-token output into the
+/// pnl token before the receive-token swap even runs (see
+/// `DecreasePosition::swap_collateral_token_to_pnl_token`), so the final
+/// output token bucket would be zero on every single order that chooses
+/// it. That's not variance, it's a guaranteed way to pay no fee at all,
+/// so it isn't allowed.
+///
+/// The rejection is keyed off the factor rather than off the estimate
+/// computed here. The estimate can round down to zero for a small
+/// requested size delta, while the fee actually charged is computed on
+/// the *executed* size delta, which a decrease may enlarge into a full
+/// close. Gating on a non-zero estimate would therefore admit exactly
+/// the orders that go on to incur a fee they can then bypass.
+fn estimate_builder_fee_for_collateral_withdrawal(
+    collateral_withdrawal_amount: u128,
+    size_delta_usd: u128,
+    builder_fee_factor: u128,
+    collateral_price: &Price<u128>,
+    decrease_position_swap_type: DecreasePositionSwapType,
+) -> Result<u128> {
+    if builder_fee_factor == 0 {
+        return Ok(collateral_withdrawal_amount);
+    }
+
+    require_neq!(
+        decrease_position_swap_type,
+        DecreasePositionSwapType::CollateralToPnlToken,
+        CoreError::BuilderFeeSwapTypeNotAllowed
+    );
+
+    let fee_estimate =
+        compute_builder_fee_amount(size_delta_usd, builder_fee_factor, collateral_price)?;
+
+    collateral_withdrawal_amount
+        .checked_add(fee_estimate)
+        .ok_or_else(|| error!(CoreError::TokenAmountOverflow))
+}
+
 #[allow(clippy::too_many_arguments)]
 #[inline(never)]
 fn execute_decrease_position(
@@ -2302,5 +2356,114 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(err, error!(CoreError::BuilderFeeExceedsCollateral));
+    }
+
+    #[test]
+    fn zero_builder_fee_factor_leaves_withdrawal_amount_unchanged() {
+        let withdrawal_amount = estimate_builder_fee_for_collateral_withdrawal(
+            1_000,
+            100_000 * constants::MARKET_USD_UNIT,
+            0,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+            DecreasePositionSwapType::NoSwap,
+        )
+        .unwrap();
+        assert_eq!(withdrawal_amount, 1_000);
+    }
+
+    #[test]
+    fn tops_up_withdrawal_amount_by_builder_fee_estimate() {
+        // $100,000 size, 5 bps factor => $50 fee value, at $2/unit => 25 units.
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let withdrawal_amount = estimate_builder_fee_for_collateral_withdrawal(
+            1_000,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+            DecreasePositionSwapType::PnlTokenToCollateralToken,
+        )
+        .unwrap();
+        // The withdrawal amount grows by the estimate; it is not subtracted.
+        assert_eq!(withdrawal_amount, 1_025);
+    }
+
+    #[test]
+    fn no_swap_is_allowed_with_a_non_zero_builder_fee() {
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let result = estimate_builder_fee_for_collateral_withdrawal(
+            1_000,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+            DecreasePositionSwapType::NoSwap,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn collateral_to_pnl_token_is_rejected_with_a_non_zero_builder_fee() {
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let result = estimate_builder_fee_for_collateral_withdrawal(
+            1_000,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+            DecreasePositionSwapType::CollateralToPnlToken,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn collateral_to_pnl_token_is_rejected_when_the_fee_estimate_rounds_to_zero() {
+        // A dust size delta, whose fee value truncates to zero, while the
+        // factor is still set: the executed size delta may be enlarged
+        // into a full close and incur a real fee, so the swap type must
+        // already have been rejected by then.
+        let size_delta_usd = 1_000;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let result = estimate_builder_fee_for_collateral_withdrawal(
+            1_000,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+            DecreasePositionSwapType::CollateralToPnlToken,
+        );
+        assert_eq!(
+            result.unwrap_err(),
+            error!(CoreError::BuilderFeeSwapTypeNotAllowed)
+        );
+    }
+
+    #[test]
+    fn collateral_to_pnl_token_is_allowed_when_builder_fee_is_zero() {
+        let result = estimate_builder_fee_for_collateral_withdrawal(
+            1_000,
+            100_000 * constants::MARKET_USD_UNIT,
+            0,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+            DecreasePositionSwapType::CollateralToPnlToken,
+        );
+        assert!(result.is_ok());
     }
 }

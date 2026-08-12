@@ -4444,6 +4444,14 @@ pub enum CoreError {
     /// that never opted in cannot pay one.
     #[msg("builder fee requires the final output token to equal the collateral token")]
     BuilderFeeFinalOutputTokenMismatch,
+    /// A decrease order with a non-zero builder fee used
+    /// `DecreasePositionSwapType::CollateralToPnlToken`. That swap type
+    /// deterministically moves the entire collateral-token output into the
+    /// pnl token before the receive-token swap runs, leaving the final
+    /// output token bucket at zero every time, which would make the
+    /// builder fee trivially and reliably bypassable.
+    #[msg("this decrease position swap type is not allowed together with a builder fee")]
+    BuilderFeeSwapTypeNotAllowed,
     // NOTE: New variants must be appended here to keep existing error codes stable.
 }
 
