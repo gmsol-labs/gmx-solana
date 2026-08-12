@@ -1125,6 +1125,9 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut *self.order.load_mut()?,
                         true,
                         Some(SecondaryOrderType::Liquidation),
+                        // TODO(builder-fee): read the snapshot factor from
+                        // the order once it is captured at order creation.
+                        0,
                     )?,
                     OrderKind::AutoDeleveraging => execute_decrease_position(
                         self.oracle,
@@ -1136,6 +1139,9 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut *self.order.load_mut()?,
                         true,
                         Some(SecondaryOrderType::AutoDeleveraging),
+                        // TODO(builder-fee): read the snapshot factor from
+                        // the order once it is captured at order creation.
+                        0,
                     )?,
                     OrderKind::MarketDecrease
                     | OrderKind::LimitDecrease
@@ -1149,6 +1155,9 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut *self.order.load_mut()?,
                         false,
                         None,
+                        // TODO(builder-fee): read the snapshot factor from
+                        // the order once it is captured at order creation.
+                        0,
                     )?,
                     _ => unreachable!(),
                 };
@@ -1806,14 +1815,26 @@ fn execute_decrease_position(
     order: &mut Order,
     is_insolvent_close_allowed: bool,
     secondary_order_type: Option<SecondaryOrderType>,
+    builder_fee_factor: u128,
 ) -> Result<(RemovePosition, u128)> {
     // Decrease position.
     let report = {
         let params = &order.params;
         let decrease_position_swap_type = params.decrease_position_swap_type()?;
-        let collateral_withdrawal_amount = params.initial_collateral_delta_amount as u128;
         let size_delta_usd = params.size_delta_value;
         let acceptable_price = params.acceptable_price;
+        // Fold an estimate of the builder fee into the collateral
+        // withdrawal amount so it's still funded even if the position is
+        // closed at a loss. This is only an estimate for sizing the
+        // withdrawal; the amount actually charged is computed later, in
+        // the final output token, once the receive-token swap has run.
+        let collateral_withdrawal_amount = estimate_builder_fee_for_collateral_withdrawal(
+            u128::from(params.initial_collateral_delta_amount),
+            size_delta_usd,
+            builder_fee_factor,
+            position.collateral_price(&prices),
+            decrease_position_swap_type,
+        )?;
         let is_liquidation_order =
             matches!(secondary_order_type, Some(SecondaryOrderType::Liquidation));
         let is_adl_order = matches!(
@@ -1938,6 +1959,53 @@ fn execute_decrease_position(
             token_ins,
             (output_amount, secondary_output_amount),
         )?;
+
+        // Builder fee is charged in the final output token, after the
+        // receive-token swap above. Deducting it here, before validating
+        // and transferring out the amounts below, means the order's own
+        // slippage validation and `transfer_out` both naturally see the
+        // post-fee amount: the fee is simply netted out of what would
+        // otherwise be transferred out, so no separate accounting or
+        // balance-validation adjustment is needed. Underpayment is
+        // tolerated (charges whatever is available): unlike increase, this
+        // can't fall back to cancelling the order, since a decrease order
+        // may be closing an insolvent position.
+        let output_amount = if builder_fee_factor != 0 {
+            let final_output_token_price = oracle.get_primary_price(&final_output_token, false)?;
+            // The executed size delta, not the requested one: a decrease may
+            // be enlarged into a full close, and in that case the whole
+            // collateral is withdrawn, so the fee computed from the executed
+            // size is still the maximum the withdrawal can support. The
+            // slightly smaller estimate used to size the withdrawal above is
+            // therefore not a constraint here.
+            let payable_amount = compute_builder_fee_amount(
+                *report.size_delta_usd(),
+                builder_fee_factor,
+                &final_output_token_price,
+            )?;
+            let paid_amount = clamp_builder_fee_amount(payable_amount, output_amount.into());
+            // `paid_amount` is clamped to `output_amount`, so both the
+            // conversion and the subtraction below cannot fail.
+            let output_amount = u64::try_from(paid_amount)
+                .ok()
+                .and_then(|paid| output_amount.checked_sub(paid))
+                .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+
+            // TODO(builder-fee): accumulate `paid_amount` into
+            // `order.builder_fee_amount` once that field exists.
+            position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
+                order.header().store(),
+                &position.market().market_meta().market_token_mint,
+                &final_output_token,
+                payable_amount,
+                paid_amount,
+            )?)?;
+
+            output_amount
+        } else {
+            output_amount
+        };
+
         order.validate_decrease_output_amounts(
             oracle,
             &final_output_token,
