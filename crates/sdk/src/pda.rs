@@ -74,6 +74,11 @@ pub const USER_SEED: &[u8] = b"user";
 /// Seed for [`ReferralCodeV2`](store_accounts::ReferralCodeV2).
 pub const REFERRAL_CODE_SEED: &[u8] = b"referral_code";
 
+/// Seed for the (per-user, per-token) user token controller PDA.
+///
+/// This PDA has no backing account yet; only its derivation is fixed.
+pub const USER_TOKEN_CONTROLLER_SEED: &[u8] = b"user_token_controller";
+
 /// Seed for GLV token mint.
 pub const GLV_TOKEN_SEED: &[u8] = b"glv_token";
 
@@ -342,6 +347,31 @@ pub fn find_referral_code_address(
 ) -> (Pubkey, u8) {
     Pubkey::find_program_address(
         &[REFERRAL_CODE_SEED, store.as_ref(), &code],
+        store_program_id,
+    )
+}
+
+/// Find PDA for the (per-user, per-token) user token controller.
+///
+/// `user_account` is the [`User`](store_accounts::UserHeader) account's
+/// own PDA (see [`find_user_address`]), not the user's wallet address; it
+/// is already store-scoped, so no separate store seed is needed here. This
+/// mirrors the derivation keys of the claim ATA the controller will guard
+/// (`(user_account, token_mint)`), and matches the identity convention
+/// where a builder is identified by its User Account.
+///
+/// This PDA has no backing account yet; only its derivation is fixed.
+pub fn find_user_token_controller_address(
+    user_account: &Pubkey,
+    token_mint: &Pubkey,
+    store_program_id: &Pubkey,
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[
+            USER_TOKEN_CONTROLLER_SEED,
+            user_account.as_ref(),
+            token_mint.as_ref(),
+        ],
         store_program_id,
     )
 }

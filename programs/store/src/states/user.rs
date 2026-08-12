@@ -163,6 +163,17 @@ impl Seed for UserHeader {
     const SEED: &'static [u8] = b"user";
 }
 
+/// The seed of the (per-user, per-token) user token controller PDA.
+///
+/// This PDA has no backing account and no init instruction yet; today its
+/// only purpose is to fix the derivation scheme, `[SEED, user_account,
+/// token_mint]`, so future claim/set-builder-fee instructions can reserve
+/// the account slot ahead of the controller having any data or behavior.
+/// A future "controller account exists" check degenerates to "the passed
+/// account matches this PDA derivation".
+#[constant]
+pub const USER_TOKEN_CONTROLLER_SEED: &[u8] = b"user_token_controller";
+
 /// Referral Code Bytes.
 pub type ReferralCodeBytes = [u8; 8];
 
