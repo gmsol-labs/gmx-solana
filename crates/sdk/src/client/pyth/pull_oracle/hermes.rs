@@ -30,10 +30,21 @@ pub const PRICE_LATEST: &str = "/v2/updates/price/latest";
 pub const PRICE_HISTORICAL: &str = "/v2/updates/price/";
 
 /// Hermes Client.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Hermes {
     base: Url,
+    api_key: Option<String>,
     client: Client,
+}
+
+impl fmt::Debug for Hermes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Hermes")
+            .field("base", &self.base)
+            .field("api_key", &self.api_key.as_ref().map(|_| "[redacted]"))
+            .field("client", &"Client")
+            .finish()
+    }
 }
 
 impl Hermes {
@@ -41,6 +52,19 @@ impl Hermes {
     pub fn try_new(base: impl IntoUrl) -> crate::Result<Self> {
         Ok(Self {
             base: base.into_url()?,
+            api_key: None,
+            client: Client::new(),
+        })
+    }
+
+    /// Create a new hermes client with the given base URL and API key.
+    pub fn try_new_with_api_key(
+        base: impl IntoUrl,
+        api_key: impl Into<String>,
+    ) -> crate::Result<Self> {
+        Ok(Self {
+            base: base.into_url()?,
+            api_key: Some(api_key.into()),
             client: Client::new(),
         })
     }
@@ -182,6 +206,7 @@ impl Default for Hermes {
     fn default() -> Self {
         Self {
             base: DEFAULT_HERMES_BASE.parse().unwrap(),
+            api_key: None,
             client: Default::default(),
         }
     }
