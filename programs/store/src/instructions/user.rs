@@ -2,9 +2,10 @@ use anchor_lang::prelude::*;
 use gmsol_utils::InitSpace;
 
 use crate::{
+    events::{BuilderFeeFactorSet, EventEmitter},
     states::{
         user::{ReferralCodeBytes, ReferralCodeV2, UserHeader},
-        Seed, Store,
+        FactorKey, Seed, Store,
     },
     CoreError,
 };
@@ -305,6 +306,72 @@ pub(crate) fn cancel_referral_code_transfer(
         code.code,
         code.next_owner(),
     );
+
+    Ok(())
+}
+
+/// The accounts definitions for
+/// [`set_builder_fee_factor`](crate::gmsol_store::set_builder_fee_factor) instruction.
+#[event_cpi]
+#[derive(Accounts)]
+pub struct SetBuilderFeeFactor<'info> {
+    /// Owner.
+    pub owner: Signer<'info>,
+    /// Store.
+    pub store: AccountLoader<'info, Store>,
+    /// User Account.
+    ///
+    /// The seeds bind this account to the signing `owner`, so setting the
+    /// factor on someone else's User Account is unconstructible rather than
+    /// merely rejected. This is what makes the instruction permissionless
+    /// without granting anyone reach beyond their own account.
+    #[account(
+        mut,
+        has_one = owner,
+        has_one = store,
+        constraint = user.load()?.is_initialized() @ CoreError::InvalidUserAccount,
+        seeds = [UserHeader::SEED, store.key().as_ref(), owner.key().as_ref()],
+        bump = user.load()?.bump,
+    )]
+    pub user: AccountLoader<'info, UserHeader>,
+}
+
+pub(crate) fn set_builder_fee_factor(
+    ctx: Context<SetBuilderFeeFactor>,
+    factor: u128,
+) -> Result<()> {
+    // Note that this instruction is deliberately not gated by the
+    // `BuilderFee` domain flag: it only records an advertised rate, and no
+    // instruction charges a fee off it today. A fee can only be charged after
+    // a future `set_builder_fee` checkpoints the factor onto an order, so
+    // gating belongs there rather than here.
+    //
+    // A missing cap is treated as `0` (deny by default), so on a store that
+    // predates the factor key only opting out remains possible. The key is
+    // always wired today, which makes this branch unreachable rather than
+    // merely unlikely.
+    let max_factor = ctx
+        .accounts
+        .store
+        .load()?
+        .get_factor_by_key(FactorKey::MaxBuilderFeeFactor)
+        .copied()
+        .unwrap_or(0);
+    require_gte!(
+        max_factor,
+        factor,
+        CoreError::BuilderFeeFactorExceedsMaxFactor
+    );
+
+    let previous_factor = ctx.accounts.user.load_mut()?.set_builder_fee_factor(factor);
+
+    let event_emitter = EventEmitter::new(&ctx.accounts.event_authority, ctx.bumps.event_authority);
+    event_emitter.emit_cpi(&BuilderFeeFactorSet::new(
+        ctx.accounts.user.key(),
+        ctx.accounts.owner.key(),
+        previous_factor,
+        factor,
+    ))?;
 
     Ok(())
 }

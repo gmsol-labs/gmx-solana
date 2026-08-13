@@ -196,6 +196,7 @@
 //! - [`transfer_referral_code`](gmsol_store::transfer_referral_code): Transfer the referral code to others.
 //! - [`cancel_referral_code_transfer`](gmsol_store::cancel_referral_code_transfer): Cancel the referral code transfer.
 //! - [`accept_referral_code`](gmsol_store::accept_referral_code): Complete the referral code transfer.
+//! - [`set_builder_fee_factor`](gmsol_store::set_builder_fee_factor): Set the builder fee factor advertised by the user.
 //!
 //! ## GT Model
 //!
@@ -3105,6 +3106,35 @@ pub mod gmsol_store {
         instructions::set_referrer(ctx, code)
     }
 
+    /// Set the builder fee factor advertised by the user.
+    ///
+    /// This instruction is permissionless: any User Account owner can set the
+    /// factor on their own account, and the account seeds make it impossible
+    /// to target another user's account. The factor is only an advertisement:
+    /// nothing is charged here, and no instruction reads it yet. A future
+    /// `set_builder_fee` will checkpoint it onto an order and validate it
+    /// against the cap a second time, and only a factor checkpointed that way
+    /// is ever paid.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](SetBuilderFeeFactor)*
+    ///
+    /// # Arguments
+    /// - `factor`: The builder fee factor to advertise. `0` opts out.
+    ///
+    /// # Errors
+    /// - The [`owner`](SetBuilderFeeFactor::owner) must be a signer.
+    /// - The [`store`](SetBuilderFeeFactor::store) must be properly initialized.
+    /// - The [`user`](SetBuilderFeeFactor::user) must be:
+    ///   - Properly initialized
+    ///   - Correspond to the `owner`
+    /// - The `factor` must not exceed the store's
+    ///   [`MaxBuilderFeeFactor`](crate::states::FactorKey::MaxBuilderFeeFactor),
+    ///   which reads `0` until a config keeper raises it.
+    pub fn set_builder_fee_factor(ctx: Context<SetBuilderFeeFactor>, factor: u128) -> Result<()> {
+        instructions::set_builder_fee_factor(ctx, factor)
+    }
+
     /// Transfer referral code.
     ///
     /// # Accounts
@@ -4371,6 +4401,12 @@ pub enum CoreError {
     /// Market status flags are not yet supported for this price provider.
     #[msg("market status flags are not yet supported for this price provider")]
     ProviderDoesNotSupportMarketStatus,
+    // ===========================================
+    //              Builder Fee Errors
+    // ===========================================
+    /// Builder fee factor exceeds the max builder fee factor.
+    #[msg("builder fee factor exceeds the max builder fee factor")]
+    BuilderFeeFactorExceedsMaxFactor,
     // NOTE: New variants must be appended here to keep existing error codes stable.
 }
 

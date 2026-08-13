@@ -157,6 +157,14 @@ impl UserHeader {
     pub fn builder_fee_factor(&self) -> u128 {
         self.builder_fee_factor
     }
+
+    /// Set this user's builder fee factor, as a builder, returning the previous one.
+    ///
+    /// The caller is responsible for validating the factor against the
+    /// store-level cap: this only records the advertised rate.
+    pub(crate) fn set_builder_fee_factor(&mut self, factor: u128) -> u128 {
+        std::mem::replace(&mut self.builder_fee_factor, factor)
+    }
 }
 
 impl Seed for UserHeader {

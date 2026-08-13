@@ -19050,6 +19050,138 @@
       ]
     },
     {
+      "name": "set_builder_fee_factor",
+      "docs": [
+        "Set the builder fee factor advertised by the user.",
+        "",
+        "This instruction is permissionless: any User Account owner can set the",
+        "factor on their own account, and the account seeds make it impossible",
+        "to target another user's account. The factor is only an advertisement:",
+        "nothing is charged here, and no instruction reads it yet. A future",
+        "`set_builder_fee` will checkpoint it onto an order and validate it",
+        "against the cap a second time, and only a factor checkpointed that way",
+        "is ever paid.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](SetBuilderFeeFactor)*",
+        "",
+        "# Arguments",
+        "- `factor`: The builder fee factor to advertise. `0` opts out.",
+        "",
+        "# Errors",
+        "- The [`owner`](SetBuilderFeeFactor::owner) must be a signer.",
+        "- The [`store`](SetBuilderFeeFactor::store) must be properly initialized.",
+        "- The [`user`](SetBuilderFeeFactor::user) must be:",
+        "- Properly initialized",
+        "- Correspond to the `owner`",
+        "- The `factor` must not exceed the store's",
+        "[`MaxBuilderFeeFactor`](crate::states::FactorKey::MaxBuilderFeeFactor),",
+        "which reads `0` until a config keeper raises it."
+      ],
+      "discriminator": [
+        12,
+        9,
+        172,
+        156,
+        43,
+        229,
+        239,
+        121
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "Owner."
+          ],
+          "signer": true,
+          "relations": [
+            "user"
+          ]
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "user"
+          ]
+        },
+        {
+          "name": "user",
+          "docs": [
+            "User Account.",
+            "",
+            "The seeds bind this account to the signing `owner`, so setting the",
+            "factor on someone else's User Account is unconstructible rather than",
+            "merely rejected. This is what makes the instruction permissionless",
+            "without granting anyone reach beyond their own account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "factor",
+          "type": "u128"
+        }
+      ]
+    },
+    {
       "name": "set_expected_provider",
       "docs": [
         "Set the expected provider for the given token.",
@@ -22231,6 +22363,19 @@
       ]
     },
     {
+      "name": "BuilderFeeFactorSet",
+      "discriminator": [
+        4,
+        62,
+        202,
+        111,
+        226,
+        46,
+        131,
+        203
+      ]
+    },
+    {
       "name": "DepositCreated",
       "discriminator": [
         146,
@@ -23188,6 +23333,11 @@
       "code": 6128,
       "name": "ProviderDoesNotSupportMarketStatus",
       "msg": "market status flags are not yet supported for this price provider"
+    },
+    {
+      "code": 6129,
+      "name": "BuilderFeeFactorExceedsMaxFactor",
+      "msg": "builder fee factor exceeds the max builder fee factor"
     }
   ],
   "types": [
@@ -23557,6 +23707,54 @@
                   }
                 ]
               }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuilderFeeFactorSet",
+      "docs": [
+        "Builder fee factor set event."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "docs": [
+              "The User Account whose builder fee factor was set."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "The owner of the User Account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "previous_factor",
+            "docs": [
+              "The builder fee factor before this update."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "factor",
+            "docs": [
+              "The builder fee factor after this update."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
             }
           }
         ]

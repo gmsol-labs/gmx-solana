@@ -52,6 +52,16 @@ pub trait UserOps<C> {
         code: ReferralCodeBytes,
         hint_owner: Option<Pubkey>,
     ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
+
+    /// Set the builder fee factor advertised by the payer's user account.
+    ///
+    /// The factor must not exceed the store's `MaxBuilderFeeFactor`, which
+    /// reads `0` until a config keeper raises it. Passing `0` opts out.
+    fn set_builder_fee_factor(
+        &self,
+        store: &Pubkey,
+        factor: u128,
+    ) -> crate::Result<TransactionBuilder<C>>;
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> UserOps<C> for crate::Client<C> {
@@ -232,6 +242,26 @@ impl<C: Deref<Target = impl Signer> + Clone> UserOps<C> for crate::Client<C> {
                 receiver_user,
             })
             .anchor_args(args::AcceptReferralCode {});
+        Ok(rpc)
+    }
+
+    fn set_builder_fee_factor(
+        &self,
+        store: &Pubkey,
+        factor: u128,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let owner = self.payer();
+        let user = self.find_user_address(store, &owner);
+        let rpc = self
+            .store_transaction()
+            .anchor_accounts(accounts::SetBuilderFeeFactor {
+                owner,
+                store: *store,
+                user,
+                event_authority: self.store_event_authority(),
+                program: *self.store_program_id(),
+            })
+            .anchor_args(args::SetBuilderFeeFactor { factor });
         Ok(rpc)
     }
 }
