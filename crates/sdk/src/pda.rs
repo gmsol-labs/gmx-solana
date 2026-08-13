@@ -17,7 +17,8 @@ use gmsol_programs::gmsol_timelock::accounts as timelock_accounts;
 use gmsol_programs::gmsol_liquidity_provider::accounts as liquidity_provider_accounts;
 
 pub use gmsol_programs::gmsol_store::constants::{
-    VIRTUAL_INVENTORY_FOR_POSITIONS_SEED, VIRTUAL_INVENTORY_FOR_SWAPS_SEED,
+    USER_TOKEN_CONTROLLER_SEED, VIRTUAL_INVENTORY_FOR_POSITIONS_SEED,
+    VIRTUAL_INVENTORY_FOR_SWAPS_SEED,
 };
 
 /// Nonce bytes.
@@ -73,11 +74,6 @@ pub const USER_SEED: &[u8] = b"user";
 
 /// Seed for [`ReferralCodeV2`](store_accounts::ReferralCodeV2).
 pub const REFERRAL_CODE_SEED: &[u8] = b"referral_code";
-
-/// Seed for the (per-user, per-token) user token controller PDA.
-///
-/// This PDA has no backing account yet; only its derivation is fixed.
-pub const USER_TOKEN_CONTROLLER_SEED: &[u8] = b"user_token_controller";
 
 /// Seed for GLV token mint.
 pub const GLV_TOKEN_SEED: &[u8] = b"glv_token";
