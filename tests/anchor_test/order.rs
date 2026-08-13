@@ -906,9 +906,10 @@ async fn increase_order_with_escrow_initializes_final_output_token() -> eyre::Re
 /// revert, leaving no order account behind. The SDK always passes the collateral token for increase
 /// orders, so the mismatch is produced by rewriting that one account on the built instruction.
 ///
-/// The order is deliberately built **without** the escrow: when the escrow is provided, Anchor's
-/// own `associated_token::mint = final_output_token` constraint rejects a rewritten mint before the
-/// creation-time validation is reached, so this path is the only one that exercises it.
+/// The order is deliberately built **without** the escrow, which is also the case only the
+/// instruction-layer check can catch: with no escrow the operation never learns which mint was
+/// requested. When the escrow is provided, Anchor's own `associated_token::mint =
+/// final_output_token` constraint rejects a rewritten mint before either validation is reached.
 #[tokio::test]
 async fn increase_order_with_mismatched_final_output_token_should_fail() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
