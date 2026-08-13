@@ -361,33 +361,27 @@ impl UserGtState {
 }
 
 #[cfg(test)]
-mod builder_fee_layout_tests {
+mod tests {
     use super::*;
 
-    // Captured from the layout before `builder_fee_factor` was carved out
-    // of `reserved`. These must never change.
-    const OLD_SIZE: usize = 512;
+    // The `UserHeader` account's byte layout. These must never change.
+    const EXPECTED_USER_HEADER_ACCOUNT_SIZE: usize = 512;
     const GT_OFFSET: usize = 224;
-    const OLD_RESERVED_OFFSET: usize = 384;
+    const BUILDER_FEE_FACTOR_OFFSET: usize = 384;
 
     #[test]
-    fn existing_fields_keep_their_offsets_and_size_is_unchanged() {
-        assert_eq!(std::mem::size_of::<UserHeader>(), OLD_SIZE);
-        assert_eq!(std::mem::offset_of!(UserHeader, gt), GT_OFFSET);
-    }
-
-    #[test]
-    fn builder_fee_factor_is_carved_from_the_old_reserved_region_with_correct_alignment() {
-        let offset = std::mem::offset_of!(UserHeader, builder_fee_factor);
-        assert_eq!(offset, OLD_RESERVED_OFFSET);
-        // u128 requires 16-byte alignment.
-        assert_eq!(offset % 16, 0);
-        // No new fields introduced beyond what the old reserved region
-        // covered.
-        assert!(
-            std::mem::offset_of!(UserHeader, reserved) + std::mem::size_of::<[u8; 112]>()
-                <= OLD_SIZE
+    fn user_header_account_layout() {
+        assert_eq!(
+            std::mem::size_of::<UserHeader>(),
+            EXPECTED_USER_HEADER_ACCOUNT_SIZE
         );
+        assert_eq!(std::mem::offset_of!(UserHeader, gt), GT_OFFSET);
+        assert_eq!(
+            std::mem::offset_of!(UserHeader, builder_fee_factor),
+            BUILDER_FEE_FACTOR_OFFSET
+        );
+        // u128 requires 16-byte alignment.
+        assert_eq!(BUILDER_FEE_FACTOR_OFFSET % 16, 0);
     }
 
     #[test]

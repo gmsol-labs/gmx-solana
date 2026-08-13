@@ -659,55 +659,6 @@ impl Factors {
     }
 }
 
-#[cfg(test)]
-mod factors_layout_tests {
-    use super::*;
-
-    // Captured from the layout before `max_builder_fee_factor` was carved
-    // out of `reserved`. These must never change.
-    const OLD_SIZE: usize = 1056;
-    const ORACLE_REF_PRICE_DEVIATION_OFFSET: usize = 0;
-    const ORDER_FEE_DISCOUNT_FOR_REFERRED_USER_OFFSET: usize = 16;
-
-    #[test]
-    fn existing_fields_keep_their_offsets_and_size_is_unchanged() {
-        assert_eq!(std::mem::size_of::<Factors>(), OLD_SIZE);
-        assert_eq!(
-            std::mem::offset_of!(Factors, oracle_ref_price_deviation),
-            ORACLE_REF_PRICE_DEVIATION_OFFSET
-        );
-        assert_eq!(
-            std::mem::offset_of!(Factors, order_fee_discount_for_referred_user),
-            ORDER_FEE_DISCOUNT_FOR_REFERRED_USER_OFFSET
-        );
-    }
-
-    #[test]
-    fn max_builder_fee_factor_is_carved_from_the_old_reserved_region() {
-        // The old `reserved: [Factor; 64]` started right after
-        // `order_fee_discount_for_referred_user`, at offset 32.
-        let old_reserved_offset = ORDER_FEE_DISCOUNT_FOR_REFERRED_USER_OFFSET + 16;
-        assert_eq!(
-            std::mem::offset_of!(Factors, max_builder_fee_factor),
-            old_reserved_offset
-        );
-        // No new fields introduced beyond what the old reserved region
-        // covered.
-        assert!(
-            std::mem::offset_of!(Factors, reserved) + std::mem::size_of::<[Factor; 63]>()
-                <= OLD_SIZE
-        );
-    }
-
-    #[test]
-    fn existing_zeroed_stores_read_max_builder_fee_factor_as_zero() {
-        // Every existing on-chain `Store` account has zero bytes
-        // throughout what used to be `Factors::reserved`.
-        let factors: Factors = bytemuck::Zeroable::zeroed();
-        assert_eq!(factors.get(&FactorKey::MaxBuilderFeeFactor), Some(&0u128));
-    }
-}
-
 /// Addresses.
 #[zero_copy]
 #[cfg_attr(feature = "debug", derive(derive_more::Debug))]
@@ -738,5 +689,44 @@ impl Addresses {
             _ => return None,
         };
         Some(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The `Factors` account's byte layout. These must never change.
+    const EXPECTED_FACTORS_ACCOUNT_SIZE: usize = 1056;
+    const ORACLE_REF_PRICE_DEVIATION_OFFSET: usize = 0;
+    const ORDER_FEE_DISCOUNT_FOR_REFERRED_USER_OFFSET: usize = 16;
+    const MAX_BUILDER_FEE_FACTOR_OFFSET: usize = 32;
+
+    #[test]
+    fn factors_account_layout() {
+        assert_eq!(
+            std::mem::size_of::<Factors>(),
+            EXPECTED_FACTORS_ACCOUNT_SIZE
+        );
+        assert_eq!(
+            std::mem::offset_of!(Factors, oracle_ref_price_deviation),
+            ORACLE_REF_PRICE_DEVIATION_OFFSET
+        );
+        assert_eq!(
+            std::mem::offset_of!(Factors, order_fee_discount_for_referred_user),
+            ORDER_FEE_DISCOUNT_FOR_REFERRED_USER_OFFSET
+        );
+        assert_eq!(
+            std::mem::offset_of!(Factors, max_builder_fee_factor),
+            MAX_BUILDER_FEE_FACTOR_OFFSET
+        );
+    }
+
+    #[test]
+    fn existing_zeroed_stores_read_max_builder_fee_factor_as_zero() {
+        // Every existing on-chain `Store` account has zero bytes
+        // throughout what used to be `Factors::reserved`.
+        let factors: Factors = bytemuck::Zeroable::zeroed();
+        assert_eq!(factors.get(&FactorKey::MaxBuilderFeeFactor), Some(&0u128));
     }
 }
