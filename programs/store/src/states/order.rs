@@ -323,18 +323,16 @@ pub struct Order {
     /// Order params.
     pub(crate) params: OrderActionParams,
     pub(crate) gt_reward: u64,
-    #[cfg_attr(feature = "debug", debug(skip))]
-    padding_1: [u8; 8],
+    /// The builder fee amount charged so far, pending settlement.
+    pub(crate) builder_fee_amount: u64,
     /// The builder attached to this order, at order creation time. The
     /// default (zero) [`Pubkey`] means no builder is attached.
     pub(crate) builder: Pubkey,
     /// The builder's fee factor, snapshotted when the builder fee is set.
     pub(crate) builder_fee_factor: u128,
-    /// The builder fee amount charged so far, pending settlement.
-    pub(crate) builder_fee_amount: u64,
     #[cfg_attr(feature = "debug", debug(skip))]
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 72],
+    reserved: [u8; 80],
 }
 
 impl Seed for Order {
@@ -967,39 +965,31 @@ impl OrderActionParams {
 }
 
 #[cfg(test)]
-mod builder_fee_layout_tests {
+mod tests {
     use super::*;
 
-    // Captured from the layout before the builder fee fields were carved
-    // out of `reserved`. These must never change.
-    const OLD_SIZE: usize = 2464;
+    // The `Order` account's byte layout. These must never change.
+    const EXPECTED_ORDER_ACCOUNT_SIZE: usize = 2464;
     const GT_REWARD_OFFSET: usize = 2320;
-    const PADDING_1_OFFSET: usize = 2328;
-    const OLD_RESERVED_OFFSET: usize = 2336;
+    const BUILDER_FEE_AMOUNT_OFFSET: usize = 2328;
+    const BUILDER_OFFSET: usize = 2336;
+    const BUILDER_FEE_FACTOR_OFFSET: usize = 2368;
 
     #[test]
-    fn existing_fields_keep_their_offsets_and_size_is_unchanged() {
-        assert_eq!(std::mem::size_of::<Order>(), OLD_SIZE);
+    fn order_account_layout() {
+        assert_eq!(std::mem::size_of::<Order>(), EXPECTED_ORDER_ACCOUNT_SIZE);
         assert_eq!(std::mem::offset_of!(Order, gt_reward), GT_REWARD_OFFSET);
-        assert_eq!(std::mem::offset_of!(Order, padding_1), PADDING_1_OFFSET);
-    }
-
-    #[test]
-    fn builder_fee_fields_are_carved_from_the_old_reserved_region_with_correct_alignment() {
-        assert_eq!(std::mem::offset_of!(Order, builder), OLD_RESERVED_OFFSET);
-        let builder_fee_factor_offset = std::mem::offset_of!(Order, builder_fee_factor);
-        assert_eq!(builder_fee_factor_offset, OLD_RESERVED_OFFSET + 32);
-        // u128 requires 16-byte alignment.
-        assert_eq!(builder_fee_factor_offset % 16, 0);
         assert_eq!(
             std::mem::offset_of!(Order, builder_fee_amount),
-            OLD_RESERVED_OFFSET + 32 + 16
+            BUILDER_FEE_AMOUNT_OFFSET
         );
-        // No new fields introduced beyond what the old reserved region
-        // covered.
-        assert!(
-            std::mem::offset_of!(Order, reserved) + std::mem::size_of::<[u8; 72]>() <= OLD_SIZE
+        assert_eq!(std::mem::offset_of!(Order, builder), BUILDER_OFFSET);
+        assert_eq!(
+            std::mem::offset_of!(Order, builder_fee_factor),
+            BUILDER_FEE_FACTOR_OFFSET
         );
+        // u128 requires 16-byte alignment.
+        assert_eq!(BUILDER_FEE_FACTOR_OFFSET % 16, 0);
     }
 
     #[test]
