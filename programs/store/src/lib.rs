@@ -4407,6 +4407,10 @@ pub enum CoreError {
     /// Builder fee factor exceeds the max builder fee factor.
     #[msg("builder fee factor exceeds the max builder fee factor")]
     BuilderFeeFactorExceedsMaxFactor,
+    /// An order cannot be closed while it still has an unsettled builder
+    /// fee; settle it first via `settle_builder_fee`.
+    #[msg("order has an unsettled builder fee")]
+    UnsettledBuilderFee,
     // NOTE: New variants must be appended here to keep existing error codes stable.
 }
 
