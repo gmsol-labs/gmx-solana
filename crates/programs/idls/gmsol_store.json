@@ -22672,6 +22672,19 @@
       ]
     },
     {
+      "name": "BuilderFeeCharged",
+      "discriminator": [
+        128,
+        242,
+        205,
+        122,
+        163,
+        166,
+        209,
+        114
+      ]
+    },
+    {
       "name": "BuilderFeeFactorSet",
       "discriminator": [
         4,
@@ -23665,6 +23678,21 @@
       "code": 6130,
       "name": "UnsettledBuilderFee",
       "msg": "order has an unsettled builder fee"
+    },
+    {
+      "code": 6131,
+      "name": "BuilderFeeExceedsCollateral",
+      "msg": "builder fee exceeds the collateral increment"
+    },
+    {
+      "code": 6132,
+      "name": "BuilderFeeFinalOutputTokenMismatch",
+      "msg": "builder fee requires the final output token to equal the collateral token"
+    },
+    {
+      "code": 6133,
+      "name": "BuilderFeeSwapTypeNotAllowed",
+      "msg": "this decrease position swap type is not allowed together with a builder fee"
     }
   ],
   "types": [
@@ -24035,6 +24063,72 @@
                 ]
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuilderFeeCharged",
+      "docs": [
+        "An event indicating that a builder fee has been charged.",
+        "",
+        "Only emitted when the order's builder fee factor is non-zero. Emitted",
+        "even when `paid_amount` is `0` (e.g. fully clamped away by a",
+        "shortfall), so indexers can distinguish \"no builder attached\" from",
+        "\"builder attached but nothing was collectible\" by whether this event",
+        "is present at all."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ts",
+            "docs": [
+              "Timestamp."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "slot",
+            "docs": [
+              "Slot."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "store",
+            "docs": [
+              "Store."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "market_token",
+            "docs": [
+              "Market token."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "token",
+            "docs": [
+              "The token the builder fee is denominated and paid in."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "payable_amount",
+            "docs": [
+              "The computed builder fee amount, before shortfall clamping."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "paid_amount",
+            "docs": [
+              "The amount actually charged, after shortfall clamping."
+            ],
+            "type": "u128"
           }
         ]
       }
