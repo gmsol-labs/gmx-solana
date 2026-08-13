@@ -57,7 +57,11 @@ pub mod virtual_inventory;
 #[cfg(liquidity_provider)]
 pub mod liquidity_provider;
 
+/// Operations for builder fees.
+pub mod builder_fee;
+
 pub use alt::AddressLookupTableOps;
+pub use builder_fee::BuilderFeeOps;
 pub use config::ConfigOps;
 pub use exchange::ExchangeOps;
 pub use glv::GlvOps;
