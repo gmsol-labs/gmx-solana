@@ -69,6 +69,13 @@ impl Hermes {
         })
     }
 
+    fn authorize(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match &self.api_key {
+            Some(api_key) => request.header("Authorization", format!("Bearer {api_key}")),
+            None => request,
+        }
+    }
+
     /// Get a stream of price updates.
     pub async fn price_updates(
         &self,
@@ -77,9 +84,11 @@ impl Hermes {
     ) -> crate::Result<impl Stream<Item = crate::Result<PriceUpdate>> + 'static> {
         let params = get_query(feed_ids, encoding);
         let stream = self
-            .client
-            .get(self.base.join(PRICE_STREAM).map_err(crate::Error::custom)?)
-            .query(&params)
+            .authorize(
+                self.client
+                    .get(self.base.join(PRICE_STREAM).map_err(crate::Error::custom)?)
+                    .query(&params),
+            )
             .send()
             .await?
             .bytes_stream()
@@ -104,9 +113,11 @@ impl Hermes {
     ) -> crate::Result<PriceUpdate> {
         let params = get_query(feed_ids, encoding);
         let update = self
-            .client
-            .get(self.base.join(PRICE_LATEST).map_err(crate::Error::custom)?)
-            .query(&params)
+            .authorize(
+                self.client
+                    .get(self.base.join(PRICE_LATEST).map_err(crate::Error::custom)?)
+                    .query(&params),
+            )
             .send()
             .await?
             .json()
@@ -127,9 +138,11 @@ impl Hermes {
         let params = get_query(feed_ids, encoding);
         let path = format!("{PRICE_HISTORICAL}{publish_time}");
         let update = self
-            .client
-            .get(self.base.join(&path).map_err(crate::Error::custom)?)
-            .query(&params)
+            .authorize(
+                self.client
+                    .get(self.base.join(&path).map_err(crate::Error::custom)?)
+                    .query(&params),
+            )
             .send()
             .await?
             .json()
