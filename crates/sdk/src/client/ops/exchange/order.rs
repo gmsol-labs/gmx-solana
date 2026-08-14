@@ -121,6 +121,7 @@ pub struct CreateOrderBuilder<'a, C> {
     receiver: Pubkey,
     callback: Option<Callback>,
     alts: HashMap<Pubkey, Vec<Pubkey>>,
+    prepare_final_output_token_escrow: bool,
 }
 
 /// Create Order Hint.
@@ -160,6 +161,7 @@ where
             receiver: client.payer(),
             callback: None,
             alts: Default::default(),
+            prepare_final_output_token_escrow: false,
         }
     }
 
@@ -254,6 +256,19 @@ where
     /// Defaults to should unwrap.
     pub fn should_unwrap_native_token(&mut self, should_unwrap: bool) -> &mut Self {
         self.should_unwrap_native_token = should_unwrap;
+        self
+    }
+
+    /// Prepare and pass the final output token escrow for **increase** orders.
+    ///
+    /// Increase orders are not required to provide it, and by default this builder does not, which
+    /// leaves the order's final output token uninitialized. Opt in when the order may later be
+    /// given a builder fee: the fee is charged in the final output token and paid out of that
+    /// escrow, so `set_builder_fee` requires the escrow to be present on the order.
+    ///
+    /// Has no effect on swap and decrease orders, which always provide it.
+    pub fn prepare_final_output_token_escrow(&mut self, prepare: bool) -> &mut Self {
+        self.prepare_final_output_token_escrow = prepare;
         self
     }
 
@@ -492,13 +507,16 @@ where
             let ata = get_associated_token_address(&receiver, token);
             (escrow, ata)
         });
-        let final_output_token_accounts = if is_swap || is_decrease {
-            let escrow = get_associated_token_address(&order, &final_output_token);
-            let ata = get_associated_token_address(&receiver, &final_output_token);
-            Some((escrow, ata))
-        } else {
-            None
-        };
+        // Swap and decrease orders always need it; increase orders only when the caller opts in,
+        // which is what makes the order eligible for a builder fee later.
+        let final_output_token_accounts =
+            if is_swap || is_decrease || self.prepare_final_output_token_escrow {
+                let escrow = get_associated_token_address(&order, &final_output_token);
+                let ata = get_associated_token_address(&receiver, &final_output_token);
+                Some((escrow, ata))
+            } else {
+                None
+            };
         let position = self.position().await?;
         let user = self.client.find_user_address(&self.store, owner);
 
@@ -564,6 +582,12 @@ where
                     &token_program_id,
                     Some(&receiver),
                 );
+
+                // Opting into the final output token escrow requires no additional preparation
+                // instruction: for an increase order the final output token is the collateral
+                // token, i.e. the long or short token, so its escrow is one of the two prepared
+                // above. The opt-in only changes which accounts are passed, via
+                // `final_output_token_accounts`.
 
                 let prepare_position = self
                     .client

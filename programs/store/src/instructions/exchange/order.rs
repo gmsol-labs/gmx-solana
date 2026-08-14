@@ -259,7 +259,11 @@ pub struct CreateOrderV2<'info> {
     )]
     pub initial_collateral_token_escrow: Option<Box<Account<'info, TokenAccount>>>,
     /// Final output token escrow account.
-    /// Only required by decrease and swap orders.
+    ///
+    /// Required by decrease and swap orders. Optional for increase orders: when provided, it is
+    /// recorded on the order and becomes the account a builder fee would be paid out of, and when
+    /// omitted the order's final output token is left uninitialized, so no builder fee can be set
+    /// on it later.
     #[account(
         mut,
         associated_token::mint = final_output_token,
@@ -401,6 +405,22 @@ impl<'info> internal::Create<'info, Order> for CreateOrderV2<'info> {
                     .execute()?;
             }
             OrderKind::MarketIncrease | OrderKind::LimitIncrease => {
+                // The final output token is where a builder fee would be charged, so for an
+                // increase order it must be the position's collateral token. The check lives here
+                // rather than in the operation because the escrow is optional: without it the ops
+                // layer never sees the requested mint, while this account is always provided, so
+                // this is the only place that covers every increase-creation path.
+                let collateral_token = if params.is_collateral_long {
+                    self.market.load()?.meta().long_token_mint
+                } else {
+                    self.market.load()?.meta().short_token_mint
+                };
+                require_keys_eq!(
+                    self.final_output_token.key(),
+                    collateral_token,
+                    CoreError::TokenMintMismatched
+                );
+
                 let initial_collateral = self
                     .initial_collateral_token_escrow
                     .as_ref()
@@ -422,6 +442,7 @@ impl<'info> internal::Create<'info, Order> for CreateOrderV2<'info> {
                     .initial_collateral_token(initial_collateral.as_ref())
                     .long_token(long_token.as_ref())
                     .short_token(short_token.as_ref())
+                    .final_output_token(self.final_output_token_escrow.as_deref())
                     .build()
                     .execute()?;
             }
