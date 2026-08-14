@@ -389,16 +389,98 @@ fn get_query<'a>(
 mod tests {
     use super::*;
 
+    fn sample_feed_id() -> Identifier {
+        Identifier::from_hex("ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace")
+            .unwrap()
+    }
+
+    #[test]
+    fn debug_redacts_api_key() {
+        let hermes = Hermes::try_new_with_api_key(DEFAULT_HERMES_BASE, "super-secret-key").unwrap();
+        let debug = format!("{hermes:?}");
+        assert!(!debug.contains("super-secret-key"));
+        assert!(debug.contains("[redacted]"));
+    }
+
+    #[test]
+    fn latest_request_includes_bearer_token() {
+        let hermes =
+            Hermes::try_new_with_api_key("https://example.com/hermes", "test-token").unwrap();
+        let params = get_query([&sample_feed_id()], None);
+        let request = hermes
+            .authorize(
+                hermes
+                    .client
+                    .get(hermes.base.join(PRICE_LATEST).unwrap())
+                    .query(&params),
+            )
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            request
+                .headers()
+                .get(reqwest::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok()),
+            Some("Bearer test-token")
+        );
+        assert!(request.url().path().ends_with(PRICE_LATEST));
+        assert!(request.url().query().unwrap().contains("ids"));
+    }
+
+    #[test]
+    fn stream_request_includes_bearer_token() {
+        let hermes =
+            Hermes::try_new_with_api_key("https://example.com/hermes", "test-token").unwrap();
+        let params = get_query([&sample_feed_id()], None);
+        let request = hermes
+            .authorize(
+                hermes
+                    .client
+                    .get(hermes.base.join(PRICE_STREAM).unwrap())
+                    .query(&params),
+            )
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            request
+                .headers()
+                .get(reqwest::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok()),
+            Some("Bearer test-token")
+        );
+        assert!(request.url().path().ends_with(PRICE_STREAM));
+        assert!(request.url().query().unwrap().contains("ids"));
+    }
+
+    #[test]
+    fn request_omits_authorization_without_api_key() {
+        let hermes = Hermes::try_new("https://example.com/hermes").unwrap();
+        let params = get_query([&sample_feed_id()], None);
+        let request = hermes
+            .authorize(
+                hermes
+                    .client
+                    .get(hermes.base.join(PRICE_LATEST).unwrap())
+                    .query(&params),
+            )
+            .build()
+            .unwrap();
+
+        assert!(request
+            .headers()
+            .get(reqwest::header::AUTHORIZATION)
+            .is_none());
+    }
+
     #[cfg(feature = "nightly-pyth-historical-api")]
     #[tokio::test]
     async fn test_historical_price_updates() -> eyre::Result<()> {
         use std::time::{SystemTime, UNIX_EPOCH};
 
         // ETH/USD feed
-        let feed_id = Identifier::from_hex(
-            "ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
-        )
-        .unwrap();
+        let feed_id = sample_feed_id();
 
         let hermes = Hermes::default();
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
