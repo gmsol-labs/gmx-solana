@@ -25537,11 +25537,20 @@
             "type": "u128"
           },
           {
+            "name": "max_builder_fee_factor",
+            "docs": [
+              "Max builder fee factor. Reads as `0` on existing stores until a",
+              "CONFIG_KEEPER explicitly raises it via `insert_factor`, so no",
+              "non-zero builder fee factor can be configured by default."
+            ],
+            "type": "u128"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u128",
-                64
+                63
               ]
             }
           }
@@ -28627,11 +28636,33 @@
             }
           },
           {
+            "name": "builder",
+            "docs": [
+              "The builder attached to this order, at order creation time. The",
+              "default (zero) [`Pubkey`] means no builder is attached."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "builder_fee_factor",
+            "docs": [
+              "The builder's fee factor, snapshotted at order creation time."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "builder_fee_amount",
+            "docs": [
+              "The builder fee amount charged so far, pending settlement."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                128
+                72
               ]
             }
           }
@@ -32854,11 +32885,19 @@
             }
           },
           {
+            "name": "builder_fee_factor",
+            "docs": [
+              "This user's builder fee factor, as a builder. `0` means the user",
+              "has not advertised a rate."
+            ],
+            "type": "u128"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                128
+                112
               ]
             }
           }
@@ -33506,6 +33545,21 @@
       ],
       "type": "bytes",
       "value": "[109, 97, 114, 107, 101, 116, 95, 118, 97, 117, 108, 116]"
+    },
+    {
+      "name": "USER_TOKEN_CONTROLLER_SEED",
+      "docs": [
+        "The seed of the (per-user, per-token) user token controller PDA.",
+        "",
+        "This PDA has no backing account and no init instruction yet; today its",
+        "only purpose is to fix the derivation scheme, `[SEED, user_account,",
+        "token_mint]`, so future claim/set-builder-fee instructions can reserve",
+        "the account slot ahead of the controller having any data or behavior.",
+        "A future \"controller account exists\" check degenerates to \"the passed",
+        "account matches this PDA derivation\"."
+      ],
+      "type": "bytes",
+      "value": "[117, 115, 101, 114, 95, 116, 111, 107, 101, 110, 95, 99, 111, 110, 116, 114, 111, 108, 108, 101, 114]"
     },
     {
       "name": "VIRTUAL_INVENTORY_FOR_POSITIONS_SEED",

@@ -31,9 +31,12 @@ pub struct UserHeader {
     pub(crate) referral: Referral,
     /// GT State.
     pub(crate) gt: UserGtState,
+    /// This user's builder fee factor, as a builder. `0` means the user
+    /// has not advertised a rate.
+    pub(crate) builder_fee_factor: u128,
     #[cfg_attr(feature = "debug", debug(skip))]
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 128],
+    reserved: [u8; 112],
 }
 
 gmsol_utils::flags!(UserFlag, MAX_USER_FLAGS, u8);
@@ -149,11 +152,27 @@ impl UserHeader {
     pub fn gt(&self) -> &UserGtState {
         &self.gt
     }
+
+    /// Get this user's builder fee factor, as a builder.
+    pub fn builder_fee_factor(&self) -> u128 {
+        self.builder_fee_factor
+    }
 }
 
 impl Seed for UserHeader {
     const SEED: &'static [u8] = b"user";
 }
+
+/// The seed of the (per-user, per-token) user token controller PDA.
+///
+/// This PDA has no backing account and no init instruction yet; today its
+/// only purpose is to fix the derivation scheme, `[SEED, user_account,
+/// token_mint]`, so future claim/set-builder-fee instructions can reserve
+/// the account slot ahead of the controller having any data or behavior.
+/// A future "controller account exists" check degenerates to "the passed
+/// account matches this PDA derivation".
+#[constant]
+pub const USER_TOKEN_CONTROLLER_SEED: &[u8] = b"user_token_controller";
 
 /// Referral Code Bytes.
 pub type ReferralCodeBytes = [u8; 8];
@@ -338,5 +357,38 @@ impl UserGtState {
     /// Get GT balance.
     pub fn amount(&self) -> u64 {
         self.amount
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The `UserHeader` account's byte layout. These must never change.
+    const EXPECTED_USER_HEADER_ACCOUNT_SIZE: usize = 512;
+    const GT_OFFSET: usize = 224;
+    const BUILDER_FEE_FACTOR_OFFSET: usize = 384;
+
+    #[test]
+    fn user_header_account_layout() {
+        assert_eq!(
+            std::mem::size_of::<UserHeader>(),
+            EXPECTED_USER_HEADER_ACCOUNT_SIZE
+        );
+        assert_eq!(std::mem::offset_of!(UserHeader, gt), GT_OFFSET);
+        assert_eq!(
+            std::mem::offset_of!(UserHeader, builder_fee_factor),
+            BUILDER_FEE_FACTOR_OFFSET
+        );
+        // u128 requires 16-byte alignment.
+        assert_eq!(BUILDER_FEE_FACTOR_OFFSET % 16, 0);
+    }
+
+    #[test]
+    fn existing_zeroed_accounts_read_as_no_builder_fee_factor() {
+        // Every existing on-chain `UserHeader` account has zero bytes
+        // throughout what used to be its `reserved` region.
+        let user: UserHeader = bytemuck::Zeroable::zeroed();
+        assert_eq!(user.builder_fee_factor(), 0);
     }
 }

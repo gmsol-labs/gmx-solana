@@ -619,8 +619,12 @@ impl Amounts {
 pub struct Factors {
     pub(crate) oracle_ref_price_deviation: Factor,
     pub(crate) order_fee_discount_for_referred_user: Factor,
+    /// Max builder fee factor. Reads as `0` on existing stores until a
+    /// CONFIG_KEEPER explicitly raises it via `insert_factor`, so no
+    /// non-zero builder fee factor can be configured by default.
+    pub(crate) max_builder_fee_factor: Factor,
     #[cfg_attr(feature = "debug", debug(skip))]
-    reserved: [Factor; 64],
+    reserved: [Factor; 63],
 }
 
 impl Factors {
@@ -635,6 +639,7 @@ impl Factors {
             FactorKey::OrderFeeDiscountForReferredUser => {
                 &self.order_fee_discount_for_referred_user
             }
+            FactorKey::MaxBuilderFeeFactor => &self.max_builder_fee_factor,
             _ => return None,
         };
         Some(value)
@@ -647,6 +652,7 @@ impl Factors {
             FactorKey::OrderFeeDiscountForReferredUser => {
                 &mut self.order_fee_discount_for_referred_user
             }
+            FactorKey::MaxBuilderFeeFactor => &mut self.max_builder_fee_factor,
             _ => return None,
         };
         Some(value)
@@ -683,5 +689,44 @@ impl Addresses {
             _ => return None,
         };
         Some(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The `Factors` account's byte layout. These must never change.
+    const EXPECTED_FACTORS_ACCOUNT_SIZE: usize = 1056;
+    const ORACLE_REF_PRICE_DEVIATION_OFFSET: usize = 0;
+    const ORDER_FEE_DISCOUNT_FOR_REFERRED_USER_OFFSET: usize = 16;
+    const MAX_BUILDER_FEE_FACTOR_OFFSET: usize = 32;
+
+    #[test]
+    fn factors_account_layout() {
+        assert_eq!(
+            std::mem::size_of::<Factors>(),
+            EXPECTED_FACTORS_ACCOUNT_SIZE
+        );
+        assert_eq!(
+            std::mem::offset_of!(Factors, oracle_ref_price_deviation),
+            ORACLE_REF_PRICE_DEVIATION_OFFSET
+        );
+        assert_eq!(
+            std::mem::offset_of!(Factors, order_fee_discount_for_referred_user),
+            ORDER_FEE_DISCOUNT_FOR_REFERRED_USER_OFFSET
+        );
+        assert_eq!(
+            std::mem::offset_of!(Factors, max_builder_fee_factor),
+            MAX_BUILDER_FEE_FACTOR_OFFSET
+        );
+    }
+
+    #[test]
+    fn existing_zeroed_stores_read_max_builder_fee_factor_as_zero() {
+        // Every existing on-chain `Store` account has zero bytes
+        // throughout what used to be `Factors::reserved`.
+        let factors: Factors = bytemuck::Zeroable::zeroed();
+        assert_eq!(factors.get(&FactorKey::MaxBuilderFeeFactor), Some(&0u128));
     }
 }

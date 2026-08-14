@@ -323,11 +323,16 @@ pub struct Order {
     /// Order params.
     pub(crate) params: OrderActionParams,
     pub(crate) gt_reward: u64,
-    #[cfg_attr(feature = "debug", debug(skip))]
-    padding_1: [u8; 8],
+    /// The builder fee amount charged so far, pending settlement.
+    pub(crate) builder_fee_amount: u64,
+    /// The builder attached to this order, at order creation time. The
+    /// default (zero) [`Pubkey`] means no builder is attached.
+    pub(crate) builder: Pubkey,
+    /// The builder's fee factor, snapshotted when the builder fee is set.
+    pub(crate) builder_fee_factor: u128,
     #[cfg_attr(feature = "debug", debug(skip))]
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 128],
+    reserved: [u8; 80],
 }
 
 impl Seed for Order {
@@ -532,6 +537,21 @@ impl Order {
     /// Get token accounts.
     pub fn tokens(&self) -> &OrderTokenAccounts {
         &self.tokens
+    }
+
+    /// Get the builder attached to this order, if any.
+    pub fn builder(&self) -> Option<&Pubkey> {
+        optional_address(&self.builder)
+    }
+
+    /// Get the builder's fee factor, snapshotted when the builder fee is set.
+    pub fn builder_fee_factor(&self) -> u128 {
+        self.builder_fee_factor
+    }
+
+    /// Get the builder fee amount charged so far, pending settlement.
+    pub fn builder_fee_amount(&self) -> u64 {
+        self.builder_fee_amount
     }
 
     /// Process GT.
@@ -941,5 +961,46 @@ impl OrderActionParams {
     pub(crate) fn set_should_keep_position_account(&mut self, keep: bool) -> bool {
         self.flags
             .set_flag(OrderFlag::ShouldKeepPositionAccount, keep)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The `Order` account's byte layout. These must never change.
+    const EXPECTED_ORDER_ACCOUNT_SIZE: usize = 2464;
+    const GT_REWARD_OFFSET: usize = 2320;
+    const BUILDER_FEE_AMOUNT_OFFSET: usize = 2328;
+    const BUILDER_OFFSET: usize = 2336;
+    const BUILDER_FEE_FACTOR_OFFSET: usize = 2368;
+
+    #[test]
+    fn order_account_layout() {
+        assert_eq!(std::mem::size_of::<Order>(), EXPECTED_ORDER_ACCOUNT_SIZE);
+        assert_eq!(std::mem::offset_of!(Order, gt_reward), GT_REWARD_OFFSET);
+        assert_eq!(
+            std::mem::offset_of!(Order, builder_fee_amount),
+            BUILDER_FEE_AMOUNT_OFFSET
+        );
+        assert_eq!(std::mem::offset_of!(Order, builder), BUILDER_OFFSET);
+        assert_eq!(
+            std::mem::offset_of!(Order, builder_fee_factor),
+            BUILDER_FEE_FACTOR_OFFSET
+        );
+        // u128 requires 16-byte alignment.
+        assert_eq!(BUILDER_FEE_FACTOR_OFFSET % 16, 0);
+    }
+
+    #[test]
+    fn existing_zeroed_accounts_read_as_no_builder_fee() {
+        // Every existing on-chain `Order` account has zero bytes
+        // throughout what used to be its `reserved` region, so
+        // reinterpreting one under the new layout must read the new
+        // fields as "no builder fee attached", not fail to deserialize.
+        let order: Order = bytemuck::Zeroable::zeroed();
+        assert_eq!(order.builder(), None);
+        assert_eq!(order.builder_fee_factor(), 0);
+        assert_eq!(order.builder_fee_amount(), 0);
     }
 }
