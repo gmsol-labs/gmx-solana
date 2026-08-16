@@ -1,6 +1,6 @@
 [toolchain]
-anchor_version = "0.31.1"
-solana_version = "2.1.21"
+anchor_version = "0.32.1"
+solana_version = "2.2.12"
 
 [features]
 resolution = true
@@ -37,15 +37,15 @@ address = "HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny"
 program = "external-programs/chainlink-store.so"
 
 [[test.genesis]]
-address = "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ"
+address = "rec2HHDDnjLfj4kE7VyEtFA1HPGQLK33259532cRyHp"
 program = "external-programs/pyth-receiver.so"
 
 [[test.genesis]]
-address = "pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT"
+address = "pyt2F414BA6dPttK6RddPZUdHfapoBN24GL5wbrPCou"
 program = "external-programs/pyth-push-oracle.so"
 
 [[test.genesis]]
-address = "HDwcJBJXjL9FpJ7UBsYBtaDjsBUhuLCUYoz3zr8SWWaQ"
+address = "HDw2E7P8X1SkCyjvoGsfBGAVUutKcj874bXjHrpVYrVL"
 program = "external-programs/wormhole.so"
 
 [test.validator]
@@ -84,7 +84,7 @@ address = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh"
 
 # Pyth receiver program
 [[test.validator.clone]]
-address = "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ"
+address = "rec2HHDDnjLfj4kE7VyEtFA1HPGQLK33259532cRyHp"
 
 # BTC Data Feed (Pyth)
 [[test.validator.clone]]
