@@ -11,8 +11,8 @@ RUST_LOG=trace \
   --limit-ledger-size 1000000000 \
   --log-messages-bytes-limit 1000000000 \
   --compute-unit-limit 1000000000 \
-  --clone 5gxPdahvSzcKySxXxPuRXZZ9s6h8hZ88XDVKavWpaQGn \
-  --clone DaWUKXCyXsnzcvLUyeJRWou8KTn7XtadgTsdhJ6RHS7b \
+  --clone CJHmJw4FuvLTUfPsYepyVCQkUR8qv1AtZbkwsS36hEcd \
+  --clone H3R4M45f2gyqp6geVUruapzZdyxpgGZ96UnWkDM3ndye \
   --upgradeable-program rec2HHDDnjLfj4kE7VyEtFA1HPGQLK33259532cRyHp external-programs/pyth-receiver.so $ADDRESS \
   --upgradeable-program pyt2F414BA6dPttK6RddPZUdHfapoBN24GL5wbrPCou external-programs/pyth-push-oracle.so $ADDRESS \
   --upgradeable-program HDw2E7P8X1SkCyjvoGsfBGAVUutKcj874bXjHrpVYrVL external-programs/wormhole.so $ADDRESS \

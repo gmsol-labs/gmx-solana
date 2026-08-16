@@ -22,18 +22,16 @@ pub fn guardian_set_address(index: u32) -> Pubkey {
 pub struct Detected {
     /// Highest existing guardian-set index (= the active set).
     pub active: u32,
-    /// All indices in `1..=max_probe` whose account exists on the cluster.
+    /// All indices in `0..=max_probe` whose account exists on the cluster.
     pub existing: Vec<u32>,
 }
 
-/// One `getMultipleAccounts` call over indices `1..=max_probe`; the highest existing
+/// One `getMultipleAccounts` call over indices `0..=max_probe`; the highest existing
 /// index is the active set (indices increment by +1 per rotation, newest is active).
-/// Index 0 (the 2021 genesis set) is intentionally skipped: it is never used to sign
-/// current VAAs, and skipping it keeps `existing` deterministic regardless of whether
-/// the genesis account sits at the standard PDA.
+/// Index 0 is included: upgraded Pyth Core posts are signed by list 0.
 pub fn detect(rpc_url: &str, max_probe: u32) -> Result<Detected> {
     let client = RpcClient::new(rpc_url.to_string());
-    let indices: Vec<u32> = (1..=max_probe).collect();
+    let indices: Vec<u32> = (0..=max_probe).collect();
     let addresses: Vec<Pubkey> = indices.iter().map(|&i| guardian_set_address(i)).collect();
     let accounts = client
         .get_multiple_accounts(&addresses)
@@ -64,7 +62,8 @@ mod tests {
     #[test]
     fn derives_known_guardian_set_addresses() {
         let cases = [
-            (1u32, "59LY6jV5LcoEdXrhNhX7AJQmW1gHUHQWSLy3299CgGBY"),
+            (0u32, "CJHmJw4FuvLTUfPsYepyVCQkUR8qv1AtZbkwsS36hEcd"),
+            (1, "59LY6jV5LcoEdXrhNhX7AJQmW1gHUHQWSLy3299CgGBY"),
             (4, "7M14Nv49D5wPnoeXqGpHZBzFbE1jKvEZgBXu95QziRLF"),
             (6, "2yuAjFYwpjR8UJt2zwBNAqBNXyLUsWCy3VnSFZPE5PZZ"),
             (7, "ijDpMb9MzJyuEyBXGmQiFS9VS2yhzMcx1cu5Aj3Ydpg"),
