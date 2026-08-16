@@ -8,7 +8,7 @@ use solana_sdk::pubkey::Pubkey;
 
 /// Pyth Solana Wormhole receiver program.
 /// Source of truth: gmsol SDK `pyth/pull_oracle/wormhole/mod.rs` (WORMHOLE_PROGRAM_ID).
-const WORMHOLE_PROGRAM_ID: &str = "HDwcJBJXjL9FpJ7UBsYBtaDjsBUhuLCUYoz3zr8SWWaQ";
+const WORMHOLE_PROGRAM_ID: &str = "HDw2E7P8X1SkCyjvoGsfBGAVUutKcj874bXjHrpVYrVL";
 
 pub fn program_id() -> Pubkey {
     Pubkey::from_str(WORMHOLE_PROGRAM_ID).expect("valid program id")
@@ -64,10 +64,10 @@ mod tests {
     #[test]
     fn derives_known_guardian_set_addresses() {
         let cases = [
-            (1u32, "8d9szTd157GKCLcxBqiLUgB7mek3v65rbsy2ErRyjwQ5"),
-            (4, "5gxPdahvSzcKySxXxPuRXZZ9s6h8hZ88XDVKavWpaQGn"),
-            (6, "HstYgN21fgNmutTVXjBw54n4ryvP3WrCFbMAjnbdbTzf"),
-            (7, "6GaHgiaQg9Pg346xHq9m7vQ9rJtnH83gQKqJoiAxQa7D"),
+            (1u32, "59LY6jV5LcoEdXrhNhX7AJQmW1gHUHQWSLy3299CgGBY"),
+            (4, "7M14Nv49D5wPnoeXqGpHZBzFbE1jKvEZgBXu95QziRLF"),
+            (6, "2yuAjFYwpjR8UJt2zwBNAqBNXyLUsWCy3VnSFZPE5PZZ"),
+            (7, "ijDpMb9MzJyuEyBXGmQiFS9VS2yhzMcx1cu5Aj3Ydpg"),
         ];
         for (index, expected) in cases {
             assert_eq!(

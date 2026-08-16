@@ -13,9 +13,9 @@ RUST_LOG=trace \
   --compute-unit-limit 1000000000 \
   --clone 5gxPdahvSzcKySxXxPuRXZZ9s6h8hZ88XDVKavWpaQGn \
   --clone DaWUKXCyXsnzcvLUyeJRWou8KTn7XtadgTsdhJ6RHS7b \
-  --upgradeable-program rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ external-programs/pyth-receiver.so $ADDRESS \
-  --upgradeable-program pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT external-programs/pyth-push-oracle.so $ADDRESS \
-  --upgradeable-program HDwcJBJXjL9FpJ7UBsYBtaDjsBUhuLCUYoz3zr8SWWaQ external-programs/wormhole.so $ADDRESS \
+  --upgradeable-program rec2HHDDnjLfj4kE7VyEtFA1HPGQLK33259532cRyHp external-programs/pyth-receiver.so $ADDRESS \
+  --upgradeable-program pyt2F414BA6dPttK6RddPZUdHfapoBN24GL5wbrPCou external-programs/pyth-push-oracle.so $ADDRESS \
+  --upgradeable-program HDw2E7P8X1SkCyjvoGsfBGAVUutKcj874bXjHrpVYrVL external-programs/wormhole.so $ADDRESS \
   --upgradeable-program Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo target/verifiable/gmsol_store.so $ADDRESS \
   --upgradeable-program GTuvYD5SxkTq4FLG6JV1FQ5dkczr1AfgDcBHaFsBdtBg target/verifiable/gmsol_treasury.so $ADDRESS \
   --upgradeable-program TimeBQ7gQyWyQMD3bTteAdy7hTVDNWSwELdSVZHfSXL target/verifiable/gmsol_timelock.so $ADDRESS \
