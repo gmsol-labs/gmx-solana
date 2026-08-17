@@ -3,11 +3,11 @@ use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChe
 use gmsol_model::action::decrease_position::DecreasePositionSwapType;
 
 use crate::{
-    events::{BuilderFeeSet, BuilderFeeSettled, EventEmitter},
+    events::{BuilderFeeClaimed, BuilderFeeSet, BuilderFeeSettled, EventEmitter},
     states::{
         feature::{ActionDisabledFlag, DomainDisabledFlag},
         user::{UserHeader, USER_TOKEN_CONTROLLER_SEED},
-        FactorKey, Order, Store,
+        FactorKey, Order, Seed, Store,
     },
     CoreError,
 };
@@ -363,6 +363,140 @@ impl SetBuilderFee<'_> {
             previous_builder,
             previous_factor,
         ))?;
+
+        Ok(())
+    }
+}
+
+/// The accounts definition for
+/// [`claim_builder_fees`](crate::gmsol_store::claim_builder_fees).
+#[event_cpi]
+#[derive(Accounts)]
+pub struct ClaimBuilderFees<'info> {
+    /// The owner of the [`user_account`](Self::user_account). The only
+    /// signer allowed to claim its builder fees.
+    pub owner: Signer<'info>,
+    /// Store.
+    pub store: AccountLoader<'info, Store>,
+    /// The builder's User Account.
+    #[account(
+        constraint = user_account.load()?.is_initialized() @ CoreError::InvalidUserAccount,
+        has_one = owner,
+        has_one = store,
+        seeds = [UserHeader::SEED, store.key().as_ref(), owner.key().as_ref()],
+        bump = user_account.load()?.bump,
+    )]
+    pub user_account: AccountLoader<'info, UserHeader>,
+    /// The token mint the claim is denominated in.
+    pub token_mint: Box<Account<'info, Mint>>,
+    /// The claim vault: the associated token account of `token_mint`
+    /// owned by `user_account`.
+    ///
+    /// Its authority is the program-controlled User Account PDA, so this
+    /// instruction is the only path that can move tokens out of it.
+    ///
+    /// Must already exist; this instruction never creates it. A builder
+    /// with no vault for this mint has never been settled and so has
+    /// nothing to claim, which is rejected outright rather than treated
+    /// as a no-op: the caller asked to be paid, and the useful answer is
+    /// that no such vault exists. Callers holding a `None` vault address
+    /// simply leave the instruction out of the transaction.
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = user_account,
+    )]
+    pub claim_vault: Box<Account<'info, TokenAccount>>,
+    /// The destination token account for `token_mint`, chosen by the
+    /// owner. Not required to be an associated token account, but a
+    /// transferring claim rejects the claim vault itself; see
+    /// [`claim_builder_fees`](crate::gmsol_store::claim_builder_fees).
+    #[account(mut, token::mint = token_mint)]
+    pub destination: Box<Account<'info, TokenAccount>>,
+    /// The (per-user, per-token) user token controller PDA.
+    ///
+    /// Reserved for future withdrawal access control (e.g. a timelock).
+    /// It has no backing account and no data today, so the only check
+    /// performed on it is that the passed address matches its PDA
+    /// derivation; adding real behavior behind it later is not a
+    /// breaking change to this instruction's accounts.
+    /// CHECK: only the PDA derivation is verified, by the constraints below.
+    #[account(
+        seeds = [
+            USER_TOKEN_CONTROLLER_SEED,
+            user_account.key().as_ref(),
+            token_mint.key().as_ref(),
+        ],
+        bump,
+    )]
+    pub user_token_controller: UncheckedAccount<'info>,
+    /// Token program.
+    pub token_program: Program<'info, Token>,
+}
+
+impl ClaimBuilderFees<'_> {
+    /// Claim the full balance of a builder's claim vault to an owner-chosen
+    /// destination.
+    ///
+    /// Restricted to the [`user_account`](ClaimBuilderFees::user_account)'s
+    /// owner: no other signer can initiate a claim, and no other instruction
+    /// can move tokens out of a claim vault, since its authority is the
+    /// program-controlled User Account PDA. Idempotent: an existing vault
+    /// with a zero balance is an explicit no-op, performing no token
+    /// transfer, no CPI, and emitting no event, so this is safe to call
+    /// freely once the vault exists. Not gated by the `BuilderFee` feature
+    /// flag, since disabling the feature must never freeze already-settled
+    /// funds.
+    pub(crate) fn invoke(ctx: Context<Self>) -> Result<()> {
+        let claim_vault = &ctx.accounts.claim_vault;
+
+        let amount = claim_vault.amount;
+        if amount == 0 {
+            return Ok(());
+        }
+
+        // Only claims that actually transfer are affected: spl-token
+        // short-circuits a self-transfer to `Ok(())` after validation without
+        // moving any balance, which would emit `BuilderFeeClaimed` for the
+        // full vault balance while the vault still holds it. Checked here
+        // rather than as an account constraint so that it cannot turn a
+        // no-op, which moves nothing and emits nothing either way, into a
+        // failure.
+        require_keys_neq!(
+            ctx.accounts.destination.key(),
+            claim_vault.key(),
+            CoreError::InvalidArgument
+        );
+
+        let store = ctx.accounts.store.key();
+        let owner = ctx.accounts.owner.key();
+        let bump = ctx.accounts.user_account.load()?.bump;
+        let seeds = &[UserHeader::SEED, store.as_ref(), owner.as_ref(), &[bump]];
+
+        transfer_checked(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: claim_vault.to_account_info(),
+                    mint: ctx.accounts.token_mint.to_account_info(),
+                    to: ctx.accounts.destination.to_account_info(),
+                    authority: ctx.accounts.user_account.to_account_info(),
+                },
+            )
+            .with_signer(&[seeds]),
+            amount,
+            ctx.accounts.token_mint.decimals,
+        )?;
+
+        EventEmitter::new(&ctx.accounts.event_authority, ctx.bumps.event_authority).emit_cpi(
+            &BuilderFeeClaimed::new(
+                &store,
+                &ctx.accounts.user_account.key(),
+                &ctx.accounts.token_mint.key(),
+                amount,
+                &ctx.accounts.destination.key(),
+            )?,
+        )?;
 
         Ok(())
     }
