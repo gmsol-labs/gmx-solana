@@ -1013,6 +1013,303 @@
       "returns": "bool"
     },
     {
+      "name": "claim_builder_fees",
+      "docs": [
+        "Claim builder fees.",
+        "",
+        "Restricted to the User Account's owner. Idempotent: a claim vault",
+        "with a zero balance is an explicit no-op, so this may be called",
+        "freely once the vault exists. Not gated by the `BuilderFee`",
+        "feature flag.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](ClaimBuilderFees)*",
+        "",
+        "# Errors",
+        "- The [`owner`](ClaimBuilderFees::owner) must be a signer and must",
+        "match the owner recorded on [`user_account`](ClaimBuilderFees::user_account).",
+        "- The [`user_account`](ClaimBuilderFees::user_account) must be properly",
+        "initialized and belong to the `store`.",
+        "- The [`claim_vault`](ClaimBuilderFees::claim_vault) must already exist and",
+        "be the associated token account of the [`token_mint`](ClaimBuilderFees::token_mint)",
+        "owned by `user_account`.",
+        "- The [`destination`](ClaimBuilderFees::destination) must be a token account",
+        "for `token_mint`.",
+        "- The [`user_token_controller`](ClaimBuilderFees::user_token_controller) must",
+        "match its PDA derivation from `user_account` and `token_mint`; no other",
+        "validation is performed on it."
+      ],
+      "discriminator": [
+        207,
+        194,
+        126,
+        184,
+        118,
+        67,
+        225,
+        181
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "The owner of the [`user_account`](Self::user_account). The only",
+            "signer allowed to claim its builder fees."
+          ],
+          "signer": true,
+          "relations": [
+            "user_account"
+          ]
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "user_account"
+          ]
+        },
+        {
+          "name": "user_account",
+          "docs": [
+            "The builder's User Account."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_mint",
+          "docs": [
+            "The token mint the claim is denominated in."
+          ]
+        },
+        {
+          "name": "claim_vault",
+          "docs": [
+            "The claim vault: the associated token account of `token_mint`",
+            "owned by `user_account`.",
+            "",
+            "Its authority is the program-controlled User Account PDA, so this",
+            "instruction is the only path that can move tokens out of it.",
+            "",
+            "Must already exist; this instruction never creates it. A builder",
+            "with no vault for this mint has never been settled and so has",
+            "nothing to claim, which is rejected outright rather than treated",
+            "as a no-op: the caller asked to be paid, and the useful answer is",
+            "that no such vault exists. Callers holding a `None` vault address",
+            "simply leave the instruction out of the transaction."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "destination",
+          "docs": [
+            "The destination token account for `token_mint`, chosen by the",
+            "owner. Not required to be an associated token account, but a",
+            "transferring claim rejects the claim vault itself; see",
+            "[`claim_builder_fees`](crate::gmsol_store::claim_builder_fees)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_token_controller",
+          "docs": [
+            "The (per-user, per-token) user token controller PDA.",
+            "",
+            "Reserved for future withdrawal access control (e.g. a timelock).",
+            "It has no backing account and no data today, so the only check",
+            "performed on it is that the passed address matches its PDA",
+            "derivation; adding real behavior behind it later is not a",
+            "breaking change to this instruction's accounts."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "token_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claim_fees_from_market",
       "docs": [
         "Claim fees from the given market.",
@@ -23001,6 +23298,19 @@
       ]
     },
     {
+      "name": "BuilderFeeClaimed",
+      "discriminator": [
+        173,
+        137,
+        231,
+        148,
+        184,
+        179,
+        14,
+        141
+      ]
+    },
+    {
       "name": "BuilderFeeFactorSet",
       "discriminator": [
         4,
@@ -24478,6 +24788,69 @@
               "The amount actually charged, after shortfall clamping."
             ],
             "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuilderFeeClaimed",
+      "docs": [
+        "An event indicating that builder fees have been claimed.",
+        "",
+        "Emitted only when the claim actually transfers a non-zero amount; the",
+        "no-op path (an empty claim vault) emits nothing."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ts",
+            "docs": [
+              "Timestamp."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "slot",
+            "docs": [
+              "Slot."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "store",
+            "docs": [
+              "Store."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "builder",
+            "docs": [
+              "The builder's User Account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "token",
+            "docs": [
+              "The token mint the claim is denominated in."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "The amount transferred, i.e. the claim vault's full prior balance."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "docs": [
+              "The destination token account the claim was sent to."
+            ],
+            "type": "pubkey"
           }
         ]
       }
