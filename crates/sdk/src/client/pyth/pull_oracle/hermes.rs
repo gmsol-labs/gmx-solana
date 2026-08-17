@@ -42,7 +42,7 @@ impl fmt::Debug for Hermes {
         f.debug_struct("Hermes")
             .field("base", &self.base)
             .field("api_key", &self.api_key.as_ref().map(|_| "[redacted]"))
-            .field("client", &"Client")
+            .field("client", &self.client)
             .finish()
     }
 }
