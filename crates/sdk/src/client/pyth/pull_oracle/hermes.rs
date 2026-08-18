@@ -30,10 +30,21 @@ pub const PRICE_LATEST: &str = "/v2/updates/price/latest";
 pub const PRICE_HISTORICAL: &str = "/v2/updates/price/";
 
 /// Hermes Client.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Hermes {
     base: Url,
+    api_key: Option<String>,
     client: Client,
+}
+
+impl fmt::Debug for Hermes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Hermes")
+            .field("base", &self.base)
+            .field("api_key", &self.api_key.as_ref().map(|_| "[redacted]"))
+            .field("client", &self.client)
+            .finish()
+    }
 }
 
 impl Hermes {
@@ -41,8 +52,28 @@ impl Hermes {
     pub fn try_new(base: impl IntoUrl) -> crate::Result<Self> {
         Ok(Self {
             base: base.into_url()?,
+            api_key: None,
             client: Client::new(),
         })
+    }
+
+    /// Create a new hermes client with the given base URL and API key.
+    pub fn try_new_with_api_key(
+        base: impl IntoUrl,
+        api_key: impl Into<String>,
+    ) -> crate::Result<Self> {
+        Ok(Self {
+            base: base.into_url()?,
+            api_key: Some(api_key.into()),
+            client: Client::new(),
+        })
+    }
+
+    fn authorize(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match &self.api_key {
+            Some(api_key) => request.header("Authorization", format!("Bearer {api_key}")),
+            None => request,
+        }
     }
 
     /// Get a stream of price updates.
@@ -53,9 +84,11 @@ impl Hermes {
     ) -> crate::Result<impl Stream<Item = crate::Result<PriceUpdate>> + 'static> {
         let params = get_query(feed_ids, encoding);
         let stream = self
-            .client
-            .get(self.base.join(PRICE_STREAM).map_err(crate::Error::custom)?)
-            .query(&params)
+            .authorize(
+                self.client
+                    .get(self.base.join(PRICE_STREAM).map_err(crate::Error::custom)?)
+                    .query(&params),
+            )
             .send()
             .await?
             .bytes_stream()
@@ -80,9 +113,11 @@ impl Hermes {
     ) -> crate::Result<PriceUpdate> {
         let params = get_query(feed_ids, encoding);
         let update = self
-            .client
-            .get(self.base.join(PRICE_LATEST).map_err(crate::Error::custom)?)
-            .query(&params)
+            .authorize(
+                self.client
+                    .get(self.base.join(PRICE_LATEST).map_err(crate::Error::custom)?)
+                    .query(&params),
+            )
             .send()
             .await?
             .json()
@@ -103,9 +138,11 @@ impl Hermes {
         let params = get_query(feed_ids, encoding);
         let path = format!("{PRICE_HISTORICAL}{publish_time}");
         let update = self
-            .client
-            .get(self.base.join(&path).map_err(crate::Error::custom)?)
-            .query(&params)
+            .authorize(
+                self.client
+                    .get(self.base.join(&path).map_err(crate::Error::custom)?)
+                    .query(&params),
+            )
             .send()
             .await?
             .json()
@@ -182,6 +219,7 @@ impl Default for Hermes {
     fn default() -> Self {
         Self {
             base: DEFAULT_HERMES_BASE.parse().unwrap(),
+            api_key: None,
             client: Default::default(),
         }
     }
@@ -351,16 +389,98 @@ fn get_query<'a>(
 mod tests {
     use super::*;
 
+    fn sample_feed_id() -> Identifier {
+        Identifier::from_hex("ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace")
+            .unwrap()
+    }
+
+    #[test]
+    fn debug_redacts_api_key() {
+        let hermes = Hermes::try_new_with_api_key(DEFAULT_HERMES_BASE, "super-secret-key").unwrap();
+        let debug = format!("{hermes:?}");
+        assert!(!debug.contains("super-secret-key"));
+        assert!(debug.contains("[redacted]"));
+    }
+
+    #[test]
+    fn latest_request_includes_bearer_token() {
+        let hermes =
+            Hermes::try_new_with_api_key("https://example.com/hermes", "test-token").unwrap();
+        let params = get_query([&sample_feed_id()], None);
+        let request = hermes
+            .authorize(
+                hermes
+                    .client
+                    .get(hermes.base.join(PRICE_LATEST).unwrap())
+                    .query(&params),
+            )
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            request
+                .headers()
+                .get(reqwest::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok()),
+            Some("Bearer test-token")
+        );
+        assert!(request.url().path().ends_with(PRICE_LATEST));
+        assert!(request.url().query().unwrap().contains("ids"));
+    }
+
+    #[test]
+    fn stream_request_includes_bearer_token() {
+        let hermes =
+            Hermes::try_new_with_api_key("https://example.com/hermes", "test-token").unwrap();
+        let params = get_query([&sample_feed_id()], None);
+        let request = hermes
+            .authorize(
+                hermes
+                    .client
+                    .get(hermes.base.join(PRICE_STREAM).unwrap())
+                    .query(&params),
+            )
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            request
+                .headers()
+                .get(reqwest::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok()),
+            Some("Bearer test-token")
+        );
+        assert!(request.url().path().ends_with(PRICE_STREAM));
+        assert!(request.url().query().unwrap().contains("ids"));
+    }
+
+    #[test]
+    fn request_omits_authorization_without_api_key() {
+        let hermes = Hermes::try_new("https://example.com/hermes").unwrap();
+        let params = get_query([&sample_feed_id()], None);
+        let request = hermes
+            .authorize(
+                hermes
+                    .client
+                    .get(hermes.base.join(PRICE_LATEST).unwrap())
+                    .query(&params),
+            )
+            .build()
+            .unwrap();
+
+        assert!(request
+            .headers()
+            .get(reqwest::header::AUTHORIZATION)
+            .is_none());
+    }
+
     #[cfg(feature = "nightly-pyth-historical-api")]
     #[tokio::test]
     async fn test_historical_price_updates() -> eyre::Result<()> {
         use std::time::{SystemTime, UNIX_EPOCH};
 
         // ETH/USD feed
-        let feed_id = Identifier::from_hex(
-            "ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
-        )
-        .unwrap();
+        let feed_id = sample_feed_id();
 
         let hermes = Hermes::default();
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
