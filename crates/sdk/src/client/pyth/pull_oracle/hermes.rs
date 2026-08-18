@@ -19,6 +19,9 @@ use crate::client::pyth::pubkey_to_identifier;
 /// Default base URL for Hermes.
 pub const DEFAULT_HERMES_BASE: &str = "https://hermes.pyth.network";
 
+/// ENV for Pyth Hermes API key.
+pub const ENV_API_KEY: &str = "PYTH_API_KEY";
+
 /// The SSE endpoint of price updates stream.
 pub const PRICE_STREAM: &str = "/v2/updates/price/stream";
 
@@ -67,6 +70,14 @@ impl Hermes {
             api_key: Some(api_key.into()),
             client: Client::new(),
         })
+    }
+
+    /// Create a new Hermes client from default ENVs.
+    ///
+    /// Reads [`ENV_API_KEY`] and uses [`DEFAULT_HERMES_BASE`].
+    pub fn from_default_envs() -> crate::Result<Self> {
+        let api_key = std::env::var(ENV_API_KEY).map_err(crate::Error::custom)?;
+        Self::try_new_with_api_key(DEFAULT_HERMES_BASE, api_key)
     }
 
     fn authorize(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
@@ -472,6 +483,20 @@ mod tests {
             .headers()
             .get(reqwest::header::AUTHORIZATION)
             .is_none());
+    }
+
+    #[test]
+    fn from_default_envs_requires_pyth_api_key() {
+        match std::env::var(ENV_API_KEY) {
+            Ok(key) => {
+                let hermes = Hermes::from_default_envs().unwrap();
+                assert_eq!(hermes.api_key.as_deref(), Some(key.as_str()));
+                assert!(hermes.base.as_str().starts_with(DEFAULT_HERMES_BASE));
+            }
+            Err(_) => {
+                assert!(Hermes::from_default_envs().is_err());
+            }
+        }
     }
 
     #[cfg(feature = "nightly-pyth-historical-api")]
