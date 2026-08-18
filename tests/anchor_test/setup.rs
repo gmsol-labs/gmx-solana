@@ -1848,6 +1848,75 @@ impl Deployment {
         Ok(())
     }
 
+    /// Create a fresh mint, along with the associated token account of `owner`
+    /// for it.
+    ///
+    /// The mint is registered nowhere and named by nothing, so no other test
+    /// can touch it. That is what a case asserting on the absence of a token
+    /// account needs, since the suite runs concurrently against one deployment.
+    pub(crate) async fn create_unregistered_mint(
+        &self,
+        owner: &Pubkey,
+    ) -> eyre::Result<(Pubkey, Pubkey)> {
+        use anchor_spl::{
+            associated_token::{
+                spl_associated_token_account,
+                spl_associated_token_account::get_associated_token_address,
+            },
+            token::{spl_token::instruction, Mint, ID},
+        };
+
+        /// Arbitrary; nothing prices this mint.
+        const DECIMALS: u8 = 6;
+
+        let mint = Keypair::generate(&mut rand::thread_rng());
+        let mint_address = mint.pubkey();
+        let payer = self.client.payer();
+        let rent = self
+            .client
+            .store_program()
+            .rpc()
+            .get_minimum_balance_for_rent_exemption(Mint::LEN)
+            .await?;
+
+        let signature = self
+            .client
+            .store_transaction()
+            .signer(&mint)
+            .pre_instruction(
+                system_instruction::create_account(
+                    &payer,
+                    &mint_address,
+                    rent,
+                    Mint::LEN as u64,
+                    &ID,
+                ),
+                true,
+            )
+            .pre_instruction(
+                instruction::initialize_mint2(&ID, &mint_address, &payer, None, DECIMALS)?,
+                true,
+            )
+            .pre_instruction(
+                spl_associated_token_account::instruction::create_associated_token_account_idempotent(
+                    &payer,
+                    owner,
+                    &mint_address,
+                    &ID,
+                ),
+                true,
+            )
+            .send()
+            .await?;
+
+        tracing::info!(%signature, mint=%mint_address, "created an unregistered mint");
+
+        Ok((
+            mint_address,
+            get_associated_token_address(owner, &mint_address),
+        ))
+    }
+
     pub(crate) fn market_token(&self, index: &str, long: &str, short: &str) -> Option<&Pubkey> {
         self.market_tokens
             .get(&[index.to_string(), long.to_string(), short.to_string()])
