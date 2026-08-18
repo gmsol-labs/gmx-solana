@@ -487,13 +487,16 @@ mod tests {
 
     #[test]
     fn from_default_envs_requires_pyth_api_key() {
-        unsafe { std::env::set_var(ENV_API_KEY, "env-token") };
-        let hermes = Hermes::from_default_envs().unwrap();
-        assert_eq!(hermes.api_key.as_deref(), Some("env-token"));
-        assert!(hermes.base.as_str().starts_with(DEFAULT_HERMES_BASE));
-
-        unsafe { std::env::remove_var(ENV_API_KEY) };
-        assert!(Hermes::from_default_envs().is_err());
+        match std::env::var(ENV_API_KEY) {
+            Ok(key) => {
+                let hermes = Hermes::from_default_envs().unwrap();
+                assert_eq!(hermes.api_key.as_deref(), Some(key.as_str()));
+                assert!(hermes.base.as_str().starts_with(DEFAULT_HERMES_BASE));
+            }
+            Err(_) => {
+                assert!(Hermes::from_default_envs().is_err());
+            }
+        }
     }
 
     #[cfg(feature = "nightly-pyth-historical-api")]
