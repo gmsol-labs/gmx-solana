@@ -25,6 +25,9 @@ mod market;
 /// GT events.
 mod gt;
 
+/// User account events.
+mod user;
+
 pub use deposit::*;
 pub use glv::*;
 pub use gt::*;
@@ -33,6 +36,7 @@ pub use order::*;
 pub use shift::*;
 pub use swap::*;
 pub use trade::*;
+pub use user::*;
 pub use withdrawal::*;
 
 use anchor_lang::prelude::*;

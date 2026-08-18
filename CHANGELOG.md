@@ -13,7 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- programs(store): Added the permissionless `set_builder_fee_factor` instruction, with which a User Account owner advertises a builder fee factor on their own account, bounded by the store's `MaxBuilderFeeFactor` (which reads `0` until a config keeper raises it). Emits a `BuilderFeeFactorSet` event.
 - sdk(sdk): Added `CreateOrderBuilder::prepare_final_output_token_escrow`, opting an increase order into providing its final output token escrow at creation. The escrow is what a builder fee would be paid out of, so an increase order created without it cannot be given one. Off by default, leaving the previous behavior unchanged.
+- sdk(sdk): Added `UserOps::set_builder_fee_factor` for building the instruction.
+- sdk(decode): Added `BuilderFeeFactorSet` to `GMSOLCPIEvent`, so the event decodes into its typed form instead of `UnknownOwnedData`.
 - sdk(solana-utils): Added `Bundle::send_all_with_opts_detailed`, returning one `Result` per transaction with stable bundle indices.
 - sdk(solana-utils): Added `Error::SendAborted` for unsent transactions after an early bundle abort.
 - sdk(solana-utils): Made `compress_send_results` public so callers can map detailed results to the legacy signature list.
