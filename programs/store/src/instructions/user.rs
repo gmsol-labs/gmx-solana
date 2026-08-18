@@ -336,42 +336,42 @@ pub struct SetBuilderFeeFactor<'info> {
     pub user: AccountLoader<'info, UserHeader>,
 }
 
-pub(crate) fn set_builder_fee_factor(
-    ctx: Context<SetBuilderFeeFactor>,
-    factor: u128,
-) -> Result<()> {
-    // Note that this instruction is deliberately not gated by the
-    // `BuilderFee` domain flag: it only records an advertised rate, and no
-    // instruction charges a fee off it today. A fee can only be charged after
-    // a future `set_builder_fee` checkpoints the factor onto an order, so
-    // gating belongs there rather than here.
-    //
-    // A missing cap is treated as `0` (deny by default), so on a store that
-    // predates the factor key only opting out remains possible. The key is
-    // always wired today, which makes this branch unreachable rather than
-    // merely unlikely.
-    let max_factor = ctx
-        .accounts
-        .store
-        .load()?
-        .get_factor_by_key(FactorKey::MaxBuilderFeeFactor)
-        .copied()
-        .unwrap_or(0);
-    require_gte!(
-        max_factor,
-        factor,
-        CoreError::BuilderFeeFactorExceedsMaxFactor
-    );
+impl SetBuilderFeeFactor<'_> {
+    pub(crate) fn invoke(ctx: Context<Self>, factor: u128) -> Result<()> {
+        // Note that this instruction is deliberately not gated by the
+        // `BuilderFee` domain flag: it only records an advertised rate, and no
+        // instruction charges a fee off it today. A fee can only be charged after
+        // a future `set_builder_fee` checkpoints the factor onto an order, so
+        // gating belongs there rather than here.
+        //
+        // A missing cap is treated as `0` (deny by default), so on a store that
+        // predates the factor key only opting out remains possible. The key is
+        // always wired today, which makes this branch unreachable rather than
+        // merely unlikely.
+        let max_factor = ctx
+            .accounts
+            .store
+            .load()?
+            .get_factor_by_key(FactorKey::MaxBuilderFeeFactor)
+            .copied()
+            .unwrap_or(0);
+        require_gte!(
+            max_factor,
+            factor,
+            CoreError::BuilderFeeFactorExceedsMaxFactor
+        );
 
-    let previous_factor = ctx.accounts.user.load_mut()?.set_builder_fee_factor(factor);
+        let previous_factor = ctx.accounts.user.load_mut()?.set_builder_fee_factor(factor);
 
-    let event_emitter = EventEmitter::new(&ctx.accounts.event_authority, ctx.bumps.event_authority);
-    event_emitter.emit_cpi(&BuilderFeeFactorSet::new(
-        ctx.accounts.user.key(),
-        ctx.accounts.owner.key(),
-        previous_factor,
-        factor,
-    ))?;
+        let event_emitter =
+            EventEmitter::new(&ctx.accounts.event_authority, ctx.bumps.event_authority);
+        event_emitter.emit_cpi(&BuilderFeeFactorSet::new(
+            ctx.accounts.user.key(),
+            ctx.accounts.owner.key(),
+            previous_factor,
+            factor,
+        ))?;
 
-    Ok(())
+        Ok(())
+    }
 }

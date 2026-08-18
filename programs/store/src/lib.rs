@@ -3132,7 +3132,7 @@ pub mod gmsol_store {
     ///   [`MaxBuilderFeeFactor`](crate::states::FactorKey::MaxBuilderFeeFactor),
     ///   which reads `0` until a config keeper raises it.
     pub fn set_builder_fee_factor(ctx: Context<SetBuilderFeeFactor>, factor: u128) -> Result<()> {
-        instructions::set_builder_fee_factor(ctx, factor)
+        SetBuilderFeeFactor::invoke(ctx, factor)
     }
 
     /// Transfer referral code.
