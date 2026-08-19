@@ -703,7 +703,10 @@ impl OrderTokenAccounts {
 
     /// Get final output token info.
     ///
-    /// Only available for decrease and swap orders.
+    /// Always initialized for decrease and swap orders. For increase orders it
+    /// is initialized only when the creation request provided the final output
+    /// token escrow, so read [`TokenAndAccount::token`] rather than infer
+    /// availability from the order's kind.
     pub fn final_output_token(&self) -> &TokenAndAccount {
         &self.final_output_token
     }

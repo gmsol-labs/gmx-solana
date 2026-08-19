@@ -1215,11 +1215,16 @@ async fn set_builder_fee() -> eyre::Result<()> {
     Ok(())
 }
 
-/// The orders and account shapes a checkpoint must refuse.
+/// The orders, account shapes and store states a checkpoint must refuse.
 ///
 /// None of these need the fee cap raised: the builder here is the caller's own
 /// User Account, which advertises zero, and zero is payable under any cap. That
-/// keeps this test out of the lock that serializes [`set_builder_fee`].
+/// keeps most of this test out of the lock that serializes [`set_builder_fee`].
+///
+/// The exception is the disabled-feature case at the end, which moves a store
+/// global and so takes that lock for its window through
+/// [`Deployment::with_builder_fee_disabled`]. The cases above it run unlocked
+/// and are unaffected, being the same test and therefore sequential.
 ///
 /// Liquidation and `AutoDeleveraging` are the two kinds AC4 exists for, and they
 /// are deliberately absent: `create_order` refuses both (`OrderKindNotAllowed`,
@@ -1428,6 +1433,34 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
         Some(ErrorCode::ConstraintSeeds.into()),
     );
 
+    // AC9: the mechanism sits behind `DomainDisabledFlag::BuilderFee`, and this
+    // is the only instruction it gates. Everything above rejects on the order or
+    // the accounts, so the case is only meaningful with a call that would
+    // otherwise be accepted, which is why the same call is repeated afterwards.
+    deployment
+        .with_builder_fee_disabled(async {
+            let err = client
+                .set_builder_fee(store, &order, &user, 0, None)
+                .await?
+                .send()
+                .await
+                .expect_err("should reject a checkpoint while the feature is disabled");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::FeatureDisabled.into()),
+            );
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    let signature = client
+        .set_builder_fee(store, &order, &user, 0, None)
+        .await?
+        .send_without_preflight()
+        .await?;
+    tracing::info!(%order, %signature, "the same checkpoint lands once the feature is back on");
+
     let signature = client.close_order(&order)?.build().await?.send().await?;
     tracing::info!(%order, %signature, "cancelled the order");
 
@@ -1444,8 +1477,8 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
 /// A decrease order needs a position, and the position for
 /// [`Deployment::DEFAULT_USER`] on this market is opened and fully closed by
 /// `balanced_market_order` running concurrently, so this one trades as the
-/// exclusive locked user instead. It takes that lock before the fee cap; no
-/// other test takes them in the opposite order.
+/// exclusive locked user instead. It takes that lock before the builder fee
+/// globals; no other test takes them in the opposite order.
 #[tokio::test]
 async fn set_builder_fee_rejects_collateral_to_pnl_swap() -> eyre::Result<()> {
     /// One percent, in the market factor unit.
