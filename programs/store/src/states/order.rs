@@ -572,6 +572,21 @@ impl Order {
         Ok(())
     }
 
+    /// Checkpoint a builder and its fee factor onto this order.
+    ///
+    /// The only writer of either field. Every validation the checkpoint depends
+    /// on (owner, order state and kind, the factor against both the builder's
+    /// advertised rate and the store cap, the fee output token) belongs to the
+    /// caller: this records an already authorized decision and trusts it.
+    ///
+    /// Overwriting is intentional, and is the whole of the re-checkpointing
+    /// behavior: no other code path touches these fields, so between two calls
+    /// the checkpoint cannot change.
+    pub(crate) fn set_builder_fee(&mut self, builder: Pubkey, factor: u128) {
+        self.builder = builder;
+        self.builder_fee_factor = factor;
+    }
+
     /// Process GT.
     /// CHECK: the order must have been successfully executed.
     #[inline(never)]

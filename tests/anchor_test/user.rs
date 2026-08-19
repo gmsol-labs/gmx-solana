@@ -121,6 +121,11 @@ async fn builder_fee_factor() -> eyre::Result<()> {
 
     let user_address = client.find_user_address(store, &client.payer());
 
+    // Held for the whole test, not just the raised window below: the very first
+    // assertion reads the cap as zero, which is only true while no concurrent
+    // test has it raised.
+    let _cap_lock = Deployment::lock_builder_fee_cap().await;
+
     // The cap is zero until a config keeper raises it, so the mechanism is
     // closed and no nonzero rate can be advertised yet.
     let err = client

@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use borsh::BorshSerialize;
 use gmsol_utils::InitSpace;
 
 use super::Event;
@@ -59,3 +60,62 @@ impl InitSpace for BuilderFeeSettled {
 }
 
 impl Event for BuilderFeeSettled {}
+
+/// Builder fee set event.
+///
+/// Emitted whenever a builder and its fee factor are checkpointed onto an
+/// order. This is the only event carrying the order-to-builder mapping: the
+/// charge emitted at execution reports amounts, not who they are owed to, so an
+/// indexer that misses this event cannot attribute a fee.
+///
+/// Re-checkpointing emits again, with the replaced values in the `previous_*`
+/// fields, so the full history of an order's builder is reconstructible from
+/// this event alone.
+#[event]
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
+#[derive(InitSpace)]
+pub struct BuilderFeeSet {
+    /// The store the order belongs to.
+    pub store: Pubkey,
+    /// The order the builder fee was checkpointed onto.
+    pub order: Pubkey,
+    /// The builder's User Account.
+    pub builder: Pubkey,
+    /// The checkpointed builder fee factor.
+    pub factor: u128,
+    /// The builder attached before this call.
+    ///
+    /// The default (zero) [`Pubkey`] means the order had no builder.
+    pub previous_builder: Pubkey,
+    /// The builder fee factor checkpointed before this call.
+    pub previous_factor: u128,
+    #[cfg_attr(feature = "debug", debug(skip))]
+    reserved: [u8; 64],
+}
+
+impl gmsol_utils::InitSpace for BuilderFeeSet {
+    const INIT_SPACE: usize = <Self as Space>::INIT_SPACE;
+}
+
+impl Event for BuilderFeeSet {}
+
+impl BuilderFeeSet {
+    pub(crate) fn new(
+        store: Pubkey,
+        order: Pubkey,
+        builder: Pubkey,
+        factor: u128,
+        previous_builder: Pubkey,
+        previous_factor: u128,
+    ) -> Self {
+        Self {
+            store,
+            order,
+            builder,
+            factor,
+            previous_builder,
+            previous_factor,
+            reserved: [0; 64],
+        }
+    }
+}

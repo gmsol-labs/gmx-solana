@@ -10,6 +10,9 @@ pub mod update;
 /// Builder for position account management instructions.
 pub mod position;
 
+/// Builder for the `set_builder_fee` instruction.
+pub mod set_builder_fee;
+
 /// Min execution lamports for order.
 pub const MIN_EXECUTION_LAMPORTS_FOR_ORDER: u64 = 300_000;
 
@@ -19,5 +22,6 @@ pub use self::{
         CreateOrder, CreateOrderHint, CreateOrderKind, CreateOrderParams, DecreasePositionSwapType,
     },
     position::PreparePosition,
+    set_builder_fee::{SetBuilderFee, SetBuilderFeeHint},
     update::{UpdateOrder, UpdateOrderHint, UpdateOrderParams},
 };

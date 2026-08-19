@@ -19054,6 +19054,318 @@
       ]
     },
     {
+      "name": "set_builder_fee",
+      "docs": [
+        "Checkpoint a builder and its fee factor onto a pending order.",
+        "",
+        "Owner-signed and separate from order creation and update on purpose: a",
+        "builder fee is only ever paid because the order's owner explicitly",
+        "authorized it, for this order, at a rate it could see. The checkpoint is",
+        "immutable between calls, so neither an order update nor a later change to",
+        "the builder's advertised factor can alter what will be charged.",
+        "",
+        "Calling again on a still-pending order re-runs every validation and",
+        "overwrites the checkpoint. Since a User Account advertises a zero factor",
+        "until its owner sets one, checkpointing an account that advertises zero",
+        "is how an owner cancels a builder fee it no longer wants.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](SetBuilderFee)*",
+        "",
+        "# Arguments",
+        "- `expected_factor`: The factor the caller expects the builder to be",
+        "advertising. The call fails unless it matches exactly, which is what",
+        "stops a builder from raising its rate between the owner signing and the",
+        "transaction landing.",
+        "",
+        "# Errors",
+        "- The [`owner`](SetBuilderFee::owner) must be a signer and must own the",
+        "[`order`](SetBuilderFee::order).",
+        "- The [`store`](SetBuilderFee::store) must be properly initialized, and",
+        "must not have the [`BuilderFee`](crate::states::feature::DomainDisabledFlag::BuilderFee)",
+        "feature disabled.",
+        "- The [`order`](SetBuilderFee::order) must:",
+        "- Belong to the `store`",
+        "- Still be pending execution",
+        "- Be a user-initiated position order, so swap orders and the",
+        "keeper-initiated kinds are rejected",
+        "- Have an initialized final output token, equal to the passed",
+        "[`final_output_token`](SetBuilderFee::final_output_token)",
+        "- Not be a decrease order using",
+        "[`CollateralToPnlToken`](gmsol_model::action::decrease_position::DecreasePositionSwapType::CollateralToPnlToken),",
+        "unless the factor is `0`",
+        "- The [`builder`](SetBuilderFee::builder) must be a properly initialized",
+        "User Account of the same `store`, advertising exactly `expected_factor`.",
+        "- The factor must not exceed the store's",
+        "[`MaxBuilderFeeFactor`](crate::states::FactorKey::MaxBuilderFeeFactor).",
+        "- The [`claim_vault`](SetBuilderFee::claim_vault) must already exist, and",
+        "the [`user_token_controller`](SetBuilderFee::user_token_controller) must",
+        "match its PDA derivation."
+      ],
+      "discriminator": [
+        137,
+        75,
+        239,
+        52,
+        224,
+        128,
+        35,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "The order's owner, and the only signer that can attach a builder to it."
+          ],
+          "signer": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "builder"
+          ]
+        },
+        {
+          "name": "order",
+          "docs": [
+            "The order to checkpoint the builder fee onto.",
+            "",
+            "Restricted to orders still pending execution: once an order has been",
+            "executed or reached a terminal state its fee is already settled or moot,",
+            "and letting a checkpoint land afterwards would change the amount owed",
+            "for work already done."
+          ],
+          "writable": true
+        },
+        {
+          "name": "builder",
+          "docs": [
+            "The builder's User Account, identifying the builder and advertising the",
+            "factor this call must match.",
+            "",
+            "Not seed-derived here, unlike the owner-scoped User Account elsewhere:",
+            "the builder's owner is not a party to this transaction, so there is no",
+            "key to derive from. Belonging to this store, and being initialized, are",
+            "the whole of what can be checked.",
+            "",
+            "May be the order owner's own User Account. That is the only way to clear",
+            "a checkpoint, since a fresh User Account advertises a zero factor, and it",
+            "is deliberately allowed so an owner is never bound to a builder for the",
+            "life of the order."
+          ]
+        },
+        {
+          "name": "final_output_token",
+          "docs": [
+            "The order's final output token mint, i.e. the token the builder fee will",
+            "be denominated in."
+          ]
+        },
+        {
+          "name": "claim_vault",
+          "docs": [
+            "The builder's claim vault: the associated token account of",
+            "[`final_output_token`](Self::final_output_token) owned by the builder's",
+            "User Account.",
+            "",
+            "Required to exist here so that settlement cannot fail later. Settlement",
+            "takes the vault as a plain token account and creates nothing, so a",
+            "builder without one would make the order unsettleable and therefore",
+            "uncloseable. Checking at checkpoint time moves that failure to the only",
+            "point where it is still recoverable: the owner simply does not get a",
+            "builder attached."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "builder"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "final_output_token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "user_token_controller",
+          "docs": [
+            "The (per-user, per-token) user token controller PDA.",
+            "",
+            "Reserved for future withdrawal access control. It has no backing account",
+            "and no data today, so the only check performed on it is that the passed",
+            "address matches its PDA derivation; adding real behavior behind it later",
+            "is not a breaking change to this instruction's accounts."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108,
+                  108,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "builder"
+              },
+              {
+                "kind": "account",
+                "path": "final_output_token"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program.",
+            "",
+            "Read by the associated-token constraint on",
+            "[`claim_vault`](Self::claim_vault) to derive the vault's address."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_factor",
+          "type": "u128"
+        }
+      ]
+    },
+    {
       "name": "set_builder_fee_factor",
       "docs": [
         "Set the builder fee factor advertised by the user.",
@@ -22698,6 +23010,19 @@
       ]
     },
     {
+      "name": "BuilderFeeSet",
+      "discriminator": [
+        55,
+        113,
+        197,
+        140,
+        191,
+        43,
+        152,
+        19
+      ]
+    },
+    {
       "name": "BuilderFeeSettled",
       "discriminator": [
         92,
@@ -23693,6 +24018,21 @@
       "code": 6133,
       "name": "BuilderFeeSwapTypeNotAllowed",
       "msg": "this decrease position swap type is not allowed together with a builder fee"
+    },
+    {
+      "code": 6134,
+      "name": "BuilderFeeFactorMismatched",
+      "msg": "builder fee factor does not match the expected factor"
+    },
+    {
+      "code": 6135,
+      "name": "BuilderFeeOrderKindNotAllowed",
+      "msg": "builder fee is not allowed for this order kind"
+    },
+    {
+      "code": 6136,
+      "name": "BuilderFeeFinalOutputTokenNotInitialized",
+      "msg": "the order's final output token is not initialized"
     }
   ],
   "types": [
@@ -24166,6 +24506,79 @@
             "name": "factor",
             "docs": [
               "The builder fee factor after this update."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuilderFeeSet",
+      "docs": [
+        "Builder fee set event.",
+        "",
+        "Emitted whenever a builder and its fee factor are checkpointed onto an",
+        "order. This is the only event carrying the order-to-builder mapping: the",
+        "charge emitted at execution reports amounts, not who they are owed to, so an",
+        "indexer that misses this event cannot attribute a fee.",
+        "",
+        "Re-checkpointing emits again, with the replaced values in the `previous_*`",
+        "fields, so the full history of an order's builder is reconstructible from",
+        "this event alone."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "store",
+            "docs": [
+              "The store the order belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "order",
+            "docs": [
+              "The order the builder fee was checkpointed onto."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "builder",
+            "docs": [
+              "The builder's User Account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "factor",
+            "docs": [
+              "The checkpointed builder fee factor."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "previous_builder",
+            "docs": [
+              "The builder attached before this call.",
+              "",
+              "The default (zero) [`Pubkey`] means the order had no builder."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "previous_factor",
+            "docs": [
+              "The builder fee factor checkpointed before this call."
             ],
             "type": "u128"
           },

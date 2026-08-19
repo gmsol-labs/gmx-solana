@@ -9,11 +9,12 @@ pub mod programs {
             Store, UserHeader, VirtualInventory, Withdrawal,
         },
         events::{
-            BorrowingFeesUpdated, BuilderFeeFactorSet, DepositExecuted, DepositRemoved,
-            GlvDepositRemoved, GlvPricing, GlvTokenValue, GlvWithdrawalRemoved, GtBuyback,
-            GtUpdated, InsufficientFundingFeePayment, MarketFeesUpdated, MarketStateUpdated,
-            MarketTokenValue, OrderRemoved, OrderUpdated, PositionDecreased, PositionIncreased,
-            ShiftRemoved, SwapExecuted, TradeEvent, WithdrawalExecuted, WithdrawalRemoved,
+            BorrowingFeesUpdated, BuilderFeeFactorSet, BuilderFeeSet, DepositExecuted,
+            DepositRemoved, GlvDepositRemoved, GlvPricing, GlvTokenValue, GlvWithdrawalRemoved,
+            GtBuyback, GtUpdated, InsufficientFundingFeePayment, MarketFeesUpdated,
+            MarketStateUpdated, MarketTokenValue, OrderRemoved, OrderUpdated, PositionDecreased,
+            PositionIncreased, ShiftRemoved, SwapExecuted, TradeEvent, WithdrawalExecuted,
+            WithdrawalRemoved,
         },
     };
 
@@ -54,6 +55,7 @@ pub mod programs {
     impl_decode_for_cpi_event!(MarketTokenValue);
     impl_decode_for_cpi_event!(GlvTokenValue);
     impl_decode_for_cpi_event!(BuilderFeeFactorSet);
+    impl_decode_for_cpi_event!(BuilderFeeSet);
 
     untagged!(
         GMSOLAccountData,
@@ -103,6 +105,7 @@ pub mod programs {
             MarketTokenValue,
             GlvTokenValue,
             BuilderFeeFactorSet,
+            BuilderFeeSet,
             UnknownOwnedData
         ]
     );
