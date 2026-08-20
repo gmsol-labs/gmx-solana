@@ -1,4 +1,5 @@
 IDL_OUT_DIR := "idl-out"
+PROGRAMS_IDL_DIR := "crates/programs/idls"
 FEATURES := "u128"
 DEVNET_FEATURES := "devnet,test-only,migration"
 INTEGRATION_TEST_FEATURES := "integration-test"
@@ -66,6 +67,19 @@ build-idls:
   anchor idl build -p gmsol_competition -t {{IDL_OUT_DIR}}/gmsol_competition.ts -o {{IDL_OUT_DIR}}/gmsol_competition.json
   anchor idl build -p gmsol_liquidity_provider -t {{IDL_OUT_DIR}}/gmsol_liquidity_provider.ts -o {{IDL_OUT_DIR}}/gmsol_liquidity_provider.json
   anchor idl build -p gmsol_gt_incentive -t {{IDL_OUT_DIR}}/gmsol_gt_incentive.ts -o {{IDL_OUT_DIR}}/gmsol_gt_incentive.json
+
+update-idls: build-idls
+  cp {{IDL_OUT_DIR}}/*.json {{PROGRAMS_IDL_DIR}}
+
+check-idls: update-idls
+  @if [ -n "$(git status --porcelain -- {{PROGRAMS_IDL_DIR}})" ]; then \
+    git --no-pager diff -- {{PROGRAMS_IDL_DIR}}; \
+    git status --porcelain -- {{PROGRAMS_IDL_DIR}}; \
+    echo "IDLs are out of date. Run 'just update-idls' and commit the changes."; \
+    exit 1; \
+  else \
+    echo "IDLs are up to date."; \
+  fi
 
 check-verifiable:
   @if [ -f {{STORE_PROGRAM}} ] && [ -f {{TREASURY_PROGRAM}} ] && [ -f {{TIMELOCK_PROGRAM}} ] && [ -f {{MOCK_CHAINLINK_PROGRAM}} ]; then \
