@@ -2254,6 +2254,27 @@ pub mod gmsol_store {
         internal::Close::close(&ctx, &reason)
     }
 
+    /// Settle the builder fee of an order.
+    ///
+    /// Permissionless: any signer may invoke it, no role is required, and
+    /// no specific address can block it. Idempotent: a recorded builder
+    /// fee amount of zero, including orders that never had a builder set,
+    /// is an explicit no-op, so this may be called in any order state,
+    /// before or after terminal.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](SettleBuilderFee)*
+    ///
+    /// # Errors
+    /// - The [`order`](SettleBuilderFee::order) must be initialized and owned by the `store`.
+    /// - If the order's recorded builder fee amount is non-zero, [`builder_user`](SettleBuilderFee::builder_user)
+    ///   must be provided and must match the builder recorded on the order, and
+    ///   [`claim_vault`](SettleBuilderFee::claim_vault) must be provided and must be the
+    ///   associated token account of the final output token owned by `builder_user`.
+    pub fn settle_builder_fee(ctx: Context<SettleBuilderFee>) -> Result<()> {
+        SettleBuilderFee::invoke(ctx)
+    }
+
     /// Cancel order if the corresponding position does not exist.
     ///
     /// # Accounts
@@ -4407,6 +4428,10 @@ pub enum CoreError {
     /// Builder fee factor exceeds the max builder fee factor.
     #[msg("builder fee factor exceeds the max builder fee factor")]
     BuilderFeeFactorExceedsMaxFactor,
+    /// An order cannot be closed while it still has an unsettled builder
+    /// fee; settle it first via `settle_builder_fee`.
+    #[msg("order has an unsettled builder fee")]
+    UnsettledBuilderFee,
     // NOTE: New variants must be appended here to keep existing error codes stable.
 }
 

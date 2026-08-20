@@ -43,6 +43,10 @@ pub mod callback;
 /// Instructions for virtual inventories.
 pub mod virtual_inventory;
 
+/// Instructions for builder fees.
+pub mod builder_fee;
+
+pub use builder_fee::*;
 pub use callback::*;
 pub use config::*;
 pub use exchange::*;

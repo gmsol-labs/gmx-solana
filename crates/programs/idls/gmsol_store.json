@@ -7421,7 +7421,11 @@
           "name": "final_output_token_escrow",
           "docs": [
             "Final output token escrow account.",
-            "Only required by decrease and swap orders."
+            "",
+            "Required by decrease and swap orders. Optional for increase orders: when provided, it is",
+            "recorded on the order and becomes the account a builder fee would be paid out of, and when",
+            "omitted the order's final output token is left uninitialized, so no builder fee can be set",
+            "on it later."
           ],
           "writable": true,
           "optional": true,
@@ -19905,6 +19909,311 @@
       "args": []
     },
     {
+      "name": "settle_builder_fee",
+      "docs": [
+        "Settle the builder fee of an order.",
+        "",
+        "Permissionless: any signer may invoke it, no role is required, and",
+        "no specific address can block it. Idempotent: a recorded builder",
+        "fee amount of zero, including orders that never had a builder set,",
+        "is an explicit no-op, so this may be called in any order state,",
+        "before or after terminal.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](SettleBuilderFee)*",
+        "",
+        "# Errors",
+        "- The [`order`](SettleBuilderFee::order) must be initialized and owned by the `store`.",
+        "- If the order's recorded builder fee amount is non-zero, [`builder_user`](SettleBuilderFee::builder_user)",
+        "must be provided and must match the builder recorded on the order, and",
+        "[`claim_vault`](SettleBuilderFee::claim_vault) must be provided and must be the",
+        "associated token account of the final output token owned by `builder_user`."
+      ],
+      "discriminator": [
+        209,
+        56,
+        167,
+        214,
+        184,
+        197,
+        10,
+        10
+      ],
+      "accounts": [
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "builder_user"
+          ]
+        },
+        {
+          "name": "order",
+          "docs": [
+            "The order whose builder fee is to be settled."
+          ],
+          "writable": true
+        },
+        {
+          "name": "final_output_token",
+          "docs": [
+            "The final output token mint of the order, i.e. the token the",
+            "builder fee is denominated in."
+          ]
+        },
+        {
+          "name": "escrow",
+          "docs": [
+            "The order's escrow account for the final output token."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "order"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "final_output_token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "builder_user",
+          "docs": [
+            "The builder's User Account.",
+            "",
+            "Only required when the order has a non-zero recorded builder fee",
+            "amount. The no-op path (a recorded amount of zero, including",
+            "orders that never had a builder set) performs no CPI and does not",
+            "need it, so it may be omitted."
+          ],
+          "optional": true
+        },
+        {
+          "name": "claim_vault",
+          "docs": [
+            "The builder's claim vault: the associated token account of the",
+            "final output token owned by the builder's User Account.",
+            "",
+            "Required to already exist, so no `init_if_needed` is used here.",
+            "Nothing currently guarantees that existence ahead of time: the",
+            "instruction that is meant to (CON-40's `set_builder_fee`) has not",
+            "landed yet. Until it does, a missing vault just makes settlement,",
+            "and therefore closing an order with a non-zero fee, fail rather",
+            "than misroute anything. Only required alongside `builder_user`,",
+            "for the same reason."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "builder_user"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "final_output_token"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "toggle_feature",
       "docs": [
         "Enable or disable a feature in this deployment.",
@@ -22376,6 +22685,19 @@
       ]
     },
     {
+      "name": "BuilderFeeSettled",
+      "discriminator": [
+        92,
+        156,
+        185,
+        185,
+        199,
+        171,
+        24,
+        82
+      ]
+    },
+    {
       "name": "DepositCreated",
       "discriminator": [
         146,
@@ -23338,6 +23660,11 @@
       "code": 6129,
       "name": "BuilderFeeFactorExceedsMaxFactor",
       "msg": "builder fee factor exceeds the max builder fee factor"
+    },
+    {
+      "code": 6130,
+      "name": "UnsettledBuilderFee",
+      "msg": "order has an unsettled builder fee"
     }
   ],
   "types": [
@@ -23756,6 +24083,78 @@
                 64
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuilderFeeSettled",
+      "docs": [
+        "An event indicating that a builder fee has been settled.",
+        "",
+        "Emitted only when settlement actually transfers a non-zero amount; the",
+        "no-op path (a recorded amount of zero) emits nothing."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ts",
+            "docs": [
+              "Timestamp."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "slot",
+            "docs": [
+              "Slot."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "store",
+            "docs": [
+              "Store."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "order",
+            "docs": [
+              "The order the settled fee was accrued on."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "builder",
+            "docs": [
+              "The builder's User Account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "token",
+            "docs": [
+              "The token mint the fee is denominated in."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "recorded_amount",
+            "docs": [
+              "The builder fee amount recorded on the order before settlement."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "settled_amount",
+            "docs": [
+              "The amount actually transferred, clamped to the escrow's balance.",
+              "A value below `recorded_amount` signals a broken invariant, since",
+              "the escrow is expected to always cover the recorded amount."
+            ],
+            "type": "u64"
           }
         ]
       }
@@ -28825,13 +29224,11 @@
             "type": "u64"
           },
           {
-            "name": "padding_1",
-            "type": {
-              "array": [
-                "u8",
-                8
-              ]
-            }
+            "name": "builder_fee_amount",
+            "docs": [
+              "The builder fee amount charged so far, pending settlement."
+            ],
+            "type": "u64"
           },
           {
             "name": "builder",
@@ -28844,23 +29241,16 @@
           {
             "name": "builder_fee_factor",
             "docs": [
-              "The builder's fee factor, snapshotted at order creation time."
+              "The builder's fee factor, snapshotted when the builder fee is set."
             ],
             "type": "u128"
-          },
-          {
-            "name": "builder_fee_amount",
-            "docs": [
-              "The builder fee amount charged so far, pending settlement."
-            ],
-            "type": "u64"
           },
           {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                72
+                80
               ]
             }
           }

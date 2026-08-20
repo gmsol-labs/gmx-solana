@@ -28,6 +28,10 @@ mod gt;
 /// User account events.
 mod user;
 
+/// Builder fee events.
+mod builder_fee;
+
+pub use builder_fee::*;
 pub use deposit::*;
 pub use glv::*;
 pub use gt::*;

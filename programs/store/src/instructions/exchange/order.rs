@@ -700,6 +700,16 @@ impl<'info> internal::Close<'info, Order> for CloseOrderV2<'info> {
     #[inline(never)]
     fn validate(&self) -> Result<()> {
         let order = self.order.load()?;
+        // Applies to every close path (owner close in any state, keeper
+        // close of terminal orders): an order with an unsettled builder
+        // fee must be settled via `settle_builder_fee` first, otherwise
+        // closing would sweep the fee to the receiver along with the
+        // regular output and destroy the beneficiary information.
+        require_eq!(
+            order.builder_fee_amount(),
+            0,
+            CoreError::UnsettledBuilderFee
+        );
         if order.header.action_state()?.is_pending() {
             self.store
                 .load()?
