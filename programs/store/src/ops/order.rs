@@ -1578,18 +1578,18 @@ fn charge_builder_fee_on_collateral_increment(
 ) -> Result<(u64, u64)> {
     let payable_amount =
         compute_builder_fee_amount(size_delta_usd, builder_fee_factor, collateral_price)?;
-    let payable_amount_u64 =
+    let payable_amount =
         u64::try_from(payable_amount).map_err(|_| error!(CoreError::TokenAmountOverflow))?;
     require_gte!(
         collateral_increment_amount,
-        payable_amount_u64,
+        payable_amount,
         CoreError::BuilderFeeExceedsCollateral
     );
     // The assertion above guarantees the subtraction succeeds.
     let collateral_increment_after_fee = collateral_increment_amount
-        .checked_sub(payable_amount_u64)
+        .checked_sub(payable_amount)
         .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
-    Ok((collateral_increment_after_fee, payable_amount_u64))
+    Ok((collateral_increment_after_fee, payable_amount))
 }
 
 #[inline(never)]
@@ -1961,16 +1961,31 @@ fn execute_decrease_position(
         )?;
 
         // Builder fee is charged in the final output token, after the
-        // receive-token swap above. Deducting it here, before validating
-        // and transferring out the amounts below, means the order's own
-        // slippage validation and `transfer_out` both naturally see the
-        // post-fee amount: the fee is simply netted out of what would
-        // otherwise be transferred out, so no separate accounting or
-        // balance-validation adjustment is needed. Underpayment is
-        // tolerated (charges whatever is available): unlike increase, this
-        // can't fall back to cancelling the order, since a decrease order
-        // may be closing an insolvent position.
-        let output_amount = if builder_fee_factor != 0 {
+        // receive-token swap above. It is only *recorded* here, never
+        // netted out of `output_amount`: the full output amount is routed
+        // into the final-output-token bucket as usual, so the fee value
+        // physically lands in the order's escrow alongside the user's
+        // payout, and settlement is what later moves the recorded amount
+        // on to the builder. That matches the increase path, which
+        // likewise transfers the fee into the escrow rather than leaving
+        // it behind in the market vault, and it preserves the invariant
+        // settlement relies on: the escrow always covers the recorded
+        // amount. The collateral withdrawal was already topped up by an
+        // estimate of the fee above, so the fee is funded even when the
+        // position closes at a loss.
+        //
+        // Underpayment is tolerated (records whatever the output amount
+        // covers) rather than erroring: unlike increase, this can't fall
+        // back to cancelling the order, since a decrease order may be
+        // closing an insolvent position.
+        //
+        // A consequence of recording rather than netting: the amount
+        // checked against the order's `min_output` below is the gross
+        // payout, before the builder fee is settled out of the escrow.
+        // Builders using `min_output` for slippage control must therefore
+        // account for their own fee, since it is part of the output that
+        // bound is checked against.
+        if builder_fee_factor != 0 {
             let final_output_token_price = oracle.get_primary_price(&final_output_token, false)?;
             // The executed size delta, not the requested one: a decrease may
             // be enlarged into a full close, and in that case the whole
@@ -1984,12 +1999,6 @@ fn execute_decrease_position(
                 &final_output_token_price,
             )?;
             let paid_amount = clamp_builder_fee_amount(payable_amount, output_amount.into());
-            // `paid_amount` is clamped to `output_amount`, so both the
-            // conversion and the subtraction below cannot fail.
-            let output_amount = u64::try_from(paid_amount)
-                .ok()
-                .and_then(|paid| output_amount.checked_sub(paid))
-                .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
 
             // TODO(builder-fee): accumulate `paid_amount` into
             // `order.builder_fee_amount` once that field exists.
@@ -2000,11 +2009,7 @@ fn execute_decrease_position(
                 payable_amount,
                 paid_amount,
             )?)?;
-
-            output_amount
-        } else {
-            output_amount
-        };
+        }
 
         order.validate_decrease_output_amounts(
             oracle,
