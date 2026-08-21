@@ -1685,9 +1685,11 @@ fn execute_increase_position(
                 position.collateral_price(&prices),
             )?;
 
-        // TODO(builder-fee): accumulate `payable_amount` into
-        // `order.builder_fee_amount` once that field exists.
+        // Recorded on the order and routed into the final output token
+        // escrow: the two go together, since settlement pays the recorded
+        // amount out of that escrow.
         transfer_out.transfer_out(false, payable_amount)?;
+        order.record_builder_fee(payable_amount)?;
         position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
             order.header().store(),
             &position.market().market_meta().market_token_mint,
@@ -1703,6 +1705,9 @@ fn execute_increase_position(
     } else {
         collateral_increment_amount
     };
+
+    // Re-borrowed because recording the fee above took `order` mutably.
+    let params = &order.params;
 
     // Increase position.
     let (long_amount, short_amount, paid_order_fee_value) = {
@@ -2000,8 +2005,12 @@ fn execute_decrease_position(
             )?;
             let paid_amount = clamp_builder_fee_amount(payable_amount, output_amount.into());
 
-            // TODO(builder-fee): accumulate `paid_amount` into
-            // `order.builder_fee_amount` once that field exists.
+            // `paid_amount` is clamped to `output_amount`, a `u64`, so the
+            // conversion cannot fail.
+            let recorded_amount =
+                u64::try_from(paid_amount).map_err(|_| error!(CoreError::TokenAmountOverflow))?;
+            order.record_builder_fee(recorded_amount)?;
+
             position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
                 order.header().store(),
                 &position.market().market_meta().market_token_mint,
