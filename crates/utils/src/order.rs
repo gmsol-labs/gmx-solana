@@ -81,6 +81,30 @@ impl OrderKind {
     pub fn is_market_decrease(&self) -> bool {
         matches!(self, Self::MarketDecrease)
     }
+
+    /// Is a position order initiated by the position's owner.
+    ///
+    /// These are the only kinds a builder fee may be attached to: the fee pays
+    /// whoever built the order for its owner, so a kind the owner did not
+    /// initiate has no builder to pay.
+    ///
+    /// Deliberately spelled as its own list rather than composed from
+    /// [`is_increase_position`](Self::is_increase_position) and
+    /// [`is_decrease_position`](Self::is_decrease_position): the latter also
+    /// covers [`Liquidation`](Self::Liquidation) and
+    /// [`AutoDeleveraging`](Self::AutoDeleveraging), which are keeper-initiated,
+    /// so that composition reads correct while admitting exactly the two kinds
+    /// this predicate exists to exclude.
+    pub fn is_user_initiated_position(&self) -> bool {
+        matches!(
+            self,
+            Self::MarketIncrease
+                | Self::LimitIncrease
+                | Self::MarketDecrease
+                | Self::LimitDecrease
+                | Self::StopLossDecrease
+        )
+    }
 }
 
 /// Order side.
@@ -188,4 +212,45 @@ pub enum OrderFlag {
     /// Whether to keep position account when empty.
     ShouldKeepPositionAccount,
     // CHECK: should have no more than `MAX_ORDER_FLAGS` of flags.
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_initiated_position_excludes_passive_kinds() {
+        for kind in [OrderKind::Liquidation, OrderKind::AutoDeleveraging] {
+            assert!(
+                !kind.is_user_initiated_position(),
+                "{kind} must not be treated as user-initiated"
+            );
+            // The guard this predicate exists to replace: the obvious composition
+            // accepts both passive kinds, so a regression here is silent.
+            assert!(kind.is_increase_position() || kind.is_decrease_position());
+        }
+    }
+
+    #[test]
+    fn user_initiated_position_accepts_owner_kinds() {
+        for kind in [
+            OrderKind::MarketIncrease,
+            OrderKind::LimitIncrease,
+            OrderKind::MarketDecrease,
+            OrderKind::LimitDecrease,
+            OrderKind::StopLossDecrease,
+        ] {
+            assert!(
+                kind.is_user_initiated_position(),
+                "{kind} must be treated as user-initiated"
+            );
+        }
+    }
+
+    #[test]
+    fn user_initiated_position_excludes_swaps() {
+        for kind in [OrderKind::MarketSwap, OrderKind::LimitSwap] {
+            assert!(!kind.is_user_initiated_position());
+        }
+    }
 }

@@ -572,6 +572,21 @@ impl Order {
         Ok(())
     }
 
+    /// Checkpoint a builder and its fee factor onto this order.
+    ///
+    /// The only writer of either field. Every validation the checkpoint depends
+    /// on (owner, order state and kind, the factor against both the builder's
+    /// advertised rate and the store cap, the fee output token) belongs to the
+    /// caller: this records an already authorized decision and trusts it.
+    ///
+    /// Overwriting is intentional, and is the whole of the re-checkpointing
+    /// behavior: no other code path touches these fields, so between two calls
+    /// the checkpoint cannot change.
+    pub(crate) fn set_builder_fee(&mut self, builder: Pubkey, factor: u128) {
+        self.builder = builder;
+        self.builder_fee_factor = factor;
+    }
+
     /// Process GT.
     /// CHECK: the order must have been successfully executed.
     #[inline(never)]
@@ -688,7 +703,10 @@ impl OrderTokenAccounts {
 
     /// Get final output token info.
     ///
-    /// Only available for decrease and swap orders.
+    /// Always initialized for decrease and swap orders. For increase orders it
+    /// is initialized only when the creation request provided the final output
+    /// token escrow, so read [`TokenAndAccount::token`] rather than infer
+    /// availability from the order's kind.
     pub fn final_output_token(&self) -> &TokenAndAccount {
         &self.final_output_token
     }

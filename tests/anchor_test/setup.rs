@@ -2,6 +2,7 @@ use std::{
     collections::{hash_map::Entry, HashMap},
     fmt,
     future::Future,
+    panic::{resume_unwind, AssertUnwindSafe},
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -13,7 +14,7 @@ use std::{
 use event_listener::Event;
 use eyre::{eyre, OptionExt};
 
-use futures_util::StreamExt;
+use futures_util::{FutureExt, StreamExt};
 use gmsol_sdk::{
     client::{
         chainlink::pull_oracle::ChainlinkPullOracleFactory,
@@ -37,7 +38,7 @@ use gmsol_solana_utils::{
     transaction_builder::default_before_sign,
 };
 use gmsol_utils::{
-    config::{AmountKey, FactorKey},
+    config::{ActionDisabledFlag, AmountKey, DomainDisabledFlag, FactorKey},
     glv::GlvMarketFlag,
     market::MarketConfigKey,
     oracle::PriceProviderKind,
@@ -74,6 +75,10 @@ const ENV_GMSOL_WRITE_OUTPUT: &str = "GMSOL_WRITE_OUTPUT";
 const ENV_GMSOL_EXTRA_USERS: &str = "GMSOL_EXTRA_USERS";
 
 const MAX_DEVIATION_FACTOR: u128 = MARKET_USD_UNIT / 100_000;
+
+/// Serializes the tests that move a builder fee global: the cap, or the
+/// `BuilderFee` feature flag. See [`Deployment::lock_builder_fee_globals`].
+static BUILDER_FEE_GLOBALS_LOCK: Mutex<()> = Mutex::const_new(());
 
 const PYTH_FETCH_MAX_RETRIES: usize = 3;
 const PYTH_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
@@ -1536,6 +1541,134 @@ impl Deployment {
         let lamports = client.get_balance(&payer).await?;
         tracing::info!(%payer, "after refunding the payer: {lamports}");
         Ok(())
+    }
+
+    /// Exclusive access to the store's builder fee globals: the
+    /// [`FactorKey::MaxBuilderFeeFactor`] cap and the `BuilderFee` feature flag.
+    ///
+    /// Needed by any test that moves either, and equally by one that asserts
+    /// what happens at a particular value: "a nonzero factor is rejected while
+    /// the cap is zero" only holds while nobody else has it raised. Hold the
+    /// guard for as long as the assumption has to stay true.
+    ///
+    /// One lock covers both because a test that moves either one wants every
+    /// other checkpoint held off regardless of which global it was: a call
+    /// caught inside a raised-cap window and a call caught inside a
+    /// feature-disabled window both come back with an error the waiting test was
+    /// not asserting.
+    ///
+    /// [`with_builder_fee_cap`](Self::with_builder_fee_cap) and
+    /// [`with_builder_fee_disabled`](Self::with_builder_fee_disabled) are the
+    /// shorthands for the common cases and take this lock themselves, so do not
+    /// call both.
+    pub(crate) async fn lock_builder_fee_globals() -> tokio::sync::MutexGuard<'static, ()> {
+        BUILDER_FEE_GLOBALS_LOCK.lock().await
+    }
+
+    /// Run `fut` with the store's [`FactorKey::MaxBuilderFeeFactor`] raised to
+    /// `cap`, then put it back to `0`.
+    ///
+    /// The cap is a single global on the store, and the store is one fixture
+    /// shared by every test in this binary running concurrently, so raising it
+    /// is not a private setup step: whoever restores it first does so under the
+    /// feet of everyone else, and a checkpoint caught mid-window fails with
+    /// `BuilderFeeFactorExceedsMaxFactor`. Holding one lock across the whole
+    /// raised window is what keeps those tests apart, so a test that needs a
+    /// nonzero cap either comes through here or holds
+    /// [`lock_builder_fee_globals`](Self::lock_builder_fee_globals) itself for
+    /// as long as its own assumption about the cap has to hold. Moving the
+    /// factor without either is what breaks the other tests.
+    ///
+    /// The restore is reached however the body ends, including a failed
+    /// assertion, which is why the panic is caught rather than just awaited: a
+    /// cap left raised leaks into unrelated tests.
+    pub(crate) async fn with_builder_fee_cap<Fut, T>(&self, cap: u128, fut: Fut) -> eyre::Result<T>
+    where
+        Fut: Future<Output = eyre::Result<T>>,
+    {
+        let _lock = Self::lock_builder_fee_globals().await;
+        let keeper = self.user_client(Self::DEFAULT_KEEPER)?;
+
+        let signature = keeper
+            .insert_global_factor_by_key(&self.store, FactorKey::MaxBuilderFeeFactor, &cap)
+            .send_without_preflight()
+            .await?;
+        tracing::info!(%signature, %cap, "raised the builder fee cap");
+
+        let result = AssertUnwindSafe(fut).catch_unwind().await;
+
+        let restored = keeper
+            .insert_global_factor_by_key(&self.store, FactorKey::MaxBuilderFeeFactor, &0)
+            .send_without_preflight()
+            .await;
+
+        // The body's failure is the interesting one, so report it before the
+        // restore's.
+        let value = match result {
+            Ok(result) => result?,
+            Err(panic) => resume_unwind(panic),
+        };
+
+        let signature = restored?;
+        tracing::info!(%signature, "lowered the builder fee cap again");
+
+        Ok(value)
+    }
+
+    /// Run `fut` with the store's `BuilderFee` feature disabled, then enable it
+    /// again.
+    ///
+    /// Takes the same lock as [`with_builder_fee_cap`](Self::with_builder_fee_cap),
+    /// which is what holds off the checkpoints that would otherwise come back
+    /// with `FeatureDisabled` instead of the error they were asserting. Every
+    /// test that calls `set_builder_fee` either holds that lock or is this one's
+    /// own caller, so nothing else can be in flight while the flag is down. Keep
+    /// the body short for the same reason the raised-cap windows are short.
+    ///
+    /// The restore is reached however the body ends, including a failed
+    /// assertion, which is why the panic is caught rather than just awaited: the
+    /// feature left disabled would fail every later checkpoint in the binary.
+    pub(crate) async fn with_builder_fee_disabled<Fut, T>(&self, fut: Fut) -> eyre::Result<T>
+    where
+        Fut: Future<Output = eyre::Result<T>>,
+    {
+        let _lock = Self::lock_builder_fee_globals().await;
+        let keeper = self.user_client(Self::DEFAULT_KEEPER)?;
+
+        let signature = keeper
+            .toggle_feature(
+                &self.store,
+                DomainDisabledFlag::BuilderFee,
+                ActionDisabledFlag::Default,
+                false,
+            )
+            .send_without_preflight()
+            .await?;
+        tracing::info!(%signature, "disabled the builder fee feature");
+
+        let result = AssertUnwindSafe(fut).catch_unwind().await;
+
+        let restored = keeper
+            .toggle_feature(
+                &self.store,
+                DomainDisabledFlag::BuilderFee,
+                ActionDisabledFlag::Default,
+                true,
+            )
+            .send_without_preflight()
+            .await;
+
+        // The body's failure is the interesting one, so report it before the
+        // restore's.
+        let value = match result {
+            Ok(result) => result?,
+            Err(panic) => resume_unwind(panic),
+        };
+
+        let signature = restored?;
+        tracing::info!(%signature, "enabled the builder fee feature again");
+
+        Ok(value)
     }
 
     pub(crate) async fn use_accounts(&self) -> eyre::Result<Guard> {
