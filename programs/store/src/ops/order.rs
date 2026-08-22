@@ -4,15 +4,19 @@ use gmsol_callback::interface::ActionKind;
 use gmsol_model::{
     action::decrease_position::{DecreasePositionFlags, DecreasePositionSwapType},
     num::Unsigned,
-    price::Prices,
-    BaseMarket, BaseMarketExt, MarketAction, PnlFactorKind, Position as _, PositionMut,
-    PositionMutExt, PositionState, PositionStateExt,
+    price::{Price, Prices},
+    BaseMarket, BaseMarketExt, MarketAction, PnlFactorKind, Position as _, PositionExt,
+    PositionMut, PositionMutExt, PositionState, PositionStateExt,
 };
 use gmsol_utils::action::ActionCallbackKind;
 use typed_builder::TypedBuilder;
 
 use crate::{
-    events::{EventEmitter, OrderUpdated, PositionDecreased, PositionIncreased, TradeData},
+    constants,
+    events::{
+        BuilderFeeCharged, EventEmitter, OrderUpdated, PositionDecreased, PositionIncreased,
+        TradeData,
+    },
     states::{
         callback::CallbackAuthority,
         common::{
@@ -1105,6 +1109,9 @@ impl ExecuteOrderOperation<'_, '_> {
                             &mut transfer_out,
                             &mut *event_loader.load_mut()?,
                             &mut *self.order.load_mut()?,
+                            // TODO(builder-fee): read the snapshot factor from
+                            // the order once it is captured at order creation.
+                            0,
                         )?;
                         (false, paid_fee_value)
                     }
@@ -1118,6 +1125,9 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut *self.order.load_mut()?,
                         true,
                         Some(SecondaryOrderType::Liquidation),
+                        // TODO(builder-fee): read the snapshot factor from
+                        // the order once it is captured at order creation.
+                        0,
                     )?,
                     OrderKind::AutoDeleveraging => execute_decrease_position(
                         self.oracle,
@@ -1129,6 +1139,9 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut *self.order.load_mut()?,
                         true,
                         Some(SecondaryOrderType::AutoDeleveraging),
+                        // TODO(builder-fee): read the snapshot factor from
+                        // the order once it is captured at order creation.
+                        0,
                     )?,
                     OrderKind::MarketDecrease
                     | OrderKind::LimitDecrease
@@ -1142,6 +1155,9 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut *self.order.load_mut()?,
                         false,
                         None,
+                        // TODO(builder-fee): read the snapshot factor from
+                        // the order once it is captured at order creation.
+                        0,
                     )?,
                     _ => unreachable!(),
                 };
@@ -1468,6 +1484,39 @@ impl ValidateOracleTime for ExecuteOrderOperation<'_, '_> {
 }
 
 #[inline(never)]
+/// Computes a builder fee amount, denominated in the token of `price`,
+/// from `size_delta_usd` and the builder's fee `factor`.
+///
+/// The amount is rounded up so the fee is never under-collected. Returns
+/// `0` without touching `price` if `factor` is zero, so callers don't need
+/// a meaningful price when no builder fee applies.
+fn compute_builder_fee_amount(
+    size_delta_usd: u128,
+    factor: u128,
+    price: &Price<u128>,
+) -> Result<u128> {
+    if factor == 0 {
+        return Ok(0);
+    }
+
+    let fee_value = gmsol_model::utils::apply_factor::<_, { constants::MARKET_DECIMALS }>(
+        &size_delta_usd,
+        &factor,
+    )
+    .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+
+    fee_value
+        .checked_round_up_div(price.pick_price(false))
+        .ok_or_else(|| error!(CoreError::TokenAmountOverflow))
+}
+
+/// Clamps a computed builder fee down to at most `available`, so a
+/// builder fee never turns an otherwise-fillable order into a hard
+/// failure.
+fn clamp_builder_fee_amount(fee_amount: u128, available: u128) -> u128 {
+    fee_amount.min(available)
+}
+
 fn execute_swap(
     should_throw_error: &mut bool,
     oracle: &Oracle,
@@ -1510,6 +1559,39 @@ fn execute_swap(
     Ok(())
 }
 
+/// Charges the builder fee against an increase order's collateral
+/// increment, in the collateral token, after the pay token has already
+/// been swapped into it. Returns the reduced collateral increment
+/// together with the fee actually charged.
+///
+/// Unlike the decrease path, underpayment here is not tolerated: an
+/// increase order has no equivalent of "complete the close anyway, at a
+/// loss" to fall back on, so if the collateral increment can't fully
+/// cover the fee, this returns an error instead of charging a partial
+/// amount. The caller propagates this as a soft failure (the order is
+/// cancelled), not a transaction revert.
+fn charge_builder_fee_on_collateral_increment(
+    collateral_increment_amount: u64,
+    size_delta_usd: u128,
+    builder_fee_factor: u128,
+    collateral_price: &Price<u128>,
+) -> Result<(u64, u64)> {
+    let payable_amount =
+        compute_builder_fee_amount(size_delta_usd, builder_fee_factor, collateral_price)?;
+    let payable_amount =
+        u64::try_from(payable_amount).map_err(|_| error!(CoreError::TokenAmountOverflow))?;
+    require_gte!(
+        collateral_increment_amount,
+        payable_amount,
+        CoreError::BuilderFeeExceedsCollateral
+    );
+    // The assertion above guarantees the subtraction succeeds.
+    let collateral_increment_after_fee = collateral_increment_amount
+        .checked_sub(payable_amount)
+        .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+    Ok((collateral_increment_after_fee, payable_amount))
+}
+
 #[inline(never)]
 fn execute_increase_position(
     oracle: &Oracle,
@@ -1519,6 +1601,7 @@ fn execute_increase_position(
     transfer_out: &mut TransferOut,
     event: &mut TradeData,
     order: &mut Order,
+    builder_fee_factor: u128,
 ) -> Result<u128> {
     // The builder fee is charged in the order's final output token, so for an increase order that
     // token, and therefore the escrow it is paid out of, must belong to the position's collateral
@@ -1567,6 +1650,65 @@ fn execute_increase_position(
     // after the swap.
     order.validate_output_amount(collateral_increment_amount.into())?;
 
+    // Builder fee is charged in the collateral token, after the pay token
+    // has already been swapped into it, and is deducted from
+    // `collateral_increment_amount` before it is fed into
+    // `position.increase()` below. Because of that, the withheld amount
+    // never enters any market's balances (it is counted only into
+    // `TransferOut`'s final-output-token bucket), so
+    // `validate_market_balances` further down does not need to be
+    // adjusted to cover it.
+    let collateral_increment_amount = if builder_fee_factor != 0 {
+        // Initializing the final output token is optional for increase
+        // orders (see `CreateIncreaseOrderOperation`), so an order whose
+        // creator did not opt in carries `None` here and cannot pay a fee.
+        // The check at the top of this function already rejects a `Some`
+        // that disagrees with the collateral token, so this is the same
+        // condition stated positively, and it is what the fee branch
+        // actually depends on.
+        let final_output_token = order
+            .tokens
+            .final_output_token
+            .token()
+            .ok_or_else(|| error!(CoreError::BuilderFeeFinalOutputTokenMismatch))?;
+        require_keys_eq!(
+            final_output_token,
+            *position.collateral_token(),
+            CoreError::BuilderFeeFinalOutputTokenMismatch
+        );
+
+        let (collateral_increment_amount, payable_amount) =
+            charge_builder_fee_on_collateral_increment(
+                collateral_increment_amount,
+                params.size_delta_value,
+                builder_fee_factor,
+                position.collateral_price(&prices),
+            )?;
+
+        // Recorded on the order and routed into the final output token
+        // escrow: the two go together, since settlement pays the recorded
+        // amount out of that escrow.
+        transfer_out.transfer_out(false, payable_amount)?;
+        order.record_builder_fee(payable_amount)?;
+        position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
+            order.header().store(),
+            &position.market().market_meta().market_token_mint,
+            position.collateral_token(),
+            payable_amount.into(),
+            // Underpayment errors out above rather than charging a partial
+            // amount, so the paid amount always equals the payable amount
+            // here.
+            payable_amount.into(),
+        )?)?;
+
+        collateral_increment_amount
+    } else {
+        collateral_increment_amount
+    };
+
+    // Re-borrowed because recording the fee above took `order` mutably.
+    let params = &order.params;
+
     // Increase position.
     let (long_amount, short_amount, paid_order_fee_value) = {
         let size_delta_usd = params.size_delta_value;
@@ -1612,6 +1754,60 @@ fn execute_increase_position(
     Ok(paid_order_fee_value)
 }
 
+/// Folds an estimate of the builder fee, denominated in the collateral
+/// token, into a decrease order's collateral withdrawal amount, so it can
+/// still be paid even when the position is closed at a loss. Returns the
+/// withdrawal amount including the estimate.
+///
+/// This is only an estimate used to size how much extra collateral to
+/// pull out of the position; the amount actually charged is computed
+/// afterwards, in the final output token, once it's known how much of
+/// that token the withdrawal (and any subsequent swap) actually produced.
+///
+/// Also rejects [`DecreasePositionSwapType::CollateralToPnlToken`]
+/// whenever a builder fee factor is set. This is different from ordinary
+/// underpayment: `NoSwap` can *sometimes* leave less in the final output
+/// token bucket than the fee needs (when the pnl token differs from the
+/// final output token), which is tolerated the same way any other
+/// decrease-side shortfall is. `CollateralToPnlToken`, however,
+/// deterministically moves the *entire* collateral-token output into the
+/// pnl token before the receive-token swap even runs (see
+/// `DecreasePosition::swap_collateral_token_to_pnl_token`), so the final
+/// output token bucket would be zero on every single order that chooses
+/// it. That's not variance, it's a guaranteed way to pay no fee at all,
+/// so it isn't allowed.
+///
+/// The rejection is keyed off the factor rather than off the estimate
+/// computed here. The estimate can round down to zero for a small
+/// requested size delta, while the fee actually charged is computed on
+/// the *executed* size delta, which a decrease may enlarge into a full
+/// close. Gating on a non-zero estimate would therefore admit exactly
+/// the orders that go on to incur a fee they can then bypass.
+fn estimate_builder_fee_for_collateral_withdrawal(
+    collateral_withdrawal_amount: u128,
+    size_delta_usd: u128,
+    builder_fee_factor: u128,
+    collateral_price: &Price<u128>,
+    decrease_position_swap_type: DecreasePositionSwapType,
+) -> Result<u128> {
+    if builder_fee_factor == 0 {
+        return Ok(collateral_withdrawal_amount);
+    }
+
+    require_neq!(
+        decrease_position_swap_type,
+        DecreasePositionSwapType::CollateralToPnlToken,
+        CoreError::BuilderFeeSwapTypeNotAllowed
+    );
+
+    let fee_estimate =
+        compute_builder_fee_amount(size_delta_usd, builder_fee_factor, collateral_price)?;
+
+    collateral_withdrawal_amount
+        .checked_add(fee_estimate)
+        .ok_or_else(|| error!(CoreError::TokenAmountOverflow))
+}
+
 #[allow(clippy::too_many_arguments)]
 #[inline(never)]
 fn execute_decrease_position(
@@ -1624,14 +1820,26 @@ fn execute_decrease_position(
     order: &mut Order,
     is_insolvent_close_allowed: bool,
     secondary_order_type: Option<SecondaryOrderType>,
+    builder_fee_factor: u128,
 ) -> Result<(RemovePosition, u128)> {
     // Decrease position.
     let report = {
         let params = &order.params;
         let decrease_position_swap_type = params.decrease_position_swap_type()?;
-        let collateral_withdrawal_amount = params.initial_collateral_delta_amount as u128;
         let size_delta_usd = params.size_delta_value;
         let acceptable_price = params.acceptable_price;
+        // Fold an estimate of the builder fee into the collateral
+        // withdrawal amount so it's still funded even if the position is
+        // closed at a loss. This is only an estimate for sizing the
+        // withdrawal; the amount actually charged is computed later, in
+        // the final output token, once the receive-token swap has run.
+        let collateral_withdrawal_amount = estimate_builder_fee_for_collateral_withdrawal(
+            u128::from(params.initial_collateral_delta_amount),
+            size_delta_usd,
+            builder_fee_factor,
+            position.collateral_price(&prices),
+            decrease_position_swap_type,
+        )?;
         let is_liquidation_order =
             matches!(secondary_order_type, Some(SecondaryOrderType::Liquidation));
         let is_adl_order = matches!(
@@ -1756,6 +1964,62 @@ fn execute_decrease_position(
             token_ins,
             (output_amount, secondary_output_amount),
         )?;
+
+        // Builder fee is charged in the final output token, after the
+        // receive-token swap above. It is only *recorded* here, never
+        // netted out of `output_amount`: the full output amount is routed
+        // into the final-output-token bucket as usual, so the fee value
+        // physically lands in the order's escrow alongside the user's
+        // payout, and settlement is what later moves the recorded amount
+        // on to the builder. That matches the increase path, which
+        // likewise transfers the fee into the escrow rather than leaving
+        // it behind in the market vault, and it preserves the invariant
+        // settlement relies on: the escrow always covers the recorded
+        // amount. The collateral withdrawal was already topped up by an
+        // estimate of the fee above, so the fee is funded even when the
+        // position closes at a loss.
+        //
+        // Underpayment is tolerated (records whatever the output amount
+        // covers) rather than erroring: unlike increase, this can't fall
+        // back to cancelling the order, since a decrease order may be
+        // closing an insolvent position.
+        //
+        // A consequence of recording rather than netting: the amount
+        // checked against the order's `min_output` below is the gross
+        // payout, before the builder fee is settled out of the escrow.
+        // Builders using `min_output` for slippage control must therefore
+        // account for their own fee, since it is part of the output that
+        // bound is checked against.
+        if builder_fee_factor != 0 {
+            let final_output_token_price = oracle.get_primary_price(&final_output_token, false)?;
+            // The executed size delta, not the requested one: a decrease may
+            // be enlarged into a full close, and in that case the whole
+            // collateral is withdrawn, so the fee computed from the executed
+            // size is still the maximum the withdrawal can support. The
+            // slightly smaller estimate used to size the withdrawal above is
+            // therefore not a constraint here.
+            let payable_amount = compute_builder_fee_amount(
+                *report.size_delta_usd(),
+                builder_fee_factor,
+                &final_output_token_price,
+            )?;
+            let paid_amount = clamp_builder_fee_amount(payable_amount, output_amount.into());
+
+            // `paid_amount` is clamped to `output_amount`, a `u64`, so the
+            // conversion cannot fail.
+            let recorded_amount =
+                u64::try_from(paid_amount).map_err(|_| error!(CoreError::TokenAmountOverflow))?;
+            order.record_builder_fee(recorded_amount)?;
+
+            position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
+                order.header().store(),
+                &position.market().market_meta().market_token_mint,
+                &final_output_token,
+                payable_amount,
+                paid_amount,
+            )?)?;
+        }
+
         order.validate_decrease_output_amounts(
             oracle,
             &final_output_token,
@@ -2048,5 +2312,240 @@ impl PositionCutOperation<'_, '_> {
             .build()
             .execute()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn price(min: u128, max: u128) -> Price<u128> {
+        Price { min, max }
+    }
+
+    #[test]
+    fn zero_builder_fee_factor_yields_zero_fee_without_needing_a_price() {
+        let fee = compute_builder_fee_amount(1_000_000, 0, &price(0, 0)).unwrap();
+        assert_eq!(fee, 0);
+    }
+
+    #[test]
+    fn computes_expected_builder_fee_amount() {
+        // $100,000 size, 5 bps factor => $50 fee value, at $2/unit => 25 units.
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000; // 5 bps
+        let unit_price = 2 * constants::MARKET_USD_UNIT;
+        let fee =
+            compute_builder_fee_amount(size_delta_usd, factor, &price(unit_price, unit_price))
+                .unwrap();
+        assert_eq!(fee, 25);
+    }
+
+    #[test]
+    fn builder_fee_amount_rounds_up_on_remainder() {
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000; // 5 bps => $50 fee value
+        let unit_price = 3 * constants::MARKET_USD_UNIT;
+        let fee =
+            compute_builder_fee_amount(size_delta_usd, factor, &price(unit_price, unit_price))
+                .unwrap();
+        // 50 / 3 = 16.67, rounded up.
+        assert_eq!(fee, 17);
+    }
+
+    #[test]
+    fn builder_fee_shortfall_clamps_to_available() {
+        assert_eq!(clamp_builder_fee_amount(1_000, 100), 100);
+    }
+
+    #[test]
+    fn builder_fee_clamps_to_zero_when_nothing_is_available() {
+        assert_eq!(clamp_builder_fee_amount(1_000, 0), 0);
+    }
+
+    #[test]
+    fn builder_fee_within_available_is_unchanged() {
+        assert_eq!(clamp_builder_fee_amount(10, 100), 10);
+    }
+
+    #[test]
+    fn zero_builder_fee_factor_leaves_collateral_increment_unchanged() {
+        let (collateral_increment_after_fee, fee) = charge_builder_fee_on_collateral_increment(
+            1_000,
+            100_000 * constants::MARKET_USD_UNIT,
+            0,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+        )
+        .unwrap();
+        assert_eq!(fee, 0);
+        assert_eq!(collateral_increment_after_fee, 1_000);
+    }
+
+    #[test]
+    fn charges_expected_builder_fee_on_collateral_increment() {
+        // $100,000 size, 5 bps factor => $50 fee value, at $2/unit => 25 units.
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let (collateral_increment_after_fee, fee) = charge_builder_fee_on_collateral_increment(
+            1_000,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+        )
+        .unwrap();
+        assert_eq!(fee, 25);
+        assert_eq!(collateral_increment_after_fee, 975);
+    }
+
+    #[test]
+    fn exact_builder_fee_consumes_the_whole_collateral_increment() {
+        // Fee equals the entire collateral increment: allowed, leaves 0.
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let (collateral_increment_after_fee, fee) = charge_builder_fee_on_collateral_increment(
+            25,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+        )
+        .unwrap();
+        assert_eq!(fee, 25);
+        assert_eq!(collateral_increment_after_fee, 0);
+    }
+
+    #[test]
+    fn builder_fee_underpayment_errors_instead_of_clamping() {
+        // Same fee value as above (25 units), but the swap only produced 10 units.
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let err = charge_builder_fee_on_collateral_increment(
+            10,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+        )
+        .unwrap_err();
+        assert_eq!(err, error!(CoreError::BuilderFeeExceedsCollateral));
+    }
+
+    #[test]
+    fn zero_builder_fee_factor_leaves_withdrawal_amount_unchanged() {
+        let withdrawal_amount = estimate_builder_fee_for_collateral_withdrawal(
+            1_000,
+            100_000 * constants::MARKET_USD_UNIT,
+            0,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+            DecreasePositionSwapType::NoSwap,
+        )
+        .unwrap();
+        assert_eq!(withdrawal_amount, 1_000);
+    }
+
+    #[test]
+    fn tops_up_withdrawal_amount_by_builder_fee_estimate() {
+        // $100,000 size, 5 bps factor => $50 fee value, at $2/unit => 25 units.
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let withdrawal_amount = estimate_builder_fee_for_collateral_withdrawal(
+            1_000,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+            DecreasePositionSwapType::PnlTokenToCollateralToken,
+        )
+        .unwrap();
+        // The withdrawal amount grows by the estimate; it is not subtracted.
+        assert_eq!(withdrawal_amount, 1_025);
+    }
+
+    #[test]
+    fn no_swap_is_allowed_with_a_non_zero_builder_fee() {
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let result = estimate_builder_fee_for_collateral_withdrawal(
+            1_000,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+            DecreasePositionSwapType::NoSwap,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn collateral_to_pnl_token_is_rejected_with_a_non_zero_builder_fee() {
+        let size_delta_usd = 100_000 * constants::MARKET_USD_UNIT;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let result = estimate_builder_fee_for_collateral_withdrawal(
+            1_000,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+            DecreasePositionSwapType::CollateralToPnlToken,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn collateral_to_pnl_token_is_rejected_when_the_fee_estimate_rounds_to_zero() {
+        // A dust size delta, whose fee value truncates to zero, while the
+        // factor is still set: the executed size delta may be enlarged
+        // into a full close and incur a real fee, so the swap type must
+        // already have been rejected by then.
+        let size_delta_usd = 1_000;
+        let factor = constants::MARKET_USD_UNIT / 2_000;
+        let result = estimate_builder_fee_for_collateral_withdrawal(
+            1_000,
+            size_delta_usd,
+            factor,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+            DecreasePositionSwapType::CollateralToPnlToken,
+        );
+        assert_eq!(
+            result.unwrap_err(),
+            error!(CoreError::BuilderFeeSwapTypeNotAllowed)
+        );
+    }
+
+    #[test]
+    fn collateral_to_pnl_token_is_allowed_when_builder_fee_is_zero() {
+        let result = estimate_builder_fee_for_collateral_withdrawal(
+            1_000,
+            100_000 * constants::MARKET_USD_UNIT,
+            0,
+            &price(
+                2 * constants::MARKET_USD_UNIT,
+                2 * constants::MARKET_USD_UNIT,
+            ),
+            DecreasePositionSwapType::CollateralToPnlToken,
+        );
+        assert!(result.is_ok());
     }
 }

@@ -4432,6 +4432,26 @@ pub enum CoreError {
     /// fee; settle it first via `settle_builder_fee`.
     #[msg("order has an unsettled builder fee")]
     UnsettledBuilderFee,
+    /// An increase order's collateral increment cannot fully cover the
+    /// builder fee. Unlike decrease, increase has no equivalent of
+    /// "complete anyway at a loss" to fall back on, so this cancels the
+    /// order instead of charging a partial fee.
+    #[msg("builder fee exceeds the collateral increment")]
+    BuilderFeeExceedsCollateral,
+    /// A non-zero builder fee is being charged on an increase order that
+    /// has no final output token. Initializing it is optional for
+    /// increase orders, and the builder fee is charged in it, so an order
+    /// that never opted in cannot pay one.
+    #[msg("builder fee requires the final output token to equal the collateral token")]
+    BuilderFeeFinalOutputTokenMismatch,
+    /// A decrease order with a non-zero builder fee used
+    /// `DecreasePositionSwapType::CollateralToPnlToken`. That swap type
+    /// deterministically moves the entire collateral-token output into the
+    /// pnl token before the receive-token swap runs, leaving the final
+    /// output token bucket at zero every time, which would make the
+    /// builder fee trivially and reliably bypassable.
+    #[msg("this decrease position swap type is not allowed together with a builder fee")]
+    BuilderFeeSwapTypeNotAllowed,
     // NOTE: New variants must be appended here to keep existing error codes stable.
 }
 

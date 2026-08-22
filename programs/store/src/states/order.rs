@@ -554,6 +554,24 @@ impl Order {
         self.builder_fee_amount
     }
 
+    /// Record a builder fee amount charged during execution, adding it to
+    /// the amount pending settlement.
+    ///
+    /// Accumulates rather than overwrites: the field is the total charged
+    /// so far, and `settle_builder_fee` is what zeroes it once the amount
+    /// has been paid out to the builder.
+    ///
+    /// CHECK: the caller must have routed the same amount into the order's
+    /// final output token escrow, since settlement pays the recorded
+    /// amount out of that escrow.
+    pub(crate) fn record_builder_fee(&mut self, amount: u64) -> Result<()> {
+        self.builder_fee_amount = self
+            .builder_fee_amount
+            .checked_add(amount)
+            .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+        Ok(())
+    }
+
     /// Process GT.
     /// CHECK: the order must have been successfully executed.
     #[inline(never)]
@@ -1002,5 +1020,25 @@ mod tests {
         assert_eq!(order.builder(), None);
         assert_eq!(order.builder_fee_factor(), 0);
         assert_eq!(order.builder_fee_amount(), 0);
+    }
+
+    #[test]
+    fn recorded_builder_fee_amounts_accumulate() {
+        let mut order: Order = bytemuck::Zeroable::zeroed();
+        order.record_builder_fee(25).unwrap();
+        order.record_builder_fee(17).unwrap();
+        // The field is the total charged so far, so a second charge adds
+        // to the first rather than replacing it.
+        assert_eq!(order.builder_fee_amount(), 42);
+    }
+
+    #[test]
+    fn recording_a_builder_fee_rejects_overflow() {
+        let mut order: Order = bytemuck::Zeroable::zeroed();
+        order.record_builder_fee(u64::MAX).unwrap();
+        let err = order.record_builder_fee(1).unwrap_err();
+        assert_eq!(err, error!(CoreError::TokenAmountOverflow));
+        // The rejected charge leaves the recorded amount untouched.
+        assert_eq!(order.builder_fee_amount(), u64::MAX);
     }
 }
