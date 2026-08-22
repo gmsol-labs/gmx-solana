@@ -153,6 +153,15 @@ suffix line
     }
 
     #[test]
+    fn renders_only_index_zero_when_that_is_the_active_set() {
+        let out = render_interior(&[0], 0, |i| format!("ADDR{i}"));
+        assert!(out.contains(
+            "# Wormhole Guardian Set account (index = 0)\n[[test.validator.clone]]\naddress = \"ADDR0\""
+        ));
+        assert!(!out.contains("index = 1"));
+    }
+
+    #[test]
     fn renders_active_and_previous_uncommented() {
         let out = render_interior(&[5, 6, 7], 7, |i| format!("ADDR{i}"));
         // index 7 (active) uncommented

@@ -8,7 +8,7 @@ use solana_sdk::pubkey::Pubkey;
 
 /// Pyth Solana Wormhole receiver program.
 /// Source of truth: gmsol SDK `pyth/pull_oracle/wormhole/mod.rs` (WORMHOLE_PROGRAM_ID).
-const WORMHOLE_PROGRAM_ID: &str = "HDwcJBJXjL9FpJ7UBsYBtaDjsBUhuLCUYoz3zr8SWWaQ";
+const WORMHOLE_PROGRAM_ID: &str = "HDw2E7P8X1SkCyjvoGsfBGAVUutKcj874bXjHrpVYrVL";
 
 pub fn program_id() -> Pubkey {
     Pubkey::from_str(WORMHOLE_PROGRAM_ID).expect("valid program id")
@@ -22,18 +22,16 @@ pub fn guardian_set_address(index: u32) -> Pubkey {
 pub struct Detected {
     /// Highest existing guardian-set index (= the active set).
     pub active: u32,
-    /// All indices in `1..=max_probe` whose account exists on the cluster.
+    /// All indices in `0..=max_probe` whose account exists on the cluster.
     pub existing: Vec<u32>,
 }
 
-/// One `getMultipleAccounts` call over indices `1..=max_probe`; the highest existing
+/// One `getMultipleAccounts` call over indices `0..=max_probe`; the highest existing
 /// index is the active set (indices increment by +1 per rotation, newest is active).
-/// Index 0 (the 2021 genesis set) is intentionally skipped: it is never used to sign
-/// current VAAs, and skipping it keeps `existing` deterministic regardless of whether
-/// the genesis account sits at the standard PDA.
+/// Index 0 is included: upgraded Pyth Core posts are signed by list 0.
 pub fn detect(rpc_url: &str, max_probe: u32) -> Result<Detected> {
     let client = RpcClient::new(rpc_url.to_string());
-    let indices: Vec<u32> = (1..=max_probe).collect();
+    let indices: Vec<u32> = (0..=max_probe).collect();
     let addresses: Vec<Pubkey> = indices.iter().map(|&i| guardian_set_address(i)).collect();
     let accounts = client
         .get_multiple_accounts(&addresses)
@@ -64,10 +62,11 @@ mod tests {
     #[test]
     fn derives_known_guardian_set_addresses() {
         let cases = [
-            (1u32, "8d9szTd157GKCLcxBqiLUgB7mek3v65rbsy2ErRyjwQ5"),
-            (4, "5gxPdahvSzcKySxXxPuRXZZ9s6h8hZ88XDVKavWpaQGn"),
-            (6, "HstYgN21fgNmutTVXjBw54n4ryvP3WrCFbMAjnbdbTzf"),
-            (7, "6GaHgiaQg9Pg346xHq9m7vQ9rJtnH83gQKqJoiAxQa7D"),
+            (0u32, "CJHmJw4FuvLTUfPsYepyVCQkUR8qv1AtZbkwsS36hEcd"),
+            (1, "59LY6jV5LcoEdXrhNhX7AJQmW1gHUHQWSLy3299CgGBY"),
+            (4, "7M14Nv49D5wPnoeXqGpHZBzFbE1jKvEZgBXu95QziRLF"),
+            (6, "2yuAjFYwpjR8UJt2zwBNAqBNXyLUsWCy3VnSFZPE5PZZ"),
+            (7, "ijDpMb9MzJyuEyBXGmQiFS9VS2yhzMcx1cu5Aj3Ydpg"),
         ];
         for (index, expected) in cases {
             assert_eq!(

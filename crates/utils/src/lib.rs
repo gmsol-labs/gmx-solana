@@ -67,7 +67,7 @@ pub mod security_txt;
 
 /// Convert a string to a seed.
 pub fn to_seed(key: &str) -> [u8; 32] {
-    use anchor_lang::solana_program::hash::hash;
+    use solana_sha256_hasher::hash;
     hash(key.as_bytes()).to_bytes()
 }
 

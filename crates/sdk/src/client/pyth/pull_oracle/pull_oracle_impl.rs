@@ -182,17 +182,16 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
                 .create_encoded_vaa(draft_vaa, vaa.len() as u64)
                 .await?;
             let draft_vaa = pubkey;
-            let write_1 = wormhole.write_encoded_vaa(draft_vaa, 0, &vaa[0..VAA_SPLIT_INDEX]);
-            let write_2 = wormhole.write_encoded_vaa(
-                draft_vaa,
-                VAA_SPLIT_INDEX as u32,
-                &vaa[VAA_SPLIT_INDEX..],
-            );
-            let verify = wormhole.verify_encoded_vaa_v1(draft_vaa, *guardian_set_index);
             ixns.try_push_post(create.clear_output())
                 .map_err(|(_, err)| err)?;
-            ixns.try_push_post(write_1).map_err(|(_, err)| err)?;
-            ixns.try_push_post(write_2).map_err(|(_, err)| err)?;
+            let mut offset = 0usize;
+            while offset < vaa.len() {
+                let end = (offset + VAA_SPLIT_INDEX).min(vaa.len());
+                let write = wormhole.write_encoded_vaa(draft_vaa, offset as u32, &vaa[offset..end]);
+                ixns.try_push_post(write).map_err(|(_, err)| err)?;
+                offset = end;
+            }
+            let verify = wormhole.verify_encoded_vaa_v1(draft_vaa, *guardian_set_index);
             ixns.try_push_post(verify).map_err(|(_, err)| err)?;
             let close_encoded_vaa = wormhole.close_encoded_vaa(draft_vaa);
             ixns.try_push_close(close_encoded_vaa)
