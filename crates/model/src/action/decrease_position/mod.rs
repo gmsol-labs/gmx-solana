@@ -6,8 +6,8 @@ use crate::{
     params::fee::PositionFees,
     pool::delta::PriceImpact,
     position::{
-        CollateralDelta, Position, PositionExt, PositionMut, PositionMutExt, PositionStateExt,
-        WillCollateralBeSufficient,
+        CollateralDelta, InsolventCloseStep, Position, PositionExt, PositionMut, PositionMutExt,
+        PositionStateExt, WillCollateralBeSufficient,
     },
     price::{Price, Prices},
     BorrowingFeeMarketExt, PerpMarketMut, PoolExt,
@@ -158,6 +158,31 @@ impl DecreasePositionFlags {
         self.is_insolvent_close_allowed = is_full_close && self.is_insolvent_close_allowed;
 
         Ok(())
+    }
+}
+
+/// Whether an insolvent close reported at `step` short-circuited the collateral
+/// pipeline before the fee step had a chance to collect anything.
+///
+/// The pipeline runs, in order: `Funding`, `Pnl`, `Fees`, `Impact`, `Diff` (see
+/// `process_collateral`). An insolvent close stops at the step that ran out of funds, so
+/// a step reported here means every later step was skipped.
+///
+/// Matched exhaustively rather than compared by ordering: the declaration order of
+/// [`InsolventCloseStep`] does not match the pipeline order, and the enum derives no
+/// `Ord`. Being in the crate that defines it, an exhaustive match also forces a decision
+/// here if a step is ever added.
+fn insolvency_preempted_fee_collection(step: InsolventCloseStep) -> bool {
+    match step {
+        // Both run before `pay_for_fees_excluding_funding`, so no order or borrowing fee
+        // was collected and the values computed up front must not be reported as paid.
+        InsolventCloseStep::Funding | InsolventCloseStep::Pnl => true,
+        // The fee step itself already clears what it failed to collect, on the
+        // partial-payment branch that credits the amount to the pool instead.
+        InsolventCloseStep::Fees => false,
+        // Both run after the fee step, so the fees were genuinely collected. Clearing
+        // here would under-report them and under-mint GT.
+        InsolventCloseStep::Impact | InsolventCloseStep::Diff => false,
     }
 }
 
@@ -426,6 +451,19 @@ where
 
             result
         };
+
+        // An insolvent close short-circuits the pipeline above at the step that ran out of
+        // funds, so every step after it is skipped. When that step precedes the fee step,
+        // `pay_for_fees_excluding_funding` never ran: no fees were collected, but `fees`
+        // still carries the values computed up front, including
+        // `paid_order_and_borrowing_fee_value`. Leaving it set would let the caller mint GT
+        // against fees that were never paid.
+        if result
+            .insolvent_close_step
+            .is_some_and(insolvency_preempted_fee_collection)
+        {
+            fees.clear_uncollected_fees_excluding_funding();
+        }
 
         // Handle initial collateral delta amount with price impact diff.
         // The price_impact_diff has been deducted from the output amount or the position's collateral
