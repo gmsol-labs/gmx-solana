@@ -557,10 +557,10 @@ where
                         // Empty the fees since the amount was entirely paid to the pool instead of for fees.
                         // It is possible for the txn execution to still complete even in this case
                         // as long as the remaining_cost is still zero.
-                        fees.clear_fees_excluding_funding();
-
-                        // Also, clear the `paid_order_and_borrowing_fee_value` for the same reason.
-                        fees.set_paid_order_and_borrowing_fee_value(Zero::zero());
+                        //
+                        // This also clears `paid_order_and_borrowing_fee_value`, which must not
+                        // outlive the fees it accounts for.
+                        fees.clear_uncollected_fees_excluding_funding();
                     }
                     Ok(())
                 },
