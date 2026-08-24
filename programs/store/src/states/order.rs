@@ -1033,6 +1033,42 @@ mod tests {
     }
 
     #[test]
+    fn zero_paid_fee_value_mints_no_gt() {
+        // The model reports a zero paid fee value when an insolvent close never
+        // reached the fee step. This early return is what turns that into no GT,
+        // so removing it would restore minting without fee backing.
+        let mut order: Order = bytemuck::Zeroable::zeroed();
+        let mut store: Box<Store> = Box::new(bytemuck::Zeroable::zeroed());
+        let mut user: Box<UserHeader> = Box::new(bytemuck::Zeroable::zeroed());
+
+        // A placeholder account is enough, since nothing is emitted.
+        let key = Pubkey::new_unique();
+        let owner = crate::ID;
+        let mut lamports = 0u64;
+        let mut data: [u8; 0] = [];
+        let event_authority = AccountInfo::new(
+            &key,
+            false,
+            false,
+            &mut lamports,
+            &mut data,
+            &owner,
+            false,
+            0,
+        );
+        let event_emitter = EventEmitter::new(&event_authority, 0);
+
+        order
+            .unchecked_process_gt(&mut store, &mut user, 0, &event_emitter)
+            .unwrap();
+
+        assert_eq!(order.gt_reward, 0);
+        assert_eq!(user.gt.amount(), 0);
+        assert_eq!(user.gt.paid_fee_value(), 0);
+        assert_eq!(user.gt.minted_fee_value(), 0);
+    }
+
+    #[test]
     fn recording_a_builder_fee_rejects_overflow() {
         let mut order: Order = bytemuck::Zeroable::zeroed();
         order.record_builder_fee(u64::MAX).unwrap();
