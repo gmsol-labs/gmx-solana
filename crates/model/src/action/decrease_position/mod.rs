@@ -856,4 +856,83 @@ mod tests {
         println!("{market:#?}");
         Ok(())
     }
+
+    /// A test for the step-to-clear decision.
+    ///
+    /// The last three rows guard against a blanket `is_some()` check, which would
+    /// under-report fees that were collected.
+    #[test]
+    fn insolvency_preempted_fee_collection_decision_table() {
+        for (step, expected) in [
+            (InsolventCloseStep::Funding, true),
+            (InsolventCloseStep::Pnl, true),
+            (InsolventCloseStep::Fees, false),
+            (InsolventCloseStep::Impact, false),
+            (InsolventCloseStep::Diff, false),
+        ] {
+            assert_eq!(insolvency_preempted_fee_collection(step), expected);
+        }
+    }
+
+    /// Opens a leveraged long and fully closes it at `close_price`.
+    ///
+    /// Insolvent close is always allowed, so solvency is the only variable.
+    fn close_long_at(
+        close_price: u64,
+    ) -> crate::Result<Box<DecreasePositionReport<u64, <u64 as Unsigned>::Signed>>> {
+        let mut market = TestMarket::<u64, 9>::default();
+        let prices = Prices::new_for_test(120, 120, 1);
+        market.deposit(1_000_000_000, 0, prices)?.execute()?;
+        market.deposit(0, 1_000_000_000, prices)?.execute()?;
+
+        let mut position = TestPosition::long(true);
+        let _ = position
+            .ops(&mut market)
+            .increase(
+                Prices::new_for_test(123, 123, 1),
+                100_000_000,
+                80_000_000_000,
+                None,
+            )?
+            .execute()?;
+
+        let mut ops = position.ops(&mut market);
+        ops.decrease(
+            Prices::new_for_test(close_price, close_price, 1),
+            80_000_000_000,
+            None,
+            0,
+            DecreasePositionFlags {
+                is_insolvent_close_allowed: true,
+                is_liquidation_order: false,
+                is_cap_size_delta_usd_allowed: true,
+            },
+        )?
+        .execute()
+    }
+
+    /// A test for an insolvent close that stops before the fee step.
+    #[test]
+    fn insolvent_close_at_pnl_step_reports_no_paid_fee() -> crate::Result<()> {
+        let report = close_long_at(100)?;
+
+        assert!(matches!(
+            report.insolvent_close_step(),
+            Some(InsolventCloseStep::Pnl)
+        ));
+        assert_eq!(*report.fees().paid_order_and_borrowing_fee_value(), 0);
+
+        Ok(())
+    }
+
+    /// A test for a solvent close, which must still report its paid fee.
+    #[test]
+    fn solvent_close_still_reports_paid_fee() -> crate::Result<()> {
+        let report = close_long_at(122)?;
+
+        assert!(report.insolvent_close_step().is_none());
+        assert!(*report.fees().paid_order_and_borrowing_fee_value() > 0);
+
+        Ok(())
+    }
 }
