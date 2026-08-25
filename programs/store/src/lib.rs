@@ -3156,6 +3156,59 @@ pub mod gmsol_store {
         SetBuilderFeeFactor::invoke(ctx, factor)
     }
 
+    /// Checkpoint a builder and its fee factor onto a pending order.
+    ///
+    /// Owner-signed and separate from order creation and update on purpose: a
+    /// builder fee is only ever paid because the order's owner explicitly
+    /// authorized it, for this order, at a rate it could see. The checkpoint is
+    /// immutable between calls, so neither an order update nor a later change to
+    /// the builder's advertised factor can alter what will be charged.
+    ///
+    /// Calling again on a still-pending order re-runs every validation and
+    /// overwrites the checkpoint. Since a User Account advertises a zero factor
+    /// until its owner sets one, checkpointing an account that advertises zero
+    /// is how an owner cancels a builder fee it no longer wants.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](SetBuilderFee)*
+    ///
+    /// # Arguments
+    /// - `expected_factor`: The factor the caller expects the builder to be
+    ///   advertising. The call fails unless it matches exactly, which is what
+    ///   stops a builder from raising its rate between the owner signing and the
+    ///   transaction landing.
+    ///
+    /// # Errors
+    /// - The [`owner`](SetBuilderFee::owner) must be a signer and must own the
+    ///   [`order`](SetBuilderFee::order).
+    /// - The [`store`](SetBuilderFee::store) must be properly initialized, and
+    ///   must not have the [`BuilderFee`](crate::states::feature::DomainDisabledFlag::BuilderFee)
+    ///   feature disabled.
+    /// - The [`order`](SetBuilderFee::order) must:
+    ///   - Belong to the `store`
+    ///   - Still be pending execution
+    ///   - Be a user-initiated position order, so swap orders and the
+    ///     keeper-initiated kinds are rejected
+    ///   - Have an initialized final output token, equal to the passed
+    ///     [`final_output_token`](SetBuilderFee::final_output_token), and an
+    ///     initialized escrow account for it
+    ///   - Not carry
+    ///     [`CollateralToPnlToken`](gmsol_model::action::decrease_position::DecreasePositionSwapType::CollateralToPnlToken)
+    ///     as its decrease position swap type, unless the factor is `0`. This
+    ///     is checked on every user-initiated position order rather than only
+    ///     on decrease orders, so it is stricter than the swap type's own
+    ///     reach
+    /// - The [`builder`](SetBuilderFee::builder) must be a properly initialized
+    ///   User Account of the same `store`, advertising exactly `expected_factor`.
+    /// - The factor must not exceed the store's
+    ///   [`MaxBuilderFeeFactor`](crate::states::FactorKey::MaxBuilderFeeFactor).
+    /// - The [`claim_vault`](SetBuilderFee::claim_vault) must already exist, and
+    ///   the [`user_token_controller`](SetBuilderFee::user_token_controller) must
+    ///   match its PDA derivation.
+    pub fn set_builder_fee(ctx: Context<SetBuilderFee>, expected_factor: u128) -> Result<()> {
+        SetBuilderFee::invoke(ctx, expected_factor)
+    }
+
     /// Transfer referral code.
     ///
     /// # Accounts
@@ -4452,6 +4505,21 @@ pub enum CoreError {
     /// builder fee trivially and reliably bypassable.
     #[msg("this decrease position swap type is not allowed together with a builder fee")]
     BuilderFeeSwapTypeNotAllowed,
+    /// The builder's advertised factor does not match the expected factor.
+    #[msg("builder fee factor does not match the expected factor")]
+    BuilderFeeFactorMismatched,
+    /// Builder fee is not allowed for this order kind.
+    #[msg("builder fee is not allowed for this order kind")]
+    BuilderFeeOrderKindNotAllowed,
+    /// The order's final output token is not initialized.
+    #[msg("the order's final output token is not initialized")]
+    BuilderFeeFinalOutputTokenNotInitialized,
+    /// The order's escrow account for the final output token is not
+    /// initialized. The builder fee is paid out of that escrow, so an order
+    /// without one would revert at the transfer-out stage of `execute_order`
+    /// once a fee were charged.
+    #[msg("the order's final output token escrow is not initialized")]
+    BuilderFeeFinalOutputTokenEscrowNotInitialized,
     // NOTE: New variants must be appended here to keep existing error codes stable.
 }
 

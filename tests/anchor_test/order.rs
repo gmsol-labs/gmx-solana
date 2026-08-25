@@ -2,13 +2,21 @@ use std::time::Duration;
 
 use anchor_spl::associated_token::get_associated_token_address;
 use eyre::OptionExt;
-use gmsol_programs::gmsol_store::types::{DecreasePositionSwapType, UpdateOrderParams};
+use gmsol_programs::{
+    anchor_lang::error::ErrorCode,
+    gmsol_store::{
+        client::{accounts, args},
+        types::{DecreasePositionSwapType, UpdateOrderParams},
+    },
+};
 use gmsol_sdk::{
-    client::ops::{ExchangeOps, MarketOps},
+    builders::order::SetBuilderFeeHint,
+    client::ops::{BuilderFeeOps, ConfigOps, ExchangeOps, MarketOps, UserOps},
     constants::MARKET_USD_UNIT,
+    pda::find_user_token_controller_address,
 };
 use gmsol_store::CoreError;
-use gmsol_utils::market::MarketConfigKey;
+use gmsol_utils::{config::FactorKey, market::MarketConfigKey};
 use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
@@ -993,6 +1001,608 @@ async fn increase_order_with_mismatched_final_output_token_should_fail() -> eyre
         matches!(err, gmsol_sdk::Error::NotFound),
         "expected the order account to be absent, got {err:?}"
     );
+
+    Ok(())
+}
+
+/// The full checkpoint lifecycle: advertise, checkpoint, re-checkpoint, revoke.
+///
+/// Every case here needs the store's builder fee cap raised, so the whole body
+/// runs inside [`Deployment::with_builder_fee_cap`], which also serializes it
+/// against the other tests that move that cap.
+#[tokio::test]
+async fn set_builder_fee() -> eyre::Result<()> {
+    /// One percent, in the market factor unit.
+    const CAP: u128 = MARKET_USD_UNIT / 100;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("set_builder_fee");
+    let _enter = span.enter();
+
+    let owner = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let builder = deployment.user_client(Deployment::USER_1)?;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let store = &deployment.store;
+    let fbtc = deployment.token("fBTC").expect("must exist");
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+
+    // Both sides need a User Account: the builder to advertise a factor, the
+    // owner because checkpointing its own account is the revocation path.
+    for client in [&owner, &builder] {
+        client.prepare_user(store)?.send_without_preflight().await?;
+    }
+    let owner_user = owner.find_user_address(store, &owner.payer());
+    let builder_user = builder.find_user_address(store, &builder.payer());
+
+    // The claim vault has to exist before a checkpoint is allowed, and this
+    // instruction deliberately creates nothing. Minting zero is how the fixture
+    // opens an ATA without moving a balance.
+    for user in [&owner_user, &builder_user] {
+        deployment.mint_or_transfer_to("fBTC", user, 0).await?;
+    }
+
+    let collateral_amount = 100_000;
+    deployment
+        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, collateral_amount)
+        .await?;
+
+    // A limit order priced far from the market stays pending for the whole
+    // test, which is the state a checkpoint requires. The escrow is what makes
+    // it fee-eligible: without it the final output token is never initialized.
+    let size = 5_000 * MARKET_USD_UNIT;
+    let price = 400_000 * MARKET_USD_UNIT / 10u128.pow(fbtc.config.decimals as u32);
+    let (rpc, order) = owner
+        .limit_increase(
+            store,
+            market_token,
+            false,
+            size,
+            price,
+            true,
+            collateral_amount,
+        )
+        .prepare_final_output_token_escrow(true)
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%order, %signature, "created a fee-eligible limit increase order");
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            let signature = builder
+                .set_builder_fee_factor(store, CAP)?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "the builder advertised its factor");
+
+            // The checkpoint carries the factor the owner signed for, and
+            // one unit off in either direction is rejected. Exact equality is
+            // what stops a builder raising its rate after the owner decided.
+            for expected in [CAP - 1, CAP + 1] {
+                let err = owner
+                    .set_builder_fee(store, &order, &builder_user, expected, None)
+                    .await?
+                    .send()
+                    .await
+                    .expect_err("should reject a factor the builder is not advertising");
+                assert_eq!(
+                    gmsol_sdk::Error::from(err).anchor_error_code(),
+                    Some(CoreError::BuilderFeeFactorMismatched.into()),
+                );
+            }
+
+            // Only the order's owner may checkpoint onto it. Signed here by
+            // the builder, which is the party that would gain from it.
+            let err = builder
+                .set_builder_fee(store, &order, &builder_user, CAP, None)
+                .await?
+                .send()
+                .await
+                .expect_err("should reject a checkpoint signed by anyone but the order's owner");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::OwnerMismatched.into()),
+            );
+
+            // The happy path.
+            let signature = owner
+                .set_builder_fee(store, &order, &builder_user, CAP, None)
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "checkpointed the builder fee");
+
+            let checkpointed = owner.order(&order).await?;
+            assert_eq!(
+                checkpointed.builder, builder_user,
+                "the builder must be recorded on the order"
+            );
+            assert_eq!(
+                checkpointed.builder_fee_factor, CAP,
+                "the advertised factor must be the one recorded"
+            );
+
+            // Updating the order is not a way to change the checkpoint.
+            // `update_order_v2` writes none of these fields, and this is the
+            // regression guard for that.
+            let signature = owner
+                .update_order(
+                    store,
+                    market_token,
+                    &order,
+                    UpdateOrderParams {
+                        trigger_price: Some(price / 2),
+                        ..Default::default()
+                    },
+                    None,
+                )
+                .await?
+                .send()
+                .await?;
+            tracing::info!(%signature, "updated the order after checkpointing");
+
+            let after_update = owner.order(&order).await?;
+            assert_eq!(
+                after_update.builder, builder_user,
+                "an order update must leave the checkpointed builder untouched"
+            );
+            assert_eq!(
+                after_update.builder_fee_factor, CAP,
+                "an order update must leave the checkpointed factor untouched"
+            );
+
+            // Revocation. A fresh User Account advertises zero, so checkpointing
+            // one is how a builder is dropped; the owner's own account is the
+            // natural choice and is deliberately allowed.
+            let signature = owner
+                .set_builder_fee(store, &order, &owner_user, 0, None)
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "revoked the builder fee");
+
+            let revoked = owner.order(&order).await?;
+            assert_eq!(revoked.builder, owner_user);
+            assert_eq!(
+                revoked.builder_fee_factor, 0,
+                "checkpointing a zero-advertising account must clear the fee"
+            );
+
+            // The cap is enforced again at checkpoint time, not only when
+            // the rate is advertised, so a rate that was legal when advertised
+            // stops being payable once the cap drops under it.
+            let signature = keeper
+                .insert_global_factor_by_key(store, FactorKey::MaxBuilderFeeFactor, &(CAP / 2))
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "lowered the cap under the advertised factor");
+
+            let err = owner
+                .set_builder_fee(store, &order, &builder_user, CAP, None)
+                .await?
+                .send()
+                .await
+                .expect_err("should reject a factor above the lowered cap");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::BuilderFeeFactorExceedsMaxFactor.into()),
+            );
+
+            let unchanged = owner.order(&order).await?;
+            assert_eq!(
+                unchanged.builder, owner_user,
+                "a rejected checkpoint must leave the previous one in place"
+            );
+
+            // The builder's User Account is shared with other tests, so put its
+            // advertised factor back where it was found.
+            builder
+                .set_builder_fee_factor(store, 0)?
+                .send_without_preflight()
+                .await?;
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    let signature = owner.close_order(&order)?.build().await?.send().await?;
+    tracing::info!(%order, %signature, "cancelled the order");
+
+    Ok(())
+}
+
+/// The orders, account shapes and store states a checkpoint must refuse.
+///
+/// None of these need the fee cap raised: the builder here is the caller's own
+/// User Account, which advertises zero, and zero is payable under any cap. That
+/// keeps most of this test out of the lock that serializes [`set_builder_fee`].
+///
+/// The exception is the disabled-feature case at the end, which moves a store
+/// global and so takes that lock for its window through
+/// [`Deployment::with_builder_fee_disabled`]. The cases above it run unlocked
+/// and are unaffected, being the same test and therefore sequential.
+///
+/// Liquidation and `AutoDeleveraging` are the two keeper-initiated kinds, and
+/// they are deliberately absent: `create_order` refuses both (`OrderKindNotAllowed`,
+/// `instructions/exchange/order.rs`) and the keeper builds a liquidation inside
+/// the transaction that executes it, so no pending order of either kind can be
+/// reached from a test. They are covered instead by the unit tests on
+/// `OrderKind::is_user_initiated_position` in `crates/utils/src/order.rs`.
+///
+/// `BuilderFeeFinalOutputTokenEscrowNotInitialized` is absent for the same
+/// reason. `TokenAndAccount::init` writes the mint and the escrow address
+/// together from one token account, so no creation path can leave an order
+/// holding the first without the second; the check guards against a future
+/// path that does, not against a state reachable today.
+#[tokio::test]
+async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("set_builder_fee_rejects_ineligible_orders");
+    let _enter = span.enter();
+
+    let client = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let store = &deployment.store;
+    let fbtc = deployment.token("fBTC").expect("must exist");
+    let usdg = deployment.token("USDG").expect("must exist");
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+
+    // The caller is its own builder here. A User Account advertises zero until
+    // its owner sets a factor, and nothing else in the suite moves this one, so
+    // the expected factor stays zero without touching the cap.
+    client.prepare_user(store)?.send_without_preflight().await?;
+    let user = client.find_user_address(store, &client.payer());
+    deployment.mint_or_transfer_to("fBTC", &user, 0).await?;
+
+    let collateral_amount = 100_000;
+    let swap_amount = 1_000_000;
+    deployment
+        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, collateral_amount)
+        .await?;
+    deployment
+        .mint_or_transfer_to_user("USDG", Deployment::DEFAULT_USER, swap_amount + 17)
+        .await?;
+
+    let size = 5_000 * MARKET_USD_UNIT;
+    let price = 400_000 * MARKET_USD_UNIT / 10u128.pow(fbtc.config.decimals as u32);
+
+    // A swap order is not a position order, so it can carry no builder.
+    // Swapping into the long token makes fBTC the final output token, which is
+    // the mint the claim vault above was opened for, so the account constraints
+    // are satisfied and the kind check is what actually rejects this.
+    let (rpc, swap_order) = client
+        .market_swap(
+            store,
+            market_token,
+            true,
+            &usdg.address,
+            swap_amount,
+            [market_token],
+        )
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%swap_order, %signature, "created a swap order");
+
+    let err = client
+        .set_builder_fee(store, &swap_order, &user, 0, None)
+        .await?
+        .send()
+        .await
+        .expect_err("should reject a checkpoint onto a swap order");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::BuilderFeeOrderKindNotAllowed.into()),
+    );
+
+    let signature = client
+        .close_order(&swap_order)?
+        .build()
+        .await?
+        .send()
+        .await?;
+    tracing::info!(%swap_order, %signature, "cancelled the swap order");
+
+    // An increase order created without the escrow has no final output
+    // token, and so no bucket a fee could ever be paid from.
+    let (rpc, bare_order) = client
+        .limit_increase(
+            store,
+            market_token,
+            false,
+            size,
+            price,
+            true,
+            collateral_amount,
+        )
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%bare_order, %signature, "created an increase order without the escrow");
+
+    // The SDK refuses to build the instruction at all, since it reads the mint
+    // off the order and there is none to read.
+    let err = client
+        .set_builder_fee(store, &bare_order, &user, 0, None)
+        .await
+        .err()
+        .ok_or_eyre("the SDK must refuse to build a checkpoint for an order with no fee token")?;
+    tracing::info!(%err, "the SDK rejected the order before building");
+
+    // Forcing a mint past that guard reaches the program's own check, which is
+    // the one that has to hold whatever the caller does.
+    let err = client
+        .set_builder_fee(
+            store,
+            &bare_order,
+            &user,
+            0,
+            Some(
+                SetBuilderFeeHint::builder()
+                    .final_output_token(fbtc.address)
+                    .build(),
+            ),
+        )
+        .await?
+        .send()
+        .await
+        .expect_err("should reject a checkpoint onto an order with no final output token");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::BuilderFeeFinalOutputTokenNotInitialized.into()),
+    );
+
+    let signature = client
+        .close_order(&bare_order)?
+        .build()
+        .await?
+        .send()
+        .await?;
+    tracing::info!(%bare_order, %signature, "cancelled the order without the escrow");
+
+    // The two builder-account cases below need an order that passes everything
+    // else.
+    deployment
+        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, collateral_amount)
+        .await?;
+    let (rpc, order) = client
+        .limit_increase(
+            store,
+            market_token,
+            false,
+            size,
+            price,
+            true,
+            collateral_amount,
+        )
+        .prepare_final_output_token_escrow(true)
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%order, %signature, "created a fee-eligible limit increase order");
+
+    // Missing claim vault. The keeper's User Account has no fBTC ATA, and
+    // a builder without one would make settlement, and therefore closing the
+    // order, fail later; refusing here is what keeps that unreachable.
+    keeper.prepare_user(store)?.send_without_preflight().await?;
+    let keeper_user = keeper.find_user_address(store, &keeper.payer());
+    assert_eq!(
+        deployment
+            .get_ata_amount(&fbtc.address, &keeper_user)
+            .await?,
+        None,
+        "this case is only meaningful while that claim vault does not exist"
+    );
+
+    let err = client
+        .set_builder_fee(store, &order, &keeper_user, 0, None)
+        .await?
+        .send()
+        .await
+        .expect_err("should reject a builder whose claim vault does not exist");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(ErrorCode::AccountNotInitialized.into()),
+    );
+
+    // The controller PDA. The SDK always derives it, so a mismatch has to
+    // be built by hand; the one here is the controller of a different mint.
+    let wrong_controller =
+        find_user_token_controller_address(&user, &usdg.address, client.store_program_id()).0;
+    let err = client
+        .store_transaction()
+        .anchor_accounts(accounts::SetBuilderFee {
+            owner: client.payer(),
+            store: *store,
+            order,
+            builder: user,
+            final_output_token: fbtc.address,
+            claim_vault: get_associated_token_address(&user, &fbtc.address),
+            user_token_controller: wrong_controller,
+            token_program: anchor_spl::token::ID,
+            event_authority: client.store_event_authority(),
+            program: *client.store_program_id(),
+        })
+        .anchor_args(args::SetBuilderFee { expected_factor: 0 })
+        .send()
+        .await
+        .expect_err("should reject a controller that is not the derived PDA");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(ErrorCode::ConstraintSeeds.into()),
+    );
+
+    // The mechanism sits behind `DomainDisabledFlag::BuilderFee`, and this
+    // is the only instruction it gates. Everything above rejects on the order or
+    // the accounts, so the case is only meaningful with a call that would
+    // otherwise be accepted, which is why the same call is repeated afterwards.
+    deployment
+        .with_builder_fee_disabled(async {
+            let err = client
+                .set_builder_fee(store, &order, &user, 0, None)
+                .await?
+                .send()
+                .await
+                .expect_err("should reject a checkpoint while the feature is disabled");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::FeatureDisabled.into()),
+            );
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    let signature = client
+        .set_builder_fee(store, &order, &user, 0, None)
+        .await?
+        .send_without_preflight()
+        .await?;
+    tracing::info!(%order, %signature, "the same checkpoint lands once the feature is back on");
+
+    let signature = client.close_order(&order)?.build().await?.send().await?;
+    tracing::info!(%order, %signature, "cancelled the order");
+
+    Ok(())
+}
+
+/// A `CollateralToPnlToken` decrease order can carry no nonzero fee.
+///
+/// That swap type moves the whole collateral-token output into the pnl token
+/// before the receive swap runs, so the bucket a fee would be charged from is
+/// empty on every such order. A zero factor stays allowed, since it charges
+/// nothing and is how a checkpoint gets cleared.
+///
+/// A decrease order needs a position, and the position for
+/// [`Deployment::DEFAULT_USER`] on this market is opened and fully closed by
+/// `balanced_market_order` running concurrently, so this one trades as the
+/// exclusive locked user instead. It takes that lock before the builder fee
+/// globals; no other test takes them in the opposite order.
+#[tokio::test]
+async fn set_builder_fee_rejects_collateral_to_pnl_swap() -> eyre::Result<()> {
+    /// One percent, in the market factor unit.
+    const CAP: u128 = MARKET_USD_UNIT / 100;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("set_builder_fee_rejects_collateral_to_pnl_swap");
+    let _enter = span.enter();
+
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let builder = deployment.user_client(Deployment::USER_1)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+
+    let owner = deployment.locked_user_client().await?;
+
+    for signature in [
+        owner.prepare_user(store)?.send_without_preflight().await?,
+        builder
+            .prepare_user(store)?
+            .send_without_preflight()
+            .await?,
+    ] {
+        tracing::info!(%signature, "prepared a user account");
+    }
+    let builder_user = builder.find_user_address(store, &builder.payer());
+    deployment
+        .mint_or_transfer_to("fBTC", &builder_user, 0)
+        .await?;
+
+    // Deliberately small: this market is shared with the other order tests and
+    // the position opened here is left behind, so it keeps its footprint on
+    // open interest and pool balances negligible.
+    let collateral_amount = 10_000;
+    deployment
+        .mint_or_transfer_to("fBTC", &owner.payer(), collateral_amount * 2)
+        .await?;
+
+    let size = 100 * MARKET_USD_UNIT;
+    let (rpc, increase) = owner
+        .market_increase(store, market_token, true, collateral_amount, true, size)
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%increase, %signature, "created the increase order");
+
+    let mut execution = keeper.execute_order(store, oracle, &increase, false)?;
+    deployment
+        .execute_with_pyth(
+            execution
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone()),
+            None,
+            true,
+            true,
+        )
+        .await?;
+    tracing::info!(%increase, "executed the increase order, opening the position");
+
+    // Never executed, only checkpointed onto and then cancelled.
+    let (rpc, order) = owner
+        .market_decrease(store, market_token, true, 0, true, size)
+        .decrease_position_swap_type(Some(DecreasePositionSwapType::CollateralToPnlToken))
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%order, %signature, "created a CollateralToPnlToken decrease order");
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            let signature = builder
+                .set_builder_fee_factor(store, CAP)?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "the builder advertised its factor");
+
+            let err = owner
+                .set_builder_fee(store, &order, &builder_user, CAP, None)
+                .await?
+                .send()
+                .await
+                .expect_err("should reject a nonzero fee on a CollateralToPnlToken order");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::BuilderFeeSwapTypeNotAllowed.into()),
+            );
+
+            // The same order accepts a zero factor, which is what keeps the
+            // revocation path open on an order that can never carry a fee.
+            let signature = builder
+                .set_builder_fee_factor(store, 0)?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "the builder opted back out");
+
+            let signature = owner
+                .set_builder_fee(store, &order, &builder_user, 0, None)
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "checkpointed a zero fee on the same order");
+
+            let checkpointed = owner.order(&order).await?;
+            assert_eq!(checkpointed.builder, builder_user);
+            assert_eq!(checkpointed.builder_fee_factor, 0);
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    let signature = owner.close_order(&order)?.build().await?.send().await?;
+    tracing::info!(%order, %signature, "cancelled the decrease order");
 
     Ok(())
 }

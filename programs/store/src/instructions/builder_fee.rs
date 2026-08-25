@@ -1,9 +1,14 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
+use gmsol_model::action::decrease_position::DecreasePositionSwapType;
 
 use crate::{
-    events::{BuilderFeeSettled, EventEmitter},
-    states::{user::UserHeader, Order, Store},
+    events::{BuilderFeeSet, BuilderFeeSettled, EventEmitter},
+    states::{
+        feature::{ActionDisabledFlag, DomainDisabledFlag},
+        user::{UserHeader, USER_TOKEN_CONTROLLER_SEED},
+        FactorKey, Order, Store,
+    },
     CoreError,
 };
 
@@ -133,6 +138,231 @@ impl SettleBuilderFee<'_> {
                 settled_amount,
             )?,
         )?;
+
+        Ok(())
+    }
+}
+
+/// The accounts definitions for
+/// [`set_builder_fee`](crate::gmsol_store::set_builder_fee) instruction.
+#[event_cpi]
+#[derive(Accounts)]
+pub struct SetBuilderFee<'info> {
+    /// The order's owner, and the only signer that can attach a builder to it.
+    pub owner: Signer<'info>,
+    /// Store.
+    pub store: AccountLoader<'info, Store>,
+    /// The order to checkpoint the builder fee onto.
+    ///
+    /// Restricted to orders still pending execution: once an order has been
+    /// executed or reached a terminal state its fee is already settled or moot,
+    /// and letting a checkpoint land afterwards would change the amount owed
+    /// for work already done.
+    #[account(
+        mut,
+        constraint = order.load()?.header.store == store.key() @ CoreError::StoreMismatched,
+        constraint = order.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
+        constraint = order.load()?.header.action_state()?.is_pending() @ CoreError::PreconditionsAreNotMet,
+    )]
+    pub order: AccountLoader<'info, Order>,
+    /// The builder's User Account, identifying the builder and advertising the
+    /// factor this call must match.
+    ///
+    /// Not seed-derived here, unlike the owner-scoped User Account elsewhere:
+    /// the builder's owner is not a party to this transaction, so there is no
+    /// key to derive from. Belonging to this store, and being initialized, are
+    /// the whole of what can be checked.
+    ///
+    /// May be the order owner's own User Account. That is the only way to clear
+    /// a checkpoint, since a fresh User Account advertises a zero factor, and it
+    /// is deliberately allowed so an owner is never bound to a builder for the
+    /// life of the order.
+    #[account(
+        has_one = store,
+        constraint = builder.load()?.is_initialized() @ CoreError::InvalidUserAccount,
+    )]
+    pub builder: AccountLoader<'info, UserHeader>,
+    /// The order's final output token mint, i.e. the token the builder fee will
+    /// be denominated in.
+    pub final_output_token: Box<Account<'info, Mint>>,
+    /// The builder's claim vault: the associated token account of
+    /// [`final_output_token`](Self::final_output_token) owned by the builder's
+    /// User Account.
+    ///
+    /// Required to exist here so that settlement cannot fail later. Settlement
+    /// takes the vault as a plain token account and creates nothing, so a
+    /// builder without one would make the order unsettleable and therefore
+    /// uncloseable. Checking at checkpoint time moves that failure to the only
+    /// point where it is still recoverable: the owner simply does not get a
+    /// builder attached.
+    #[account(
+        associated_token::mint = final_output_token,
+        associated_token::authority = builder,
+    )]
+    pub claim_vault: Box<Account<'info, TokenAccount>>,
+    /// The (per-user, per-token) user token controller PDA.
+    ///
+    /// Reserved for future withdrawal access control. It has no backing account
+    /// and no data today, so the only check performed on it is that the passed
+    /// address matches its PDA derivation; adding real behavior behind it later
+    /// is not a breaking change to this instruction's accounts.
+    /// CHECK: only the PDA derivation is validated, by the seeds below.
+    #[account(
+        seeds = [
+            USER_TOKEN_CONTROLLER_SEED,
+            builder.key().as_ref(),
+            final_output_token.key().as_ref(),
+        ],
+        bump,
+    )]
+    pub user_token_controller: UncheckedAccount<'info>,
+    /// Token program.
+    ///
+    /// Read by the associated-token constraint on
+    /// [`claim_vault`](Self::claim_vault) to derive the vault's address.
+    pub token_program: Program<'info, Token>,
+}
+
+impl SetBuilderFee<'_> {
+    pub(crate) fn invoke(ctx: Context<Self>, expected_factor: u128) -> Result<()> {
+        // The only builder-fee instruction behind the feature flag. Settlement,
+        // claiming and execution stay ungated on purpose, so disabling the
+        // feature stops new orders from taking on a fee without freezing any
+        // fee already owed. `Default` is the action here because the flag guards
+        // a mechanism rather than a step in an order's lifecycle.
+        ctx.accounts
+            .store
+            .load()?
+            .validate_not_restarted()?
+            .validate_feature_enabled(
+                DomainDisabledFlag::BuilderFee,
+                ActionDisabledFlag::Default,
+            )?;
+
+        // The builder's advertised rate has to match what the owner signed for,
+        // exactly and with no tolerance: anything looser lets a builder raise
+        // its factor between the owner deciding and the transaction landing.
+        let factor = ctx.accounts.builder.load()?.builder_fee_factor();
+        require_eq!(
+            factor,
+            expected_factor,
+            CoreError::BuilderFeeFactorMismatched
+        );
+
+        // Second enforcement point for the store cap. The builder's rate was
+        // already checked against it when advertised, but the cap can be lowered
+        // afterwards, and this is the moment the rate becomes payable.
+        //
+        // A missing cap is treated as `0` (deny by default), matching how the
+        // advertising side reads it.
+        let max_factor = ctx
+            .accounts
+            .store
+            .load()?
+            .get_factor_by_key(FactorKey::MaxBuilderFeeFactor)
+            .copied()
+            .unwrap_or(0);
+        require_gte!(
+            max_factor,
+            factor,
+            CoreError::BuilderFeeFactorExceedsMaxFactor
+        );
+
+        let (previous_builder, previous_factor) = {
+            let order = ctx.accounts.order.load()?;
+            let kind = order.params().kind()?;
+
+            // Keeper-initiated kinds ride the same decrease pipeline as the
+            // owner's own orders, so the check has to name the kinds rather than
+            // ask whether the order decreases a position.
+            require!(
+                kind.is_user_initiated_position(),
+                CoreError::BuilderFeeOrderKindNotAllowed
+            );
+
+            // `CollateralToPnlToken` moves the entire collateral-token output
+            // into the pnl token before the receive-token swap runs, so the
+            // final output token bucket a fee is taken from is empty on every
+            // such order.
+            //
+            // The guard is conditional on the factor rather than
+            // unconditional, even though rejecting the swap type outright
+            // would be harmless today, because a zero-factor checkpoint is the
+            // revocation path: it is how an owner clears a builder it no
+            // longer wants. Gating on `factor != 0` aims the rule at the harm
+            // it exists for, a charge that would be trivially bypassable, and
+            // leaves revocation reachable on every order regardless of swap
+            // type. The scenario that needs that: should a later change ever
+            // let an order's swap type move after a checkpoint is written
+            // (`update_order_v2` cannot today), an unconditional guard would
+            // strand the existing checkpoint, since the only instruction that
+            // could clear it would itself be rejected.
+            //
+            // Note this runs on every user-initiated position order, not only
+            // decrease orders. An increase order leaves the field at
+            // `NoSwap`, so the extra breadth is unreachable rather than
+            // restrictive.
+            if factor != 0
+                && matches!(
+                    order.params().decrease_position_swap_type()?,
+                    DecreasePositionSwapType::CollateralToPnlToken
+                )
+            {
+                return err!(CoreError::BuilderFeeSwapTypeNotAllowed);
+            }
+
+            // An increase order created without its final output token escrow
+            // has no slot to pay a fee out of. Uninitialized is a real state
+            // rather than a sentinel, so `None` is the whole of the check.
+            let fee_token = order
+                .tokens()
+                .final_output_token
+                .token()
+                .ok_or_else(|| error!(CoreError::BuilderFeeFinalOutputTokenNotInitialized))?;
+            require_keys_eq!(
+                fee_token,
+                ctx.accounts.final_output_token.key(),
+                CoreError::TokenMintMismatched
+            );
+
+            // An initialized final output token does not by itself guarantee an
+            // initialized escrow for it. The two are written together by the
+            // creation path, but that is a contract of that path rather than an
+            // invariant of the account, so this checks the escrow directly.
+            //
+            // Without the check, an order that somehow held the token without
+            // the escrow could still be checkpointed, and would then revert at
+            // the transfer-out stage of `execute_order`, i.e. become
+            // unexecutable. That is not a deadlock, since a failed execution
+            // charges a zero fee and cancellation still works, but refusing the
+            // checkpoint keeps the order usable instead.
+            require!(
+                order.tokens().final_output_token.account().is_some(),
+                CoreError::BuilderFeeFinalOutputTokenEscrowNotInitialized
+            );
+
+            (
+                order.builder().copied().unwrap_or_default(),
+                order.builder_fee_factor(),
+            )
+        };
+
+        let builder = ctx.accounts.builder.key();
+        ctx.accounts
+            .order
+            .load_mut()?
+            .set_builder_fee(builder, factor);
+
+        let event_emitter =
+            EventEmitter::new(&ctx.accounts.event_authority, ctx.bumps.event_authority);
+        event_emitter.emit_cpi(&BuilderFeeSet::new(
+            ctx.accounts.store.key(),
+            ctx.accounts.order.key(),
+            builder,
+            factor,
+            previous_builder,
+            previous_factor,
+        ))?;
 
         Ok(())
     }

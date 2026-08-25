@@ -121,6 +121,17 @@ impl StoreProgram {
         pda::find_user_address(&self.store, owner, &self.id).0
     }
 
+    /// Find the (per-user, per-token) user token controller address.
+    ///
+    /// `user_account` is the User Account's own PDA, not its owner's wallet.
+    pub fn find_user_token_controller_address(
+        &self,
+        user_account: &Pubkey,
+        token_mint: &Pubkey,
+    ) -> Pubkey {
+        pda::find_user_token_controller_address(user_account, token_mint, &self.id).0
+    }
+
     /// Find position address.
     pub fn find_position_address(
         &self,
