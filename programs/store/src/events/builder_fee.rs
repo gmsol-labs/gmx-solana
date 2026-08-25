@@ -27,8 +27,9 @@ pub struct BuilderFeeSettled {
     /// The builder fee amount recorded on the order before settlement.
     pub recorded_amount: u64,
     /// The amount actually transferred, clamped to the escrow's balance.
-    /// A value below `recorded_amount` signals a broken invariant, since
-    /// the escrow is expected to always cover the recorded amount.
+    /// A value below `recorded_amount` breaks the coverage invariant (see
+    /// the builder fee invariants on [`crate::states::order`]), which has
+    /// the escrow always covering the recorded amount.
     pub settled_amount: u64,
 }
 
