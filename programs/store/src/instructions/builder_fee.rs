@@ -283,8 +283,25 @@ impl SetBuilderFee<'_> {
             // `CollateralToPnlToken` moves the entire collateral-token output
             // into the pnl token before the receive-token swap runs, so the
             // final output token bucket a fee is taken from is empty on every
-            // such order. A zero factor is still allowed, since it charges
-            // nothing and is how a checkpoint gets cleared.
+            // such order.
+            //
+            // The guard is conditional on the factor rather than
+            // unconditional, even though rejecting the swap type outright
+            // would be harmless today, because a zero-factor checkpoint is the
+            // revocation path: it is how an owner clears a builder it no
+            // longer wants. Gating on `factor != 0` aims the rule at the harm
+            // it exists for, a charge that would be trivially bypassable, and
+            // leaves revocation reachable on every order regardless of swap
+            // type. The scenario that needs that: should a later change ever
+            // let an order's swap type move after a checkpoint is written
+            // (`update_order_v2` cannot today), an unconditional guard would
+            // strand the existing checkpoint, since the only instruction that
+            // could clear it would itself be rejected.
+            //
+            // Note this runs on every user-initiated position order, not only
+            // decrease orders. An increase order leaves the field at
+            // `NoSwap`, so the extra breadth is unreachable rather than
+            // restrictive.
             if factor != 0
                 && matches!(
                     order.params().decrease_position_swap_type()?,
@@ -306,6 +323,22 @@ impl SetBuilderFee<'_> {
                 fee_token,
                 ctx.accounts.final_output_token.key(),
                 CoreError::TokenMintMismatched
+            );
+
+            // An initialized final output token does not by itself guarantee an
+            // initialized escrow for it. The two are written together by the
+            // creation path, but that is a contract of that path rather than an
+            // invariant of the account, so this checks the escrow directly.
+            //
+            // Without the check, an order that somehow held the token without
+            // the escrow could still be checkpointed, and would then revert at
+            // the transfer-out stage of `execute_order`, i.e. become
+            // unexecutable. That is not a deadlock, since a failed execution
+            // charges a zero fee and cancellation still works, but refusing the
+            // checkpoint keeps the order usable instead.
+            require!(
+                order.tokens().final_output_token.account().is_some(),
+                CoreError::BuilderFeeFinalOutputTokenEscrowNotInitialized
             );
 
             (

@@ -3190,10 +3190,14 @@ pub mod gmsol_store {
     ///   - Be a user-initiated position order, so swap orders and the
     ///     keeper-initiated kinds are rejected
     ///   - Have an initialized final output token, equal to the passed
-    ///     [`final_output_token`](SetBuilderFee::final_output_token)
-    ///   - Not be a decrease order using
-    ///     [`CollateralToPnlToken`](gmsol_model::action::decrease_position::DecreasePositionSwapType::CollateralToPnlToken),
-    ///     unless the factor is `0`
+    ///     [`final_output_token`](SetBuilderFee::final_output_token), and an
+    ///     initialized escrow account for it
+    ///   - Not carry
+    ///     [`CollateralToPnlToken`](gmsol_model::action::decrease_position::DecreasePositionSwapType::CollateralToPnlToken)
+    ///     as its decrease position swap type, unless the factor is `0`. This
+    ///     is checked on every user-initiated position order rather than only
+    ///     on decrease orders, so it is stricter than the swap type's own
+    ///     reach
     /// - The [`builder`](SetBuilderFee::builder) must be a properly initialized
     ///   User Account of the same `store`, advertising exactly `expected_factor`.
     /// - The factor must not exceed the store's
@@ -4510,6 +4514,12 @@ pub enum CoreError {
     /// The order's final output token is not initialized.
     #[msg("the order's final output token is not initialized")]
     BuilderFeeFinalOutputTokenNotInitialized,
+    /// The order's escrow account for the final output token is not
+    /// initialized. The builder fee is paid out of that escrow, so an order
+    /// without one would revert at the transfer-out stage of `execute_order`
+    /// once a fee were charged.
+    #[msg("the order's final output token escrow is not initialized")]
+    BuilderFeeFinalOutputTokenEscrowNotInitialized,
     // NOTE: New variants must be appended here to keep existing error codes stable.
 }
 
