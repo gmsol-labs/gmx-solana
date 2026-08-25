@@ -102,7 +102,8 @@ impl SettleBuilderFee<'_> {
         // the `associated_token` constraint above, so its owner and mint are
         // already guaranteed here.
 
-        // Under the charging invariant the escrow always covers the recorded
+        // Under the coverage invariant (see the builder fee invariants on
+        // `crate::states::order`) the escrow always covers the recorded
         // amount, so this clamp should never actually reduce anything; it is
         // defense in depth, guaranteeing a protocol bug can never make an
         // order permanently unclosable. Any discrepancy is observable via the
