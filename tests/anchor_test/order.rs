@@ -1079,7 +1079,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
                 .await?;
             tracing::info!(%signature, "the builder advertised its factor");
 
-            // AC2: the checkpoint carries the factor the owner signed for, and
+            // The checkpoint carries the factor the owner signed for, and
             // one unit off in either direction is rejected. Exact equality is
             // what stops a builder raising its rate after the owner decided.
             for expected in [CAP - 1, CAP + 1] {
@@ -1095,7 +1095,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
                 );
             }
 
-            // AC1: only the order's owner may checkpoint onto it. Signed here by
+            // Only the order's owner may checkpoint onto it. Signed here by
             // the builder, which is the party that would gain from it.
             let err = builder
                 .set_builder_fee(store, &order, &builder_user, CAP, None)
@@ -1126,7 +1126,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
                 "the advertised factor must be the one recorded"
             );
 
-            // AC8: updating the order is not a way to change the checkpoint.
+            // Updating the order is not a way to change the checkpoint.
             // `update_order_v2` writes none of these fields, and this is the
             // regression guard for that.
             let signature = owner
@@ -1172,7 +1172,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
                 "checkpointing a zero-advertising account must clear the fee"
             );
 
-            // AC3: the cap is enforced again at checkpoint time, not only when
+            // The cap is enforced again at checkpoint time, not only when
             // the rate is advertised, so a rate that was legal when advertised
             // stops being payable once the cap drops under it.
             let signature = keeper
@@ -1226,12 +1226,18 @@ async fn set_builder_fee() -> eyre::Result<()> {
 /// [`Deployment::with_builder_fee_disabled`]. The cases above it run unlocked
 /// and are unaffected, being the same test and therefore sequential.
 ///
-/// Liquidation and `AutoDeleveraging` are the two kinds AC4 exists for, and they
-/// are deliberately absent: `create_order` refuses both (`OrderKindNotAllowed`,
+/// Liquidation and `AutoDeleveraging` are the two keeper-initiated kinds, and
+/// they are deliberately absent: `create_order` refuses both (`OrderKindNotAllowed`,
 /// `instructions/exchange/order.rs`) and the keeper builds a liquidation inside
 /// the transaction that executes it, so no pending order of either kind can be
 /// reached from a test. They are covered instead by the unit tests on
 /// `OrderKind::is_user_initiated_position` in `crates/utils/src/order.rs`.
+///
+/// `BuilderFeeFinalOutputTokenEscrowNotInitialized` is absent for the same
+/// reason. `TokenAndAccount::init` writes the mint and the escrow address
+/// together from one token account, so no creation path can leave an order
+/// holding the first without the second; the check guards against a future
+/// path that does, not against a state reachable today.
 #[tokio::test]
 async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
@@ -1268,7 +1274,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
     let size = 5_000 * MARKET_USD_UNIT;
     let price = 400_000 * MARKET_USD_UNIT / 10u128.pow(fbtc.config.decimals as u32);
 
-    // AC4: a swap order is not a position order, so it can carry no builder.
+    // A swap order is not a position order, so it can carry no builder.
     // Swapping into the long token makes fBTC the final output token, which is
     // the mint the claim vault above was opened for, so the account constraints
     // are satisfied and the kind check is what actually rejects this.
@@ -1305,7 +1311,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
         .await?;
     tracing::info!(%swap_order, %signature, "cancelled the swap order");
 
-    // AC7: an increase order created without the escrow has no final output
+    // An increase order created without the escrow has no final output
     // token, and so no bucket a fee could ever be paid from.
     let (rpc, bare_order) = client
         .limit_increase(
@@ -1362,7 +1368,8 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
         .await?;
     tracing::info!(%bare_order, %signature, "cancelled the order without the escrow");
 
-    // AC6 needs an order that passes everything else.
+    // The two builder-account cases below need an order that passes everything
+    // else.
     deployment
         .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, collateral_amount)
         .await?;
@@ -1382,7 +1389,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
     let signature = rpc.send().await?;
     tracing::info!(%order, %signature, "created a fee-eligible limit increase order");
 
-    // AC6, missing claim vault. The keeper's User Account has no fBTC ATA, and
+    // Missing claim vault. The keeper's User Account has no fBTC ATA, and
     // a builder without one would make settlement, and therefore closing the
     // order, fail later; refusing here is what keeps that unreachable.
     keeper.prepare_user(store)?.send_without_preflight().await?;
@@ -1406,7 +1413,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
         Some(ErrorCode::AccountNotInitialized.into()),
     );
 
-    // AC6, the controller PDA. The SDK always derives it, so a mismatch has to
+    // The controller PDA. The SDK always derives it, so a mismatch has to
     // be built by hand; the one here is the controller of a different mint.
     let wrong_controller =
         find_user_token_controller_address(&user, &usdg.address, client.store_program_id()).0;
@@ -1433,7 +1440,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
         Some(ErrorCode::ConstraintSeeds.into()),
     );
 
-    // AC9: the mechanism sits behind `DomainDisabledFlag::BuilderFee`, and this
+    // The mechanism sits behind `DomainDisabledFlag::BuilderFee`, and this
     // is the only instruction it gates. Everything above rejects on the order or
     // the accounts, so the case is only meaningful with a call that would
     // otherwise be accepted, which is why the same call is repeated afterwards.
@@ -1467,7 +1474,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
     Ok(())
 }
 
-/// AC5a: a `CollateralToPnlToken` decrease order can carry no nonzero fee.
+/// A `CollateralToPnlToken` decrease order can carry no nonzero fee.
 ///
 /// That swap type moves the whole collateral-token output into the pnl token
 /// before the receive swap runs, so the bucket a fee would be charged from is
