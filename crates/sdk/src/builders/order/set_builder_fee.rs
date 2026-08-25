@@ -1,6 +1,8 @@
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use gmsol_programs::gmsol_store::client::{accounts, args};
-use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup, ProgramExt};
+use gmsol_solana_utils::{
+    client_traits::FromRpcClientWith, AtomicGroup, IntoAtomicGroup, ProgramExt,
+};
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
@@ -101,5 +103,34 @@ impl IntoAtomicGroup for SetBuilderFee {
             .build();
 
         Ok(AtomicGroup::with_instructions(&payer, Some(set)))
+    }
+}
+
+impl FromRpcClientWith<SetBuilderFee> for SetBuilderFeeHint {
+    async fn from_rpc_client_with<'a>(
+        builder: &'a SetBuilderFee,
+        client: &'a impl gmsol_solana_utils::client_traits::RpcClient,
+    ) -> gmsol_solana_utils::Result<Self> {
+        use crate::{programs::gmsol_store::accounts::Order, utils::zero_copy::ZeroCopy};
+        use gmsol_solana_utils::client_traits::RpcClientExt;
+
+        let order = client
+            .get_anchor_account::<ZeroCopy<Order>>(&builder.order.0, Default::default())
+            .await?
+            .0;
+
+        // An uninitialized final output token is the one failure worth naming
+        // here rather than letting the program reject it: it means the order
+        // was created without a fee output slot, which no amount of retrying
+        // fixes.
+        let final_output_token = order.tokens.final_output_token.token().ok_or_else(|| {
+            gmsol_solana_utils::Error::custom(
+                "the order's final output token is uninitialized, so it cannot carry a builder fee",
+            )
+        })?;
+
+        Ok(Self {
+            final_output_token: final_output_token.into(),
+        })
     }
 }

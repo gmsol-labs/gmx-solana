@@ -2,7 +2,9 @@ use std::{future::Future, ops::Deref};
 
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use gmsol_programs::gmsol_store::client::{accounts, args};
-use gmsol_solana_utils::{transaction_builder::TransactionBuilder, IntoAtomicGroup};
+use gmsol_solana_utils::{
+    client_traits::FromRpcClientWith, transaction_builder::TransactionBuilder, IntoAtomicGroup,
+};
 use gmsol_utils::pubkey::optional_address;
 use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
@@ -130,37 +132,20 @@ impl<C: Deref<Target = impl Signer> + Clone> BuilderFeeOps<C> for crate::Client<
         expected_factor: u128,
         hint: Option<SetBuilderFeeHint>,
     ) -> crate::Result<TransactionBuilder<C>> {
-        let hint = match hint {
-            Some(hint) => hint,
-            None => {
-                let account = self.order(order).await?;
-                // An uninitialized final output token is the one failure worth
-                // naming here rather than letting the program reject it: it
-                // means the order was created without a fee output slot, which
-                // no amount of retrying fixes.
-                let final_output_token = account
-                    .tokens
-                    .final_output_token
-                    .token()
-                    .ok_or_else(|| {
-                        crate::Error::custom(
-                            "the order's final output token is uninitialized, so it cannot carry a builder fee",
-                        )
-                    })?;
-                SetBuilderFeeHint::builder()
-                    .final_output_token(final_output_token)
-                    .build()
-            }
-        };
-
-        let ag = SetBuilderFee::builder()
+        let ix = SetBuilderFee::builder()
             .program(self.store_program_for_builders(store))
             .payer(self.payer())
             .order(*order)
             .builder(*builder)
             .expected_factor(expected_factor)
-            .build()
-            .into_atomic_group(&hint)?;
+            .build();
+
+        let hint = match hint {
+            Some(hint) => hint,
+            None => SetBuilderFeeHint::from_rpc_client_with(&ix, self.rpc()).await?,
+        };
+
+        let ag = ix.into_atomic_group(&hint)?;
 
         Ok(self.store_transaction().pre_atomic_group(ag, true))
     }
