@@ -162,6 +162,11 @@ impl UserHeader {
     ///
     /// The caller is responsible for validating the factor against the
     /// store-level cap: this only records the advertised rate.
+    ///
+    /// Upholds the authorization invariant structurally: the User Account PDA
+    /// seeds bind the account to its signer, so advertising on someone else's
+    /// account is unconstructible rather than merely rejected. See the builder
+    /// fee invariants on [`crate::states::order`].
     pub(crate) fn set_builder_fee_factor(&mut self, factor: u128) -> u128 {
         std::mem::replace(&mut self.builder_fee_factor, factor)
     }
