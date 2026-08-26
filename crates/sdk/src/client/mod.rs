@@ -501,6 +501,20 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         crate::pda::find_referral_code_address(store, code, self.store_program_id()).0
     }
 
+    /// Find PDA for the (per-user, per-token) user token controller.
+    pub fn find_user_token_controller_address(
+        &self,
+        user_account: &Pubkey,
+        token_mint: &Pubkey,
+    ) -> Pubkey {
+        crate::pda::find_user_token_controller_address(
+            user_account,
+            token_mint,
+            self.store_program_id(),
+        )
+        .0
+    }
+
     /// Find PDA for GLV token mint.
     pub fn find_glv_token_address(&self, store: &Pubkey, index: u16) -> Pubkey {
         crate::pda::find_glv_token_address(store, index, self.store_program_id()).0

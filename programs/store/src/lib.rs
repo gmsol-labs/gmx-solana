@@ -3276,6 +3276,33 @@ pub mod gmsol_store {
         instructions::accept_referral_code(ctx)
     }
 
+    /// Claim builder fees.
+    ///
+    /// Restricted to the User Account's owner. Idempotent: a claim vault
+    /// with a zero balance is an explicit no-op, so this may be called
+    /// freely once the vault exists. Not gated by the `BuilderFee`
+    /// feature flag.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](ClaimBuilderFees)*
+    ///
+    /// # Errors
+    /// - The [`owner`](ClaimBuilderFees::owner) must be a signer and must
+    ///   match the owner recorded on [`user_account`](ClaimBuilderFees::user_account).
+    /// - The [`user_account`](ClaimBuilderFees::user_account) must be properly
+    ///   initialized and belong to the `store`.
+    /// - The [`claim_vault`](ClaimBuilderFees::claim_vault) must already exist and
+    ///   be the associated token account of the [`token_mint`](ClaimBuilderFees::token_mint)
+    ///   owned by `user_account`.
+    /// - The [`destination`](ClaimBuilderFees::destination) must be a token account
+    ///   for `token_mint`.
+    /// - The [`user_token_controller`](ClaimBuilderFees::user_token_controller) must
+    ///   match its PDA derivation from `user_account` and `token_mint`; no other
+    ///   validation is performed on it.
+    pub fn claim_builder_fees(ctx: Context<ClaimBuilderFees>) -> Result<()> {
+        ClaimBuilderFees::invoke(ctx)
+    }
+
     // ===========================================
     //                GLV Operations
     // ===========================================

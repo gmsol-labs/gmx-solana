@@ -1,5 +1,6 @@
 use std::panic::{resume_unwind, AssertUnwindSafe};
 
+use anchor_spl::associated_token::spl_associated_token_account::get_associated_token_address;
 use futures_util::FutureExt;
 use gmsol_programs::{
     anchor_lang::error::ErrorCode,
@@ -9,11 +10,12 @@ use gmsol_programs::{
     },
 };
 use gmsol_sdk::{
-    client::ops::{ConfigOps, UserOps},
+    client::ops::{BuilderFeeOps, ConfigOps, UserOps},
     constants::MARKET_USD_UNIT,
 };
 use gmsol_store::CoreError;
 use gmsol_utils::config::FactorKey;
+use solana_sdk::{signature::Keypair, signer::Signer};
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
 
@@ -223,6 +225,183 @@ async fn builder_fee_factor() -> eyre::Result<()> {
 
     let signature = restored?;
     tracing::info!(%signature, "closed the mechanism again");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn claim_builder_fees() -> eyre::Result<()> {
+    /// The token the claim is denominated in.
+    const TOKEN: &str = "USDG";
+    /// The balance seeded into the claim vault.
+    const AMOUNT: u64 = 1_234_567;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("claim_builder_fees");
+    let _enter = span.enter();
+
+    let client = deployment.user_client(Deployment::USER_1)?;
+    let other = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let store = &deployment.store;
+    let token = deployment.token(TOKEN).expect("no such token").address;
+
+    let signature = client.prepare_user(store)?.send_without_preflight().await?;
+    tracing::info!(%signature, "prepared user account for the builder");
+
+    let owner = client.payer();
+    let user_account = client.find_user_address(store, &owner);
+    let claim_vault = get_associated_token_address(&user_account, &token);
+
+    // A destination no other test touches. The users' own ATAs are minted
+    // into by tests running concurrently against this same deployment, so
+    // asserting on one of those balances would be flaky.
+    let destination_owner = Keypair::generate(&mut rand::thread_rng()).pubkey();
+    deployment
+        .mint_or_transfer_to(TOKEN, &destination_owner, 0)
+        .await?;
+    let destination = get_associated_token_address(&destination_owner, &token);
+
+    // Seed the claim vault directly. Settlement, the instruction that
+    // normally fills it, lands separately; claiming does not care how the
+    // balance got there.
+    deployment
+        .mint_or_transfer_to(TOKEN, &user_account, AMOUNT)
+        .await?;
+    assert_eq!(
+        deployment.get_ata_amount(&token, &user_account).await?,
+        Some(AMOUNT)
+    );
+
+    // Owner-only: no other signer can claim this vault. The User Account
+    // seeds are derived from the signer, so the address passed here cannot
+    // be the one the constraint derives.
+    let err = other
+        .store_transaction()
+        .anchor_accounts(accounts::ClaimBuilderFees {
+            owner: other.payer(),
+            store: *store,
+            user_account,
+            token_mint: token,
+            claim_vault,
+            destination,
+            user_token_controller: other.find_user_token_controller_address(&user_account, &token),
+            token_program: anchor_spl::token::ID,
+            event_authority: other.store_event_authority(),
+            program: *other.store_program_id(),
+        })
+        .anchor_args(args::ClaimBuilderFees {})
+        .send()
+        .await
+        .expect_err("should reject a claim signed by anyone but the owner");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(ErrorCode::ConstraintSeeds.into())
+    );
+    assert_eq!(
+        deployment.get_ata_amount(&token, &user_account).await?,
+        Some(AMOUNT),
+        "a rejected claim must leave the vault untouched"
+    );
+
+    // A transferring claim cannot send the vault to itself: spl-token
+    // short-circuits a self-transfer to `Ok(())` without moving any
+    // balance, which would emit a claim event for a claim that never
+    // happened. Asserted while the vault still holds a balance, since the
+    // guard deliberately does not apply to the no-op paths.
+    let err = client
+        .claim_builder_fees(store, &token, &claim_vault)?
+        .send()
+        .await
+        .expect_err("should reject the claim vault as its own destination");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::InvalidArgument.into())
+    );
+    assert_eq!(
+        deployment.get_ata_amount(&token, &user_account).await?,
+        Some(AMOUNT),
+        "a rejected claim must leave the vault untouched"
+    );
+
+    // The owner claims, and the full balance moves in one go.
+    let signature = client
+        .claim_builder_fees(store, &token, &destination)?
+        .send_without_preflight()
+        .await?;
+    tracing::info!(%signature, "claimed the builder fees");
+    assert_eq!(
+        deployment.get_ata_amount(&token, &user_account).await?,
+        Some(0)
+    );
+    assert_eq!(
+        deployment
+            .get_ata_amount(&token, &destination_owner)
+            .await?,
+        Some(AMOUNT)
+    );
+
+    // Nothing to claim, with the vault present but empty: succeeds and
+    // moves nothing.
+    let signature = client
+        .claim_builder_fees(store, &token, &destination)?
+        .send_without_preflight()
+        .await?;
+    tracing::info!(%signature, "claimed again from an empty vault");
+    assert_eq!(
+        deployment.get_ata_amount(&token, &user_account).await?,
+        Some(0)
+    );
+    assert_eq!(
+        deployment
+            .get_ata_amount(&token, &destination_owner)
+            .await?,
+        Some(AMOUNT),
+        "a no-op claim must not move anything"
+    );
+
+    // The self-destination guard covers transferring claims only, so it
+    // cannot turn a no-op into a failure. This call moves nothing either
+    // way, and succeeds.
+    let signature = client
+        .claim_builder_fees(store, &token, &claim_vault)?
+        .send_without_preflight()
+        .await?;
+    tracing::info!(%signature, "no-op claim into the vault itself");
+
+    // A mint that was never settled has no claim vault, and the claim is
+    // rejected rather than treated as a no-op. The vault is required, so
+    // the missing account is what fails, and nothing creates it.
+    //
+    // The mint is created here rather than picked from the deployment: the
+    // suite's tokens are shared, and a test running concurrently creating a
+    // claim vault for this same builder would silently empty the case out.
+    let (unsettled_token, unsettled_destination) = deployment
+        .create_unregistered_mint(&destination_owner)
+        .await?;
+    assert_eq!(
+        deployment
+            .get_ata_amount(&unsettled_token, &user_account)
+            .await?,
+        None,
+        "the claim vault for this mint must not exist for the case to mean anything"
+    );
+    let err = client
+        .claim_builder_fees(store, &unsettled_token, &unsettled_destination)?
+        .send()
+        .await
+        .expect_err("should reject a claim for a mint that was never settled");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(ErrorCode::AccountNotInitialized.into())
+    );
+    assert_eq!(
+        deployment
+            .get_ata_amount(&unsettled_token, &user_account)
+            .await?,
+        None,
+        "a rejected claim must not create the vault"
+    );
 
     Ok(())
 }

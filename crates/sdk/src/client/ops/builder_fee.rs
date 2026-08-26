@@ -40,6 +40,26 @@ pub trait BuilderFeeOps<C> {
         expected_factor: u128,
         hint: Option<SetBuilderFeeHint>,
     ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
+
+    /// Claim the full balance of the caller's own claim vault for the
+    /// given token mint, to a destination token account of their choice.
+    ///
+    /// Restricted to the payer's own User Account by the program: no
+    /// hint is needed, since every account here is a pure function of
+    /// `store`, `token_mint`, `destination`, and the payer's own key.
+    /// Idempotent once the claim vault exists: safe to call whether or
+    /// not it holds a non-zero balance.
+    ///
+    /// The claim vault is required by the program, so a builder that has
+    /// never been settled for this mint fails here rather than silently
+    /// succeeding, which is the more useful answer for a caller who asked
+    /// to be paid.
+    fn claim_builder_fees(
+        &self,
+        store: &Pubkey,
+        token_mint: &Pubkey,
+        destination: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>>;
 }
 
 /// Hint for [`settle_builder_fee`](BuilderFeeOps::settle_builder_fee), to
@@ -148,5 +168,40 @@ impl<C: Deref<Target = impl Signer> + Clone> BuilderFeeOps<C> for crate::Client<
         let ag = ix.into_atomic_group(&hint)?;
 
         Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
+    fn claim_builder_fees(
+        &self,
+        store: &Pubkey,
+        token_mint: &Pubkey,
+        destination: &Pubkey,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let owner = self.payer();
+        let user_account = self.find_user_address(store, &owner);
+        let claim_vault = get_associated_token_address_with_program_id(
+            &user_account,
+            token_mint,
+            &anchor_spl::token::ID,
+        );
+        let user_token_controller =
+            self.find_user_token_controller_address(&user_account, token_mint);
+
+        let rpc = self
+            .store_transaction()
+            .anchor_accounts(accounts::ClaimBuilderFees {
+                owner,
+                store: *store,
+                user_account,
+                token_mint: *token_mint,
+                claim_vault,
+                destination: *destination,
+                user_token_controller,
+                token_program: anchor_spl::token::ID,
+                event_authority: self.store_event_authority(),
+                program: *self.store_program_id(),
+            })
+            .anchor_args(args::ClaimBuilderFees {});
+
+        Ok(rpc)
     }
 }
