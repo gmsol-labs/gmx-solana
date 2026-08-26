@@ -1190,11 +1190,20 @@
             "type": "u128"
           },
           {
+            "name": "max_builder_fee_factor",
+            "docs": [
+              "Max builder fee factor. Reads as `0` on existing stores until a",
+              "CONFIG_KEEPER explicitly raises it via `insert_factor`, so no",
+              "non-zero builder fee factor can be configured by default."
+            ],
+            "type": "u128"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u128",
-                64
+                63
               ]
             }
           }

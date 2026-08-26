@@ -88,3 +88,41 @@ jobs:
             .anchor/program-logs/
             .anchor/test-ledger/*.log
           if-no-files-found: ignore
+
+  # Unlike test-programs, this job is deterministic and safe to require:
+  # it regenerates the IDLs from source and fails on any diff against the
+  # committed ones under crates/programs/idls.
+  check-idls:
+    name: check idls
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+      - name: Install just
+        uses: taiki-e/install-action@just
+      - name: Install Solana ${{ env.solana_version }}
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.solana_version }}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      - name: Install Anchor ${{ env.anchor_version }}
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL "https://github.com/coral-xyz/anchor/releases/download/v${{ env.anchor_version }}/anchor-${{ env.anchor_version }}-x86_64-unknown-linux-gnu" -o "$HOME/.local/bin/anchor"
+          chmod +x "$HOME/.local/bin/anchor"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Verify toolchain versions
+        run: |
+          solana --version
+          anchor --version
+          anchor --version | grep -q "anchor-cli ${{ env.anchor_version }}"
+      - name: Create test wallet
+        run: solana-keygen new --no-bip39-passphrase --silent
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: "just check-idls"
+        run: just check-idls

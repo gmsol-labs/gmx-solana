@@ -1,4 +1,5 @@
 IDL_OUT_DIR := "idl-out"
+PROGRAMS_IDL_DIR := "crates/programs/idls"
 FEATURES := "u128"
 DEVNET_FEATURES := "devnet,test-only,migration"
 INTEGRATION_TEST_FEATURES := "integration-test"
@@ -59,6 +60,7 @@ build-docs *ARGS:
   cargo doc --features doc {{ARGS}}
 
 build-idls:
+  rm -rf {{IDL_OUT_DIR}}
   mkdir -p {{IDL_OUT_DIR}}
   anchor idl build -p gmsol_store -t {{IDL_OUT_DIR}}/gmsol_store.ts -o {{IDL_OUT_DIR}}/gmsol_store.json
   anchor idl build -p gmsol_treasury -t {{IDL_OUT_DIR}}/gmsol_treasury.ts -o {{IDL_OUT_DIR}}/gmsol_treasury.json
@@ -66,6 +68,21 @@ build-idls:
   anchor idl build -p gmsol_competition -t {{IDL_OUT_DIR}}/gmsol_competition.ts -o {{IDL_OUT_DIR}}/gmsol_competition.json
   anchor idl build -p gmsol_liquidity_provider -t {{IDL_OUT_DIR}}/gmsol_liquidity_provider.ts -o {{IDL_OUT_DIR}}/gmsol_liquidity_provider.json
   anchor idl build -p gmsol_gt_incentive -t {{IDL_OUT_DIR}}/gmsol_gt_incentive.ts -o {{IDL_OUT_DIR}}/gmsol_gt_incentive.json
+
+update-idls: build-idls
+  cp {{IDL_OUT_DIR}}/*.json {{PROGRAMS_IDL_DIR}}
+
+check-idls: build-idls
+  @status=0; \
+  for name in $(basename -a {{PROGRAMS_IDL_DIR}}/*.json {{IDL_OUT_DIR}}/*.json | sort -u); do \
+    diff -u {{PROGRAMS_IDL_DIR}}/"$name" {{IDL_OUT_DIR}}/"$name" || status=1; \
+  done; \
+  if [ "$status" -ne 0 ]; then \
+    echo "IDLs are out of date. Run 'just update-idls' and commit the changes."; \
+    exit 1; \
+  else \
+    echo "IDLs are up to date."; \
+  fi
 
 check-verifiable:
   @if [ -f {{STORE_PROGRAM}} ] && [ -f {{TREASURY_PROGRAM}} ] && [ -f {{TIMELOCK_PROGRAM}} ] && [ -f {{MOCK_CHAINLINK_PROGRAM}} ]; then \
