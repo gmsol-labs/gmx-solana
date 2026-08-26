@@ -92,6 +92,9 @@ impl SettleBuilderFee<'_> {
             .ok_or_else(|| error!(CoreError::TokenAccountNotProvided))?;
 
         {
+            // Upholds the delivery invariant: a settled fee reaches the
+            // checkpointed builder and nobody else.
+            //
             // A non-zero recorded amount implies a builder must have been set.
             let order = ctx.accounts.order.load()?;
             let builder = order.builder().ok_or_else(|| error!(CoreError::Internal))?;
@@ -226,6 +229,9 @@ pub struct SetBuilderFee<'info> {
 
 impl SetBuilderFee<'_> {
     pub(crate) fn invoke(ctx: Context<Self>, expected_factor: u128) -> Result<()> {
+        // Upholds the liveness invariant: nothing freezes when the mechanism
+        // is switched off.
+        //
         // The only builder-fee instruction behind the feature flag. Settlement,
         // claiming and execution stay ungated on purpose, so disabling the
         // feature stops new orders from taking on a fee without freezing any
@@ -240,6 +246,9 @@ impl SetBuilderFee<'_> {
                 ActionDisabledFlag::Default,
             )?;
 
+        // Upholds the authorization invariant: never charged at a factor
+        // other than the one the owner authorized.
+        //
         // The builder's advertised rate has to match what the owner signed for,
         // exactly and with no tolerance: anything looser lets a builder raise
         // its factor between the owner deciding and the transaction landing.
@@ -250,6 +259,9 @@ impl SetBuilderFee<'_> {
             CoreError::BuilderFeeFactorMismatched
         );
 
+        // Upholds the boundedness invariant: no factor above the cap in force
+        // at checkpoint time is ever checkpointed.
+        //
         // Second enforcement point for the store cap. The builder's rate was
         // already checked against it when advertised, but the cap can be lowered
         // afterwards, and this is the moment the rate becomes payable.

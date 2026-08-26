@@ -700,6 +700,10 @@ impl<'info> internal::Close<'info, Order> for CloseOrderV2<'info> {
     #[inline(never)]
     fn validate(&self) -> Result<()> {
         let order = self.order.load()?;
+        // Upholds delivery (an order cannot be closed while a fee is still
+        // owed) and coverage (nothing drains the escrow before settlement).
+        // See the builder fee invariants on `crate::states::order`.
+        //
         // Applies to every close path (owner close in any state, keeper
         // close of terminal orders): an order with an unsettled builder
         // fee must be settled via `settle_builder_fee` first, otherwise
