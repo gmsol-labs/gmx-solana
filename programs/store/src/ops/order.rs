@@ -1099,6 +1099,18 @@ impl ExecuteOrderOperation<'_, '_> {
 
                 position.on_validate().map_err(ModelError::from)?;
 
+                // The factor checkpointed onto the order by `set_builder_fee`, not the one the
+                // builder currently advertises: what the order owes is fixed when the owner signs
+                // the checkpoint, and stays fixed however the builder moves its factor afterwards.
+                // Orders that never took a checkpoint carry zero here, which every fee path below
+                // reads as "no builder fee" and short-circuits on.
+                //
+                // Liquidation and ADL orders are created by the keeper rather than the owner, and
+                // `set_builder_fee` accepts only user-initiated kinds, so their factor is always
+                // zero; they are passed the same value for uniformity rather than as a special
+                // case.
+                let builder_fee_factor = self.order.load()?.builder_fee_factor();
+
                 let (should_remove_position, paid_fee_value) = match kind {
                     OrderKind::MarketIncrease | OrderKind::LimitIncrease => {
                         let paid_fee_value = execute_increase_position(
@@ -1109,9 +1121,7 @@ impl ExecuteOrderOperation<'_, '_> {
                             &mut transfer_out,
                             &mut *event_loader.load_mut()?,
                             &mut *self.order.load_mut()?,
-                            // TODO(builder-fee): read the snapshot factor from
-                            // the order once it is captured at order creation.
-                            0,
+                            builder_fee_factor,
                         )?;
                         (false, paid_fee_value)
                     }
@@ -1125,9 +1135,7 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut *self.order.load_mut()?,
                         true,
                         Some(SecondaryOrderType::Liquidation),
-                        // TODO(builder-fee): read the snapshot factor from
-                        // the order once it is captured at order creation.
-                        0,
+                        builder_fee_factor,
                     )?,
                     OrderKind::AutoDeleveraging => execute_decrease_position(
                         self.oracle,
@@ -1139,9 +1147,7 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut *self.order.load_mut()?,
                         true,
                         Some(SecondaryOrderType::AutoDeleveraging),
-                        // TODO(builder-fee): read the snapshot factor from
-                        // the order once it is captured at order creation.
-                        0,
+                        builder_fee_factor,
                     )?,
                     OrderKind::MarketDecrease
                     | OrderKind::LimitDecrease
@@ -1155,9 +1161,7 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut *self.order.load_mut()?,
                         false,
                         None,
-                        // TODO(builder-fee): read the snapshot factor from
-                        // the order once it is captured at order creation.
-                        0,
+                        builder_fee_factor,
                     )?,
                     _ => unreachable!(),
                 };
