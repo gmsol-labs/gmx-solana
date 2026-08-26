@@ -1747,15 +1747,25 @@ impl Deployment {
         token: &Pubkey,
         user: &Pubkey,
     ) -> eyre::Result<Option<u64>> {
-        use anchor_spl::{
-            associated_token::spl_associated_token_account::get_associated_token_address,
-            token::TokenAccount,
-        };
+        use anchor_spl::associated_token::spl_associated_token_account::get_associated_token_address;
 
-        let ata = get_associated_token_address(user, token);
+        self.get_token_account_amount(&get_associated_token_address(user, token))
+            .await
+    }
+
+    /// Read the balance of a token account by address, `None` if the account does not exist.
+    ///
+    /// Unlike [`get_ata_amount`](Self::get_ata_amount) this makes no assumption about how the
+    /// account is derived, which is what an order's escrow needs.
+    pub(crate) async fn get_token_account_amount(
+        &self,
+        account: &Pubkey,
+    ) -> eyre::Result<Option<u64>> {
+        use anchor_spl::token::TokenAccount;
+
         let account = self
             .client
-            .account_with_config::<TokenAccount>(&ata, Default::default())
+            .account_with_config::<TokenAccount>(account, Default::default())
             .await?
             .into_value();
         Ok(account.map(|a| a.amount))
