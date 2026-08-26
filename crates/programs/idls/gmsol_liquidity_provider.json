@@ -1937,11 +1937,15 @@
             "type": "u128"
           },
           {
+            "name": "max_builder_fee_factor",
+            "type": "u128"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u128",
-                64
+                63
               ]
             }
           }
@@ -4444,11 +4448,15 @@
             }
           },
           {
+            "name": "builder_fee_factor",
+            "type": "u128"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                128
+                112
               ]
             }
           }

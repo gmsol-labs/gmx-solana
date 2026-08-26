@@ -60,6 +60,7 @@ build-docs *ARGS:
   cargo doc --features doc {{ARGS}}
 
 build-idls:
+  rm -rf {{IDL_OUT_DIR}}
   mkdir -p {{IDL_OUT_DIR}}
   anchor idl build -p gmsol_store -t {{IDL_OUT_DIR}}/gmsol_store.ts -o {{IDL_OUT_DIR}}/gmsol_store.json
   anchor idl build -p gmsol_treasury -t {{IDL_OUT_DIR}}/gmsol_treasury.ts -o {{IDL_OUT_DIR}}/gmsol_treasury.json
@@ -71,10 +72,12 @@ build-idls:
 update-idls: build-idls
   cp {{IDL_OUT_DIR}}/*.json {{PROGRAMS_IDL_DIR}}
 
-check-idls: update-idls
-  @if [ -n "$(git status --porcelain -- {{PROGRAMS_IDL_DIR}})" ]; then \
-    git --no-pager diff -- {{PROGRAMS_IDL_DIR}}; \
-    git status --porcelain -- {{PROGRAMS_IDL_DIR}}; \
+check-idls: build-idls
+  @status=0; \
+  for name in $(basename -a {{PROGRAMS_IDL_DIR}}/*.json {{IDL_OUT_DIR}}/*.json | sort -u); do \
+    diff -u {{PROGRAMS_IDL_DIR}}/"$name" {{IDL_OUT_DIR}}/"$name" || status=1; \
+  done; \
+  if [ "$status" -ne 0 ]; then \
     echo "IDLs are out of date. Run 'just update-idls' and commit the changes."; \
     exit 1; \
   else \
