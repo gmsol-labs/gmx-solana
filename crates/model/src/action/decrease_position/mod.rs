@@ -6,8 +6,8 @@ use crate::{
     params::fee::PositionFees,
     pool::delta::PriceImpact,
     position::{
-        CollateralDelta, Position, PositionExt, PositionMut, PositionMutExt, PositionStateExt,
-        WillCollateralBeSufficient,
+        CollateralDelta, InsolventCloseStep, Position, PositionExt, PositionMut, PositionMutExt,
+        PositionStateExt, WillCollateralBeSufficient,
     },
     price::{Price, Prices},
     BorrowingFeeMarketExt, PerpMarketMut, PoolExt,
@@ -158,6 +158,31 @@ impl DecreasePositionFlags {
         self.is_insolvent_close_allowed = is_full_close && self.is_insolvent_close_allowed;
 
         Ok(())
+    }
+}
+
+/// Whether an insolvent close reported at `step` short-circuited the collateral
+/// pipeline before the fee step had a chance to collect anything.
+///
+/// The pipeline runs, in order: `Funding`, `Pnl`, `Fees`, `Impact`, `Diff` (see
+/// `process_collateral`). An insolvent close stops at the step that ran out of funds, so
+/// a step reported here means every later step was skipped.
+///
+/// Matched exhaustively rather than compared by ordering: the declaration order of
+/// [`InsolventCloseStep`] does not match the pipeline order, and the enum derives no
+/// `Ord`. Being in the crate that defines it, an exhaustive match also forces a decision
+/// here if a step is ever added.
+fn insolvency_preempted_fee_collection(step: InsolventCloseStep) -> bool {
+    match step {
+        // Both run before `pay_for_fees_excluding_funding`, so no order or borrowing fee
+        // was collected and the values computed up front must not be reported as paid.
+        InsolventCloseStep::Funding | InsolventCloseStep::Pnl => true,
+        // The fee step itself already clears what it failed to collect, on the
+        // partial-payment branch that credits the amount to the pool instead.
+        InsolventCloseStep::Fees => false,
+        // Both run after the fee step, so the fees were genuinely collected. Clearing
+        // here would under-report them and under-mint GT.
+        InsolventCloseStep::Impact | InsolventCloseStep::Diff => false,
     }
 }
 
@@ -426,6 +451,19 @@ where
 
             result
         };
+
+        // An insolvent close short-circuits the pipeline above at the step that ran out of
+        // funds, so every step after it is skipped. When that step precedes the fee step,
+        // `pay_for_fees_excluding_funding` never ran: no fees were collected, but `fees`
+        // still carries the values computed up front, including
+        // `paid_order_and_borrowing_fee_value`. Leaving it set would let the caller mint GT
+        // against fees that were never paid.
+        if result
+            .insolvent_close_step
+            .is_some_and(insolvency_preempted_fee_collection)
+        {
+            fees.clear_uncollected_fees_excluding_funding();
+        }
 
         // Handle initial collateral delta amount with price impact diff.
         // The price_impact_diff has been deducted from the output amount or the position's collateral
@@ -816,6 +854,85 @@ mod tests {
         println!("{report:#?}");
         println!("{position:#?}");
         println!("{market:#?}");
+        Ok(())
+    }
+
+    /// A test for the step-to-clear decision.
+    ///
+    /// The last three rows guard against a blanket `is_some()` check, which would
+    /// under-report fees that were collected.
+    #[test]
+    fn insolvency_preempted_fee_collection_decision_table() {
+        for (step, expected) in [
+            (InsolventCloseStep::Funding, true),
+            (InsolventCloseStep::Pnl, true),
+            (InsolventCloseStep::Fees, false),
+            (InsolventCloseStep::Impact, false),
+            (InsolventCloseStep::Diff, false),
+        ] {
+            assert_eq!(insolvency_preempted_fee_collection(step), expected);
+        }
+    }
+
+    /// Opens a leveraged long and fully closes it at `close_price`.
+    ///
+    /// Insolvent close is always allowed, so solvency is the only variable.
+    fn close_long_at(
+        close_price: u64,
+    ) -> crate::Result<Box<DecreasePositionReport<u64, <u64 as Unsigned>::Signed>>> {
+        let mut market = TestMarket::<u64, 9>::default();
+        let prices = Prices::new_for_test(120, 120, 1);
+        market.deposit(1_000_000_000, 0, prices)?.execute()?;
+        market.deposit(0, 1_000_000_000, prices)?.execute()?;
+
+        let mut position = TestPosition::long(true);
+        let _ = position
+            .ops(&mut market)
+            .increase(
+                Prices::new_for_test(123, 123, 1),
+                100_000_000,
+                80_000_000_000,
+                None,
+            )?
+            .execute()?;
+
+        let mut ops = position.ops(&mut market);
+        ops.decrease(
+            Prices::new_for_test(close_price, close_price, 1),
+            80_000_000_000,
+            None,
+            0,
+            DecreasePositionFlags {
+                is_insolvent_close_allowed: true,
+                is_liquidation_order: false,
+                is_cap_size_delta_usd_allowed: true,
+            },
+        )?
+        .execute()
+    }
+
+    /// A test for an insolvent close that stops before the fee step.
+    #[test]
+    fn insolvent_close_at_pnl_step_reports_no_paid_fee() -> crate::Result<()> {
+        let report = close_long_at(100)?;
+
+        assert!(matches!(
+            report.insolvent_close_step(),
+            Some(InsolventCloseStep::Pnl)
+        ));
+        assert_eq!(*report.fees().paid_order_and_borrowing_fee_value(), 0);
+
+        Ok(())
+    }
+
+    /// A test for a solvent close, which must still report its paid fee.
+    #[test]
+    fn solvent_close_still_reports_paid_fee() -> crate::Result<()> {
+        let report = close_long_at(122)?;
+
+        assert!(report.insolvent_close_step().is_none());
+        assert!(*report.fees().paid_order_and_borrowing_fee_value() > 0);
+
         Ok(())
     }
 }

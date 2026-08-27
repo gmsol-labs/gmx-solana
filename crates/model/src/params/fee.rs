@@ -816,6 +816,24 @@ impl<T> PositionFees<T> {
         self.liquidation = None;
     }
 
+    /// Clear the fees excluding funding fee, along with the accounting value
+    /// derived from them.
+    ///
+    /// For use on paths where those fees were never actually collected. Both
+    /// the fee breakdown and
+    /// [`paid_order_and_borrowing_fee_value`](Self::paid_order_and_borrowing_fee_value)
+    /// describe the same collection, and the latter is what GT minting is
+    /// derived from, so clearing one without the other would mint GT with no
+    /// fee backing. Kept in a single helper so the two cannot drift apart
+    /// across call sites.
+    pub(crate) fn clear_uncollected_fees_excluding_funding(&mut self)
+    where
+        T: Zero,
+    {
+        self.clear_fees_excluding_funding();
+        self.set_paid_order_and_borrowing_fee_value(Zero::zero());
+    }
+
     /// Set borrowing fees.
     pub fn set_borrowing_fees<const DECIMALS: u8>(
         mut self,
