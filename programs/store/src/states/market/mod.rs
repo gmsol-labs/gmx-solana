@@ -564,6 +564,12 @@ impl Market {
 
     /// Leave a disabled virtual inventory.
     ///
+    /// This market must currently be associated with the given [`VirtualInventory`],
+    /// through either of its two references. Otherwise the `ref_count` would be
+    /// decremented on behalf of a market that never joined, which would let the
+    /// virtual inventory reach zero and be closed while other markets still
+    /// reference it.
+    ///
     /// # CHECK
     /// - The address and the provided [`VirtualInventory`] must match.
     pub fn leave_disabled_virtual_inventory_unchecked(
@@ -580,6 +586,9 @@ impl Market {
             self.virtual_inventory_for_swaps = DEFAULT_PUBKEY;
         } else if self.virtual_inventory_for_positions() == Some(address) {
             self.virtual_inventory_for_positions = DEFAULT_PUBKEY;
+        } else {
+            msg!("the market is not associated with this virtual inventory");
+            return err!(CoreError::PreconditionsAreNotMet);
         }
 
         virtual_inventory.leave_unchecked(Delta::new(None, None))?;
@@ -977,5 +986,121 @@ mod tests {
             .expect("failed to serialize `EventOtherState`");
 
         assert_eq!(data, event_data);
+    }
+
+    /// A disabled [`VirtualInventory`] carrying `ref_count` references.
+    fn disabled_virtual_inventory(ref_count: u32) -> VirtualInventory {
+        use bytemuck::Zeroable;
+
+        let mut virtual_inventory = VirtualInventory::zeroed();
+        for _ in 0..ref_count {
+            virtual_inventory
+                .join_unchecked(Delta::new(None, None))
+                .expect("failed to bump `ref_count`");
+        }
+        virtual_inventory
+            .disable()
+            .expect("failed to disable the virtual inventory");
+        virtual_inventory
+    }
+
+    #[test]
+    fn leave_disabled_virtual_inventory_clears_the_swaps_reference() {
+        let address = Pubkey::new_unique();
+        let mut virtual_inventory = disabled_virtual_inventory(1);
+
+        let mut market = Market::default();
+        market.virtual_inventory_for_swaps = address;
+
+        market
+            .leave_disabled_virtual_inventory_unchecked(&address, &mut virtual_inventory)
+            .expect("an associated market must be allowed to leave");
+
+        assert_eq!(market.virtual_inventory_for_swaps(), None);
+        assert_eq!(virtual_inventory.ref_count(), 0);
+    }
+
+    /// The same instruction serves both kinds, so validating only the swaps
+    /// reference would break every market that joined for positions.
+    #[test]
+    fn leave_disabled_virtual_inventory_clears_the_positions_reference() {
+        let address = Pubkey::new_unique();
+        let mut virtual_inventory = disabled_virtual_inventory(1);
+
+        let mut market = Market::default();
+        market.virtual_inventory_for_positions = address;
+
+        market
+            .leave_disabled_virtual_inventory_unchecked(&address, &mut virtual_inventory)
+            .expect("an associated market must be allowed to leave");
+
+        assert_eq!(market.virtual_inventory_for_positions(), None);
+        assert_eq!(virtual_inventory.ref_count(), 0);
+    }
+
+    /// Regression test for the premature-closure bug: a market that never
+    /// joined must not be able to spend a reference it does not hold.
+    #[test]
+    fn leave_disabled_virtual_inventory_rejects_an_unassociated_market() {
+        let address = Pubkey::new_unique();
+        let mut virtual_inventory = disabled_virtual_inventory(2);
+
+        // A market associated with two other virtual inventories.
+        let other_for_swaps = Pubkey::new_unique();
+        let other_for_positions = Pubkey::new_unique();
+        let mut market = Market::default();
+        market.virtual_inventory_for_swaps = other_for_swaps;
+        market.virtual_inventory_for_positions = other_for_positions;
+
+        let err = market
+            .leave_disabled_virtual_inventory_unchecked(&address, &mut virtual_inventory)
+            .unwrap_err();
+        assert_eq!(err, error!(CoreError::PreconditionsAreNotMet));
+
+        // Neither side moved: the counter still reflects the markets that did join,
+        // and the market keeps the references it actually holds.
+        assert_eq!(virtual_inventory.ref_count(), 2);
+        assert_eq!(market.virtual_inventory_for_swaps(), Some(&other_for_swaps));
+        assert_eq!(
+            market.virtual_inventory_for_positions(),
+            Some(&other_for_positions)
+        );
+    }
+
+    /// The unassociated case also covers a market holding no reference at all.
+    #[test]
+    fn leave_disabled_virtual_inventory_rejects_a_market_without_references() {
+        let address = Pubkey::new_unique();
+        let mut virtual_inventory = disabled_virtual_inventory(1);
+        let mut market = Market::default();
+
+        let err = market
+            .leave_disabled_virtual_inventory_unchecked(&address, &mut virtual_inventory)
+            .unwrap_err();
+        assert_eq!(err, error!(CoreError::PreconditionsAreNotMet));
+        assert_eq!(virtual_inventory.ref_count(), 1);
+    }
+
+    /// The disabled precondition is checked before anything else, so an enabled
+    /// virtual inventory is rejected even for a market that did join it.
+    #[test]
+    fn leave_disabled_virtual_inventory_rejects_an_enabled_virtual_inventory() {
+        use bytemuck::Zeroable;
+
+        let address = Pubkey::new_unique();
+        let mut virtual_inventory = VirtualInventory::zeroed();
+        virtual_inventory
+            .join_unchecked(Delta::new(None, None))
+            .expect("failed to bump `ref_count`");
+
+        let mut market = Market::default();
+        market.virtual_inventory_for_swaps = address;
+
+        let err = market
+            .leave_disabled_virtual_inventory_unchecked(&address, &mut virtual_inventory)
+            .unwrap_err();
+        assert_eq!(err, error!(CoreError::PreconditionsAreNotMet));
+        assert_eq!(virtual_inventory.ref_count(), 1);
+        assert_eq!(market.virtual_inventory_for_swaps(), Some(&address));
     }
 }
