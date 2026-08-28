@@ -19,6 +19,8 @@ mod market;
 
 mod market_status;
 
+mod virtual_inventory;
+
 mod glv;
 
 mod oracle;
