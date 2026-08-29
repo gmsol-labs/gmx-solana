@@ -6,6 +6,7 @@ use gmsol_programs::{
     anchor_lang::error::ErrorCode,
     gmsol_store::{
         client::{accounts, args},
+        events::BuilderFeeCharged,
         types::{DecreasePositionSwapType, UpdateOrderParams},
     },
 };
@@ -13,13 +14,39 @@ use gmsol_sdk::{
     builders::order::SetBuilderFeeHint,
     client::ops::{BuilderFeeOps, ConfigOps, ExchangeOps, MarketOps, UserOps},
     constants::MARKET_USD_UNIT,
+    decode::gmsol::programs::GMSOLCPIEvent,
     pda::find_user_token_controller_address,
+    Client,
 };
+use gmsol_solana_utils::signer::SignerRef;
 use gmsol_store::CoreError;
 use gmsol_utils::{config::FactorKey, market::MarketConfigKey};
+use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
+
+/// Read the [`BuilderFeeCharged`] event emitted by the most recent transaction touching `order`.
+///
+/// Errors when the order's last transaction emitted none, which is what a case asserting that a fee
+/// was charged wants: the absence of the event is exactly the failure being guarded against.
+async fn last_builder_fee_charged(
+    client: &Client<SignerRef>,
+    order: &Pubkey,
+) -> eyre::Result<BuilderFeeCharged> {
+    let slot = client.get_slot(None).await?;
+    let events = client
+        .last_order_events(order, slot, CommitmentConfig::confirmed())
+        .await?;
+
+    events
+        .into_iter()
+        .find_map(|event| match event {
+            GMSOLCPIEvent::BuilderFeeCharged(event) => Some(event),
+            _ => None,
+        })
+        .ok_or_eyre("no `BuilderFeeCharged` event was emitted")
+}
 
 #[tokio::test]
 async fn balanced_market_order() -> eyre::Result<()> {
@@ -1603,6 +1630,193 @@ async fn set_builder_fee_rejects_collateral_to_pnl_swap() -> eyre::Result<()> {
 
     let signature = owner.close_order(&order)?.build().await?.send().await?;
     tracing::info!(%order, %signature, "cancelled the decrease order");
+
+    Ok(())
+}
+
+/// Executing a fee-bearing order charges the fee.
+///
+/// The amount follows the factor checkpointed onto the order rather than whatever the builder
+/// advertises by the time the order executes; the pending amount recorded on the order, the balance
+/// left in the order's escrow and the `BuilderFeeCharged` event all agree; and the order cannot be
+/// closed until the fee has been settled into the builder's claim vault.
+///
+/// Trades as the exclusive locked user: the assertions read an escrow and a claim vault that no
+/// concurrently running test may also be moving.
+#[tokio::test]
+async fn charges_builder_fee_on_execution() -> eyre::Result<()> {
+    /// One percent, in the market factor unit.
+    const CAP: u128 = MARKET_USD_UNIT / 100;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("charges_builder_fee_on_execution");
+    let _enter = span.enter();
+
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let builder = deployment.user_client(Deployment::USER_1)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+    let fbtc = deployment.token("fBTC").expect("must exist");
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+
+    let owner = deployment.locked_user_client().await?;
+
+    for signature in [
+        owner.prepare_user(store)?.send_without_preflight().await?,
+        builder
+            .prepare_user(store)?
+            .send_without_preflight()
+            .await?,
+    ] {
+        tracing::info!(%signature, "prepared a user account");
+    }
+
+    // The vault settlement pays into. `set_builder_fee` requires it to exist; the balance it starts
+    // from is read under the lock below, since this builder is shared with the other builder fee
+    // tests and one of them settles into this very vault.
+    let builder_user = builder.find_user_address(store, &builder.payer());
+    deployment
+        .mint_or_transfer_to("fBTC", &builder_user, 0)
+        .await?;
+
+    // Deliberately small: this market is shared with the other order tests and the position opened
+    // here is left behind, so it keeps its footprint on open interest and pool balances negligible.
+    let collateral_amount = 10_000;
+    deployment
+        .mint_or_transfer_to("fBTC", &owner.payer(), collateral_amount)
+        .await?;
+
+    let size = 100 * MARKET_USD_UNIT;
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            let claim_vault_before = deployment
+                .get_ata_amount(&fbtc.address, &builder_user)
+                .await?
+                .ok_or_eyre("the claim vault must exist")?;
+
+            let signature = builder
+                .set_builder_fee_factor(store, CAP)?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "the builder advertised its factor");
+
+            // The escrow is what makes an increase order fee-eligible: the fee is charged in the
+            // final output token and lands in that token's escrow under the order.
+            let (rpc, order) = owner
+                .market_increase(store, market_token, true, collateral_amount, true, size)
+                .prepare_final_output_token_escrow(true)
+                .build_with_address()
+                .await?;
+            let signature = rpc.send().await?;
+            tracing::info!(%order, %signature, "created a fee-eligible increase order");
+
+            let signature = owner
+                .set_builder_fee(store, &order, &builder_user, CAP, None)
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%order, %signature, "checkpointed the builder fee onto the order");
+
+            // Whatever the builder advertises from here on must not reach this order. Opting out
+            // entirely is the strongest form of that: the charge below is non-zero only if it is
+            // computed from the checkpoint rather than from the builder's current factor.
+            let signature = builder
+                .set_builder_fee_factor(store, 0)?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "the builder opted back out after the checkpoint");
+
+            let escrow = owner
+                .order(&order)
+                .await?
+                .tokens
+                .final_output_token
+                .account()
+                .ok_or_eyre("the order must carry a final output token escrow")?;
+
+            let mut execution = keeper.execute_order(store, oracle, &order, false)?;
+            deployment
+                .execute_with_pyth(
+                    execution
+                        .add_alt(deployment.common_alt().clone())
+                        .add_alt(deployment.market_alt().clone()),
+                    None,
+                    true,
+                    true,
+                )
+                .await?;
+            tracing::info!(%order, "executed the fee-bearing order");
+
+            let executed = owner.order(&order).await?;
+            let pending_amount = executed.builder_fee_amount;
+            assert_ne!(
+                pending_amount, 0,
+                "the checkpointed factor must be charged even though the builder now advertises 0"
+            );
+            assert_eq!(executed.builder, builder_user);
+
+            // The escrow of an increase order receives nothing but the fee, so its whole balance is
+            // what settlement has to pay out.
+            assert_eq!(
+                deployment.get_token_account_amount(&escrow).await?,
+                Some(pending_amount),
+                "the escrow must hold exactly the amount recorded as pending"
+            );
+
+            let charged = last_builder_fee_charged(&keeper, &order).await?;
+            assert_eq!(charged.paid_amount, u128::from(pending_amount));
+            assert_eq!(
+                charged.payable_amount, charged.paid_amount,
+                "an increase order errors out rather than charging a partial amount"
+            );
+            assert_eq!(charged.token, fbtc.address);
+
+            // The fee is unsettled, so the order is not closable yet.
+            let err = owner
+                .close_order(&order)?
+                .build()
+                .await?
+                .send()
+                .await
+                .expect_err("should reject closing an order with an unsettled builder fee");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::UnsettledBuilderFee.into()),
+            );
+
+            // Settlement is permissionless, so the keeper can do it.
+            let signature = keeper
+                .settle_builder_fee(store, &order, None)
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%order, %signature, "settled the builder fee");
+
+            assert_eq!(
+                owner.order(&order).await?.builder_fee_amount,
+                0,
+                "settlement must clear the pending amount"
+            );
+            assert_eq!(
+                deployment
+                    .get_ata_amount(&fbtc.address, &builder_user)
+                    .await?,
+                Some(claim_vault_before + pending_amount),
+                "the settled fee must land in the builder's claim vault"
+            );
+
+            // Closable once nothing is pending.
+            let signature = owner.close_order(&order)?.build().await?.send().await?;
+            tracing::info!(%order, %signature, "closed the settled order");
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
 
     Ok(())
 }
