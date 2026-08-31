@@ -125,12 +125,18 @@ fn cmd_rotate() -> ExitCode {
         eprintln!("error: failed to write {ANCHOR_TOML}: {e}");
         return ExitCode::FAILURE;
     }
-    let previous = detected.active.saturating_sub(1);
-    println!(
-        "updated {ANCHOR_TOML}: guardian set {} active, {previous} kept as previous \
-         (older commented). Review and commit.",
-        detected.active
-    );
+    if detected.active == 0 {
+        println!(
+            "updated {ANCHOR_TOML}: guardian set 0 active (no previous set). Review and commit."
+        );
+    } else {
+        let previous = detected.active.saturating_sub(1);
+        println!(
+            "updated {ANCHOR_TOML}: guardian set {} active, {previous} kept as previous \
+             (older commented). Review and commit.",
+            detected.active
+        );
+    }
     ExitCode::SUCCESS
 }
 

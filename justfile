@@ -43,6 +43,10 @@ check-guardian-set:
 rotate-guardian-set:
   cargo xtask guardian-set rotate
 
+# Live post of one upgraded Hermes price to the new Pyth programs (needs PYTH_API_KEY + SOL).
+pyth-post:
+  cargo run -p gmsol-examples --example pyth-post
+
 build-test-programs:
   anchor build -- --features mock --features {{DEVNET_FEATURES}}
 

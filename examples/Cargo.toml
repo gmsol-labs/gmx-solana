@@ -39,3 +39,7 @@ path = "market.rs"
 name = "decode-transaction"
 path = "decode_transaction.rs"
 
+[[example]]
+name = "pyth-post"
+path = "pyth_post.rs"
+
