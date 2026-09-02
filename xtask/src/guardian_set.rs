@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use eyre::{eyre, OptionExt, Result};
+use eyre::{eyre, Result};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 
@@ -20,8 +20,15 @@ pub fn guardian_set_address(index: u32) -> Pubkey {
 }
 
 pub struct Detected {
-    /// Highest existing guardian-set index (= the active set).
-    pub active: u32,
+    /// Highest existing guardian-set index (= the active set), or `None` when the
+    /// probe succeeded and found nothing.
+    ///
+    /// `None` is deliberately not an `Err`. A failed query and an empty cluster are
+    /// different events and the caller must be able to treat them differently: the
+    /// first is a network blip worth skipping over, the second is an outage. Folding
+    /// them into one `Err` is what let the 2026-08-26 Pyth Core upgrade pass
+    /// `guardian-set check` while the validator could not start.
+    pub active: Option<u32>,
     /// All indices in `0..=max_probe` whose account exists on the cluster.
     pub existing: Vec<u32>,
 }
@@ -44,11 +51,7 @@ pub fn detect(rpc_url: &str, max_probe: u32) -> Result<Detected> {
         .zip(accounts.iter())
         .filter_map(|(&i, acc)| acc.as_ref().map(|_| i))
         .collect();
-    let active = existing
-        .iter()
-        .copied()
-        .max()
-        .ok_or_eyre("no guardian-set accounts found on cluster")?;
+    let active = existing.iter().copied().max();
     if existing.contains(&max_probe) {
         eprintln!(
             "warning: highest probed guardian-set index ({max_probe}) exists; a newer set \
