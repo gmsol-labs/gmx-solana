@@ -951,6 +951,19 @@ impl ExecuteOrderOperation<'_, '_> {
         let mut should_throw_error = false;
         let prices = self.prices()?;
         let discount = self.validate_and_get_order_fee_discount()?;
+
+        // The builder fee is recorded onto the order part-way through
+        // execution, and the order account is not revertible: unlike the
+        // position and the markets, it is passed down as a plain `&mut Order`,
+        // so a soft failure below keeps whatever was written to it while
+        // discarding the `TransferOut` that was supposed to fund the fee.
+        //
+        // Snapshotting here keys the record to the outcome rather than to an
+        // ordering of the fallible steps. Moving the record after the last one
+        // would fix the paths that exist today and silently rot the moment a
+        // new fallible step is added after it.
+        let builder_fee_amount_before = self.order.load()?.builder_fee_amount();
+
         let res = match self.perform_execution(&mut should_throw_error, prices, discount) {
             Ok((should_remove_position, mut transfer_out, should_send_trade_event)) => {
                 transfer_out.set_executed(true);
@@ -959,6 +972,13 @@ impl ExecuteOrderOperation<'_, '_> {
             }
             Err(err) if !(should_throw_error || self.throw_on_execution_error) => {
                 msg!("Execute order error: {}", err);
+                // Everything this attempt produced is dropped here, so the fee
+                // it recorded goes with it. The caller cancels the order and
+                // refunds the principal into the very escrow settlement would
+                // otherwise pay the builder from.
+                self.order
+                    .load_mut()?
+                    .restore_builder_fee_amount(builder_fee_amount_before);
                 remove_position = self
                     .position
                     .as_ref()
