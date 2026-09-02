@@ -16,11 +16,11 @@
 //! order's final output token escrow; `settle_builder_fee` moves it to the
 //! builder and zeroes the record.
 //!
-//! **Charging is not yet wired.** Every execution call site currently passes a
-//! literal zero factor rather than reading the checkpoint, so the charging
-//! invariants below hold vacuously today. They describe the mechanism the
-//! checkpoint exists for, and become load-bearing when the call sites start
-//! reading it.
+//! **Charging is wired as of #421.** The execution call sites read the order's
+//! checkpointed factor instead of the literal zero they used to pass, so the
+//! charging invariants below are load-bearing rather than vacuous. An earlier
+//! revision of this document said the opposite and named that change as the
+//! moment they would become live; it landed, so they are.
 //!
 //! ## Conservation
 //!
