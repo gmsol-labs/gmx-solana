@@ -20,7 +20,7 @@ use gmsol_sdk::{
 };
 use gmsol_solana_utils::signer::SignerRef;
 use gmsol_store::CoreError;
-use gmsol_utils::{config::FactorKey, market::MarketConfigKey};
+use gmsol_utils::{action::ActionState, config::FactorKey, market::MarketConfigKey};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tracing::Instrument;
 
@@ -1923,6 +1923,174 @@ async fn revoked_builder_fee_still_closes_in_bundle() -> eyre::Result<()> {
                 matches!(err, gmsol_sdk::Error::NotFound),
                 "expected the order account to be absent, got {err:?}"
             );
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    Ok(())
+}
+
+/// An execution that soft-fails must leave no builder fee recorded on the order.
+///
+/// The fee is written to the `Order` account part-way through execution, and that account is not
+/// revertible: `perform_execution` takes it as a plain `&mut Order`, unlike the position and the
+/// markets. When a later step fails and the keeper opted into cancellation, the `TransferOut` that
+/// was supposed to fund the fee is discarded while the record survives it, leaving an amount payable
+/// out of an escrow nothing was routed into. The order is then refused by every close path until
+/// someone calls `settle_builder_fee`, and on the increase path the principal refunded by the same
+/// cancellation lands in the very escrow settlement pays from.
+///
+/// The lever is a decrease order with an unreachable `min_output_amount`, which fails
+/// `validate_decrease_output_amounts` after the fee has been recorded, with `should_throw_error`
+/// left `false` so the failure lands in the soft-failure arm rather than reverting the transaction.
+/// The decrease path is used because that minimum is a parameter the test controls; the increase
+/// path reaches the same arm only through a market condition.
+///
+/// Executes with the bundled close disabled, so the assertion lands on the recorded amount itself
+/// rather than on the close guard tripping. Closing is then exercised separately, since being unable
+/// to close without an extra settlement is the user-visible half of the defect.
+///
+/// Trades as the exclusive locked user: it needs a position of its own, and the position for
+/// [`Deployment::DEFAULT_USER`] on this market is opened and closed by `balanced_market_order`
+/// running concurrently. It takes that lock before the builder fee globals, matching
+/// `set_builder_fee_rejects_collateral_to_pnl_swap`; no test takes them in the opposite order.
+#[tokio::test]
+async fn soft_failed_execution_records_no_builder_fee() -> eyre::Result<()> {
+    /// One percent, in the market factor unit.
+    const CAP: u128 = MARKET_USD_UNIT / 100;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("soft_failed_execution_records_no_builder_fee");
+    let _enter = span.enter();
+
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let builder = deployment.user_client(Deployment::USER_1)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+
+    let owner = deployment.locked_user_client().await?;
+
+    for signature in [
+        owner.prepare_user(store)?.send_without_preflight().await?,
+        builder
+            .prepare_user(store)?
+            .send_without_preflight()
+            .await?,
+    ] {
+        tracing::info!(%signature, "prepared a user account");
+    }
+
+    // `set_builder_fee` requires the claim vault to exist, even though nothing is ever settled here.
+    let builder_user = builder.find_user_address(store, &builder.payer());
+    deployment
+        .mint_or_transfer_to("fBTC", &builder_user, 0)
+        .await?;
+
+    // Deliberately small: this market is shared with the other order tests and the position opened
+    // here is left behind, so it keeps its footprint on open interest and pool balances negligible.
+    let collateral_amount = 10_000;
+    deployment
+        .mint_or_transfer_to("fBTC", &owner.payer(), collateral_amount * 2)
+        .await?;
+
+    let size = 100 * MARKET_USD_UNIT;
+    let (rpc, increase) = owner
+        .market_increase(store, market_token, true, collateral_amount, true, size)
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%increase, %signature, "created the increase order");
+
+    let mut execution = keeper.execute_order(store, oracle, &increase, false)?;
+    deployment
+        .execute_with_pyth(
+            execution
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone()),
+            None,
+            true,
+            true,
+        )
+        .await?;
+    tracing::info!(%increase, "executed the increase order, opening the position");
+
+    // A full close, so the whole collateral is released and the fee computed from the executed size
+    // is comfortably covered by the output amount it is clamped against. The minimum output is what
+    // makes the execution fail, after that fee has been recorded. The swap type is left at its
+    // default: `CollateralToPnlToken` is refused a non-zero checkpoint outright.
+    let (rpc, order) = owner
+        .market_decrease(store, market_token, true, 0, true, size)
+        .min_output_amount(u128::MAX)
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%order, %signature, "created a decrease order that cannot meet its minimum output");
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            let signature = builder
+                .set_builder_fee_factor(store, CAP)?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "the builder advertised its factor");
+
+            let signature = owner
+                .set_builder_fee(store, &order, &builder_user, CAP, None)
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%order, %signature, "checkpointed the builder fee onto the decrease order");
+
+            let before = owner.order(&order).await?;
+            assert_eq!(before.builder_fee_factor, CAP);
+            let recorded_before = before.builder_fee_amount;
+
+            // `true` opts into cancellation, which is what routes the failure into the soft-failure
+            // arm instead of reverting the whole transaction and with it the record.
+            let mut execution = keeper.execute_order(store, oracle, &order, true)?;
+            deployment
+                .execute_with_pyth(
+                    execution
+                        .close(false)
+                        .add_alt(deployment.common_alt().clone())
+                        .add_alt(deployment.market_alt().clone()),
+                    None,
+                    true,
+                    true,
+                )
+                .await?;
+            tracing::info!(%order, "executed the decrease order, which must have soft-failed");
+
+            let executed = owner.order(&order).await?;
+
+            // Without this the test would also pass on a successful execution that happened to
+            // charge nothing, which is the one way it could go quietly vacuous.
+            assert!(
+                matches!(executed.header.action_state()?, ActionState::Cancelled),
+                "the execution must have failed and cancelled the order, not completed it"
+            );
+
+            assert_eq!(
+                executed.builder_fee_amount, recorded_before,
+                "a discarded execution must leave the recorded builder fee untouched"
+            );
+
+            // The other half of the defect: the close guard refuses any order carrying a recorded
+            // fee, so before the fix this order could not be closed until it had been settled.
+            let signature = owner.close_order(&order)?.build().await?.send().await?;
+            tracing::info!(%order, %signature, "closed the cancelled order without settling anything");
+
+            let signature = builder
+                .set_builder_fee_factor(store, 0)?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "the builder opted back out");
 
             Ok::<_, eyre::Report>(())
         })

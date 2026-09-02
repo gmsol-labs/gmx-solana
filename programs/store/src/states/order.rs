@@ -633,6 +633,26 @@ impl Order {
         Ok(())
     }
 
+    /// Restore the recorded builder fee amount to a previously observed value.
+    ///
+    /// The undo half of [`record_builder_fee`](Self::record_builder_fee),
+    /// for the soft-failure path. The order account is not revertible, so a
+    /// fee recorded by an execution attempt that is then discarded survives
+    /// it, payable out of an escrow the same failure refunded to the owner
+    /// rather than funded.
+    ///
+    /// Takes the previous value instead of zeroing, because the field
+    /// accumulates by contract. Restoring is therefore correct without
+    /// depending on an order being executable at most once, which is what
+    /// makes a prior unsettled charge unreachable today.
+    ///
+    /// CHECK: the caller must be discarding every output of the attempt that
+    /// recorded the amount, so that nothing was routed into the escrow to
+    /// cover it.
+    pub(crate) fn restore_builder_fee_amount(&mut self, amount: u64) {
+        self.builder_fee_amount = amount;
+    }
+
     /// Checkpoint a builder and its fee factor onto this order.
     ///
     /// The only writer of either field. Every validation the checkpoint depends
