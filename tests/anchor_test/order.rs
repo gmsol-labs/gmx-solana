@@ -1820,3 +1820,113 @@ async fn charges_builder_fee_on_execution() -> eyre::Result<()> {
 
     Ok(())
 }
+
+/// An order whose builder fee was revoked must still be closed by the bundled close.
+///
+/// Revocation writes the builder key like any other checkpoint (see `set_builder_fee`, which
+/// asserts the same pair), so the order is left with `builder` set and `builder_fee_factor` at
+/// zero. Nothing is charged, `builder_fee_amount` stays zero, and `CloseOrderV2` therefore
+/// accepts the close. Gating the bundled close on the builder's presence rather than on the
+/// factor skips a close that works and leaves the order open, with no `settle_builder_fee`
+/// command in the CLI to recover it.
+///
+/// Trades as the exclusive locked user: it executes an order and leaves a position behind.
+#[tokio::test]
+async fn revoked_builder_fee_still_closes_in_bundle() -> eyre::Result<()> {
+    /// One percent, in the market factor unit.
+    const CAP: u128 = MARKET_USD_UNIT / 100;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("revoked_builder_fee_still_closes_in_bundle");
+    let _enter = span.enter();
+
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+
+    let owner = deployment.locked_user_client().await?;
+
+    let signature = owner.prepare_user(store)?.send_without_preflight().await?;
+    tracing::info!(%signature, "prepared a user account");
+
+    // The revocation checkpoint names the owner's own User Account, which advertises zero. Its
+    // claim vault still has to exist, and minting zero is how the fixture opens an ATA.
+    let owner_user = owner.find_user_address(store, &owner.payer());
+    deployment
+        .mint_or_transfer_to("fBTC", &owner_user, 0)
+        .await?;
+
+    // Deliberately small, for the same reason as the charging test: this market is shared and
+    // the position opened here is left behind.
+    let collateral_amount = 10_000;
+    deployment
+        .mint_or_transfer_to("fBTC", &owner.payer(), collateral_amount)
+        .await?;
+
+    let size = 100 * MARKET_USD_UNIT;
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            let (rpc, order) = owner
+                .market_increase(store, market_token, true, collateral_amount, true, size)
+                .prepare_final_output_token_escrow(true)
+                .build_with_address()
+                .await?;
+            let signature = rpc.send().await?;
+            tracing::info!(%order, %signature, "created a fee-eligible increase order");
+
+            // Straight to the revoked state: a zero-advertising account is what clears a
+            // checkpoint, and checkpointing one on a fresh order reaches the same pair without
+            // needing a paying checkpoint first.
+            let signature = owner
+                .set_builder_fee(store, &order, &owner_user, 0, None)
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%order, %signature, "checkpointed a zero-advertising account");
+
+            let checkpointed = owner.order(&order).await?;
+            assert_eq!(
+                checkpointed.builder, owner_user,
+                "the checkpoint must leave the builder set, which is what makes this case"
+            );
+            assert_eq!(
+                checkpointed.builder_fee_factor, 0,
+                "the checkpoint must leave nothing payable"
+            );
+
+            // The default bundled close, i.e. what the CLI keeper runs.
+            let mut execution = keeper.execute_order(store, oracle, &order, false)?;
+            deployment
+                .execute_with_pyth(
+                    execution
+                        .add_alt(deployment.common_alt().clone())
+                        .add_alt(deployment.market_alt().clone()),
+                    None,
+                    true,
+                    true,
+                )
+                .await?;
+            tracing::info!(%order, "executed the order with the bundled close");
+
+            let err = owner
+                .order(&order)
+                .await
+                .err()
+                .ok_or_eyre("the bundled close must have closed an order that pays no fee")?;
+            assert!(
+                matches!(err, gmsol_sdk::Error::NotFound),
+                "expected the order account to be absent, got {err:?}"
+            );
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    Ok(())
+}
