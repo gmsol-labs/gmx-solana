@@ -182,17 +182,23 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
                 .create_encoded_vaa(draft_vaa, vaa.len() as u64)
                 .await?;
             let draft_vaa = pubkey;
-            let write_1 = wormhole.write_encoded_vaa(draft_vaa, 0, &vaa[0..VAA_SPLIT_INDEX]);
-            let write_2 = wormhole.write_encoded_vaa(
-                draft_vaa,
-                VAA_SPLIT_INDEX as u32,
-                &vaa[VAA_SPLIT_INDEX..],
-            );
+            // The split exists because a VAA can exceed what one transaction can carry, which is
+            // not a property of every VAA: the length scales with the guardian signature count,
+            // and Hermes currently serves 292-byte VAAs (guardian set 0, 3 signatures). Slicing
+            // at a fixed index panics on anything shorter than it, so only split when there is
+            // something to split.
+            let split = (vaa.len() > VAA_SPLIT_INDEX).then_some(VAA_SPLIT_INDEX);
+            let write_1 =
+                wormhole.write_encoded_vaa(draft_vaa, 0, &vaa[0..split.unwrap_or(vaa.len())]);
+            let write_2 =
+                split.map(|at| wormhole.write_encoded_vaa(draft_vaa, at as u32, &vaa[at..]));
             let verify = wormhole.verify_encoded_vaa_v1(draft_vaa, *guardian_set_index);
             ixns.try_push_post(create.clear_output())
                 .map_err(|(_, err)| err)?;
             ixns.try_push_post(write_1).map_err(|(_, err)| err)?;
-            ixns.try_push_post(write_2).map_err(|(_, err)| err)?;
+            if let Some(write_2) = write_2 {
+                ixns.try_push_post(write_2).map_err(|(_, err)| err)?;
+            }
             ixns.try_push_post(verify).map_err(|(_, err)| err)?;
             let close_encoded_vaa = wormhole.close_encoded_vaa(draft_vaa);
             ixns.try_push_close(close_encoded_vaa)
