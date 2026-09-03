@@ -78,6 +78,8 @@ jobs:
       - name: Build programs
         run: just build-test-programs
       - name: "just test-programs (one retry, skip build)"
+        env:
+          PYTH_API_KEY: ${{ secrets.PYTH_API_KEY }}
         run: just test-programs --skip-build || { echo "::warning::first attempt failed, retrying once"; pkill -f solana-test-validator || true; sleep 2; just test-programs --skip-build; }
       - name: Upload anchor logs
         if: failure()
