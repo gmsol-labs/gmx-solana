@@ -55,6 +55,7 @@ fn cmd_check() -> ExitCode {
         Ok(d) => d,
         Err(e) => {
             // Soft-pass: a network blip must not masquerade as "rotation needed".
+            // This covers a failed query only; an empty answer is handled below.
             eprintln!(
                 "warning: could not check guardian set ({e}); skipping. \
                        anchor's --clone will surface a real outage."
@@ -63,7 +64,19 @@ fn cmd_check() -> ExitCode {
         }
     };
 
-    let active_addr = guardian_set::guardian_set_address(detected.active).to_string();
+    // An answered query that found nothing is an outage, not a blip, so it must fail
+    // rather than soft-pass. This is the case that went undetected on 2026-08-26.
+    let Some(active) = detected.active else {
+        eprintln!(
+            "error: no Wormhole guardian set exists at indices 0..={MAX_PROBE} on {rpc}.\n\
+             The cluster answered, so this is not a network problem: either the program \
+             moved or its sets were withdrawn. `just rotate-guardian-set` cannot help, \
+             since there is nothing to rotate onto."
+        );
+        return ExitCode::FAILURE;
+    };
+
+    let active_addr = guardian_set::guardian_set_address(active).to_string();
     let cloned = match anchor_toml::uncommented_addresses(&contents) {
         Ok(addrs) => addrs,
         Err(e) => {
@@ -73,13 +86,12 @@ fn cmd_check() -> ExitCode {
     };
 
     if cloned.iter().any(|a| a == &active_addr) {
-        println!("guardian set {} is active and cloned; ok.", detected.active);
+        println!("guardian set {active} is active and cloned; ok.");
         ExitCode::SUCCESS
     } else {
         eprintln!(
-            "error: Wormhole guardian set {} is active but not cloned in {ANCHOR_TOML}.\n\
-             Run `just rotate-guardian-set` to update it.",
-            detected.active
+            "error: Wormhole guardian set {active} is active but not cloned in {ANCHOR_TOML}.\n\
+             Run `just rotate-guardian-set` to update it."
         );
         ExitCode::FAILURE
     }
@@ -103,7 +115,18 @@ fn cmd_rotate() -> ExitCode {
         }
     };
 
-    let interior = anchor_toml::render_interior(&detected.existing, detected.active, |i| {
+    // Same distinction as in `cmd_check`: nothing to rotate onto is a hard failure,
+    // and writing an empty managed block would silently disarm the check.
+    let Some(active) = detected.active else {
+        eprintln!(
+            "error: no Wormhole guardian set exists at indices 0..={MAX_PROBE} on {rpc}; \
+             there is nothing to rotate onto. The program has most likely moved or its \
+             sets were withdrawn, which needs an address change rather than a rotation."
+        );
+        return ExitCode::FAILURE;
+    };
+
+    let interior = anchor_toml::render_interior(&detected.existing, active, |i| {
         guardian_set::guardian_set_address(i).to_string()
     });
     let updated = match anchor_toml::splice_managed_block(&contents, &interior) {
@@ -115,21 +138,17 @@ fn cmd_rotate() -> ExitCode {
     };
 
     if updated == contents {
-        println!(
-            "guardian set {} already current; no change.",
-            detected.active
-        );
+        println!("guardian set {active} already current; no change.");
         return ExitCode::SUCCESS;
     }
     if let Err(e) = std::fs::write(ANCHOR_TOML, &updated) {
         eprintln!("error: failed to write {ANCHOR_TOML}: {e}");
         return ExitCode::FAILURE;
     }
-    let previous = detected.active.saturating_sub(1);
+    let previous = active.saturating_sub(1);
     println!(
-        "updated {ANCHOR_TOML}: guardian set {} active, {previous} kept as previous \
-         (older commented). Review and commit.",
-        detected.active
+        "updated {ANCHOR_TOML}: guardian set {active} active, {previous} kept as previous \
+         (older commented). Review and commit."
     );
     ExitCode::SUCCESS
 }

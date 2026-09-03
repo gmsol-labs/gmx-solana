@@ -11,7 +11,7 @@ RUST_LOG=trace \
   --limit-ledger-size 1000000000 \
   --log-messages-bytes-limit 1000000000 \
   --compute-unit-limit 1000000000 \
-  --clone 5gxPdahvSzcKySxXxPuRXZZ9s6h8hZ88XDVKavWpaQGn \
+  --clone C7RmcKdjeFscYSyekkmCjvHcnBQd7qJDkeB9RmRtuB3L \
   --clone DaWUKXCyXsnzcvLUyeJRWou8KTn7XtadgTsdhJ6RHS7b \
   --upgradeable-program rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ external-programs/pyth-receiver.so $ADDRESS \
   --upgradeable-program pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT external-programs/pyth-push-oracle.so $ADDRESS \
