@@ -243,7 +243,10 @@ impl Deployment {
             users: Users::new(&mut rng),
             extra_user_count: 0,
             rng,
-            hermes: Default::default(),
+            // Hermes rejects unauthenticated requests, so pick up `PYTH_API_KEY` when it is set.
+            // Falls back to the unauthenticated client when it is not, keeping the previous
+            // behaviour for contributors and CI runs without a key.
+            hermes: Hermes::from_default_envs().unwrap_or_default(),
             pyth: PythPullOracle::try_new(&client)?,
             client,
             store_key,
