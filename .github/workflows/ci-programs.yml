@@ -79,6 +79,8 @@ jobs:
         run: just build-test-programs
       - name: "just test-programs (one retry, skip build)"
         run: just test-programs --skip-build || { echo "::warning::first attempt failed, retrying once"; pkill -f solana-test-validator || true; sleep 2; just test-programs --skip-build; }
+        env:
+          PYTH_API_KEY: ${{ secrets.PYTH_API_KEY }}
       - name: Upload anchor logs
         if: failure()
         uses: actions/upload-artifact@v4
