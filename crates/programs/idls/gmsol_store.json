@@ -25040,8 +25040,9 @@
             "name": "settled_amount",
             "docs": [
               "The amount actually transferred, clamped to the escrow's balance.",
-              "A value below `recorded_amount` signals a broken invariant, since",
-              "the escrow is expected to always cover the recorded amount."
+              "A value below `recorded_amount` breaks the coverage invariant (see",
+              "the builder fee invariants on [`crate::states::order`]), which has",
+              "the escrow always covering the recorded amount."
             ],
             "type": "u64"
           }
@@ -27027,7 +27028,10 @@
             "docs": [
               "Max builder fee factor. Reads as `0` on existing stores until a",
               "CONFIG_KEEPER explicitly raises it via `insert_factor`, so no",
-              "non-zero builder fee factor can be configured by default."
+              "non-zero builder fee factor can be configured by default.",
+              "",
+              "The cap the boundedness invariant is stated against; see the builder",
+              "fee invariants on [`crate::states::order`]."
             ],
             "type": "u128"
           },
@@ -34095,7 +34099,14 @@
     {
       "name": "UpdateOrderParams",
       "docs": [
-        "Update Order Params."
+        "Update Order Params.",
+        "",
+        "",
+        "A reachable builder fee factor would change what an order owes after its owner",
+        "authorized it, and a reachable swap type would let a checkpointed order be flipped",
+        "to [`DecreasePositionSwapType::CollateralToPnlToken`], which empties the bucket the",
+        "fee is taken from. `update_order_params_field_set_is_pinned` fails the build if",
+        "either is added."
       ],
       "type": {
         "kind": "struct",

@@ -622,6 +622,9 @@ pub struct Factors {
     /// Max builder fee factor. Reads as `0` on existing stores until a
     /// CONFIG_KEEPER explicitly raises it via `insert_factor`, so no
     /// non-zero builder fee factor can be configured by default.
+    ///
+    /// The cap the boundedness invariant is stated against; see the builder
+    /// fee invariants on [`crate::states::order`].
     pub(crate) max_builder_fee_factor: Factor,
     #[cfg_attr(feature = "debug", debug(skip))]
     reserved: [Factor; 63],

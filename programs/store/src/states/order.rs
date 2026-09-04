@@ -1,3 +1,56 @@
+//! Order accounts, the parameters that create and update them, and the
+//! invariants the builder fee mechanism upholds.
+//!
+//! # Builder fee invariants
+//!
+//! A builder fee is a share of an order's output paid to the interface that
+//! built the order. The mechanism is spread over several instructions and two
+//! execution paths, so the properties it guarantees are stated here once rather
+//! than left implicit at the sites that enforce them. Comments elsewhere refer
+//! to these by name.
+//!
+//! The moving parts: a builder advertises a factor on its own User Account
+//! (`set_builder_fee_factor`); the order's owner checkpoints that builder and
+//! factor onto a pending order (`set_builder_fee`), which is the authorization;
+//! execution charges against the checkpoint and routes the amount into the
+//! order's final output token escrow; `settle_builder_fee` moves it to the
+//! builder and zeroes the record.
+//!
+//! ## Conservation
+//!
+//! The amount charged, the amount recorded on the order, the tokens in the
+//! escrow and the amounts on the events all agree.
+//!
+//! ## Coverage
+//!
+//! From the moment a fee is recorded until it is settled, the escrow holds at
+//! least the recorded amount.
+//!
+//! ## Authorization
+//!
+//! An order is never charged a fee its owner did not authorize, and never at a
+//! factor other than the one authorized.
+//!
+//! ## Boundedness
+//!
+//! A charge never exceeds what the order can pay, and no factor above the cap
+//! in force at checkpoint time is ever checkpointed.
+//!
+//! ## Delivery
+//!
+//! A settled fee reaches the checkpointed builder and nobody else, and an order
+//! cannot be closed while a fee is still owed.
+//!
+//! ## Isolation
+//!
+//! With no builder fee set, an order behaves as it did before the mechanism
+//! existed, and market-level accounting is untouched.
+//!
+//! ## Liveness
+//!
+//! Settlement cannot be blocked, an order is always eventually closable, and
+//! nothing freezes when the mechanism is switched off.
+
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 use gmsol_model::{
@@ -30,6 +83,14 @@ pub use gmsol_utils::order::{OrderKind, OrderSide};
 gmsol_utils::flags!(OrderFlag, MAX_ORDER_FLAGS, u8);
 
 /// Update Order Params.
+///
+/// CHECK: the field set is pinned, and adding a field to it is a security decision.
+///
+/// A reachable builder fee factor would change what an order owes after its owner
+/// authorized it, and a reachable swap type would let a checkpointed order be flipped
+/// to [`DecreasePositionSwapType::CollateralToPnlToken`], which empties the bucket the
+/// fee is taken from. `update_order_params_field_set_is_pinned` fails the build if
+/// either is added.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace, Copy)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct UpdateOrderParams {
@@ -1026,6 +1087,33 @@ mod tests {
         );
         // u128 requires 16-byte alignment.
         assert_eq!(BUILDER_FEE_FACTOR_OFFSET % 16, 0);
+    }
+
+    #[test]
+    fn update_order_params_field_set_is_pinned() {
+        // Pins what an update may reach. The destructuring is exhaustive and
+        // takes no `..` rest pattern, so a new field on `UpdateOrderParams`
+        // fails to compile here instead of silently widening the update path.
+        //
+        // What that protects is on the struct's own doc comment: a builder fee
+        // is charged at the factor checkpointed on the order, and taken from a
+        // bucket the decrease position swap type can empty, so neither value
+        // may become updatable without revisiting what a checkpoint means. The
+        // runtime half, that an update leaves an existing checkpoint alone, is
+        // covered end to end by `set_builder_fee` in `tests/anchor_test`.
+        let UpdateOrderParams {
+            size_delta_value: _,
+            acceptable_price: _,
+            trigger_price: _,
+            min_output: _,
+            valid_from_ts: _,
+        } = UpdateOrderParams {
+            size_delta_value: None,
+            acceptable_price: None,
+            trigger_price: None,
+            min_output: None,
+            valid_from_ts: None,
+        };
     }
 
     #[test]

@@ -1494,6 +1494,9 @@ impl ValidateOracleTime for ExecuteOrderOperation<'_, '_> {
 /// The amount is rounded up so the fee is never under-collected. Returns
 /// `0` without touching `price` if `factor` is zero, so callers don't need
 /// a meaningful price when no builder fee applies.
+///
+/// Upholds the boundedness and isolation invariants; see the builder fee
+/// invariants on [`crate::states::order`].
 fn compute_builder_fee_amount(
     size_delta_usd: u128,
     factor: u128,
@@ -1517,6 +1520,9 @@ fn compute_builder_fee_amount(
 /// Clamps a computed builder fee down to at most `available`, so a
 /// builder fee never turns an otherwise-fillable order into a hard
 /// failure.
+///
+/// Upholds the coverage invariant on the decrease side: the recorded
+/// amount cannot exceed the output that funds the escrow.
 fn clamp_builder_fee_amount(fee_amount: u128, available: u128) -> u128 {
     fee_amount.min(available)
 }
@@ -1574,6 +1580,8 @@ fn execute_swap(
 /// cover the fee, this returns an error instead of charging a partial
 /// amount. The caller propagates this as a soft failure (the order is
 /// cancelled), not a transaction revert.
+///
+/// Upholds the coverage invariant on the increase side.
 fn charge_builder_fee_on_collateral_increment(
     collateral_increment_amount: u64,
     size_delta_usd: u128,
@@ -1689,9 +1697,9 @@ fn execute_increase_position(
                 position.collateral_price(&prices),
             )?;
 
-        // Recorded on the order and routed into the final output token
-        // escrow: the two go together, since settlement pays the recorded
-        // amount out of that escrow.
+        // Upholds the conservation invariant. Recorded on the order and
+        // routed into the final output token escrow: the two go together,
+        // since settlement pays the recorded amount out of that escrow.
         transfer_out.transfer_out(false, payable_amount)?;
         order.record_builder_fee(payable_amount)?;
         position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
@@ -1787,6 +1795,10 @@ fn execute_increase_position(
 /// the *executed* size delta, which a decrease may enlarge into a full
 /// close. Gating on a non-zero estimate would therefore admit exactly
 /// the orders that go on to incur a fee they can then bypass.
+///
+/// Upholds the isolation invariant: this is the one pre-existing line the
+/// mechanism changed, and at a zero factor it returns its input unchanged
+/// ahead of any arithmetic and of the swap-type check.
 fn estimate_builder_fee_for_collateral_withdrawal(
     collateral_withdrawal_amount: u128,
     size_delta_usd: u128,
@@ -2009,6 +2021,10 @@ fn execute_decrease_position(
             )?;
             let paid_amount = clamp_builder_fee_amount(payable_amount, output_amount.into());
 
+            // Upholds conservation and coverage: the recorded amount is the
+            // clamped one, and the full output lands in the escrow, so the
+            // fee value is already sitting there.
+            //
             // `paid_amount` is clamped to `output_amount`, a `u64`, so the
             // conversion cannot fail.
             let recorded_amount =

@@ -344,6 +344,11 @@ impl SetBuilderFeeFactor<'_> {
         // a future `set_builder_fee` checkpoints the factor onto an order, so
         // gating belongs there rather than here.
         //
+        // Upholds the boundedness invariant, first of its two enforcement
+        // points; the second is in `set_builder_fee`, because the cap can be
+        // lowered between advertising and checkpointing. See the builder fee
+        // invariants on `crate::states::order`.
+        //
         // A missing cap is treated as `0` (deny by default), so on a store that
         // predates the factor key only opting out remains possible. The key is
         // always wired today, which makes this branch unreachable rather than
