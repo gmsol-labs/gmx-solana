@@ -624,33 +624,16 @@ impl Order {
     ///
     /// CHECK: the caller must have routed the same amount into the order's
     /// final output token escrow, since settlement pays the recorded
-    /// amount out of that escrow.
+    /// amount out of that escrow, and must call this only once the
+    /// execution that charged the amount can no longer fail. This account
+    /// is not revertible, so a record written by an attempt that is then
+    /// discarded outlives the `TransferOut` that was to fund it.
     pub(crate) fn record_builder_fee(&mut self, amount: u64) -> Result<()> {
         self.builder_fee_amount = self
             .builder_fee_amount
             .checked_add(amount)
             .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
         Ok(())
-    }
-
-    /// Restore the recorded builder fee amount to a previously observed value.
-    ///
-    /// The undo half of [`record_builder_fee`](Self::record_builder_fee),
-    /// for the soft-failure path. The order account is not revertible, so a
-    /// fee recorded by an execution attempt that is then discarded survives
-    /// it, payable out of an escrow the same failure refunded to the owner
-    /// rather than funded.
-    ///
-    /// Takes the previous value instead of zeroing, because the field
-    /// accumulates by contract. Restoring is therefore correct without
-    /// depending on an order being executable at most once, which is what
-    /// makes a prior unsettled charge unreachable today.
-    ///
-    /// CHECK: the caller must be discarding every output of the attempt that
-    /// recorded the amount, so that nothing was routed into the escrow to
-    /// cover it.
-    pub(crate) fn restore_builder_fee_amount(&mut self, amount: u64) {
-        self.builder_fee_amount = amount;
     }
 
     /// Checkpoint a builder and its fee factor onto this order.
