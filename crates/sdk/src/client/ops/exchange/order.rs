@@ -775,6 +775,15 @@ pub struct ExecuteOrderHint {
     store: Arc<Store>,
     market_token: Pubkey,
     position: Option<Pubkey>,
+    /// The order's checkpointed builder fee factor, zero when no fee is
+    /// payable. Written by `set_builder_fee` before execution, so it is
+    /// observable here even though the fee itself is only charged during
+    /// execution.
+    ///
+    /// The factor rather than the builder, because the two disagree: a
+    /// zero-factor checkpoint is how a builder fee is revoked, and it leaves
+    /// the builder set on an order that will never be charged.
+    builder_fee_factor: u128,
     owner: Pubkey,
     receiver: Pubkey,
     rent_receiver: Pubkey,
@@ -882,6 +891,10 @@ where
     }
 
     /// Set whether to close order after execution.
+    ///
+    /// Requesting the close is not a guarantee of one: it is skipped for an
+    /// order carrying a non-zero builder fee factor, whose fee has to be
+    /// settled by `settle_builder_fee` before a close can succeed.
     pub fn close(&mut self, close: bool) -> &mut Self {
         self.close = close;
         self
@@ -924,6 +937,7 @@ where
             store: store.clone(),
             market_token,
             position: optional_address(&params.position).copied(),
+            builder_fee_factor: order.builder_fee_factor,
             owner,
             receiver: order.header.receiver,
             rent_receiver,
@@ -1252,7 +1266,25 @@ where
             execute_order = prepare_event_buffer.merge(execute_order);
         }
 
-        if self.close {
+        // An order that will be charged a builder fee cannot be closed in the
+        // same bundle: execution charges the fee onto the order, and
+        // `CloseOrderV2` rejects a non-zero `builder_fee_amount`
+        // (`CoreError::UnsettledBuilderFee`) so the fee is not swept to the
+        // wrong receiver. Bundling the close would revert the whole execution.
+        // The fee must be settled first via the separate, permissionless
+        // `settle_builder_fee`, so leave the order open here and let the keeper
+        // settle and close it afterwards.
+        //
+        // Gated on the factor and not on `builder`, which stays set through a
+        // revocation: a zero-factor checkpoint charges nothing, so the close
+        // still succeeds and skipping it would strand the order open.
+        //
+        // Narrows the revert rather than removing it. The checkpoint is read
+        // when the bundle is built and `set_builder_fee` stays callable while
+        // the order is pending, so an owner attaching a fee after this read
+        // still reverts the execution. Callers that must not fail on it should
+        // pass `close(false)` and settle and close separately.
+        if self.close && hint.builder_fee_factor == 0 {
             let mut close = self
                 .client
                 .close_order(&self.order)?
