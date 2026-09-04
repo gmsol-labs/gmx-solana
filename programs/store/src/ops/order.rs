@@ -1183,27 +1183,42 @@ impl ExecuteOrderOperation<'_, '_> {
                     .load_mut()?
                     .update_with_transfer_out(&transfer_out)?;
 
-                // The irreversible point. Both writes below land on accounts that
-                // cannot be rolled back, so they are held until every fallible step
-                // of the execution has passed.
-                if gt_minting_enabled {
-                    self.order.load_mut()?.unchecked_process_gt(
-                        &mut *self.store.load_mut()?,
-                        &mut *self.user.load_mut()?,
-                        fees.paid_fee_value,
-                        position.event_emitter(),
-                    )?;
+                // Overflow is checked here, while a failure is still discarded
+                // cleanly, so that the write itself cannot fail. `None` when
+                // nothing was charged, which keeps a fee-less execution from
+                // touching the field at all.
+                let next_builder_fee_amount = if fees.builder_fee_amount == 0 {
+                    None
                 } else {
-                    msg!("[GT] GT minting is disabled for this market");
-                }
+                    Some(
+                        self.order
+                            .load()?
+                            .builder_fee_amount_after(fees.builder_fee_amount)?,
+                    )
+                };
 
-                // Last, because it must be the last fallible call in this function:
-                // everything below only commits the revertible wrappers, and the
-                // fallible `handle_executed` runs outside the soft-failure arm, so a
-                // failure there reverts the transaction instead of discarding it.
-                self.order
-                    .load_mut()?
-                    .record_builder_fee(fees.builder_fee_amount)?;
+                // The irreversible point. Neither account below is revertible, so
+                // both writes wait until every fallible step has passed, and the
+                // builder fee goes last because it is the only one that cannot
+                // fail: a GT failure here still leaves the order untouched.
+                {
+                    let mut order = self.order.load_mut()?;
+
+                    if gt_minting_enabled {
+                        order.unchecked_process_gt(
+                            &mut *self.store.load_mut()?,
+                            &mut *self.user.load_mut()?,
+                            fees.paid_fee_value,
+                            position.event_emitter(),
+                        )?;
+                    } else {
+                        msg!("[GT] GT minting is disabled for this market");
+                    }
+
+                    if let Some(amount) = next_builder_fee_amount {
+                        order.set_builder_fee_amount(amount);
+                    }
+                }
 
                 position.commit();
                 msg!(
