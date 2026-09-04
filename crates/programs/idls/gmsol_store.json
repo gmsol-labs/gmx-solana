@@ -34101,12 +34101,12 @@
       "docs": [
         "Update Order Params.",
         "",
-        "CHECK: the field set is pinned. A reachable builder fee factor would change",
-        "what an order owes after its owner authorized it, and a reachable swap type",
-        "would let a checkpointed order be flipped to",
-        "[`DecreasePositionSwapType::CollateralToPnlToken`], which empties the bucket",
-        "the fee is taken from; `update_order_params_field_set_is_pinned` fails the",
-        "build if either is added."
+        "",
+        "A reachable builder fee factor would change what an order owes after its owner",
+        "authorized it, and a reachable swap type would let a checkpointed order be flipped",
+        "to [`DecreasePositionSwapType::CollateralToPnlToken`], which empties the bucket the",
+        "fee is taken from. `update_order_params_field_set_is_pinned` fails the build if",
+        "either is added."
       ],
       "type": {
         "kind": "struct",

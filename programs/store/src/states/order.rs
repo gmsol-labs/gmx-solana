@@ -84,12 +84,13 @@ gmsol_utils::flags!(OrderFlag, MAX_ORDER_FLAGS, u8);
 
 /// Update Order Params.
 ///
-/// CHECK: the field set is pinned. A reachable builder fee factor would change
-/// what an order owes after its owner authorized it, and a reachable swap type
-/// would let a checkpointed order be flipped to
-/// [`DecreasePositionSwapType::CollateralToPnlToken`], which empties the bucket
-/// the fee is taken from; `update_order_params_field_set_is_pinned` fails the
-/// build if either is added.
+/// CHECK: the field set is pinned, and adding a field to it is a security decision.
+///
+/// A reachable builder fee factor would change what an order owes after its owner
+/// authorized it, and a reachable swap type would let a checkpointed order be flipped
+/// to [`DecreasePositionSwapType::CollateralToPnlToken`], which empties the bucket the
+/// fee is taken from. `update_order_params_field_set_is_pinned` fails the build if
+/// either is added.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace, Copy)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct UpdateOrderParams {
