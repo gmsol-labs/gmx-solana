@@ -34101,17 +34101,12 @@
       "docs": [
         "Update Order Params.",
         "",
-        "# Adding a field here is a security decision",
-        "",
-        "These are the only values an update may reach, and the builder fee rests on",
-        "that twice over: a fee is charged at the factor checkpointed on the order,",
-        "and it is taken from the final output token bucket, which",
-        "[`DecreasePositionSwapType::CollateralToPnlToken`] empties. A factor",
-        "reachable by an update would change the amount owed after the owner",
-        "authorized it; a reachable swap type would let an order be checkpointed",
-        "under a benign one and then flipped to one that pays nothing. Neither is",
-        "reachable today, and `update_order_params_field_set_is_pinned` fails the",
-        "build if that changes."
+        "CHECK: the field set is pinned. A reachable builder fee factor would change",
+        "what an order owes after its owner authorized it, and a reachable swap type",
+        "would let a checkpointed order be flipped to",
+        "[`DecreasePositionSwapType::CollateralToPnlToken`], which empties the bucket",
+        "the fee is taken from; `update_order_params_field_set_is_pinned` fails the",
+        "build if either is added."
       ],
       "type": {
         "kind": "struct",

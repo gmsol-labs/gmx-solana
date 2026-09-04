@@ -5,9 +5,9 @@
 //!
 //! A builder fee is a share of an order's output paid to the interface that
 //! built the order. The mechanism is spread over several instructions and two
-//! execution paths, so the properties it guarantees are stated here once,
-//! together with the argument for each, rather than left implicit at the sites
-//! that enforce them. Comments elsewhere refer to these by name.
+//! execution paths, so the properties it guarantees are stated here once rather
+//! than left implicit at the sites that enforce them. Comments elsewhere refer
+//! to these by name.
 //!
 //! The moving parts: a builder advertises a factor on its own User Account
 //! (`set_builder_fee_factor`); the order's owner checkpoints that builder and
@@ -16,132 +16,40 @@
 //! order's final output token escrow; `settle_builder_fee` moves it to the
 //! builder and zeroes the record.
 //!
-//! **Charging is wired as of #421.** The execution call sites read the order's
-//! checkpointed factor instead of the literal zero they used to pass, so the
-//! charging invariants below are load-bearing rather than vacuous. An earlier
-//! revision of this document said the opposite and named that change as the
-//! moment they would become live; it landed, so they are.
-//!
 //! ## Conservation
 //!
 //! The amount charged, the amount recorded on the order, the tokens in the
 //! escrow and the amounts on the events all agree.
-//!
-//! Charging is never a lone write. The increase path deducts the fee from the
-//! collateral increment and routes the same number into the final output token
-//! bucket in the same breath; `Order::record_builder_fee` carries that
-//! obligation as a `CHECK:` on itself, because settlement pays the recorded
-//! amount out of that escrow. The decrease path reaches the same state
-//! differently: it records the fee without netting it out of the output, so the
-//! full output lands in the escrow and the fee value is already sitting there.
-//! Recording accumulates with a checked add rather than overwriting, so several
-//! charges against one order sum. `BuilderFeeCharged` and `BuilderFeeSettled`
-//! each carry two amounts rather than one, so a divergence is observable on
-//! chain instead of inferred.
 //!
 //! ## Coverage
 //!
 //! From the moment a fee is recorded until it is settled, the escrow holds at
 //! least the recorded amount.
 //!
-//! On the increase path a fee larger than the collateral increment is refused
-//! outright (`BuilderFeeExceedsCollateral`) and the order is cancelled, since an
-//! increase has no partial outcome to fall back on. On the decrease path
-//! underpayment is tolerated instead, because a decrease may be closing an
-//! insolvent position, so the recorded amount is clamped to the output actually
-//! produced and therefore cannot exceed the escrow. In between, nothing can
-//! drain the escrow first: closing an order with a non-zero recorded amount is
-//! refused (`UnsettledBuilderFee`). Settlement clamps a second time as defence
-//! in depth, and under this invariant that clamp never bites.
-//!
 //! ## Authorization
 //!
 //! An order is never charged a fee its owner did not authorize, and never at a
 //! factor other than the one authorized.
 //!
-//! The factor used is the one checkpointed on the order, not a live read of the
-//! builder's account, so the builder's advertised rate may move afterwards
-//! without changing what an existing order owes. Writing that checkpoint takes
-//! the owner's signature and requires the builder's advertised factor to equal
-//! the factor the owner passed, exactly, which is what stops a builder raising
-//! its rate between the owner deciding and the transaction landing. A builder
-//! can only advertise on its own account, structurally: the User Account PDA
-//! seeds bind it to the signer, so doing otherwise is unconstructible rather
-//! than merely rejected. No update can reach the checkpoint or the swap type it
-//! depends on; see [`UpdateOrderParams`].
-//!
 //! ## Boundedness
 //!
-//! A charge never exceeds the payable fee, and no factor above the cap in force
-//! at checkpoint time is ever checkpointed.
-//!
-//! The store's cap is enforced twice, once when a builder advertises a rate and
-//! again when an owner checkpoints it, because the cap can be lowered in between
-//! and the checkpoint is the moment the rate becomes payable. Both treat a
-//! missing cap as zero, so a store that has never configured one denies every
-//! non-zero factor. The amount itself is bounded by what the order can pay, by
-//! the refusal on the increase path and the clamp on the decrease path. Note the
-//! computed amount rounds **up**, deliberately, so the fee is never
-//! under-collected; the bound on what is taken comes from those two mechanisms,
-//! not from the rounding.
+//! A charge never exceeds what the order can pay, and no factor above the cap
+//! in force at checkpoint time is ever checkpointed.
 //!
 //! ## Delivery
 //!
 //! A settled fee reaches the checkpointed builder and nobody else, and an order
 //! cannot be closed while a fee is still owed.
 //!
-//! Settlement requires the passed User Account to equal the builder recorded on
-//! the order, and the destination is the associated token account of that
-//! builder and the final output token, so its owner and mint follow from the
-//! address derivation rather than from a check. The transfer is signed by the
-//! order PDA, so nothing outside the program can move the escrow. The close
-//! guard is the other half: an order with an unsettled fee must be settled
-//! first, since closing would otherwise sweep the fee to the receiver along with
-//! the regular output and destroy the record of who it belonged to.
-//!
 //! ## Isolation
 //!
 //! With no builder fee set, an order behaves as it did before the mechanism
 //! existed, and market-level accounting is untouched.
 //!
-//! Every fee behaviour sits behind a non-zero factor check, and the amount
-//! computation returns zero without even reading a price when the factor is
-//! zero. Only one pre-existing line changed rather than being added: the
-//! decrease path's collateral withdrawal now passes through the fee estimate,
-//! which returns its input unchanged at a zero factor, ahead of any arithmetic.
-//! Market accounting is separate and holds for a different reason: the withheld
-//! amount is deducted before the collateral reaches the position and is counted
-//! only into the transfer-out bucket, so it never enters a market's balances.
-//! The account layout supports this too, the checkpoint fields having been
-//! carved out of existing padding and reserved space, so an order written before
-//! the mechanism existed reads back as carrying no builder fee.
-//!
 //! ## Liveness
 //!
 //! Settlement cannot be blocked, an order is always eventually closable, and
 //! nothing freezes when the mechanism is switched off.
-//!
-//! Settlement is permissionless, so no particular address can withhold it, and
-//! it is idempotent: a recorded amount of zero is an explicit no-op with no
-//! transfer and no CPI, which makes it safe to call in any state. It needs the
-//! builder's claim vault to already exist and deliberately creates nothing, so
-//! that precondition is discharged one instruction earlier, by `set_builder_fee`
-//! requiring the same account; a builder without one is refused at checkpoint
-//! time, where the owner simply does not get a builder attached, rather than at
-//! settlement time, where the order would already be stuck. The feature flag
-//! gates only the checkpoint, leaving settlement, claiming and execution
-//! ungated, so disabling the mechanism stops new orders taking on a fee without
-//! stranding a fee already owed.
-//!
-//! ## What cannot be exercised on chain
-//!
-//! Two cases are argued rather than tested, because no transaction can reach
-//! them. There is no update path through which a forbidden swap type or a
-//! different factor could arrive, so the "reject it at update" case has no code
-//! to exercise; `UpdateOrderParams` pins that, and the compile fails if it
-//! stops being true. And no pending `Liquidation` or `AutoDeleveraging` order
-//! can exist to be checkpointed: order creation refuses both kinds, and the
-//! keeper builds a liquidation inside the transaction that executes it.
 
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -176,17 +84,12 @@ gmsol_utils::flags!(OrderFlag, MAX_ORDER_FLAGS, u8);
 
 /// Update Order Params.
 ///
-/// # Adding a field here is a security decision
-///
-/// These are the only values an update may reach, and the builder fee rests on
-/// that twice over: a fee is charged at the factor checkpointed on the order,
-/// and it is taken from the final output token bucket, which
-/// [`DecreasePositionSwapType::CollateralToPnlToken`] empties. A factor
-/// reachable by an update would change the amount owed after the owner
-/// authorized it; a reachable swap type would let an order be checkpointed
-/// under a benign one and then flipped to one that pays nothing. Neither is
-/// reachable today, and `update_order_params_field_set_is_pinned` fails the
-/// build if that changes.
+/// CHECK: the field set is pinned. A reachable builder fee factor would change
+/// what an order owes after its owner authorized it, and a reachable swap type
+/// would let a checkpointed order be flipped to
+/// [`DecreasePositionSwapType::CollateralToPnlToken`], which empties the bucket
+/// the fee is taken from; `update_order_params_field_set_is_pinned` fails the
+/// build if either is added.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace, Copy)]
 #[cfg_attr(feature = "debug", derive(Debug))]
 pub struct UpdateOrderParams {
