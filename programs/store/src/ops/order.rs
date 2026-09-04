@@ -901,6 +901,25 @@ pub(crate) struct ExecuteOrderOperation<'a, 'info> {
 pub(crate) type RemovePosition = bool;
 pub(crate) type ShouldSendTradeEvent = bool;
 
+/// The amounts an execution computes but must not write to the [`Order`] itself.
+///
+/// The `Order` is the one piece of state `perform_execution` cannot roll back:
+/// the position, the swap markets and the virtual inventories are all revertible
+/// wrappers that only `commit()` at the end, while the order is passed down as a
+/// plain `&mut Order`, so anything written to it during a failed attempt outlives
+/// that attempt. Carrying these amounts out by value instead of writing them where
+/// they are computed keeps the guarantee that a failed execution leaves the order
+/// untouched, which is what the soft-failure arm relies on.
+///
+/// Both fields are applied together at the irreversible point, after the last
+/// fallible step of the execution has passed.
+struct ExecutionFees {
+    /// Order and borrowing fee value paid, the basis for the GT reward.
+    paid_fee_value: u128,
+    /// Builder fee charged, pending settlement.
+    builder_fee_amount: u64,
+}
+
 enum SecondaryOrderType {
     Liquidation,
     AutoDeleveraging,
@@ -951,19 +970,6 @@ impl ExecuteOrderOperation<'_, '_> {
         let mut should_throw_error = false;
         let prices = self.prices()?;
         let discount = self.validate_and_get_order_fee_discount()?;
-
-        // The builder fee is recorded onto the order part-way through
-        // execution, and the order account is not revertible: unlike the
-        // position and the markets, it is passed down as a plain `&mut Order`,
-        // so a soft failure below keeps whatever was written to it while
-        // discarding the `TransferOut` that was supposed to fund the fee.
-        //
-        // Snapshotting here keys the record to the outcome rather than to an
-        // ordering of the fallible steps. Moving the record after the last one
-        // would fix the paths that exist today and silently rot the moment a
-        // new fallible step is added after it.
-        let builder_fee_amount_before = self.order.load()?.builder_fee_amount();
-
         let res = match self.perform_execution(&mut should_throw_error, prices, discount) {
             Ok((should_remove_position, mut transfer_out, should_send_trade_event)) => {
                 transfer_out.set_executed(true);
@@ -972,13 +978,6 @@ impl ExecuteOrderOperation<'_, '_> {
             }
             Err(err) if !(should_throw_error || self.throw_on_execution_error) => {
                 msg!("Execute order error: {}", err);
-                // Everything this attempt produced is dropped here, so the fee
-                // it recorded goes with it. The caller cancels the order and
-                // refunds the principal into the very escrow settlement would
-                // otherwise pay the builder from.
-                self.order
-                    .load_mut()?
-                    .restore_builder_fee_amount(builder_fee_amount_before);
                 remove_position = self
                     .position
                     .as_ref()
@@ -1131,9 +1130,9 @@ impl ExecuteOrderOperation<'_, '_> {
                 // case.
                 let builder_fee_factor = self.order.load()?.builder_fee_factor();
 
-                let (should_remove_position, paid_fee_value) = match kind {
+                let (should_remove_position, fees) = match kind {
                     OrderKind::MarketIncrease | OrderKind::LimitIncrease => {
-                        let paid_fee_value = execute_increase_position(
+                        let fees = execute_increase_position(
                             self.oracle,
                             prices,
                             &mut position,
@@ -1143,7 +1142,7 @@ impl ExecuteOrderOperation<'_, '_> {
                             &mut *self.order.load_mut()?,
                             builder_fee_factor,
                         )?;
-                        (false, paid_fee_value)
+                        (false, fees)
                     }
                     OrderKind::Liquidation => execute_decrease_position(
                         self.oracle,
@@ -1191,11 +1190,25 @@ impl ExecuteOrderOperation<'_, '_> {
                     .load_mut()?
                     .update_with_transfer_out(&transfer_out)?;
 
+                // The irreversible point: every fallible step of the execution has
+                // passed, and what follows only commits the revertible wrappers. Both
+                // writes below land on accounts that cannot be rolled back, so this is
+                // the only place they are allowed to happen.
+                //
+                // The builder fee goes first because it is the only one of the two
+                // that can still fail without having written anything:
+                // `unchecked_process_gt` mints into the store and the user partway
+                // through, so an overflow raised after it had run would send the
+                // execution into the soft-failure arm with that mint left behind.
+                self.order
+                    .load_mut()?
+                    .record_builder_fee(fees.builder_fee_amount)?;
+
                 if gt_minting_enabled {
                     self.order.load_mut()?.unchecked_process_gt(
                         &mut *self.store.load_mut()?,
                         &mut *self.user.load_mut()?,
-                        paid_fee_value,
+                        fees.paid_fee_value,
                         position.event_emitter(),
                     )?;
                 } else {
@@ -1634,7 +1647,7 @@ fn execute_increase_position(
     event: &mut TradeData,
     order: &mut Order,
     builder_fee_factor: u128,
-) -> Result<u128> {
+) -> Result<ExecutionFees> {
     // The builder fee is charged in the order's final output token, so for an increase order that
     // token, and therefore the escrow it is paid out of, must belong to the position's collateral
     // token. Orders created before the final output token was initialized at creation time carry
@@ -1690,7 +1703,7 @@ fn execute_increase_position(
     // `TransferOut`'s final-output-token bucket), so
     // `validate_market_balances` further down does not need to be
     // adjusted to cover it.
-    let collateral_increment_amount = if builder_fee_factor != 0 {
+    let (collateral_increment_amount, builder_fee_amount) = if builder_fee_factor != 0 {
         // Initializing the final output token is optional for increase
         // orders (see `CreateIncreaseOrderOperation`), so an order whose
         // creator did not opt in carries `None` here and cannot pay a fee.
@@ -1717,11 +1730,12 @@ fn execute_increase_position(
                 position.collateral_price(&prices),
             )?;
 
-        // Upholds the conservation invariant. Recorded on the order and
-        // routed into the final output token escrow: the two go together,
-        // since settlement pays the recorded amount out of that escrow.
+        // Upholds the conservation invariant. Routed into the final output
+        // token escrow here, but only returned for recording: the two go
+        // together, since settlement pays the recorded amount out of that
+        // escrow, and `TransferOut` is discarded by the same failure that
+        // must leave the record unwritten.
         transfer_out.transfer_out(false, payable_amount)?;
-        order.record_builder_fee(payable_amount)?;
         position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
             order.header().store(),
             &position.market().market_meta().market_token_mint,
@@ -1733,12 +1747,11 @@ fn execute_increase_position(
             payable_amount.into(),
         )?)?;
 
-        collateral_increment_amount
+        (collateral_increment_amount, payable_amount)
     } else {
-        collateral_increment_amount
+        (collateral_increment_amount, 0)
     };
 
-    // Re-borrowed because recording the fee above took `order` mutably.
     let params = &order.params;
 
     // Increase position.
@@ -1783,7 +1796,10 @@ fn execute_increase_position(
             .map_err(|_| error!(CoreError::TokenAmountOverflow))?,
     )?;
 
-    Ok(paid_order_fee_value)
+    Ok(ExecutionFees {
+        paid_fee_value: paid_order_fee_value,
+        builder_fee_amount,
+    })
 }
 
 /// Folds an estimate of the builder fee, denominated in the collateral
@@ -1857,7 +1873,7 @@ fn execute_decrease_position(
     is_insolvent_close_allowed: bool,
     secondary_order_type: Option<SecondaryOrderType>,
     builder_fee_factor: u128,
-) -> Result<(RemovePosition, u128)> {
+) -> Result<(RemovePosition, ExecutionFees)> {
     // Decrease position.
     let report = {
         let params = &order.params;
@@ -1957,6 +1973,11 @@ fn execute_decrease_position(
     };
     let should_remove_position = report.should_remove();
 
+    // Charged inside the swap block below, but carried out to the caller
+    // rather than written to `order` there: the steps that follow it can
+    // still fail, and the order is not revertible.
+    let mut builder_fee_amount = 0u64;
+
     // Perform swaps.
     {
         require!(
@@ -2002,7 +2023,7 @@ fn execute_decrease_position(
         )?;
 
         // Builder fee is charged in the final output token, after the
-        // receive-token swap above. It is only *recorded* here, never
+        // receive-token swap above. It is only *computed* here, never
         // netted out of `output_amount`: the full output amount is routed
         // into the final-output-token bucket as usual, so the fee value
         // physically lands in the order's escrow alongside the user's
@@ -2047,9 +2068,8 @@ fn execute_decrease_position(
             //
             // `paid_amount` is clamped to `output_amount`, a `u64`, so the
             // conversion cannot fail.
-            let recorded_amount =
+            builder_fee_amount =
                 u64::try_from(paid_amount).map_err(|_| error!(CoreError::TokenAmountOverflow))?;
-            order.record_builder_fee(recorded_amount)?;
 
             position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
                 order.header().store(),
@@ -2138,7 +2158,13 @@ fn execute_decrease_position(
             report,
         ))?;
 
-    Ok((should_remove_position, paid_fee_value))
+    Ok((
+        should_remove_position,
+        ExecutionFees {
+            paid_fee_value,
+            builder_fee_amount,
+        },
+    ))
 }
 
 /// Position Cut Operation.
