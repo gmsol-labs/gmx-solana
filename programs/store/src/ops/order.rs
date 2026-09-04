@@ -903,16 +903,9 @@ pub(crate) type ShouldSendTradeEvent = bool;
 
 /// The amounts an execution computes but must not write to the [`Order`] itself.
 ///
-/// The `Order` is the one piece of state `perform_execution` cannot roll back:
-/// the position, the swap markets and the virtual inventories are all revertible
-/// wrappers that only `commit()` at the end, while the order is passed down as a
-/// plain `&mut Order`, so anything written to it during a failed attempt outlives
-/// that attempt. Carrying these amounts out by value instead of writing them where
-/// they are computed keeps the guarantee that a failed execution leaves the order
-/// untouched, which is what the soft-failure arm relies on.
-///
-/// Both fields are applied together at the irreversible point, after the last
-/// fallible step of the execution has passed.
+/// CHECK: the `Order` is not revertible, unlike the position, the swap markets and
+/// the virtual inventories, so both fields are carried out by value and applied by
+/// the caller at the irreversible point rather than written where they are computed.
 struct ExecutionFees {
     /// Order and borrowing fee value paid, the basis for the GT reward.
     paid_fee_value: u128,
@@ -1077,7 +1070,7 @@ impl ExecuteOrderOperation<'_, '_> {
                     &mut market,
                     &mut swap_markets,
                     &mut transfer_out,
-                    &mut *self.order.load_mut()?,
+                    &*self.order.load()?,
                 )?;
                 market.commit();
                 false
@@ -1139,7 +1132,7 @@ impl ExecuteOrderOperation<'_, '_> {
                             &mut swap_markets,
                             &mut transfer_out,
                             &mut *event_loader.load_mut()?,
-                            &mut *self.order.load_mut()?,
+                            &*self.order.load()?,
                             builder_fee_factor,
                         )?;
                         (false, fees)
@@ -1151,7 +1144,7 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut swap_markets,
                         &mut transfer_out,
                         &mut *event_loader.load_mut()?,
-                        &mut *self.order.load_mut()?,
+                        &*self.order.load()?,
                         true,
                         Some(SecondaryOrderType::Liquidation),
                         builder_fee_factor,
@@ -1163,7 +1156,7 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut swap_markets,
                         &mut transfer_out,
                         &mut *event_loader.load_mut()?,
-                        &mut *self.order.load_mut()?,
+                        &*self.order.load()?,
                         true,
                         Some(SecondaryOrderType::AutoDeleveraging),
                         builder_fee_factor,
@@ -1177,7 +1170,7 @@ impl ExecuteOrderOperation<'_, '_> {
                         &mut swap_markets,
                         &mut transfer_out,
                         &mut *event_loader.load_mut()?,
-                        &mut *self.order.load_mut()?,
+                        &*self.order.load()?,
                         false,
                         None,
                         builder_fee_factor,
@@ -1190,20 +1183,9 @@ impl ExecuteOrderOperation<'_, '_> {
                     .load_mut()?
                     .update_with_transfer_out(&transfer_out)?;
 
-                // The irreversible point: every fallible step of the execution has
-                // passed, and what follows only commits the revertible wrappers. Both
-                // writes below land on accounts that cannot be rolled back, so this is
-                // the only place they are allowed to happen.
-                //
-                // The builder fee goes first because it is the only one of the two
-                // that can still fail without having written anything:
-                // `unchecked_process_gt` mints into the store and the user partway
-                // through, so an overflow raised after it had run would send the
-                // execution into the soft-failure arm with that mint left behind.
-                self.order
-                    .load_mut()?
-                    .record_builder_fee(fees.builder_fee_amount)?;
-
+                // The irreversible point. Both writes below land on accounts that
+                // cannot be rolled back, so they are held until every fallible step
+                // of the execution has passed.
                 if gt_minting_enabled {
                     self.order.load_mut()?.unchecked_process_gt(
                         &mut *self.store.load_mut()?,
@@ -1214,6 +1196,14 @@ impl ExecuteOrderOperation<'_, '_> {
                 } else {
                     msg!("[GT] GT minting is disabled for this market");
                 }
+
+                // Last, because it must be the last fallible call in this function:
+                // everything below only commits the revertible wrappers, and the
+                // fallible `handle_executed` runs outside the soft-failure arm, so a
+                // failure there reverts the transaction instead of discarding it.
+                self.order
+                    .load_mut()?
+                    .record_builder_fee(fees.builder_fee_amount)?;
 
                 position.commit();
                 msg!(
@@ -1566,7 +1556,7 @@ fn execute_swap(
     market: &mut RevertibleMarket<'_, '_>,
     swap_markets: &mut SwapMarkets<'_, '_>,
     transfer_out: &mut TransferOut,
-    order: &mut Order,
+    order: &Order,
 ) -> Result<()> {
     let swap_out_token = order
         .tokens
@@ -1645,7 +1635,7 @@ fn execute_increase_position(
     swap_markets: &mut SwapMarkets<'_, '_>,
     transfer_out: &mut TransferOut,
     event: &mut TradeData,
-    order: &mut Order,
+    order: &Order,
     builder_fee_factor: u128,
 ) -> Result<ExecutionFees> {
     // The builder fee is charged in the order's final output token, so for an increase order that
@@ -1751,8 +1741,6 @@ fn execute_increase_position(
     } else {
         (collateral_increment_amount, 0)
     };
-
-    let params = &order.params;
 
     // Increase position.
     let (long_amount, short_amount, paid_order_fee_value) = {
@@ -1869,7 +1857,7 @@ fn execute_decrease_position(
     swap_markets: &mut SwapMarkets<'_, '_>,
     transfer_out: &mut TransferOut,
     event: &mut TradeData,
-    order: &mut Order,
+    order: &Order,
     is_insolvent_close_allowed: bool,
     secondary_order_type: Option<SecondaryOrderType>,
     builder_fee_factor: u128,
