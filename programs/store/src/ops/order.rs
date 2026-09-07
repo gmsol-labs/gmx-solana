@@ -1247,23 +1247,32 @@ impl ExecuteOrderOperation<'_, '_> {
                     // failure then discards.
                     //
                     // Sits immediately before the write and after GT on purpose.
-                    // The emit is the only fallible step left, and the write
-                    // below cannot fail, so a successful emit is always followed
-                    // by its record: the event and the recorded amount cannot
-                    // disagree. The residual is the reverse pair, an `Err` from
-                    // the emit leaving GT processed for an execution that then
-                    // cancels. That is the narrower exposure of the two, since a
-                    // self-CPI failing is not reachable through ordinary business
-                    // outcomes the way the min-output rejection below the old
-                    // emit site was.
+                    // The write below cannot fail, so an emitted event is always
+                    // followed by its record and the two cannot disagree.
+                    //
+                    // Panics rather than propagating, which is what makes that
+                    // hold in both directions. A `?` here would be swallowed by
+                    // the soft-failure arm and committed, leaving the GT minted
+                    // above standing for an execution that then cancels; a panic
+                    // aborts the transaction, so nothing in this block outlives a
+                    // failure in it. Neither call is reachable in practice:
+                    // `BuilderFeeCharged::new` fails only if `Clock::get` does,
+                    // and `emit_cpi` only if the self-CPI does. The point of
+                    // spelling it `expect` is that a reader can see at a glance
+                    // that no fallible-and-swallowed step remains past this line.
                     if let Some(charge) = &fees.builder_fee {
-                        position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
+                        let event = BuilderFeeCharged::new(
                             order.header().store(),
                             &position.market().market_meta().market_token_mint,
                             &charge.token,
                             charge.payable_amount,
                             charge.paid_amount.into(),
-                        )?)?;
+                        )
+                        .expect("clock is always available");
+                        position
+                            .event_emitter()
+                            .emit_cpi(&event)
+                            .expect("emitting the builder fee event must not be swallowed");
                     }
 
                     if let Some(amount) = next_builder_fee_amount {
