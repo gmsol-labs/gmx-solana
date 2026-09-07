@@ -27,15 +27,27 @@ pub struct SettleBuilderFee<'info> {
     pub order: AccountLoader<'info, Order>,
     /// The final output token mint of the order, i.e. the token the
     /// builder fee is denominated in.
-    pub final_output_token: Box<Account<'info, Mint>>,
+    ///
+    /// Only required when the order has a non-zero recorded builder fee
+    /// amount, for the same reason as `builder_user` below: the no-op path
+    /// moves no tokens and so needs neither the mint nor its decimals.
+    /// Optional so that the instruction can be built for an order whose
+    /// final output token was never initialized, which is a supported
+    /// state and the one the no-op exists to serve.
+    pub final_output_token: Option<Box<Account<'info, Mint>>>,
     /// The order's escrow account for the final output token.
+    ///
+    /// Only required alongside `final_output_token`. A non-zero recorded
+    /// amount implies it exists, because `set_builder_fee` refuses to
+    /// checkpoint a builder onto an order whose final output token account
+    /// is uninitialized.
     #[account(
         mut,
         associated_token::mint = final_output_token,
         associated_token::authority = order,
         constraint = order.load()?.tokens().final_output_token.account() == Some(escrow.key()) @ CoreError::TokenAccountMismatched,
     )]
-    pub escrow: Box<Account<'info, TokenAccount>>,
+    pub escrow: Option<Box<Account<'info, TokenAccount>>>,
     /// The builder's User Account.
     ///
     /// Only required when the order has a non-zero recorded builder fee
@@ -80,6 +92,22 @@ impl SettleBuilderFee<'_> {
             return Ok(());
         }
 
+        // All four transferring-path accounts are unwrapped here rather than
+        // required by the struct, so that the no-op above stays reachable for
+        // an order that has none of them. A non-zero amount reaching this
+        // point with any of them missing is a caller error, not a protocol
+        // state: the coverage invariant guarantees the escrow exists whenever
+        // the recorded amount does.
+        let final_output_token = ctx
+            .accounts
+            .final_output_token
+            .as_ref()
+            .ok_or_else(|| error!(CoreError::TokenAccountNotProvided))?;
+        let escrow = ctx
+            .accounts
+            .escrow
+            .as_ref()
+            .ok_or_else(|| error!(CoreError::TokenAccountNotProvided))?;
         let builder_user = ctx
             .accounts
             .builder_user
@@ -111,7 +139,7 @@ impl SettleBuilderFee<'_> {
         // defense in depth, guaranteeing a protocol bug can never make an
         // order permanently unclosable. Any discrepancy is observable via the
         // two amounts recorded on the emitted event below.
-        let settled_amount = recorded_amount.min(ctx.accounts.escrow.amount);
+        let settled_amount = recorded_amount.min(escrow.amount);
 
         let signer = ctx.accounts.order.load()?.signer();
         let seeds = signer.as_seeds();
@@ -119,15 +147,15 @@ impl SettleBuilderFee<'_> {
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 TransferChecked {
-                    from: ctx.accounts.escrow.to_account_info(),
-                    mint: ctx.accounts.final_output_token.to_account_info(),
+                    from: escrow.to_account_info(),
+                    mint: final_output_token.to_account_info(),
                     to: claim_vault.to_account_info(),
                     authority: ctx.accounts.order.to_account_info(),
                 },
             )
             .with_signer(&[&seeds]),
             settled_amount,
-            ctx.accounts.final_output_token.decimals,
+            final_output_token.decimals,
         )?;
 
         ctx.accounts.order.load_mut()?.builder_fee_amount = 0;
@@ -137,7 +165,7 @@ impl SettleBuilderFee<'_> {
                 &ctx.accounts.store.key(),
                 &ctx.accounts.order.key(),
                 &builder_user.key(),
-                &ctx.accounts.final_output_token.key(),
+                &final_output_token.key(),
                 recorded_amount,
                 settled_amount,
             )?,
