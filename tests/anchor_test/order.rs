@@ -48,6 +48,31 @@ async fn last_builder_fee_charged(
         .ok_or_eyre("no `BuilderFeeCharged` event was emitted")
 }
 
+/// Counts the [`BuilderFeeCharged`] events on the most recent transaction touching `order`,
+/// alongside the total number of events read.
+///
+/// The total is the positive control, and the reason this is not just [`last_builder_fee_charged`]
+/// with the result inverted: that helper's `Err` covers both "the event is absent" and "the read
+/// failed", so asserting on it would let a broken reader pass as a passing test. `(0, 0)` means
+/// nothing was read and proves nothing; `(0, n)` for `n > 0` is a real absence.
+async fn builder_fee_charged_count(
+    client: &Client<SignerRef>,
+    order: &Pubkey,
+) -> eyre::Result<(usize, usize)> {
+    let slot = client.get_slot(None).await?;
+    let events = client
+        .last_order_events(order, slot, CommitmentConfig::confirmed())
+        .await?;
+
+    let total = events.len();
+    let charged = events
+        .iter()
+        .filter(|event| matches!(event, GMSOLCPIEvent::BuilderFeeCharged(_)))
+        .count();
+
+    Ok((charged, total))
+}
+
 #[tokio::test]
 async fn balanced_market_order() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
@@ -2079,6 +2104,23 @@ async fn soft_failed_execution_records_no_builder_fee() -> eyre::Result<()> {
             assert_eq!(
                 executed.builder_fee_amount, recorded_before,
                 "a discarded execution must leave the recorded builder fee untouched"
+            );
+
+            // The event half of the same defect, reported externally on #433. `BuilderFeeCharged`
+            // used to be emitted where the fee was computed, several fallible steps above the
+            // record, and `emit_cpi` is a self-CPI: once it returns, the event is in the
+            // transaction, and the soft-failure arm commits that transaction rather than reverting
+            // it. So a discarded execution announced a charge the order never recorded. Measured
+            // before the fix, this returned payable/paid `(13, 13)` against a recorded 0.
+            let (charged, total) = builder_fee_charged_count(&keeper, &order).await?;
+            assert!(
+                total > 0,
+                "read no events at all from the cancelled execution, so the absence asserted \
+                 below would prove nothing"
+            );
+            assert_eq!(
+                charged, 0,
+                "a discarded execution must not announce a builder fee charge"
             );
 
             // The other half of the defect: the close guard refuses any order carrying a recorded

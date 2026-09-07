@@ -909,8 +909,32 @@ pub(crate) type ShouldSendTradeEvent = bool;
 struct ExecutionFees {
     /// Order and borrowing fee value paid, the basis for the GT reward.
     paid_fee_value: u128,
-    /// Builder fee charged, pending settlement.
-    builder_fee_amount: u64,
+    /// The builder fee charge, pending both its record and its announcement.
+    ///
+    /// `None` only when the order carries no builder fee factor. A factor that
+    /// clamps to a zero payment still yields `Some`, because the event's contract
+    /// is that its presence separates "no builder attached" from "builder attached,
+    /// nothing collectible".
+    builder_fee: Option<BuilderFeeCharge>,
+}
+
+/// A builder fee that has been computed but neither recorded nor announced yet.
+///
+/// CHECK: carried by value for the same reason as the rest of [`ExecutionFees`], and
+/// the event is carried for one more. `emit_cpi` is a self-CPI, so the moment it
+/// returns, the event sits in the transaction's inner instructions and a later `Err`
+/// swallowed by the soft-failure arm cannot take it back, exactly as a write to the
+/// non-revertible `Order` cannot be taken back. Announcing a charge that the order
+/// never records is therefore the same defect as recording one that was never funded,
+/// pointed the other way, and it is what this type exists to prevent.
+struct BuilderFeeCharge {
+    /// The token the fee is denominated and paid in.
+    token: Pubkey,
+    /// The computed amount, before shortfall clamping.
+    payable_amount: u128,
+    /// The amount actually charged, after shortfall clamping. Already narrowed, so
+    /// that the conversion cannot fail at the irreversible point.
+    paid_amount: u64,
 }
 
 enum SecondaryOrderType {
@@ -1186,15 +1210,16 @@ impl ExecuteOrderOperation<'_, '_> {
                 // Overflow is checked here, while a failure is still discarded
                 // cleanly, so that the write itself cannot fail. `None` when
                 // nothing was charged, which keeps a fee-less execution from
-                // touching the field at all.
-                let next_builder_fee_amount = if fees.builder_fee_amount == 0 {
-                    None
-                } else {
-                    Some(
+                // touching the field at all. Note this is not the same condition
+                // as the event's: a factor that clamps to a zero payment records
+                // nothing and still announces itself.
+                let next_builder_fee_amount = match &fees.builder_fee {
+                    Some(charge) if charge.paid_amount != 0 => Some(
                         self.order
                             .load()?
-                            .builder_fee_amount_after(fees.builder_fee_amount)?,
-                    )
+                            .builder_fee_amount_after(charge.paid_amount)?,
+                    ),
+                    _ => None,
                 };
 
                 // The irreversible point. Neither account below is revertible, so
@@ -1213,6 +1238,32 @@ impl ExecuteOrderOperation<'_, '_> {
                         )?;
                     } else {
                         msg!("[GT] GT minting is disabled for this market");
+                    }
+
+                    // Announced here rather than where it was computed, because
+                    // `emit_cpi` is a self-CPI: once it returns the event is in
+                    // the transaction and the soft-failure arm cannot take it
+                    // back, so emitting early announces charges that a later
+                    // failure then discards.
+                    //
+                    // Sits immediately before the write and after GT on purpose.
+                    // The emit is the only fallible step left, and the write
+                    // below cannot fail, so a successful emit is always followed
+                    // by its record: the event and the recorded amount cannot
+                    // disagree. The residual is the reverse pair, an `Err` from
+                    // the emit leaving GT processed for an execution that then
+                    // cancels. That is the narrower exposure of the two, since a
+                    // self-CPI failing is not reachable through ordinary business
+                    // outcomes the way the min-output rejection below the old
+                    // emit site was.
+                    if let Some(charge) = &fees.builder_fee {
+                        position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
+                            order.header().store(),
+                            &position.market().market_meta().market_token_mint,
+                            &charge.token,
+                            charge.payable_amount,
+                            charge.paid_amount.into(),
+                        )?)?;
                     }
 
                     if let Some(amount) = next_builder_fee_amount {
@@ -1708,7 +1759,7 @@ fn execute_increase_position(
     // `TransferOut`'s final-output-token bucket), so
     // `validate_market_balances` further down does not need to be
     // adjusted to cover it.
-    let (collateral_increment_amount, builder_fee_amount) = if builder_fee_factor != 0 {
+    let (collateral_increment_amount, builder_fee) = if builder_fee_factor != 0 {
         // Initializing the final output token is optional for increase
         // orders (see `CreateIncreaseOrderOperation`), so an order whose
         // creator did not opt in carries `None` here and cannot pay a fee.
@@ -1741,20 +1792,20 @@ fn execute_increase_position(
         // escrow, and `TransferOut` is discarded by the same failure that
         // must leave the record unwritten.
         transfer_out.transfer_out(false, payable_amount)?;
-        position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
-            order.header().store(),
-            &position.market().market_meta().market_token_mint,
-            position.collateral_token(),
-            payable_amount.into(),
-            // Underpayment errors out above rather than charging a partial
-            // amount, so the paid amount always equals the payable amount
-            // here.
-            payable_amount.into(),
-        )?)?;
 
-        (collateral_increment_amount, payable_amount)
+        (
+            collateral_increment_amount,
+            Some(BuilderFeeCharge {
+                token: *position.collateral_token(),
+                payable_amount: payable_amount.into(),
+                // Underpayment errors out above rather than charging a partial
+                // amount, so the paid amount always equals the payable amount
+                // here.
+                paid_amount: payable_amount,
+            }),
+        )
     } else {
-        (collateral_increment_amount, 0)
+        (collateral_increment_amount, None)
     };
 
     // Increase position.
@@ -1801,7 +1852,7 @@ fn execute_increase_position(
 
     Ok(ExecutionFees {
         paid_fee_value: paid_order_fee_value,
-        builder_fee_amount,
+        builder_fee,
     })
 }
 
@@ -1977,9 +2028,10 @@ fn execute_decrease_position(
     let should_remove_position = report.should_remove();
 
     // Charged inside the swap block below, but carried out to the caller
-    // rather than written to `order` there: the steps that follow it can
-    // still fail, and the order is not revertible.
-    let mut builder_fee_amount = 0u64;
+    // rather than written to `order` or announced there: the steps that follow
+    // it can still fail, the order is not revertible, and an emitted event is
+    // not retractable either.
+    let mut builder_fee = None;
 
     // Perform swaps.
     {
@@ -2071,16 +2123,12 @@ fn execute_decrease_position(
             //
             // `paid_amount` is clamped to `output_amount`, a `u64`, so the
             // conversion cannot fail.
-            builder_fee_amount =
-                u64::try_from(paid_amount).map_err(|_| error!(CoreError::TokenAmountOverflow))?;
-
-            position.event_emitter().emit_cpi(&BuilderFeeCharged::new(
-                order.header().store(),
-                &position.market().market_meta().market_token_mint,
-                &final_output_token,
+            builder_fee = Some(BuilderFeeCharge {
+                token: final_output_token,
                 payable_amount,
-                paid_amount,
-            )?)?;
+                paid_amount: u64::try_from(paid_amount)
+                    .map_err(|_| error!(CoreError::TokenAmountOverflow))?,
+            });
         }
 
         order.validate_decrease_output_amounts(
@@ -2165,7 +2213,7 @@ fn execute_decrease_position(
         should_remove_position,
         ExecutionFees {
             paid_fee_value,
-            builder_fee_amount,
+            builder_fee,
         },
     ))
 }
