@@ -102,7 +102,7 @@ impl SettleBuilderFee<'_> {
             .accounts
             .final_output_token
             .as_ref()
-            .ok_or_else(|| error!(CoreError::TokenAccountNotProvided))?;
+            .ok_or_else(|| error!(CoreError::TokenMintNotProvided))?;
         let escrow = ctx
             .accounts
             .escrow

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Breaking Changes
 
 - programs(store): Creating an increase order now requires its final output token to be the position's collateral token, and executing one whose final output token was recorded at creation revalidates the same thing. Creating an order with a different final output token used to succeed and silently ignore the value; it now reverts with `TokenMintMismatched`. Existing orders with an uninitialized final output token are unaffected and keep executing.
+- sdk(sdk): Changed `SettleBuilderFeeHint`'s `final_output_token` and `escrow` fields from `Pubkey` to `Option<Pubkey>`. Both are `None` for an order whose final output token escrow was never initialized, which is now a hint the SDK builds rather than an error it raises. Code constructing the hint by hand must wrap the two values.
 
 ### Added
 
@@ -28,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - programs(store): An increase order now records its final output token at creation when the escrow is provided, which is what makes it eligible for a builder fee later.
 - sdk(solana-utils): Kept the two-argument `Bundle::send_all_with_opts` as a deprecated compatibility wrapper around the detailed API. It still returns the compressed success-signature list, and when multiple transactions fail it returns the **last** real send error (matching prior overwrite semantics; `SendAborted` placeholders are ignored).
+- programs(store): Made `settle_builder_fee`'s `final_output_token` and `escrow` accounts optional, joining `builder_user` and `claim_vault`. All four are required exactly when the order's recorded builder fee amount is non-zero, so the instruction's documented no-op is now reachable for an order whose final output token escrow was never initialized. Such orders are a supported state, and settlement sits on the critical path to closing an order because `CloseOrderV2` rejects a non-zero recorded fee.
 
 ## [0.10.0] - 2026-08-12
 

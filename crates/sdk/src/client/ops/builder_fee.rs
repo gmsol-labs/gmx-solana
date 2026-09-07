@@ -114,10 +114,11 @@ impl<C: Deref<Target = impl Signer> + Clone> BuilderFeeOps<C> for crate::Client<
         // All four are only required for a genuine settlement: the no-op path
         // performs no CPI and does not touch them, so they need not even exist
         // on-chain. A non-zero amount is what makes them required, and each
-        // missing one now names itself. The old message said "order has no
-        // final output token" for a missing mint and for an uninitialized
-        // account alike, so it pointed at the wrong thing whenever the token
-        // existed and only the account did not.
+        // missing one now names itself. The old message, "order has no final
+        // output token", was raised for the mint and for the escrow alike, so
+        // a caller-supplied hint missing either one reported the same thing.
+        // A hint derived from the order cannot miss just one: `TokenAndAccount`
+        // records the mint and the account together or records neither.
         let (final_output_token, escrow, builder_user, claim_vault) =
             if hint.builder_fee_amount == 0 {
                 (None, None, None, None)
