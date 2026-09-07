@@ -102,6 +102,10 @@ address = "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX"
 # Wormhole Guardian Set account (index = 0)
 [[test.validator.clone]]
 address = "C7RmcKdjeFscYSyekkmCjvHcnBQd7qJDkeB9RmRtuB3L"
+
+# Wormhole Guardian Set account (index = 1)
+[[test.validator.clone]]
+address = "8d9szTd157GKCLcxBqiLUgB7mek3v65rbsy2ErRyjwQ5"
 # END guardian-sets
 
 # Pyth Config account

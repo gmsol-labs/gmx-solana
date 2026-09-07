@@ -184,9 +184,10 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
             let draft_vaa = pubkey;
             // The split exists because a VAA can exceed what one transaction can carry, which is
             // not a property of every VAA: the length scales with the guardian signature count,
-            // and Hermes currently serves 292-byte VAAs (guardian set 0, 3 signatures). Slicing
-            // at a fixed index panics on anything shorter than it, so only split when there is
-            // something to split.
+            // and Hermes currently serves 292-byte VAAs at 3 signatures (measured 2026-09-07, by
+            // then on guardian set 1). The set index does not enter the length, the signature
+            // count does, so a rotation alone leaves this untouched. Slicing at a fixed index
+            // panics on anything shorter than it, so only split when there is something to split.
             let split = (vaa.len() > VAA_SPLIT_INDEX).then_some(VAA_SPLIT_INDEX);
             let write_1 =
                 wormhole.write_encoded_vaa(draft_vaa, 0, &vaa[0..split.unwrap_or(vaa.len())]);
