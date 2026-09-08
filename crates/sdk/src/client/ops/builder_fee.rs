@@ -1,14 +1,20 @@
 use std::{future::Future, ops::Deref};
 
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
-use gmsol_programs::gmsol_store::client::{accounts, args};
+use gmsol_programs::gmsol_store::{
+    client::{accounts, args},
+    ID,
+};
 use gmsol_solana_utils::{
     client_traits::FromRpcClientWith, transaction_builder::TransactionBuilder, IntoAtomicGroup,
 };
 use gmsol_utils::pubkey::optional_address;
 use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
-use crate::builders::order::{SetBuilderFee, SetBuilderFeeHint};
+use crate::{
+    builders::order::{SetBuilderFee, SetBuilderFeeHint},
+    utils::optional::fix_optional_account_metas,
+};
 
 /// Operations for builder fees.
 pub trait BuilderFeeOps<C> {
@@ -153,17 +159,21 @@ impl<C: Deref<Target = impl Signer> + Clone> BuilderFeeOps<C> for crate::Client<
 
         let rpc = self
             .store_transaction()
-            .anchor_accounts(accounts::SettleBuilderFee {
-                store: *store,
-                order: *order,
-                final_output_token,
-                escrow,
-                builder_user,
-                claim_vault,
-                token_program: anchor_spl::token::ID,
-                event_authority: self.store_event_authority(),
-                program: *self.store_program_id(),
-            })
+            .accounts(fix_optional_account_metas(
+                accounts::SettleBuilderFee {
+                    store: *store,
+                    order: *order,
+                    final_output_token,
+                    escrow,
+                    builder_user,
+                    claim_vault,
+                    token_program: anchor_spl::token::ID,
+                    event_authority: self.store_event_authority(),
+                    program: *self.store_program_id(),
+                },
+                &ID,
+                self.store_program_id(),
+            ))
             .anchor_args(args::SettleBuilderFee {});
 
         Ok(rpc)
