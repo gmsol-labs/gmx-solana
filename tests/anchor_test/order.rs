@@ -2357,11 +2357,11 @@ async fn decrease_execution_records_builder_fee() -> eyre::Result<()> {
 /// `settle_builder_fee` is buildable and succeeds as a no-op on an order whose final output token
 /// escrow was never initialized.
 ///
-/// This is the case CON-46 exists for, and it was previously **unconstructible**: the accounts
-/// struct required `final_output_token` and `escrow`, and the SDK refused before building anything
-/// with "order has no final output token". So the handler's own doc comment, which promises the
-/// call is "safe to call in any order state", was not true for exactly the orders that need it
-/// least and hit it most: a keeper composing execute + settle + close settles blindly.
+/// This case was previously **unconstructible**: the accounts struct required `final_output_token`
+/// and `escrow`, and the SDK refused before building anything with "order has no final output
+/// token". So the handler's own doc comment, which promises the call is "safe to call in any order
+/// state", was not true for exactly the orders that need it least and hit it most: a keeper
+/// composing execute + settle + close settles blindly.
 #[tokio::test]
 async fn settle_builder_fee_is_a_no_op_without_escrow() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
@@ -2416,7 +2416,7 @@ async fn settle_builder_fee_is_a_no_op_without_escrow() -> eyre::Result<()> {
         "an order that never had a builder must record no fee"
     );
 
-    // The assertion is that this builds at all: before CON-46 the SDK errored here.
+    // The assertion is that this builds at all: the SDK used to error here.
     let signature = client
         .settle_builder_fee(store, &order, None)
         .await?
