@@ -23,6 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(solana-utils): Added `Bundle::send_all_with_opts_detailed`, returning one `Result` per transaction with stable bundle indices.
 - sdk(solana-utils): Added `Error::SendAborted` for unsent transactions after an early bundle abort.
 - sdk(solana-utils): Made `compress_send_results` public so callers can map detailed results to the legacy signature list.
+- programs(store): Added the permissionless `settle_builder_fee` instruction, which pays an order's recorded builder fee out of its final output token escrow into the builder's claim vault and zeroes the record. Idempotent: a recorded amount of zero, including orders that never had a builder, is an explicit no-op, so it may be called in any order state. The four transferring-path accounts (`final_output_token`, `escrow`, `builder_user`, `claim_vault`) are optional and required only when the recorded amount is non-zero. Emits a `BuilderFeeSettled` event.
+- programs(store): Added the owner-signed `claim_builder_fees` instruction, with which a builder withdraws the balance of its claim vault to a destination token account. Idempotent: a zero-balance vault is an explicit no-op. Not gated by the `BuilderFee` feature flag. Emits a `BuilderFeeClaimed` event.
+- programs(store): Added `Factors::max_builder_fee_factor`, the store-level cap that a User Account's advertised builder fee factor is checked against, which reads `0` until a config keeper raises it. Taken from reserved space (`[u128; 64]` to `[u128; 63]`), so the account layout and size are unchanged. The same field appears in the `gmsol_liquidity_provider`, `gmsol_timelock` and `gmsol_treasury` IDLs, which share the type.
+- programs(store): Added `UserHeader::builder_fee_factor`, the factor a User Account advertises to builders. Also taken from reserved space (`[u8; 128]` to `[u8; 112]`), so the account layout and size are unchanged. Present in the `gmsol_liquidity_provider` IDL for the same reason.
+- programs(store): Added the `BuilderFeeCharged` event, emitted when an execution charges a builder fee against the order's collateral.
+- programs(store): Added the `BuilderFeeSettled` event, carrying both the recorded amount and the amount actually transferred, so any shortfall between them is observable.
+- programs(store): Added the `BuilderFeeClaimed` event, emitted when a builder withdraws from its claim vault.
+- programs(store): Added nine builder fee error codes, `6129` through `6137`, appended after the existing codes so no existing code shifts: `BuilderFeeFactorExceedsMaxFactor` (6129), `UnsettledBuilderFee` (6130), `BuilderFeeExceedsCollateral` (6131), `BuilderFeeFinalOutputTokenMismatch` (6132), `BuilderFeeSwapTypeNotAllowed` (6133), `BuilderFeeFactorMismatched` (6134), `BuilderFeeOrderKindNotAllowed` (6135), `BuilderFeeFinalOutputTokenNotInitialized` (6136) and `BuilderFeeFinalOutputTokenEscrowNotInitialized` (6137).
+- sdk(decode): Added `BuilderFeeCharged` to `GMSOLCPIEvent`, so the event decodes into its typed form instead of `UnknownOwnedData`.
 
 ### Changed
 
