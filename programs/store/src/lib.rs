@@ -2256,11 +2256,14 @@ pub mod gmsol_store {
 
     /// Settle the builder fee of an order.
     ///
-    /// Permissionless: any signer may invoke it, no role is required, and
-    /// no specific address can block it. Idempotent: a recorded builder
-    /// fee amount of zero, including orders that never had a builder set,
-    /// is an explicit no-op, so this may be called in any order state,
-    /// before or after terminal.
+    /// Permissionless: any signer may invoke it, no role is required, and no
+    /// authority within the protocol can block it. The fee token's freeze
+    /// authority can, by freezing the builder's claim vault, which is the known
+    /// liveness exception documented with the builder fee invariants on
+    /// [`crate::states::order`]. Idempotent: a recorded builder fee amount of
+    /// zero, including orders that never had a builder set, is an explicit
+    /// no-op, so this may be called in any order state, before or after
+    /// terminal.
     ///
     /// # Accounts
     /// *[See the documentation for the accounts.](SettleBuilderFee)*

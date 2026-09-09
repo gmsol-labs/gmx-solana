@@ -59,17 +59,22 @@
 //! into a frozen account before it reads the amount, and the close guard under
 //! `Delivery` lifts only once the fee is settled. Freezing one builder's claim
 //! vault therefore leaves every executed-but-unclosed order checkpointed to
-//! that builder permanently unclosable, with no recovery at any privilege level
-//! short of a program upgrade.
+//! that builder unclosable for as long as the freeze stands. Nothing in the
+//! protocol can lift it at any privilege level short of a program upgrade; only
+//! the freeze authority itself can, by thawing the vault.
 //!
 //! The loss falls on the order owners whose escrows are held, not on the frozen
-//! builder; for a decrease order the escrow holds the whole position payout.
+//! builder, and every escrow on the order is held rather than the fee alone:
+//! for a decrease order that is the whole position payout, which may be split
+//! between the final output token escrow and the pnl token's.
 //!
-//! Accepted rather than fixed for now, because the claim vault is owned by a
-//! program-derived address rather than by a wallet, which makes it an unlikely
-//! target, though its address is derivable from the builder it belongs to. The
-//! intended remedy is a governance waiver of a fee owed to a given builder,
-//! which restores closability without letting the freeze authority decide who
+//! Accepted rather than fixed for now, on the judgement that a claim vault is
+//! an unlikely target, belonging to a program-derived address rather than to a
+//! wallet. That is a claim about likelihood and not about capability: a freeze
+//! applies to the token account whoever its authority is, and the vault's
+//! address is derivable from the builder it belongs to. The intended remedy is
+//! a governance waiver of a fee owed to a given builder, which restores
+//! closability without letting the freeze authority decide who
 //! is paid.
 
 use anchor_lang::prelude::*;
