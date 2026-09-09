@@ -19455,8 +19455,15 @@
             "",
             "May be the order owner's own User Account. That is the only way to clear",
             "a checkpoint, since a fresh User Account advertises a zero factor, and it",
-            "is deliberately allowed so an owner is never bound to a builder for the",
-            "life of the order."
+            "is deliberately allowed so an owner can detach a builder it no longer",
+            "wants.",
+            "",
+            "That escape closes at execution. This instruction requires the order to",
+            "still be pending, while a fee is recorded only during execution, which",
+            "leaves the pending state in the same instruction. Once an amount is owed",
+            "it can only be settled, never re-checkpointed away, so detaching the",
+            "builder is not a route around the liveness exception documented on",
+            "[`crate::states::order`]."
           ]
         },
         {
@@ -19473,12 +19480,16 @@
             "[`final_output_token`](Self::final_output_token) owned by the builder's",
             "User Account.",
             "",
-            "Required to exist here so that settlement cannot fail later. Settlement",
-            "takes the vault as a plain token account and creates nothing, so a",
-            "builder without one would make the order unsettleable and therefore",
-            "uncloseable. Checking at checkpoint time moves that failure to the only",
-            "point where it is still recoverable: the owner simply does not get a",
-            "builder attached."
+            "Required to exist here so that settlement cannot fail for want of a",
+            "destination. Settlement takes the vault as a plain token account and",
+            "creates nothing, so a builder without one would make the order",
+            "unsettleable and therefore uncloseable. Checking at checkpoint time moves",
+            "that failure to the only point where it is still recoverable: the owner",
+            "simply does not get a builder attached.",
+            "",
+            "Existence is necessary and not sufficient. A vault that exists here can",
+            "still be frozen before settlement, which is the known liveness exception",
+            "documented with the builder fee invariants on [`crate::states::order`]."
           ],
           "pda": {
             "seeds": [
@@ -20526,11 +20537,14 @@
       "docs": [
         "Settle the builder fee of an order.",
         "",
-        "Permissionless: any signer may invoke it, no role is required, and",
-        "no specific address can block it. Idempotent: a recorded builder",
-        "fee amount of zero, including orders that never had a builder set,",
-        "is an explicit no-op, so this may be called in any order state,",
-        "before or after terminal.",
+        "Permissionless: any signer may invoke it, no role is required, and no",
+        "authority within the protocol can block it. The fee token's freeze",
+        "authority can, by freezing the builder's claim vault, which is the known",
+        "liveness exception documented with the builder fee invariants on",
+        "[`crate::states::order`]. Idempotent: a recorded builder fee amount of",
+        "zero, including orders that never had a builder set, is an explicit",
+        "no-op, so this may be called in any order state, before or after",
+        "terminal.",
         "",
         "# Accounts",
         "*[See the documentation for the accounts.](SettleBuilderFee)*",

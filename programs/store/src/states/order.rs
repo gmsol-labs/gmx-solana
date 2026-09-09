@@ -48,8 +48,36 @@
 //!
 //! ## Liveness
 //!
-//! Settlement cannot be blocked, an order is always eventually closable, and
-//! nothing freezes when the mechanism is switched off.
+//! Nothing the protocol controls can block settlement or keep an order from
+//! eventually being closed, and disabling the mechanism strands nothing already
+//! owed.
+//!
+//! ### Known exception: a frozen claim vault
+//!
+//! Liveness does not hold against the fee token's freeze authority. Settlement
+//! must transfer into the builder's claim vault, SPL Token rejects a transfer
+//! into a frozen account before it reads the amount, and the close guard under
+//! `Delivery` lifts only once the fee is settled. A claim vault is the
+//! associated token account of one mint owned by the builder's User Account,
+//! so freezing it leaves unclosable every executed-but-unclosed order that
+//! owes that builder a fee in that mint, for as long as the freeze stands.
+//! Orders owing the same builder in another mint are unaffected. Nothing in
+//! the protocol can lift that block at any privilege level short of a program
+//! upgrade; only the freeze authority itself can, by thawing the vault.
+//!
+//! The impact falls on the order owners whose escrows are held, not on the
+//! frozen builder, and every escrow on the order is held rather than the fee
+//! alone: for a decrease order that is the whole position payout, which may be
+//! split between the final output token escrow and the pnl token's.
+//!
+//! Accepted rather than fixed for now, on the judgement that a claim vault is
+//! an unlikely target, belonging to a program-derived address rather than to a
+//! wallet. That is a claim about likelihood and not about capability: a freeze
+//! applies to the token account whoever its authority is, and the vault's
+//! address is derivable from the builder it belongs to. The intended remedy is
+//! a governance waiver of a fee owed to a given builder, which restores
+//! closability without letting the freeze authority decide who
+//! is paid.
 
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
