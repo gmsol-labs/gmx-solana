@@ -209,8 +209,15 @@ pub struct SetBuilderFee<'info> {
     ///
     /// May be the order owner's own User Account. That is the only way to clear
     /// a checkpoint, since a fresh User Account advertises a zero factor, and it
-    /// is deliberately allowed so an owner is never bound to a builder for the
-    /// life of the order.
+    /// is deliberately allowed so an owner can detach a builder it no longer
+    /// wants.
+    ///
+    /// That escape closes at execution. This instruction requires the order to
+    /// still be pending, while a fee is recorded only during execution, which
+    /// leaves the pending state in the same instruction. Once an amount is owed
+    /// it can only be settled, never re-checkpointed away, so detaching the
+    /// builder is not a route around the liveness exception documented on
+    /// [`crate::states::order`].
     #[account(
         has_one = store,
         constraint = builder.load()?.is_initialized() @ CoreError::InvalidUserAccount,
@@ -271,6 +278,11 @@ impl SetBuilderFee<'_> {
         // feature stops new orders from taking on a fee without stranding any
         // fee already owed. `Default` is the action here because the flag guards
         // a mechanism rather than a step in an order's lifecycle.
+        //
+        // The same ungating means the flag is not a lever in the other
+        // direction either: disabling the feature cannot release an order whose
+        // settlement is blocked, which is the known liveness exception on
+        // `crate::states::order`.
         ctx.accounts
             .store
             .load()?
