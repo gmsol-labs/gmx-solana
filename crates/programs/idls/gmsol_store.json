@@ -19473,12 +19473,16 @@
             "[`final_output_token`](Self::final_output_token) owned by the builder's",
             "User Account.",
             "",
-            "Required to exist here so that settlement cannot fail later. Settlement",
-            "takes the vault as a plain token account and creates nothing, so a",
-            "builder without one would make the order unsettleable and therefore",
-            "uncloseable. Checking at checkpoint time moves that failure to the only",
-            "point where it is still recoverable: the owner simply does not get a",
-            "builder attached."
+            "Required to exist here so that settlement cannot fail for want of a",
+            "destination. Settlement takes the vault as a plain token account and",
+            "creates nothing, so a builder without one would make the order",
+            "unsettleable and therefore uncloseable. Checking at checkpoint time moves",
+            "that failure to the only point where it is still recoverable: the owner",
+            "simply does not get a builder attached.",
+            "",
+            "Existence is necessary and not sufficient. A vault that exists here can",
+            "still be frozen before settlement, which is the known liveness exception",
+            "documented with the builder fee invariants on [`crate::states::order`]."
           ],
           "pda": {
             "seeds": [

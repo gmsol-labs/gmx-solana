@@ -136,9 +136,11 @@ impl SettleBuilderFee<'_> {
         // Under the coverage invariant (see the builder fee invariants on
         // `crate::states::order`) the escrow always covers the recorded
         // amount, so this clamp should never actually reduce anything; it is
-        // defense in depth, guaranteeing a protocol bug can never make an
-        // order permanently unclosable. Any discrepancy is observable via the
-        // two amounts recorded on the emitted event below.
+        // defense in depth, guaranteeing that a shortfall in the escrow can
+        // never make an order permanently unclosable. It does not cover the
+        // transfer below being rejected, which is the known liveness exception
+        // documented alongside those invariants. Any discrepancy is observable
+        // via the two amounts recorded on the emitted event below.
         let settled_amount = recorded_amount.min(escrow.amount);
 
         let signer = ctx.accounts.order.load()?.signer();
@@ -221,12 +223,16 @@ pub struct SetBuilderFee<'info> {
     /// [`final_output_token`](Self::final_output_token) owned by the builder's
     /// User Account.
     ///
-    /// Required to exist here so that settlement cannot fail later. Settlement
-    /// takes the vault as a plain token account and creates nothing, so a
-    /// builder without one would make the order unsettleable and therefore
-    /// uncloseable. Checking at checkpoint time moves that failure to the only
-    /// point where it is still recoverable: the owner simply does not get a
-    /// builder attached.
+    /// Required to exist here so that settlement cannot fail for want of a
+    /// destination. Settlement takes the vault as a plain token account and
+    /// creates nothing, so a builder without one would make the order
+    /// unsettleable and therefore uncloseable. Checking at checkpoint time moves
+    /// that failure to the only point where it is still recoverable: the owner
+    /// simply does not get a builder attached.
+    ///
+    /// Existence is necessary and not sufficient. A vault that exists here can
+    /// still be frozen before settlement, which is the known liveness exception
+    /// documented with the builder fee invariants on [`crate::states::order`].
     #[account(
         associated_token::mint = final_output_token,
         associated_token::authority = builder,
@@ -257,12 +263,12 @@ pub struct SetBuilderFee<'info> {
 
 impl SetBuilderFee<'_> {
     pub(crate) fn invoke(ctx: Context<Self>, expected_factor: u128) -> Result<()> {
-        // Upholds the liveness invariant: nothing freezes when the mechanism
-        // is switched off.
+        // Upholds the liveness invariant: disabling the mechanism strands
+        // nothing already owed.
         //
         // The only builder-fee instruction behind the feature flag. Settlement,
         // claiming and execution stay ungated on purpose, so disabling the
-        // feature stops new orders from taking on a fee without freezing any
+        // feature stops new orders from taking on a fee without stranding any
         // fee already owed. `Default` is the action here because the flag guards
         // a mechanism rather than a step in an order's lifecycle.
         ctx.accounts
@@ -486,7 +492,7 @@ impl ClaimBuilderFees<'_> {
     /// with a zero balance is an explicit no-op, performing no token
     /// transfer, no CPI, and emitting no event, so this is safe to call
     /// freely once the vault exists. Not gated by the `BuilderFee` feature
-    /// flag, since disabling the feature must never freeze already-settled
+    /// flag, since disabling the feature must never strand already-settled
     /// funds.
     pub(crate) fn invoke(ctx: Context<Self>) -> Result<()> {
         let claim_vault = &ctx.accounts.claim_vault;

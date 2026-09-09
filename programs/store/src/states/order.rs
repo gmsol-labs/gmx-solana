@@ -48,8 +48,29 @@
 //!
 //! ## Liveness
 //!
-//! Settlement cannot be blocked, an order is always eventually closable, and
-//! nothing freezes when the mechanism is switched off.
+//! Nothing the protocol controls can block settlement or keep an order from
+//! eventually being closed, and disabling the mechanism strands nothing already
+//! owed.
+//!
+//! ### Known exception: a frozen claim vault
+//!
+//! Liveness does not hold against the fee token's freeze authority. Settlement
+//! must transfer into the builder's claim vault, SPL Token rejects a transfer
+//! into a frozen account before it reads the amount, and the close guard under
+//! `Delivery` lifts only once the fee is settled. Freezing one builder's claim
+//! vault therefore leaves every executed-but-unclosed order checkpointed to
+//! that builder permanently unclosable, with no recovery at any privilege level
+//! short of a program upgrade.
+//!
+//! The loss falls on the order owners whose escrows are held, not on the frozen
+//! builder; for a decrease order the escrow holds the whole position payout.
+//!
+//! Accepted rather than fixed for now, because the claim vault is owned by a
+//! program-derived address rather than by a wallet, which makes it an unlikely
+//! target, though its address is derivable from the builder it belongs to. The
+//! intended remedy is a governance waiver of a fee owed to a given builder,
+//! which restores closability without letting the freeze authority decide who
+//! is paid.
 
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
