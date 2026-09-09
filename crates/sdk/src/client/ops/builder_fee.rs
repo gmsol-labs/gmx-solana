@@ -1,14 +1,20 @@
 use std::{future::Future, ops::Deref};
 
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
-use gmsol_programs::gmsol_store::client::{accounts, args};
+use gmsol_programs::gmsol_store::{
+    client::{accounts, args},
+    ID,
+};
 use gmsol_solana_utils::{
     client_traits::FromRpcClientWith, transaction_builder::TransactionBuilder, IntoAtomicGroup,
 };
 use gmsol_utils::pubkey::optional_address;
 use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
-use crate::builders::order::{SetBuilderFee, SetBuilderFeeHint};
+use crate::{
+    builders::order::{SetBuilderFee, SetBuilderFeeHint},
+    utils::optional::fix_optional_account_metas,
+};
 
 /// Operations for builder fees.
 pub trait BuilderFeeOps<C> {
@@ -73,9 +79,17 @@ pub struct SettleBuilderFeeHint {
     pub builder: Option<Pubkey>,
     /// The order's final output token mint, i.e. the token the builder
     /// fee is denominated in.
-    pub final_output_token: Pubkey,
+    ///
+    /// `None` for an order that never had one. Only required when
+    /// `builder_fee_amount` is non-zero, matching the instruction's own
+    /// account optionality.
+    pub final_output_token: Option<Pubkey>,
     /// The order's escrow account for the final output token.
-    pub escrow: Pubkey,
+    ///
+    /// `None` when the account was never initialized, which is a supported
+    /// order state rather than an error: settlement there is a no-op and
+    /// needs neither this nor the mint above.
+    pub escrow: Option<Pubkey>,
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> BuilderFeeOps<C> for crate::Client<C> {
@@ -85,60 +99,81 @@ impl<C: Deref<Target = impl Signer> + Clone> BuilderFeeOps<C> for crate::Client<
         order: &Pubkey,
         hint: Option<SettleBuilderFeeHint>,
     ) -> crate::Result<TransactionBuilder<C>> {
-        let hint =
-            match hint {
-                Some(hint) => hint,
-                None => {
-                    let account = self.order(order).await?;
-                    let final_output_token =
-                        account.tokens.final_output_token.token().ok_or_else(|| {
-                            crate::Error::custom("order has no final output token")
-                        })?;
-                    let escrow =
-                        account.tokens.final_output_token.account().ok_or_else(|| {
-                            crate::Error::custom("order has no final output token")
-                        })?;
-                    SettleBuilderFeeHint {
-                        builder_fee_amount: account.builder_fee_amount,
-                        builder: optional_address(&account.builder).copied(),
-                        final_output_token,
-                        escrow,
-                    }
+        let hint = match hint {
+            Some(hint) => hint,
+            None => {
+                // Neither is an error here any more. An order with no
+                // final output token, or with the mint but no escrow
+                // account, is a supported state and settling it is a
+                // no-op; refusing to build the instruction is what made
+                // the no-op unreachable for exactly those orders.
+                let account = self.order(order).await?;
+                SettleBuilderFeeHint {
+                    builder_fee_amount: account.builder_fee_amount,
+                    builder: optional_address(&account.builder).copied(),
+                    final_output_token: account.tokens.final_output_token.token(),
+                    escrow: account.tokens.final_output_token.account(),
                 }
-            };
-
-        // The builder-related accounts are only required for a genuine
-        // settlement: the no-op path performs no CPI and does not touch
-        // them, so they need not even exist on-chain.
-        let (builder_user, claim_vault) = if hint.builder_fee_amount == 0 {
-            (None, None)
-        } else {
-            let builder = hint.builder.ok_or_else(|| {
-                crate::Error::custom(
-                    "order has a non-zero builder fee amount but no builder recorded",
-                )
-            })?;
-            let claim_vault = get_associated_token_address_with_program_id(
-                &builder,
-                &hint.final_output_token,
-                &anchor_spl::token::ID,
-            );
-            (Some(builder), Some(claim_vault))
+            }
         };
+
+        // All four are only required for a genuine settlement: the no-op path
+        // performs no CPI and does not touch them, so they need not even exist
+        // on-chain. A non-zero amount is what makes them required, and each
+        // missing one now names itself. The old message, "order has no final
+        // output token", was raised for the mint and for the escrow alike, so
+        // a caller-supplied hint missing either one reported the same thing.
+        // A hint derived from the order cannot miss just one: `TokenAndAccount`
+        // records the mint and the account together or records neither.
+        let (final_output_token, escrow, builder_user, claim_vault) =
+            if hint.builder_fee_amount == 0 {
+                (None, None, None, None)
+            } else {
+                let final_output_token = hint.final_output_token.ok_or_else(|| {
+                    crate::Error::custom(
+                        "order has a non-zero builder fee amount but no final output token mint",
+                    )
+                })?;
+                let escrow = hint.escrow.ok_or_else(|| {
+                    crate::Error::custom(
+                        "order has a non-zero builder fee amount but no final output token escrow",
+                    )
+                })?;
+                let builder = hint.builder.ok_or_else(|| {
+                    crate::Error::custom(
+                        "order has a non-zero builder fee amount but no builder recorded",
+                    )
+                })?;
+                let claim_vault = get_associated_token_address_with_program_id(
+                    &builder,
+                    &final_output_token,
+                    &anchor_spl::token::ID,
+                );
+                (
+                    Some(final_output_token),
+                    Some(escrow),
+                    Some(builder),
+                    Some(claim_vault),
+                )
+            };
 
         let rpc = self
             .store_transaction()
-            .anchor_accounts(accounts::SettleBuilderFee {
-                store: *store,
-                order: *order,
-                final_output_token: hint.final_output_token,
-                escrow: hint.escrow,
-                builder_user,
-                claim_vault,
-                token_program: anchor_spl::token::ID,
-                event_authority: self.store_event_authority(),
-                program: *self.store_program_id(),
-            })
+            .accounts(fix_optional_account_metas(
+                accounts::SettleBuilderFee {
+                    store: *store,
+                    order: *order,
+                    final_output_token,
+                    escrow,
+                    builder_user,
+                    claim_vault,
+                    token_program: anchor_spl::token::ID,
+                    event_authority: self.store_event_authority(),
+                    program: *self.store_program_id(),
+                },
+                &ID,
+                self.store_program_id(),
+            ))
             .anchor_args(args::SettleBuilderFee {});
 
         Ok(rpc)

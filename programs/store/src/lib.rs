@@ -2267,10 +2267,14 @@ pub mod gmsol_store {
     ///
     /// # Errors
     /// - The [`order`](SettleBuilderFee::order) must be initialized and owned by the `store`.
-    /// - If the order's recorded builder fee amount is non-zero, [`builder_user`](SettleBuilderFee::builder_user)
-    ///   must be provided and must match the builder recorded on the order, and
-    ///   [`claim_vault`](SettleBuilderFee::claim_vault) must be provided and must be the
-    ///   associated token account of the final output token owned by `builder_user`.
+    /// - If the order's recorded builder fee amount is non-zero, all four of
+    ///   [`final_output_token`](SettleBuilderFee::final_output_token),
+    ///   [`escrow`](SettleBuilderFee::escrow),
+    ///   [`builder_user`](SettleBuilderFee::builder_user) and
+    ///   [`claim_vault`](SettleBuilderFee::claim_vault) must be provided: the `escrow` must be
+    ///   the final output token account recorded on the order, the `builder_user` must match the
+    ///   builder recorded on the order, and the `claim_vault` must be the associated token
+    ///   account of the final output token owned by `builder_user`.
     pub fn settle_builder_fee(ctx: Context<SettleBuilderFee>) -> Result<()> {
         SettleBuilderFee::invoke(ctx)
     }

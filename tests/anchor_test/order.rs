@@ -839,7 +839,6 @@ async fn increase_order_without_escrow_leaves_final_output_token_uninitialized()
     let span = tracing::info_span!("increase_order_without_escrow");
     let _enter = span.enter();
 
-    let client = deployment.user_client(Deployment::DEFAULT_USER)?;
     let store = &deployment.store;
     let fbtc = deployment.token("fBTC").expect("must exist");
 
@@ -847,9 +846,15 @@ async fn increase_order_without_escrow_leaves_final_output_token_uninitialized()
         .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
         .await?;
 
+    // Trades as the exclusive locked user rather than `DEFAULT_USER`. Every test in this module
+    // mints into and spends from that shared balance with no lock over it, so adding two more
+    // consumers of it made the documented `0x1` InsufficientFunds contention fire on order
+    // creation, alternating between these two tests across three runs.
+    let client = deployment.locked_user_client().await?;
+
     let collateral_amount = 100_000;
     deployment
-        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, collateral_amount)
+        .mint_or_transfer_to("fBTC", &client.payer(), collateral_amount)
         .await?;
 
     let size = 5_000 * MARKET_USD_UNIT;
@@ -2345,6 +2350,171 @@ async fn decrease_execution_records_builder_fee() -> eyre::Result<()> {
             Ok::<_, eyre::Report>(())
         })
         .await?;
+
+    Ok(())
+}
+
+/// `settle_builder_fee` is buildable and succeeds as a no-op on an order whose final output token
+/// escrow was never initialized.
+///
+/// This case was previously **unconstructible**: the accounts struct required `final_output_token`
+/// and `escrow`, and the SDK refused before building anything with "order has no final output
+/// token". So the handler's own doc comment, which promises the call is "safe to call in any order
+/// state", was not true for exactly the orders that need it least and hit it most: a keeper
+/// composing execute + settle + close settles blindly.
+#[tokio::test]
+async fn settle_builder_fee_is_a_no_op_without_escrow() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("settle_builder_fee_no_escrow");
+    let _enter = span.enter();
+
+    let store = &deployment.store;
+    let fbtc = deployment.token("fBTC").expect("must exist");
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+
+    // Trades as the exclusive locked user rather than `DEFAULT_USER`. Every test in this module
+    // mints into and spends from that shared balance with no lock over it, so adding two more
+    // consumers of it made the documented `0x1` InsufficientFunds contention fire on order
+    // creation, alternating between these two tests across three runs.
+    let client = deployment.locked_user_client().await?;
+
+    let collateral_amount = 100_000;
+    deployment
+        .mint_or_transfer_to("fBTC", &client.payer(), collateral_amount)
+        .await?;
+
+    // `false` leaves the final output token escrow uninitialized, the same shape
+    // `increase_order_without_escrow_leaves_final_output_token_uninitialized` asserts.
+    let size = 5_000 * MARKET_USD_UNIT;
+    let price = 400_000 * MARKET_USD_UNIT / 10u128.pow(fbtc.config.decimals as u32);
+    let (rpc, order) = client
+        .limit_increase(
+            store,
+            market_token,
+            false,
+            size,
+            price,
+            true,
+            collateral_amount,
+        )
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%order, %signature, "created an order with no final output token escrow");
+
+    let before = client.order(&order).await?;
+    assert!(
+        before.tokens.final_output_token.token_and_account().is_none(),
+        "the fixture must produce an order with no final output token, otherwise this test is vacuous"
+    );
+    assert_eq!(
+        before.builder_fee_amount, 0,
+        "an order that never had a builder must record no fee"
+    );
+
+    // The assertion is that this builds at all: the SDK used to error here.
+    let signature = client
+        .settle_builder_fee(store, &order, None)
+        .await?
+        .send()
+        .await?;
+    tracing::info!(%order, %signature, "settled a builder fee on an order with no escrow");
+
+    let after = client.order(&order).await?;
+    assert_eq!(
+        after.builder_fee_amount, 0,
+        "a no-op settlement must not touch the recorded amount"
+    );
+    assert_eq!(
+        after.header.action_state()?,
+        before.header.action_state()?,
+        "a no-op settlement must not change the order's state"
+    );
+
+    let signature = client.close_order(&order)?.build().await?.send().await?;
+    tracing::info!(%order, %signature, "closed the order after the no-op settlement");
+
+    Ok(())
+}
+
+/// The other half of the no-op: an order that **does** have the escrow but has no builder, so its
+/// recorded fee is zero.
+///
+/// Separate from the case above because the two fail differently if the predicate is ever changed
+/// from the recorded amount to the presence of a builder: this one would still build and start
+/// touching accounts, while the other would not build at all.
+#[tokio::test]
+async fn settle_builder_fee_is_a_no_op_with_escrow_and_zero_fee() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("settle_builder_fee_zero_fee");
+    let _enter = span.enter();
+
+    let store = &deployment.store;
+    let fbtc = deployment.token("fBTC").expect("must exist");
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+
+    // Trades as the exclusive locked user rather than `DEFAULT_USER`. Every test in this module
+    // mints into and spends from that shared balance with no lock over it, so adding two more
+    // consumers of it made the documented `0x1` InsufficientFunds contention fire on order
+    // creation, alternating between these two tests across three runs.
+    let client = deployment.locked_user_client().await?;
+
+    let collateral_amount = 100_000;
+    deployment
+        .mint_or_transfer_to("fBTC", &client.payer(), collateral_amount)
+        .await?;
+
+    // The escrow is opted into with `prepare_final_output_token_escrow`, not through any of the
+    // positional arguments; without that call the order comes out with the slot uninitialized,
+    // which is the previous test's fixture rather than this one's.
+    let size = 5_000 * MARKET_USD_UNIT;
+    let price = 400_000 * MARKET_USD_UNIT / 10u128.pow(fbtc.config.decimals as u32);
+    let (rpc, order) = client
+        .limit_increase(
+            store,
+            market_token,
+            false,
+            size,
+            price,
+            true,
+            collateral_amount,
+        )
+        .prepare_final_output_token_escrow(true)
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%order, %signature, "created an order with an escrow and no builder");
+
+    let before = client.order(&order).await?;
+    assert!(
+        before.tokens.final_output_token.token_and_account().is_some(),
+        "the fixture must produce an order that has the escrow, otherwise this duplicates the previous test"
+    );
+    assert_eq!(before.builder_fee_amount, 0, "no builder means no fee");
+
+    let signature = client
+        .settle_builder_fee(store, &order, None)
+        .await?
+        .send()
+        .await?;
+    tracing::info!(%order, %signature, "settled a builder fee on an order with a zero fee");
+
+    let after = client.order(&order).await?;
+    assert_eq!(
+        after.builder_fee_amount, 0,
+        "a no-op settlement must not touch the recorded amount"
+    );
+
+    let signature = client.close_order(&order)?.build().await?.send().await?;
+    tracing::info!(%order, %signature, "closed the order after the no-op settlement");
 
     Ok(())
 }

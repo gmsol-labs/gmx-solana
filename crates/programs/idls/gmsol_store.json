@@ -20537,10 +20537,14 @@
         "",
         "# Errors",
         "- The [`order`](SettleBuilderFee::order) must be initialized and owned by the `store`.",
-        "- If the order's recorded builder fee amount is non-zero, [`builder_user`](SettleBuilderFee::builder_user)",
-        "must be provided and must match the builder recorded on the order, and",
-        "[`claim_vault`](SettleBuilderFee::claim_vault) must be provided and must be the",
-        "associated token account of the final output token owned by `builder_user`."
+        "- If the order's recorded builder fee amount is non-zero, all four of",
+        "[`final_output_token`](SettleBuilderFee::final_output_token),",
+        "[`escrow`](SettleBuilderFee::escrow),",
+        "[`builder_user`](SettleBuilderFee::builder_user) and",
+        "[`claim_vault`](SettleBuilderFee::claim_vault) must be provided: the `escrow` must be",
+        "the final output token account recorded on the order, the `builder_user` must match the",
+        "builder recorded on the order, and the `claim_vault` must be the associated token",
+        "account of the final output token owned by `builder_user`."
       ],
       "discriminator": [
         209,
@@ -20573,15 +20577,29 @@
           "name": "final_output_token",
           "docs": [
             "The final output token mint of the order, i.e. the token the",
-            "builder fee is denominated in."
-          ]
+            "builder fee is denominated in.",
+            "",
+            "Only required when the order has a non-zero recorded builder fee",
+            "amount, for the same reason as `builder_user` below: the no-op path",
+            "moves no tokens and so needs neither the mint nor its decimals.",
+            "Optional so that the instruction can be built for an order whose",
+            "final output token was never initialized, which is a supported",
+            "state and the one the no-op exists to serve."
+          ],
+          "optional": true
         },
         {
           "name": "escrow",
           "docs": [
-            "The order's escrow account for the final output token."
+            "The order's escrow account for the final output token.",
+            "",
+            "Only required alongside `final_output_token`. A non-zero recorded",
+            "amount implies it exists, because `set_builder_fee` refuses to",
+            "checkpoint a builder onto an order whose final output token account",
+            "is uninitialized."
           ],
           "writable": true,
+          "optional": true,
           "pda": {
             "seeds": [
               {
