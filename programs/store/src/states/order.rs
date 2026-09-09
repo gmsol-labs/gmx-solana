@@ -57,16 +57,18 @@
 //! Liveness does not hold against the fee token's freeze authority. Settlement
 //! must transfer into the builder's claim vault, SPL Token rejects a transfer
 //! into a frozen account before it reads the amount, and the close guard under
-//! `Delivery` lifts only once the fee is settled. Freezing one builder's claim
-//! vault therefore leaves every executed-but-unclosed order checkpointed to
-//! that builder unclosable for as long as the freeze stands. Nothing in the
-//! protocol can lift it at any privilege level short of a program upgrade; only
-//! the freeze authority itself can, by thawing the vault.
+//! `Delivery` lifts only once the fee is settled. A claim vault is the
+//! associated token account of one mint owned by the builder's User Account,
+//! so freezing it leaves unclosable every executed-but-unclosed order that
+//! owes that builder a fee in that mint, for as long as the freeze stands.
+//! Orders owing the same builder in another mint are unaffected. Nothing in
+//! the protocol can lift that block at any privilege level short of a program
+//! upgrade; only the freeze authority itself can, by thawing the vault.
 //!
-//! The loss falls on the order owners whose escrows are held, not on the frozen
-//! builder, and every escrow on the order is held rather than the fee alone:
-//! for a decrease order that is the whole position payout, which may be split
-//! between the final output token escrow and the pnl token's.
+//! The impact falls on the order owners whose escrows are held, not on the
+//! frozen builder, and every escrow on the order is held rather than the fee
+//! alone: for a decrease order that is the whole position payout, which may be
+//! split between the final output token escrow and the pnl token's.
 //!
 //! Accepted rather than fixed for now, on the judgement that a claim vault is
 //! an unlikely target, belonging to a program-derived address rather than to a
