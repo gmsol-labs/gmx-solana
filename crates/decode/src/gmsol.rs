@@ -9,12 +9,12 @@ pub mod programs {
             Store, UserHeader, VirtualInventory, Withdrawal,
         },
         events::{
-            BorrowingFeesUpdated, BuilderFeeCharged, BuilderFeeFactorSet, BuilderFeeSet,
-            DepositExecuted, DepositRemoved, GlvDepositRemoved, GlvPricing, GlvTokenValue,
-            GlvWithdrawalRemoved, GtBuyback, GtUpdated, InsufficientFundingFeePayment,
-            MarketFeesUpdated, MarketStateUpdated, MarketTokenValue, OrderRemoved, OrderUpdated,
-            PositionDecreased, PositionIncreased, ShiftRemoved, SwapExecuted, TradeEvent,
-            WithdrawalExecuted, WithdrawalRemoved,
+            BorrowingFeesUpdated, BuilderFeeCharged, BuilderFeeClaimed, BuilderFeeFactorSet,
+            BuilderFeeSet, BuilderFeeSettled, DepositExecuted, DepositRemoved, GlvDepositRemoved,
+            GlvPricing, GlvTokenValue, GlvWithdrawalRemoved, GtBuyback, GtUpdated,
+            InsufficientFundingFeePayment, MarketFeesUpdated, MarketStateUpdated, MarketTokenValue,
+            OrderRemoved, OrderUpdated, PositionDecreased, PositionIncreased, ShiftRemoved,
+            SwapExecuted, TradeEvent, WithdrawalExecuted, WithdrawalRemoved,
         },
     };
 
@@ -57,6 +57,8 @@ pub mod programs {
     impl_decode_for_cpi_event!(BuilderFeeCharged);
     impl_decode_for_cpi_event!(BuilderFeeFactorSet);
     impl_decode_for_cpi_event!(BuilderFeeSet);
+    impl_decode_for_cpi_event!(BuilderFeeSettled);
+    impl_decode_for_cpi_event!(BuilderFeeClaimed);
 
     untagged!(
         GMSOLAccountData,
@@ -108,6 +110,8 @@ pub mod programs {
             BuilderFeeCharged,
             BuilderFeeFactorSet,
             BuilderFeeSet,
+            BuilderFeeSettled,
+            BuilderFeeClaimed,
             UnknownOwnedData
         ]
     );
