@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(utils): Added `OrderKind::is_user_initiated_position`, spelled as an explicit list of the five owner-created position kinds. `is_increase_position() || is_decrease_position()` is not equivalent: the latter also matches `Liquidation` and `AutoDeleveraging`, which must never carry a builder fee.
 - sdk(sdk): Added `BuilderFeeOps::set_builder_fee` and the `SetBuilderFee` atomic-group builder for building the instruction.
 - sdk(decode): Added `BuilderFeeFactorSet` and `BuilderFeeSet` to `GMSOLCPIEvent`, so the events decode into their typed form instead of `UnknownOwnedData`.
+- sdk(decode): Added `BuilderFeeSettled` and `BuilderFeeClaimed` to `GMSOLCPIEvent`, so the events decode into their typed form instead of `UnknownOwnedData`.
 - sdk(solana-utils): Added `Bundle::send_all_with_opts_detailed`, returning one `Result` per transaction with stable bundle indices.
 - sdk(solana-utils): Added `Error::SendAborted` for unsent transactions after an early bundle abort.
 - sdk(solana-utils): Made `compress_send_results` public so callers can map detailed results to the legacy signature list.
