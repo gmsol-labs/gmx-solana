@@ -148,17 +148,71 @@ impl PositionCalculations for PositionModel {
         };
 
         // liquidation price
+        //
+        // The threshold must come from `min_collateral_factor_for_liquidation`, which is what
+        // `check_liquidatable(.., for_liquidation = true)` compares against on the liquidation
+        // path (`crates/model/src/position.rs`). It falls back to `min_collateral_factor` when
+        // the market leaves it unset, and `position_params()` already resolves the
+        // market-closed variant, so reading it here covers both.
         let params = self.market().position_params()?;
-        let min_collateral_factor = params.min_collateral_factor();
+        let min_collateral_factor_for_liquidation = params.min_collateral_factor_for_liquidation();
         let min_collateral_value = params.min_collateral_value();
-        let liquidation_collateral_usd = gmsol_model::utils::apply_factor::<
-            _,
-            { constants::MARKET_DECIMALS },
-        >(position_size_in_usd, min_collateral_factor)
-        .max(Some(*min_collateral_value))
-        .ok_or(gmsol_model::Error::Computation(
-            "calculating liquidation collateral usd",
-        ))?;
+        let liquidation_collateral_usd =
+            gmsol_model::utils::apply_factor::<_, { constants::MARKET_DECIMALS }>(
+                position_size_in_usd,
+                min_collateral_factor_for_liquidation,
+            )
+            .max(Some(*min_collateral_value))
+            .ok_or(gmsol_model::Error::Computation(
+                "calculating liquidation collateral usd",
+            ))?;
+
+        // When the collateral token *is* the index token, two of the terms below are functions of
+        // the very price being solved for, so they cannot be held at spot:
+        //
+        //   collateral_value        = collateral_amount        * collateral_token_price
+        //   pending_funding_fee     = pending_funding_amount   * collateral_token_price
+        //
+        // Everything else is price-independent: the borrowing fee is `apply_factor(size_in_usd, ..)`
+        // and the close order fee is `apply_factor(size_delta_usd, ..)`, both plain USD, and the
+        // price impact is computed off pool balances. So the boundary stays linear in `P` and the
+        // correction is entirely in the denominator:
+        //
+        //   long:  P = (liq + size_in_usd - K) / (size_in_tokens + collateral_amount - funding)
+        //   short: P = (K + size_in_usd - liq) / (size_in_tokens - collateral_amount + funding)
+        //
+        // where K is what remains of `remaining_collateral_usd` once the two price-dependent terms
+        // are taken back out. With a different collateral token the extra terms are zero and this
+        // reduces to the original formula.
+        //
+        // Correlated-but-not-identical tokens are deliberately left uncorrected: that error decays
+        // to zero as the position approaches liquidation and the UI recomputes continuously.
+        let collateral_tracks_index =
+            self.position().collateral_token == self.market_model().meta.index_token_mint;
+        // The two amounts are added before either is subtracted, so an intermediate never
+        // underflows. A short whose collateral exceeds `size_in_tokens + funding` gains more from
+        // a rising price than the position loses, so it has no liquidation price on the way up and
+        // the `checked_sub` returning `None` is the right answer for that direction.
+        //
+        // Not solved here: such a short can still liquidate on the way *down*, but only when
+        // `liquidation_collateral_usd` exceeds `size_in_usd`, which needs the `min_collateral_value`
+        // floor to sit above the whole notional. `None` understates that case rather than
+        // misreporting it, and it is left uncorrected along with the correlated-token case above.
+        let denominator = if collateral_tracks_index {
+            let collateral_amount = *self.collateral_amount();
+            let funding_amount = *pending_funding_fee.amount();
+            if self.is_long() {
+                position_size_in_tokens
+                    .checked_add(collateral_amount)
+                    .and_then(|d| d.checked_sub(funding_amount))
+            } else {
+                position_size_in_tokens
+                    .checked_add(funding_amount)
+                    .and_then(|d| d.checked_sub(collateral_amount))
+            }
+        } else {
+            Some(*position_size_in_tokens)
+        };
 
         let liquidation_price = if position_size_in_tokens.is_zero() {
             None
@@ -169,16 +223,49 @@ impl PositionCalculations for PositionModel {
                 .and_then(|a| a.checked_sub(pending_funding_fee_value))
                 .and_then(|a| a.checked_sub(close_order_fee_value))
                 .and_then(|remaining_collateral_usd| {
+                    let denominator = denominator?;
+                    if denominator.is_zero() {
+                        return None;
+                    }
+                    if !collateral_tracks_index {
+                        return if self.is_long() {
+                            liquidation_collateral_usd
+                                .checked_add(*position_size_in_usd)?
+                                .checked_sub(remaining_collateral_usd)?
+                                .checked_div(denominator)
+                        } else {
+                            remaining_collateral_usd
+                                .checked_add(*position_size_in_usd)?
+                                .checked_sub(liquidation_collateral_usd)?
+                                .checked_div(denominator)
+                        };
+                    }
+
+                    // The price-independent residual is `impact - borrowing - order_fee`, which is
+                    // never positive: the impact is clamped to <= 0 just above and both fees are
+                    // >= 0. These are unsigned, so it cannot be represented; carry its magnitude
+                    // instead, `surcharge = borrowing + order_fee - impact >= 0`.
+                    //
+                    // Subtracting `remaining` before the funding fee keeps both steps non-negative
+                    // without assuming the collateral exceeds the funding owed:
+                    //   collateral - remaining          = borrowing + funding + order_fee - impact
+                    //   ... - funding                   = borrowing + order_fee - impact
+                    let surcharge = collateral_value
+                        .checked_sub(remaining_collateral_usd)?
+                        .checked_sub(pending_funding_fee_value)?;
+
                     if self.is_long() {
                         liquidation_collateral_usd
                             .checked_add(*position_size_in_usd)?
-                            .checked_sub(remaining_collateral_usd)?
-                            .checked_div(*position_size_in_tokens)
+                            .checked_add(surcharge)?
+                            .checked_div(denominator)
                     } else {
-                        remaining_collateral_usd
-                            .checked_add(*position_size_in_usd)?
+                        // `S - L - surcharge`. Underflow here means the position is already past
+                        // the boundary, and no liquidation price is the honest answer.
+                        position_size_in_usd
                             .checked_sub(liquidation_collateral_usd)?
-                            .checked_div(*position_size_in_tokens)
+                            .checked_sub(surcharge)?
+                            .checked_div(denominator)
                     }
                 })
         };
@@ -196,5 +283,559 @@ impl PositionCalculations for PositionModel {
             leverage,
             liquidation_price,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gmsol_model::price::Price;
+    use gmsol_programs::{
+        anchor_lang::prelude::Pubkey,
+        bytemuck::Zeroable,
+        gmsol_store::accounts::{Market, Position},
+        model::MarketModel,
+    };
+    use std::sync::Arc;
+
+    // Units. A USD value carries MARKET_DECIMALS (1e20); a token amount carries
+    // MARKET_TOKEN_DECIMALS (1e9); a price is scaled so amount * price lands back in USD,
+    // i.e. 1e11 per 1 USD. Getting this wrong overflows u128 inside collateral_value.
+    const USD: u128 = constants::MARKET_USD_UNIT;
+    const PRICE: u128 = constants::MARKET_USD_TO_AMOUNT_DIVISOR;
+    const TOKEN: u128 = 10u128.pow(constants::MARKET_TOKEN_DECIMALS as u32);
+
+    const SIZE_USD: u128 = 10_000 * USD;
+    const SIZE_TOKENS: u128 = 500 * TOKEN; // entry 20 USD
+    const COLLATERAL: u128 = 1_000 * TOKEN; // in the short token, priced at 1 USD
+
+    /// A market carrying two *different* collateral factors, which is what every mainnet
+    /// market actually looks like. `for_liquidation` is the one the contract compares
+    /// against on the liquidation path.
+    fn market(min_collateral_factor: u128, for_liquidation: u128) -> MarketModel {
+        let mut m = Market::zeroed();
+        m.meta.market_token_mint = Pubkey::new_unique();
+        m.meta.index_token_mint = Pubkey::new_unique();
+        m.meta.long_token_mint = Pubkey::new_unique();
+        m.meta.short_token_mint = Pubkey::new_unique();
+        m.config.min_collateral_factor = min_collateral_factor;
+        m.config.min_collateral_factor_for_liquidation = for_liquidation;
+        m.config.min_collateral_value = 0;
+        // A zeroed market has no open interest, and closing the whole position underflows the
+        // pool while computing price impact. Seed both long open-interest pools with the
+        // position itself so the close nets to zero.
+        m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
+        m.state
+            .pools
+            .open_interest_in_tokens_for_long
+            .pool
+            .long_token_amount = SIZE_TOKENS;
+        MarketModel::from_parts(Arc::new(m), 0)
+    }
+
+    /// Long, collateralised in the SHORT token so the collateral value does not move with the
+    /// index price; that isolates the factor from the separate same-token-collateral effect.
+    fn position(market: &MarketModel) -> PositionModel {
+        let mut p = Position::zeroed();
+        p.kind = 1; // Long
+        p.collateral_token = market.meta.short_token_mint;
+        p.state.size_in_usd = SIZE_USD;
+        p.state.size_in_tokens = SIZE_TOKENS;
+        p.state.collateral_amount = COLLATERAL;
+        PositionModel::new(market.clone(), Arc::new(p)).expect("position model")
+    }
+
+    fn prices() -> Prices<u128> {
+        let one = Price {
+            min: PRICE,
+            max: PRICE,
+        };
+        let index = Price {
+            min: 20 * PRICE,
+            max: 20 * PRICE,
+        };
+        Prices {
+            index_token_price: index,
+            long_token_price: one,
+            short_token_price: one,
+        }
+    }
+
+    /// long boundary: (threshold + size_in_usd - collateral_value) / size_in_tokens,
+    /// with no fees or price impact on a zeroed market.
+    fn expected(factor: u128) -> u128 {
+        let threshold = SIZE_USD / USD * factor;
+        let collateral_value = COLLATERAL * PRICE;
+        (threshold + SIZE_USD - collateral_value) / SIZE_TOKENS
+    }
+
+    #[test]
+    fn liquidation_price_uses_the_liquidation_factor_not_the_plain_one() {
+        // 1% vs 0.5%, the ratio 89 of 101 mainnet markets carry.
+        let mcf = USD / 100;
+        let liq = USD / 200;
+        let reported = position(&market(mcf, liq))
+            .status(&prices())
+            .expect("status")
+            .liquidation_price
+            .expect("liquidation price");
+
+        assert_eq!(
+            reported,
+            expected(liq),
+            "liquidation_price must be built from min_collateral_factor_for_liquidation"
+        );
+        assert_ne!(
+            reported,
+            expected(mcf),
+            "regression guard: this is the value the old code produced"
+        );
+        // 18.10 rather than 18.20, on the config of a real mainnet market
+        assert_eq!(reported * 100 / PRICE, 1810, "expected 18.10");
+        assert_eq!(expected(mcf) * 100 / PRICE, 1820, "the old code gave 18.20");
+    }
+
+    #[test]
+    fn falls_back_to_min_collateral_factor_when_the_market_leaves_it_unset() {
+        let mcf = USD / 100;
+        let reported = position(&market(mcf, 0)) // 0 means unset; the accessor falls back
+            .status(&prices())
+            .expect("status")
+            .liquidation_price
+            .expect("liquidation price");
+        assert_eq!(reported, expected(mcf));
+    }
+
+    /// A market whose index token IS its long token, which is the shape the correction exists
+    /// for. The assertion is not against a formula of my own: it binary-searches the real
+    /// `check_liquidatable(.., true, true)` and requires the reported price to be that boundary.
+    #[test]
+    fn same_token_collateral_matches_the_real_liquidation_boundary() {
+        let liq = USD / 200;
+        let mut m = Market::zeroed();
+        let shared = Pubkey::new_unique();
+        m.meta.market_token_mint = Pubkey::new_unique();
+        m.meta.index_token_mint = shared;
+        m.meta.long_token_mint = shared; // index == long
+        m.meta.short_token_mint = Pubkey::new_unique();
+        m.config.min_collateral_factor = USD / 100;
+        m.config.min_collateral_factor_for_liquidation = liq;
+        m.config.min_collateral_value = 0;
+        m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
+        m.state
+            .pools
+            .open_interest_in_tokens_for_long
+            .pool
+            .long_token_amount = SIZE_TOKENS;
+        let market = MarketModel::from_parts(Arc::new(m), 0);
+
+        let mut pos = Position::zeroed();
+        pos.kind = 1; // Long
+        pos.collateral_token = shared; // collateral IS the index token
+        pos.state.size_in_usd = SIZE_USD;
+        pos.state.size_in_tokens = SIZE_TOKENS;
+        let collateral = 50 * TOKEN; // 1 000 USD at spot 20, in the index token itself
+        pos.state.collateral_amount = collateral;
+        let p = PositionModel::new(market, Arc::new(pos)).expect("position model");
+
+        // both index and collateral prices move together: they are the same mint
+        let at = |price: u128| {
+            let px = Price {
+                min: price,
+                max: price,
+            };
+            Prices {
+                index_token_price: px,
+                long_token_price: px,
+                short_token_price: Price {
+                    min: PRICE,
+                    max: PRICE,
+                },
+            }
+        };
+        let liquidatable = |price: u128| {
+            p.check_liquidatable(&at(price), true, true)
+                .expect("check_liquidatable")
+                .is_some()
+        };
+
+        let spot = 20 * PRICE;
+        assert!(!liquidatable(spot), "position must start healthy");
+        assert!(liquidatable(PRICE), "must be liquidatable near zero");
+
+        // lowest price at which the contract still considers the position healthy
+        let (mut lo, mut hi) = (PRICE, spot);
+        while hi - lo > 1 {
+            let mid = lo + (hi - lo) / 2;
+            if liquidatable(mid) {
+                lo = mid
+            } else {
+                hi = mid
+            }
+        }
+        let boundary = hi;
+
+        let reported = p
+            .status(&at(spot))
+            .expect("status")
+            .liquidation_price
+            .expect("price");
+
+        // a few units of slack for the integer divisions inside the formula
+        let diff = reported.abs_diff(boundary);
+        assert!(
+            diff <= 8,
+            "reported {reported} should be the real boundary {boundary} (diff {diff})"
+        );
+
+        // and the old, spot-pinned formula would have been materially lower
+        let pinned = {
+            let threshold = SIZE_USD / USD * liq;
+            let collateral_value = collateral * spot;
+            (threshold + SIZE_USD - collateral_value) / SIZE_TOKENS
+        };
+        assert!(
+            pinned < boundary,
+            "regression guard: the spot-pinned value {pinned} understated the boundary {boundary}"
+        );
+    }
+
+    /// Sweep every shape against the REAL check_liquidatable boundary.
+    ///
+    /// At a zero oracle spread the reported price must BE the boundary. With a spread it cannot:
+    /// the formula solves for a single price while the model picks `.min` for collateral and
+    /// `.max`/`.min` for pnl by side, so a half-spread of error is inherent, and it shows up on
+    /// positions this change does not touch as well. Measured before/after on this sweep, the
+    /// same-token cases went 0.934% -> 0.000% (long) and 0.945% -> 0.000% (short) at zero spread,
+    /// while the different-token cases came out byte-identical, which is the control.
+    #[test]
+    fn sweep_reported_vs_real_boundary() {
+        let mut checked = 0;
+        for &is_long in &[true, false] {
+            for &same_token in &[true, false] {
+                for &spread_bps in &[0u128, 50] {
+                    let mut m = Market::zeroed();
+                    let shared = Pubkey::new_unique();
+                    let other = Pubkey::new_unique();
+                    m.meta.market_token_mint = Pubkey::new_unique();
+                    m.meta.index_token_mint = shared;
+                    m.meta.long_token_mint = shared;
+                    m.meta.short_token_mint = other;
+                    m.config.min_collateral_factor = USD / 100;
+                    m.config.min_collateral_factor_for_liquidation = USD / 200;
+                    m.config.min_collateral_value = 0;
+                    // non-zero fees, so the price-independent residual is not 0 in any shape;
+                    // with these at 0 the same-token branch cannot exercise its subtraction
+                    m.config.order_fee_factor_for_positive_impact = USD / 1_000;
+                    m.config.order_fee_factor_for_negative_impact = USD / 1_000;
+                    if is_long {
+                        m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
+                        m.state
+                            .pools
+                            .open_interest_in_tokens_for_long
+                            .pool
+                            .long_token_amount = SIZE_TOKENS;
+                    } else {
+                        m.state
+                            .pools
+                            .open_interest_for_short
+                            .pool
+                            .short_token_amount = SIZE_USD;
+                        m.state
+                            .pools
+                            .open_interest_in_tokens_for_short
+                            .pool
+                            .short_token_amount = SIZE_TOKENS;
+                    }
+                    let market = MarketModel::from_parts(Arc::new(m), 0);
+
+                    let mut pos = Position::zeroed();
+                    pos.kind = if is_long { 1 } else { 2 };
+                    pos.collateral_token = if same_token { shared } else { other };
+                    pos.state.size_in_usd = SIZE_USD;
+                    pos.state.size_in_tokens = SIZE_TOKENS;
+                    // 1 000 USD of collateral either way: 50 index tokens at 20, or 1 000 of the other
+                    pos.state.collateral_amount = if same_token {
+                        50 * TOKEN
+                    } else {
+                        1_000 * TOKEN
+                    };
+                    let pm = match PositionModel::new(market, Arc::new(pos)) {
+                        Ok(v) => v,
+                        Err(e) => panic!(
+                            "long={is_long} same={same_token} spread={spread_bps}: fixture failed to build: {e}"
+                        ),
+                    };
+
+                    let at = |price: u128| {
+                        let half = price * spread_bps / 20_000;
+                        let px = Price {
+                            min: price - half,
+                            max: price + half,
+                        };
+                        let one = Price {
+                            min: PRICE,
+                            max: PRICE,
+                        };
+                        Prices {
+                            index_token_price: px,
+                            long_token_price: px,
+                            short_token_price: one,
+                        }
+                    };
+                    let liq = |price: u128| {
+                        pm.check_liquidatable(&at(price), true, true)
+                            .map(|r| r.is_some())
+                    };
+
+                    let spot = 20 * PRICE;
+                    let healthy_at_spot = liq(spot);
+                    assert_eq!(
+                        healthy_at_spot.as_ref().ok(),
+                        Some(&false),
+                        "long={is_long} same={same_token} spread={spread_bps}: fixture must start healthy"
+                    );
+                    // long liquidates downward, short upward
+                    let (mut lo, mut hi) = if is_long {
+                        (PRICE, spot)
+                    } else {
+                        (spot, 400 * PRICE)
+                    };
+                    let far_ok = if is_long { liq(lo) } else { liq(hi) };
+                    assert_eq!(
+                        far_ok.as_ref().ok(),
+                        Some(&true),
+                        "long={is_long} same={same_token} spread={spread_bps}: must liquidate somewhere in range"
+                    );
+                    while hi - lo > 1 {
+                        let mid = lo + (hi - lo) / 2;
+                        let l = liq(mid).unwrap_or(false);
+                        if is_long {
+                            if l {
+                                lo = mid
+                            } else {
+                                hi = mid
+                            }
+                        } else if l {
+                            hi = mid
+                        } else {
+                            lo = mid
+                        }
+                    }
+                    let boundary = if is_long { hi } else { lo };
+
+                    let reported = pm
+                        .status(&at(spot))
+                        .expect("status")
+                        .liquidation_price
+                        .expect("liquidation price");
+                    let diff = reported.abs_diff(boundary);
+                    if spread_bps == 0 {
+                        assert!(
+                    diff <= 8,
+                    "long={is_long} same={same_token}: {reported} must be the boundary {boundary}, diff {diff}"
+                );
+                    } else {
+                        let bps = diff * 10_000 / boundary;
+                        assert!(
+                    bps <= 50,
+                    "long={is_long} same={same_token}: {bps}bps exceeds the half-spread budget"
+                );
+                    }
+                    checked += 1;
+                }
+            }
+        }
+        assert_eq!(checked, 8, "every shape must be exercised, none skipped");
+    }
+
+    /// Reported by mv-reyes on PR #439: with any non-zero fee the same-token branch was
+    /// claimed to underflow and return `None` for exactly the positions it targets. Every other
+    /// test here runs on a zeroed market, where all fees are 0, so none of them could see it.
+    #[test]
+    fn same_token_survives_a_non_zero_order_fee() {
+        let mut m = Market::zeroed();
+        let shared = Pubkey::new_unique();
+        m.meta.market_token_mint = Pubkey::new_unique();
+        m.meta.index_token_mint = shared;
+        m.meta.long_token_mint = shared;
+        m.meta.short_token_mint = Pubkey::new_unique();
+        m.config.min_collateral_factor = USD / 100;
+        m.config.min_collateral_factor_for_liquidation = USD / 200;
+        m.config.min_collateral_value = 0;
+        // the one thing the other fixtures leave at zero: a real market always has this set
+        m.config.order_fee_factor_for_positive_impact = USD / 1_000;
+        m.config.order_fee_factor_for_negative_impact = USD / 1_000;
+        m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
+        m.state
+            .pools
+            .open_interest_in_tokens_for_long
+            .pool
+            .long_token_amount = SIZE_TOKENS;
+        let market = MarketModel::from_parts(Arc::new(m), 0);
+
+        let mut pos = Position::zeroed();
+        pos.kind = 1;
+        pos.collateral_token = shared;
+        pos.state.size_in_usd = SIZE_USD;
+        pos.state.size_in_tokens = SIZE_TOKENS;
+        pos.state.collateral_amount = 50 * TOKEN;
+        let pm = PositionModel::new(market, Arc::new(pos)).expect("position model");
+
+        let at = |price: u128| {
+            let px = Price {
+                min: price,
+                max: price,
+            };
+            Prices {
+                index_token_price: px,
+                long_token_price: px,
+                short_token_price: Price {
+                    min: PRICE,
+                    max: PRICE,
+                },
+            }
+        };
+
+        let status = pm.status(&at(20 * PRICE)).expect("status");
+        assert!(
+            status.close_order_fee_value > 0,
+            "fixture must actually charge a fee, else it proves nothing"
+        );
+        assert!(
+            status.liquidation_price.is_some(),
+            "liquidation_price went None with a non-zero fee: the same-token branch underflowed"
+        );
+    }
+
+    /// A closed market resolves its threshold through
+    /// `min_collateral_factor_for_liquidation(is_closed())`, so three things have to line up:
+    /// the market's `Closed` flag, the `EnableMarketClosedParams` config flag, and the
+    /// market-closed factor itself. Both flag enums are private, so the bit indices are spelled
+    /// out here rather than imported.
+    #[test]
+    fn a_closed_market_uses_its_own_liquidation_factor() {
+        const MARKET_FLAG_CLOSED: u8 = 5;
+        const CONFIG_FLAG_ENABLE_MARKET_CLOSED_PARAMS: u8 = 2;
+
+        let open_liq = USD / 200;
+        let closed_liq = USD / 400; // different from both other factors, so the pick is unambiguous
+        let mut m = Market::zeroed();
+        m.meta.market_token_mint = Pubkey::new_unique();
+        m.meta.index_token_mint = Pubkey::new_unique();
+        m.meta.long_token_mint = Pubkey::new_unique();
+        m.meta.short_token_mint = Pubkey::new_unique();
+        m.config.min_collateral_factor = USD / 100;
+        m.config.min_collateral_factor_for_liquidation = open_liq;
+        m.config.market_closed_min_collateral_factor_for_liquidation = closed_liq;
+        m.config.min_collateral_value = 0;
+        m.flags.value = 1 << MARKET_FLAG_CLOSED;
+        m.config.flag.value = 1 << CONFIG_FLAG_ENABLE_MARKET_CLOSED_PARAMS;
+        m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
+        m.state
+            .pools
+            .open_interest_in_tokens_for_long
+            .pool
+            .long_token_amount = SIZE_TOKENS;
+        let market = MarketModel::from_parts(Arc::new(m), 0);
+
+        let reported = position(&market)
+            .status(&prices())
+            .expect("status")
+            .liquidation_price
+            .expect("liquidation price");
+
+        assert_eq!(
+            reported,
+            expected(closed_liq),
+            "a closed market must use market_closed_min_collateral_factor_for_liquidation"
+        );
+        assert_ne!(
+            reported,
+            expected(open_liq),
+            "regression guard: this is the open-market factor"
+        );
+    }
+
+    /// The `min_collateral_value` floor, which every other fixture here leaves at 0. When it
+    /// binds it replaces the factor-derived threshold entirely, and `check_collateral` returns
+    /// `MinCollateral` off it, so it is a boundary shape of its own. Asserted against the real
+    /// `check_liquidatable` rather than against a formula, on the same-token path.
+    #[test]
+    fn same_token_collateral_with_a_binding_min_collateral_value_floor() {
+        let mut m = Market::zeroed();
+        let shared = Pubkey::new_unique();
+        m.meta.market_token_mint = Pubkey::new_unique();
+        m.meta.index_token_mint = shared;
+        m.meta.long_token_mint = shared;
+        m.meta.short_token_mint = Pubkey::new_unique();
+        m.config.min_collateral_factor = USD / 100;
+        m.config.min_collateral_factor_for_liquidation = USD / 200;
+        // apply_factor(10_000 USD, 0.5%) is 50 USD, so this floor binds and takes over
+        m.config.min_collateral_value = 200 * USD;
+        m.config.order_fee_factor_for_positive_impact = USD / 1_000;
+        m.config.order_fee_factor_for_negative_impact = USD / 1_000;
+        m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
+        m.state
+            .pools
+            .open_interest_in_tokens_for_long
+            .pool
+            .long_token_amount = SIZE_TOKENS;
+        let market = MarketModel::from_parts(Arc::new(m), 0);
+
+        let mut pos = Position::zeroed();
+        pos.kind = 1;
+        pos.collateral_token = shared;
+        pos.state.size_in_usd = SIZE_USD;
+        pos.state.size_in_tokens = SIZE_TOKENS;
+        pos.state.collateral_amount = 50 * TOKEN;
+        let pm = PositionModel::new(market, Arc::new(pos)).expect("position model");
+
+        let at = |price: u128| {
+            let px = Price {
+                min: price,
+                max: price,
+            };
+            Prices {
+                index_token_price: px,
+                long_token_price: px,
+                short_token_price: Price {
+                    min: PRICE,
+                    max: PRICE,
+                },
+            }
+        };
+        let liquidatable = |price: u128| p_is_liquidatable(&pm, &at(price));
+
+        let spot = 20 * PRICE;
+        assert!(!liquidatable(spot), "fixture must start healthy");
+        assert!(liquidatable(PRICE), "must be liquidatable near zero");
+        let (mut lo, mut hi) = (PRICE, spot);
+        while hi - lo > 1 {
+            let mid = lo + (hi - lo) / 2;
+            if liquidatable(mid) {
+                lo = mid
+            } else {
+                hi = mid
+            }
+        }
+        let boundary = hi;
+
+        let reported = pm
+            .status(&at(spot))
+            .expect("status")
+            .liquidation_price
+            .expect("liquidation price");
+        let diff = reported.abs_diff(boundary);
+        assert!(
+            diff <= 8,
+            "floor case: reported {reported} should be the real boundary {boundary} (diff {diff})"
+        );
+    }
+
+    fn p_is_liquidatable(pm: &PositionModel, prices: &Prices<u128>) -> bool {
+        pm.check_liquidatable(prices, true, true)
+            .expect("check_liquidatable")
+            .is_some()
     }
 }
