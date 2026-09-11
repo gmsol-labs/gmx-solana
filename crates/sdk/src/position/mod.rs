@@ -155,16 +155,17 @@ impl PositionCalculations for PositionModel {
         // the market leaves it unset, and `position_params()` already resolves the
         // market-closed variant, so reading it here covers both.
         let params = self.market().position_params()?;
-        let min_collateral_factor = params.min_collateral_factor_for_liquidation();
+        let min_collateral_factor_for_liquidation = params.min_collateral_factor_for_liquidation();
         let min_collateral_value = params.min_collateral_value();
-        let liquidation_collateral_usd = gmsol_model::utils::apply_factor::<
-            _,
-            { constants::MARKET_DECIMALS },
-        >(position_size_in_usd, min_collateral_factor)
-        .max(Some(*min_collateral_value))
-        .ok_or(gmsol_model::Error::Computation(
-            "calculating liquidation collateral usd",
-        ))?;
+        let liquidation_collateral_usd =
+            gmsol_model::utils::apply_factor::<_, { constants::MARKET_DECIMALS }>(
+                position_size_in_usd,
+                min_collateral_factor_for_liquidation,
+            )
+            .max(Some(*min_collateral_value))
+            .ok_or(gmsol_model::Error::Computation(
+                "calculating liquidation collateral usd",
+            ))?;
 
         // When the collateral token *is* the index token, two of the terms below are functions of
         // the very price being solved for, so they cannot be held at spot:
@@ -189,9 +190,14 @@ impl PositionCalculations for PositionModel {
         let collateral_tracks_index =
             self.position().collateral_token == self.market_model().meta.index_token_mint;
         // The two amounts are added before either is subtracted, so an intermediate never
-        // underflows. A short whose collateral exceeds `size_in_tokens + funding` has no
-        // liquidation price on the way up at all, and the `checked_sub` returning `None` is the
-        // right answer there rather than a number.
+        // underflows. A short whose collateral exceeds `size_in_tokens + funding` gains more from
+        // a rising price than the position loses, so it has no liquidation price on the way up and
+        // the `checked_sub` returning `None` is the right answer for that direction.
+        //
+        // Not solved here: such a short can still liquidate on the way *down*, but only when
+        // `liquidation_collateral_usd` exceeds `size_in_usd`, which needs the `min_collateral_value`
+        // floor to sit above the whole notional. `None` understates that case rather than
+        // misreporting it, and it is left uncorrected along with the correlated-token case above.
         let denominator = if collateral_tracks_index {
             let collateral_amount = *self.collateral_amount();
             let funding_amount = *pending_funding_fee.amount();
@@ -304,8 +310,8 @@ mod tests {
     const COLLATERAL: u128 = 1_000 * TOKEN; // in the short token, priced at 1 USD
 
     /// A market carrying two *different* collateral factors, which is what every mainnet
-    /// market actually looks like.  is the one the
-    /// contract compares against on the liquidation path.
+    /// market actually looks like. `for_liquidation` is the one the contract compares
+    /// against on the liquidation path.
     fn market(min_collateral_factor: u128, for_liquidation: u128) -> MarketModel {
         let mut m = Market::zeroed();
         m.meta.market_token_mint = Pubkey::new_unique();
@@ -384,8 +390,7 @@ mod tests {
             expected(mcf),
             "regression guard: this is the value the old code produced"
         );
-        // 18.10 rather than 18.20, the worked example on the issue
-        // 18.10 rather than 18.20, matching the worked example on the issue
+        // 18.10 rather than 18.20, on the config of a real mainnet market
         assert_eq!(reported * 100 / PRICE, 1810, "expected 18.10");
         assert_eq!(expected(mcf) * 100 / PRICE, 1820, "the old code gave 18.20");
     }
@@ -476,7 +481,7 @@ mod tests {
             .liquidation_price
             .expect("price");
 
-        // one unit of slack for the integer division inside the formula
+        // a few units of slack for the integer divisions inside the formula
         let diff = reported.abs_diff(boundary);
         assert!(
             diff <= 8,
@@ -501,7 +506,7 @@ mod tests {
     /// the formula solves for a single price while the model picks `.min` for collateral and
     /// `.max`/`.min` for pnl by side, so a half-spread of error is inherent, and it shows up on
     /// positions this change does not touch as well. Measured before/after on this sweep, the
-    /// same-token cases went 0.945% -> 0.000% (long) and 0.955% -> 0.000% (short) at zero spread,
+    /// same-token cases went 0.934% -> 0.000% (long) and 0.945% -> 0.000% (short) at zero spread,
     /// while the different-token cases came out byte-identical, which is the control.
     #[test]
     fn sweep_reported_vs_real_boundary() {
@@ -701,5 +706,136 @@ mod tests {
             status.liquidation_price.is_some(),
             "liquidation_price went None with a non-zero fee: the same-token branch underflowed"
         );
+    }
+
+    /// A closed market resolves its threshold through
+    /// `min_collateral_factor_for_liquidation(is_closed())`, so three things have to line up:
+    /// the market's `Closed` flag, the `EnableMarketClosedParams` config flag, and the
+    /// market-closed factor itself. Both flag enums are private, so the bit indices are spelled
+    /// out here rather than imported.
+    #[test]
+    fn a_closed_market_uses_its_own_liquidation_factor() {
+        const MARKET_FLAG_CLOSED: u8 = 5;
+        const CONFIG_FLAG_ENABLE_MARKET_CLOSED_PARAMS: u8 = 2;
+
+        let open_liq = USD / 200;
+        let closed_liq = USD / 400; // different from both other factors, so the pick is unambiguous
+        let mut m = Market::zeroed();
+        m.meta.market_token_mint = Pubkey::new_unique();
+        m.meta.index_token_mint = Pubkey::new_unique();
+        m.meta.long_token_mint = Pubkey::new_unique();
+        m.meta.short_token_mint = Pubkey::new_unique();
+        m.config.min_collateral_factor = USD / 100;
+        m.config.min_collateral_factor_for_liquidation = open_liq;
+        m.config.market_closed_min_collateral_factor_for_liquidation = closed_liq;
+        m.config.min_collateral_value = 0;
+        m.flags.value = 1 << MARKET_FLAG_CLOSED;
+        m.config.flag.value = 1 << CONFIG_FLAG_ENABLE_MARKET_CLOSED_PARAMS;
+        m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
+        m.state
+            .pools
+            .open_interest_in_tokens_for_long
+            .pool
+            .long_token_amount = SIZE_TOKENS;
+        let market = MarketModel::from_parts(Arc::new(m), 0);
+
+        let reported = position(&market)
+            .status(&prices())
+            .expect("status")
+            .liquidation_price
+            .expect("liquidation price");
+
+        assert_eq!(
+            reported,
+            expected(closed_liq),
+            "a closed market must use market_closed_min_collateral_factor_for_liquidation"
+        );
+        assert_ne!(
+            reported,
+            expected(open_liq),
+            "regression guard: this is the open-market factor"
+        );
+    }
+
+    /// The `min_collateral_value` floor, which every other fixture here leaves at 0. When it
+    /// binds it replaces the factor-derived threshold entirely, and `check_collateral` returns
+    /// `MinCollateral` off it, so it is a boundary shape of its own. Asserted against the real
+    /// `check_liquidatable` rather than against a formula, on the same-token path.
+    #[test]
+    fn same_token_collateral_with_a_binding_min_collateral_value_floor() {
+        let mut m = Market::zeroed();
+        let shared = Pubkey::new_unique();
+        m.meta.market_token_mint = Pubkey::new_unique();
+        m.meta.index_token_mint = shared;
+        m.meta.long_token_mint = shared;
+        m.meta.short_token_mint = Pubkey::new_unique();
+        m.config.min_collateral_factor = USD / 100;
+        m.config.min_collateral_factor_for_liquidation = USD / 200;
+        // apply_factor(10_000 USD, 0.5%) is 50 USD, so this floor binds and takes over
+        m.config.min_collateral_value = 200 * USD;
+        m.config.order_fee_factor_for_positive_impact = USD / 1_000;
+        m.config.order_fee_factor_for_negative_impact = USD / 1_000;
+        m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
+        m.state
+            .pools
+            .open_interest_in_tokens_for_long
+            .pool
+            .long_token_amount = SIZE_TOKENS;
+        let market = MarketModel::from_parts(Arc::new(m), 0);
+
+        let mut pos = Position::zeroed();
+        pos.kind = 1;
+        pos.collateral_token = shared;
+        pos.state.size_in_usd = SIZE_USD;
+        pos.state.size_in_tokens = SIZE_TOKENS;
+        pos.state.collateral_amount = 50 * TOKEN;
+        let pm = PositionModel::new(market, Arc::new(pos)).expect("position model");
+
+        let at = |price: u128| {
+            let px = Price {
+                min: price,
+                max: price,
+            };
+            Prices {
+                index_token_price: px,
+                long_token_price: px,
+                short_token_price: Price {
+                    min: PRICE,
+                    max: PRICE,
+                },
+            }
+        };
+        let liquidatable = |price: u128| p_is_liquidatable(&pm, &at(price));
+
+        let spot = 20 * PRICE;
+        assert!(!liquidatable(spot), "fixture must start healthy");
+        assert!(liquidatable(PRICE), "must be liquidatable near zero");
+        let (mut lo, mut hi) = (PRICE, spot);
+        while hi - lo > 1 {
+            let mid = lo + (hi - lo) / 2;
+            if liquidatable(mid) {
+                lo = mid
+            } else {
+                hi = mid
+            }
+        }
+        let boundary = hi;
+
+        let reported = pm
+            .status(&at(spot))
+            .expect("status")
+            .liquidation_price
+            .expect("liquidation price");
+        let diff = reported.abs_diff(boundary);
+        assert!(
+            diff <= 8,
+            "floor case: reported {reported} should be the real boundary {boundary} (diff {diff})"
+        );
+    }
+
+    fn p_is_liquidatable(pm: &PositionModel, prices: &Prices<u128>) -> bool {
+        pm.check_liquidatable(prices, true, true)
+            .expect("check_liquidatable")
+            .is_some()
     }
 }
