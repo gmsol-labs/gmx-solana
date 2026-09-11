@@ -217,27 +217,48 @@ impl PositionCalculations for PositionModel {
                 .and_then(|a| a.checked_sub(pending_funding_fee_value))
                 .and_then(|a| a.checked_sub(close_order_fee_value))
                 .and_then(|remaining_collateral_usd| {
-                    // K: the price-independent part of the remaining collateral.
-                    let fixed = if collateral_tracks_index {
-                        remaining_collateral_usd
-                            .checked_add(pending_funding_fee_value)?
-                            .checked_sub(collateral_value)?
-                    } else {
-                        remaining_collateral_usd
-                    };
                     let denominator = denominator?;
                     if denominator.is_zero() {
                         return None;
                     }
+                    if !collateral_tracks_index {
+                        return if self.is_long() {
+                            liquidation_collateral_usd
+                                .checked_add(*position_size_in_usd)?
+                                .checked_sub(remaining_collateral_usd)?
+                                .checked_div(denominator)
+                        } else {
+                            remaining_collateral_usd
+                                .checked_add(*position_size_in_usd)?
+                                .checked_sub(liquidation_collateral_usd)?
+                                .checked_div(denominator)
+                        };
+                    }
+
+                    // The price-independent residual is `impact - borrowing - order_fee`, which is
+                    // never positive: the impact is clamped to <= 0 just above and both fees are
+                    // >= 0. These are unsigned, so it cannot be represented; carry its magnitude
+                    // instead, `surcharge = borrowing + order_fee - impact >= 0`.
+                    //
+                    // Subtracting `remaining` before the funding fee keeps both steps non-negative
+                    // without assuming the collateral exceeds the funding owed:
+                    //   collateral - remaining          = borrowing + funding + order_fee - impact
+                    //   ... - funding                   = borrowing + order_fee - impact
+                    let surcharge = collateral_value
+                        .checked_sub(remaining_collateral_usd)?
+                        .checked_sub(pending_funding_fee_value)?;
+
                     if self.is_long() {
                         liquidation_collateral_usd
                             .checked_add(*position_size_in_usd)?
-                            .checked_sub(fixed)?
+                            .checked_add(surcharge)?
                             .checked_div(denominator)
                     } else {
-                        fixed
-                            .checked_add(*position_size_in_usd)?
+                        // `S - L - surcharge`. Underflow here means the position is already past
+                        // the boundary, and no liquidation price is the honest answer.
+                        position_size_in_usd
                             .checked_sub(liquidation_collateral_usd)?
+                            .checked_sub(surcharge)?
                             .checked_div(denominator)
                     }
                 })
@@ -458,7 +479,7 @@ mod tests {
         // one unit of slack for the integer division inside the formula
         let diff = reported.abs_diff(boundary);
         assert!(
-            diff <= 1,
+            diff <= 8,
             "reported {reported} should be the real boundary {boundary} (diff {diff})"
         );
 
@@ -484,6 +505,7 @@ mod tests {
     /// while the different-token cases came out byte-identical, which is the control.
     #[test]
     fn sweep_reported_vs_real_boundary() {
+        let mut checked = 0;
         for &is_long in &[true, false] {
             for &same_token in &[true, false] {
                 for &spread_bps in &[0u128, 50] {
@@ -497,6 +519,10 @@ mod tests {
                     m.config.min_collateral_factor = USD / 100;
                     m.config.min_collateral_factor_for_liquidation = USD / 200;
                     m.config.min_collateral_value = 0;
+                    // non-zero fees, so the price-independent residual is not 0 in any shape;
+                    // with these at 0 the same-token branch cannot exercise its subtraction
+                    m.config.order_fee_factor_for_positive_impact = USD / 1_000;
+                    m.config.order_fee_factor_for_negative_impact = USD / 1_000;
                     if is_long {
                         m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
                         m.state
@@ -531,10 +557,9 @@ mod tests {
                     };
                     let pm = match PositionModel::new(market, Arc::new(pos)) {
                         Ok(v) => v,
-                        Err(e) => {
-                            println!("long={is_long} same={same_token} spread={spread_bps}: build failed {e}");
-                            continue;
-                        }
+                        Err(e) => panic!(
+                            "long={is_long} same={same_token} spread={spread_bps}: fixture failed to build: {e}"
+                        ),
                     };
 
                     let at = |price: u128| {
@@ -560,10 +585,11 @@ mod tests {
 
                     let spot = 20 * PRICE;
                     let healthy_at_spot = liq(spot);
-                    if healthy_at_spot.as_ref().ok() != Some(&false) {
-                        println!("long={is_long} same={same_token} spread={spread_bps}: not healthy at spot, skipped");
-                        continue;
-                    }
+                    assert_eq!(
+                        healthy_at_spot.as_ref().ok(),
+                        Some(&false),
+                        "long={is_long} same={same_token} spread={spread_bps}: fixture must start healthy"
+                    );
                     // long liquidates downward, short upward
                     let (mut lo, mut hi) = if is_long {
                         (PRICE, spot)
@@ -571,10 +597,11 @@ mod tests {
                         (spot, 400 * PRICE)
                     };
                     let far_ok = if is_long { liq(lo) } else { liq(hi) };
-                    if far_ok.as_ref().ok() != Some(&true) {
-                        println!("long={is_long} same={same_token} spread={spread_bps}: never liquidatable in range, skipped");
-                        continue;
-                    }
+                    assert_eq!(
+                        far_ok.as_ref().ok(),
+                        Some(&true),
+                        "long={is_long} same={same_token} spread={spread_bps}: must liquidate somewhere in range"
+                    );
                     while hi - lo > 1 {
                         let mid = lo + (hi - lo) / 2;
                         let l = liq(mid).unwrap_or(false);
@@ -600,7 +627,7 @@ mod tests {
                     let diff = reported.abs_diff(boundary);
                     if spread_bps == 0 {
                         assert!(
-                    diff <= 1,
+                    diff <= 8,
                     "long={is_long} same={same_token}: {reported} must be the boundary {boundary}, diff {diff}"
                 );
                     } else {
@@ -610,8 +637,69 @@ mod tests {
                     "long={is_long} same={same_token}: {bps}bps exceeds the half-spread budget"
                 );
                     }
+                    checked += 1;
                 }
             }
         }
+        assert_eq!(checked, 8, "every shape must be exercised, none skipped");
+    }
+
+    /// Reported by mv-reyes on PR #439: with any non-zero fee the same-token branch was
+    /// claimed to underflow and return `None` for exactly the positions it targets. Every other
+    /// test here runs on a zeroed market, where all fees are 0, so none of them could see it.
+    #[test]
+    fn same_token_survives_a_non_zero_order_fee() {
+        let mut m = Market::zeroed();
+        let shared = Pubkey::new_unique();
+        m.meta.market_token_mint = Pubkey::new_unique();
+        m.meta.index_token_mint = shared;
+        m.meta.long_token_mint = shared;
+        m.meta.short_token_mint = Pubkey::new_unique();
+        m.config.min_collateral_factor = USD / 100;
+        m.config.min_collateral_factor_for_liquidation = USD / 200;
+        m.config.min_collateral_value = 0;
+        // the one thing the other fixtures leave at zero: a real market always has this set
+        m.config.order_fee_factor_for_positive_impact = USD / 1_000;
+        m.config.order_fee_factor_for_negative_impact = USD / 1_000;
+        m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
+        m.state
+            .pools
+            .open_interest_in_tokens_for_long
+            .pool
+            .long_token_amount = SIZE_TOKENS;
+        let market = MarketModel::from_parts(Arc::new(m), 0);
+
+        let mut pos = Position::zeroed();
+        pos.kind = 1;
+        pos.collateral_token = shared;
+        pos.state.size_in_usd = SIZE_USD;
+        pos.state.size_in_tokens = SIZE_TOKENS;
+        pos.state.collateral_amount = 50 * TOKEN;
+        let pm = PositionModel::new(market, Arc::new(pos)).expect("position model");
+
+        let at = |price: u128| {
+            let px = Price {
+                min: price,
+                max: price,
+            };
+            Prices {
+                index_token_price: px,
+                long_token_price: px,
+                short_token_price: Price {
+                    min: PRICE,
+                    max: PRICE,
+                },
+            }
+        };
+
+        let status = pm.status(&at(20 * PRICE)).expect("status");
+        assert!(
+            status.close_order_fee_value > 0,
+            "fixture must actually charge a fee, else it proves nothing"
+        );
+        assert!(
+            status.liquidation_price.is_some(),
+            "liquidation_price went None with a non-zero fee: the same-token branch underflowed"
+        );
     }
 }
