@@ -166,6 +166,48 @@ impl PositionCalculations for PositionModel {
             "calculating liquidation collateral usd",
         ))?;
 
+        // When the collateral token *is* the index token, two of the terms below are functions of
+        // the very price being solved for, so they cannot be held at spot:
+        //
+        //   collateral_value        = collateral_amount        * collateral_token_price
+        //   pending_funding_fee     = pending_funding_amount   * collateral_token_price
+        //
+        // Everything else is price-independent: the borrowing fee is `apply_factor(size_in_usd, ..)`
+        // and the close order fee is `apply_factor(size_delta_usd, ..)`, both plain USD, and the
+        // price impact is computed off pool balances. So the boundary stays linear in `P` and the
+        // correction is entirely in the denominator:
+        //
+        //   long:  P = (liq + size_in_usd - K) / (size_in_tokens + collateral_amount - funding)
+        //   short: P = (K + size_in_usd - liq) / (size_in_tokens - collateral_amount + funding)
+        //
+        // where K is what remains of `remaining_collateral_usd` once the two price-dependent terms
+        // are taken back out. With a different collateral token the extra terms are zero and this
+        // reduces to the original formula.
+        //
+        // Correlated-but-not-identical tokens are deliberately left uncorrected: that error decays
+        // to zero as the position approaches liquidation and the UI recomputes continuously.
+        let collateral_tracks_index =
+            self.position().collateral_token == self.market_model().meta.index_token_mint;
+        // The two amounts are added before either is subtracted, so an intermediate never
+        // underflows. A short whose collateral exceeds `size_in_tokens + funding` has no
+        // liquidation price on the way up at all, and the `checked_sub` returning `None` is the
+        // right answer there rather than a number.
+        let denominator = if collateral_tracks_index {
+            let collateral_amount = *self.collateral_amount();
+            let funding_amount = *pending_funding_fee.amount();
+            if self.is_long() {
+                position_size_in_tokens
+                    .checked_add(collateral_amount)
+                    .and_then(|d| d.checked_sub(funding_amount))
+            } else {
+                position_size_in_tokens
+                    .checked_add(funding_amount)
+                    .and_then(|d| d.checked_sub(collateral_amount))
+            }
+        } else {
+            Some(*position_size_in_tokens)
+        };
+
         let liquidation_price = if position_size_in_tokens.is_zero() {
             None
         } else {
@@ -175,16 +217,28 @@ impl PositionCalculations for PositionModel {
                 .and_then(|a| a.checked_sub(pending_funding_fee_value))
                 .and_then(|a| a.checked_sub(close_order_fee_value))
                 .and_then(|remaining_collateral_usd| {
+                    // K: the price-independent part of the remaining collateral.
+                    let fixed = if collateral_tracks_index {
+                        remaining_collateral_usd
+                            .checked_add(pending_funding_fee_value)?
+                            .checked_sub(collateral_value)?
+                    } else {
+                        remaining_collateral_usd
+                    };
+                    let denominator = denominator?;
+                    if denominator.is_zero() {
+                        return None;
+                    }
                     if self.is_long() {
                         liquidation_collateral_usd
                             .checked_add(*position_size_in_usd)?
-                            .checked_sub(remaining_collateral_usd)?
-                            .checked_div(*position_size_in_tokens)
+                            .checked_sub(fixed)?
+                            .checked_div(denominator)
                     } else {
-                        remaining_collateral_usd
+                        fixed
                             .checked_add(*position_size_in_usd)?
                             .checked_sub(liquidation_collateral_usd)?
-                            .checked_div(*position_size_in_tokens)
+                            .checked_div(denominator)
                     }
                 })
         };
@@ -324,5 +378,99 @@ mod tests {
             .liquidation_price
             .expect("liquidation price");
         assert_eq!(reported, expected(mcf));
+    }
+
+    /// A market whose index token IS its long token, which is the shape the correction exists
+    /// for. The assertion is not against a formula of my own: it binary-searches the real
+    /// `check_liquidatable(.., true, true)` and requires the reported price to be that boundary.
+    #[test]
+    fn same_token_collateral_matches_the_real_liquidation_boundary() {
+        let liq = USD / 200;
+        let mut m = Market::zeroed();
+        let shared = Pubkey::new_unique();
+        m.meta.market_token_mint = Pubkey::new_unique();
+        m.meta.index_token_mint = shared;
+        m.meta.long_token_mint = shared; // index == long
+        m.meta.short_token_mint = Pubkey::new_unique();
+        m.config.min_collateral_factor = USD / 100;
+        m.config.min_collateral_factor_for_liquidation = liq;
+        m.config.min_collateral_value = 0;
+        m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
+        m.state
+            .pools
+            .open_interest_in_tokens_for_long
+            .pool
+            .long_token_amount = SIZE_TOKENS;
+        let market = MarketModel::from_parts(Arc::new(m), 0);
+
+        let mut pos = Position::zeroed();
+        pos.kind = 1; // Long
+        pos.collateral_token = shared; // collateral IS the index token
+        pos.state.size_in_usd = SIZE_USD;
+        pos.state.size_in_tokens = SIZE_TOKENS;
+        let collateral = 50 * TOKEN; // 1 000 USD at spot 20, in the index token itself
+        pos.state.collateral_amount = collateral;
+        let p = PositionModel::new(market, Arc::new(pos)).expect("position model");
+
+        // both index and collateral prices move together: they are the same mint
+        let at = |price: u128| {
+            let px = Price {
+                min: price,
+                max: price,
+            };
+            Prices {
+                index_token_price: px,
+                long_token_price: px,
+                short_token_price: Price {
+                    min: PRICE,
+                    max: PRICE,
+                },
+            }
+        };
+        let liquidatable = |price: u128| {
+            p.check_liquidatable(&at(price), true, true)
+                .expect("check_liquidatable")
+                .is_some()
+        };
+
+        let spot = 20 * PRICE;
+        assert!(!liquidatable(spot), "position must start healthy");
+        assert!(liquidatable(PRICE), "must be liquidatable near zero");
+
+        // lowest price at which the contract still considers the position healthy
+        let (mut lo, mut hi) = (PRICE, spot);
+        while hi - lo > 1 {
+            let mid = lo + (hi - lo) / 2;
+            if liquidatable(mid) {
+                lo = mid
+            } else {
+                hi = mid
+            }
+        }
+        let boundary = hi;
+
+        let reported = p
+            .status(&at(spot))
+            .expect("status")
+            .liquidation_price
+            .expect("price");
+
+        // one unit of slack for the integer division inside the formula
+        let diff = reported.abs_diff(boundary);
+        assert!(
+            diff <= 1,
+            "reported {reported} should be the real boundary {boundary} (diff {diff})"
+        );
+
+        // and the old, spot-pinned formula would have been materially lower
+        let pinned = {
+            let threshold = SIZE_USD / USD * liq;
+            let collateral_value = collateral * spot;
+            (threshold + SIZE_USD - collateral_value) / SIZE_TOKENS
+        };
+        assert!(
+            pinned < boundary,
+            "regression guard: the spot-pinned value {pinned} understated the boundary {boundary}"
+        );
     }
 }

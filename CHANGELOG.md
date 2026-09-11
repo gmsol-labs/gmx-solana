@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - sdk(sdk): Fixed `PositionStatus.liquidation_price`, which built its threshold from `min_collateral_factor` while a liquidation order is checked against `min_collateral_factor_for_liquidation`. The two differ on every mainnet market, so the reported price was wrong for every position regardless of collateral token; it read higher than reality for a long, warning earlier than the contract acts. The market-closed variant is covered too, since `position_params()` already resolves it.
+- sdk(sdk): Fixed `PositionStatus.liquidation_price` when the collateral token is the market index token, where it held `collateral_value` and the pending funding fee at spot while solving for the very price both depend on. The correction is in the denominator only, since every other term is a plain USD amount; positions collateralised in a different token are unaffected. Correlated but non-identical tokens are deliberately left uncorrected, as that error decays to zero on approach to liquidation.
 - programs(store): Reallocated the token map account with `zero_init` enabled.
 - programs(store): Forbade no-op swaps.
 - model: Treated a decrease that zeroes `size_in_tokens` as a full close.
