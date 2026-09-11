@@ -473,4 +473,145 @@ mod tests {
             "regression guard: the spot-pinned value {pinned} understated the boundary {boundary}"
         );
     }
+
+    /// Sweep every shape against the REAL check_liquidatable boundary.
+    ///
+    /// At a zero oracle spread the reported price must BE the boundary. With a spread it cannot:
+    /// the formula solves for a single price while the model picks `.min` for collateral and
+    /// `.max`/`.min` for pnl by side, so a half-spread of error is inherent, and it shows up on
+    /// positions this change does not touch as well. Measured before/after on this sweep, the
+    /// same-token cases went 0.945% -> 0.000% (long) and 0.955% -> 0.000% (short) at zero spread,
+    /// while the different-token cases came out byte-identical, which is the control.
+    #[test]
+    fn sweep_reported_vs_real_boundary() {
+        for &is_long in &[true, false] {
+            for &same_token in &[true, false] {
+                for &spread_bps in &[0u128, 50] {
+                    let mut m = Market::zeroed();
+                    let shared = Pubkey::new_unique();
+                    let other = Pubkey::new_unique();
+                    m.meta.market_token_mint = Pubkey::new_unique();
+                    m.meta.index_token_mint = shared;
+                    m.meta.long_token_mint = shared;
+                    m.meta.short_token_mint = other;
+                    m.config.min_collateral_factor = USD / 100;
+                    m.config.min_collateral_factor_for_liquidation = USD / 200;
+                    m.config.min_collateral_value = 0;
+                    if is_long {
+                        m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
+                        m.state
+                            .pools
+                            .open_interest_in_tokens_for_long
+                            .pool
+                            .long_token_amount = SIZE_TOKENS;
+                    } else {
+                        m.state
+                            .pools
+                            .open_interest_for_short
+                            .pool
+                            .short_token_amount = SIZE_USD;
+                        m.state
+                            .pools
+                            .open_interest_in_tokens_for_short
+                            .pool
+                            .short_token_amount = SIZE_TOKENS;
+                    }
+                    let market = MarketModel::from_parts(Arc::new(m), 0);
+
+                    let mut pos = Position::zeroed();
+                    pos.kind = if is_long { 1 } else { 2 };
+                    pos.collateral_token = if same_token { shared } else { other };
+                    pos.state.size_in_usd = SIZE_USD;
+                    pos.state.size_in_tokens = SIZE_TOKENS;
+                    // 1 000 USD of collateral either way: 50 index tokens at 20, or 1 000 of the other
+                    pos.state.collateral_amount = if same_token {
+                        50 * TOKEN
+                    } else {
+                        1_000 * TOKEN
+                    };
+                    let pm = match PositionModel::new(market, Arc::new(pos)) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            println!("long={is_long} same={same_token} spread={spread_bps}: build failed {e}");
+                            continue;
+                        }
+                    };
+
+                    let at = |price: u128| {
+                        let half = price * spread_bps / 20_000;
+                        let px = Price {
+                            min: price - half,
+                            max: price + half,
+                        };
+                        let one = Price {
+                            min: PRICE,
+                            max: PRICE,
+                        };
+                        Prices {
+                            index_token_price: px,
+                            long_token_price: px,
+                            short_token_price: one,
+                        }
+                    };
+                    let liq = |price: u128| {
+                        pm.check_liquidatable(&at(price), true, true)
+                            .map(|r| r.is_some())
+                    };
+
+                    let spot = 20 * PRICE;
+                    let healthy_at_spot = liq(spot);
+                    if healthy_at_spot.as_ref().ok() != Some(&false) {
+                        println!("long={is_long} same={same_token} spread={spread_bps}: not healthy at spot, skipped");
+                        continue;
+                    }
+                    // long liquidates downward, short upward
+                    let (mut lo, mut hi) = if is_long {
+                        (PRICE, spot)
+                    } else {
+                        (spot, 400 * PRICE)
+                    };
+                    let far_ok = if is_long { liq(lo) } else { liq(hi) };
+                    if far_ok.as_ref().ok() != Some(&true) {
+                        println!("long={is_long} same={same_token} spread={spread_bps}: never liquidatable in range, skipped");
+                        continue;
+                    }
+                    while hi - lo > 1 {
+                        let mid = lo + (hi - lo) / 2;
+                        let l = liq(mid).unwrap_or(false);
+                        if is_long {
+                            if l {
+                                lo = mid
+                            } else {
+                                hi = mid
+                            }
+                        } else if l {
+                            hi = mid
+                        } else {
+                            lo = mid
+                        }
+                    }
+                    let boundary = if is_long { hi } else { lo };
+
+                    let reported = pm
+                        .status(&at(spot))
+                        .expect("status")
+                        .liquidation_price
+                        .expect("liquidation price");
+                    let diff = reported.abs_diff(boundary);
+                    if spread_bps == 0 {
+                        assert!(
+                    diff <= 1,
+                    "long={is_long} same={same_token}: {reported} must be the boundary {boundary}, diff {diff}"
+                );
+                    } else {
+                        let bps = diff * 10_000 / boundary;
+                        assert!(
+                    bps <= 50,
+                    "long={is_long} same={same_token}: {bps}bps exceeds the half-spread budget"
+                );
+                    }
+                }
+            }
+        }
+    }
 }
