@@ -148,8 +148,14 @@ impl PositionCalculations for PositionModel {
         };
 
         // liquidation price
+        //
+        // The threshold must come from `min_collateral_factor_for_liquidation`, which is what
+        // `check_liquidatable(.., for_liquidation = true)` compares against on the liquidation
+        // path (`crates/model/src/position.rs`). It falls back to `min_collateral_factor` when
+        // the market leaves it unset, and `position_params()` already resolves the
+        // market-closed variant, so reading it here covers both.
         let params = self.market().position_params()?;
-        let min_collateral_factor = params.min_collateral_factor();
+        let min_collateral_factor = params.min_collateral_factor_for_liquidation();
         let min_collateral_value = params.min_collateral_value();
         let liquidation_collateral_usd = gmsol_model::utils::apply_factor::<
             _,
@@ -196,5 +202,127 @@ impl PositionCalculations for PositionModel {
             leverage,
             liquidation_price,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gmsol_model::price::Price;
+    use gmsol_programs::{
+        anchor_lang::prelude::Pubkey,
+        bytemuck::Zeroable,
+        gmsol_store::accounts::{Market, Position},
+        model::MarketModel,
+    };
+    use std::sync::Arc;
+
+    // Units. A USD value carries MARKET_DECIMALS (1e20); a token amount carries
+    // MARKET_TOKEN_DECIMALS (1e9); a price is scaled so amount * price lands back in USD,
+    // i.e. 1e11 per 1 USD. Getting this wrong overflows u128 inside collateral_value.
+    const USD: u128 = constants::MARKET_USD_UNIT;
+    const PRICE: u128 = constants::MARKET_USD_TO_AMOUNT_DIVISOR;
+    const TOKEN: u128 = 10u128.pow(constants::MARKET_TOKEN_DECIMALS as u32);
+
+    const SIZE_USD: u128 = 10_000 * USD;
+    const SIZE_TOKENS: u128 = 500 * TOKEN; // entry 20 USD
+    const COLLATERAL: u128 = 1_000 * TOKEN; // in the short token, priced at 1 USD
+
+    /// A market carrying two *different* collateral factors, which is what every mainnet
+    /// market actually looks like.  is the one the
+    /// contract compares against on the liquidation path.
+    fn market(min_collateral_factor: u128, for_liquidation: u128) -> MarketModel {
+        let mut m = Market::zeroed();
+        m.meta.market_token_mint = Pubkey::new_unique();
+        m.meta.index_token_mint = Pubkey::new_unique();
+        m.meta.long_token_mint = Pubkey::new_unique();
+        m.meta.short_token_mint = Pubkey::new_unique();
+        m.config.min_collateral_factor = min_collateral_factor;
+        m.config.min_collateral_factor_for_liquidation = for_liquidation;
+        m.config.min_collateral_value = 0;
+        // A zeroed market has no open interest, and closing the whole position underflows the
+        // pool while computing price impact. Seed both long open-interest pools with the
+        // position itself so the close nets to zero.
+        m.state.pools.open_interest_for_long.pool.long_token_amount = SIZE_USD;
+        m.state
+            .pools
+            .open_interest_in_tokens_for_long
+            .pool
+            .long_token_amount = SIZE_TOKENS;
+        MarketModel::from_parts(Arc::new(m), 0)
+    }
+
+    /// Long, collateralised in the SHORT token so the collateral value does not move with the
+    /// index price; that isolates the factor from the separate same-token-collateral effect.
+    fn position(market: &MarketModel) -> PositionModel {
+        let mut p = Position::zeroed();
+        p.kind = 1; // Long
+        p.collateral_token = market.meta.short_token_mint;
+        p.state.size_in_usd = SIZE_USD;
+        p.state.size_in_tokens = SIZE_TOKENS;
+        p.state.collateral_amount = COLLATERAL;
+        PositionModel::new(market.clone(), Arc::new(p)).expect("position model")
+    }
+
+    fn prices() -> Prices<u128> {
+        let one = Price {
+            min: PRICE,
+            max: PRICE,
+        };
+        let index = Price {
+            min: 20 * PRICE,
+            max: 20 * PRICE,
+        };
+        Prices {
+            index_token_price: index,
+            long_token_price: one,
+            short_token_price: one,
+        }
+    }
+
+    /// long boundary: (threshold + size_in_usd - collateral_value) / size_in_tokens,
+    /// with no fees or price impact on a zeroed market.
+    fn expected(factor: u128) -> u128 {
+        let threshold = SIZE_USD / USD * factor;
+        let collateral_value = COLLATERAL * PRICE;
+        (threshold + SIZE_USD - collateral_value) / SIZE_TOKENS
+    }
+
+    #[test]
+    fn liquidation_price_uses_the_liquidation_factor_not_the_plain_one() {
+        // 1% vs 0.5%, the ratio 89 of 101 mainnet markets carry.
+        let mcf = USD / 100;
+        let liq = USD / 200;
+        let reported = position(&market(mcf, liq))
+            .status(&prices())
+            .expect("status")
+            .liquidation_price
+            .expect("liquidation price");
+
+        assert_eq!(
+            reported,
+            expected(liq),
+            "liquidation_price must be built from min_collateral_factor_for_liquidation"
+        );
+        assert_ne!(
+            reported,
+            expected(mcf),
+            "regression guard: this is the value the old code produced"
+        );
+        // 18.10 rather than 18.20, the worked example on the issue
+        // 18.10 rather than 18.20, matching the worked example on the issue
+        assert_eq!(reported * 100 / PRICE, 1810, "expected 18.10");
+        assert_eq!(expected(mcf) * 100 / PRICE, 1820, "the old code gave 18.20");
+    }
+
+    #[test]
+    fn falls_back_to_min_collateral_factor_when_the_market_leaves_it_unset() {
+        let mcf = USD / 100;
+        let reported = position(&market(mcf, 0)) // 0 means unset; the accessor falls back
+            .status(&prices())
+            .expect("status")
+            .liquidation_price
+            .expect("liquidation price");
+        assert_eq!(reported, expected(mcf));
     }
 }
