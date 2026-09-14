@@ -13,6 +13,9 @@ pub mod position;
 /// Builder for the `set_builder_fee` instruction.
 pub mod set_builder_fee;
 
+/// Builder for the `settle_builder_fee` instruction.
+pub mod settle_builder_fee;
+
 /// Min execution lamports for order.
 pub const MIN_EXECUTION_LAMPORTS_FOR_ORDER: u64 = 300_000;
 
@@ -23,5 +26,6 @@ pub use self::{
     },
     position::PreparePosition,
     set_builder_fee::{SetBuilderFee, SetBuilderFeeHint},
+    settle_builder_fee::{SettleBuilderFee, SettleBuilderFeeHint},
     update::{UpdateOrder, UpdateOrderHint, UpdateOrderParams},
 };

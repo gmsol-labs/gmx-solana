@@ -12,6 +12,10 @@ pub mod order;
 /// Instruction builders related to user.
 pub mod user;
 
+/// Instruction builders related to the builder fee, except the order-scoped
+/// `set_builder_fee`, which lives under [`order`].
+pub mod builder_fee;
+
 /// Instruction builders related to position.
 pub mod position;
 
