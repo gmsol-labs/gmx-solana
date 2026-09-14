@@ -407,7 +407,7 @@ mod tests {
     }
 
     /// A market whose index token IS its long token, which is the shape the correction exists
-    /// for. The assertion is not against a formula of my own: it binary-searches the real
+    /// for. The assertion does not restate the formula under test: it binary-searches the real
     /// `check_liquidatable(.., true, true)` and requires the reported price to be that boundary.
     #[test]
     fn same_token_collateral_matches_the_real_liquidation_boundary() {
