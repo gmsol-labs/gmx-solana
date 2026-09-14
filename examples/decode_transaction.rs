@@ -136,9 +136,9 @@ async fn main() -> gmsol_sdk::Result<()> {
             .get_transaction_with_config(
                 &signature,
                 RpcTransactionConfig {
-                    encoding: Some(UiTransactionEncoding::Base58),
+                    encoding: Some(UiTransactionEncoding::Base64),
                     commitment: None,
-                    max_supported_transaction_version: Some(0),
+                    max_supported_transaction_version: Some(1),
                 },
             )
             .await

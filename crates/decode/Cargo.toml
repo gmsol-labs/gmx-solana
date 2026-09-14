@@ -29,6 +29,10 @@ solana-transaction-status-client-types = { workspace = true }
 
 bs58 = { workspace = true, optional = true }
 
+[dev-dependencies]
+bincode = { workspace = true }
+serde_json = { workspace = true }
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

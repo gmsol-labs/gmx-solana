@@ -1284,7 +1284,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             program_id,
             &event_authority,
             commitment,
-            Some(0),
+            Some(1),
         )
         .try_filter_map(|event| {
             let decoded = event
@@ -1331,7 +1331,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             self.store_program_id(),
             &self.store_event_authority(),
             commitment,
-            Some(0),
+            Some(1),
         )
         .try_filter(|events| std::future::ready(!events.value().events.is_empty()))
         .and_then(|encoded| {

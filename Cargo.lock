@@ -2378,11 +2378,13 @@ version = "0.11.0"
 dependencies = [
  "anchor-lang",
  "base64 0.22.1",
+ "bincode",
  "bs58 0.5.1",
  "bytemuck",
  "cfg-if",
  "gmsol-programs",
  "paste",
+ "serde_json",
  "solana-sdk",
  "solana-transaction-status-client-types",
  "thiserror 1.0.69",
