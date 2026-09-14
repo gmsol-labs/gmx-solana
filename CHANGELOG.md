@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- sdk(decode): Added `TransactionDecoder::decoded_transaction_any_version` for complete legacy/v0/v1 binary decoding with RPC meta, using Solana 2.1.21 types. Existing transaction visitors and CPI event APIs now accept v1; the original `decoded_transaction()` and its public result type remain legacy/v0-compatible and unchanged. SDK event subscriptions and history requests accept versions through v1. No v1 transaction construction or sending is added.
 - programs(store): Added the permissionless `set_builder_fee_factor` instruction, with which a User Account owner advertises a builder fee factor on their own account, bounded by the store's `MaxBuilderFeeFactor` (which reads `0` until a config keeper raises it). Emits a `BuilderFeeFactorSet` event.
 - sdk(sdk): Added `CreateOrderBuilder::prepare_final_output_token_escrow`, opting an increase order into providing its final output token escrow at creation. The escrow is what a builder fee would be paid out of, so an increase order created without it cannot be given one. Off by default, leaving the previous behavior unchanged.
 - sdk(sdk): Added `UserOps::set_builder_fee_factor` for building the instruction.

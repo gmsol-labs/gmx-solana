@@ -3,6 +3,9 @@
 pub mod solana_decoder;
 
 #[cfg(feature = "solana-decoder")]
+mod v1_codec;
+
+#[cfg(feature = "solana-decoder")]
 pub use solana_decoder::{CPIEventFilter, CPIEvents, TransactionDecoder};
 
 use crate::{AccountAccess, DecodeError, Visitor};

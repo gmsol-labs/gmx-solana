@@ -138,7 +138,7 @@ async fn main() -> gmsol_sdk::Result<()> {
                 RpcTransactionConfig {
                     encoding: Some(UiTransactionEncoding::Base58),
                     commitment: None,
-                    max_supported_transaction_version: Some(0),
+                    max_supported_transaction_version: Some(1),
                 },
             )
             .await
