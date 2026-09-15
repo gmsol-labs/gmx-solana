@@ -11,16 +11,28 @@ use crate::{
         callback::Callback,
         order::{
             CreateOrder, CreateOrderHint, CreateOrderKind, CreateOrderParams, PreparePosition,
+            SetBuilderFee, SetBuilderFeeHint,
         },
         token::{PrepareTokenAccounts, WrapNative},
         user::PrepareUser,
-        StoreProgram,
+        utils::generate_nonce,
+        NonceBytes, StoreProgram,
     },
     js::instructions::BuildTransactionOptions,
     serde::StringPubkey,
 };
 
 use super::{TransactionGroup, TransactionGroupOptions};
+
+/// Options for attaching a `set_builder_fee` instruction to a single order,
+/// keyed by the order's market token inside [`CreateOrderOptions::set_builder_fee`].
+#[derive(Debug, Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct SetBuilderFeeOptions {
+    pub builder: StringPubkey,
+    pub expected_factor: u128,
+    pub final_output_token: StringPubkey,
+}
 
 /// Options for creating orders.
 #[derive(Debug, Serialize, Deserialize, Tsify)]
@@ -54,6 +66,15 @@ pub struct CreateOrderOptions {
     force_create_positions_in_parallel: Option<bool>,
     #[serde(default)]
     force_create_positions: Option<bool>,
+    /// Per-order `set_builder_fee` options, keyed by market token.
+    ///
+    /// When an entry is present for an order's market token, a `set_builder_fee`
+    /// instruction is appended in the same transaction group (after all create-order
+    /// instructions). The order address is derived internally, so the `nonce` field
+    /// in [`CreateOrderParams`] is optional here. Set it if you need the order
+    /// address before sending; the returned `TransactionGroup` does not expose it.
+    #[serde(default)]
+    set_builder_fee: HashMap<StringPubkey, SetBuilderFeeOptions>,
 }
 
 /// Create transaction builder for create-order ixs.
@@ -91,6 +112,8 @@ pub fn create_orders_builder(
         options.force_create_positions.unwrap_or_default() || force_create_positions_in_parallel;
 
     let mut positions = HashMap::<StringPubkey, _>::default();
+    let mut set_builder_fees: Vec<AtomicGroup> = Vec::new();
+
     let create = orders
         .into_iter()
         .map(|params| {
@@ -102,6 +125,9 @@ pub fn create_orders_builder(
             let program = options.program.clone().unwrap_or_default();
             let payer = options.payer;
             let collateral_or_swap_out_token = options.collateral_or_swap_out_token;
+
+            let nonce: NonceBytes = params.nonce.unwrap_or_else(generate_nonce);
+
             if !kind.is_swap() {
                 tokens.insert(hint.long_token);
                 tokens.insert(hint.short_token);
@@ -124,6 +150,21 @@ pub fn create_orders_builder(
                 }
             }
 
+            if let Some(sbf_opts) = options.set_builder_fee.get(market_token) {
+                let order = program.find_order_address(&payer.0, &nonce);
+                let sbf = SetBuilderFee::builder()
+                    .program(program.clone())
+                    .payer(payer)
+                    .order(order)
+                    .builder(sbf_opts.builder)
+                    .expected_factor(sbf_opts.expected_factor)
+                    .build()
+                    .into_atomic_group(&SetBuilderFeeHint {
+                        final_output_token: sbf_opts.final_output_token,
+                    })?;
+                set_builder_fees.push(sbf);
+            }
+
             let amount = params.amount;
             let create = CreateOrder::builder()
                 .program(program)
@@ -131,6 +172,7 @@ pub fn create_orders_builder(
                 .kind(kind)
                 .collateral_or_swap_out_token(collateral_or_swap_out_token)
                 .params(params)
+                .nonce(nonce)
                 .pay_token(options.pay_token)
                 .receive_token(options.receive_token)
                 .swap_path(options.swap_path.clone().unwrap_or_default())
@@ -166,6 +208,7 @@ pub fn create_orders_builder(
         tokens,
         positions,
         create,
+        set_builder_fees,
         transaction_group: options.transaction_group,
         build: BuildTransactionOptions {
             recent_blockhash: options.recent_blockhash,
@@ -182,6 +225,7 @@ pub struct CreateOrdersBuilder {
     tokens: HashSet<StringPubkey>,
     positions: HashMap<StringPubkey, AtomicGroup>,
     create: Vec<AtomicGroup>,
+    set_builder_fees: Vec<AtomicGroup>,
     transaction_group: TransactionGroupOptions,
     build: BuildTransactionOptions,
 }
@@ -215,6 +259,7 @@ impl CreateOrdersBuilder {
                 .add(prepare)?
                 .add(self.positions.into_values().collect::<ParallelGroup>())?
                 .add(self.create.into_iter().collect::<ParallelGroup>())?
+                .add(self.set_builder_fees.into_iter().collect::<ParallelGroup>())?
                 .optimize(false),
             &build.recent_blockhash,
             build.compute_unit_price_micro_lamports,
@@ -237,6 +282,7 @@ impl CreateOrdersBuilder {
             self.positions.entry(position).or_insert(ag);
         }
         self.create.append(&mut other.create);
+        self.set_builder_fees.append(&mut other.set_builder_fees);
         Ok(())
     }
 }

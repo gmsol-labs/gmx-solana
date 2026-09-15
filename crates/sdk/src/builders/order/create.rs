@@ -156,6 +156,16 @@ pub struct CreateOrderParams {
     #[cfg_attr(serde, serde(default))]
     #[builder(default, setter(strip_option))]
     pub valid_from_ts: Option<i64>,
+    /// Nonce that pins the order address.
+    ///
+    /// When provided the address is deterministic; a follow-on `set_builder_fee`
+    /// instruction in the same transaction can use it as an account.
+    /// When absent a random nonce is generated inside the builder.
+    ///
+    /// [`CreateOrder::nonce`] takes precedence over this field when both are set.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default, setter(strip_option, into))]
+    pub nonce: Option<NonceBytes>,
 }
 
 /// Builder for the `create_order` instruction.
@@ -275,7 +285,10 @@ impl IntoAtomicGroup for CreateOrder {
         let mut insts = AtomicGroup::new(&owner);
 
         let receiver = self.receiver.as_deref().copied().unwrap_or(owner);
-        let nonce = self.nonce.unwrap_or_else(generate_nonce);
+        let nonce = self
+            .nonce
+            .or(self.params.nonce)
+            .unwrap_or_else(generate_nonce);
         let order = self.program.find_order_address(&owner, &nonce);
         let token_program_id = anchor_spl::token::ID;
 
@@ -540,6 +553,52 @@ mod tests {
                 None,
                 default_before_sign,
             )?;
+        Ok(())
+    }
+
+    /// A nonce supplied through [`CreateOrderParams`] has to reach the instruction.
+    /// [`CreateOrder`] carries its own `nonce` field, so a params-borne nonce that is
+    /// silently dropped still produces a valid-looking order, just at an address the
+    /// caller never chose, which breaks any `set_builder_fee` built against it.
+    #[test]
+    fn params_nonce_pins_the_order_address() -> crate::Result<()> {
+        let long_token = Pubkey::new_unique();
+        let short_token = Pubkey::new_unique();
+        let payer = Pubkey::new_unique();
+        let nonce = generate_nonce();
+
+        let params = CreateOrderParams::builder()
+            .market_token(Pubkey::new_unique())
+            .is_long(true)
+            .size(1_000 * crate::constants::MARKET_USD_UNIT)
+            .nonce(nonce)
+            .build();
+
+        let create = CreateOrder::builder()
+            .payer(payer)
+            .kind(CreateOrderKind::MarketIncrease)
+            .collateral_or_swap_out_token(long_token)
+            .params(params)
+            .swap_path([Pubkey::new_unique().into()])
+            .build();
+        let program = create.program.clone();
+
+        let group = create.into_atomic_group(
+            &CreateOrderHint::builder()
+                .long_token(long_token)
+                .short_token(short_token)
+                .build(),
+        )?;
+        let keys: Vec<Pubkey> = group
+            .instructions_with_options(Default::default())
+            .filter(|ix| ix.program_id == program.id.0)
+            .flat_map(|ix| ix.accounts.iter().map(|m| m.pubkey).collect::<Vec<_>>())
+            .collect();
+
+        assert!(
+            keys.contains(&program.find_order_address(&payer, &nonce)),
+            "order address was not derived from `params.nonce`"
+        );
         Ok(())
     }
 
