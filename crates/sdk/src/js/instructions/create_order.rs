@@ -70,8 +70,9 @@ pub struct CreateOrderOptions {
     ///
     /// When an entry is present for an order's market token, a `set_builder_fee`
     /// instruction is appended in the same transaction group (after all create-order
-    /// instructions). The order's `nonce` field in [`CreateOrderParams`] must be
-    /// set, because the order address has to be known before the transaction is sent.
+    /// instructions). The order address is derived internally, so the `nonce` field
+    /// in [`CreateOrderParams`] is optional here. Set it if you need the order
+    /// address before sending; the returned `TransactionGroup` does not expose it.
     #[serde(default)]
     set_builder_fee: HashMap<StringPubkey, SetBuilderFeeOptions>,
 }
