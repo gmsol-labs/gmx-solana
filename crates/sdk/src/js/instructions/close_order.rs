@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     builders::{
-        order::{CloseOrder, CloseOrderHint},
+        order::{CloseOrder, CloseOrderHint, SettleBuilderFee, SettleBuilderFeeHint},
         token::PrepareTokenAccounts,
         StoreProgram,
     },
@@ -30,6 +30,12 @@ pub struct CloseOrderArgs {
     program: Option<StoreProgram>,
     #[serde(default)]
     transaction_group: TransactionGroupOptions,
+    /// Per-order `settle_builder_fee` hints, keyed by order address.
+    ///
+    /// When present, a `settle_builder_fee` instruction is emitted in a stage
+    /// before the close instructions so the escrow still exists when it runs.
+    #[serde(default)]
+    settle_builder_fee: HashMap<StringPubkey, SettleBuilderFeeHint>,
 }
 
 /// Build transactions for closing orders.
@@ -73,6 +79,19 @@ pub fn close_orders(args: CloseOrderArgs) -> crate::Result<TransactionGroup> {
         })
         .collect::<crate::Result<ParallelGroup>>()?;
 
+    let settle = args
+        .settle_builder_fee
+        .into_iter()
+        .map(|(order, hint)| {
+            Ok(SettleBuilderFee::builder()
+                .payer(payer)
+                .order(order)
+                .program(program.clone())
+                .build()
+                .into_atomic_group(&hint)?)
+        })
+        .collect::<crate::Result<ParallelGroup>>()?;
+
     let close = args
         .orders
         .into_iter()
@@ -87,7 +106,7 @@ pub fn close_orders(args: CloseOrderArgs) -> crate::Result<TransactionGroup> {
         .collect::<crate::Result<ParallelGroup>>()?;
 
     TransactionGroup::new(
-        group.add(prepare)?.add(close)?.optimize(false),
+        group.add(prepare)?.add(settle)?.add(close)?.optimize(false),
         &args.recent_blockhash,
         args.compute_unit_price_micro_lamports,
         args.compute_unit_min_priority_lamports,

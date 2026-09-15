@@ -156,6 +156,14 @@ pub struct CreateOrderParams {
     #[cfg_attr(serde, serde(default))]
     #[builder(default, setter(strip_option))]
     pub valid_from_ts: Option<i64>,
+    /// Nonce that pins the order address.
+    ///
+    /// When provided the address is deterministic; a follow-on `set_builder_fee`
+    /// instruction in the same transaction can use it as an account.
+    /// When absent a random nonce is generated inside the builder.
+    #[cfg_attr(serde, serde(default))]
+    #[builder(default, setter(strip_option, into))]
+    pub nonce: Option<NonceBytes>,
 }
 
 /// Builder for the `create_order` instruction.
