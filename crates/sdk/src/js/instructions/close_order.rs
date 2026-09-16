@@ -35,7 +35,7 @@ pub struct CloseOrderArgs {
     /// When present, a `settle_builder_fee` instruction is emitted in a stage
     /// before the close instructions so the escrow still exists when it runs.
     #[serde(default)]
-    settle_builder_fee: HashMap<StringPubkey, SettleBuilderFeeHint>,
+    settle_builder_fee: Option<HashMap<StringPubkey, SettleBuilderFeeHint>>,
 }
 
 /// Build transactions for closing orders.
@@ -81,6 +81,7 @@ pub fn close_orders(args: CloseOrderArgs) -> crate::Result<TransactionGroup> {
 
     let settle = args
         .settle_builder_fee
+        .unwrap_or_default()
         .into_iter()
         .map(|(order, hint)| {
             Ok(SettleBuilderFee::builder()
