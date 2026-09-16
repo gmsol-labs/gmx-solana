@@ -66,15 +66,14 @@ pub struct CreateOrderOptions {
     force_create_positions_in_parallel: Option<bool>,
     #[serde(default)]
     force_create_positions: Option<bool>,
-    /// Per-order `set_builder_fee` options, keyed by market token.
+    /// Builder fee to attach to every order in this call.
     ///
-    /// When an entry is present for an order's market token, a `set_builder_fee`
-    /// instruction is appended in the same transaction group (after all create-order
-    /// instructions). The order address is derived internally, so the `nonce` field
-    /// in [`CreateOrderParams`] is optional here. Set it if you need the order
-    /// address before sending; the returned `TransactionGroup` does not expose it.
+    /// When set, a `set_builder_fee` instruction is appended for each created
+    /// order in the same transaction group (after all create-order instructions).
+    /// The same builder and factor apply to every order; for different settings
+    /// per order, use separate `create_orders_builder` calls.
     #[serde(default)]
-    set_builder_fee: HashMap<StringPubkey, SetBuilderFeeOptions>,
+    set_builder_fee: Option<SetBuilderFeeOptions>,
 }
 
 /// Create transaction builder for create-order ixs.
@@ -150,7 +149,7 @@ pub fn create_orders_builder(
                 }
             }
 
-            if let Some(sbf_opts) = options.set_builder_fee.get(market_token) {
+            if let Some(sbf_opts) = options.set_builder_fee.as_ref() {
                 let order = program.find_order_address(&payer.0, &nonce);
                 let sbf = SetBuilderFee::builder()
                     .program(program.clone())
