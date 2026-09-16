@@ -1,16 +1,16 @@
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use gmsol_programs::gmsol_store::client::{accounts, args};
-use gmsol_solana_utils::{client_traits::FromRpcClientWith, AtomicGroup, IntoAtomicGroup, ProgramExt};
+use gmsol_solana_utils::{
+    client_traits::FromRpcClientWith, AtomicGroup, IntoAtomicGroup, ProgramExt,
+};
 use typed_builder::TypedBuilder;
 
 use crate::{builders::StoreProgram, serde::StringPubkey};
 
-const ERR_NO_MINT: &str =
-    "order has a non-zero builder fee amount but no final output token mint";
+const ERR_NO_MINT: &str = "order has a non-zero builder fee amount but no final output token mint";
 const ERR_NO_ESCROW: &str =
     "order has a non-zero builder fee amount but no final output token escrow";
-const ERR_NO_BUILDER: &str =
-    "order has a non-zero builder fee amount but no builder recorded";
+const ERR_NO_BUILDER: &str = "order has a non-zero builder fee amount but no builder recorded";
 
 /// Builder for the `settle_builder_fee` instruction.
 ///
