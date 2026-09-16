@@ -80,7 +80,7 @@ impl IntoAtomicGroup for ClaimBuilderFees {
                     event_authority: self.program.find_event_authority_address(),
                     program: self.program.id.0,
                 },
-                true,
+                false,
             )
             .build();
 

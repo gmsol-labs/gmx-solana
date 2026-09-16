@@ -1,18 +1,16 @@
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
-use gmsol_programs::{
-    anchor_lang::InstructionData,
-    gmsol_store::{
-        client::{accounts, args},
-        ID,
-    },
-};
-use gmsol_solana_utils::{client_traits::FromRpcClientWith, AtomicGroup, IntoAtomicGroup};
-use solana_sdk::instruction::Instruction;
+use gmsol_programs::gmsol_store::client::{accounts, args};
+use gmsol_solana_utils::{client_traits::FromRpcClientWith, AtomicGroup, IntoAtomicGroup, ProgramExt};
 use typed_builder::TypedBuilder;
 
-use crate::{
-    builders::StoreProgram, serde::StringPubkey, utils::optional::fix_optional_account_metas,
-};
+use crate::{builders::StoreProgram, serde::StringPubkey};
+
+const ERR_NO_MINT: &str =
+    "order has a non-zero builder fee amount but no final output token mint";
+const ERR_NO_ESCROW: &str =
+    "order has a non-zero builder fee amount but no final output token escrow";
+const ERR_NO_BUILDER: &str =
+    "order has a non-zero builder fee amount but no builder recorded";
 
 /// Builder for the `settle_builder_fee` instruction.
 ///
@@ -88,21 +86,18 @@ impl IntoAtomicGroup for SettleBuilderFee {
             if hint.builder_fee_amount == 0 {
                 (None, None, None, None)
             } else {
-                let final_output_token = hint.final_output_token.as_ref().ok_or_else(|| {
-                    gmsol_solana_utils::Error::custom(
-                        "order has a non-zero builder fee amount but no final output token mint",
-                    )
-                })?;
-                let escrow = hint.escrow.as_ref().ok_or_else(|| {
-                    gmsol_solana_utils::Error::custom(
-                        "order has a non-zero builder fee amount but no final output token escrow",
-                    )
-                })?;
-                let builder = hint.builder.as_ref().ok_or_else(|| {
-                    gmsol_solana_utils::Error::custom(
-                        "order has a non-zero builder fee amount but no builder recorded",
-                    )
-                })?;
+                let final_output_token = hint
+                    .final_output_token
+                    .as_ref()
+                    .ok_or_else(|| gmsol_solana_utils::Error::custom(ERR_NO_MINT))?;
+                let escrow = hint
+                    .escrow
+                    .as_ref()
+                    .ok_or_else(|| gmsol_solana_utils::Error::custom(ERR_NO_ESCROW))?;
+                let builder = hint
+                    .builder
+                    .as_ref()
+                    .ok_or_else(|| gmsol_solana_utils::Error::custom(ERR_NO_BUILDER))?;
                 // The claim vault is the builder User Account's ATA for the fee
                 // token, legacy-SPL like the rest of the order path.
                 let claim_vault = get_associated_token_address_with_program_id(
@@ -118,12 +113,10 @@ impl IntoAtomicGroup for SettleBuilderFee {
                 )
             };
 
-        let settle = Instruction {
-            program_id: self.program.id.0,
-            // The optional accounts are encoded as the defining program's ID
-            // when absent, so they have to be rewritten whenever this store is
-            // deployed under a different ID.
-            accounts: fix_optional_account_metas(
+        let settle = self
+            .program
+            .anchor_instruction(args::SettleBuilderFee {})
+            .anchor_accounts(
                 accounts::SettleBuilderFee {
                     store: self.program.store.0,
                     order: self.order.0,
@@ -135,11 +128,9 @@ impl IntoAtomicGroup for SettleBuilderFee {
                     event_authority: self.program.find_event_authority_address(),
                     program: self.program.id.0,
                 },
-                &ID,
-                &self.program.id.0,
-            ),
-            data: args::SettleBuilderFee {}.data(),
-        };
+                true,
+            )
+            .build();
 
         Ok(AtomicGroup::with_instructions(&payer, Some(settle)))
     }

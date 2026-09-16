@@ -93,7 +93,7 @@ impl IntoAtomicGroup for SetBuilderFeeFactor {
                     event_authority: self.program.find_event_authority_address(),
                     program: self.program.id.0,
                 },
-                true,
+                false,
             )
             .build();
 
