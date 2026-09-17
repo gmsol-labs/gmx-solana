@@ -6,7 +6,7 @@ use crate::{
     events::EventEmitter,
     states::{
         common::{
-            action::{Action, ActionParams},
+            action::{Action, ActionExt, ActionParams},
             swap::SwapActionParamsExt,
         },
         market::revertible::Revertible,
@@ -132,6 +132,8 @@ impl CreateWithdrawalOperation<'_, '_> {
             params.market_token_amount,
             CoreError::NotEnoughTokenAmount,
         );
+
+        ActionExt::validate_balance(&self.withdrawal, self.params.execution_lamports)?;
 
         Ok(())
     }

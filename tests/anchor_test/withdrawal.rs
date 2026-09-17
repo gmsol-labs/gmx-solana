@@ -1,4 +1,5 @@
 use gmsol_sdk::client::ops::ExchangeOps;
+use gmsol_store::CoreError;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
 
@@ -161,5 +162,76 @@ async fn balanced_pool_withdrawal() -> eyre::Result<()> {
 
         assert_eq!(market_token_after_withdarwal, 0);
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn withdrawal_creation_enforces_execution_fee_floor() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("withdrawal_creation_enforces_execution_fee_floor");
+    let _enter = span.enter();
+
+    let client = deployment.locked_user_client().await?;
+    let amount = 500_000_000;
+    deployment
+        .mint_or_transfer_to("WSOL", &client.payer(), 2 * amount + 1_000_000)
+        .await?;
+
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+    let market_token = deployment
+        .market_token("SOL", "WSOL", "WSOL")
+        .expect("must exist");
+
+    // Get the user some market tokens to withdraw against.
+    let (rpc, deposit) = client
+        .create_deposit(store, market_token)
+        .long_token(amount, None, None)
+        .short_token(amount, None, None)
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%deposit, %signature, "created a deposit");
+
+    let mut builder = keeper.execute_deposit(store, oracle, &deposit, true);
+    deployment
+        .execute_with_pyth(&mut builder, None, true, true)
+        .await?;
+
+    let market_token_amount = deployment
+        .get_user_ata_amount(market_token, None)
+        .await?
+        .expect("must exist");
+
+    // Subject: a withdrawal with execution_fee = 0 must be rejected at creation. This path
+    // previously skipped the balance/fee-floor check that every sibling action enforces, so a
+    // zero-fee withdrawal was accepted and the keeper who later executed it was reimbursed
+    // nothing (CON-76).
+    let (rpc, _withdrawal) = client
+        .create_withdrawal(store, market_token, market_token_amount)
+        .execution_fee(0)
+        .build_with_address()
+        .await?;
+    let err = rpc
+        .send()
+        .await
+        .expect_err("a zero execution fee must be rejected at withdrawal creation");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::NotEnoughExecutionFee.into()),
+        "must fail specifically on the execution-fee floor, not some other constraint"
+    );
+
+    // Control: a withdrawal at the default fee is still accepted, so the rejection above is
+    // attributable to the fee alone.
+    let (rpc, withdrawal) = client
+        .create_withdrawal(store, market_token, market_token_amount)
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%withdrawal, %signature, "a default-fee withdrawal is still accepted");
+
     Ok(())
 }
