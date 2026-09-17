@@ -208,7 +208,7 @@ async fn withdrawal_creation_enforces_execution_fee_floor() -> eyre::Result<()> 
     // Subject: a withdrawal with execution_fee = 0 must be rejected at creation. This path
     // previously skipped the balance/fee-floor check that every sibling action enforces, so a
     // zero-fee withdrawal was accepted and the keeper who later executed it was reimbursed
-    // nothing (CON-76).
+    // nothing.
     let (rpc, _withdrawal) = client
         .create_withdrawal(store, market_token, market_token_amount)
         .execution_fee(0)
