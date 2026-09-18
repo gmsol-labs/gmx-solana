@@ -578,7 +578,7 @@ const closeOrdersWithFee = close_orders({
     [
       "11111111111111111111111111111116",
       {
-        builder_fee_amount: 1_000_000n,
+        builder_fee_amount: 1_000_000,
         builder: builderPubkey,
         final_output_token: finalOutputToken,
         escrow: escrowPubkey,

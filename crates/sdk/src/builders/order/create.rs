@@ -324,7 +324,10 @@ impl IntoAtomicGroup for CreateOrder {
                         .copied()
                         .unwrap_or(collateral_or_swap_out_token),
                 ),
-                None,
+                // An increase order has no "receive" token in the swap/decrease sense; this is
+                // repurposed as an opt-in for the final-output-token escrow (needed to be given a
+                // builder fee later), left unset by default so existing callers are unaffected.
+                self.receive_token.as_deref().copied(),
                 Some(hint.long_token.0),
                 Some(hint.short_token.0),
                 true,

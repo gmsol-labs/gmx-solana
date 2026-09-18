@@ -173,7 +173,19 @@ pub fn create_orders_builder(
                 .params(params)
                 .nonce(nonce)
                 .pay_token(options.pay_token)
-                .receive_token(options.receive_token)
+                .receive_token(options.receive_token.or_else(|| {
+                    // An increase order needs its final-output-token escrow prepared to be
+                    // eligible for a builder fee; opt it in using the fee's own target token
+                    // when the caller did not already ask for a specific one.
+                    kind.is_increase()
+                        .then(|| {
+                            options
+                                .set_builder_fee
+                                .as_ref()
+                                .map(|sbf| sbf.final_output_token)
+                        })
+                        .flatten()
+                }))
                 .swap_path(options.swap_path.clone().unwrap_or_default())
                 .unwrap_native_on_receive(
                     !options.skip_unwrap_native_on_receive.unwrap_or_default(),
