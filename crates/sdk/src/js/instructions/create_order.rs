@@ -83,6 +83,23 @@ pub fn create_orders_builder(
     orders: Vec<CreateOrderParams>,
     options: CreateOrderOptions,
 ) -> crate::Result<CreateOrdersBuilder> {
+    if options.set_builder_fee.is_some() {
+        if kind.is_swap() {
+            return Err(crate::Error::custom(
+                "set_builder_fee is not supported on swap orders: the program rejects it on-chain \
+                 (BuilderFeeOrderKindNotAllowed), only increase and decrease orders may carry one",
+            ));
+        }
+        if orders.len() > 1 {
+            return Err(crate::Error::custom(
+                "set_builder_fee applies one final_output_token to every order in the call; a \
+                 multi-order batch would record it as every order's own output token at creation, \
+                 which is only correct for orders that actually share it. Use separate \
+                 create_orders_builder calls per order instead",
+            ));
+        }
+    }
+
     let pay_token = options
         .pay_token
         .unwrap_or(options.collateral_or_swap_out_token);
