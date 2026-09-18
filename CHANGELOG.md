@@ -39,7 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - programs(store): An increase order now records its final output token at creation when the escrow is provided, which is what makes it eligible for a builder fee later.
-- sdk(sdk): `BuilderFeeOps::settle_builder_fee` now takes the builder layer's `SettleBuilderFeeHint`, and the identically named type that used to sit beside the trait has been removed. Field names and meanings are unchanged; they now hold `StringPubkey` instead of `Pubkey`. Callers passing `None` are unaffected. This mirrors what `set_builder_fee` already did, so the two no longer disagree about where their hint lives.
 - sdk(solana-utils): Kept the two-argument `Bundle::send_all_with_opts` as a deprecated compatibility wrapper around the detailed API. It still returns the compressed success-signature list, and when multiple transactions fail it returns the **last** real send error (matching prior overwrite semantics; `SendAborted` placeholders are ignored).
 
 ### Fixed
