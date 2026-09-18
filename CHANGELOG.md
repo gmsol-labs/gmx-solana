@@ -34,10 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Added the `BuilderFeeClaimed` event, emitted when a builder withdraws from its claim vault.
 - programs(store): Added nine builder fee error codes, `6129` through `6137`, appended after the existing codes so no existing code shifts: `BuilderFeeFactorExceedsMaxFactor` (6129), `UnsettledBuilderFee` (6130), `BuilderFeeExceedsCollateral` (6131), `BuilderFeeFinalOutputTokenMismatch` (6132), `BuilderFeeSwapTypeNotAllowed` (6133), `BuilderFeeFactorMismatched` (6134), `BuilderFeeOrderKindNotAllowed` (6135), `BuilderFeeFinalOutputTokenNotInitialized` (6136) and `BuilderFeeFinalOutputTokenEscrowNotInitialized` (6137).
 - sdk(decode): Added `BuilderFeeCharged` to `GMSOLCPIEvent`, so the event decodes into its typed form instead of `UnknownOwnedData`.
+- sdk(sdk): Added the `SettleBuilderFee`, `ClaimBuilderFees` and `SetBuilderFeeFactor` atomic-group builders, completing the set for the four builder fee instructions. Only `set_builder_fee` had one before, so the other three could not be composed into a single transaction with anything else, and the JS surface had nothing to wrap since it is built on the builder layer. `SettleBuilderFee` carries a hint resolvable from the order account; the other two need none, because every account they take is derived from the payer, the store and the mint.
 
 ### Changed
 
 - programs(store): An increase order now records its final output token at creation when the escrow is provided, which is what makes it eligible for a builder fee later.
+- sdk(sdk): `BuilderFeeOps::settle_builder_fee` now takes the builder layer's `SettleBuilderFeeHint`, and the identically named type that used to sit beside the trait has been removed. Field names and meanings are unchanged; they now hold `StringPubkey` instead of `Pubkey`. Callers passing `None` are unaffected. This mirrors what `set_builder_fee` already did, so the two no longer disagree about where their hint lives.
 - sdk(solana-utils): Kept the two-argument `Bundle::send_all_with_opts` as a deprecated compatibility wrapper around the detailed API. It still returns the compressed success-signature list, and when multiple transactions fail it returns the **last** real send error (matching prior overwrite semantics; `SendAborted` placeholders are ignored).
 
 ### Fixed
