@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Added nine builder fee error codes, `6129` through `6137`, appended after the existing codes so no existing code shifts: `BuilderFeeFactorExceedsMaxFactor` (6129), `UnsettledBuilderFee` (6130), `BuilderFeeExceedsCollateral` (6131), `BuilderFeeFinalOutputTokenMismatch` (6132), `BuilderFeeSwapTypeNotAllowed` (6133), `BuilderFeeFactorMismatched` (6134), `BuilderFeeOrderKindNotAllowed` (6135), `BuilderFeeFinalOutputTokenNotInitialized` (6136) and `BuilderFeeFinalOutputTokenEscrowNotInitialized` (6137).
 - sdk(decode): Added `BuilderFeeCharged` to `GMSOLCPIEvent`, so the event decodes into its typed form instead of `UnknownOwnedData`.
 - sdk(sdk): Added the `SettleBuilderFee`, `ClaimBuilderFees` and `SetBuilderFeeFactor` atomic-group builders, completing the set for the four builder fee instructions. Only `set_builder_fee` had one before, so the other three could not be composed into a single transaction with anything else, and the JS surface had nothing to wrap since it is built on the builder layer. `SettleBuilderFee` carries a hint resolvable from the order account; the other two need none, because every account they take is derived from the payer, the store and the mint.
+- cli(gmsol): Added `user set-builder-fee`, `user set-builder-fee-factor` and `user claim-builder-fees`, wrapping the existing `BuilderFeeOps`/`UserOps` SDK operations. `settle_builder_fee` has no CLI command yet.
 
 ### Changed
 
