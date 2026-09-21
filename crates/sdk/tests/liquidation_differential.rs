@@ -148,7 +148,6 @@ impl fmt::Display for Ledger {
 
 struct Fixture {
     model: gmsol_sdk::programs::model::PositionModel,
-    liquidation_collateral_usd: u128,
     floor_engaged: bool,
 }
 
@@ -291,7 +290,6 @@ fn build_fixture(cfg: &CaseParams) -> Fixture {
         .unwrap_or_else(|e| panic!("{cfg}: fixture failed to build: {e}"));
     Fixture {
         model,
-        liquidation_collateral_usd,
         floor_engaged,
     }
 }
