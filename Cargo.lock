@@ -1663,6 +1663,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "det-macros"
+version = "0.3.1"
+source = "git+https://github.com/mv-reyes/sol-rpc-mini?rev=33e594badae29c69efb569198ea2b0112bf637d1#33e594badae29c69efb569198ea2b0112bf637d1"
+dependencies = [
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
 name = "dialoguer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5606,9 +5615,10 @@ dependencies = [
 
 [[package]]
 name = "sol-rpc-mini"
-version = "0.3.0"
-source = "git+https://github.com/mv-reyes/sol-rpc-mini#9d891f7d27f6ef6e8f543a501ce6f85c7dc3c65f"
+version = "0.3.1"
+source = "git+https://github.com/mv-reyes/sol-rpc-mini?rev=33e594badae29c69efb569198ea2b0112bf637d1#33e594badae29c69efb569198ea2b0112bf637d1"
 dependencies = [
+ "det-macros",
  "serde_json",
  "ureq",
 ]
