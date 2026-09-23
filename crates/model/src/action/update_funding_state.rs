@@ -342,8 +342,10 @@ where
     Unsigned: gmsol_utils::InitSpace,
     Signed: gmsol_utils::InitSpace,
 {
-    const INIT_SPACE: usize =
-        <u64 as gmsol_utils::InitSpace>::INIT_SPACE + Signed::INIT_SPACE + 4 * Unsigned::INIT_SPACE + 4 * Unsigned::INIT_SPACE;
+    const INIT_SPACE: usize = <u64 as gmsol_utils::InitSpace>::INIT_SPACE
+        + Signed::INIT_SPACE
+        + 4 * Unsigned::INIT_SPACE
+        + 4 * Unsigned::INIT_SPACE;
 }
 
 #[inline]
