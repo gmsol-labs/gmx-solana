@@ -22,6 +22,8 @@ security-txt = ["solana-security-txt"]
 
 [dependencies]
 anchor-lang = { workspace = true }
+borsh = { workspace = true }
+solana-program = { workspace = true }
 thiserror = { workspace = true }
 paste = { workspace = true }
 bytemuck = { workspace = true, features = ["derive"] }
