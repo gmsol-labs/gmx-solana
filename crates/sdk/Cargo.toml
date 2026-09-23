@@ -85,10 +85,7 @@ switchboard = ["switchboard-on-demand-client"]
 squads = []
 discover = ["client", "tower/discover", "tokio/time", "pin-project-lite"]
 clap = ["dep:clap", "gmsol-utils/clap"]
-openssl-vendored = [
-    "solana-sdk/openssl-vendored",
-    "gmsol-solana-utils/openssl-vendored",
-]
+openssl-vendored = ["gmsol-solana-utils/openssl-vendored"]
 http-rpc-sender = ["gmsol-solana-utils/http-rpc-sender"]
 chaoslabs-risk-oracle = ["client", "reqwest", "serde", "uuid", "libsecp256k1"]
 

@@ -63,7 +63,7 @@ impl<T> DepositParams<T> {
         &self.prices.short_token_price
     }
 
-    fn reassign_values(&self, is_long_token: bool) -> ReassignedValues<T>
+    fn reassign_values(&self, is_long_token: bool) -> ReassignedValues<'_, T>
     where
         T: Clone,
     {
