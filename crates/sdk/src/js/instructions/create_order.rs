@@ -128,7 +128,6 @@ pub fn create_orders_builder(
         options.force_create_positions.unwrap_or_default() || force_create_positions_in_parallel;
 
     let mut positions = HashMap::<StringPubkey, _>::default();
-    let mut set_builder_fees: Vec<AtomicGroup> = Vec::new();
 
     let create = orders
         .into_iter()
@@ -166,20 +165,26 @@ pub fn create_orders_builder(
                 }
             }
 
-            if let Some(sbf_opts) = options.set_builder_fee.as_ref() {
-                let order = program.find_order_address(&payer.0, &nonce);
-                let sbf = SetBuilderFee::builder()
-                    .program(program.clone())
-                    .payer(payer)
-                    .order(order)
-                    .builder(sbf_opts.builder)
-                    .expected_factor(sbf_opts.expected_factor)
-                    .build()
-                    .into_atomic_group(&SetBuilderFeeHint {
-                        final_output_token: sbf_opts.final_output_token,
-                    })?;
-                set_builder_fees.push(sbf);
-            }
+            // Built here but merged into this order's own atomic group below, not collected
+            // into a stage of its own: the checkpoint has to be in the same transaction as
+            // the create it belongs to. See SCSOL-13.
+            let set_builder_fee = options
+                .set_builder_fee
+                .as_ref()
+                .map(|sbf_opts| {
+                    let order = program.find_order_address(&payer.0, &nonce);
+                    SetBuilderFee::builder()
+                        .program(program.clone())
+                        .payer(payer)
+                        .order(order)
+                        .builder(sbf_opts.builder)
+                        .expected_factor(sbf_opts.expected_factor)
+                        .build()
+                        .into_atomic_group(&SetBuilderFeeHint {
+                            final_output_token: sbf_opts.final_output_token,
+                        })
+                })
+                .transpose()?;
 
             let amount = params.amount;
             let create = CreateOrder::builder()
@@ -215,7 +220,7 @@ pub fn create_orders_builder(
                 .build()
                 .into_atomic_group(hint)?;
 
-            let ag = if wrap_native {
+            let mut ag = if wrap_native {
                 let mut wrap = WrapNative::builder()
                     .owner(options.payer)
                     .lamports(amount.try_into().map_err(crate::Error::custom)?)
@@ -227,6 +232,12 @@ pub fn create_orders_builder(
                 create
             };
 
+            // Immediately after create, in the same transaction, so no submission can land
+            // an order that exists without its builder fee checkpoint.
+            if let Some(set_builder_fee) = set_builder_fee {
+                ag.merge(set_builder_fee);
+            }
+
             Ok(ag)
         })
         .collect::<crate::Result<Vec<_>>>()?;
@@ -236,7 +247,6 @@ pub fn create_orders_builder(
         tokens,
         positions,
         create,
-        set_builder_fees,
         transaction_group: options.transaction_group,
         build: BuildTransactionOptions {
             recent_blockhash: options.recent_blockhash,
@@ -253,7 +263,6 @@ pub struct CreateOrdersBuilder {
     tokens: HashSet<StringPubkey>,
     positions: HashMap<StringPubkey, AtomicGroup>,
     create: Vec<AtomicGroup>,
-    set_builder_fees: Vec<AtomicGroup>,
     transaction_group: TransactionGroupOptions,
     build: BuildTransactionOptions,
 }
@@ -287,7 +296,6 @@ impl CreateOrdersBuilder {
                 .add(prepare)?
                 .add(self.positions.into_values().collect::<ParallelGroup>())?
                 .add(self.create.into_iter().collect::<ParallelGroup>())?
-                .add(self.set_builder_fees.into_iter().collect::<ParallelGroup>())?
                 .optimize(false),
             &build.recent_blockhash,
             build.compute_unit_price_micro_lamports,
@@ -310,7 +318,6 @@ impl CreateOrdersBuilder {
             self.positions.entry(position).or_insert(ag);
         }
         self.create.append(&mut other.create);
-        self.set_builder_fees.append(&mut other.set_builder_fees);
         Ok(())
     }
 }
