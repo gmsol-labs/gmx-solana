@@ -1631,7 +1631,7 @@ fn clamp_builder_fee_amount(fee_amount: u128, available: u128) -> u128 {
 /// Upholds the same property the decrease path gets for free by accumulating its
 /// output transfers: every amount still due to leave the market is excluded, so
 /// the balance is checked against the completed state rather than a state one
-/// fee too high (Zenith#25).
+/// fee too high.
 ///
 /// A pure market needs no special case here: `validate_market_balances` sums both
 /// sides itself when `is_pure()`, so either side reaches the same total.
@@ -1805,9 +1805,8 @@ fn execute_increase_position(
     // presence in `TransferOut` is exactly why `validate_market_balances`
     // below must exclude it, not a reason it can be ignored, since those
     // arguments are the amounts still to leave. Leaving it out validates
-    // against a balance higher than the completed state by the fee, which is
-    // Zenith#25; the decrease path has always folded its own
-    // transfers in the same way.
+    // against a balance higher than the completed state by the fee. The
+    // decrease path folds its own transfers in the same way.
     let (collateral_increment_amount, builder_fee) = if builder_fee_factor != 0 {
         // Initializing the final output token is optional for increase
         // orders (see `CreateIncreaseOrderOperation`), so an order whose
