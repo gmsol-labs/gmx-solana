@@ -551,9 +551,9 @@ for (const batch of glvWithdrawalGroup.serialize()) {
 }
 
 // Builder fee: close_orders with settle_builder_fee populated.
-const builderPubkey = "22222222222222222222222222222222";
+const builderPubkey = "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3";
 const finalOutputToken = wsol;
-const escrowPubkey = "33333333333333333333333333333333";
+const escrowPubkey = "4Ss5JMkXAD9Z7cktFEdrqeMuT6jGMF1pVozTyPHZ6zT4";
 const closeOrdersWithFee = close_orders({
   recent_blockhash: recentBlockhash,
   payer,
