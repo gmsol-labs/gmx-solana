@@ -32,8 +32,10 @@ pub struct CloseOrderArgs {
     transaction_group: TransactionGroupOptions,
     /// Per-order `settle_builder_fee` hints, keyed by order address.
     ///
-    /// When present, a `settle_builder_fee` instruction is emitted in a stage
-    /// before the close instructions so the escrow still exists when it runs.
+    /// When present, the keys must match `orders` exactly. Each order's
+    /// `settle_builder_fee` is emitted in the same atomic group as its close, ahead of the
+    /// close instruction, so the escrow still exists when it runs and neither can land
+    /// without the other.
     #[serde(default)]
     settle_builder_fee: Option<HashMap<StringPubkey, SettleBuilderFeeHint>>,
 }
@@ -79,35 +81,64 @@ pub fn close_orders(args: CloseOrderArgs) -> crate::Result<TransactionGroup> {
         })
         .collect::<crate::Result<ParallelGroup>>()?;
 
-    let settle = args
-        .settle_builder_fee
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(order, hint)| {
-            Ok(SettleBuilderFee::builder()
-                .payer(payer)
-                .order(order)
-                .program(program.clone())
-                .build()
-                .into_atomic_group(&hint)?)
-        })
-        .collect::<crate::Result<ParallelGroup>>()?;
+    let mut settle_hints = args.settle_builder_fee;
 
+    // The hints must cover exactly the orders being closed. A missing key would silently
+    // close an order without settling its fee; an extra key names an order this call does
+    // not touch, so the caller is working from a stale view either way.
+    if let Some(hints) = settle_hints.as_ref() {
+        let orders = args.orders.keys().collect::<HashSet<_>>();
+        let settled = hints.keys().collect::<HashSet<_>>();
+        if orders != settled {
+            let mut missing = orders
+                .difference(&settled)
+                .map(|key| key.0.to_string())
+                .collect::<Vec<_>>();
+            let mut unexpected = settled
+                .difference(&orders)
+                .map(|key| key.0.to_string())
+                .collect::<Vec<_>>();
+            missing.sort();
+            unexpected.sort();
+            return Err(crate::Error::custom(format!(
+                "`settle_builder_fee` must have the same keys as `orders`: missing {missing:?}, unexpected {unexpected:?}"
+            )));
+        }
+    }
+
+    // Settle and close go in the same atomic group, per order, rather than in two
+    // sequential parallel groups. Ordering across parallel groups is a contract of
+    // `TransactionGroup` that downstream consumers are not obliged to honour, and if the
+    // close landed first the escrow would be gone before the fee was settled. Inside one
+    // atomic group the order is the instruction order and the whole thing reverts together.
     let close = args
         .orders
         .into_iter()
         .map(|(order, hint)| {
-            Ok(CloseOrder::builder()
+            let close = CloseOrder::builder()
                 .payer(payer)
                 .order(order)
                 .program(program.clone())
                 .build()
-                .into_atomic_group(&hint)?)
+                .into_atomic_group(&hint)?;
+            match settle_hints.as_mut().and_then(|hints| hints.remove(&order)) {
+                Some(settle_hint) => {
+                    let mut group = SettleBuilderFee::builder()
+                        .payer(payer)
+                        .order(order)
+                        .program(program.clone())
+                        .build()
+                        .into_atomic_group(&settle_hint)?;
+                    group.merge(close);
+                    Ok(group)
+                }
+                None => Ok(close),
+            }
         })
         .collect::<crate::Result<ParallelGroup>>()?;
 
     TransactionGroup::new(
-        group.add(prepare)?.add(settle)?.add(close)?.optimize(false),
+        group.add(prepare)?.add(close)?.optimize(false),
         &args.recent_blockhash,
         args.compute_unit_price_micro_lamports,
         args.compute_unit_min_priority_lamports,
