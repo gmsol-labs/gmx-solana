@@ -1625,6 +1625,40 @@ fn clamp_builder_fee_amount(fee_amount: u128, available: u128) -> u128 {
     fee_amount.min(available)
 }
 
+/// Fold a builder fee into the amounts excluded from the increase path's market
+/// balance validation, on the side the fee token belongs to.
+///
+/// Upholds the same property the decrease path gets for free by accumulating its
+/// output transfers: every amount still due to leave the market is excluded, so
+/// the balance is checked against the completed state rather than a state one
+/// fee too high.
+///
+/// A pure market needs no special case here: `validate_market_balances` sums both
+/// sides itself when `is_pure()`, so either side reaches the same total.
+fn add_builder_fee_to_excluding_amounts(
+    long_excluding_amount: u64,
+    short_excluding_amount: u64,
+    is_collateral_long: bool,
+    fee_amount: u64,
+) -> Result<(u64, u64)> {
+    let overflow = || error!(CoreError::TokenAmountOverflow);
+    if is_collateral_long {
+        Ok((
+            long_excluding_amount
+                .checked_add(fee_amount)
+                .ok_or_else(overflow)?,
+            short_excluding_amount,
+        ))
+    } else {
+        Ok((
+            long_excluding_amount,
+            short_excluding_amount
+                .checked_add(fee_amount)
+                .ok_or_else(overflow)?,
+        ))
+    }
+}
+
 fn execute_swap(
     should_throw_error: &mut bool,
     oracle: &Oracle,
@@ -1763,11 +1797,16 @@ fn execute_increase_position(
     // Builder fee is charged in the collateral token, after the pay token
     // has already been swapped into it, and is deducted from
     // `collateral_increment_amount` before it is fed into
-    // `position.increase()` below. Because of that, the withheld amount
-    // never enters any market's balances (it is counted only into
-    // `TransferOut`'s final-output-token bucket), so
-    // `validate_market_balances` further down does not need to be
-    // adjusted to cover it.
+    // `position.increase()` below.
+    //
+    // Being withheld from the position does **not** keep it out of the
+    // market's balances: the tokens arrived with the collateral and stay in
+    // the market vault until settlement moves them to the order escrow. Its
+    // presence in `TransferOut` is exactly why `validate_market_balances`
+    // below must exclude it, not a reason it can be ignored, since those
+    // arguments are the amounts still to leave. Leaving it out validates
+    // against a balance higher than the completed state by the fee. The
+    // decrease path folds its own transfers in the same way.
     let (collateral_increment_amount, builder_fee) = if builder_fee_factor != 0 {
         // Initializing the final output token is optional for increase
         // orders (see `CreateIncreaseOrderOperation`), so an order whose
@@ -1850,14 +1889,32 @@ fn execute_increase_position(
     // Process output amount.
     transfer_out.transfer_out_funding_amounts(&long_amount, &short_amount)?;
 
-    position.market().validate_market_balances(
-        long_amount
-            .try_into()
-            .map_err(|_| error!(CoreError::TokenAmountOverflow))?,
-        short_amount
-            .try_into()
-            .map_err(|_| error!(CoreError::TokenAmountOverflow))?,
-    )?;
+    let mut long_excluding_amount: u64 = long_amount
+        .try_into()
+        .map_err(|_| error!(CoreError::TokenAmountOverflow))?;
+    let mut short_excluding_amount: u64 = short_amount
+        .try_into()
+        .map_err(|_| error!(CoreError::TokenAmountOverflow))?;
+
+    // The builder fee leaves the market at settlement, so it is excluded here
+    // alongside the funding payouts.
+    if let Some(charge) = builder_fee.as_ref() {
+        let is_collateral_long = position
+            .market()
+            .market_meta()
+            .to_token_side(&charge.token)
+            .map_err(CoreError::from)?;
+        (long_excluding_amount, short_excluding_amount) = add_builder_fee_to_excluding_amounts(
+            long_excluding_amount,
+            short_excluding_amount,
+            is_collateral_long,
+            charge.paid_amount,
+        )?;
+    }
+
+    position
+        .market()
+        .validate_market_balances(long_excluding_amount, short_excluding_amount)?;
 
     Ok(ExecutionFees {
         paid_fee_value: paid_order_fee_value,
@@ -2487,6 +2544,25 @@ mod tests {
     #[test]
     fn builder_fee_clamps_to_zero_when_nothing_is_available() {
         assert_eq!(clamp_builder_fee_amount(1_000, 0), 0);
+    }
+    #[test]
+    fn builder_fee_is_excluded_on_the_collateral_side() {
+        // Funding payouts of 10/20 are already excluded. A 7-unit fee in the long
+        // collateral token must join the long side and leave the short untouched;
+        // putting it on the wrong side under-excludes the side that actually pays.
+        let (long, short) = add_builder_fee_to_excluding_amounts(10, 20, true, 7).unwrap();
+        assert_eq!((long, short), (17, 20));
+
+        let (long, short) = add_builder_fee_to_excluding_amounts(10, 20, false, 7).unwrap();
+        assert_eq!((long, short), (10, 27));
+    }
+
+    #[test]
+    fn builder_fee_exclusion_rejects_an_overflowing_total() {
+        // The exclusion is subtracted from the balance that must remain, so a
+        // silent wrap would under-exclude and pass a market that is actually short.
+        assert!(add_builder_fee_to_excluding_amounts(u64::MAX, 0, true, 1).is_err());
+        assert!(add_builder_fee_to_excluding_amounts(0, u64::MAX, false, 1).is_err());
     }
 
     #[test]
