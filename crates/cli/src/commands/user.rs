@@ -112,8 +112,8 @@ impl super::Command for User {
             } => match destination {
                 Some(destination) => client.claim_builder_fees(store, token_mint, destination)?,
                 None => {
-                    // The claim vault is an associated token account of the legacy
-                    // token program, so the mint is one too and the default
+                    // The claim vault is an associated token account of the SPL
+                    // Token program, so the mint is one too and the default
                     // destination derives unambiguously.
                     let destination = get_associated_token_address(&client.payer(), token_mint);
                     let prepare = client.prepare_associated_token_account(
