@@ -39,8 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - programs(store): An increase order now records its final output token at creation when the escrow is provided, which is what makes it eligible for a builder fee later.
-- sdk(js): `CreateOrderOptions::set_builder_fee` simplified from a per-market `HashMap<marketToken, SetBuilderFeeOptions>` to a single `Option<SetBuilderFeeOptions>`. The same builder and factor apply to every order in the call; callers needing different settings per order should use separate `create_orders_builder` calls.
-- sdk(js): `CloseOrderArgs::settle_builder_fee` is now `Option<HashMap<orderAddress, SettleBuilderFeeHint>>`. Callers that do not provide it get the same behaviour as before; callers closing orders that may carry a non-zero builder fee should populate it so the fee is settled before the escrow is closed.
 - sdk(solana-utils): Kept the two-argument `Bundle::send_all_with_opts` as a deprecated compatibility wrapper around the detailed API. It still returns the compressed success-signature list, and when multiple transactions fail it returns the **last** real send error (matching prior overwrite semantics; `SendAborted` placeholders are ignored).
 
 ### Fixed
