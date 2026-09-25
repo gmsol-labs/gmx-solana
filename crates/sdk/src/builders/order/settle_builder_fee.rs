@@ -44,6 +44,15 @@ pub struct SettleBuilderFee {
 /// Every field is read off the order account. A zero `builder_fee_amount`
 /// makes the other three irrelevant, because settlement is then a no-op that
 /// performs no CPI and touches none of them.
+///
+/// The read has to be a current one. Nothing here is checked against the chain
+/// while the transaction is built, but every field is load-bearing once it
+/// lands: a stale `escrow` fails with `TokenAccountMismatched`, a stale
+/// `builder` with `InvalidUserAccount`, and a `builder_fee_amount` captured
+/// while the order was still pending, and therefore zero, takes the no-op path
+/// and then fails with `TokenMintNotProvided` if a keeper executed the order in
+/// the meantime. `FromRpcClientWith<SettleBuilderFee>` derives all four from the
+/// live account; prefer it to a hint cached across a user session.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]

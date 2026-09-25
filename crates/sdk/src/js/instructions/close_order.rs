@@ -36,6 +36,10 @@ pub struct CloseOrderArgs {
     /// `settle_builder_fee` is emitted in the same atomic group as its close, ahead of the
     /// close instruction, so the escrow still exists when it runs and neither can land
     /// without the other.
+    ///
+    /// Each hint must be built from a fresh read of its order account; only field
+    /// presence is validated here, never freshness, and a stale hint reverts the close
+    /// along with the settle. See `SettleBuilderFeeHint` for which field fails how.
     #[serde(default)]
     settle_builder_fee: Option<HashMap<StringPubkey, SettleBuilderFeeHint>>,
 }

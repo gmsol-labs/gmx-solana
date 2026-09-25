@@ -27,6 +27,9 @@ pub struct SettleBuilderFeeArgs {
     compute_unit_min_priority_lamports: Option<u64>,
     payer: StringPubkey,
     /// Orders to settle, keyed by order address.
+    ///
+    /// Each hint must be built from a fresh read of its order account; only field
+    /// presence is validated here, never freshness. See `SettleBuilderFeeHint`.
     orders: HashMap<StringPubkey, SettleBuilderFeeHint>,
     #[serde(default)]
     program: Option<StoreProgram>,
