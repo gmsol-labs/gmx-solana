@@ -549,3 +549,165 @@ for (const batch of glvWithdrawalGroup.serialize()) {
     console.log(toBase64(txn));
   }
 }
+
+// Builder fee: close_orders with settle_builder_fee populated.
+const builderPubkey = "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3";
+const finalOutputToken = wsol;
+const escrowPubkey = "4Ss5JMkXAD9Z7cktFEdrqeMuT6jGMF1pVozTyPHZ6zT4";
+const closeOrdersWithFee = close_orders({
+  recent_blockhash: recentBlockhash,
+  payer,
+  orders: new Map([
+    [
+      "11111111111111111111111111111116",
+      {
+        owner: payer,
+        receiver: payer,
+        rent_receiver: payer,
+        referrer: undefined,
+        initial_collateral_token: wsol,
+        final_output_token: wsol,
+        long_token: wsol,
+        short_token: usdc,
+        should_unwrap_native_token: true,
+        callback: undefined,
+      },
+    ],
+  ]),
+  settle_builder_fee: new Map([
+    [
+      "11111111111111111111111111111116",
+      {
+        builder_fee_amount: 1_000_000,
+        builder: builderPubkey,
+        final_output_token: finalOutputToken,
+        escrow: escrowPubkey,
+      },
+    ],
+  ]),
+});
+
+console.log("close orders with settle_builder_fee");
+for (const batch of closeOrdersWithFee.serialize()) {
+  for (const txn of batch) {
+    console.log(toBase64(txn));
+  }
+}
+
+// Builder fee: close_orders with settle_builder_fee omitted (None path).
+const closeOrdersNoFee = close_orders({
+  recent_blockhash: recentBlockhash,
+  payer,
+  orders: new Map([
+    [
+      "11111111111111111111111111111117",
+      {
+        owner: payer,
+        receiver: payer,
+        rent_receiver: payer,
+        referrer: undefined,
+        initial_collateral_token: wsol,
+        final_output_token: undefined,
+        long_token: wsol,
+        short_token: usdc,
+        should_unwrap_native_token: true,
+        callback: undefined,
+      },
+    ],
+  ]),
+});
+
+console.log("close orders without settle_builder_fee");
+for (const batch of closeOrdersNoFee.serialize()) {
+  for (const txn of batch) {
+    console.log(toBase64(txn));
+  }
+}
+
+// Builder fee: create_orders_builder with set_builder_fee.
+const builderFeeBuilder = create_orders_builder(
+  "MarketIncrease",
+  [
+    {
+      market_token: marketToken,
+      is_long: true,
+      size: 50_000_000_000_000_000_000_000n,
+      amount: 5_000_000n,
+    },
+  ],
+  {
+    recent_blockhash: recentBlockhash,
+    payer,
+    collateral_or_swap_out_token: wsol,
+    hints: new Map([
+      [
+        marketToken,
+        {
+          long_token: wsol,
+          short_token: usdc,
+        },
+      ],
+    ]),
+    set_builder_fee: {
+      builder: builderPubkey,
+      expected_factor: 1_000_000_000_000_000_000n,
+    },
+  }
+);
+
+const builderFeeTransactions = builderFeeBuilder.build_with_options(
+  {},
+  {
+    recent_blockhash: recentBlockhash,
+    compute_unit_price_micro_lamports: 2000000,
+  }
+);
+
+console.log("create orders builder with set_builder_fee");
+for (const batch of builderFeeTransactions.serialize()) {
+  for (const txn of batch) {
+    console.log(toBase64(txn));
+  }
+}
+
+// Builder fee: create_orders_builder without set_builder_fee (None path).
+const noBuilderFeeBuilder = create_orders_builder(
+  "MarketIncrease",
+  [
+    {
+      market_token: marketToken,
+      is_long: true,
+      size: 50_000_000_000_000_000_000_000n,
+      amount: 5_000_000n,
+    },
+  ],
+  {
+    recent_blockhash: recentBlockhash,
+    payer,
+    collateral_or_swap_out_token: wsol,
+    hints: new Map([
+      [
+        marketToken,
+        {
+          long_token: wsol,
+          short_token: usdc,
+        },
+      ],
+    ]),
+  }
+);
+
+const noBuilderFeeTransactions = noBuilderFeeBuilder.build_with_options(
+  {},
+  {
+    recent_blockhash: recentBlockhash,
+    compute_unit_price_micro_lamports: 2000000,
+  }
+);
+
+console.log("create orders builder without set_builder_fee");
+for (const batch of noBuilderFeeTransactions.serialize()) {
+  for (const txn of batch) {
+    console.log(toBase64(txn));
+  }
+}
