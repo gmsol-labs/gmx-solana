@@ -24,8 +24,9 @@ use crate::{
 
 use super::{TransactionGroup, TransactionGroupOptions};
 
-/// Options for attaching a `set_builder_fee` instruction to a single order,
-/// keyed by the order's market token inside [`CreateOrderOptions::set_builder_fee`].
+/// Options for attaching a `set_builder_fee` instruction to a created order.
+///
+/// A single value for the whole call, see [`CreateOrderOptions::set_builder_fee`].
 #[derive(Debug, Serialize, Deserialize, Tsify)]
 #[tsify(from_wasm_abi)]
 pub struct SetBuilderFeeOptions {
@@ -66,12 +67,16 @@ pub struct CreateOrderOptions {
     force_create_positions_in_parallel: Option<bool>,
     #[serde(default)]
     force_create_positions: Option<bool>,
-    /// Builder fee to attach to every order in this call.
+    /// Builder fee to attach to the order created by this call.
     ///
-    /// When set, a `set_builder_fee` instruction is appended for each created
-    /// order in the same transaction group (after all create-order instructions).
-    /// The same builder and factor apply to every order; for different settings
-    /// per order, use separate `create_orders_builder` calls.
+    /// When set, the `set_builder_fee` instruction is merged into the order's own
+    /// atomic group immediately after its create instruction, so no submission can
+    /// land an order that exists without its checkpoint.
+    ///
+    /// Only a single-order call may carry one. A batch is rejected, because one
+    /// `final_output_token` cannot describe orders that do not share it; use
+    /// separate `create_orders_builder` calls instead. Swap orders are rejected
+    /// too, matching the on-chain `BuilderFeeOrderKindNotAllowed`.
     #[serde(default)]
     set_builder_fee: Option<SetBuilderFeeOptions>,
 }
