@@ -24,15 +24,16 @@ use crate::{
 
 use super::{TransactionGroup, TransactionGroupOptions};
 
-/// Options for attaching a `set_builder_fee` instruction to a created order.
+/// Options for attaching a `set_builder_fee` instruction to the created orders.
 ///
 /// A single value for the whole call, see [`CreateOrderOptions::set_builder_fee`].
+/// The token the fee is denominated in is not given here: it is the orders' own
+/// final output token, which they necessarily share.
 #[derive(Debug, Serialize, Deserialize, Tsify)]
 #[tsify(from_wasm_abi)]
 pub struct SetBuilderFeeOptions {
     pub builder: StringPubkey,
     pub expected_factor: u128,
-    pub final_output_token: StringPubkey,
 }
 
 /// Options for creating orders.
@@ -67,16 +68,14 @@ pub struct CreateOrderOptions {
     force_create_positions_in_parallel: Option<bool>,
     #[serde(default)]
     force_create_positions: Option<bool>,
-    /// Builder fee to attach to the order created by this call.
+    /// Builder fee to attach to every order created by this call.
     ///
-    /// When set, the `set_builder_fee` instruction is merged into the order's own
+    /// When set, a `set_builder_fee` instruction is merged into each order's own
     /// atomic group immediately after its create instruction, so no submission can
     /// land an order that exists without its checkpoint.
     ///
-    /// Only a single-order call may carry one. A batch is rejected, because one
-    /// `final_output_token` cannot describe orders that do not share it; use
-    /// separate `create_orders_builder` calls instead. Swap orders are rejected
-    /// too, matching the on-chain `BuilderFeeOrderKindNotAllowed`.
+    /// The same builder and factor apply to every order in the call. Swap orders are
+    /// rejected, matching the on-chain `BuilderFeeOrderKindNotAllowed`.
     #[serde(default)]
     set_builder_fee: Option<SetBuilderFeeOptions>,
 }
@@ -88,26 +87,28 @@ pub fn create_orders_builder(
     orders: Vec<CreateOrderParams>,
     options: CreateOrderOptions,
 ) -> crate::Result<CreateOrdersBuilder> {
-    if options.set_builder_fee.is_some() {
-        if kind.is_swap() {
-            return Err(crate::Error::custom(
-                "set_builder_fee is not supported on swap orders: the program rejects it on-chain \
-                 (BuilderFeeOrderKindNotAllowed), only increase and decrease orders may carry one",
-            ));
-        }
-        if orders.len() > 1 {
-            return Err(crate::Error::custom(
-                "set_builder_fee applies one final_output_token to every order in the call; a \
-                 multi-order batch would record it as every order's own output token at creation, \
-                 which is only correct for orders that actually share it. Use separate \
-                 create_orders_builder calls per order instead",
-            ));
-        }
+    if options.set_builder_fee.is_some() && kind.is_swap() {
+        return Err(crate::Error::custom(
+            "set_builder_fee is not supported on swap orders: the program rejects it on-chain \
+             (BuilderFeeOrderKindNotAllowed), only increase and decrease orders may carry one",
+        ));
     }
 
     let pay_token = options
         .pay_token
         .unwrap_or(options.collateral_or_swap_out_token);
+    // The token every order in this call pays out in, which is also the token a builder
+    // fee is denominated in. An increase order's output is its own collateral; a decrease
+    // pays out to `receive_token`, defaulting to the same collateral-or-swap-out token.
+    // This builder already assumes one receive token across the batch, so deriving it here
+    // is what makes a caller-supplied `final_output_token` unnecessary.
+    let final_output_token = if kind.is_increase() {
+        options.collateral_or_swap_out_token
+    } else {
+        options
+            .receive_token
+            .unwrap_or(options.collateral_or_swap_out_token)
+    };
     let wrap_native = (kind.is_increase() || kind.is_swap())
         && (pay_token.0 == WrapNative::NATIVE_MINT
             && !options.skip_wrap_native_on_pay.unwrap_or_default());
@@ -185,9 +186,7 @@ pub fn create_orders_builder(
                         .builder(sbf_opts.builder)
                         .expected_factor(sbf_opts.expected_factor)
                         .build()
-                        .into_atomic_group(&SetBuilderFeeHint {
-                            final_output_token: sbf_opts.final_output_token,
-                        })
+                        .into_atomic_group(&SetBuilderFeeHint { final_output_token })
                 })
                 .transpose()?;
 
@@ -202,16 +201,11 @@ pub fn create_orders_builder(
                 .pay_token(options.pay_token)
                 .receive_token(options.receive_token.or_else(|| {
                     // An increase order needs its final-output-token escrow prepared to be
-                    // eligible for a builder fee; opt it in using the fee's own target token
-                    // when the caller did not already ask for a specific one.
-                    kind.is_increase()
-                        .then(|| {
-                            options
-                                .set_builder_fee
-                                .as_ref()
-                                .map(|sbf| sbf.final_output_token)
-                        })
-                        .flatten()
+                    // eligible for a builder fee, and an increase order's output token is
+                    // its own collateral. Opt it in when the caller did not ask for a
+                    // specific receive token themselves.
+                    (kind.is_increase() && options.set_builder_fee.is_some())
+                        .then_some(final_output_token)
                 }))
                 .swap_path(options.swap_path.clone().unwrap_or_default())
                 .unwrap_native_on_receive(

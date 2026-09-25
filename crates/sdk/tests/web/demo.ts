@@ -651,7 +651,6 @@ const builderFeeBuilder = create_orders_builder(
     set_builder_fee: {
       builder: builderPubkey,
       expected_factor: 1_000_000_000_000_000_000n,
-      final_output_token: finalOutputToken,
     },
   }
 );
