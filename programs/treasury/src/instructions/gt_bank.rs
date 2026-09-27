@@ -269,6 +269,7 @@ impl<'info> SyncGtBank<'info> {
 #[derive(Accounts)]
 pub struct CompleteGtExchange<'info> {
     /// Owner.
+    #[account(mut)]
     pub owner: Signer<'info>,
     /// Store.
     #[account(constraint = store.load()?.validate_not_restarted().map(|_| true)?)]
