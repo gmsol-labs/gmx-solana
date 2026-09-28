@@ -1095,12 +1095,10 @@ async fn set_builder_fee() -> eyre::Result<()> {
     let owner_user = owner.find_user_address(store, &owner.payer());
     let builder_user = builder.find_user_address(store, &builder.payer());
 
-    // The claim vault has to exist before a checkpoint is allowed, and this
-    // instruction deliberately creates nothing. Minting zero is how the fixture
-    // opens an ATA without moving a balance.
-    for user in [&owner_user, &builder_user] {
-        deployment.mint_or_transfer_to("fBTC", user, 0).await?;
-    }
+    // A positive fee needs the builder's vault. Revocation supplies no ATA.
+    deployment
+        .mint_or_transfer_to("fBTC", &builder_user, 0)
+        .await?;
 
     let collateral_amount = 100_000;
     deployment
@@ -1135,6 +1133,36 @@ async fn set_builder_fee() -> eyre::Result<()> {
                 .send_without_preflight()
                 .await?;
             tracing::info!(%signature, "the builder advertised its factor");
+
+            let err = owner
+                .store_transaction()
+                .anchor_accounts(accounts::SetBuilderFee {
+                    owner: owner.payer(),
+                    store: *store,
+                    order,
+                    builder: builder_user,
+                    final_output_token: fbtc.address,
+                    claim_vault: None,
+                    user_token_controller: find_user_token_controller_address(
+                        &builder_user,
+                        &fbtc.address,
+                        owner.store_program_id(),
+                    )
+                    .0,
+                    token_program: anchor_spl::token::ID,
+                    event_authority: owner.store_event_authority(),
+                    program: *owner.store_program_id(),
+                })
+                .anchor_args(args::SetBuilderFee {
+                    expected_factor: CAP,
+                })
+                .send()
+                .await
+                .expect_err("a positive factor must require the builder ATA");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::TokenAccountNotProvided.into()),
+            );
 
             // The checkpoint carries the factor the owner signed for, and
             // one unit off in either direction is rejected. Exact equality is
@@ -1227,6 +1255,33 @@ async fn set_builder_fee() -> eyre::Result<()> {
             assert_eq!(
                 revoked.builder_fee_factor, 0,
                 "checkpointing a zero-advertising account must clear the fee"
+            );
+            let err = owner
+                .store_transaction()
+                .anchor_accounts(accounts::SetBuilderFee {
+                    owner: owner.payer(),
+                    store: *store,
+                    order,
+                    builder: owner_user,
+                    final_output_token: fbtc.address,
+                    claim_vault: Some(get_associated_token_address(&builder_user, &fbtc.address)),
+                    user_token_controller: find_user_token_controller_address(
+                        &owner_user,
+                        &fbtc.address,
+                        owner.store_program_id(),
+                    )
+                    .0,
+                    token_program: anchor_spl::token::ID,
+                    event_authority: owner.store_event_authority(),
+                    program: *owner.store_program_id(),
+                })
+                .anchor_args(args::SetBuilderFee { expected_factor: 0 })
+                .send()
+                .await
+                .expect_err("a supplied ATA must belong to the selected builder");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(ErrorCode::ConstraintAssociated.into()),
             );
 
             // The cap is enforced again at checkpoint time, not only when
@@ -1446,9 +1501,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
     let signature = rpc.send().await?;
     tracing::info!(%order, %signature, "created a fee-eligible limit increase order");
 
-    // Missing claim vault. The keeper's User Account has no fBTC ATA, and
-    // a builder without one would make settlement, and therefore closing the
-    // order, fail later; refusing here is what keeps that unreachable.
+    // A zero-factor checkpoint works even when the builder's ATA is absent.
     keeper.prepare_user(store)?.send_without_preflight().await?;
     let keeper_user = keeper.find_user_address(store, &keeper.payer());
     assert_eq!(
@@ -1459,16 +1512,11 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
         "this case is only meaningful while that claim vault does not exist"
     );
 
-    let err = client
+    client
         .set_builder_fee(store, &order, &keeper_user, 0, None)
         .await?
         .send()
-        .await
-        .expect_err("should reject a builder whose claim vault does not exist");
-    assert_eq!(
-        gmsol_sdk::Error::from(err).anchor_error_code(),
-        Some(ErrorCode::AccountNotInitialized.into()),
-    );
+        .await?;
 
     // The controller PDA. The SDK always derives it, so a mismatch has to
     // be built by hand; the one here is the controller of a different mint.
@@ -1482,7 +1530,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
             order,
             builder: user,
             final_output_token: fbtc.address,
-            claim_vault: get_associated_token_address(&user, &fbtc.address),
+            claim_vault: None,
             user_token_controller: wrong_controller,
             token_program: anchor_spl::token::ID,
             event_authority: client.store_event_authority(),
@@ -1884,8 +1932,8 @@ async fn revoked_builder_fee_still_closes_in_bundle() -> eyre::Result<()> {
     let signature = owner.prepare_user(store)?.send_without_preflight().await?;
     tracing::info!(%signature, "prepared a user account");
 
-    // The revocation checkpoint names the owner's own User Account, which advertises zero. Its
-    // claim vault still has to exist, and minting zero is how the fixture opens an ATA.
+    // The revocation checkpoint names the owner's own User Account, which advertises zero.
+    // This test also uses its claim vault later, so open it here with a zero mint.
     let owner_user = owner.find_user_address(store, &owner.payer());
     deployment
         .mint_or_transfer_to("fBTC", &owner_user, 0)
@@ -2016,7 +2064,7 @@ async fn soft_failed_execution_records_no_builder_fee() -> eyre::Result<()> {
         tracing::info!(%signature, "prepared a user account");
     }
 
-    // `set_builder_fee` requires the claim vault to exist, even though nothing is ever settled here.
+    // This positive-factor checkpoint requires the claim vault even though nothing is settled here.
     let builder_user = builder.find_user_address(store, &builder.payer());
     deployment
         .mint_or_transfer_to("fBTC", &builder_user, 0)
