@@ -1615,14 +1615,27 @@ fn compute_builder_fee_amount(
         .ok_or_else(|| error!(CoreError::TokenAmountOverflow))
 }
 
-/// Clamps a computed builder fee down to at most `available`, so a
-/// builder fee never turns an otherwise-fillable order into a hard
-/// failure.
+/// Clamps a computed decrease builder fee to the outputs that fund the
+/// final output token's escrow. A secondary output in another token cannot
+/// cover the fee.
 ///
 /// Upholds the coverage invariant on the decrease side: the recorded
 /// amount cannot exceed the output that funds the escrow.
-fn clamp_builder_fee_amount(fee_amount: u128, available: u128) -> u128 {
-    fee_amount.min(available)
+fn clamp_builder_fee_amount(
+    fee_amount: u128,
+    final_output_token: &Pubkey,
+    output_amount: u64,
+    secondary_output_token: &Pubkey,
+    secondary_output_amount: u64,
+) -> Result<u128> {
+    let available_amount = if final_output_token == secondary_output_token {
+        output_amount
+            .checked_add(secondary_output_amount)
+            .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?
+    } else {
+        output_amount
+    };
+    Ok(fee_amount.min(u128::from(available_amount)))
 }
 
 fn execute_swap(
@@ -2100,10 +2113,10 @@ fn execute_decrease_position(
         // estimate of the fee above, so the fee is funded even when the
         // position closes at a loss.
         //
-        // Underpayment is tolerated (records whatever the output amount
-        // covers) rather than erroring: unlike increase, this can't fall
-        // back to cancelling the order, since a decrease order may be
-        // closing an insolvent position.
+        // Underpayment is tolerated (records whatever the outputs in the
+        // final output token cover) rather than erroring: unlike increase,
+        // this can't fall back to cancelling the order, since a decrease
+        // order may be closing an insolvent position.
         //
         // A consequence of recording rather than netting: the amount
         // checked against the order's `min_output` below is the gross
@@ -2124,14 +2137,20 @@ fn execute_decrease_position(
                 builder_fee_factor,
                 &final_output_token_price,
             )?;
-            let paid_amount = clamp_builder_fee_amount(payable_amount, output_amount.into());
+            let paid_amount = clamp_builder_fee_amount(
+                payable_amount,
+                &final_output_token,
+                output_amount,
+                &secondary_output_token,
+                secondary_output_amount,
+            )?;
 
             // Upholds conservation and coverage: the recorded amount is the
-            // clamped one, and the full output lands in the escrow, so the
-            // fee value is already sitting there.
+            // clamped one, and both outputs land in the same escrow when
+            // their tokens match, so the fee value is already sitting there.
             //
-            // `paid_amount` is clamped to `output_amount`, a `u64`, so the
-            // conversion cannot fail.
+            // The fee is clamped to a checked u64 amount, so this conversion
+            // cannot fail.
             builder_fee = Some(BuilderFeeCharge {
                 token: final_output_token,
                 payable_amount,
@@ -2481,17 +2500,94 @@ mod tests {
 
     #[test]
     fn builder_fee_shortfall_clamps_to_available() {
-        assert_eq!(clamp_builder_fee_amount(1_000, 100), 100);
+        let token = Pubkey::new_unique();
+        assert_eq!(
+            clamp_builder_fee_amount(1_000, &token, 100, &token, 0).unwrap(),
+            100
+        );
     }
 
     #[test]
     fn builder_fee_clamps_to_zero_when_nothing_is_available() {
-        assert_eq!(clamp_builder_fee_amount(1_000, 0), 0);
+        let token = Pubkey::new_unique();
+        assert_eq!(
+            clamp_builder_fee_amount(1_000, &token, 0, &token, 0).unwrap(),
+            0
+        );
     }
 
     #[test]
     fn builder_fee_within_available_is_unchanged() {
-        assert_eq!(clamp_builder_fee_amount(10, 100), 10);
+        let token = Pubkey::new_unique();
+        assert_eq!(
+            clamp_builder_fee_amount(10, &token, 100, &token, 0).unwrap(),
+            10
+        );
+    }
+
+    #[test]
+    fn decrease_builder_fee_counts_same_token_secondary_output() {
+        let token = Pubkey::new_unique();
+        // The primary output alone cannot cover the fee, but both outputs can.
+        assert_eq!(
+            clamp_builder_fee_amount(50, &token, 20, &token, 80).unwrap(),
+            50
+        );
+    }
+
+    #[test]
+    fn decrease_builder_fee_shortfall_clamps_to_combined_outputs() {
+        let token = Pubkey::new_unique();
+        assert_eq!(
+            clamp_builder_fee_amount(150, &token, 20, &token, 80).unwrap(),
+            100
+        );
+    }
+
+    #[test]
+    fn decrease_builder_fee_can_be_funded_only_by_secondary_output() {
+        let token = Pubkey::new_unique();
+        assert_eq!(
+            clamp_builder_fee_amount(50, &token, 0, &token, 80).unwrap(),
+            50
+        );
+    }
+
+    #[test]
+    fn decrease_builder_fee_ignores_different_token_secondary_output() {
+        let final_token = Pubkey::new_unique();
+        let secondary_token = Pubkey::new_unique();
+        // Even a maximum secondary balance cannot fund a fee in another token.
+        // It must not be added to the primary amount or trigger overflow either.
+        for primary_amount in [0, 20] {
+            assert_eq!(
+                clamp_builder_fee_amount(
+                    50,
+                    &final_token,
+                    primary_amount,
+                    &secondary_token,
+                    u64::MAX,
+                )
+                .unwrap(),
+                u128::from(primary_amount)
+            );
+        }
+    }
+
+    #[test]
+    fn decrease_builder_fee_accepts_maximum_combined_output() {
+        let token = Pubkey::new_unique();
+        assert_eq!(
+            clamp_builder_fee_amount(u128::MAX, &token, u64::MAX - 1, &token, 1).unwrap(),
+            u128::from(u64::MAX)
+        );
+    }
+
+    #[test]
+    fn decrease_builder_fee_rejects_combined_output_overflow() {
+        let token = Pubkey::new_unique();
+        let err = clamp_builder_fee_amount(50, &token, u64::MAX, &token, 1).unwrap_err();
+        assert_eq!(err, error!(CoreError::TokenAmountOverflow));
     }
 
     #[test]
