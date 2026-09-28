@@ -6,7 +6,7 @@ use gmsol_programs::{
     anchor_lang::error::ErrorCode,
     gmsol_store::{
         client::{accounts, args},
-        events::BuilderFeeCharged,
+        events::{BuilderFeeCharged, TradeEvent},
         types::{DecreasePositionSwapType, UpdateOrderParams},
     },
 };
@@ -46,6 +46,22 @@ async fn last_builder_fee_charged(
             _ => None,
         })
         .ok_or_eyre("no `BuilderFeeCharged` event was emitted")
+}
+
+/// Read the trade event for `order` from its most recent transaction.
+async fn last_trade_event(client: &Client<SignerRef>, order: &Pubkey) -> eyre::Result<TradeEvent> {
+    let slot = client.get_slot(None).await?;
+    let events = client
+        .last_order_events(order, slot, CommitmentConfig::confirmed())
+        .await?;
+
+    events
+        .into_iter()
+        .find_map(|event| match event {
+            GMSOLCPIEvent::TradeEvent(event) if event.order == *order => Some(event),
+            _ => None,
+        })
+        .ok_or_eyre("no `TradeEvent` was emitted for the order")
 }
 
 /// Counts the [`BuilderFeeCharged`] events on the most recent transaction touching `order`,
@@ -1806,6 +1822,16 @@ async fn charges_builder_fee_on_execution() -> eyre::Result<()> {
             );
             assert_eq!(charged.token, fbtc.address);
 
+            let trade = last_trade_event(&keeper, &order).await?;
+            assert_eq!(
+                trade.final_output_token, fbtc.address,
+                "the increase trade event must identify the builder fee token"
+            );
+            assert_eq!(
+                trade.transfer_out.final_output_token, pending_amount,
+                "the trade event must report the fee routed into the final output escrow"
+            );
+
             // The fee is unsettled, so the order is not closable yet.
             let err = owner
                 .close_order(&order)?
@@ -1943,6 +1969,14 @@ async fn revoked_builder_fee_still_closes_in_bundle() -> eyre::Result<()> {
                 )
                 .await?;
             tracing::info!(%order, "executed the order with the bundled close");
+
+            let trade = last_trade_event(&keeper, &order).await?;
+            assert_eq!(
+                trade.final_output_token,
+                Pubkey::default(),
+                "an increase without a builder fee must keep the default final output mint"
+            );
+            assert_eq!(trade.transfer_out.final_output_token, 0);
 
             let err = owner
                 .order(&order)
