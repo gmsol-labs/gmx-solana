@@ -1281,7 +1281,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
                 .expect_err("a supplied ATA must belong to the selected builder");
             assert_eq!(
                 gmsol_sdk::Error::from(err).anchor_error_code(),
-                Some(ErrorCode::ConstraintAssociated.into()),
+                Some(ErrorCode::ConstraintTokenOwner.into()),
             );
 
             // The cap is enforced again at checkpoint time, not only when
