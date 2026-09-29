@@ -3171,6 +3171,13 @@ pub mod gmsol_store {
     /// immutable between calls, so neither an order update nor a later change to
     /// the builder's advertised factor can alter what will be charged.
     ///
+    /// Submit this instruction with order creation in the same transaction if
+    /// the order must carry a builder fee. With separate transactions, a keeper
+    /// can execute the order before the checkpoint lands, charging no builder
+    /// fee. The checkpoint cannot be attached after execution or closure.
+    /// Check the order's current state before retrying a failed checkpoint;
+    /// retrying it on an order that is no longer pending will fail again.
+    ///
     /// Calling again on a still-pending order re-runs every validation and
     /// overwrites the checkpoint. Since a User Account advertises a zero factor
     /// until its owner sets one, checkpointing an account that advertises zero
