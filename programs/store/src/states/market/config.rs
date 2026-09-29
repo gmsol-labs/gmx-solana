@@ -171,7 +171,7 @@ impl MarketConfig {
         self.funding_fee_threshold_for_decrease_funding =
             constants::DEFAULT_FUNDING_FEE_THRESHOLD_FOR_DECREASE_FUNDING;
 
-        self.reserve_factor = constants::DEFAULT_RECEIVER_FACTOR;
+        self.reserve_factor = constants::DEFAULT_RESERVE_FACTOR;
         self.open_interest_reserve_factor = constants::DEFAULT_OPEN_INTEREST_RESERVE_FACTOR;
 
         self.max_pnl_factor_for_long_deposit = constants::DEFAULT_MAX_PNL_FACTOR_FOR_LONG_DEPOSIT;
@@ -670,5 +670,36 @@ impl MarketConfigBuffer {
     /// Return the number of entries.
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytemuck::Zeroable;
+
+    /// A market that is enabled before its configuration is pushed runs on these defaults, so
+    /// `reserve_factor` must come from the reserve default and not from the receiver one.
+    #[test]
+    fn init_uses_the_dedicated_reserve_factor() {
+        let mut config = MarketConfig::zeroed();
+        config.init();
+
+        assert_eq!(config.reserve_factor, constants::DEFAULT_RESERVE_FACTOR);
+        assert_eq!(
+            config.open_interest_reserve_factor,
+            constants::DEFAULT_OPEN_INTEREST_RESERVE_FACTOR
+        );
+    }
+
+    /// The test above can only discriminate while the two constants differ. If they ever converge
+    /// it would keep passing against the very assignment it exists to reject, so pin the premise
+    /// rather than leaving it implicit.
+    #[test]
+    fn reserve_and_receiver_defaults_are_distinct() {
+        assert_ne!(
+            constants::DEFAULT_RESERVE_FACTOR,
+            constants::DEFAULT_RECEIVER_FACTOR
+        );
     }
 }
