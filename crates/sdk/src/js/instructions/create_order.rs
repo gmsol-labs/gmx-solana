@@ -11,16 +11,30 @@ use crate::{
         callback::Callback,
         order::{
             CreateOrder, CreateOrderHint, CreateOrderKind, CreateOrderParams, PreparePosition,
+            SetBuilderFee, SetBuilderFeeHint,
         },
         token::{PrepareTokenAccounts, WrapNative},
         user::PrepareUser,
-        StoreProgram,
+        utils::generate_nonce,
+        NonceBytes, StoreProgram,
     },
     js::instructions::BuildTransactionOptions,
     serde::StringPubkey,
 };
 
 use super::{TransactionGroup, TransactionGroupOptions};
+
+/// Options for attaching a `set_builder_fee` instruction to the created orders.
+///
+/// A single value for the whole call, see [`CreateOrderOptions::set_builder_fee`].
+/// The token the fee is denominated in is not given here: it is the orders' own
+/// final output token, which they necessarily share.
+#[derive(Debug, Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct SetBuilderFeeOptions {
+    pub builder: StringPubkey,
+    pub expected_factor: u128,
+}
 
 /// Options for creating orders.
 #[derive(Debug, Serialize, Deserialize, Tsify)]
@@ -54,6 +68,16 @@ pub struct CreateOrderOptions {
     force_create_positions_in_parallel: Option<bool>,
     #[serde(default)]
     force_create_positions: Option<bool>,
+    /// Builder fee to attach to every order created by this call.
+    ///
+    /// When set, a `set_builder_fee` instruction is merged into each order's own
+    /// atomic group immediately after its create instruction, so no submission can
+    /// land an order that exists without its checkpoint.
+    ///
+    /// The same builder and factor apply to every order in the call. Swap orders are
+    /// rejected, matching the on-chain `BuilderFeeOrderKindNotAllowed`.
+    #[serde(default)]
+    set_builder_fee: Option<SetBuilderFeeOptions>,
 }
 
 /// Create transaction builder for create-order ixs.
@@ -63,9 +87,28 @@ pub fn create_orders_builder(
     orders: Vec<CreateOrderParams>,
     options: CreateOrderOptions,
 ) -> crate::Result<CreateOrdersBuilder> {
+    if options.set_builder_fee.is_some() && kind.is_swap() {
+        return Err(crate::Error::custom(
+            "set_builder_fee is not supported on swap orders: the program rejects it on-chain \
+             (BuilderFeeOrderKindNotAllowed), only increase and decrease orders may carry one",
+        ));
+    }
+
     let pay_token = options
         .pay_token
         .unwrap_or(options.collateral_or_swap_out_token);
+    // The token every order in this call pays out in, which is also the token a builder
+    // fee is denominated in. An increase order's output is its own collateral; a decrease
+    // pays out to `receive_token`, defaulting to the same collateral-or-swap-out token.
+    // This builder already assumes one receive token across the batch, so deriving it here
+    // is what makes a caller-supplied `final_output_token` unnecessary.
+    let final_output_token = if kind.is_increase() {
+        options.collateral_or_swap_out_token
+    } else {
+        options
+            .receive_token
+            .unwrap_or(options.collateral_or_swap_out_token)
+    };
     let wrap_native = (kind.is_increase() || kind.is_swap())
         && (pay_token.0 == WrapNative::NATIVE_MINT
             && !options.skip_wrap_native_on_pay.unwrap_or_default());
@@ -91,6 +134,7 @@ pub fn create_orders_builder(
         options.force_create_positions.unwrap_or_default() || force_create_positions_in_parallel;
 
     let mut positions = HashMap::<StringPubkey, _>::default();
+
     let create = orders
         .into_iter()
         .map(|params| {
@@ -102,6 +146,9 @@ pub fn create_orders_builder(
             let program = options.program.clone().unwrap_or_default();
             let payer = options.payer;
             let collateral_or_swap_out_token = options.collateral_or_swap_out_token;
+
+            let nonce: NonceBytes = params.nonce.unwrap_or_else(generate_nonce);
+
             if !kind.is_swap() {
                 tokens.insert(hint.long_token);
                 tokens.insert(hint.short_token);
@@ -124,6 +171,25 @@ pub fn create_orders_builder(
                 }
             }
 
+            // Built here but merged into this order's own atomic group below, not collected
+            // into a stage of its own: the checkpoint has to be in the same transaction as
+            // the create it belongs to. See SCSOL-13.
+            let set_builder_fee = options
+                .set_builder_fee
+                .as_ref()
+                .map(|sbf_opts| {
+                    let order = program.find_order_address(&payer.0, &nonce);
+                    SetBuilderFee::builder()
+                        .program(program.clone())
+                        .payer(payer)
+                        .order(order)
+                        .builder(sbf_opts.builder)
+                        .expected_factor(sbf_opts.expected_factor)
+                        .build()
+                        .into_atomic_group(&SetBuilderFeeHint { final_output_token })
+                })
+                .transpose()?;
+
             let amount = params.amount;
             let create = CreateOrder::builder()
                 .program(program)
@@ -131,8 +197,16 @@ pub fn create_orders_builder(
                 .kind(kind)
                 .collateral_or_swap_out_token(collateral_or_swap_out_token)
                 .params(params)
+                .nonce(nonce)
                 .pay_token(options.pay_token)
-                .receive_token(options.receive_token)
+                .receive_token(options.receive_token.or_else(|| {
+                    // An increase order needs its final-output-token escrow prepared to be
+                    // eligible for a builder fee, and an increase order's output token is
+                    // its own collateral. Opt it in when the caller did not ask for a
+                    // specific receive token themselves.
+                    (kind.is_increase() && options.set_builder_fee.is_some())
+                        .then_some(final_output_token)
+                }))
                 .swap_path(options.swap_path.clone().unwrap_or_default())
                 .unwrap_native_on_receive(
                     !options.skip_unwrap_native_on_receive.unwrap_or_default(),
@@ -145,7 +219,7 @@ pub fn create_orders_builder(
                 .build()
                 .into_atomic_group(hint)?;
 
-            let ag = if wrap_native {
+            let mut ag = if wrap_native {
                 let mut wrap = WrapNative::builder()
                     .owner(options.payer)
                     .lamports(amount.try_into().map_err(crate::Error::custom)?)
@@ -156,6 +230,12 @@ pub fn create_orders_builder(
             } else {
                 create
             };
+
+            // Immediately after create, in the same transaction, so no submission can land
+            // an order that exists without its builder fee checkpoint.
+            if let Some(set_builder_fee) = set_builder_fee {
+                ag.merge(set_builder_fee);
+            }
 
             Ok(ag)
         })

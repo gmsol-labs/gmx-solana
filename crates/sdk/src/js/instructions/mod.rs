@@ -37,6 +37,9 @@ pub mod create_glv_deposit;
 /// Create GLV withdrawal.
 pub mod create_glv_withdrawal;
 
+/// Builder fee instructions (settle, claim, set factor).
+pub mod builder_fee;
+
 /// A JS version transaction group options.
 #[derive(Debug, Serialize, Deserialize, Tsify, Default)]
 #[tsify(from_wasm_abi)]
