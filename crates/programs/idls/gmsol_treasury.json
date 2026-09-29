@@ -412,6 +412,7 @@
           "docs": [
             "Owner."
           ],
+          "writable": true,
           "signer": true
         },
         {
