@@ -3181,7 +3181,8 @@ pub mod gmsol_store {
     /// Calling again on a still-pending order re-runs every validation and
     /// overwrites the checkpoint. Since a User Account advertises a zero factor
     /// until its owner sets one, checkpointing an account that advertises zero
-    /// is how an owner cancels a builder fee it no longer wants.
+    /// is how an owner cancels a builder fee it no longer wants, even when the
+    /// BuilderFee feature is disabled.
     ///
     /// # Accounts
     /// *[See the documentation for the accounts.](SetBuilderFee)*
@@ -3195,9 +3196,10 @@ pub mod gmsol_store {
     /// # Errors
     /// - The [`owner`](SetBuilderFee::owner) must be a signer and must own the
     ///   [`order`](SetBuilderFee::order).
-    /// - The [`store`](SetBuilderFee::store) must be properly initialized, and
-    ///   must not have the [`BuilderFee`](crate::states::feature::DomainDisabledFlag::BuilderFee)
-    ///   feature disabled.
+    /// - The [`store`](SetBuilderFee::store) must be properly initialized and
+    ///   must pass restart validation. For a nonzero factor, it must not have
+    ///   the [`BuilderFee`](crate::states::feature::DomainDisabledFlag::BuilderFee)
+    ///   feature disabled; a zero-factor revocation is allowed while disabled.
     /// - The [`order`](SetBuilderFee::order) must:
     ///   - Belong to the `store`
     ///   - Still be pending execution

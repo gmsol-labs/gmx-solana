@@ -1343,16 +1343,146 @@ async fn set_builder_fee() -> eyre::Result<()> {
     Ok(())
 }
 
-/// The orders, account shapes and store states a checkpoint must refuse.
+/// Disabling builder fees blocks nonzero checkpoints, but not revocation of an
+/// existing fee. Uses a locked builder so its advertised factor stays unchanged
+/// across the separately locked cap and feature-flag windows.
+#[tokio::test]
+async fn set_builder_fee_allows_revocation_when_disabled() -> eyre::Result<()> {
+    const CAP: u128 = MARKET_USD_UNIT / 100;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let owner = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let builder = deployment.locked_user_client().await?;
+    let store = &deployment.store;
+    let fbtc = deployment.token("fBTC").expect("must exist");
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+
+    owner.prepare_user(store)?.send().await?;
+    builder.prepare_user(store)?.send().await?;
+    let owner_user = owner.find_user_address(store, &owner.payer());
+    let builder_user = builder.find_user_address(store, &builder.payer());
+    for user in [&owner_user, &builder_user] {
+        deployment.mint_or_transfer_to("fBTC", user, 0).await?;
+    }
+
+    let collateral_amount = 100_000;
+    deployment
+        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, collateral_amount)
+        .await?;
+    let price = 400_000 * MARKET_USD_UNIT / 10u128.pow(fbtc.config.decimals as u32);
+    let (rpc, order) = owner
+        .limit_increase(
+            store,
+            market_token,
+            false,
+            5_000 * MARKET_USD_UNIT,
+            price,
+            true,
+            collateral_amount,
+        )
+        .prepare_final_output_token_escrow(true)
+        .build_with_address()
+        .await?;
+    rpc.send().await?;
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            builder.set_builder_fee_factor(store, CAP)?.send().await?;
+            owner
+                .set_builder_fee(store, &order, &builder_user, CAP, None)
+                .await?
+                .send()
+                .await?;
+            let checkpointed = owner.order(&order).await?;
+            assert_eq!(checkpointed.builder, builder_user);
+            assert_eq!(checkpointed.builder_fee_factor, CAP);
+            Ok(())
+        })
+        .await?;
+
+    deployment
+        .with_builder_fee_disabled(async {
+            // The feature gate still rejects a correctly authorized nonzero
+            // factor, even though the cap has also returned to zero.
+            let err = owner
+                .set_builder_fee(store, &order, &builder_user, CAP, None)
+                .await?
+                .send()
+                .await
+                .expect_err("nonzero checkpoints must remain disabled");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::FeatureDisabled.into()),
+            );
+
+            let err = builder
+                .set_builder_fee(store, &order, &owner_user, 0, None)
+                .await?
+                .send()
+                .await
+                .expect_err("only the order owner may revoke the fee");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::OwnerMismatched.into()),
+            );
+            let unchanged = owner.order(&order).await?;
+            assert_eq!(unchanged.builder, builder_user);
+            assert_eq!(unchanged.builder_fee_factor, CAP);
+
+            owner
+                .set_builder_fee(store, &order, &owner_user, 0, None)
+                .await?
+                .send()
+                .await?;
+            let revoked = owner.order(&order).await?;
+            assert_eq!(revoked.builder, owner_user);
+            assert_eq!(revoked.builder_fee_factor, 0);
+
+            // Supplying expected_factor = 0 cannot bypass the advertised rate.
+            let err = owner
+                .set_builder_fee(store, &order, &builder_user, 0, None)
+                .await?
+                .send()
+                .await
+                .expect_err("revocation must still match the advertised factor");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::BuilderFeeFactorMismatched.into()),
+            );
+
+            Ok(())
+        })
+        .await?;
+
+    // Once the feature and cap are restored, nonzero checkpoints work again.
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            owner
+                .set_builder_fee(store, &order, &builder_user, CAP, None)
+                .await?
+                .send()
+                .await?;
+            let checkpointed = owner.order(&order).await?;
+            assert_eq!(checkpointed.builder, builder_user);
+            assert_eq!(checkpointed.builder_fee_factor, CAP);
+            builder.set_builder_fee_factor(store, 0)?.send().await?;
+            Ok(())
+        })
+        .await?;
+
+    owner.close_order(&order)?.build().await?.send().await?;
+    Ok(())
+}
+
+/// The orders and account shapes a checkpoint must refuse.
 ///
 /// None of these need the fee cap raised: the builder here is the caller's own
 /// User Account, which advertises zero, and zero is payable under any cap. That
-/// keeps most of this test out of the lock that serializes [`set_builder_fee`].
-///
-/// The exception is the disabled-feature case at the end, which moves a store
-/// global and so takes that lock for its window through
-/// [`Deployment::with_builder_fee_disabled`]. The cases above it run unlocked
-/// and are unaffected, being the same test and therefore sequential.
+/// keeps this test independent of the cap and feature-flag windows in the
+/// other checkpoint tests.
 ///
 /// Liquidation and `AutoDeleveraging` are the two keeper-initiated kinds, and
 /// they are deliberately absent: `create_order` refuses both (`OrderKindNotAllowed`,
@@ -1561,33 +1691,13 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
         Some(ErrorCode::ConstraintSeeds.into()),
     );
 
-    // The mechanism sits behind `DomainDisabledFlag::BuilderFee`, and this
-    // is the only instruction it gates. Everything above rejects on the order or
-    // the accounts, so the case is only meaningful with a call that would
-    // otherwise be accepted, which is why the same call is repeated afterwards.
-    deployment
-        .with_builder_fee_disabled(async {
-            let err = client
-                .set_builder_fee(store, &order, &user, 0, None)
-                .await?
-                .send()
-                .await
-                .expect_err("should reject a checkpoint while the feature is disabled");
-            assert_eq!(
-                gmsol_sdk::Error::from(err).anchor_error_code(),
-                Some(CoreError::FeatureDisabled.into()),
-            );
-
-            Ok::<_, eyre::Report>(())
-        })
-        .await?;
-
+    // Positive control: the same order accepts a valid zero-factor checkpoint.
     let signature = client
         .set_builder_fee(store, &order, &user, 0, None)
         .await?
         .send_without_preflight()
         .await?;
-    tracing::info!(%order, %signature, "the same checkpoint lands once the feature is back on");
+    tracing::info!(%order, %signature, "checkpointed a valid zero factor");
 
     let signature = client.close_order(&order)?.build().await?.send().await?;
     tracing::info!(%order, %signature, "cancelled the order");

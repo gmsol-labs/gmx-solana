@@ -1622,15 +1622,14 @@ impl Deployment {
     /// again.
     ///
     /// Takes the same lock as [`with_builder_fee_cap`](Self::with_builder_fee_cap),
-    /// which is what holds off the checkpoints that would otherwise come back
-    /// with `FeatureDisabled` instead of the error they were asserting. Every
-    /// test that calls `set_builder_fee` either holds that lock or is this one's
-    /// own caller, so nothing else can be in flight while the flag is down. Keep
-    /// the body short for the same reason the raised-cap windows are short.
+    /// which holds off nonzero checkpoints that would otherwise come back with
+    /// `FeatureDisabled` instead of the error they were asserting. Zero-factor
+    /// checkpoints do not depend on this flag. Keep the body short for the same
+    /// reason the raised-cap windows are short.
     ///
     /// The restore is reached however the body ends, including a failed
     /// assertion, which is why the panic is caught rather than just awaited: the
-    /// feature left disabled would fail every later checkpoint in the binary.
+    /// feature left disabled would fail later nonzero checkpoints in the binary.
     pub(crate) async fn with_builder_fee_disabled<Fut, T>(&self, fut: Fut) -> eyre::Result<T>
     where
         Fut: Future<Output = eyre::Result<T>>,

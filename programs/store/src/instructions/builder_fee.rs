@@ -268,27 +268,8 @@ pub struct SetBuilderFee<'info> {
 
 impl SetBuilderFee<'_> {
     pub(crate) fn invoke(ctx: Context<Self>, expected_factor: u128) -> Result<()> {
-        // Upholds the liveness invariant: disabling the mechanism strands
-        // nothing already owed.
-        //
-        // The only builder-fee instruction behind the feature flag. Settlement,
-        // claiming and execution stay ungated on purpose, so disabling the
-        // feature stops new orders from taking on a fee without stranding any
-        // fee already owed. `Default` is the action here because the flag guards
-        // a mechanism rather than a step in an order's lifecycle.
-        //
-        // The same ungating means the flag is not a lever in the other
-        // direction either: disabling the feature cannot release an order whose
-        // settlement is blocked, which is the known liveness exception on
-        // `crate::states::order`.
-        ctx.accounts
-            .store
-            .load()?
-            .validate_not_restarted()?
-            .validate_feature_enabled(
-                DomainDisabledFlag::BuilderFee,
-                ActionDisabledFlag::Default,
-            )?;
+        // Restart protection applies to both checkpointing and revocation.
+        ctx.accounts.store.load()?.validate_not_restarted()?;
 
         // Upholds the authorization invariant: never charged at a factor
         // other than the one the owner authorized.
@@ -306,6 +287,17 @@ impl SetBuilderFee<'_> {
             factor == 0 || ctx.accounts.claim_vault.is_some(),
             CoreError::TokenAccountNotProvided
         );
+
+        // Disabling the feature prevents nonzero checkpoints, but owners must
+        // still be able to revoke a fee on a pending order. Settlement, claiming
+        // and execution stay ungated so fees already owed are not stranded.
+        // `Default` guards the mechanism rather than an order lifecycle step.
+        if factor != 0 {
+            ctx.accounts.store.load()?.validate_feature_enabled(
+                DomainDisabledFlag::BuilderFee,
+                ActionDisabledFlag::Default,
+            )?;
+        }
 
         // Upholds the boundedness invariant: no factor above the cap in force
         // at checkpoint time is ever checkpointed.
