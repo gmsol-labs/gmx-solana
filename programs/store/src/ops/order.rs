@@ -1840,6 +1840,9 @@ fn execute_increase_position(
         // escrow, and `TransferOut` is discarded by the same failure that
         // must leave the record unwritten.
         transfer_out.transfer_out(false, payable_amount)?;
+        if payable_amount != 0 {
+            event.set_final_output_token(&final_output_token);
+        }
 
         (
             collateral_increment_amount,
