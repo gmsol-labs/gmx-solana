@@ -69,14 +69,15 @@ impl IntoAtomicGroup for SetBuilderFee {
         // vault are `Account<TokenAccount>`, not the token-interface flavour.
         let token_program_id = anchor_spl::token::ID;
 
-        // The claim vault is the builder's ATA for the fee token. It has to
-        // exist already: this instruction only checks for it, and creating it
-        // here would charge the order's owner rent for the builder's account.
-        let claim_vault: Pubkey = get_associated_token_address_with_program_id(
-            &builder,
-            &final_output_token,
-            &token_program_id,
-        );
+        // A zero-factor checkpoint revokes the fee, so it needs no claim vault.
+        // A nonzero checkpoint still requires the existing builder ATA.
+        let claim_vault: Option<Pubkey> = (self.expected_factor != 0).then(|| {
+            get_associated_token_address_with_program_id(
+                &builder,
+                &final_output_token,
+                &token_program_id,
+            )
+        });
 
         let set = self
             .program
@@ -132,5 +133,54 @@ impl FromRpcClientWith<SetBuilderFee> for SetBuilderFeeHint {
         Ok(Self {
             final_output_token: final_output_token.into(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zero_factor_uses_the_optional_account_sentinel() -> crate::Result<()> {
+        let scub_owner = Pubkey::new_unique();
+        let scub_order = Pubkey::new_unique();
+        let scub_builder = Pubkey::new_unique();
+        let scub_mint = Pubkey::new_unique();
+        let hint = SetBuilderFeeHint::builder()
+            .final_output_token(scub_mint)
+            .build();
+
+        for (factor, expected_vault) in [
+            (0, None),
+            (
+                1,
+                Some(get_associated_token_address_with_program_id(
+                    &scub_builder,
+                    &scub_mint,
+                    &anchor_spl::token::ID,
+                )),
+            ),
+        ] {
+            let builder = SetBuilderFee::builder()
+                .payer(scub_owner)
+                .order(scub_order)
+                .builder(scub_builder)
+                .expected_factor(factor)
+                .build();
+            let program_id = builder.program.id.0;
+            let group = builder.into_atomic_group(&hint)?;
+            let instruction = group
+                .instructions_with_options(Default::default())
+                .find(|ix| ix.program_id == program_id)
+                .expect("set_builder_fee instruction must be present");
+
+            assert_eq!(
+                instruction.accounts[5].pubkey,
+                expected_vault.unwrap_or(program_id),
+                "claim_vault account differs from the wire format for factor {factor}"
+            );
+        }
+
+        Ok(())
     }
 }

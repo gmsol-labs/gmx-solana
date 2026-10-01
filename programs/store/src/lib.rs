@@ -3209,8 +3209,10 @@ pub mod gmsol_store {
     ///   User Account of the same `store`, advertising exactly `expected_factor`.
     /// - The factor must not exceed the store's
     ///   [`MaxBuilderFeeFactor`](crate::states::FactorKey::MaxBuilderFeeFactor).
-    /// - The [`claim_vault`](SetBuilderFee::claim_vault) must already exist, and
-    ///   the [`user_token_controller`](SetBuilderFee::user_token_controller) must
+    /// - The [`claim_vault`](SetBuilderFee::claim_vault) must already exist when
+    ///   the factor is nonzero. If supplied with a zero factor, it must still be
+    ///   the builder's associated token account for the final output token.
+    ///   The [`user_token_controller`](SetBuilderFee::user_token_controller) must
     ///   match its PDA derivation.
     pub fn set_builder_fee(ctx: Context<SetBuilderFee>, expected_factor: u128) -> Result<()> {
         SetBuilderFee::invoke(ctx, expected_factor)

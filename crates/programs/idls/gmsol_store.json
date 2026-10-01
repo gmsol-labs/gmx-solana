@@ -19399,8 +19399,10 @@
         "User Account of the same `store`, advertising exactly `expected_factor`.",
         "- The factor must not exceed the store's",
         "[`MaxBuilderFeeFactor`](crate::states::FactorKey::MaxBuilderFeeFactor).",
-        "- The [`claim_vault`](SetBuilderFee::claim_vault) must already exist, and",
-        "the [`user_token_controller`](SetBuilderFee::user_token_controller) must",
+        "- The [`claim_vault`](SetBuilderFee::claim_vault) must already exist when",
+        "the factor is nonzero. If supplied with a zero factor, it must still be",
+        "the builder's associated token account for the final output token.",
+        "The [`user_token_controller`](SetBuilderFee::user_token_controller) must",
         "match its PDA derivation."
       ],
       "discriminator": [
@@ -19480,17 +19482,16 @@
             "[`final_output_token`](Self::final_output_token) owned by the builder's",
             "User Account.",
             "",
-            "Required to exist here so that settlement cannot fail for want of a",
-            "destination. Settlement takes the vault as a plain token account and",
-            "creates nothing, so a builder without one would make the order",
-            "unsettleable and therefore uncloseable. Checking at checkpoint time moves",
-            "that failure to the only point where it is still recoverable: the owner",
-            "simply does not get a builder attached.",
+            "Required for a nonzero factor so that settlement cannot fail for want",
+            "of a destination. A zero-factor checkpoint revokes the fee and needs no",
+            "vault. When supplied, the associated-token constraints still apply.",
             "",
-            "Existence is necessary and not sufficient. A vault that exists here can",
-            "still be frozen before settlement, which is the known liveness exception",
-            "documented with the builder fee invariants on [`crate::states::order`]."
+            "For a nonzero factor, existence is necessary and not sufficient. A vault",
+            "that exists here can still be frozen before settlement, which is the",
+            "known liveness exception documented with the builder fee invariants on",
+            "[`crate::states::order`]."
           ],
+          "optional": true,
           "pda": {
             "seeds": [
               {

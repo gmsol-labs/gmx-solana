@@ -230,21 +230,19 @@ pub struct SetBuilderFee<'info> {
     /// [`final_output_token`](Self::final_output_token) owned by the builder's
     /// User Account.
     ///
-    /// Required to exist here so that settlement cannot fail for want of a
-    /// destination. Settlement takes the vault as a plain token account and
-    /// creates nothing, so a builder without one would make the order
-    /// unsettleable and therefore uncloseable. Checking at checkpoint time moves
-    /// that failure to the only point where it is still recoverable: the owner
-    /// simply does not get a builder attached.
+    /// Required for a nonzero factor so that settlement cannot fail for want
+    /// of a destination. A zero-factor checkpoint revokes the fee and needs no
+    /// vault. When supplied, the associated-token constraints still apply.
     ///
-    /// Existence is necessary and not sufficient. A vault that exists here can
-    /// still be frozen before settlement, which is the known liveness exception
-    /// documented with the builder fee invariants on [`crate::states::order`].
+    /// For a nonzero factor, existence is necessary and not sufficient. A vault
+    /// that exists here can still be frozen before settlement, which is the
+    /// known liveness exception documented with the builder fee invariants on
+    /// [`crate::states::order`].
     #[account(
         associated_token::mint = final_output_token,
         associated_token::authority = builder,
     )]
-    pub claim_vault: Box<Account<'info, TokenAccount>>,
+    pub claim_vault: Option<Box<Account<'info, TokenAccount>>>,
     /// The (per-user, per-token) user token controller PDA.
     ///
     /// Reserved for future withdrawal access control. It has no backing account
@@ -303,6 +301,10 @@ impl SetBuilderFee<'_> {
             factor,
             expected_factor,
             CoreError::BuilderFeeFactorMismatched
+        );
+        require!(
+            factor == 0 || ctx.accounts.claim_vault.is_some(),
+            CoreError::TokenAccountNotProvided
         );
 
         // Upholds the boundedness invariant: no factor above the cap in force
