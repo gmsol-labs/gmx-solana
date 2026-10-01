@@ -184,6 +184,13 @@ impl ExecuteShiftOperation<'_, '_> {
                 return Err(error!(err));
             }
         }
+        RemainingAccountsForMarket::validate_for_execution(
+            self.remaining_accounts,
+            &self.store.key(),
+            self.from_market_token_mint.key(),
+            None,
+            &[self.from_market, self.to_market],
+        )?;
         match self.perform_shift() {
             Ok(()) => Ok(true),
             Err(err) if !throw_on_execution_error => {
