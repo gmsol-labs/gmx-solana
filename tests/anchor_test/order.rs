@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::BTreeSet, time::Duration};
 
 use anchor_spl::associated_token::get_associated_token_address;
 use eyre::OptionExt;
@@ -25,6 +25,61 @@ use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
+
+#[tokio::test]
+async fn malformed_keeper_account_does_not_cancel_order() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let owner = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_005, 6_000_000_000_003, true)
+        .await?;
+    deployment
+        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, 100_000)
+        .await?;
+    let (creation, order) = owner
+        .market_increase(store, market_token, true, 100_000, true, MARKET_USD_UNIT)
+        .build_with_address()
+        .await?;
+    creation.send().await?;
+
+    let before = owner.order(&order).await?;
+    let market_address = keeper.find_market_address(store, &market_token);
+    let market = keeper.market(&market_address).await?;
+    let store_account = keeper.store(store).await?;
+    let token_map = keeper.authorized_token_map(store).await?;
+    let invalid_inventory = Pubkey::find_program_address(&[b"scub-invalid-vi"], &gmsol_store::ID).0;
+
+    let mut execution = keeper.execute_order(store, oracle, &order, true)?;
+    execution.close(false).hint(
+        &before,
+        &market,
+        &store_account,
+        &token_map,
+        None,
+        BTreeSet::from([invalid_inventory]),
+    )?;
+    let err = deployment
+        .execute_with_pyth(&mut execution, None, true, true)
+        .await
+        .expect_err("malformed keeper account must revert the transaction");
+    assert_eq!(
+        err.anchor_error_code(),
+        Some(ErrorCode::AccountOwnedByWrongProgram.into())
+    );
+
+    let after = owner.order(&order).await?;
+    assert!(matches!(after.header.action_state()?, ActionState::Pending));
+    assert_eq!(
+        after.header.max_execution_lamports,
+        before.header.max_execution_lamports
+    );
+    Ok(())
+}
 
 /// Read the [`BuilderFeeCharged`] event emitted by the most recent transaction touching `order`.
 ///
