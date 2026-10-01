@@ -15,6 +15,12 @@ use crate::{builders::StoreProgram, serde::StringPubkey};
 /// advertises, so the caller has to read that factor before building this
 /// instruction rather than letting the program pick it up implicitly.
 ///
+/// Submit this instruction with order creation in the same transaction when a
+/// builder fee is required. If submitted separately, a keeper can execute the
+/// order without the fee before this checkpoint lands. Execution or closure
+/// prevents attaching it afterwards. Check the order's state before retrying a
+/// failed checkpoint, since a non-pending order will reject it again.
+///
 /// To cancel a builder fee, checkpoint a User Account advertising `0`. The
 /// owner's own User Account does so until its owner sets a factor, which makes
 /// it the natural choice.
