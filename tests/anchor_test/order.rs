@@ -67,9 +67,11 @@ async fn malformed_keeper_account_does_not_cancel_order() -> eyre::Result<()> {
         .execute_with_pyth(&mut execution, None, true, true)
         .await
         .expect_err("malformed keeper account must revert the transaction");
-    assert_eq!(
-        err.anchor_error_code(),
-        Some(ErrorCode::AccountOwnedByWrongProgram.into())
+    let error_code: u32 = ErrorCode::AccountOwnedByWrongProgram.into();
+    assert!(
+        err.to_string()
+            .contains(&format!("custom program error: 0x{error_code:x}")),
+        "unexpected transaction error: {err:?}"
     );
 
     let after = owner.order(&order).await?;
