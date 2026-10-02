@@ -195,7 +195,7 @@ mod tests {
                 .expect("set_builder_fee instruction must be present");
 
             assert_eq!(
-                instruction.accounts[5].pubkey,
+                instruction.accounts[6].pubkey,
                 expected_vault.unwrap_or(program_id),
                 "claim_vault account differs from the wire format for factor {factor}"
             );
