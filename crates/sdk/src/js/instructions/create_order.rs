@@ -186,7 +186,10 @@ pub fn create_orders_builder(
                         .builder(sbf_opts.builder)
                         .expected_factor(sbf_opts.expected_factor)
                         .build()
-                        .into_atomic_group(&SetBuilderFeeHint { final_output_token })
+                        .into_atomic_group(&SetBuilderFeeHint {
+                            market: *market_token,
+                            final_output_token,
+                        })
                 })
                 .transpose()?;
 

@@ -19374,6 +19374,13 @@
         "is how an owner cancels a builder fee it no longer wants, even when the",
         "BuilderFee feature is disabled.",
         "",
+        "The checkpoint is bound to the order address and market, but not to the",
+        "order's market-scoped ID. A transaction can therefore be withheld and",
+        "applied to a replacement order at the same address in the same market.",
+        "A durable nonce transaction can be withheld indefinitely. Clients should",
+        "use random order nonces without reuse and submit this instruction in the",
+        "same transaction as order creation whenever possible.",
+        "",
         "# Accounts",
         "*[See the documentation for the accounts.](SetBuilderFee)*",
         "",
@@ -19392,6 +19399,7 @@
         "feature disabled; a zero-factor revocation is allowed while disabled.",
         "- The [`order`](SetBuilderFee::order) must:",
         "- Belong to the `store`",
+        "- Belong to the passed [`market`](SetBuilderFee::market)",
         "- Still be pending execution",
         "- Be a user-initiated position order, so swap orders and the",
         "keeper-initiated kinds are rejected",
@@ -19438,7 +19446,17 @@
             "Store."
           ],
           "relations": [
+            "market",
             "builder"
+          ]
+        },
+        {
+          "name": "market",
+          "docs": [
+            "Market the owner authorized this checkpoint for."
+          ],
+          "relations": [
+            "store"
           ]
         },
         {

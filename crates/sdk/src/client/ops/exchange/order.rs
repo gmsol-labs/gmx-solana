@@ -166,6 +166,10 @@ where
     }
 
     /// Set the nonce.
+    ///
+    /// Use a random value and do not reuse it. An order address can be created
+    /// again after closure, and a withheld authorization may still target a
+    /// replacement order at that address.
     pub fn nonce(&mut self, nonce: NonceBytes) -> &mut Self {
         self.nonce = Some(nonce);
         self

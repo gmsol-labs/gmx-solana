@@ -7,7 +7,7 @@ use crate::{
     states::{
         feature::{ActionDisabledFlag, DomainDisabledFlag},
         user::{UserHeader, USER_TOKEN_CONTROLLER_SEED},
-        FactorKey, Order, Seed, Store,
+        FactorKey, Market, Order, Seed, Store,
     },
     CoreError,
 };
@@ -186,6 +186,9 @@ pub struct SetBuilderFee<'info> {
     pub owner: Signer<'info>,
     /// Store.
     pub store: AccountLoader<'info, Store>,
+    /// Market the owner authorized this checkpoint for.
+    #[account(has_one = store)]
+    pub market: AccountLoader<'info, Market>,
     /// The order to checkpoint the builder fee onto.
     ///
     /// Restricted to orders still pending execution: once an order has been
@@ -195,6 +198,7 @@ pub struct SetBuilderFee<'info> {
     #[account(
         mut,
         constraint = order.load()?.header.store == store.key() @ CoreError::StoreMismatched,
+        constraint = order.load()?.header.market == market.key() @ CoreError::MarketMismatched,
         constraint = order.load()?.header.owner == owner.key() @ CoreError::OwnerMismatched,
         constraint = order.load()?.header.action_state()?.is_pending() @ CoreError::PreconditionsAreNotMet,
     )]
