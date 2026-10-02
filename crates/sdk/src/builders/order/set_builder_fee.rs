@@ -163,8 +163,10 @@ mod tests {
         let scub_owner = Pubkey::new_unique();
         let scub_order = Pubkey::new_unique();
         let scub_builder = Pubkey::new_unique();
+        let scub_market = Pubkey::new_unique();
         let scub_mint = Pubkey::new_unique();
         let hint = SetBuilderFeeHint::builder()
+            .market(scub_market)
             .final_output_token(scub_mint)
             .build();
 
