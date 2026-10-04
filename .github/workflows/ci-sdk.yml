@@ -18,9 +18,9 @@ env:
   RUSTFLAGS: -Dwarnings
   RUST_BACKTRACE: 1
   RUSTUP_WINDOWS_PATH_ADD_BIN: 1
-  rust_stable: "1.88"
-  rust_clippy: "1.88"
-  rust_min: "1.86"
+  rust_stable: "1.89"
+  rust_clippy: "1.89"
+  rust_min: "1.89"
   libudev: "1.0"
   exclude_packages: "--exclude gmsol-store --exclude gmsol-treasury --exclude gmsol-timelock --exclude gmsol-competition --exclude gmsol-callback --exclude gmsol-mock-chainlink-verifier --exclude gmsol-liquidity-provider --exclude gmsol-gt-incentive --exclude gmsol-tests"
 
