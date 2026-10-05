@@ -134,6 +134,12 @@ For a working implementation, check out the [gmx-solana-programs][gmx-solana-pro
 [treasury-program-link]: https://explorer.solana.com/address/GTuvYD5SxkTq4FLG6JV1FQ5dkczr1AfgDcBHaFsBdtBg/anchor-program
 [gmx-solana-programs-link]: https://github.com/gmsol-labs/gmx-solana-programs
 
+## Builder fees
+
+A builder's claim vault is the associated token account owned by the builder's User Account for a fee token mint. A nonzero builder fee requires this vault to exist before the fee is set. There is one claim vault, and one rent-exempt deposit, per builder User Account and fee mint. At the current mainnet rent rate, the minimum deposit for a 165-byte token account is approximately 0.0015 SOL; the required amount can change with rent parameters.
+
+`claim_builder_fees` withdraws the vault's token balance but leaves the account and its rent deposit in place. The protocol does not offer a way to close the claim vault or reclaim that deposit. Closing a vault while checkpointed orders still owe it fees could prevent those orders from settling and closing.
+
 ## Known Issues
 
 ### Keepers
