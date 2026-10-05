@@ -173,11 +173,12 @@ pub fn create_orders_builder(
 
             // Built here but merged into this order's own atomic group below, not collected
             // into a stage of its own: the checkpoint has to be in the same transaction as
-            // the create it belongs to. See SCSOL-13.
+            // the create it belongs to.
             //
-            // `created_at_slot` is `None` for the same reason: the slot the order will be
-            // created in is not knowable at build time, and sharing the transaction with
-            // the create is exactly the case the program's unbound form is sound for.
+            // `created_at_slot` is a placeholder for the same reason: the slot the order
+            // will be created in is not knowable at build time. The program accepts any
+            // value here because the checkpoint executes in the order's creation slot,
+            // which sharing the transaction guarantees.
             let set_builder_fee = options
                 .set_builder_fee
                 .as_ref()
@@ -193,7 +194,7 @@ pub fn create_orders_builder(
                         .into_atomic_group(&SetBuilderFeeHint {
                             market: program.find_market_address(market_token).into(),
                             final_output_token,
-                            created_at_slot: None,
+                            created_at_slot: 0,
                         })
                 })
                 .transpose()?;

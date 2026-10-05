@@ -66,9 +66,10 @@ pub struct SetBuilderFee {
 /// carries is what binds the checkpoint to the order instance that was read:
 /// order addresses are reused once the occupying order closes, so a hint read
 /// from a previous instance makes the program reject the checkpoint rather
-/// than attach a fee to a different order at the same address. Pass `None`
-/// for the slot only when the checkpoint shares a transaction with the
-/// order's creation, where atomicity provides the binding instead.
+/// than attach a fee to a different order at the same address. Only the
+/// same-transaction create flow cannot know the slot at build time; it passes
+/// a placeholder instead and is accepted because the checkpoint executes in
+/// the slot the order was created in.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
@@ -85,9 +86,9 @@ pub struct SetBuilderFeeHint {
     #[builder(setter(into))]
     pub final_output_token: StringPubkey,
     /// The order's creation slot, read from the same fresh read of the order
-    /// account. See the hint's own documentation for what it binds and when
-    /// `None` is sound.
-    pub created_at_slot: Option<u64>,
+    /// account. See the hint's own documentation for what it binds and when a
+    /// placeholder is accepted.
+    pub created_at_slot: u64,
 }
 
 impl IntoAtomicGroup for SetBuilderFee {
@@ -167,7 +168,7 @@ impl FromRpcClientWith<SetBuilderFee> for SetBuilderFeeHint {
         Ok(Self {
             market: order.header.market.into(),
             final_output_token: final_output_token.into(),
-            created_at_slot: Some(order.header.created_at_slot),
+            created_at_slot: order.header.created_at_slot,
         })
     }
 }
@@ -183,7 +184,7 @@ mod tests {
         let scub_builder = Pubkey::new_unique();
         let scub_market = Pubkey::new_unique();
         let scub_mint = Pubkey::new_unique();
-        for (factor, slot) in [(0, None), (1, Some(42)), (1, None)] {
+        for (factor, slot) in [(0, 0u64), (1, 42), (1, 0)] {
             let hint = SetBuilderFeeHint::builder()
                 .market(scub_market)
                 .final_output_token(scub_mint)
@@ -223,25 +224,11 @@ mod tests {
                 factor.to_le_bytes(),
                 "expected_factor differs from the wire format for factor {factor}"
             );
-            match slot {
-                Some(slot) => {
-                    assert_eq!(
-                        args[16..],
-                        [1u8]
-                            .into_iter()
-                            .chain(slot.to_le_bytes())
-                            .collect::<Vec<_>>(),
-                        "expected_created_at_slot differs from the wire format for slot {slot}"
-                    );
-                }
-                None => {
-                    assert_eq!(
-                        args[16..],
-                        [0u8],
-                        "expected_created_at_slot differs from the wire format for no slot"
-                    );
-                }
-            }
+            assert_eq!(
+                args[16..],
+                slot.to_le_bytes(),
+                "expected_created_at_slot differs from the wire format for slot {slot}"
+            );
         }
 
         Ok(())

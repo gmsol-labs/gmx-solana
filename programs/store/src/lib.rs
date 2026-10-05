@@ -3172,21 +3172,26 @@ pub mod gmsol_store {
     /// the builder's advertised factor can alter what will be charged.
     ///
     /// Submit this instruction with order creation in the same transaction if
-    /// the order must carry a builder fee, passing `None` for
-    /// `expected_created_at_slot`: the creation slot is not knowable before the
-    /// transaction lands, and atomicity already binds the checkpoint to the
-    /// instance created alongside it. With separate transactions, a keeper
-    /// can execute the order before the checkpoint lands, charging no builder
-    /// fee. The checkpoint cannot be attached after execution or closure.
-    /// Check the order's current state before retrying a failed checkpoint;
-    /// retrying it on an order that is no longer pending will fail again.
+    /// the order must carry a builder fee. The creation slot is not knowable
+    /// before the transaction lands, so such a checkpoint cannot name it; pass
+    /// any placeholder, `0` by convention. The program accepts it because the
+    /// order it lands on was created in the very slot the checkpoint executes
+    /// in, which the same-transaction flow always satisfies. With separate
+    /// transactions, a keeper can execute the order before the checkpoint
+    /// lands, charging no builder fee. The checkpoint cannot be attached after
+    /// execution or closure. Check the order's current state before retrying
+    /// a failed checkpoint; retrying it on an order that is no longer pending
+    /// will fail again.
     ///
-    /// A standalone checkpoint must bind itself to one order instance by
-    /// passing `Some` of the order's creation slot, read fresh from the order
-    /// account. Order addresses are derived from owner and nonce and are
-    /// reused once the occupying order closes, so an unbound standalone
-    /// checkpoint signed for a previous instance could otherwise land on a
-    /// different order that now holds the address.
+    /// A standalone checkpoint binds itself to one order instance: the
+    /// argument must equal the order's creation slot, read fresh from the
+    /// order account. Order addresses are derived from owner and nonce and
+    /// are reused once the occupying order closes, so a checkpoint signed for
+    /// a previous instance is rejected by the instance now holding the
+    /// address, whose recorded slot has moved on and which was not created in
+    /// the current slot. Orders initialized before the field existed record a
+    /// creation slot of `0`, so `0` binds them, vacuously for a recycled
+    /// legacy address, since every legacy instance reads `0`.
     ///
     /// Calling again on a still-pending order re-runs every validation and
     /// overwrites the checkpoint. Since a User Account advertises a zero factor
@@ -3209,11 +3214,12 @@ pub mod gmsol_store {
     ///   advertising. The call fails unless it matches exactly, which is what
     ///   stops a builder from raising its rate between the owner signing and the
     ///   transaction landing.
-    /// - `expected_created_at_slot`: `Some` of the creation slot the caller
-    ///   read from the [`order`](SetBuilderFee::order), binding the checkpoint
-    ///   to that instance of the order address. `None` skips the binding and
-    ///   is only sound when this instruction shares a transaction with the
-    ///   order's creation.
+    /// - `expected_created_at_slot`: The creation slot the caller read from
+    ///   the [`order`](SetBuilderFee::order), binding the checkpoint to that
+    ///   instance of the order address. The checkpoint is also accepted, for
+    ///   any value of this argument, when the order was created in the slot
+    ///   the checkpoint executes in: the same-transaction create flow, where
+    ///   the slot is not knowable at build time.
     ///
     /// # Errors
     /// - The [`owner`](SetBuilderFee::owner) must be a signer and must own the
@@ -3226,8 +3232,8 @@ pub mod gmsol_store {
     ///   - Belong to the `store`
     ///   - Belong to the passed [`market`](SetBuilderFee::market)
     ///   - Still be pending execution
-    ///   - Record `expected_created_at_slot` as its creation slot, when that
-    ///     argument is `Some`
+    ///   - Record `expected_created_at_slot` as its creation slot, or have
+    ///     been created in the slot this instruction executes in
     ///   - Be a user-initiated position order, so swap orders and the
     ///     keeper-initiated kinds are rejected
     ///   - Have an initialized final output token, equal to the passed
@@ -3251,7 +3257,7 @@ pub mod gmsol_store {
     pub fn set_builder_fee(
         ctx: Context<SetBuilderFee>,
         expected_factor: u128,
-        expected_created_at_slot: Option<u64>,
+        expected_created_at_slot: u64,
     ) -> Result<()> {
         SetBuilderFee::invoke(ctx, expected_factor, expected_created_at_slot)
     }

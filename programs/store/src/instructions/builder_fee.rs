@@ -274,7 +274,7 @@ impl SetBuilderFee<'_> {
     pub(crate) fn invoke(
         ctx: Context<Self>,
         expected_factor: u128,
-        expected_created_at_slot: Option<u64>,
+        expected_created_at_slot: u64,
     ) -> Result<()> {
         // Restart protection applies to both checkpointing and revocation.
         ctx.accounts.store.load()?.validate_not_restarted()?;
@@ -290,25 +290,40 @@ impl SetBuilderFee<'_> {
         // that no longer exists. The creation slot identifies the instance:
         // it is written once at initialization and never updated, so two
         // instances sharing an address differ here unless they were created in
-        // the same slot, which a replayed signature cannot arrange on its own.
+        // the same slot.
         //
-        // `None` leaves the checkpoint unbound. That is only sound when the
-        // checkpoint shares a transaction with the order's creation, where
-        // atomicity already guarantees the instance it lands on, and it is the
-        // supported way to build that flow, since the creation slot is not
-        // knowable before the transaction lands. A standalone checkpoint must
-        // pass `Some` of the order's current creation slot, read fresh.
+        // Acceptance has two disjuncts. The first binds a standalone
+        // checkpoint to the instance the caller read: the expected slot must
+        // equal the recorded one. The second covers the create-and-checkpoint
+        // flow, where the creation slot is not knowable when the transaction
+        // is built: `Clock::get()` returns the same slot to every instruction
+        // of one transaction, so a checkpoint sharing a transaction with the
+        // create always sees the recorded slot equal the current one, and the
+        // caller passes any placeholder. A checkpoint signed for a closed
+        // instance fails both: recreation moved the recorded slot on, and only
+        // an instance created in the current slot satisfies the second
+        // disjunct. There is no unbound form: every checkpoint is held to one
+        // of the two.
         //
-        // Orders initialized before the field existed record `0`, so `Some(0)`
-        // still binds them, to the only value they can have.
-        if let Some(expected) = expected_created_at_slot {
-            let created_at_slot = ctx.accounts.order.load()?.header.created_at_slot();
-            require_eq!(
-                created_at_slot,
-                expected,
-                CoreError::OrderCreatedAtSlotMismatched
-            );
-        }
+        // The residual is the same-slot recreate: two instances created in one
+        // slot at one address are indistinguishable here, so a checkpoint
+        // signed for the first also lands on the second. Arranging that still
+        // requires the owner's signatures on the close and the recreate, since
+        // `owner` above must sign and match, plus landing inside one ~400ms
+        // slot, so no stale signature alone can exploit it.
+        //
+        // Orders initialized before the field existed record `0`, so an
+        // expected slot of `0` still binds them, to the only value they can
+        // have. For a recycled legacy address that binding is vacuous, since
+        // every legacy instance reads `0`, so replay protection for legacy
+        // orders is nominal until the order is recreated under this program.
+        // The second disjunct can never accept a legacy order, slot `0` being
+        // long past on any established cluster.
+        let created_at_slot = ctx.accounts.order.load()?.header.created_at_slot();
+        require!(
+            created_at_slot == expected_created_at_slot || created_at_slot == Clock::get()?.slot,
+            CoreError::OrderCreatedAtSlotMismatched
+        );
 
         // Upholds the authorization invariant: never charged at a factor
         // other than the one the owner authorized.

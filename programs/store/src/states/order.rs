@@ -34,9 +34,11 @@
 //! A standalone checkpoint is also bound to one order instance: the caller
 //! names the creation slot it read from the order, so a checkpoint signed for
 //! an order that has since closed cannot attach a fee to a different order
-//! that reused its address. The unbound form is reserved for checkpoints that
-//! share a transaction with the order's creation, where atomicity provides
-//! the same guarantee.
+//! that reused its address. A checkpoint that shares a transaction with the
+//! order's creation cannot name the slot yet and is instead accepted because
+//! the order it lands on was created in the very slot the checkpoint executes
+//! in. The program holds every checkpoint to one of the two, so no unbound
+//! form exists.
 //!
 //! ## Boundedness
 //!
