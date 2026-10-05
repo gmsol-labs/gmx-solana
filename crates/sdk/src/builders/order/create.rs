@@ -186,6 +186,10 @@ pub struct CreateOrder {
     #[builder(default, setter(strip_option, into))]
     pub receiver: Option<StringPubkey>,
     /// Nonce for the order.
+    ///
+    /// Use a random value and do not reuse it. An order address can be created
+    /// again after closure, and a withheld authorization may still target a
+    /// replacement order at that address.
     #[cfg_attr(serde, serde(default))]
     #[builder(default, setter(strip_option, into))]
     pub nonce: Option<NonceBytes>,
