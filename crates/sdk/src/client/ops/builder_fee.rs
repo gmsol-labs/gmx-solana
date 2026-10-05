@@ -31,6 +31,10 @@ pub trait BuilderFeeOps<C> {
     /// the builder currently advertises, so read it from the builder's User
     /// Account rather than guessing; the call is rejected on any mismatch.
     ///
+    /// The hint binds the checkpoint to the order instance it was read from,
+    /// through the creation slot, so prefer the default fresh-read hint over a
+    /// cached or hand-built one for a standalone checkpoint.
+    ///
     /// Passing a User Account that advertises `0` clears the checkpoint, which
     /// is how a builder fee is cancelled.
     ///

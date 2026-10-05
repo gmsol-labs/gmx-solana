@@ -1199,6 +1199,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
                 })
                 .anchor_args(args::SetBuilderFee {
                     expected_factor: CAP,
+                    expected_created_at_slot: None,
                 })
                 .send()
                 .await
@@ -1320,7 +1321,10 @@ async fn set_builder_fee() -> eyre::Result<()> {
                     event_authority: owner.store_event_authority(),
                     program: *owner.store_program_id(),
                 })
-                .anchor_args(args::SetBuilderFee { expected_factor: 0 })
+                .anchor_args(args::SetBuilderFee {
+                    expected_factor: 0,
+                    expected_created_at_slot: None,
+                })
                 .send()
                 .await
                 .expect_err("a supplied ATA must belong to the selected builder");
@@ -1368,6 +1372,226 @@ async fn set_builder_fee() -> eyre::Result<()> {
 
     let signature = owner.close_order(&order)?.build().await?.send().await?;
     tracing::info!(%order, %signature, "cancelled the order");
+
+    Ok(())
+}
+
+/// Instance binding: a bound checkpoint names the creation slot read from the
+/// order, so one signed against a previous instance of an order address is
+/// rejected by whatever instance holds the address when it lands, on any
+/// market.
+///
+/// Needs the cap raised for its nonzero checkpoints, so it runs inside
+/// [`Deployment::with_builder_fee_cap`] like [`set_builder_fee`].
+#[tokio::test]
+async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
+    /// One percent, in the market factor unit.
+    const CAP: u128 = MARKET_USD_UNIT / 100;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("set_builder_fee_binds_to_order_instance");
+    let _enter = span.enter();
+
+    let owner = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let builder = deployment.user_client(Deployment::USER_1)?;
+    let store = &deployment.store;
+    let fbtc = deployment.token("fBTC").expect("must exist");
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_013, 6_000_000_000_009, true)
+        .await?;
+
+    for client in [&owner, &builder] {
+        client.prepare_user(store)?.send_without_preflight().await?;
+    }
+    let builder_user = builder.find_user_address(store, &builder.payer());
+    deployment
+        .mint_or_transfer_to("fBTC", &builder_user, 0)
+        .await?;
+
+    let collateral_amount = 100_000;
+    deployment
+        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, collateral_amount)
+        .await?;
+
+    let size = 5_000 * MARKET_USD_UNIT;
+    let price = 400_000 * MARKET_USD_UNIT / 10u128.pow(fbtc.config.decimals as u32);
+
+    // A fixed nonce is what makes the order recreated later in this test reuse
+    // this order's address, which is the situation the binding exists for.
+    let nonce: [u8; 32] = rand::random();
+    let (rpc, order) = owner
+        .limit_increase(
+            store,
+            market_token,
+            false,
+            size,
+            price,
+            true,
+            collateral_amount,
+        )
+        .prepare_final_output_token_escrow(true)
+        .nonce(nonce)
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%order, %signature, "created the first instance of the order");
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            builder
+                .set_builder_fee_factor(store, CAP)?
+                .send_without_preflight()
+                .await?;
+
+            let created_at_slot = owner.order(&order).await?.header.created_at_slot;
+
+            // Any slot other than the one recorded on the order is rejected:
+            // a stale read, and the zero a pre-field account would report,
+            // which an order created since never matches.
+            for stale in [created_at_slot + 1, 0] {
+                let err = owner
+                    .set_builder_fee(
+                        store,
+                        &order,
+                        &builder_user,
+                        CAP,
+                        Some(
+                            SetBuilderFeeHint::builder()
+                                .final_output_token(fbtc.address)
+                                .created_at_slot(Some(stale))
+                                .build(),
+                        ),
+                    )
+                    .await?
+                    .send()
+                    .await
+                    .expect_err("should reject a checkpoint bound to the wrong creation slot");
+                assert_eq!(
+                    gmsol_sdk::Error::from(err).anchor_error_code(),
+                    Some(CoreError::OrderCreatedAtSlotMismatched.into()),
+                );
+            }
+
+            // The recorded slot is accepted.
+            let signature = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &builder_user,
+                    CAP,
+                    Some(
+                        SetBuilderFeeHint::builder()
+                            .final_output_token(fbtc.address)
+                            .created_at_slot(Some(created_at_slot))
+                            .build(),
+                    ),
+                )
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "checkpointed with the recorded creation slot");
+
+            let checkpointed = owner.order(&order).await?;
+            assert_eq!(checkpointed.builder, builder_user);
+            assert_eq!(checkpointed.builder_fee_factor, CAP);
+
+            // The builder's User Account is shared with other tests, so put its
+            // advertised factor back where it was found.
+            builder
+                .set_builder_fee_factor(store, 0)?
+                .send_without_preflight()
+                .await?;
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    // Close the first instance and recreate the order at the same address.
+    // The checkpoint attempted afterwards is bound to the first instance's
+    // creation slot, so the new instance must reject it: this is the replay
+    // the binding exists to stop.
+    let first_created_at_slot = owner.order(&order).await?.header.created_at_slot;
+    let signature = owner.close_order(&order)?.build().await?.send().await?;
+    tracing::info!(%order, %signature, "closed the first instance");
+
+    let (rpc, recreated) = owner
+        .limit_increase(
+            store,
+            market_token,
+            false,
+            size,
+            price,
+            true,
+            collateral_amount,
+        )
+        .prepare_final_output_token_escrow(true)
+        .nonce(nonce)
+        .build_with_address()
+        .await?;
+    assert_eq!(
+        recreated, order,
+        "the same owner and nonce must derive the same order address"
+    );
+    let signature = rpc.send().await?;
+    tracing::info!(order = %recreated, %signature, "recreated the order at the same address");
+
+    let second_created_at_slot = owner.order(&order).await?.header.created_at_slot;
+    assert_ne!(
+        first_created_at_slot, second_created_at_slot,
+        "two instances of one address must record different creation slots"
+    );
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            builder
+                .set_builder_fee_factor(store, CAP)?
+                .send_without_preflight()
+                .await?;
+
+            let err = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &builder_user,
+                    CAP,
+                    Some(
+                        SetBuilderFeeHint::builder()
+                            .final_output_token(fbtc.address)
+                            .created_at_slot(Some(first_created_at_slot))
+                            .build(),
+                    ),
+                )
+                .await?
+                .send()
+                .await
+                .expect_err("should reject a checkpoint signed for the closed instance");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::OrderCreatedAtSlotMismatched.into()),
+            );
+
+            // The instance now at the address accepts its own slot, which the
+            // default fresh-read hint supplies.
+            let signature = owner
+                .set_builder_fee(store, &order, &builder_user, CAP, None)
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "checkpointed the recreated order with a fresh hint");
+
+            builder
+                .set_builder_fee_factor(store, 0)?
+                .send_without_preflight()
+                .await?;
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    let signature = owner.close_order(&order)?.build().await?.send().await?;
+    tracing::info!(%order, %signature, "cancelled the recreated order");
 
     Ok(())
 }
@@ -1637,6 +1861,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
                 SetBuilderFeeHint::builder()
                     .market(market)
                     .final_output_token(fbtc.address)
+                    .created_at_slot(None)
                     .build(),
             ),
         )
@@ -1714,7 +1939,10 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
             event_authority: client.store_event_authority(),
             program: *client.store_program_id(),
         })
-        .anchor_args(args::SetBuilderFee { expected_factor: 0 })
+        .anchor_args(args::SetBuilderFee {
+            expected_factor: 0,
+            expected_created_at_slot: None,
+        })
         .send()
         .await
         .expect_err("should reject a controller that is not the derived PDA");

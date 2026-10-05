@@ -56,8 +56,17 @@ pub struct ActionHeader {
     pub callback_shared_data: Pubkey,
     /// The account holding partitioned data for callback use.
     pub callback_partitioned_data: Pubkey,
+    /// Creation slot.
+    ///
+    /// Written once by initialization and never updated afterwards, unlike
+    /// [`updated_at_slot`](Self::updated_at_slot), which is refreshed by every
+    /// update. An action address is derived from owner and nonce, so it is
+    /// reused once the action occupying it closes; the creation slot is what
+    /// distinguishes two instances sharing one address, and it is read by
+    /// instructions that must bind a call to one specific instance.
+    pub(crate) created_at_slot: u64,
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 160],
+    reserved: [u8; 152],
 }
 
 impl Default for ActionHeader {
@@ -278,6 +287,16 @@ impl ActionHeader {
         self.updated_at_slot
     }
 
+    /// Get the creation slot of this action instance.
+    ///
+    /// Unlike [`updated_at_slot`](Self::updated_at_slot), this is set only by
+    /// initialization, so it survives updates and identifies the instance
+    /// rather than its latest revision. Reads `0` on accounts initialized
+    /// before this field existed.
+    pub fn created_at_slot(&self) -> u64 {
+        self.created_at_slot
+    }
+
     /// Get the bump.
     pub fn bump(&self) -> u8 {
         self.bump
@@ -325,6 +344,7 @@ impl ActionHeader {
         self.max_execution_lamports = execution_lamports;
         self.updated_at = clock.unix_timestamp;
         self.updated_at_slot = clock.slot;
+        self.created_at_slot = clock.slot;
         self.bump = bump;
         // The creator defaults to the `owner`.
         self.creator = owner;

@@ -31,6 +31,13 @@
 //! An order is never charged a fee its owner did not authorize, and never at a
 //! factor other than the one authorized.
 //!
+//! A standalone checkpoint is also bound to one order instance: the caller
+//! names the creation slot it read from the order, so a checkpoint signed for
+//! an order that has since closed cannot attach a fee to a different order
+//! that reused its address. The unbound form is reserved for checkpoints that
+//! share a transaction with the order's creation, where atomicity provides
+//! the same guarantee.
+//!
 //! ## Boundedness
 //!
 //! A charge never exceeds what the order can pay, and no factor above the cap

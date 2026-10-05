@@ -271,9 +271,44 @@ pub struct SetBuilderFee<'info> {
 }
 
 impl SetBuilderFee<'_> {
-    pub(crate) fn invoke(ctx: Context<Self>, expected_factor: u128) -> Result<()> {
+    pub(crate) fn invoke(
+        ctx: Context<Self>,
+        expected_factor: u128,
+        expected_created_at_slot: Option<u64>,
+    ) -> Result<()> {
         // Restart protection applies to both checkpointing and revocation.
         ctx.accounts.store.load()?.validate_not_restarted()?;
+
+        // Upholds the authorization invariant: a checkpoint authorizes a fee
+        // on one specific order instance, not on whatever order happens to
+        // hold its address when the transaction lands.
+        //
+        // Order addresses are derived from owner and nonce, so an address is
+        // reused once the order occupying it closes. Without this check, a
+        // checkpoint signed for the previous instance could still land on the
+        // new one, attaching to it a fee the owner authorized for an order
+        // that no longer exists. The creation slot identifies the instance:
+        // it is written once at initialization and never updated, so two
+        // instances sharing an address differ here unless they were created in
+        // the same slot, which a replayed signature cannot arrange on its own.
+        //
+        // `None` leaves the checkpoint unbound. That is only sound when the
+        // checkpoint shares a transaction with the order's creation, where
+        // atomicity already guarantees the instance it lands on, and it is the
+        // supported way to build that flow, since the creation slot is not
+        // knowable before the transaction lands. A standalone checkpoint must
+        // pass `Some` of the order's current creation slot, read fresh.
+        //
+        // Orders initialized before the field existed record `0`, so `Some(0)`
+        // still binds them, to the only value they can have.
+        if let Some(expected) = expected_created_at_slot {
+            let created_at_slot = ctx.accounts.order.load()?.header.created_at_slot();
+            require_eq!(
+                created_at_slot,
+                expected,
+                CoreError::OrderCreatedAtSlotMismatched
+            );
+        }
 
         // Upholds the authorization invariant: never charged at a factor
         // other than the one the owner authorized.

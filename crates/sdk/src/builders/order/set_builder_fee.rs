@@ -21,6 +21,10 @@ use crate::{builders::StoreProgram, serde::StringPubkey};
 /// prevents attaching it afterwards. Check the order's state before retrying a
 /// failed checkpoint, since a non-pending order will reject it again.
 ///
+/// A standalone checkpoint binds itself to one order instance through the
+/// creation slot carried by [`SetBuilderFeeHint`], so build the hint from a
+/// fresh read of the order account.
+///
 /// To cancel a builder fee, checkpoint a User Account advertising `0`. The
 /// owner's own User Account does so until its owner sets a factor, which makes
 /// it the natural choice.
@@ -57,6 +61,14 @@ pub struct SetBuilderFee {
 }
 
 /// Hint for [`SetBuilderFee`].
+///
+/// Build it from a fresh read of the order account. The creation slot it
+/// carries is what binds the checkpoint to the order instance that was read:
+/// order addresses are reused once the occupying order closes, so a hint read
+/// from a previous instance makes the program reject the checkpoint rather
+/// than attach a fee to a different order at the same address. Pass `None`
+/// for the slot only when the checkpoint shares a transaction with the
+/// order's creation, where atomicity provides the binding instead.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
@@ -72,6 +84,10 @@ pub struct SetBuilderFeeHint {
     /// here and the instruction would be rejected anyway.
     #[builder(setter(into))]
     pub final_output_token: StringPubkey,
+    /// The order's creation slot, read from the same fresh read of the order
+    /// account. See the hint's own documentation for what it binds and when
+    /// `None` is sound.
+    pub created_at_slot: Option<u64>,
 }
 
 impl IntoAtomicGroup for SetBuilderFee {
@@ -99,6 +115,7 @@ impl IntoAtomicGroup for SetBuilderFee {
             .program
             .anchor_instruction(args::SetBuilderFee {
                 expected_factor: self.expected_factor,
+                expected_created_at_slot: hint.created_at_slot,
             })
             .anchor_accounts(
                 accounts::SetBuilderFee {
@@ -150,6 +167,7 @@ impl FromRpcClientWith<SetBuilderFee> for SetBuilderFeeHint {
         Ok(Self {
             market: order.header.market.into(),
             final_output_token: final_output_token.into(),
+            created_at_slot: Some(order.header.created_at_slot),
         })
     }
 }
@@ -165,22 +183,19 @@ mod tests {
         let scub_builder = Pubkey::new_unique();
         let scub_market = Pubkey::new_unique();
         let scub_mint = Pubkey::new_unique();
-        let hint = SetBuilderFeeHint::builder()
-            .market(scub_market)
-            .final_output_token(scub_mint)
-            .build();
-
-        for (factor, expected_vault) in [
-            (0, None),
-            (
-                1,
-                Some(get_associated_token_address_with_program_id(
+        for (factor, slot) in [(0, None), (1, Some(42)), (1, None)] {
+            let hint = SetBuilderFeeHint::builder()
+                .market(scub_market)
+                .final_output_token(scub_mint)
+                .created_at_slot(slot)
+                .build();
+            let expected_vault = (factor != 0).then(|| {
+                get_associated_token_address_with_program_id(
                     &scub_builder,
                     &scub_mint,
                     &anchor_spl::token::ID,
-                )),
-            ),
-        ] {
+                )
+            });
             let builder = SetBuilderFee::builder()
                 .payer(scub_owner)
                 .order(scub_order)
@@ -199,6 +214,34 @@ mod tests {
                 expected_vault.unwrap_or(program_id),
                 "claim_vault account differs from the wire format for factor {factor}"
             );
+
+            // After the 8-byte discriminator the data is `expected_factor`
+            // followed by `expected_created_at_slot`, both borsh-encoded.
+            let args = &instruction.data[8..];
+            assert_eq!(
+                args[..16],
+                factor.to_le_bytes(),
+                "expected_factor differs from the wire format for factor {factor}"
+            );
+            match slot {
+                Some(slot) => {
+                    assert_eq!(
+                        args[16..],
+                        [1u8]
+                            .into_iter()
+                            .chain(slot.to_le_bytes())
+                            .collect::<Vec<_>>(),
+                        "expected_created_at_slot differs from the wire format for slot {slot}"
+                    );
+                }
+                None => {
+                    assert_eq!(
+                        args[16..],
+                        [0u8],
+                        "expected_created_at_slot differs from the wire format for no slot"
+                    );
+                }
+            }
         }
 
         Ok(())
