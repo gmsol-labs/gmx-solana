@@ -3196,13 +3196,6 @@ pub mod gmsol_store {
     /// is how an owner cancels a builder fee it no longer wants, even when the
     /// BuilderFee feature is disabled.
     ///
-    /// The checkpoint is bound to the order address and market, but not to the
-    /// order's market-scoped ID. A transaction can therefore be withheld and
-    /// applied to a replacement order at the same address in the same market.
-    /// A durable nonce transaction can be withheld indefinitely. Clients should
-    /// use random order nonces without reuse and submit this instruction in the
-    /// same transaction as order creation whenever possible.
-    ///
     /// # Accounts
     /// *[See the documentation for the accounts.](SetBuilderFee)*
     /// The instructions sysvar must be supplied as a remaining account when
