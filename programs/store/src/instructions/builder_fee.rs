@@ -304,20 +304,19 @@ impl SetBuilderFee<'_> {
         let created_at_slot = order.header.created_at_slot();
         drop(order);
         let current_slot = Clock::get()?.slot;
-        let has_preceding_create =
-            if order_id != expected_order_id && created_at_slot == current_slot {
-                let instructions = ctx.remaining_accounts.iter().find(|account| {
-                    account.key == &anchor_lang::solana_program::sysvar::instructions::ID
-                });
-                match instructions {
-                    Some(instructions) => {
-                        has_preceding_create_order(instructions, &ctx.accounts.order.key())?
-                    }
-                    None => false,
+        let has_preceding_create = if expected_order_id == 0 && created_at_slot == current_slot {
+            let instructions = ctx.remaining_accounts.iter().find(|account| {
+                account.key == &anchor_lang::solana_program::sysvar::instructions::ID
+            });
+            match instructions {
+                Some(instructions) => {
+                    has_preceding_create_order(instructions, &ctx.accounts.order.key())?
                 }
-            } else {
-                false
-            };
+                None => false,
+            }
+        } else {
+            false
+        };
         require!(
             matches_order_instance(
                 expected_order_id,
@@ -486,7 +485,8 @@ fn matches_order_instance(
     current_slot: u64,
     has_preceding_create: bool,
 ) -> bool {
-    order_id == expected_order_id || (created_at_slot == current_slot && has_preceding_create)
+    order_id == expected_order_id
+        || (expected_order_id == 0 && created_at_slot == current_slot && has_preceding_create)
 }
 
 fn has_preceding_create_order(instructions: &AccountInfo<'_>, order: &Pubkey) -> Result<bool> {
@@ -538,6 +538,11 @@ mod instance_binding_tests {
     }
 
     #[test]
+    fn rejects_nonzero_placeholder_after_create_in_same_transaction() {
+        assert!(!matches_order_instance(100, 300, 300, 300, true));
+    }
+
+    #[test]
     fn rejects_placeholder_after_creation_slot() {
         assert!(!matches_order_instance(0, 300, 300, 301, true));
     }
@@ -582,6 +587,42 @@ mod instance_binding_tests {
         assert!(!has_preceding_create_order(&scub_info, &Pubkey::new_unique()).unwrap());
         store_current_index(&mut scub_info.try_borrow_mut_data().unwrap(), 0);
         assert!(!has_preceding_create_order(&scub_info, &scub_keys[5]).unwrap());
+    }
+
+    #[test]
+    fn create_order_account_index_matches_generated_instruction() {
+        let scub_other = Pubkey::new_unique();
+        let scub_order = Pubkey::new_unique();
+        let accounts = crate::accounts::CreateOrderV2 {
+            owner: scub_other,
+            receiver: scub_other,
+            store: scub_other,
+            market: scub_other,
+            user: scub_other,
+            order: scub_order,
+            position: None,
+            initial_collateral_token: None,
+            final_output_token: scub_other,
+            long_token: None,
+            short_token: None,
+            initial_collateral_token_escrow: None,
+            final_output_token_escrow: None,
+            long_token_escrow: None,
+            short_token_escrow: None,
+            initial_collateral_token_source: None,
+            system_program: scub_other,
+            token_program: scub_other,
+            associated_token_program: scub_other,
+            callback_authority: None,
+            callback_program: None,
+            callback_shared_data_account: None,
+            callback_partitioned_data_account: None,
+            event_authority: scub_other,
+            program: crate::ID,
+        }
+        .to_account_metas(None);
+
+        assert_eq!(accounts[5].pubkey, scub_order);
     }
 }
 
