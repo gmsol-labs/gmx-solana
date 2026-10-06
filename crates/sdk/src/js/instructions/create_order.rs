@@ -175,10 +175,9 @@ pub fn create_orders_builder(
             // into a stage of its own: the checkpoint has to be in the same transaction as
             // the create it belongs to.
             //
-            // `created_at_slot` is a placeholder for the same reason: the slot the order
-            // will be created in is not knowable at build time. The program accepts any
-            // value here because the checkpoint executes in the order's creation slot,
-            // which sharing the transaction guarantees.
+            // `order_id` is a placeholder because the order ID is unknown
+            // at build time. The program accepts it only after a preceding creation
+            // instruction for this order in the same transaction.
             let set_builder_fee = options
                 .set_builder_fee
                 .as_ref()
@@ -194,7 +193,7 @@ pub fn create_orders_builder(
                         .into_atomic_group(&SetBuilderFeeHint {
                             market: program.find_market_address(market_token).into(),
                             final_output_token,
-                            created_at_slot: 0,
+                            order_id: 0,
                         })
                 })
                 .transpose()?;

@@ -1,4 +1,7 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar::instructions::{
+    load_current_index_checked, load_instruction_at_checked,
+};
 use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
 use gmsol_model::action::decrease_position::DecreasePositionSwapType;
 
@@ -274,7 +277,7 @@ impl SetBuilderFee<'_> {
     pub(crate) fn invoke(
         ctx: Context<Self>,
         expected_factor: u128,
-        expected_created_at_slot: u64,
+        expected_order_id: u64,
     ) -> Result<()> {
         // Restart protection applies to both checkpointing and revocation.
         ctx.accounts.store.load()?.validate_not_restarted()?;
@@ -287,42 +290,43 @@ impl SetBuilderFee<'_> {
         // reused once the order occupying it closes. Without this check, a
         // checkpoint signed for the previous instance could still land on the
         // new one, attaching to it a fee the owner authorized for an order
-        // that no longer exists. The creation slot identifies the instance:
-        // it is written once at initialization and never updated, so two
-        // instances sharing an address differ here unless they were created in
-        // the same slot.
+        // that no longer exists. The market's order counter assigns a new ID
+        // on creation and update, including two creations in the same slot.
         //
-        // Acceptance has two disjuncts. The first binds a standalone
-        // checkpoint to the instance the caller read: the expected slot must
-        // equal the recorded one. The second covers the create-and-checkpoint
-        // flow, where the creation slot is not knowable when the transaction
-        // is built: `Clock::get()` returns the same slot to every instruction
-        // of one transaction, so a checkpoint sharing a transaction with the
-        // create always sees the recorded slot equal the current one, and the
-        // caller passes any placeholder. A checkpoint signed for a closed
-        // instance fails both: recreation moved the recorded slot on, and only
-        // an instance created in the current slot satisfies the second
-        // disjunct. There is no unbound form: every checkpoint is held to one
-        // of the two.
+        // A standalone checkpoint names the recorded order ID. The
+        // create-and-checkpoint flow cannot know that ID while building, so
+        // its placeholder is accepted only when this transaction contains a
+        // preceding creation instruction for this order. Merely being in the
+        // current slot does not prove both instructions share a transaction.
         //
-        // The residual is the same-slot recreate: two instances created in one
-        // slot at one address are indistinguishable here, so a checkpoint
-        // signed for the first also lands on the second. Arranging that still
-        // requires the owner's signatures on the close and the recreate, since
-        // `owner` above must sign and match, plus landing inside one ~400ms
-        // slot, so no stale signature alone can exploit it.
-        //
-        // Orders initialized before the field existed record `0`, so an
-        // expected slot of `0` still binds them, to the only value they can
-        // have. For a recycled legacy address that binding is vacuous, since
-        // every legacy instance reads `0`, so replay protection for legacy
-        // orders is nominal until the order is recreated under this program.
-        // The second disjunct can never accept a legacy order, slot `0` being
-        // long past on any established cluster.
-        let created_at_slot = ctx.accounts.order.load()?.header.created_at_slot();
+        let order = ctx.accounts.order.load()?;
+        let order_id = order.header.id;
+        let created_at_slot = order.header.created_at_slot();
+        drop(order);
+        let current_slot = Clock::get()?.slot;
+        let has_preceding_create =
+            if order_id != expected_order_id && created_at_slot == current_slot {
+                let instructions = ctx.remaining_accounts.iter().find(|account| {
+                    account.key == &anchor_lang::solana_program::sysvar::instructions::ID
+                });
+                match instructions {
+                    Some(instructions) => {
+                        has_preceding_create_order(instructions, &ctx.accounts.order.key())?
+                    }
+                    None => false,
+                }
+            } else {
+                false
+            };
         require!(
-            created_at_slot == expected_created_at_slot || created_at_slot == Clock::get()?.slot,
-            CoreError::OrderCreatedAtSlotMismatched
+            matches_order_instance(
+                expected_order_id,
+                order_id,
+                created_at_slot,
+                current_slot,
+                has_preceding_create,
+            ),
+            CoreError::OrderIdMismatched
         );
 
         // Upholds the authorization invariant: never charged at a factor
@@ -472,6 +476,112 @@ impl SetBuilderFee<'_> {
         ))?;
 
         Ok(())
+    }
+}
+
+fn matches_order_instance(
+    expected_order_id: u64,
+    order_id: u64,
+    created_at_slot: u64,
+    current_slot: u64,
+    has_preceding_create: bool,
+) -> bool {
+    order_id == expected_order_id || (created_at_slot == current_slot && has_preceding_create)
+}
+
+fn has_preceding_create_order(instructions: &AccountInfo<'_>, order: &Pubkey) -> Result<bool> {
+    const CREATE_ORDER_ACCOUNT_INDEX: usize = 5;
+    let current_index = load_current_index_checked(instructions)?;
+    for index in 0..current_index {
+        let instruction = load_instruction_at_checked(index as usize, instructions)?;
+        if instruction.program_id == crate::ID
+            && instruction
+                .data
+                .starts_with(crate::instruction::CreateOrderV2::DISCRIMINATOR)
+            && instruction
+                .accounts
+                .get(CREATE_ORDER_ACCOUNT_INDEX)
+                .is_some_and(|account| account.pubkey == *order)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+#[cfg(test)]
+mod instance_binding_tests {
+    use super::{has_preceding_create_order, matches_order_instance};
+    use anchor_lang::prelude::*;
+    use anchor_lang::solana_program::sysvar::instructions::{
+        construct_instructions_data, store_current_index, BorrowedAccountMeta, BorrowedInstruction,
+    };
+
+    #[test]
+    fn rejects_old_checkpoint_in_replacement_creation_slot() {
+        assert!(!matches_order_instance(100, 300, 300, 301, false));
+    }
+
+    #[test]
+    fn rejects_recreated_order_in_same_slot() {
+        assert!(!matches_order_instance(100, 300, 300, 300, false));
+    }
+
+    #[test]
+    fn accepts_standalone_checkpoint_without_instructions_sysvar() {
+        assert!(matches_order_instance(300, 300, 300, 300, false));
+    }
+
+    #[test]
+    fn accepts_checkpoint_after_create_in_same_transaction() {
+        assert!(matches_order_instance(0, 300, 300, 300, true));
+    }
+
+    #[test]
+    fn rejects_placeholder_after_creation_slot() {
+        assert!(!matches_order_instance(0, 300, 300, 301, true));
+    }
+
+    #[test]
+    fn only_prior_creation_of_the_same_order_allows_placeholder() {
+        let scub_keys: [Pubkey; 6] = std::array::from_fn(|_| Pubkey::new_unique());
+        let scub_accounts = scub_keys
+            .iter()
+            .map(|pubkey| BorrowedAccountMeta {
+                pubkey,
+                is_signer: false,
+                is_writable: false,
+            })
+            .collect();
+        let scub_create = BorrowedInstruction {
+            program_id: &crate::ID,
+            accounts: scub_accounts,
+            data: crate::instruction::CreateOrderV2::DISCRIMINATOR,
+        };
+        let scub_checkpoint = BorrowedInstruction {
+            program_id: &crate::ID,
+            accounts: vec![],
+            data: &[],
+        };
+        let mut scub_data = construct_instructions_data(&[scub_create, scub_checkpoint]);
+        store_current_index(&mut scub_data, 1);
+        let mut scub_lamports = 0;
+        let scub_sysvar_id = anchor_lang::solana_program::sysvar::instructions::ID;
+        let scub_info = AccountInfo::new(
+            &scub_sysvar_id,
+            false,
+            false,
+            &mut scub_lamports,
+            &mut scub_data,
+            &crate::ID,
+            false,
+            0,
+        );
+
+        assert!(has_preceding_create_order(&scub_info, &scub_keys[5]).unwrap());
+        assert!(!has_preceding_create_order(&scub_info, &Pubkey::new_unique()).unwrap());
+        store_current_index(&mut scub_info.try_borrow_mut_data().unwrap(), 0);
+        assert!(!has_preceding_create_order(&scub_info, &scub_keys[5]).unwrap());
     }
 }
 

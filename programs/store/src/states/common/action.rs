@@ -61,9 +61,9 @@ pub struct ActionHeader {
     /// Written once by initialization and never updated afterwards, unlike
     /// [`updated_at_slot`](Self::updated_at_slot), which is refreshed by every
     /// update. An action address is derived from owner and nonce, so it is
-    /// reused once the action occupying it closes; the creation slot is what
-    /// distinguishes two instances sharing one address, and it is read by
-    /// instructions that must bind a call to one specific instance.
+    /// reused once the action occupying it closes. This slot records when an
+    /// instance was created, but two instances can share it. Use an order's
+    /// market-counter ID to bind a call to one order instance.
     pub(crate) created_at_slot: u64,
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
     reserved: [u8; 152],

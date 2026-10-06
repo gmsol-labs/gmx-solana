@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
-- programs(store): `set_builder_fee`'s `expected_created_at_slot` argument changed from `Option<u64>` to a plain `u64`, and there is no longer an unbound form: a checkpoint is accepted when the argument equals the order's recorded creation slot, or when the order was created in the very slot the checkpoint executes in, which is what the same-transaction create-and-checkpoint flow relies on (it passes a placeholder, `0` by convention). Clients encoding the previous `Option` form now fail instruction deserialization and must be upgraded in lockstep with the program.
+- programs(store): `set_builder_fee` now takes `expected_order_id: u64` in place of the previous optional creation slot. A standalone checkpoint must name the order's recorded market-counter ID; a create-and-checkpoint transaction can pass `0` when it contains a preceding creation instruction for that order. The ID advances on order updates, so checkpoints built before an update must be rebuilt. Clients using the previous instruction encoding must be upgraded with the program.
 - programs(store): Creating an increase order now requires its final output token to be the position's collateral token, and executing one whose final output token was recorded at creation revalidates the same thing. Creating an order with a different final output token used to succeed and silently ignore the value; it now reverts with `TokenMintMismatched`. Existing orders with an uninitialized final output token are unaffected and keep executing.
 
 ### Added

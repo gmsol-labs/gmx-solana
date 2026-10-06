@@ -89,19 +89,6 @@ async fn builder_fee_charged_count(
     Ok((charged, total))
 }
 
-/// Wait until the cluster's slot has moved past `slot`.
-///
-/// A checkpoint sent afterwards can no longer satisfy the binding's
-/// current-slot disjunct against an instance created in `slot`, which is what
-/// makes the stale-slot rejections deterministic rather than dependent on
-/// where the slot boundaries happened to fall between sends.
-async fn wait_for_slot_after(client: &Client<SignerRef>, slot: u64) -> eyre::Result<()> {
-    while client.get_slot(None).await? <= slot {
-        tokio::time::sleep(Duration::from_millis(200)).await;
-    }
-    Ok(())
-}
-
 #[tokio::test]
 async fn balanced_market_order() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
@@ -1161,9 +1148,9 @@ async fn set_builder_fee() -> eyre::Result<()> {
     tracing::info!(%order, %signature, "created a fee-eligible limit increase order");
 
     // The raw-args checkpoints below must pass the instance binding before
-    // they can reach the checks they exercise, so they name the slot this
+    // they can reach the checks they exercise, so they name the ID this
     // instance recorded.
-    let created_at_slot = owner.order(&order).await?.header.created_at_slot;
+    let order_id = owner.order(&order).await?.header.id;
 
     deployment
         .with_builder_fee_cap(CAP, async {
@@ -1217,7 +1204,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
                 })
                 .anchor_args(args::SetBuilderFee {
                     expected_factor: CAP,
-                    expected_created_at_slot: created_at_slot,
+                    expected_order_id: order_id,
                 })
                 .send()
                 .await
@@ -1341,7 +1328,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
                 })
                 .anchor_args(args::SetBuilderFee {
                     expected_factor: 0,
-                    expected_created_at_slot: created_at_slot,
+                    expected_order_id: order_id,
                 })
                 .send()
                 .await
@@ -1394,7 +1381,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
     Ok(())
 }
 
-/// Instance binding: a bound checkpoint names the creation slot read from the
+/// Instance binding: a bound checkpoint names the order ID read from the
 /// order, so one signed against a previous instance of an order address is
 /// rejected by whatever instance holds the address when it lands, on any
 /// market.
@@ -1417,8 +1404,8 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
     let fbtc = deployment.token("fBTC").expect("must exist");
 
     let market_token = deployment
-        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_013, 6_000_000_000_009, true)
-        .await?;
+        .market_token("fBTC", "fBTC", "USDG")
+        .ok_or_eyre("market not found")?;
 
     for client in [&owner, &builder] {
         client.prepare_user(store)?.send_without_preflight().await?;
@@ -1463,17 +1450,10 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
                 .send_without_preflight()
                 .await?;
 
-            let created_at_slot = owner.order(&order).await?.header.created_at_slot;
+            let order_id = owner.order(&order).await?.header.id;
 
-            // The wrong-slot rejections below are only deterministic once the
-            // cluster has moved past the creation slot: inside that slot the
-            // current-slot disjunct would accept any expectation.
-            wait_for_slot_after(&owner, created_at_slot).await?;
-
-            // Any slot other than the one recorded on the order is rejected:
-            // a stale read, and the zero a pre-field account would report,
-            // which an order created since never matches.
-            for stale in [created_at_slot + 1, 0] {
+            // A stale ID and the zero reserved for atomic creation are rejected.
+            for stale in [order_id + 1, 0] {
                 let err = owner
                     .set_builder_fee(
                         store,
@@ -1483,21 +1463,21 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
                         Some(
                             SetBuilderFeeHint::builder()
                                 .final_output_token(fbtc.address)
-                                .created_at_slot(stale)
+                                .order_id(stale)
                                 .build(),
                         ),
                     )
                     .await?
                     .send()
                     .await
-                    .expect_err("should reject a checkpoint bound to the wrong creation slot");
+                    .expect_err("should reject a checkpoint bound to the wrong order ID");
                 assert_eq!(
                     gmsol_sdk::Error::from(err).anchor_error_code(),
-                    Some(CoreError::OrderCreatedAtSlotMismatched.into()),
+                    Some(CoreError::OrderIdMismatched.into()),
                 );
             }
 
-            // The recorded slot is accepted.
+            // The recorded ID is accepted.
             let signature = owner
                 .set_builder_fee(
                     store,
@@ -1507,14 +1487,14 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
                     Some(
                         SetBuilderFeeHint::builder()
                             .final_output_token(fbtc.address)
-                            .created_at_slot(created_at_slot)
+                            .order_id(order_id)
                             .build(),
                     ),
                 )
                 .await?
                 .send_without_preflight()
                 .await?;
-            tracing::info!(%signature, "checkpointed with the recorded creation slot");
+            tracing::info!(%signature, "checkpointed with the recorded order ID");
 
             let checkpointed = owner.order(&order).await?;
             assert_eq!(checkpointed.builder, builder_user);
@@ -1533,9 +1513,9 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
 
     // Close the first instance and recreate the order at the same address.
     // The checkpoint attempted afterwards is bound to the first instance's
-    // creation slot, so the new instance must reject it: this is the replay
+    // ID, so the new instance must reject it: this is the replay
     // the binding exists to stop.
-    let first_created_at_slot = owner.order(&order).await?.header.created_at_slot;
+    let first_order_id = owner.order(&order).await?.header.id;
     let signature = owner.close_order(&order)?.build().await?.send().await?;
     tracing::info!(%order, %signature, "closed the first instance");
 
@@ -1560,16 +1540,11 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
     let signature = rpc.send().await?;
     tracing::info!(order = %recreated, %signature, "recreated the order at the same address");
 
-    let second_created_at_slot = owner.order(&order).await?.header.created_at_slot;
+    let second_order_id = owner.order(&order).await?.header.id;
     assert_ne!(
-        first_created_at_slot, second_created_at_slot,
-        "two instances of one address must record different creation slots"
+        first_order_id, second_order_id,
+        "two instances of one address must record different order IDs"
     );
-
-    // Same as above: the replay rejection is only deterministic once the
-    // recreation slot has passed, since inside it the current-slot disjunct
-    // would accept any expectation; that is the documented same-slot residual.
-    wait_for_slot_after(&owner, second_created_at_slot).await?;
 
     deployment
         .with_builder_fee_cap(CAP, async {
@@ -1587,7 +1562,7 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
                     Some(
                         SetBuilderFeeHint::builder()
                             .final_output_token(fbtc.address)
-                            .created_at_slot(first_created_at_slot)
+                            .order_id(first_order_id)
                             .build(),
                     ),
                 )
@@ -1597,10 +1572,10 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
                 .expect_err("should reject a checkpoint signed for the closed instance");
             assert_eq!(
                 gmsol_sdk::Error::from(err).anchor_error_code(),
-                Some(CoreError::OrderCreatedAtSlotMismatched.into()),
+                Some(CoreError::OrderIdMismatched.into()),
             );
 
-            // The instance now at the address accepts its own slot, which the
+            // The instance now at the address accepts its own ID, which the
             // default fresh-read hint supplies.
             let signature = owner
                 .set_builder_fee(store, &order, &builder_user, CAP, None)
@@ -1625,12 +1600,12 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
 }
 
 /// Instance binding, same-transaction form: a checkpoint built together with
-/// the order's creation cannot name the creation slot, so it passes a
+/// the order's creation cannot name the assigned ID, so it passes a
 /// placeholder and is accepted through the binding's second disjunct: the
-/// order it lands on was created in the very slot the checkpoint executes in.
+/// order it lands on was created earlier in that same transaction.
 /// This is the flow the JS create-order builder produces, and the placeholder
-/// is deliberately `u64::MAX`, which no real creation slot can equal, so an
-/// accept can only have come from the current-slot disjunct.
+/// is deliberately `0`, which no assigned order ID can equal, so an
+/// accept can only have come from the preceding-create disjunct.
 ///
 /// Needs the cap raised for its nonzero checkpoint, so it runs inside
 /// [`Deployment::with_builder_fee_cap`] like [`set_builder_fee`].
@@ -1650,8 +1625,8 @@ async fn set_builder_fee_shares_transaction_with_create() -> eyre::Result<()> {
     let fbtc = deployment.token("fBTC").expect("must exist");
 
     let market_token = deployment
-        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_015, 6_000_000_000_011, true)
-        .await?;
+        .market_token("fBTC", "fBTC", "USDG")
+        .ok_or_eyre("market not found")?;
 
     for client in [&owner, &builder] {
         client.prepare_user(store)?.send_without_preflight().await?;
@@ -1682,7 +1657,7 @@ async fn set_builder_fee_shares_transaction_with_create() -> eyre::Result<()> {
         .build_with_address()
         .await?;
 
-    let signature = deployment
+    let _signature = deployment
         .with_builder_fee_cap(CAP, async {
             builder
                 .set_builder_fee_factor(store, CAP)?
@@ -1698,7 +1673,7 @@ async fn set_builder_fee_shares_transaction_with_create() -> eyre::Result<()> {
                     Some(
                         SetBuilderFeeHint::builder()
                             .final_output_token(fbtc.address)
-                            .created_at_slot(u64::MAX)
+                            .order_id(0)
                             .build(),
                     ),
                 )
@@ -1720,8 +1695,8 @@ async fn set_builder_fee_shares_transaction_with_create() -> eyre::Result<()> {
 
     let checkpointed = owner.order(&order).await?;
     assert!(
-        checkpointed.header.created_at_slot > 0,
-        "the order must record a nonzero creation slot"
+        checkpointed.header.id > 0,
+        "the order must record a nonzero ID"
     );
     assert_eq!(
         checkpointed.builder, builder_user,
@@ -1983,8 +1958,8 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
     tracing::info!(%bare_order, %signature, "created an increase order without the escrow");
 
     // The forced-mint checkpoint below must pass the instance binding before
-    // it can reach the check it exercises, so it names the recorded slot.
-    let bare_created_at_slot = client.order(&bare_order).await?.header.created_at_slot;
+    // it can reach the check it exercises, so it names the recorded ID.
+    let bare_order_id = client.order(&bare_order).await?.header.id;
 
     // The SDK refuses to build the instruction at all, since it reads the mint
     // off the order and there is none to read.
@@ -2007,7 +1982,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
                 SetBuilderFeeHint::builder()
                     .market(market)
                     .final_output_token(fbtc.address)
-                    .created_at_slot(bare_created_at_slot)
+                    .order_id(bare_order_id)
                     .build(),
             ),
         )
@@ -2051,8 +2026,8 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
 
     // The hand-built controller-PDA checkpoint below must pass the instance
     // binding before it can reach the seeds check, so it names the recorded
-    // slot.
-    let created_at_slot = client.order(&order).await?.header.created_at_slot;
+    // ID.
+    let order_id = client.order(&order).await?.header.id;
 
     // A zero-factor checkpoint works even when the builder's ATA is absent.
     keeper.prepare_user(store)?.send_without_preflight().await?;
@@ -2092,7 +2067,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
         })
         .anchor_args(args::SetBuilderFee {
             expected_factor: 0,
-            expected_created_at_slot: created_at_slot,
+            expected_order_id: order_id,
         })
         .send()
         .await

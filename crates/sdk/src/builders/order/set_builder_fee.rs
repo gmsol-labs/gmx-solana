@@ -3,7 +3,7 @@ use gmsol_programs::gmsol_store::client::{accounts, args};
 use gmsol_solana_utils::{
     client_traits::FromRpcClientWith, AtomicGroup, IntoAtomicGroup, ProgramExt,
 };
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
 use typed_builder::TypedBuilder;
 
 use crate::{builders::StoreProgram, serde::StringPubkey};
@@ -22,7 +22,7 @@ use crate::{builders::StoreProgram, serde::StringPubkey};
 /// failed checkpoint, since a non-pending order will reject it again.
 ///
 /// A standalone checkpoint binds itself to one order instance through the
-/// creation slot carried by [`SetBuilderFeeHint`], so build the hint from a
+/// order ID carried by [`SetBuilderFeeHint`], so build the hint from a
 /// fresh read of the order account.
 ///
 /// To cancel a builder fee, checkpoint a User Account advertising `0`. The
@@ -62,14 +62,14 @@ pub struct SetBuilderFee {
 
 /// Hint for [`SetBuilderFee`].
 ///
-/// Build it from a fresh read of the order account. The creation slot it
+/// Build it from a fresh read of the order account. The order ID it
 /// carries is what binds the checkpoint to the order instance that was read:
 /// order addresses are reused once the occupying order closes, so a hint read
 /// from a previous instance makes the program reject the checkpoint rather
 /// than attach a fee to a different order at the same address. Only the
-/// same-transaction create flow cannot know the slot at build time; it passes
-/// a placeholder instead and is accepted because the checkpoint executes in
-/// the slot the order was created in.
+/// same-transaction create flow cannot know the ID at build time; it passes
+/// a placeholder instead and is accepted after the transaction's creation
+/// instruction for that order.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
@@ -85,10 +85,10 @@ pub struct SetBuilderFeeHint {
     /// here and the instruction would be rejected anyway.
     #[builder(setter(into))]
     pub final_output_token: StringPubkey,
-    /// The order's creation slot, read from the same fresh read of the order
+    /// The order's ID, read from the same fresh read of the order
     /// account. See the hint's own documentation for what it binds and when a
     /// placeholder is accepted.
-    pub created_at_slot: u64,
+    pub order_id: u64,
 }
 
 impl IntoAtomicGroup for SetBuilderFee {
@@ -116,7 +116,7 @@ impl IntoAtomicGroup for SetBuilderFee {
             .program
             .anchor_instruction(args::SetBuilderFee {
                 expected_factor: self.expected_factor,
-                expected_created_at_slot: hint.created_at_slot,
+                expected_order_id: hint.order_id,
             })
             .anchor_accounts(
                 accounts::SetBuilderFee {
@@ -136,6 +136,10 @@ impl IntoAtomicGroup for SetBuilderFee {
                 },
                 true,
             )
+            .accounts(vec![AccountMeta::new_readonly(
+                solana_sdk::sysvar::instructions::ID,
+                false,
+            )])
             .build();
 
         Ok(AtomicGroup::with_instructions(&payer, Some(set)))
@@ -168,7 +172,7 @@ impl FromRpcClientWith<SetBuilderFee> for SetBuilderFeeHint {
         Ok(Self {
             market: order.header.market.into(),
             final_output_token: final_output_token.into(),
-            created_at_slot: order.header.created_at_slot,
+            order_id: order.header.id,
         })
     }
 }
@@ -184,11 +188,11 @@ mod tests {
         let scub_builder = Pubkey::new_unique();
         let scub_market = Pubkey::new_unique();
         let scub_mint = Pubkey::new_unique();
-        for (factor, slot) in [(0, 0u64), (1, 42), (1, 0)] {
+        for (factor, order_id) in [(0, 0u64), (1, 42), (1, 0)] {
             let hint = SetBuilderFeeHint::builder()
                 .market(scub_market)
                 .final_output_token(scub_mint)
-                .created_at_slot(slot)
+                .order_id(order_id)
                 .build();
             let expected_vault = (factor != 0).then(|| {
                 get_associated_token_address_with_program_id(
@@ -211,13 +215,18 @@ mod tests {
                 .expect("set_builder_fee instruction must be present");
 
             assert_eq!(
+                instruction.accounts.last().unwrap().pubkey,
+                solana_sdk::sysvar::instructions::ID,
+            );
+
+            assert_eq!(
                 instruction.accounts[6].pubkey,
                 expected_vault.unwrap_or(program_id),
                 "claim_vault account differs from the wire format for factor {factor}"
             );
 
             // After the 8-byte discriminator the data is `expected_factor`
-            // followed by `expected_created_at_slot`, both borsh-encoded.
+            // followed by `expected_order_id`, both borsh-encoded.
             let args = &instruction.data[8..];
             assert_eq!(
                 args[..16],
@@ -226,8 +235,8 @@ mod tests {
             );
             assert_eq!(
                 args[16..],
-                slot.to_le_bytes(),
-                "expected_created_at_slot differs from the wire format for slot {slot}"
+                order_id.to_le_bytes(),
+                "expected_order_id differs from the wire format for order {order_id}"
             );
         }
 
