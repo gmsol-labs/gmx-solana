@@ -222,6 +222,13 @@ impl ExecuteDepositOperation<'_, '_> {
                 return Err(error!(err));
             }
         }
+        RemainingAccountsForMarket::validate_for_execution(
+            self.remaining_accounts,
+            &self.store.key(),
+            self.market_token_mint.key(),
+            Some(self.deposit.load()?.swap()),
+            &[self.market],
+        )?;
         match self.perform_deposit() {
             Ok(()) => Ok(true),
             Err(err) if !throw_on_execution_error => {

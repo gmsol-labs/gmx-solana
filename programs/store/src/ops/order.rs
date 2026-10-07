@@ -987,6 +987,13 @@ impl ExecuteOrderOperation<'_, '_> {
         let mut should_throw_error = false;
         let prices = self.prices()?;
         let discount = self.validate_and_get_order_fee_discount()?;
+        RemainingAccountsForMarket::validate_for_execution(
+            self.remaining_accounts,
+            &self.store.key(),
+            self.market.load()?.market_meta().market_token_mint,
+            Some(self.order.load()?.swap()),
+            &[self.market],
+        )?;
         let res = match self.perform_execution(&mut should_throw_error, prices, discount) {
             Ok((should_remove_position, mut transfer_out, should_send_trade_event)) => {
                 transfer_out.set_executed(true);
