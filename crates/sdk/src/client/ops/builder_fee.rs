@@ -31,13 +31,12 @@ pub trait BuilderFeeOps<C> {
     /// the builder currently advertises, so read it from the builder's User
     /// Account rather than guessing; the call is rejected on any mismatch.
     ///
+    /// The hint binds the checkpoint to the order instance it was read from,
+    /// through the market-counter ID, so prefer the default fresh-read hint over a
+    /// cached or hand-built one for a standalone checkpoint.
+    ///
     /// Passing a User Account that advertises `0` clears the checkpoint, which
     /// is how a builder fee is cancelled.
-    ///
-    /// The checkpoint is bound to the order address and market, but not to the
-    /// order's market-scoped ID. Use random order nonces without reuse and submit
-    /// this instruction with order creation when possible. A durable nonce
-    /// transaction can otherwise be withheld indefinitely.
     fn set_builder_fee(
         &self,
         store: &Pubkey,

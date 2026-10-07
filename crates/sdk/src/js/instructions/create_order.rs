@@ -173,7 +173,11 @@ pub fn create_orders_builder(
 
             // Built here but merged into this order's own atomic group below, not collected
             // into a stage of its own: the checkpoint has to be in the same transaction as
-            // the create it belongs to. See SCSOL-13.
+            // the create it belongs to.
+            //
+            // `order_id` is a placeholder because the order ID is unknown
+            // at build time. The program accepts it only after a preceding creation
+            // instruction for this order in the same transaction.
             let set_builder_fee = options
                 .set_builder_fee
                 .as_ref()
@@ -189,6 +193,7 @@ pub fn create_orders_builder(
                         .into_atomic_group(&SetBuilderFeeHint {
                             market: program.find_market_address(market_token).into(),
                             final_output_token,
+                            order_id: 0,
                         })
                 })
                 .transpose()?;

@@ -14,7 +14,7 @@ pub(crate) fn generate_nonce() -> NonceBytes {
     use rand::{distributions::Standard, Rng};
 
     let pubkey = rand::thread_rng()
-        .sample_iter(Standard)
+        .sample_iter::<u8, _>(Standard)
         .take(32)
         .collect::<Vec<u8>>()
         .try_into()

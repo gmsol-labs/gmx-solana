@@ -19372,11 +19372,23 @@
         "the builder's advertised factor can alter what will be charged.",
         "",
         "Submit this instruction with order creation in the same transaction if",
-        "the order must carry a builder fee. With separate transactions, a keeper",
-        "can execute the order before the checkpoint lands, charging no builder",
-        "fee. The checkpoint cannot be attached after execution or closure.",
-        "Check the order's current state before retrying a failed checkpoint;",
-        "retrying it on an order that is no longer pending will fail again.",
+        "the order must carry a builder fee. The market-counter ID is not knowable",
+        "before the transaction lands, so such a checkpoint cannot name it; pass",
+        "any placeholder, `0` by convention. The program accepts it only when",
+        "a preceding instruction in this transaction created that order. With",
+        "separate transactions, a keeper can execute the order before the checkpoint",
+        "lands, charging no builder fee. The checkpoint cannot be attached after",
+        "execution or closure. Check the order's current state before retrying",
+        "a failed checkpoint; retrying it on an order that is no longer pending",
+        "will fail again.",
+        "",
+        "A standalone checkpoint binds itself to one order instance: the",
+        "argument must equal the order's market-counter ID, read fresh from the",
+        "order account. Order addresses are derived from owner and nonce and",
+        "are reused once the occupying order closes, so a checkpoint signed for",
+        "a previous instance is rejected by the instance now holding the",
+        "address, whose recorded ID has moved on. An order update also advances",
+        "the ID, so a checkpoint signed before an update must be rebuilt.",
         "",
         "Calling again on a still-pending order re-runs every validation and",
         "overwrites the checkpoint. Since a User Account advertises a zero factor",
@@ -19384,21 +19396,22 @@
         "is how an owner cancels a builder fee it no longer wants, even when the",
         "BuilderFee feature is disabled.",
         "",
-        "The checkpoint is bound to the order address and market, but not to the",
-        "order's market-scoped ID. A transaction can therefore be withheld and",
-        "applied to a replacement order at the same address in the same market.",
-        "A durable nonce transaction can be withheld indefinitely. Clients should",
-        "use random order nonces without reuse and submit this instruction in the",
-        "same transaction as order creation whenever possible.",
-        "",
         "# Accounts",
         "*[See the documentation for the accounts.](SetBuilderFee)*",
+        "The instructions sysvar must be supplied as a remaining account when",
+        "`expected_order_id` is a placeholder. Standalone checkpoints",
+        "naming the recorded ID do not need it.",
         "",
         "# Arguments",
         "- `expected_factor`: The factor the caller expects the builder to be",
         "advertising. The call fails unless it matches exactly, which is what",
         "stops a builder from raising its rate between the owner signing and the",
         "transaction landing.",
+        "- `expected_order_id`: The market-counter ID the caller read from",
+        "the [`order`](SetBuilderFee::order), binding the checkpoint to that",
+        "instance of the order address. A placeholder is accepted only when",
+        "this transaction contains a preceding creation instruction for the",
+        "same order, and its recorded creation slot is the current slot.",
         "",
         "# Errors",
         "- The [`owner`](SetBuilderFee::owner) must be a signer and must own the",
@@ -19411,6 +19424,8 @@
         "- Belong to the `store`",
         "- Belong to the passed [`market`](SetBuilderFee::market)",
         "- Still be pending execution",
+        "- Record `expected_order_id` as its ID, or have",
+        "been created earlier in this transaction",
         "- Be a user-initiated position order, so swap orders and the",
         "keeper-initiated kinds are rejected",
         "- Have an initialized final output token, equal to the passed",
@@ -19709,6 +19724,10 @@
         {
           "name": "expected_factor",
           "type": "u128"
+        },
+        {
+          "name": "expected_order_id",
+          "type": "u64"
         }
       ]
     },
@@ -24419,6 +24438,11 @@
       "code": 6137,
       "name": "BuilderFeeFinalOutputTokenEscrowNotInitialized",
       "msg": "the order's final output token escrow is not initialized"
+    },
+    {
+      "code": 6138,
+      "name": "OrderIdMismatched",
+      "msg": "order ID does not match the expected order ID"
     }
   ],
   "types": [
@@ -24600,11 +24624,25 @@
             "type": "pubkey"
           },
           {
+            "name": "created_at_slot",
+            "docs": [
+              "Creation slot.",
+              "",
+              "Written once by initialization and never updated afterwards, unlike",
+              "[`updated_at_slot`](Self::updated_at_slot), which is refreshed by every",
+              "update. An action address is derived from owner and nonce, so it is",
+              "reused once the action occupying it closes. This slot records when an",
+              "instance was created, but two instances can share it. Use an order's",
+              "market-counter ID to bind a call to one order instance."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                160
+                152
               ]
             }
           }

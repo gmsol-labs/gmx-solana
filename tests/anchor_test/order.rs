@@ -1147,6 +1147,11 @@ async fn set_builder_fee() -> eyre::Result<()> {
     let signature = rpc.send().await?;
     tracing::info!(%order, %signature, "created a fee-eligible limit increase order");
 
+    // The raw-args checkpoints below must pass the instance binding before
+    // they can reach the checks they exercise, so they name the ID this
+    // instance recorded.
+    let order_id = owner.order(&order).await?.header.id;
+
     deployment
         .with_builder_fee_cap(CAP, async {
             let signature = builder
@@ -1165,6 +1170,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
                         SetBuilderFeeHint::builder()
                             .market(wrong_market)
                             .final_output_token(fbtc.address)
+                            .order_id(order_id)
                             .build(),
                     ),
                 )
@@ -1199,6 +1205,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
                 })
                 .anchor_args(args::SetBuilderFee {
                     expected_factor: CAP,
+                    expected_order_id: order_id,
                 })
                 .send()
                 .await
@@ -1320,7 +1327,10 @@ async fn set_builder_fee() -> eyre::Result<()> {
                     event_authority: owner.store_event_authority(),
                     program: *owner.store_program_id(),
                 })
-                .anchor_args(args::SetBuilderFee { expected_factor: 0 })
+                .anchor_args(args::SetBuilderFee {
+                    expected_factor: 0,
+                    expected_order_id: order_id,
+                })
                 .send()
                 .await
                 .expect_err("a supplied ATA must belong to the selected builder");
@@ -1365,6 +1375,344 @@ async fn set_builder_fee() -> eyre::Result<()> {
             Ok::<_, eyre::Report>(())
         })
         .await?;
+
+    let signature = owner.close_order(&order)?.build().await?.send().await?;
+    tracing::info!(%order, %signature, "cancelled the order");
+
+    Ok(())
+}
+
+/// Instance binding: a bound checkpoint names the order ID read from the
+/// order, so one signed against a previous instance of an order address is
+/// rejected by whatever instance holds the address when it lands, on any
+/// market.
+///
+/// Needs the cap raised for its nonzero checkpoints, so it runs inside
+/// [`Deployment::with_builder_fee_cap`] like [`set_builder_fee`].
+#[tokio::test]
+async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
+    /// One percent, in the market factor unit.
+    const CAP: u128 = MARKET_USD_UNIT / 100;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("set_builder_fee_binds_to_order_instance");
+    let _enter = span.enter();
+
+    let owner = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let builder = deployment.user_client(Deployment::USER_1)?;
+    let store = &deployment.store;
+    let fbtc = deployment.token("fBTC").expect("must exist");
+
+    let market_token = deployment
+        .market_token("fBTC", "fBTC", "USDG")
+        .ok_or_eyre("market not found")?;
+    let market = owner.find_market_address(store, market_token);
+
+    for client in [&owner, &builder] {
+        client.prepare_user(store)?.send_without_preflight().await?;
+    }
+    let builder_user = builder.find_user_address(store, &builder.payer());
+    deployment
+        .mint_or_transfer_to("fBTC", &builder_user, 0)
+        .await?;
+
+    let collateral_amount = 100_000;
+    deployment
+        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, collateral_amount)
+        .await?;
+
+    let size = 5_000 * MARKET_USD_UNIT;
+    let price = 400_000 * MARKET_USD_UNIT / 10u128.pow(fbtc.config.decimals as u32);
+
+    // A fixed nonce is what makes the order recreated later in this test reuse
+    // this order's address, which is the situation the binding exists for.
+    let nonce: [u8; 32] = rand::random();
+    let (rpc, order) = owner
+        .limit_increase(
+            store,
+            market_token,
+            false,
+            size,
+            price,
+            true,
+            collateral_amount,
+        )
+        .prepare_final_output_token_escrow(true)
+        .nonce(nonce)
+        .build_with_address()
+        .await?;
+    let signature = rpc.send().await?;
+    tracing::info!(%order, %signature, "created the first instance of the order");
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            builder
+                .set_builder_fee_factor(store, CAP)?
+                .send_without_preflight()
+                .await?;
+
+            let order_id = owner.order(&order).await?.header.id;
+
+            // A stale ID and the zero reserved for atomic creation are rejected.
+            for stale in [order_id + 1, 0] {
+                let err = owner
+                    .set_builder_fee(
+                        store,
+                        &order,
+                        &builder_user,
+                        CAP,
+                        Some(
+                            SetBuilderFeeHint::builder()
+                                .market(market)
+                                .final_output_token(fbtc.address)
+                                .order_id(stale)
+                                .build(),
+                        ),
+                    )
+                    .await?
+                    .send()
+                    .await
+                    .expect_err("should reject a checkpoint bound to the wrong order ID");
+                assert_eq!(
+                    gmsol_sdk::Error::from(err).anchor_error_code(),
+                    Some(CoreError::OrderIdMismatched.into()),
+                );
+            }
+
+            // The recorded ID is accepted.
+            let signature = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &builder_user,
+                    CAP,
+                    Some(
+                        SetBuilderFeeHint::builder()
+                            .market(market)
+                            .final_output_token(fbtc.address)
+                            .order_id(order_id)
+                            .build(),
+                    ),
+                )
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "checkpointed with the recorded order ID");
+
+            let checkpointed = owner.order(&order).await?;
+            assert_eq!(checkpointed.builder, builder_user);
+            assert_eq!(checkpointed.builder_fee_factor, CAP);
+
+            // The builder's User Account is shared with other tests, so put its
+            // advertised factor back where it was found.
+            builder
+                .set_builder_fee_factor(store, 0)?
+                .send_without_preflight()
+                .await?;
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    // Close the first instance and recreate the order at the same address.
+    // The checkpoint attempted afterwards is bound to the first instance's
+    // ID, so the new instance must reject it: this is the replay
+    // the binding exists to stop.
+    let first_order_id = owner.order(&order).await?.header.id;
+    let signature = owner.close_order(&order)?.build().await?.send().await?;
+    tracing::info!(%order, %signature, "closed the first instance");
+
+    let (rpc, recreated) = owner
+        .limit_increase(
+            store,
+            market_token,
+            false,
+            size,
+            price,
+            true,
+            collateral_amount,
+        )
+        .prepare_final_output_token_escrow(true)
+        .nonce(nonce)
+        .build_with_address()
+        .await?;
+    assert_eq!(
+        recreated, order,
+        "the same owner and nonce must derive the same order address"
+    );
+    let signature = rpc.send().await?;
+    tracing::info!(order = %recreated, %signature, "recreated the order at the same address");
+
+    let second_order_id = owner.order(&order).await?.header.id;
+    assert_ne!(
+        first_order_id, second_order_id,
+        "two instances of one address must record different order IDs"
+    );
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            builder
+                .set_builder_fee_factor(store, CAP)?
+                .send_without_preflight()
+                .await?;
+
+            let err = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &builder_user,
+                    CAP,
+                    Some(
+                        SetBuilderFeeHint::builder()
+                            .market(market)
+                            .final_output_token(fbtc.address)
+                            .order_id(first_order_id)
+                            .build(),
+                    ),
+                )
+                .await?
+                .send()
+                .await
+                .expect_err("should reject a checkpoint signed for the closed instance");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::OrderIdMismatched.into()),
+            );
+
+            // The instance now at the address accepts its own ID, which the
+            // default fresh-read hint supplies.
+            let signature = owner
+                .set_builder_fee(store, &order, &builder_user, CAP, None)
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "checkpointed the recreated order with a fresh hint");
+
+            builder
+                .set_builder_fee_factor(store, 0)?
+                .send_without_preflight()
+                .await?;
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    let signature = owner.close_order(&order)?.build().await?.send().await?;
+    tracing::info!(%order, %signature, "cancelled the recreated order");
+
+    Ok(())
+}
+
+/// Instance binding, same-transaction form: a checkpoint built together with
+/// the order's creation cannot name the assigned ID, so it passes a
+/// placeholder and is accepted through the binding's second disjunct: the
+/// order it lands on was created earlier in that same transaction.
+/// This is the flow the JS create-order builder produces, and the placeholder
+/// is deliberately `0`, which no assigned order ID can equal, so an
+/// accept can only have come from the preceding-create disjunct.
+///
+/// Needs the cap raised for its nonzero checkpoint, so it runs inside
+/// [`Deployment::with_builder_fee_cap`] like [`set_builder_fee`].
+#[tokio::test]
+async fn set_builder_fee_shares_transaction_with_create() -> eyre::Result<()> {
+    /// One percent, in the market factor unit.
+    const CAP: u128 = MARKET_USD_UNIT / 100;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("set_builder_fee_shares_transaction_with_create");
+    let _enter = span.enter();
+
+    let owner = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let builder = deployment.user_client(Deployment::USER_1)?;
+    let store = &deployment.store;
+    let fbtc = deployment.token("fBTC").expect("must exist");
+
+    let market_token = deployment
+        .market_token("fBTC", "fBTC", "USDG")
+        .ok_or_eyre("market not found")?;
+    let market = owner.find_market_address(store, market_token);
+
+    for client in [&owner, &builder] {
+        client.prepare_user(store)?.send_without_preflight().await?;
+    }
+    let builder_user = builder.find_user_address(store, &builder.payer());
+    deployment
+        .mint_or_transfer_to("fBTC", &builder_user, 0)
+        .await?;
+
+    let collateral_amount = 100_000;
+    deployment
+        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, collateral_amount)
+        .await?;
+
+    let size = 5_000 * MARKET_USD_UNIT;
+    let price = 400_000 * MARKET_USD_UNIT / 10u128.pow(fbtc.config.decimals as u32);
+    let (create, order) = owner
+        .limit_increase(
+            store,
+            market_token,
+            false,
+            size,
+            price,
+            true,
+            collateral_amount,
+        )
+        .prepare_final_output_token_escrow(true)
+        .build_with_address()
+        .await?;
+
+    let _signature = deployment
+        .with_builder_fee_cap(CAP, async {
+            builder
+                .set_builder_fee_factor(store, CAP)?
+                .send_without_preflight()
+                .await?;
+
+            let checkpoint = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &builder_user,
+                    CAP,
+                    Some(
+                        SetBuilderFeeHint::builder()
+                            .market(market)
+                            .final_output_token(fbtc.address)
+                            .order_id(0)
+                            .build(),
+                    ),
+                )
+                .await?;
+
+            // Create first, checkpoint second: `merge` appends the other's
+            // instructions after the receiver's.
+            let signature = create.merge(checkpoint).send().await?;
+            tracing::info!(%order, %signature, "created the order and checkpointed it in one transaction");
+
+            builder
+                .set_builder_fee_factor(store, 0)?
+                .send_without_preflight()
+                .await?;
+
+            Ok::<_, eyre::Report>(signature)
+        })
+        .await?;
+
+    let checkpointed = owner.order(&order).await?;
+    assert!(
+        checkpointed.header.id > 0,
+        "the order must record a nonzero ID"
+    );
+    assert_eq!(
+        checkpointed.builder, builder_user,
+        "the same-transaction checkpoint must have attached the builder"
+    );
+    assert_eq!(
+        checkpointed.builder_fee_factor, CAP,
+        "the same-transaction checkpoint must have attached the advertised factor"
+    );
 
     let signature = owner.close_order(&order)?.build().await?.send().await?;
     tracing::info!(%order, %signature, "cancelled the order");
@@ -1616,6 +1964,10 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
     let signature = rpc.send().await?;
     tracing::info!(%bare_order, %signature, "created an increase order without the escrow");
 
+    // The forced-mint checkpoint below must pass the instance binding before
+    // it can reach the check it exercises, so it names the recorded ID.
+    let bare_order_id = client.order(&bare_order).await?.header.id;
+
     // The SDK refuses to build the instruction at all, since it reads the mint
     // off the order and there is none to read.
     let err = client
@@ -1637,6 +1989,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
                 SetBuilderFeeHint::builder()
                     .market(market)
                     .final_output_token(fbtc.address)
+                    .order_id(bare_order_id)
                     .build(),
             ),
         )
@@ -1678,6 +2031,11 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
     let signature = rpc.send().await?;
     tracing::info!(%order, %signature, "created a fee-eligible limit increase order");
 
+    // The hand-built controller-PDA checkpoint below must pass the instance
+    // binding before it can reach the seeds check, so it names the recorded
+    // ID.
+    let order_id = client.order(&order).await?.header.id;
+
     // A zero-factor checkpoint works even when the builder's ATA is absent.
     keeper.prepare_user(store)?.send_without_preflight().await?;
     let keeper_user = keeper.find_user_address(store, &keeper.payer());
@@ -1714,7 +2072,10 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
             event_authority: client.store_event_authority(),
             program: *client.store_program_id(),
         })
-        .anchor_args(args::SetBuilderFee { expected_factor: 0 })
+        .anchor_args(args::SetBuilderFee {
+            expected_factor: 0,
+            expected_order_id: order_id,
+        })
         .send()
         .await
         .expect_err("should reject a controller that is not the derived PDA");
