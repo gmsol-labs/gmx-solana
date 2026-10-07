@@ -26,6 +26,19 @@ use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
 
+/// Supplies the order fields before it exists on-chain, for a creation-slot checkpoint.
+fn builder_fee_hint(
+    owner: &Client<SignerRef>,
+    store: &Pubkey,
+    market_token: &Pubkey,
+    final_output_token: Pubkey,
+) -> SetBuilderFeeHint {
+    SetBuilderFeeHint::builder()
+        .market(owner.find_market_address(store, market_token))
+        .final_output_token(final_output_token)
+        .build()
+}
+
 /// Read the [`BuilderFeeCharged`] event emitted by the most recent transaction touching `order`.
 ///
 /// Errors when the order's last transaction emitted none, which is what a case asserting that a fee
@@ -1763,6 +1776,7 @@ async fn set_builder_fee_rejects_collateral_to_pnl_swap() -> eyre::Result<()> {
     let builder = deployment.user_client(Deployment::USER_1)?;
     let store = &deployment.store;
     let oracle = &deployment.oracle();
+    let scub_fbtc = deployment.token("fBTC").expect("must exist");
 
     let market_token = deployment
         .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
@@ -1813,9 +1827,11 @@ async fn set_builder_fee_rejects_collateral_to_pnl_swap() -> eyre::Result<()> {
         .await?;
     tracing::info!(%increase, "executed the increase order, opening the position");
 
-    // Never executed, only checkpointed onto and then cancelled.
+    // Never executed, only checkpointed onto and then cancelled. A limit order
+    // permits the later zero-factor checkpoint after the swap-type rejection.
+    let scub_price = 400_000 * MARKET_USD_UNIT / 10u128.pow(scub_fbtc.config.decimals as u32);
     let (rpc, order) = owner
-        .market_decrease(store, market_token, true, 0, true, size)
+        .limit_decrease(store, market_token, true, size, scub_price, true, 0)
         .decrease_position_swap_type(Some(DecreasePositionSwapType::CollateralToPnlToken))
         .build_with_address()
         .await?;
@@ -1948,15 +1964,17 @@ async fn charges_builder_fee_on_execution() -> eyre::Result<()> {
                 .prepare_final_output_token_escrow(true)
                 .build_with_address()
                 .await?;
-            let signature = rpc.send().await?;
-            tracing::info!(%order, %signature, "created a fee-eligible increase order");
-
-            let signature = owner
-                .set_builder_fee(store, &order, &builder_user, CAP, None)
-                .await?
-                .send_without_preflight()
+            let checkpoint = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &builder_user,
+                    CAP,
+                    Some(builder_fee_hint(&owner, store, market_token, fbtc.address)),
+                )
                 .await?;
-            tracing::info!(%order, %signature, "checkpointed the builder fee onto the order");
+            let signature = rpc.merge(checkpoint).send_without_preflight().await?;
+            tracing::info!(%order, %signature, "created the increase order with its builder fee checkpoint");
 
             // Whatever the builder advertises from here on must not reach this order. Opting out
             // entirely is the strongest form of that: the charge below is non-zero only if it is
@@ -2090,6 +2108,7 @@ async fn revoked_builder_fee_still_closes_in_bundle() -> eyre::Result<()> {
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let store = &deployment.store;
     let oracle = &deployment.oracle();
+    let scub_fbtc = deployment.token("fBTC").expect("must exist");
 
     let market_token = deployment
         .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
@@ -2123,18 +2142,20 @@ async fn revoked_builder_fee_still_closes_in_bundle() -> eyre::Result<()> {
                 .prepare_final_output_token_escrow(true)
                 .build_with_address()
                 .await?;
-            let signature = rpc.send().await?;
-            tracing::info!(%order, %signature, "created a fee-eligible increase order");
-
             // Straight to the revoked state: a zero-advertising account is what clears a
             // checkpoint, and checkpointing one on a fresh order reaches the same pair without
             // needing a paying checkpoint first.
-            let signature = owner
-                .set_builder_fee(store, &order, &owner_user, 0, None)
-                .await?
-                .send_without_preflight()
+            let checkpoint = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &owner_user,
+                    0,
+                    Some(builder_fee_hint(&owner, store, market_token, scub_fbtc.address)),
+                )
                 .await?;
-            tracing::info!(%order, %signature, "checkpointed a zero-advertising account");
+            let signature = rpc.merge(checkpoint).send_without_preflight().await?;
+            tracing::info!(%order, %signature, "created the increase order with a zero-fee checkpoint");
 
             let checkpointed = owner.order(&order).await?;
             assert_eq!(
@@ -2223,6 +2244,7 @@ async fn soft_failed_execution_records_no_builder_fee() -> eyre::Result<()> {
     let builder = deployment.user_client(Deployment::USER_1)?;
     let store = &deployment.store;
     let oracle = &deployment.oracle();
+    let scub_fbtc = deployment.token("fBTC").expect("must exist");
 
     let market_token = deployment
         .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
@@ -2278,14 +2300,6 @@ async fn soft_failed_execution_records_no_builder_fee() -> eyre::Result<()> {
     // is comfortably covered by the output amount it is clamped against. The minimum output is what
     // makes the execution fail, after that fee has been recorded. The swap type is left at its
     // default: `CollateralToPnlToken` is refused a non-zero checkpoint outright.
-    let (rpc, order) = owner
-        .market_decrease(store, market_token, true, 0, true, size)
-        .min_output_amount(u128::MAX)
-        .build_with_address()
-        .await?;
-    let signature = rpc.send().await?;
-    tracing::info!(%order, %signature, "created a decrease order that cannot meet its minimum output");
-
     deployment
         .with_builder_fee_cap(CAP, async {
             let signature = builder
@@ -2294,12 +2308,22 @@ async fn soft_failed_execution_records_no_builder_fee() -> eyre::Result<()> {
                 .await?;
             tracing::info!(%signature, "the builder advertised its factor");
 
-            let signature = owner
-                .set_builder_fee(store, &order, &builder_user, CAP, None)
-                .await?
-                .send_without_preflight()
+            let (rpc, order) = owner
+                .market_decrease(store, market_token, true, 0, true, size)
+                .min_output_amount(u128::MAX)
+                .build_with_address()
                 .await?;
-            tracing::info!(%order, %signature, "checkpointed the builder fee onto the decrease order");
+            let checkpoint = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &builder_user,
+                    CAP,
+                    Some(builder_fee_hint(&owner, store, market_token, scub_fbtc.address)),
+                )
+                .await?;
+            let signature = rpc.merge(checkpoint).send_without_preflight().await?;
+            tracing::info!(%order, %signature, "created the decrease order with its builder fee checkpoint");
 
             let before = owner.order(&order).await?;
             assert_eq!(before.builder_fee_factor, CAP);
@@ -2459,13 +2483,6 @@ async fn decrease_execution_records_builder_fee() -> eyre::Result<()> {
     // A full close, so the whole collateral is released and the fee computed from the executed size
     // is comfortably covered by the output amount it is clamped against. The minimum output is left
     // at its default, which is the only thing separating this from the soft-failure case.
-    let (rpc, order) = owner
-        .market_decrease(store, market_token, true, 0, true, size)
-        .build_with_address()
-        .await?;
-    let signature = rpc.send().await?;
-    tracing::info!(%order, %signature, "created the decrease order");
-
     deployment
         .with_builder_fee_cap(CAP, async {
             let signature = builder
@@ -2474,12 +2491,21 @@ async fn decrease_execution_records_builder_fee() -> eyre::Result<()> {
                 .await?;
             tracing::info!(%signature, "the builder advertised its factor");
 
-            let signature = owner
-                .set_builder_fee(store, &order, &builder_user, CAP, None)
-                .await?
-                .send_without_preflight()
+            let (rpc, order) = owner
+                .market_decrease(store, market_token, true, 0, true, size)
+                .build_with_address()
                 .await?;
-            tracing::info!(%order, %signature, "checkpointed the builder fee onto the decrease order");
+            let checkpoint = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &builder_user,
+                    CAP,
+                    Some(builder_fee_hint(&owner, store, market_token, fbtc.address)),
+                )
+                .await?;
+            let signature = rpc.merge(checkpoint).send_without_preflight().await?;
+            tracing::info!(%order, %signature, "created the decrease order with its builder fee checkpoint");
 
             let claim_vault_before = deployment
                 .get_ata_amount(&fbtc.address, &builder_user)
