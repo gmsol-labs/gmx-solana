@@ -680,9 +680,29 @@ impl Order {
     /// Overwriting is intentional, and is the whole of the re-checkpointing
     /// behavior: no other code path touches these fields, so between two calls
     /// the checkpoint cannot change.
-    pub(crate) fn set_builder_fee(&mut self, builder: Pubkey, factor: u128) {
+    pub(crate) fn set_builder_fee(
+        &mut self,
+        builder: Pubkey,
+        factor: u128,
+        clock: &Clock,
+    ) -> Result<()> {
+        // Market orders cannot use update_order, so their header still carries
+        // the creation slot. A later checkpoint would move updated_at and
+        // extend their execution window. This also prevents late revocation;
+        // the owner can cancel the pending order instead.
+        if self.params.kind()?.is_market() {
+            require_eq!(
+                self.header.updated_at_slot,
+                clock.slot,
+                CoreError::PreconditionsAreNotMet
+            );
+        }
+
         self.builder = builder;
         self.builder_fee_factor = factor;
+        self.header.updated_at = clock.unix_timestamp;
+        self.header.updated_at_slot = clock.slot;
+        Ok(())
     }
 
     /// Process GT.
@@ -1101,6 +1121,73 @@ impl OrderActionParams {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const SCUB_CREATION_TIMESTAMP: i64 = 100;
+    const SCUB_CREATION_SLOT: u64 = 10;
+
+    fn scub_order(kind: OrderKind) -> Order {
+        let mut order: Order = bytemuck::Zeroable::zeroed();
+        order.params.kind = kind.into();
+        order.header.updated_at = SCUB_CREATION_TIMESTAMP;
+        order.header.updated_at_slot = SCUB_CREATION_SLOT;
+        order
+    }
+
+    #[test]
+    fn builder_fee_checkpoints_refresh_limit_order_oracle_bounds() {
+        let mut order = scub_order(OrderKind::LimitDecrease);
+        let scub_builder = Pubkey::new_unique();
+
+        for (scub_slot, scub_timestamp, scub_factor) in [(11, 101, 1), (12, 102, 1), (13, 103, 0)] {
+            let scub_clock = Clock {
+                slot: scub_slot,
+                unix_timestamp: scub_timestamp,
+                ..Clock::default()
+            };
+            order
+                .set_builder_fee(scub_builder, scub_factor, &scub_clock)
+                .unwrap();
+            assert_eq!(order.header.updated_at, scub_timestamp);
+            assert_eq!(order.header.updated_at_slot, scub_slot);
+            assert_eq!(order.builder(), Some(&scub_builder));
+            assert_eq!(order.builder_fee_factor(), scub_factor);
+        }
+    }
+
+    #[test]
+    fn builder_fee_checkpoint_rejects_market_orders_after_creation_slot() {
+        let scub_builder = Pubkey::new_unique();
+        let scub_other_builder = Pubkey::new_unique();
+        for kind in [OrderKind::MarketIncrease, OrderKind::MarketDecrease] {
+            let mut order = scub_order(kind);
+            let scub_creation_clock = Clock {
+                slot: SCUB_CREATION_SLOT,
+                unix_timestamp: SCUB_CREATION_TIMESTAMP,
+                ..Clock::default()
+            };
+            order
+                .set_builder_fee(scub_builder, 1, &scub_creation_clock)
+                .unwrap();
+            assert_eq!(order.header.updated_at, SCUB_CREATION_TIMESTAMP);
+            assert_eq!(order.header.updated_at_slot, SCUB_CREATION_SLOT);
+
+            let scub_later_clock = Clock {
+                slot: SCUB_CREATION_SLOT + 1,
+                unix_timestamp: SCUB_CREATION_TIMESTAMP + 1,
+                ..Clock::default()
+            };
+            assert_eq!(
+                order
+                    .set_builder_fee(scub_other_builder, 0, &scub_later_clock)
+                    .unwrap_err(),
+                error!(CoreError::PreconditionsAreNotMet)
+            );
+            assert_eq!(order.header.updated_at, SCUB_CREATION_TIMESTAMP);
+            assert_eq!(order.header.updated_at_slot, SCUB_CREATION_SLOT);
+            assert_eq!(order.builder(), Some(&scub_builder));
+            assert_eq!(order.builder_fee_factor(), 1);
+        }
+    }
 
     // The `Order` account's byte layout. These must never change.
     const EXPECTED_ORDER_ACCOUNT_SIZE: usize = 2464;
