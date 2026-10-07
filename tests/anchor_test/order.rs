@@ -27,14 +27,9 @@ use tracing::Instrument;
 use crate::anchor_test::setup::{current_deployment, Deployment};
 
 /// Supplies the order fields before it exists on-chain, for a creation-slot checkpoint.
-fn builder_fee_hint(
-    owner: &Client<SignerRef>,
-    store: &Pubkey,
-    market_token: &Pubkey,
-    final_output_token: Pubkey,
-) -> SetBuilderFeeHint {
+fn builder_fee_hint(market: Pubkey, final_output_token: Pubkey) -> SetBuilderFeeHint {
     SetBuilderFeeHint::builder()
-        .market(owner.find_market_address(store, market_token))
+        .market(market)
         .final_output_token(final_output_token)
         .build()
 }
@@ -1970,7 +1965,7 @@ async fn charges_builder_fee_on_execution() -> eyre::Result<()> {
                     &order,
                     &builder_user,
                     CAP,
-                    Some(builder_fee_hint(&owner, store, market_token, fbtc.address)),
+                    Some(builder_fee_hint(owner.find_market_address(store, market_token), fbtc.address)),
                 )
                 .await?;
             let signature = rpc.merge(checkpoint).send_without_preflight().await?;
@@ -2151,7 +2146,7 @@ async fn revoked_builder_fee_still_closes_in_bundle() -> eyre::Result<()> {
                     &order,
                     &owner_user,
                     0,
-                    Some(builder_fee_hint(&owner, store, market_token, scub_fbtc.address)),
+                    Some(builder_fee_hint(owner.find_market_address(store, market_token), scub_fbtc.address)),
                 )
                 .await?;
             let signature = rpc.merge(checkpoint).send_without_preflight().await?;
@@ -2319,7 +2314,7 @@ async fn soft_failed_execution_records_no_builder_fee() -> eyre::Result<()> {
                     &order,
                     &builder_user,
                     CAP,
-                    Some(builder_fee_hint(&owner, store, market_token, scub_fbtc.address)),
+                    Some(builder_fee_hint(owner.find_market_address(store, market_token), scub_fbtc.address)),
                 )
                 .await?;
             let signature = rpc.merge(checkpoint).send_without_preflight().await?;
@@ -2501,7 +2496,7 @@ async fn decrease_execution_records_builder_fee() -> eyre::Result<()> {
                     &order,
                     &builder_user,
                     CAP,
-                    Some(builder_fee_hint(&owner, store, market_token, fbtc.address)),
+                    Some(builder_fee_hint(owner.find_market_address(store, market_token), fbtc.address)),
                 )
                 .await?;
             let signature = rpc.merge(checkpoint).send_without_preflight().await?;
