@@ -1170,6 +1170,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
                         SetBuilderFeeHint::builder()
                             .market(wrong_market)
                             .final_output_token(fbtc.address)
+                            .order_id(order_id)
                             .build(),
                     ),
                 )
@@ -1406,6 +1407,7 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
     let market_token = deployment
         .market_token("fBTC", "fBTC", "USDG")
         .ok_or_eyre("market not found")?;
+    let market = owner.find_market_address(store, market_token);
 
     for client in [&owner, &builder] {
         client.prepare_user(store)?.send_without_preflight().await?;
@@ -1462,6 +1464,7 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
                         CAP,
                         Some(
                             SetBuilderFeeHint::builder()
+                                .market(market)
                                 .final_output_token(fbtc.address)
                                 .order_id(stale)
                                 .build(),
@@ -1486,6 +1489,7 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
                     CAP,
                     Some(
                         SetBuilderFeeHint::builder()
+                            .market(market)
                             .final_output_token(fbtc.address)
                             .order_id(order_id)
                             .build(),
@@ -1561,6 +1565,7 @@ async fn set_builder_fee_binds_to_order_instance() -> eyre::Result<()> {
                     CAP,
                     Some(
                         SetBuilderFeeHint::builder()
+                            .market(market)
                             .final_output_token(fbtc.address)
                             .order_id(first_order_id)
                             .build(),
@@ -1627,6 +1632,7 @@ async fn set_builder_fee_shares_transaction_with_create() -> eyre::Result<()> {
     let market_token = deployment
         .market_token("fBTC", "fBTC", "USDG")
         .ok_or_eyre("market not found")?;
+    let market = owner.find_market_address(store, market_token);
 
     for client in [&owner, &builder] {
         client.prepare_user(store)?.send_without_preflight().await?;
@@ -1672,6 +1678,7 @@ async fn set_builder_fee_shares_transaction_with_create() -> eyre::Result<()> {
                     CAP,
                     Some(
                         SetBuilderFeeHint::builder()
+                            .market(market)
                             .final_output_token(fbtc.address)
                             .order_id(0)
                             .build(),

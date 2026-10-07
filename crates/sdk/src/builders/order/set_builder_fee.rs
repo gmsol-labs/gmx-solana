@@ -28,13 +28,6 @@ use crate::{builders::StoreProgram, serde::StringPubkey};
 /// To cancel a builder fee, checkpoint a User Account advertising `0`. The
 /// owner's own User Account does so until its owner sets a factor, which makes
 /// it the natural choice.
-///
-/// The checkpoint is bound to the order address and market, but not to the
-/// order's market-scoped ID. A transaction can therefore be withheld and
-/// applied to a replacement order at the same address in the same market. A
-/// durable nonce transaction can be withheld indefinitely. Use random order
-/// nonces without reuse and submit this instruction with order creation when
-/// possible.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]

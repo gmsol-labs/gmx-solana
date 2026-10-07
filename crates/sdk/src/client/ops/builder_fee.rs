@@ -37,11 +37,6 @@ pub trait BuilderFeeOps<C> {
     ///
     /// Passing a User Account that advertises `0` clears the checkpoint, which
     /// is how a builder fee is cancelled.
-    ///
-    /// The checkpoint is bound to the order address and market, but not to the
-    /// order's market-scoped ID. Use random order nonces without reuse and submit
-    /// this instruction with order creation when possible. A durable nonce
-    /// transaction can otherwise be withheld indefinitely.
     fn set_builder_fee(
         &self,
         store: &Pubkey,
