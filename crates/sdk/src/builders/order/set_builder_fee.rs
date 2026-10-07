@@ -24,6 +24,13 @@ use crate::{builders::StoreProgram, serde::StringPubkey};
 /// To cancel a builder fee, checkpoint a User Account advertising `0`. The
 /// owner's own User Account does so until its owner sets a factor, which makes
 /// it the natural choice.
+///
+/// The checkpoint is bound to the order address and market, but not to the
+/// order's market-scoped ID. A transaction can therefore be withheld and
+/// applied to a replacement order at the same address in the same market. A
+/// durable nonce transaction can be withheld indefinitely. Use random order
+/// nonces without reuse and submit this instruction with order creation when
+/// possible.
 #[cfg_attr(js, derive(tsify_next::Tsify))]
 #[cfg_attr(js, tsify(from_wasm_abi))]
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
@@ -55,6 +62,9 @@ pub struct SetBuilderFee {
 #[cfg_attr(serde, derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, TypedBuilder)]
 pub struct SetBuilderFeeHint {
+    /// Market recorded on the order.
+    #[builder(setter(into))]
+    pub market: StringPubkey,
     /// The order's final output token.
     ///
     /// Read from the order account. An order whose final output token is
@@ -94,6 +104,7 @@ impl IntoAtomicGroup for SetBuilderFee {
                 accounts::SetBuilderFee {
                     owner: payer,
                     store: self.program.store.0,
+                    market: hint.market.0,
                     order: self.order.0,
                     builder,
                     final_output_token,
@@ -137,6 +148,7 @@ impl FromRpcClientWith<SetBuilderFee> for SetBuilderFeeHint {
         })?;
 
         Ok(Self {
+            market: order.header.market.into(),
             final_output_token: final_output_token.into(),
         })
     }
@@ -151,8 +163,10 @@ mod tests {
         let scub_owner = Pubkey::new_unique();
         let scub_order = Pubkey::new_unique();
         let scub_builder = Pubkey::new_unique();
+        let scub_market = Pubkey::new_unique();
         let scub_mint = Pubkey::new_unique();
         let hint = SetBuilderFeeHint::builder()
+            .market(scub_market)
             .final_output_token(scub_mint)
             .build();
 
@@ -181,7 +195,7 @@ mod tests {
                 .expect("set_builder_fee instruction must be present");
 
             assert_eq!(
-                instruction.accounts[5].pubkey,
+                instruction.accounts[6].pubkey,
                 expected_vault.unwrap_or(program_id),
                 "claim_vault account differs from the wire format for factor {factor}"
             );

@@ -1102,6 +1102,11 @@ async fn set_builder_fee() -> eyre::Result<()> {
     let market_token = deployment
         .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
         .await?;
+    let market = owner.find_market_address(store, market_token);
+    let wrong_market_token = *deployment
+        .market_token("SOL", "fBTC", "USDG")
+        .expect("the deployment must include a second market");
+    let wrong_market = owner.find_market_address(store, &wrong_market_token);
 
     // Both sides need a User Account: the builder to advertise a factor, the
     // owner because checkpointing its own account is the revocation path.
@@ -1151,10 +1156,33 @@ async fn set_builder_fee() -> eyre::Result<()> {
             tracing::info!(%signature, "the builder advertised its factor");
 
             let err = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &builder_user,
+                    CAP,
+                    Some(
+                        SetBuilderFeeHint::builder()
+                            .market(wrong_market)
+                            .final_output_token(fbtc.address)
+                            .build(),
+                    ),
+                )
+                .await?
+                .send()
+                .await
+                .expect_err("a checkpoint for another market must be rejected");
+            assert_eq!(
+                gmsol_sdk::Error::from(err).anchor_error_code(),
+                Some(CoreError::MarketMismatched.into()),
+            );
+
+            let err = owner
                 .store_transaction()
                 .anchor_accounts(accounts::SetBuilderFee {
                     owner: owner.payer(),
                     store: *store,
+                    market,
                     order,
                     builder: builder_user,
                     final_output_token: fbtc.address,
@@ -1277,6 +1305,7 @@ async fn set_builder_fee() -> eyre::Result<()> {
                 .anchor_accounts(accounts::SetBuilderFee {
                     owner: owner.payer(),
                     store: *store,
+                    market,
                     order,
                     builder: owner_user,
                     final_output_token: fbtc.address,
@@ -1512,6 +1541,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
     let market_token = deployment
         .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
         .await?;
+    let market = client.find_market_address(store, market_token);
 
     // The caller is its own builder here. A User Account advertises zero until
     // its owner sets a factor, and nothing else in the suite moves this one, so
@@ -1605,6 +1635,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
             0,
             Some(
                 SetBuilderFeeHint::builder()
+                    .market(market)
                     .final_output_token(fbtc.address)
                     .build(),
             ),
@@ -1673,6 +1704,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
         .anchor_accounts(accounts::SetBuilderFee {
             owner: client.payer(),
             store: *store,
+            market,
             order,
             builder: user,
             final_output_token: fbtc.address,
