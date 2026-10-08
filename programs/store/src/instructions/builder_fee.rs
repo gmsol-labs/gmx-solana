@@ -348,12 +348,12 @@ impl SetBuilderFee<'_> {
             // revocation path: it is how an owner clears a builder it no
             // longer wants. Gating on `factor != 0` aims the rule at the harm
             // it exists for, a charge that would be trivially bypassable, and
-            // leaves revocation reachable on every order regardless of swap
-            // type. The scenario that needs that: should a later change ever
-            // let an order's swap type move after a checkpoint is written
-            // (`update_order_v2` cannot today), an unconditional guard would
-            // strand the existing checkpoint, since the only instruction that
-            // could clear it would itself be rejected.
+            // leaves revocation reachable on every otherwise eligible order
+            // regardless of swap type. If a later change lets an order's swap
+            // type move after a checkpoint (`update_order_v2` cannot today),
+            // an unconditional guard would strand the existing checkpoint,
+            // since the only instruction that could clear it would itself be
+            // rejected.
             //
             // Note this runs on every user-initiated position order, not only
             // decrease orders. An increase order leaves the field at
@@ -405,10 +405,11 @@ impl SetBuilderFee<'_> {
         };
 
         let builder = ctx.accounts.builder.key();
+        let clock = Clock::get()?;
         ctx.accounts
             .order
             .load_mut()?
-            .set_builder_fee(builder, factor);
+            .set_builder_fee(builder, factor, &clock)?;
 
         let event_emitter =
             EventEmitter::new(&ctx.accounts.event_authority, ctx.bumps.event_authority);
