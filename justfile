@@ -43,6 +43,10 @@ check-guardian-set:
 rotate-guardian-set:
   cargo xtask guardian-set rotate
 
+# Live smoke check of the Pyth post path (needs PYTH_API_KEY and a funded wallet on CLUSTER, default devnet).
+pyth-post:
+  cargo run -p gmsol-examples --example pyth-post
+
 build-test-programs:
   anchor build -- --features mock --features {{DEVNET_FEATURES}}
 
