@@ -128,7 +128,7 @@ async fn referral_gt_uses_execution_time_eligibility() -> eyre::Result<()> {
     let referrer_gt_before = referrer.user(&referrer_address).await?.gt.amount;
 
     let (rpc, first_order) = trader
-        .market_increase(store, market, false, collateral_amount, true, size)
+        .market_increase(store, market, true, collateral_amount, true, size)
         .build_with_address()
         .await?;
     rpc.send().await?;
@@ -159,7 +159,7 @@ async fn referral_gt_uses_execution_time_eligibility() -> eyre::Result<()> {
     );
 
     let (rpc, second_order) = trader
-        .market_increase(store, market, false, collateral_amount, true, size)
+        .market_increase(store, market, true, collateral_amount, true, size)
         .build_with_address()
         .await?;
     rpc.send().await?;
