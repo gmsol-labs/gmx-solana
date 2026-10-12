@@ -252,6 +252,7 @@ async fn failed_execution_does_not_record_referral_eligibility() -> eyre::Result
         .await?;
     rpc.send().await?;
     let mut execution = keeper.execute_order(store, oracle, &increase, false)?;
+    execution.close(false);
     deployment
         .execute_with_pyth(
             execution
