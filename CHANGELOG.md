@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Added nine builder fee error codes, `6129` through `6137`, appended after the existing codes so no existing code shifts: `BuilderFeeFactorExceedsMaxFactor` (6129), `UnsettledBuilderFee` (6130), `BuilderFeeExceedsCollateral` (6131), `BuilderFeeFinalOutputTokenMismatch` (6132), `BuilderFeeSwapTypeNotAllowed` (6133), `BuilderFeeFactorMismatched` (6134), `BuilderFeeOrderKindNotAllowed` (6135), `BuilderFeeFinalOutputTokenNotInitialized` (6136) and `BuilderFeeFinalOutputTokenEscrowNotInitialized` (6137).
 - sdk(decode): Added `BuilderFeeCharged` to `GMSOLCPIEvent`, so the event decodes into its typed form instead of `UnknownOwnedData`.
 - sdk(sdk): Added the `SettleBuilderFee`, `ClaimBuilderFees` and `SetBuilderFeeFactor` atomic-group builders, completing the set for the four builder fee instructions. Only `set_builder_fee` had one before, so the other three could not be composed into a single transaction with anything else, and the JS surface had nothing to wrap since it is built on the builder layer. `SettleBuilderFee` carries a hint resolvable from the order account; the other two need none, because every account they take is derived from the payer, the store and the mint.
+- sdk(js): Exposed the builder fee instructions to JavaScript clients, including order creation with a final output token escrow and the builders for setting, settling and claiming fees.
 - cli(gmsol): Added `user set-builder-fee`, `user set-builder-fee-factor` and `user claim-builder-fees`, wrapping the existing `BuilderFeeOps`/`UserOps` SDK operations. `claim-builder-fees` defaults `--destination` to the payer's associated token account and creates it if missing; an explicitly passed account is never created. `settle_builder_fee` has no CLI command yet.
 
 ### Changed
@@ -44,6 +45,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- programs(store): Excluded outgoing builder fees from increase order market-balance validation, so an execution cannot leave the market below its balance floor.
+- programs(store): Initialized a new market's reserve factor from its reserve default instead of the fee receiver default.
+- programs(treasury): Made the GT exchange owner account writable during completion, including when the fee payer is a different account.
+- programs(store): Allowed a zero-factor builder fee revocation without a claim vault or associated token account.
+- programs(store): Allowed an owner to revoke a pending order's builder fee while new fee attachments are disabled.
+- programs(store): Included same-mint secondary output when calculating the amount available to pay a decrease order's builder fee.
+- programs(store): Included the builder fee output mint in increase trade events.
+- programs(store): Required a builder fee checkpoint's market to match the order's market. Clients should still avoid reusing order nonces, since a checkpoint can apply to a replacement order at the same address and market.
+- programs(store): Advanced an order's oracle freshness bounds on every successful builder fee checkpoint. Market orders accept checkpoints only in their creation slot.
+- programs(store): Prevented uncollected fees on insolvent liquidation and auto-deleveraging closes from contributing to GT rewards.
 - sdk(sdk): Fixed `PositionStatus.liquidation_price`, which built its threshold from `min_collateral_factor` while a liquidation order is checked against `min_collateral_factor_for_liquidation`. Whenever a market sets the two to different values, the reported price was wrong for every position regardless of collateral token; it read higher than reality for a long, warning earlier than the contract acts. The market-closed variant is covered too, since `position_params()` already resolves it.
 - sdk(sdk): Fixed `PositionStatus.liquidation_price` when the collateral token is the market index token, where it held `collateral_value` and the pending funding fee at spot while solving for the very price both depend on. The correction is in the denominator only, since every other term is a plain USD amount; positions collateralised in a different token are unaffected. Correlated but non-identical tokens are deliberately left uncorrected, as that error decays to zero on approach to liquidation.
 - programs(store): Fixed `create_withdrawal`, which never checked the execution fee against `Withdrawal::MIN_EXECUTION_LAMPORTS`, unlike every sibling action (deposit, order, shift, GlvDeposit, GlvWithdrawal). A withdrawal could be created with an execution fee below the floor, including zero, and the keeper that later executed it was reimbursed nothing for a full execution.
