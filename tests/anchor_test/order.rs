@@ -105,7 +105,9 @@ async fn referral_gt_uses_execution_time_eligibility() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
-    let trader = deployment.locked_user_client().await?;
+    let trader = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
     let referrer = deployment
         .client
         .try_clone_with_payer(shared_signer(Keypair::new()))?;
@@ -115,6 +117,11 @@ async fn referral_gt_uses_execution_time_eligibility() -> eyre::Result<()> {
     deployment
         .client
         .transfer(&referrer.payer(), 2_000_000_000)?
+        .send()
+        .await?;
+    deployment
+        .client
+        .transfer(&trader.payer(), 2_000_000_000)?
         .send()
         .await?;
     trader.prepare_user(store)?.send().await?;
