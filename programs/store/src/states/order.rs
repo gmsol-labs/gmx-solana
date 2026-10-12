@@ -1284,14 +1284,24 @@ mod tests {
     }
 
     #[test]
-    fn eligible_and_legacy_executions_can_mint_referral_gt() {
+    fn eligible_execution_can_mint_referral_gt() {
         let mut order: Order = bytemuck::Zeroable::zeroed();
         order.gt_reward = 10;
-        assert!(order.should_mint_referral_gt());
-
         order.record_referral_eligibility(true);
         assert!(order.should_mint_referral_gt());
         assert_eq!(order.gt_reward, 10);
+    }
+
+    #[test]
+    fn pre_upgrade_order_bytes_keep_close_time_referral_eligibility() {
+        let mut old_order_bytes = [0u8; EXPECTED_ORDER_ACCOUNT_SIZE];
+        old_order_bytes[GT_REWARD_OFFSET..GT_REWARD_OFFSET + size_of::<u64>()]
+            .copy_from_slice(&10u64.to_le_bytes());
+
+        let order = bytemuck::pod_read_unaligned::<Order>(&old_order_bytes);
+        assert_eq!(order.gt_reward, 10);
+        assert_eq!(order.reserved[0], Order::REFERRAL_LEGACY);
+        assert!(order.should_mint_referral_gt());
     }
 
     #[test]

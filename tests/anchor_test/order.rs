@@ -22,9 +22,8 @@ use gmsol_sdk::{
 use gmsol_solana_utils::signer::{shared_signer, SignerRef};
 use gmsol_store::CoreError;
 use gmsol_utils::{action::ActionState, config::FactorKey, market::MarketConfigKey};
-use solana_sdk::{
-    commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair, signer::Signer,
-};
+use solana_client::rpc_config::RpcAccountInfoConfig;
+use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair};
 use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
@@ -202,6 +201,119 @@ async fn referral_gt_uses_execution_time_eligibility() -> eyre::Result<()> {
     assert!(
         referrer.user(&referrer_address).await?.gt.amount > referrer_gt_before,
         "a referrer present at execution must receive GT"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn failed_execution_does_not_record_referral_eligibility() -> eyre::Result<()> {
+    // Eight discriminator bytes, followed by the stable 2,384-byte Order prefix.
+    const REFERRAL_MARKER_OFFSET: usize = 8 + 2384;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let trader = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
+    let referrer = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+
+    for client in [&trader, &referrer] {
+        deployment
+            .client
+            .transfer(&client.payer(), 2_000_000_000)?
+            .send()
+            .await?;
+        client.prepare_user(store)?.send().await?;
+    }
+    let code = ReferralCodeV2::decode("scub12")?;
+    referrer
+        .initialize_referral_code(store, code)?
+        .send()
+        .await?;
+    trader.set_referrer(store, code, None).await?.send().await?;
+
+    let market = deployment
+        .prepare_market(["SOL", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+    let collateral_amount = 100_000;
+    deployment
+        .mint_or_transfer_to("fBTC", &trader.payer(), 2 * collateral_amount)
+        .await?;
+    let size = 5_000 * MARKET_USD_UNIT;
+    let (rpc, increase) = trader
+        .market_increase(store, market, true, collateral_amount, true, size)
+        .build_with_address()
+        .await?;
+    rpc.send().await?;
+    let mut execution = keeper.execute_order(store, oracle, &increase, false)?;
+    deployment
+        .execute_with_pyth(
+            execution
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone()),
+            None,
+            true,
+            true,
+        )
+        .await?;
+    assert!(trader.order(&increase).await?.gt_reward > 0);
+    let executed_raw = trader
+        .raw_account_with_config(&increase, RpcAccountInfoConfig::default())
+        .await?
+        .into_value()
+        .ok_or_eyre("executed order account is missing")?;
+    assert_eq!(executed_raw.data[REFERRAL_MARKER_OFFSET], 2);
+
+    let (rpc, failed_order) = trader
+        .market_decrease(store, market, true, 0, true, size)
+        .min_output_amount(u128::MAX)
+        .build_with_address()
+        .await?;
+    rpc.send().await?;
+    let referrer_address = referrer.find_user_address(store, &referrer.payer());
+    let referrer_gt_before = referrer.user(&referrer_address).await?.gt.amount;
+
+    let mut execution = keeper.execute_order(store, oracle, &failed_order, true)?;
+    deployment
+        .execute_with_pyth(
+            execution
+                .close(false)
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone()),
+            None,
+            true,
+            true,
+        )
+        .await?;
+    let cancelled = trader.order(&failed_order).await?;
+    assert!(matches!(
+        cancelled.header.action_state()?,
+        ActionState::Cancelled
+    ));
+    assert_eq!(cancelled.gt_reward, 0);
+    let raw = trader
+        .raw_account_with_config(&failed_order, RpcAccountInfoConfig::default())
+        .await?
+        .into_value()
+        .ok_or_eyre("cancelled order account is missing")?;
+    assert_eq!(raw.data[REFERRAL_MARKER_OFFSET], 0);
+
+    trader
+        .close_order(&failed_order)?
+        .build()
+        .await?
+        .send()
+        .await?;
+    assert_eq!(
+        referrer.user(&referrer_address).await?.gt.amount,
+        referrer_gt_before,
+        "a cancelled execution must not pay referral GT"
     );
 
     Ok(())
