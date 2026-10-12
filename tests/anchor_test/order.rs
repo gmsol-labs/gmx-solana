@@ -133,7 +133,7 @@ async fn referral_gt_uses_execution_time_eligibility() -> eyre::Result<()> {
         .await?;
 
     let market = deployment
-        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .prepare_market(["SOL", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
         .await?;
     let collateral_amount = 100_000;
     deployment
