@@ -13,16 +13,18 @@ use gmsol_programs::{
 };
 use gmsol_sdk::{
     builders::order::SetBuilderFeeHint,
-    client::ops::{BuilderFeeOps, ConfigOps, ExchangeOps, MarketOps, UserOps},
+    client::ops::{BuilderFeeOps, ConfigOps, ExchangeOps, MarketOps, SystemProgramOps, UserOps},
     constants::MARKET_USD_UNIT,
     decode::gmsol::programs::GMSOLCPIEvent,
     pda::find_user_token_controller_address,
     Client,
 };
-use gmsol_solana_utils::signer::SignerRef;
+use gmsol_solana_utils::signer::{shared_signer, SignerRef};
 use gmsol_store::CoreError;
 use gmsol_utils::{action::ActionState, config::FactorKey, market::MarketConfigKey};
-use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
+use solana_sdk::{
+    commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair, signer::Signer,
+};
 use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
@@ -104,10 +106,17 @@ async fn referral_gt_uses_execution_time_eligibility() -> eyre::Result<()> {
     let _guard = deployment.use_accounts().await?;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let trader = deployment.locked_user_client().await?;
-    let referrer = deployment.user_client(Deployment::USER_1)?;
+    let referrer = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
     let store = &deployment.store;
     let oracle = &deployment.oracle();
 
+    deployment
+        .client
+        .transfer(&referrer.payer(), 2_000_000_000)?
+        .send()
+        .await?;
     trader.prepare_user(store)?.send().await?;
     referrer.prepare_user(store)?.send().await?;
     let code = ReferralCodeV2::decode("scub11")?;
