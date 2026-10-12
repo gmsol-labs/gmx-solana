@@ -12,7 +12,9 @@
 //!   prefix such as `https://pyth.dourolabs.app/hermes` is preserved
 //! - `PYTH_FEED_ID` hex feed id (default BTC/USD)
 //!
-//! Prints the fetched publish time and the transaction signatures.
+//! Posts the update, then sends the close transactions so rent from the
+//! encoded VAA and price-update accounts is reclaimed. Prints the fetched
+//! publish time and the transaction signatures of both steps.
 
 use std::env;
 
@@ -27,7 +29,7 @@ use gmsol_sdk::{
             EncodingType, Hermes, PythPullOracle,
         },
     },
-    solana_utils::solana_sdk::signature::read_keypair_file,
+    solana_utils::solana_sdk::signature::{read_keypair_file, Signature},
     Client,
 };
 
@@ -81,20 +83,32 @@ async fn main() -> gmsol_sdk::Result<()> {
         .await?;
     println!("price update accounts: {feeds:?}");
 
-    let (post, _close) = ixns.split();
-    let bundle = post.build()?;
-    match bundle.send_all(false).await {
+    let (post, close) = ixns.split();
+    report("post", post.build()?.send_all(false).await)?;
+    // Reclaim rent: close the encoded VAA and price-update accounts created by
+    // the post step. Without this every run leaves SOL locked on-chain.
+    report("close", close.build()?.send_all(false).await)?;
+    Ok(())
+}
+
+/// Print the signatures of a sent bundle and turn a partial failure into an
+/// error that still shows what landed.
+fn report(
+    step: &str,
+    result: Result<Vec<Signature>, (Vec<Signature>, gmsol_sdk::solana_utils::Error)>,
+) -> gmsol_sdk::Result<()> {
+    match result {
         Ok(signatures) => {
             for sig in signatures {
-                println!("ok {sig}");
+                println!("{step} ok {sig}");
             }
             Ok(())
         }
         Err((signatures, err)) => {
             for sig in &signatures {
-                println!("partial {sig}");
+                println!("{step} partial {sig}");
             }
-            Err(gmsol_sdk::Error::custom(err.to_string()))
+            Err(gmsol_sdk::Error::custom(format!("{step} failed: {err}")))
         }
     }
 }
