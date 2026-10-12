@@ -920,6 +920,10 @@ impl<'info> CloseOrderV2<'info> {
             return Ok(());
         };
 
+        if !self.order.load()?.should_mint_referral_gt() {
+            return Ok(());
+        }
+
         let referrer_user = self
             .referrer_user
             .as_ref()

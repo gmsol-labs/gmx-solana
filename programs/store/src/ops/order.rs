@@ -1221,6 +1221,7 @@ impl ExecuteOrderOperation<'_, '_> {
                     ),
                     _ => None,
                 };
+                let has_referrer_at_execution = self.user.load()?.referral().referrer().is_some();
 
                 // The irreversible point. Neither account below is revertible, so
                 // both writes wait until every fallible step has passed, and the
@@ -1239,6 +1240,8 @@ impl ExecuteOrderOperation<'_, '_> {
                     } else {
                         msg!("[GT] GT minting is disabled for this market");
                     }
+
+                    order.record_referral_eligibility(has_referrer_at_execution);
 
                     // Announced here rather than where it was computed, because
                     // `emit_cpi` is a self-CPI: once it returns the event is in

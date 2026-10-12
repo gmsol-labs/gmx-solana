@@ -459,6 +459,10 @@ impl Closable for Order {
 }
 
 impl Order {
+    const REFERRAL_LEGACY: u8 = 0;
+    const REFERRAL_INELIGIBLE: u8 = 1;
+    const REFERRAL_ELIGIBLE: u8 = 2;
+
     /// Get rent for position cut.
     pub(crate) fn position_cut_rent(is_pure: bool, include_execution_fee: bool) -> Result<u64> {
         use anchor_spl::token::TokenAccount;
@@ -703,6 +707,23 @@ impl Order {
         self.header.updated_at = clock.unix_timestamp;
         self.header.updated_at_slot = clock.slot;
         Ok(())
+    }
+
+    /// Snapshot referral eligibility after a successful execution.
+    pub(crate) fn record_referral_eligibility(&mut self, has_referrer: bool) {
+        self.reserved[0] = if has_referrer {
+            Self::REFERRAL_ELIGIBLE
+        } else {
+            Self::REFERRAL_INELIGIBLE
+        };
+    }
+
+    /// Legacy orders retain the close-time referral behavior.
+    pub(crate) fn should_mint_referral_gt(&self) -> bool {
+        matches!(
+            self.reserved[0],
+            Self::REFERRAL_LEGACY | Self::REFERRAL_ELIGIBLE
+        )
     }
 
     /// Process GT.
@@ -1250,6 +1271,27 @@ mod tests {
         assert_eq!(order.builder(), None);
         assert_eq!(order.builder_fee_factor(), 0);
         assert_eq!(order.builder_fee_amount(), 0);
+    }
+
+    #[test]
+    fn ineligible_execution_cannot_mint_referral_gt() {
+        let mut order: Order = bytemuck::Zeroable::zeroed();
+        order.gt_reward = 10;
+        order.record_referral_eligibility(false);
+
+        assert!(!order.should_mint_referral_gt());
+        assert_eq!(order.gt_reward, 10);
+    }
+
+    #[test]
+    fn eligible_and_legacy_executions_can_mint_referral_gt() {
+        let mut order: Order = bytemuck::Zeroable::zeroed();
+        order.gt_reward = 10;
+        assert!(order.should_mint_referral_gt());
+
+        order.record_referral_eligibility(true);
+        assert!(order.should_mint_referral_gt());
+        assert_eq!(order.gt_reward, 10);
     }
 
     #[test]

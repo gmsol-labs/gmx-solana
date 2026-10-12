@@ -5,6 +5,7 @@ use eyre::OptionExt;
 use gmsol_programs::{
     anchor_lang::error::ErrorCode,
     gmsol_store::{
+        accounts::ReferralCodeV2,
         client::{accounts, args},
         events::{BuilderFeeCharged, TradeEvent},
         types::{DecreasePositionSwapType, UpdateOrderParams},
@@ -95,6 +96,97 @@ async fn builder_fee_charged_count(
         .count();
 
     Ok((charged, total))
+}
+
+#[tokio::test]
+async fn referral_gt_uses_execution_time_eligibility() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let trader = deployment.locked_user_client().await?;
+    let referrer = deployment.user_client(Deployment::USER_1)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+
+    trader.prepare_user(store)?.send().await?;
+    referrer.prepare_user(store)?.send().await?;
+    let code = ReferralCodeV2::decode("scub11")?;
+    referrer
+        .initialize_referral_code(store, code)?
+        .send()
+        .await?;
+
+    let market = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+    let collateral_amount = 100_000;
+    deployment
+        .mint_or_transfer_to("fBTC", &trader.payer(), 2 * collateral_amount)
+        .await?;
+    let size = 5_000 * MARKET_USD_UNIT;
+    let referrer_address = referrer.find_user_address(store, &referrer.payer());
+    let referrer_gt_before = referrer.user(&referrer_address).await?.gt.amount;
+
+    let (rpc, first_order) = trader
+        .market_increase(store, market, false, collateral_amount, true, size)
+        .build_with_address()
+        .await?;
+    rpc.send().await?;
+    let mut execution = keeper.execute_order(store, oracle, &first_order, false)?;
+    deployment
+        .execute_with_pyth(
+            execution
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone()),
+            None,
+            true,
+            true,
+        )
+        .await?;
+    assert!(trader.order(&first_order).await?.gt_reward > 0);
+
+    trader.set_referrer(store, code, None).await?.send().await?;
+    trader
+        .close_order(&first_order)?
+        .build()
+        .await?
+        .send()
+        .await?;
+    assert_eq!(
+        referrer.user(&referrer_address).await?.gt.amount,
+        referrer_gt_before,
+        "a referrer registered after execution must receive no GT for that order"
+    );
+
+    let (rpc, second_order) = trader
+        .market_increase(store, market, false, collateral_amount, true, size)
+        .build_with_address()
+        .await?;
+    rpc.send().await?;
+    let mut execution = keeper.execute_order(store, oracle, &second_order, false)?;
+    deployment
+        .execute_with_pyth(
+            execution
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone()),
+            None,
+            true,
+            true,
+        )
+        .await?;
+    assert!(trader.order(&second_order).await?.gt_reward > 0);
+    trader
+        .close_order(&second_order)?
+        .build()
+        .await?
+        .send()
+        .await?;
+    assert!(
+        referrer.user(&referrer_address).await?.gt.amount > referrer_gt_before,
+        "a referrer present at execution must receive GT"
+    );
+
+    Ok(())
 }
 
 #[tokio::test]
