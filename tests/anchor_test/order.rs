@@ -149,6 +149,7 @@ async fn referral_gt_uses_execution_time_eligibility() -> eyre::Result<()> {
         .await?;
     rpc.send().await?;
     let mut execution = keeper.execute_order(store, oracle, &first_order, false)?;
+    execution.close(false);
     deployment
         .execute_with_pyth(
             execution
@@ -180,6 +181,7 @@ async fn referral_gt_uses_execution_time_eligibility() -> eyre::Result<()> {
         .await?;
     rpc.send().await?;
     let mut execution = keeper.execute_order(store, oracle, &second_order, false)?;
+    execution.close(false);
     deployment
         .execute_with_pyth(
             execution
