@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-21
+
 ### Breaking Changes
 
 - programs(store): Creating an increase order now requires its final output token to be the position's collateral token, and executing one whose final output token was recorded at creation revalidates the same thing. Creating an order with a different final output token used to succeed and silently ignore the value; it now reverts with `TokenMintMismatched`. Existing orders with an uninitialized final output token are unaffected and keep executing.
@@ -556,7 +558,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provided SDK (`gmsol`) and other utility crates.
 - Provided a command-line interface (`gmsol`).
 
-[unreleased]: https://github.com/gmsol-labs/gmx-solana/compare/v0.10.0...HEAD
+[unreleased]: https://github.com/gmsol-labs/gmx-solana/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.11.0
 [0.10.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.10.0
 [0.9.1]: https://github.com/gmsol-labs/gmx-solana/releases/tag/programs-v0.9.1
 [0.9.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.9.0
