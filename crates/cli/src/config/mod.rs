@@ -28,6 +28,7 @@ use crate::wallet::signer_from_source;
 
 pub use output::{DisplayOptions, OutputFormat};
 pub use pyth::PythConfig;
+pub(crate) use pyth::MISSING_PYTH_API_KEY;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "devnet")] {

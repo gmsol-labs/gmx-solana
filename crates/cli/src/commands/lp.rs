@@ -370,7 +370,7 @@ impl super::Command for Lp {
                 };
 
                 // Use ExecutorArgs to build executor (same pattern as ConfirmGtBuyback in treasury)
-                let executor = args.build(client).await?;
+                let executor = args.build(client, ctx.config()).await?;
                 executor.execute(builder, options).await?;
                 return Ok(());
             }

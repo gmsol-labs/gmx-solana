@@ -851,7 +851,7 @@ impl super::Command for Treasury {
                 let oracle = ctx.config().oracle()?;
                 let gt_exchange_vault = gt_exchange_vault.get(store, client).await?;
                 let builder = client.confirm_gt_buyback(store, &gt_exchange_vault, oracle);
-                let executor = args.build(client).await?;
+                let executor = args.build(client, ctx.config()).await?;
                 executor.execute(builder, options).await?;
                 return Ok(());
             }
