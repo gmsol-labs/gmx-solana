@@ -3,7 +3,7 @@ use std::num::NonZeroU64;
 use bytemuck::Zeroable;
 
 use crate::gmsol_store::{
-    accounts::{Glv, GtExchange, Market, Position, ReferralCodeV2, Store, VirtualInventory},
+    accounts::{Glv, Market, Position, ReferralCodeV2, Store, VirtualInventory},
     types::{ActionHeader, EventPositionState, Pool, PositionState, UpdateOrderParams},
 };
 
@@ -48,12 +48,6 @@ impl AsRef<Position> for Position {
 }
 
 impl Default for ActionHeader {
-    fn default() -> Self {
-        Zeroable::zeroed()
-    }
-}
-
-impl Default for GtExchange {
     fn default() -> Self {
         Zeroable::zeroed()
     }
