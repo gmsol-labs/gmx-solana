@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Breaking Changes
 
 - programs(store): Creating an increase order now requires its final output token to be the position's collateral token, and executing one whose final output token was recorded at creation revalidates the same thing. Creating an order with a different final output token used to succeed and silently ignore the value; it now reverts with `TokenMintMismatched`. Existing orders with an uninitialized final output token are unaffected and keep executing.
+- programs(store): An order with a recorded builder fee can no longer be closed by its owner or a keeper until `settle_builder_fee` clears the amount; `close_order_v2` returns `UnsettledBuilderFee` otherwise. Clients must settle before closing. The Rust SDK's `ExecuteOrderBuilder::close(true)` skips the bundled close when a nonzero fee factor is checkpointed, leaving the order open for settlement and a later close.
+- programs(store): A nonzero builder fee can reduce position-order proceeds. Increase execution deducts the fee from collateral before increasing the position and can fail if the increment cannot cover it; decrease execution with `CollateralToPnlToken` cannot carry a nonzero fee. Checkpointing also advances an order's oracle freshness bounds, and market orders accept a checkpoint only in their creation slot.
+- programs(store): `create_withdrawal` now rejects an execution fee below `Withdrawal::MIN_EXECUTION_LAMPORTS`, including zero; such withdrawals previously passed creation.
+- programs(treasury): `complete_gt_exchange` now requires the owner signer account to be writable. Clients constructing account metas from an older IDL must mark it writable.
+- programs(store): A newly initialized market uses the 50% reserve-factor default instead of the former 70% fee-receiver default until configured explicitly.
+- programs(store): Insolvent liquidation and auto-deleveraging closes no longer credit GT rewards for order and borrowing fees that were not collected, so affected closes mint less GT than before.
 
 ### Added
 
