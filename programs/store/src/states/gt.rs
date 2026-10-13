@@ -620,9 +620,11 @@ pub struct GtExchange {
     pub store: Pubkey,
     /// Vault address.
     pub vault: Pubkey,
+    /// Rent receiver. A zero address means the owner for legacy exchanges.
+    rent_receiver: Pubkey,
     #[cfg_attr(feature = "debug", debug(skip))]
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 64],
+    reserved: [u8; 32],
 }
 
 impl Default for GtExchange {
@@ -672,6 +674,15 @@ impl GtExchange {
         &self.owner
     }
 
+    /// Get the rent receiver, defaulting to the owner for legacy exchanges.
+    pub fn rent_receiver(&self) -> &Pubkey {
+        if self.rent_receiver == Pubkey::default() {
+            &self.owner
+        } else {
+            &self.rent_receiver
+        }
+    }
+
     pub(crate) fn store(&self) -> &Pubkey {
         &self.store
     }
@@ -693,4 +704,26 @@ impl gmsol_utils::InitSpace for GtExchange {
 
 impl Seed for GtExchange {
     const SEED: &'static [u8] = b"gt_exchange";
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gt_exchange_rent_receiver_preserves_legacy_layout_and_defaults() {
+        let mut exchange = GtExchange::default();
+        let scub_owner = Pubkey::new_unique();
+        let scub_receiver = Pubkey::new_unique();
+        exchange
+            .init(1, &scub_owner, &Pubkey::new_unique(), &Pubkey::new_unique())
+            .unwrap();
+
+        assert_eq!(std::mem::size_of::<GtExchange>(), 176);
+        assert_eq!(std::mem::offset_of!(GtExchange, rent_receiver), 112);
+        assert_eq!(exchange.rent_receiver(), &scub_owner);
+
+        exchange.rent_receiver = scub_receiver;
+        assert_eq!(exchange.rent_receiver(), &scub_receiver);
+    }
 }

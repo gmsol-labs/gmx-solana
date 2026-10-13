@@ -28322,11 +28322,18 @@
             "type": "pubkey"
           },
           {
+            "name": "rent_receiver",
+            "docs": [
+              "Rent receiver. A zero address means the owner for legacy exchanges."
+            ],
+            "type": "pubkey"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                64
+                32
               ]
             }
           }
