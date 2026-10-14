@@ -32,7 +32,7 @@ use gmsol_utils::gt::{
     GtExchangeFlag, GtExchangeVaultFlag, MAX_GT_EXCHANGE_FLAGS, MAX_GT_EXCHANGE_VAULT_FLAGS,
 };
 
-use crate::{constants, instructions::ModelError, CoreError};
+use crate::{constants, instructions::ModelError, utils::pubkey::optional_address, CoreError};
 
 use super::{user::UserHeader, Seed};
 
@@ -620,9 +620,11 @@ pub struct GtExchange {
     pub store: Pubkey,
     /// Vault address.
     pub vault: Pubkey,
+    /// Rent receiver. A zero address selects the owner as the effective receiver.
+    rent_receiver: Pubkey,
     #[cfg_attr(feature = "debug", debug(skip))]
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 64],
+    reserved: [u8; 32],
 }
 
 impl Default for GtExchange {
@@ -672,6 +674,11 @@ impl GtExchange {
         &self.owner
     }
 
+    /// Get the rent receiver, defaulting to the owner when unset.
+    pub fn rent_receiver(&self) -> &Pubkey {
+        optional_address(&self.rent_receiver).unwrap_or(&self.owner)
+    }
+
     pub(crate) fn store(&self) -> &Pubkey {
         &self.store
     }
@@ -693,4 +700,36 @@ impl gmsol_utils::InitSpace for GtExchange {
 
 impl Seed for GtExchange {
     const SEED: &'static [u8] = b"gt_exchange";
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The `GtExchange` account's byte layout. These must never change.
+    const EXPECTED_GT_EXCHANGE_ACCOUNT_SIZE: usize = 176;
+    const RENT_RECEIVER_OFFSET: usize = 112;
+
+    #[test]
+    fn gt_exchange_rent_receiver_preserves_legacy_layout_and_defaults() {
+        let mut exchange = GtExchange::default();
+        let scub_owner = Pubkey::new_unique();
+        let scub_receiver = Pubkey::new_unique();
+        exchange
+            .init(1, &scub_owner, &Pubkey::new_unique(), &Pubkey::new_unique())
+            .unwrap();
+
+        assert_eq!(
+            std::mem::size_of::<GtExchange>(),
+            EXPECTED_GT_EXCHANGE_ACCOUNT_SIZE
+        );
+        assert_eq!(
+            std::mem::offset_of!(GtExchange, rent_receiver),
+            RENT_RECEIVER_OFFSET
+        );
+        assert_eq!(exchange.rent_receiver(), &scub_owner);
+
+        exchange.rent_receiver = scub_receiver;
+        assert_eq!(exchange.rent_receiver(), &scub_receiver);
+    }
 }
