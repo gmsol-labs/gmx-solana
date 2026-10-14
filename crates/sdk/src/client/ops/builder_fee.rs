@@ -18,6 +18,12 @@ pub trait BuilderFeeOps<C> {
     /// Permissionless and idempotent: safe to call on any order, in any
     /// state, whether or not it has a non-zero recorded builder fee
     /// amount.
+    ///
+    /// Safe to build before the fee exists, so it can be placed after an
+    /// execution in the same transaction: the settlement accounts are
+    /// attached for any order whose builder can still be charged, not only
+    /// once an amount is recorded. See [`SettleBuilderFeeHint`] for the rule
+    /// and for what a stale hint can still miss.
     fn settle_builder_fee(
         &self,
         store: &Pubkey,

@@ -2763,3 +2763,279 @@ async fn settle_builder_fee_is_a_no_op_with_escrow_and_zero_fee() -> eyre::Resul
 
     Ok(())
 }
+
+/// A `settle_builder_fee` built while the order is still pending must succeed once the order has
+/// been executed.
+///
+/// The fee is recorded by the execution, so the order a settlement is built from records no amount
+/// yet. The settlement used to be built without its accounts for that reason, and then reverted
+/// with `TokenMintNotProvided` once the amount turned non-zero. Which accounts it carries is decided
+/// when it is built, and what it checks when it lands, so landing it in a later transaction exercises
+/// the same mismatch as landing it after an execution earlier in the same one: the program reads the
+/// amount at landing time either way.
+///
+/// Trades as the exclusive locked user, and takes that lock before the builder fee globals, like
+/// the other tests that execute a fee-bearing order.
+#[tokio::test]
+async fn settle_built_before_execution_succeeds_after_it() -> eyre::Result<()> {
+    /// One percent, in the market factor unit.
+    const CAP: u128 = MARKET_USD_UNIT / 100;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("settle_built_before_execution_succeeds_after_it");
+    let _enter = span.enter();
+
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let builder = deployment.user_client(Deployment::USER_1)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+    let fbtc = deployment.token("fBTC").expect("must exist");
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+
+    let owner = deployment.locked_user_client().await?;
+
+    for signature in [
+        owner.prepare_user(store)?.send_without_preflight().await?,
+        builder
+            .prepare_user(store)?
+            .send_without_preflight()
+            .await?,
+    ] {
+        tracing::info!(%signature, "prepared a user account");
+    }
+
+    // The vault settlement pays into; `set_builder_fee` requires it to exist.
+    let builder_user = builder.find_user_address(store, &builder.payer());
+    deployment
+        .mint_or_transfer_to("fBTC", &builder_user, 0)
+        .await?;
+
+    let collateral_amount = 10_000;
+    deployment
+        .mint_or_transfer_to("fBTC", &owner.payer(), collateral_amount)
+        .await?;
+
+    let size = 100 * MARKET_USD_UNIT;
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            let claim_vault_before = deployment
+                .get_ata_amount(&fbtc.address, &builder_user)
+                .await?
+                .ok_or_eyre("the claim vault must exist")?;
+
+            let signature = builder
+                .set_builder_fee_factor(store, CAP)?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "the builder advertised its factor");
+
+            let (rpc, order) = owner
+                .market_increase(store, market_token, true, collateral_amount, true, size)
+                .prepare_final_output_token_escrow(true)
+                .build_with_address()
+                .await?;
+            let checkpoint = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &builder_user,
+                    CAP,
+                    Some(builder_fee_hint(owner.find_market_address(store, market_token), fbtc.address)),
+                )
+                .await?;
+            let signature = rpc.merge(checkpoint).send_without_preflight().await?;
+            tracing::info!(%order, %signature, "created the increase order with its builder fee checkpoint");
+
+            // Built now, while nothing has been charged: this is the read a keeper composing
+            // execute and settle has to work from.
+            let pending = owner.order(&order).await?;
+            assert_eq!(
+                pending.builder_fee_amount, 0,
+                "nothing may be recorded before the execution"
+            );
+            assert_eq!(pending.builder, builder_user);
+            assert_ne!(pending.builder_fee_factor, 0);
+            let settle = keeper.settle_builder_fee(store, &order, None).await?;
+
+            let mut execution = keeper.execute_order(store, oracle, &order, false)?;
+            deployment
+                .execute_with_pyth(
+                    execution
+                        .add_alt(deployment.common_alt().clone())
+                        .add_alt(deployment.market_alt().clone()),
+                    None,
+                    true,
+                    true,
+                )
+                .await?;
+            let executed = owner.order(&order).await?;
+            let pending_amount = executed.builder_fee_amount;
+            assert_ne!(
+                pending_amount, 0,
+                "the execution must have recorded the fee after the settlement was built"
+            );
+
+            // Before the fix this fails with `TokenMintNotProvided`: the instruction was built
+            // without the accounts, and the amount it reads on landing is no longer zero.
+            let signature = settle.send_without_preflight().await?;
+            tracing::info!(%order, %signature, "landed the settlement built before the execution");
+
+            assert_eq!(
+                owner.order(&order).await?.builder_fee_amount,
+                0,
+                "settlement must clear the pending amount"
+            );
+            assert_eq!(
+                deployment
+                    .get_ata_amount(&fbtc.address, &builder_user)
+                    .await?,
+                Some(claim_vault_before + pending_amount),
+                "the settled fee must land in the builder's claim vault"
+            );
+
+            let signature = owner.close_order(&order)?.build().await?.send().await?;
+            tracing::info!(%order, %signature, "closed the settled order");
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    Ok(())
+}
+
+/// A revoked checkpoint keeps its builder, charges nothing, and does not need the builder to have a
+/// claim vault, so `settle_builder_fee` for it must stay account-less and succeed as a no-op.
+///
+/// The builder here is the default user's User Account, which advertises zero and has no claim vault
+/// for the order's mint (no test opens one for it, and the precondition below checks): that is the case a settlement which attached the vault for every order with a
+/// builder would break, since the program validates every account it is handed and the vault does
+/// not exist. Revocation only requires the vault for a non-zero factor.
+///
+/// Executes with the bundled close disabled, so the settlement is exercised after the execution as
+/// well, then closes by hand.
+///
+/// Trades as the exclusive locked user.
+#[tokio::test]
+async fn revoked_order_settles_as_a_no_op_without_a_claim_vault() -> eyre::Result<()> {
+    /// One percent, in the market factor unit.
+    const CAP: u128 = MARKET_USD_UNIT / 100;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("revoked_order_settles_as_a_no_op_without_a_claim_vault");
+    let _enter = span.enter();
+
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+    let fbtc = deployment.token("fBTC").expect("must exist");
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+
+    let owner = deployment.locked_user_client().await?;
+    let zero_advertiser = deployment.user_client(Deployment::DEFAULT_USER)?;
+
+    for signature in [
+        owner.prepare_user(store)?.send_without_preflight().await?,
+        zero_advertiser
+            .prepare_user(store)?
+            .send_without_preflight()
+            .await?,
+    ] {
+        tracing::info!(%signature, "prepared a user account");
+    }
+
+    // Deliberately not opened: nothing in this test, and no other test, mints to this account.
+    let zero_user = zero_advertiser.find_user_address(store, &zero_advertiser.payer());
+    assert_eq!(
+        deployment.get_ata_amount(&fbtc.address, &zero_user).await?,
+        None,
+        "the fixture needs a builder without a claim vault, otherwise this test is vacuous"
+    );
+
+    let collateral_amount = 10_000;
+    deployment
+        .mint_or_transfer_to("fBTC", &owner.payer(), collateral_amount)
+        .await?;
+
+    let size = 100 * MARKET_USD_UNIT;
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            let (rpc, order) = owner
+                .market_increase(store, market_token, true, collateral_amount, true, size)
+                .prepare_final_output_token_escrow(true)
+                .build_with_address()
+                .await?;
+            let checkpoint = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &zero_user,
+                    0,
+                    Some(builder_fee_hint(owner.find_market_address(store, market_token), fbtc.address)),
+                )
+                .await?;
+            let signature = rpc.merge(checkpoint).send_without_preflight().await?;
+            tracing::info!(%order, %signature, "created the increase order with a revoked checkpoint");
+
+            let revoked = owner.order(&order).await?;
+            assert_eq!(revoked.builder, zero_user, "the builder stays set");
+            assert_eq!(revoked.builder_fee_factor, 0, "and nothing is payable");
+
+            // Pending, builder set, no vault: must build account-less and land as a no-op.
+            let signature = keeper
+                .settle_builder_fee(store, &order, None)
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%order, %signature, "settled the revoked order while pending");
+
+            let mut execution = keeper.execute_order(store, oracle, &order, false)?;
+            execution.close(false);
+            deployment
+                .execute_with_pyth(
+                    execution
+                        .add_alt(deployment.common_alt().clone())
+                        .add_alt(deployment.market_alt().clone()),
+                    None,
+                    true,
+                    true,
+                )
+                .await?;
+            assert_eq!(
+                owner.order(&order).await?.builder_fee_amount,
+                0,
+                "a revoked checkpoint must charge nothing"
+            );
+
+            let signature = keeper
+                .settle_builder_fee(store, &order, None)
+                .await?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%order, %signature, "settled the revoked order after execution");
+            assert_eq!(
+                deployment
+                    .get_ata_amount(&fbtc.address, &zero_user)
+                    .await?,
+                None,
+                "settling a revoked order must not create or touch a claim vault"
+            );
+
+            let signature = owner.close_order(&order)?.build().await?.send().await?;
+            tracing::info!(%order, %signature, "closed the revoked order");
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    Ok(())
+}
