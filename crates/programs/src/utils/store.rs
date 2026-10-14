@@ -53,6 +53,8 @@ impl Default for ActionHeader {
     }
 }
 
+// The IDL-generated GtExchange derives Default with its 32-byte reserved field.
+// A manual implementation here would conflict; the on-chain type is separate.
 impl Store {
     /// Get claimable time window size.
     pub fn claimable_time_window(&self) -> crate::Result<NonZeroU64> {

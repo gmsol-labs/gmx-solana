@@ -28324,7 +28324,7 @@
           {
             "name": "rent_receiver",
             "docs": [
-              "Rent receiver. A zero address means the owner for legacy exchanges."
+              "Rent receiver. A zero address selects the owner as the effective receiver."
             ],
             "type": "pubkey"
           },
