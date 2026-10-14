@@ -560,6 +560,10 @@ pub type SendAllSignaturesResult =
 /// the pending error (last failure wins and gets returned). [`crate::Error::SendAborted`] entries are
 /// ignored when selecting the returned error so early-abort padding does not replace
 /// the real failure.
+///
+/// Exception: a [`crate::Error::SendUnresolved`] is only replaced by a later unresolved one, so
+/// its signature stays visible for reconciliation. Callers that need every unresolved signature
+/// should inspect the detailed results with [`crate::Error::unresolved_signature`] instead.
 pub fn compress_send_results(
     results: Vec<Result<WithSlot<Signature>, crate::Error>>,
 ) -> SendAllSignaturesResult {
@@ -569,7 +573,14 @@ pub fn compress_send_results(
         match result {
             Ok(signature) => signatures.push(signature),
             Err(crate::Error::SendAborted { .. }) => {}
-            Err(err) => error = Some(err),
+            Err(err) => {
+                let pending_is_unresolved = error
+                    .as_ref()
+                    .is_some_and(|pending: &crate::Error| pending.unresolved_signature().is_some());
+                if !pending_is_unresolved || err.unresolved_signature().is_some() {
+                    error = Some(err);
+                }
+            }
         }
     }
     match error {
@@ -780,6 +791,33 @@ mod tests {
         use Outcome::*;
         let results = send_scripted(&[&[Landed], &[Failed, Landed]], false).await;
         assert_eq!(tags(&results), ["ok", "failed", "ok"]);
+    }
+
+    fn err_unresolved() -> (Signature, Result<WithSlot<Signature>, crate::Error>) {
+        let signature = Signature::new_unique();
+        let source = solana_client::rpc_request::RpcError::ForUser("timeout".to_string());
+        let err = crate::Error::SendUnresolved {
+            signature,
+            source: Box::new(source.into()),
+        };
+        (signature, Err(err))
+    }
+
+    #[test]
+    fn compress_send_results_keeps_unresolved_over_later_failure() {
+        let (signature, unresolved) = err_unresolved();
+        let results = vec![ok_sig(1), unresolved, err_msg("later")];
+        let (sigs, err) = compress_send_results(results).unwrap_err();
+        assert_eq!(sigs.len(), 1);
+        assert_eq!(err.unresolved_signature(), Some(&signature));
+    }
+
+    #[test]
+    fn compress_send_results_later_unresolved_replaces_failure() {
+        let (signature, unresolved) = err_unresolved();
+        let results = vec![err_msg("first"), unresolved];
+        let (_, err) = compress_send_results(results).unwrap_err();
+        assert_eq!(err.unresolved_signature(), Some(&signature));
     }
 
     #[test]
