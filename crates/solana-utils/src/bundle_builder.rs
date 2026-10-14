@@ -456,9 +456,18 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
     ///
     /// The returned vector has the same length as the number of transactions in the
     /// bundle. Index `i` corresponds to transaction `i` in build order (flat across
-    /// parallel batches). Each entry is `Ok(signature)` when that transaction was sent
-    /// and confirmed, or `Err(error)` when it failed. When `continue_on_error` is
-    /// `false`, remaining unsent transactions are reported as [`crate::Error::SendAborted`].
+    /// parallel batches). Each entry is one of:
+    ///
+    /// | Entry | Meaning | Safe to resend? |
+    /// |---|---|---|
+    /// | `Ok(signature)` | sent and confirmed | no, it landed |
+    /// | [`crate::Error::SendAborted`] | never sent: an earlier batch failed and `continue_on_error` is `false` | yes |
+    /// | [`crate::Error::SendUnresolved`] | sent, outcome unknown (e.g. blockhash expired) | only after looking up `signature` |
+    /// | any other `Err` | rejected before sending, or failed on-chain | yes |
+    ///
+    /// Transactions in one parallel batch are sent together, so when `continue_on_error` is
+    /// `false` the failing batch still reports every real outcome; only later batches are
+    /// reported as [`crate::Error::SendAborted`].
     ///
     /// `before_sign` runs once per built transaction, before it is signed.
     pub async fn send_all_with_opts_detailed(
