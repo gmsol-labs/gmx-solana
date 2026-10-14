@@ -133,8 +133,16 @@ impl<T> FeeParams<T> {
         T: FixedPointOps<DECIMALS>,
     {
         let order_fees = self.order_fees(collateral_token_price, size_delta_usd, balance_change)?;
+        let paid_fee_value = order_fees
+            .base
+            .fee_amount_for_pool
+            .checked_add(&order_fees.base.fee_amount_for_receiver)
+            .and_then(|amount| amount.checked_mul(collateral_token_price.pick_price(false)))
+            .ok_or(crate::Error::Computation(
+                "calculating paid order fee value",
+            ))?;
         Ok(PositionFees {
-            paid_order_and_borrowing_fee_value: order_fees.fee_value.clone(),
+            paid_order_and_borrowing_fee_value: paid_fee_value,
             order: order_fees,
             borrowing: Default::default(),
             funding: Default::default(),
@@ -849,9 +857,12 @@ impl<T> PositionFees<T> {
         let amount = value
             .checked_div(price)
             .ok_or(crate::Error::Computation("calculating borrowing amount"))?;
+        let rounded_value = amount.checked_mul(price).ok_or(crate::Error::Computation(
+            "calculating paid borrowing fee value",
+        ))?;
         let paid_fee_value = self
             .paid_order_and_borrowing_fee_value
-            .checked_add(&value)
+            .checked_add(&rounded_value)
             .ok_or(crate::Error::Computation("adding borrowing fee value"))?;
         self.borrowing.fee_amount_for_receiver =
             crate::utils::apply_factor(&amount, receiver_factor).ok_or(
