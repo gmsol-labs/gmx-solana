@@ -37,6 +37,17 @@ pub enum Error {
         /// Index of the transaction whose failure stopped the bundle send.
         failed_at: usize,
     },
+    /// The transaction was submitted, but confirming it failed (blockhash expired, or an RPC
+    /// error while polling its status). It may or may not have landed: look up `signature`
+    /// before retrying, or the action may execute twice.
+    #[cfg(feature = "solana-client")]
+    #[error("transaction {signature} was submitted but its outcome is unknown: {source}")]
+    SendUnresolved {
+        /// Signature of the submitted transaction.
+        signature: solana_sdk::signature::Signature,
+        /// Why confirmation failed.
+        source: Box<solana_client::client_error::ClientError>,
+    },
     /// RPC client error.
     #[cfg(feature = "solana-rpc-client-api")]
     #[error("rpc-client-api: {0}")]
@@ -65,6 +76,16 @@ impl Error {
     /// Create a custom error.
     pub fn custom(msg: impl ToString) -> Self {
         Self::Custom(msg.to_string())
+    }
+
+    /// Signature of a submitted transaction whose outcome is unknown
+    /// ([`Error::SendUnresolved`]), or `None` for any other error.
+    #[cfg(feature = "solana-client")]
+    pub fn unresolved_signature(&self) -> Option<&solana_sdk::signature::Signature> {
+        match self {
+            Self::SendUnresolved { signature, .. } => Some(signature),
+            _ => None,
+        }
     }
 }
 

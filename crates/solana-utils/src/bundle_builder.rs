@@ -600,7 +600,7 @@ async fn send_all_txns_detailed(
                 );
                 let inspector_cluster = inspector_cluster.clone();
                 client
-                    .send_and_confirm_transaction_with_config(txn, config)
+                    .send_and_confirm_transaction_detailed(txn, config)
                     .then(move |res| match res {
                         Ok(signature) => std::future::ready(Ok(signature)),
                         Err(err) => {
@@ -622,7 +622,6 @@ async fn send_all_txns_detailed(
             match res {
                 Ok(signature) => results.push(Ok(signature)),
                 Err(err) => {
-                    let err: crate::Error = Box::new(err).into();
                     let index = results.len();
                     results.push(Err(err));
                     if !continue_on_error {
