@@ -14,6 +14,7 @@
 use std::fmt;
 
 /// Error message for a Pyth operation that runs without an API key.
+#[cfg(any(feature = "pyth", test))]
 pub(crate) const MISSING_PYTH_API_KEY: &str = "Pyth Hermes API key is not configured: \
     set `api_key` under `[pyth]` in the config file, or set `GMSOL_PYTH__API_KEY` \
     or `PYTH_API_KEY`";
@@ -46,6 +47,7 @@ impl fmt::Debug for PythConfig {
 /// assert_eq!(resolve_api_key(Some(""), Some("env")), Some("env".to_string()));
 /// assert_eq!(resolve_api_key(None, Some("")), None);
 /// ```
+#[cfg(any(feature = "pyth", test))]
 pub(crate) fn resolve_api_key(config_key: Option<&str>, env_key: Option<&str>) -> Option<String> {
     [config_key, env_key]
         .into_iter()
