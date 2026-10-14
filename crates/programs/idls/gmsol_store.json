@@ -34360,7 +34360,8 @@
           {
             "name": "delegate",
             "docs": [
-              "The address authorized to spend GT on behalf of this user."
+              "The address authorized to spend GT on behalf of this user.",
+              "[`DEFAULT_PUBKEY`] (the zero address) means no delegate is set."
             ],
             "type": "pubkey"
           },

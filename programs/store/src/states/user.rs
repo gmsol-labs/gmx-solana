@@ -347,6 +347,7 @@ pub struct UserGtState {
     pub(crate) paid_fee_value: u128,
     pub(crate) minted_fee_value: u128,
     /// The address authorized to spend GT on behalf of this user.
+    /// [`DEFAULT_PUBKEY`] (the zero address) means no delegate is set.
     delegate: Pubkey,
     /// The remaining GT amount the delegate may spend, in raw units.
     allowance: u64,
