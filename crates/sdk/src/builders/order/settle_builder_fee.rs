@@ -348,7 +348,7 @@ mod tests {
         Ok(())
     }
 
-    /// BESOL-37. The fee is recorded by the execution that runs before this
+    /// The fee is recorded by the execution that runs before this
     /// instruction lands, so a hint read from a still-pending order carries a
     /// zero amount. With a builder attached the accounts have to be there
     /// regardless, or the instruction reverts with `TokenMintNotProvided` once
