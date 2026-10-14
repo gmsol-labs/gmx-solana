@@ -15,6 +15,22 @@ pub struct User {
 
 #[derive(Debug, clap::Subcommand)]
 enum Command {
+    /// Replace the GT delegate and its remaining allowance. Use the zero address and zero to clear it.
+    SetGtDelegate {
+        delegate: Pubkey,
+        /// Replacement allowance in raw GT units.
+        allowance: u64,
+    },
+    /// Add to the remaining GT allowance when the transaction executes.
+    IncreaseGtAllowance {
+        /// Amount to add in raw GT units.
+        amount: u64,
+    },
+    /// Subtract from the remaining GT allowance when the transaction executes, stopping at zero.
+    DecreaseGtAllowance {
+        /// Amount to subtract in raw GT units.
+        amount: u64,
+    },
     /// Prepare User Account.
     Prepare,
     /// Initialize Referral Code.
@@ -74,6 +90,16 @@ impl super::Command for User {
         let options = ctx.bundle_options();
 
         let txn = match &self.command {
+            Command::SetGtDelegate {
+                delegate,
+                allowance,
+            } => client.set_gt_delegate(store, delegate, *allowance)?,
+            Command::IncreaseGtAllowance { amount } => {
+                client.increase_gt_allowance(store, *amount)?
+            }
+            Command::DecreaseGtAllowance { amount } => {
+                client.decrease_gt_allowance(store, *amount)?
+            }
             Command::Prepare => client.prepare_user(store)?,
             Command::InitReferralCode { code } => {
                 client.initialize_referral_code(store, ReferralCodeV2::decode(code)?)?

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- programs(store): Added owner-signed instructions to replace or clear a GT delegate and allowance, increase the remaining allowance, or decrease it to a floor of zero. Each emits the resulting delegation state.
+- sdk(sdk): Added `UserOps` builders for GT delegate and allowance changes.
+- sdk(decode): Added typed decoding for GT delegation updates.
+- cli(gmsol): Added user commands for GT delegate and allowance changes, including Squads proposals through the existing `--squads` mode.
+
 ## [0.11.0] - 2026-10-21
 
 ### Breaking Changes

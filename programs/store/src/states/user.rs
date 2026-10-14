@@ -357,6 +357,35 @@ pub struct UserGtState {
 }
 
 impl UserGtState {
+    /// Replace the delegate and its remaining allowance together.
+    pub(crate) fn set_delegate(&mut self, delegate: Pubkey, allowance: u64) -> Result<()> {
+        require!(
+            delegate != DEFAULT_PUBKEY || allowance == 0,
+            CoreError::InvalidArgument
+        );
+        self.delegate = delegate;
+        self.allowance = allowance;
+        Ok(())
+    }
+
+    /// Add to the allowance that remains when this operation executes.
+    pub(crate) fn increase_allowance(&mut self, amount: u64) -> Result<()> {
+        require!(
+            self.delegate != DEFAULT_PUBKEY || amount == 0,
+            CoreError::InvalidArgument
+        );
+        self.allowance = self
+            .allowance
+            .checked_add(amount)
+            .ok_or(CoreError::InvalidArgument)?;
+        Ok(())
+    }
+
+    /// Reduce the current allowance, stopping at zero.
+    pub(crate) fn decrease_allowance(&mut self, amount: u64) {
+        self.allowance = self.allowance.saturating_sub(amount);
+    }
+
     /// Get total paid fee value.
     pub fn paid_fee_value(&self) -> u128 {
         self.paid_fee_value
@@ -442,5 +471,42 @@ mod tests {
         let mut user: UserHeader = bytemuck::Zeroable::zeroed();
         user.gt.allowance = u64::MAX;
         assert_eq!(user.gt().allowance(), u64::MAX);
+    }
+
+    #[test]
+    fn scub_gt_delegation_replaces_allowance_and_clears_it() {
+        let mut user: UserHeader = bytemuck::Zeroable::zeroed();
+        let scub_first = Pubkey::new_unique();
+        let scub_second = Pubkey::new_unique();
+        user.gt.set_delegate(scub_first, 100).unwrap();
+        user.gt.decrease_allowance(25);
+        user.gt.set_delegate(scub_second, 30).unwrap();
+        assert_eq!(user.gt.delegate(), Some(&scub_second));
+        assert_eq!(user.gt.allowance(), 30);
+        user.gt.set_delegate(scub_second, 12).unwrap();
+        assert_eq!(user.gt.allowance(), 12);
+        user.gt.set_delegate(DEFAULT_PUBKEY, 0).unwrap();
+        assert_eq!(user.gt.delegate(), None);
+        assert_eq!(user.gt.allowance(), 0);
+        assert!(user.gt.set_delegate(DEFAULT_PUBKEY, 1).is_err());
+        assert_eq!(user.gt.allowance(), 0);
+    }
+
+    #[test]
+    fn scub_gt_allowance_changes_use_current_remaining_amount() {
+        let mut user: UserHeader = bytemuck::Zeroable::zeroed();
+        assert!(user.gt.increase_allowance(1).is_err());
+        assert_eq!(user.gt.allowance(), 0);
+        user.gt.set_delegate(Pubkey::new_unique(), 100).unwrap();
+        user.gt.decrease_allowance(40); // An intervening spend.
+        user.gt.increase_allowance(15).unwrap();
+        assert_eq!(user.gt.allowance(), 75);
+        user.gt.decrease_allowance(100);
+        assert_eq!(user.gt.allowance(), 0);
+        user.gt
+            .set_delegate(Pubkey::new_unique(), u64::MAX)
+            .unwrap();
+        assert!(user.gt.increase_allowance(1).is_err());
+        assert_eq!(user.gt.allowance(), u64::MAX);
     }
 }

@@ -9323,6 +9323,115 @@
       ]
     },
     {
+      "name": "decrease_gt_allowance",
+      "docs": [
+        "Subtract from the GT allowance remaining at execution time, stopping at zero.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](UpdateGtDelegation)*",
+        "",
+        "# Errors",
+        "- The owner must sign for its initialized User Account in this store."
+      ],
+      "discriminator": [
+        31,
+        233,
+        59,
+        94,
+        220,
+        204,
+        177,
+        229
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "The GT owner, including a Squads vault acting as signer."
+          ],
+          "signer": true,
+          "relations": [
+            "user"
+          ]
+        },
+        {
+          "name": "store",
+          "docs": [
+            "The store containing the User Account."
+          ],
+          "relations": [
+            "user"
+          ]
+        },
+        {
+          "name": "user",
+          "docs": [
+            "The owner's initialized User Account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "disable_role",
       "docs": [
         "Disable an existing role for the given store.",
@@ -15176,6 +15285,116 @@
       "returns": "bool"
     },
     {
+      "name": "increase_gt_allowance",
+      "docs": [
+        "Add an amount to the GT allowance remaining at execution time.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](UpdateGtDelegation)*",
+        "",
+        "# Errors",
+        "- The owner must sign for its initialized User Account in this store.",
+        "- A positive amount requires a delegate and must not overflow `u64`."
+      ],
+      "discriminator": [
+        131,
+        229,
+        198,
+        204,
+        192,
+        176,
+        126,
+        97
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "The GT owner, including a Squads vault acting as signer."
+          ],
+          "signer": true,
+          "relations": [
+            "user"
+          ]
+        },
+        {
+          "name": "store",
+          "docs": [
+            "The store containing the User Account."
+          ],
+          "relations": [
+            "user"
+          ]
+        },
+        {
+          "name": "user",
+          "docs": [
+            "The owner's initialized User Account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "initialize",
       "docs": [
         "Create a new [`Store`](states::Store) account.",
@@ -20093,6 +20312,125 @@
       ]
     },
     {
+      "name": "set_gt_delegate",
+      "docs": [
+        "Set or clear the GT delegate and replace its remaining allowance.",
+        "",
+        "The zero address clears the delegate and requires a zero allowance.",
+        "Setting the current delegate also replaces the allowance. Only the",
+        "owner of the User Account can sign this change. Emits the resulting",
+        "delegate and allowance for indexers.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](UpdateGtDelegation)*",
+        "",
+        "# Errors",
+        "- The owner must sign for its initialized User Account in this store.",
+        "- A nonzero allowance requires a nonzero delegate."
+      ],
+      "discriminator": [
+        244,
+        168,
+        11,
+        3,
+        215,
+        153,
+        96,
+        9
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "The GT owner, including a Squads vault acting as signer."
+          ],
+          "signer": true,
+          "relations": [
+            "user"
+          ]
+        },
+        {
+          "name": "store",
+          "docs": [
+            "The store containing the User Account."
+          ],
+          "relations": [
+            "user"
+          ]
+        },
+        {
+          "name": "user",
+          "docs": [
+            "The owner's initialized User Account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "delegate",
+          "type": "pubkey"
+        },
+        {
+          "name": "allowance",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "set_market_config_buffer_authority",
       "docs": [
         "Transfer ownership of a market config buffer account to a new authority.",
@@ -23527,6 +23865,19 @@
         56,
         240,
         100
+      ]
+    },
+    {
+      "name": "GtDelegationUpdated",
+      "discriminator": [
+        29,
+        221,
+        55,
+        94,
+        125,
+        101,
+        252,
+        27
       ]
     },
     {
@@ -28256,6 +28607,45 @@
             "type": {
               "option": "u128"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GtDelegationUpdated",
+      "docs": [
+        "The complete GT delegation state after an owner-authorized change."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "docs": [
+              "The changed User Account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "The owner of the User Account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "delegate",
+            "docs": [
+              "The current delegate, or the zero address when cleared."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "allowance",
+            "docs": [
+              "The current remaining allowance, in raw GT units."
+            ],
+            "type": "u64"
           }
         ]
       }

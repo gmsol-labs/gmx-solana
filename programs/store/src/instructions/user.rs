@@ -2,13 +2,70 @@ use anchor_lang::prelude::*;
 use gmsol_utils::InitSpace;
 
 use crate::{
-    events::{BuilderFeeFactorSet, EventEmitter},
+    events::{BuilderFeeFactorSet, EventEmitter, GtDelegationUpdated},
     states::{
         user::{ReferralCodeBytes, ReferralCodeV2, UserHeader},
         FactorKey, Seed, Store,
     },
     CoreError,
 };
+
+/// Owner-authorized GT delegation updates.
+#[event_cpi]
+#[derive(Accounts)]
+pub struct UpdateGtDelegation<'info> {
+    /// The GT owner, including a Squads vault acting as signer.
+    pub owner: Signer<'info>,
+    /// The store containing the User Account.
+    pub store: AccountLoader<'info, Store>,
+    /// The owner's initialized User Account.
+    #[account(
+        mut,
+        has_one = owner,
+        has_one = store,
+        constraint = user.load()?.is_initialized() @ CoreError::InvalidUserAccount,
+        seeds = [UserHeader::SEED, store.key().as_ref(), owner.key().as_ref()],
+        bump = user.load()?.bump,
+    )]
+    pub user: AccountLoader<'info, UserHeader>,
+}
+
+impl UpdateGtDelegation<'_> {
+    pub(crate) fn set(ctx: Context<Self>, delegate: Pubkey, allowance: u64) -> Result<()> {
+        ctx.accounts
+            .user
+            .load_mut()?
+            .gt
+            .set_delegate(delegate, allowance)?;
+        Self::emit(&ctx)
+    }
+
+    pub(crate) fn increase(ctx: Context<Self>, amount: u64) -> Result<()> {
+        ctx.accounts
+            .user
+            .load_mut()?
+            .gt
+            .increase_allowance(amount)?;
+        Self::emit(&ctx)
+    }
+
+    pub(crate) fn decrease(ctx: Context<Self>, amount: u64) -> Result<()> {
+        ctx.accounts.user.load_mut()?.gt.decrease_allowance(amount);
+        Self::emit(&ctx)
+    }
+
+    fn emit(ctx: &Context<Self>) -> Result<()> {
+        let user = ctx.accounts.user.load()?;
+        EventEmitter::new(&ctx.accounts.event_authority, ctx.bumps.event_authority).emit_cpi(
+            &GtDelegationUpdated {
+                user: ctx.accounts.user.key(),
+                owner: ctx.accounts.owner.key(),
+                delegate: user.gt.delegate().copied().unwrap_or_default(),
+                allowance: user.gt.allowance(),
+            },
+        )
+    }
+}
 
 /// The accounts definitions for [`prepare_user`](crate::gmsol_store::prepare_user) instruction.
 #[derive(Accounts)]
