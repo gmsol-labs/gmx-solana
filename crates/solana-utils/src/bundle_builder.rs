@@ -589,7 +589,7 @@ async fn send_all_txns_detailed(
     let size = txns.iter().map(|txns| txns.len()).sum();
     let mut results = Vec::with_capacity(size);
     let mut failed_at = None;
-    'batches: for (batch_idx, txns) in txns.into_iter().enumerate() {
+    for (batch_idx, txns) in txns.into_iter().enumerate() {
         let mut batch = txns
             .iter()
             .enumerate()
@@ -615,20 +615,20 @@ async fn send_all_txns_detailed(
                     })
             })
             .collect::<FuturesOrdered<_>>();
+        // Every transaction in a batch is already in flight, so a failure must not stop us
+        // from recording the real outcome of the others: dropping them would report a
+        // submitted (maybe confirmed) transaction as never sent.
         while let Some(res) = batch.next().await {
-            match res {
-                Ok(signature) => results.push(Ok(signature)),
-                Err(err) => {
-                    let index = results.len();
-                    results.push(Err(err));
-                    if !continue_on_error {
-                        failed_at = Some(index);
-                        break 'batches;
-                    }
-                }
+            if res.is_err() && failed_at.is_none() {
+                failed_at = Some(results.len());
             }
+            results.push(res);
+        }
+        if failed_at.is_some() && !continue_on_error {
+            break;
         }
     }
+    // Pads only the batches that were never started; a no-op when `continue_on_error`.
     if let Some(failed_at) = failed_at {
         while results.len() < size {
             results.push(Err(crate::Error::SendAborted { failed_at }));
@@ -755,6 +755,31 @@ mod tests {
             results[1],
             Err(crate::Error::SendAborted { failed_at: 0 })
         ));
+    }
+
+    #[tokio::test]
+    async fn abort_keeps_real_outcomes_of_the_failing_batch() {
+        use Outcome::*;
+        let results = send_scripted(
+            &[&[Landed, Failed, Landed, Unresolved], &[Landed, Landed]],
+            false,
+        )
+        .await;
+        assert_eq!(
+            tags(&results),
+            ["ok", "failed", "ok", "unresolved", "aborted", "aborted"]
+        );
+        assert!(matches!(
+            results[4],
+            Err(crate::Error::SendAborted { failed_at: 1 })
+        ));
+    }
+
+    #[tokio::test]
+    async fn abort_after_last_batch_pads_nothing() {
+        use Outcome::*;
+        let results = send_scripted(&[&[Landed], &[Failed, Landed]], false).await;
+        assert_eq!(tags(&results), ["ok", "failed", "ok"]);
     }
 
     #[test]
