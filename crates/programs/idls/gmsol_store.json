@@ -34358,11 +34358,26 @@
             "type": "u128"
           },
           {
+            "name": "delegate",
+            "docs": [
+              "The address authorized to spend GT on behalf of this user.",
+              "[`DEFAULT_PUBKEY`] (the zero address) means no delegate is set."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "allowance",
+            "docs": [
+              "The remaining GT amount the delegate may spend, in raw units."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                64
+                24
               ]
             }
           }

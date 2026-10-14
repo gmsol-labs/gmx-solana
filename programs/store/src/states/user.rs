@@ -346,9 +346,14 @@ pub struct UserGtState {
     padding_1: [u8; 32],
     pub(crate) paid_fee_value: u128,
     pub(crate) minted_fee_value: u128,
+    /// The address authorized to spend GT on behalf of this user.
+    /// [`DEFAULT_PUBKEY`] (the zero address) means no delegate is set.
+    delegate: Pubkey,
+    /// The remaining GT amount the delegate may spend, in raw units.
+    allowance: u64,
     #[cfg_attr(feature = "debug", debug(skip))]
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
-    reserved: [u8; 64],
+    reserved: [u8; 24],
 }
 
 impl UserGtState {
@@ -371,6 +376,16 @@ impl UserGtState {
     pub fn amount(&self) -> u64 {
         self.amount
     }
+
+    /// Get the GT delegate, if one is set.
+    pub fn delegate(&self) -> Option<&Pubkey> {
+        optional_address(&self.delegate)
+    }
+
+    /// Get the remaining GT allowance in raw units.
+    pub fn allowance(&self) -> u64 {
+        self.allowance
+    }
 }
 
 #[cfg(test)]
@@ -380,6 +395,8 @@ mod tests {
     // The `UserHeader` account's byte layout. These must never change.
     const EXPECTED_USER_HEADER_ACCOUNT_SIZE: usize = 512;
     const GT_OFFSET: usize = 224;
+    const GT_DELEGATE_OFFSET: usize = 320;
+    const GT_ALLOWANCE_OFFSET: usize = 352;
     const BUILDER_FEE_FACTOR_OFFSET: usize = 384;
 
     #[test]
@@ -389,6 +406,14 @@ mod tests {
             EXPECTED_USER_HEADER_ACCOUNT_SIZE
         );
         assert_eq!(std::mem::offset_of!(UserHeader, gt), GT_OFFSET);
+        assert_eq!(
+            GT_OFFSET + std::mem::offset_of!(UserGtState, delegate),
+            GT_DELEGATE_OFFSET
+        );
+        assert_eq!(
+            GT_OFFSET + std::mem::offset_of!(UserGtState, allowance),
+            GT_ALLOWANCE_OFFSET
+        );
         assert_eq!(
             std::mem::offset_of!(UserHeader, builder_fee_factor),
             BUILDER_FEE_FACTOR_OFFSET
@@ -403,5 +428,19 @@ mod tests {
         // throughout what used to be its `reserved` region.
         let user: UserHeader = bytemuck::Zeroable::zeroed();
         assert_eq!(user.builder_fee_factor(), 0);
+    }
+
+    #[test]
+    fn zeroed_user_accounts_have_no_gt_delegate_or_allowance() {
+        let user: UserHeader = bytemuck::Zeroable::zeroed();
+        assert_eq!(user.gt().delegate(), None);
+        assert_eq!(user.gt().allowance(), 0);
+    }
+
+    #[test]
+    fn gt_allowance_accepts_full_supply_range() {
+        let mut user: UserHeader = bytemuck::Zeroable::zeroed();
+        user.gt.allowance = u64::MAX;
+        assert_eq!(user.gt().allowance(), u64::MAX);
     }
 }

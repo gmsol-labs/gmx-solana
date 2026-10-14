@@ -4375,11 +4375,19 @@
             "type": "u128"
           },
           {
+            "name": "delegate",
+            "type": "pubkey"
+          },
+          {
+            "name": "allowance",
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                64
+                24
               ]
             }
           }
