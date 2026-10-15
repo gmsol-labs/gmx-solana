@@ -6,14 +6,17 @@ use futures_util::{FutureExt, StreamExt};
 use gmsol_programs::{
     anchor_lang::error::ErrorCode,
     gmsol_store::{
-        accounts::ReferralCodeV2,
+        accounts::{GtExchange, ReferralCodeV2},
         client::{accounts, args},
     },
 };
 use gmsol_sdk::{
-    client::ops::{BuilderFeeOps, ConfigOps, UserOps},
+    client::ops::{
+        gt::current_time_window_index, BuilderFeeOps, ConfigOps, GtOps, SystemProgramOps, UserOps,
+    },
     constants::MARKET_USD_UNIT,
     decode::gmsol::programs::GMSOLCPIEvent,
+    utils::zero_copy::ZeroCopy,
     Client,
 };
 use gmsol_solana_utils::signer::SignerRef;
@@ -214,6 +217,123 @@ async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
         .await
         .expect_err("a zero delegate cannot be set with a positive allowance");
     assert_eq!(client.user(&user_address).await?.gt.allowance, 0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
+    const SCUB_WINDOW: u32 = 86_400;
+    const SCUB_GT_BALANCE: u64 = 100;
+    const SCUB_ALLOWANCE: u64 = 20;
+    const SCUB_FIRST_SPEND: u64 = 5;
+    const SCUB_OWNER_SPEND: u64 = 3;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let owner = deployment.user_client(Deployment::USER_1)?;
+    let delegate = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let payer = Keypair::new();
+    let store = &deployment.store;
+    let owner_address = owner.payer();
+    let user_address = owner.find_user_address(store, &owner_address);
+    let index = current_time_window_index(SCUB_WINDOW)?;
+    let vault = owner.find_gt_exchange_vault_address(store, index, SCUB_WINDOW);
+    let exchange_address = owner.find_gt_exchange_address(&vault, &owner_address);
+
+    owner.prepare_user(store)?.send().await?;
+    delegate
+        .mint_gt_reward(store, &owner_address, SCUB_GT_BALANCE)?
+        .send()
+        .await?;
+    owner
+        .set_gt_delegate(store, &delegate.payer(), SCUB_ALLOWANCE)?
+        .send()
+        .await?;
+    owner.transfer(&payer.pubkey(), 5_000_000)?.send().await?;
+    delegate
+        .prepare_gt_exchange_vault_with_time_window_index(store, index, SCUB_WINDOW)
+        .send()
+        .await?;
+    let scub_rent_payer_balance = delegate.rpc().get_balance(&payer.pubkey()).await?;
+
+    delegate
+        .request_gt_exchange_v2_with_time_window_index(
+            store,
+            &owner_address,
+            &delegate.payer(),
+            &payer.pubkey(),
+            index,
+            SCUB_WINDOW,
+            SCUB_FIRST_SPEND,
+        )
+        .signer(&payer)
+        .send()
+        .await?;
+    let exchange = owner
+        .account::<ZeroCopy<GtExchange>>(&exchange_address)
+        .await?
+        .unwrap()
+        .0;
+    assert_eq!(exchange.owner, owner_address);
+    assert_eq!(exchange.amount, SCUB_FIRST_SPEND);
+    assert_eq!(exchange.rent_receiver, payer.pubkey());
+    let scub_balance_after_creation = delegate.rpc().get_balance(&payer.pubkey()).await?;
+    assert!(scub_balance_after_creation < scub_rent_payer_balance);
+    let user = owner.user(&user_address).await?;
+    assert_eq!(user.gt.allowance, SCUB_ALLOWANCE - SCUB_FIRST_SPEND);
+    assert_eq!(user.gt.amount, SCUB_GT_BALANCE - SCUB_FIRST_SPEND);
+
+    delegate
+        .request_gt_exchange_v2_with_time_window_index(
+            store,
+            &owner_address,
+            &delegate.payer(),
+            &payer.pubkey(),
+            index,
+            SCUB_WINDOW,
+            SCUB_ALLOWANCE,
+        )
+        .signer(&payer)
+        .send()
+        .await
+        .expect_err("spending above the remaining allowance must fail");
+    let exchange = owner
+        .account::<ZeroCopy<GtExchange>>(&exchange_address)
+        .await?
+        .unwrap()
+        .0;
+    assert_eq!(exchange.amount, SCUB_FIRST_SPEND);
+    let user = owner.user(&user_address).await?;
+    assert_eq!(user.gt.allowance, SCUB_ALLOWANCE - SCUB_FIRST_SPEND);
+    assert_eq!(user.gt.amount, SCUB_GT_BALANCE - SCUB_FIRST_SPEND);
+
+    owner
+        .request_gt_exchange_v2_with_time_window_index(
+            store,
+            &owner_address,
+            &owner_address,
+            &owner_address,
+            index,
+            SCUB_WINDOW,
+            SCUB_OWNER_SPEND,
+        )
+        .send()
+        .await?;
+    let exchange = owner
+        .account::<ZeroCopy<GtExchange>>(&exchange_address)
+        .await?
+        .unwrap()
+        .0;
+    assert_eq!(exchange.amount, SCUB_FIRST_SPEND + SCUB_OWNER_SPEND);
+    assert_eq!(exchange.rent_receiver, payer.pubkey());
+    assert_eq!(
+        delegate.rpc().get_balance(&payer.pubkey()).await?,
+        scub_balance_after_creation
+    );
+    assert_eq!(
+        owner.user(&user_address).await?.gt.allowance,
+        SCUB_ALLOWANCE - SCUB_FIRST_SPEND
+    );
     Ok(())
 }
 

@@ -79,6 +79,40 @@ pub trait GtOps<C> {
         amount: u64,
     ) -> TransactionBuilder<C>;
 
+    /// Request an owner's GT exchange using a signer authorized as owner or delegate.
+    /// The rent payer may be a third signer and becomes receiver on first creation.
+    fn request_gt_exchange_v2_with_time_window_index(
+        &self,
+        store: &Pubkey,
+        owner: &Pubkey,
+        authority: &Pubkey,
+        rent_payer: &Pubkey,
+        time_window_index: i64,
+        time_window: u32,
+        amount: u64,
+    ) -> TransactionBuilder<C>;
+
+    /// Request an owner's GT exchange in the current window.
+    fn request_gt_exchange_v2_with_time_window(
+        &self,
+        store: &Pubkey,
+        owner: &Pubkey,
+        authority: &Pubkey,
+        rent_payer: &Pubkey,
+        time_window: u32,
+        amount: u64,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        Ok(self.request_gt_exchange_v2_with_time_window_index(
+            store,
+            owner,
+            authority,
+            rent_payer,
+            current_time_window_index(time_window)?,
+            time_window,
+            amount,
+        ))
+    }
+
     /// Request GT exchange with the given time window.
     fn request_gt_exchange_with_time_window(
         &self,
@@ -234,6 +268,33 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
             .anchor_args(args::RequestGtExchange { amount })
     }
 
+    fn request_gt_exchange_v2_with_time_window_index(
+        &self,
+        store: &Pubkey,
+        owner: &Pubkey,
+        authority: &Pubkey,
+        rent_payer: &Pubkey,
+        time_window_index: i64,
+        time_window: u32,
+        amount: u64,
+    ) -> TransactionBuilder<C> {
+        let vault = self.find_gt_exchange_vault_address(store, time_window_index, time_window);
+        self.store_transaction()
+            .anchor_accounts(accounts::RequestGtExchangeV2 {
+                owner: *owner,
+                authority: *authority,
+                payer: *rent_payer,
+                store: *store,
+                user: self.find_user_address(store, owner),
+                vault,
+                exchange: self.find_gt_exchange_address(&vault, owner),
+                system_program: system_program::ID,
+                event_authority: self.store_event_authority(),
+                program: *self.store_program_id(),
+            })
+            .anchor_args(args::RequestGtExchangeV2 { amount })
+    }
+
     async fn close_gt_exchange(
         &self,
         store: &Pubkey,
@@ -293,4 +354,67 @@ pub fn current_time_window_index(time_window: u32) -> crate::Result<i64> {
 
     let ts = now.as_secs() as i64;
     Ok(get_time_window_index(ts, time_window as i64))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use gmsol_solana_utils::cluster::Cluster;
+    use solana_sdk::signature::Keypair;
+
+    use super::*;
+    use crate::Client;
+
+    #[test]
+    fn scub_gt_exchange_v2_builder_keeps_owner_authority_and_rent_payer_distinct() {
+        let client = Client::new(Cluster::Devnet, Arc::new(Keypair::new())).unwrap();
+        let scub_store = Pubkey::new_unique();
+        let scub_owner = Pubkey::new_unique();
+        let scub_delegate = Pubkey::new_unique();
+        let scub_payer = Pubkey::new_unique();
+        let scub_window_index = 2;
+        let scub_window = 86_400;
+        let vault =
+            client.find_gt_exchange_vault_address(&scub_store, scub_window_index, scub_window);
+
+        let builder = client.request_gt_exchange_v2_with_time_window_index(
+            &scub_store,
+            &scub_owner,
+            &scub_delegate,
+            &scub_payer,
+            scub_window_index,
+            scub_window,
+            5,
+        );
+        let instructions = builder.instructions();
+        let request = instructions.last().unwrap();
+        assert_eq!(request.accounts[0].pubkey, scub_owner);
+        assert!(!request.accounts[0].is_signer);
+        assert_eq!(request.accounts[1].pubkey, scub_delegate);
+        assert!(request.accounts[1].is_signer);
+        assert_eq!(request.accounts[2].pubkey, scub_payer);
+        assert!(request.accounts[2].is_signer);
+        assert!(request.accounts[2].is_writable);
+        assert_eq!(
+            request.accounts[4].pubkey,
+            client.find_user_address(&scub_store, &scub_owner)
+        );
+        assert_eq!(request.accounts[5].pubkey, vault);
+        assert_eq!(
+            request.accounts[6].pubkey,
+            client.find_gt_exchange_address(&vault, &scub_owner)
+        );
+
+        let legacy = client
+            .request_gt_exchange_with_time_window_index(
+                &scub_store,
+                scub_window_index,
+                scub_window,
+                5,
+            )
+            .instructions();
+        assert_eq!(legacy.last().unwrap().accounts[0].pubkey, client.payer());
+        assert_ne!(request.data[..8], legacy.last().unwrap().data[..8]);
+    }
 }
