@@ -1,4 +1,4 @@
-use anchor_lang::solana_program::pubkey::Pubkey;
+use solana_program::pubkey::Pubkey;
 
 /// Alias of [`Space`](anchor_lang::Space).
 pub trait InitSpace {
