@@ -387,9 +387,7 @@ impl super::Command for Inspect {
             #[cfg(feature = "pyth")]
             Command::Pyth { watch, feed_ids } => {
                 use futures_util::TryStreamExt;
-                use gmsol_sdk::client::pyth::{
-                    pull_oracle::hermes::Identifier, EncodingType, Hermes,
-                };
+                use gmsol_sdk::client::pyth::{pull_oracle::hermes::Identifier, EncodingType};
 
                 fn parse_feed_ids(feed_ids: &[String]) -> gmsol_sdk::Result<Vec<Identifier>> {
                     let feed_ids = feed_ids
@@ -402,7 +400,7 @@ impl super::Command for Inspect {
                     Ok(feed_ids)
                 }
 
-                let hermes = Hermes::default();
+                let hermes = ctx.config().hermes()?;
                 let feed_ids = parse_feed_ids(feed_ids)?;
 
                 if *watch {

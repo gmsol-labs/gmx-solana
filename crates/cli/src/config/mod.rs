@@ -1,4 +1,5 @@
 mod output;
+mod pyth;
 mod store_address;
 
 use std::num::NonZeroUsize;
@@ -26,6 +27,9 @@ use store_address::StoreAddress;
 use crate::wallet::signer_from_source;
 
 pub use output::{DisplayOptions, OutputFormat};
+pub use pyth::PythConfig;
+#[cfg(feature = "execute")]
+pub(crate) use pyth::MISSING_PYTH_API_KEY;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "devnet")] {
@@ -129,6 +133,11 @@ pub struct Config {
     #[arg(skip)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     chaos: Option<ChaosConfig>,
+    /// Pyth Hermes configuration.
+    /// Not a CLI flag; only loaded from config file and env.
+    #[arg(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pyth: Option<PythConfig>,
 }
 
 impl Config {
@@ -358,6 +367,42 @@ impl Config {
             .as_ref()
             .and_then(|c| c.signer.as_ref().map(|s| s.0)))
     }
+
+    /// Returns an authenticated Hermes client for commands that fetch Pyth prices.
+    ///
+    /// Errors with an actionable message when no API key is configured.
+    #[cfg(feature = "pyth")]
+    pub fn hermes(&self) -> eyre::Result<gmsol_sdk::client::pyth::Hermes> {
+        self.optional_hermes()?
+            .ok_or_eyre(pyth::MISSING_PYTH_API_KEY)
+    }
+
+    /// Returns an authenticated Hermes client, or `None` when no API key is configured.
+    ///
+    /// For callers that only sometimes need Pyth prices and check that themselves.
+    #[cfg(feature = "pyth")]
+    pub fn optional_hermes(&self) -> eyre::Result<Option<gmsol_sdk::client::pyth::Hermes>> {
+        use gmsol_sdk::client::pyth::pull_oracle::hermes::ENV_API_KEY;
+
+        let env_key = std::env::var(ENV_API_KEY).ok();
+        self.hermes_with_env_key(env_key.as_deref())
+    }
+
+    /// Builds the Hermes client from the `[pyth]` section and the given `PYTH_API_KEY` value.
+    #[cfg(feature = "pyth")]
+    fn hermes_with_env_key(
+        &self,
+        env_key: Option<&str>,
+    ) -> eyre::Result<Option<gmsol_sdk::client::pyth::Hermes>> {
+        use gmsol_sdk::client::pyth::{pull_oracle::hermes::DEFAULT_HERMES_BASE, Hermes};
+
+        let pyth = self.pyth.clone().unwrap_or_default();
+        let Some(api_key) = pyth::resolve_api_key(pyth.api_key.as_deref(), env_key) else {
+            return Ok(None);
+        };
+        let endpoint = pyth.endpoint.as_deref().unwrap_or(DEFAULT_HERMES_BASE);
+        Ok(Some(Hermes::try_new_with_api_key(endpoint, api_key)?))
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
@@ -406,4 +451,96 @@ pub enum InstructionBuffer {
     /// Squads instruction buffer.
     #[cfg(feature = "squads")]
     Squads { multisig: Pubkey, vault_index: u8 },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config_from_toml(toml: &str) -> Config {
+        use figment::{
+            providers::{Format, Serialized, Toml},
+            Figment,
+        };
+        // Same layering as `Cli::init`, minus env vars.
+        Figment::new()
+            .merge(Serialized::defaults(Config::default()))
+            .join(Toml::string(toml))
+            .extract()
+            .expect("valid config")
+    }
+
+    #[test]
+    fn pyth_section_is_loaded_from_toml() {
+        let config = config_from_toml(
+            r#"
+            [pyth]
+            endpoint = "https://hermes.example/prefix"
+            api_key = "cfg-key"
+            "#,
+        );
+        let pyth = config.pyth.expect("pyth section");
+        assert_eq!(
+            pyth.endpoint.as_deref(),
+            Some("https://hermes.example/prefix")
+        );
+        assert_eq!(pyth.api_key.as_deref(), Some("cfg-key"));
+    }
+
+    #[cfg(feature = "pyth")]
+    #[test]
+    fn hermes_uses_configured_endpoint() {
+        let config = config_from_toml(
+            r#"
+            [pyth]
+            endpoint = "https://hermes.example/prefix"
+            api_key = "cfg-key"
+            "#,
+        );
+        let hermes = config
+            .hermes_with_env_key(None)
+            .unwrap()
+            .expect("key is configured");
+        let printed = format!("{hermes:?}");
+        // `Url`'s Debug prints host and path as separate fields.
+        assert!(printed.contains("\"hermes.example\""));
+        assert!(printed.contains("\"/prefix/\""));
+        assert!(!printed.contains("cfg-key"));
+    }
+
+    #[cfg(feature = "pyth")]
+    #[test]
+    fn hermes_falls_back_to_env_key_and_default_endpoint() {
+        let hermes = Config::default()
+            .hermes_with_env_key(Some("env-key"))
+            .unwrap()
+            .expect("env key is set");
+        assert!(format!("{hermes:?}").contains("hermes.pyth.network"));
+    }
+
+    #[cfg(feature = "pyth")]
+    #[test]
+    fn hermes_is_none_without_any_key() {
+        assert!(Config::default()
+            .hermes_with_env_key(None)
+            .unwrap()
+            .is_none());
+        assert!(Config::default()
+            .hermes_with_env_key(Some(""))
+            .unwrap()
+            .is_none());
+    }
+
+    #[cfg(feature = "pyth")]
+    #[test]
+    fn invalid_endpoint_is_an_error() {
+        let config = config_from_toml(
+            r#"
+            [pyth]
+            endpoint = "not a url"
+            api_key = "cfg-key"
+            "#,
+        );
+        assert!(config.hermes_with_env_key(None).is_err());
+    }
 }
