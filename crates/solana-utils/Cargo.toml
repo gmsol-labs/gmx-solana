@@ -20,6 +20,7 @@ client = [
     "serde_json",
     "tokio",
     "futures-util",
+    "dep:bincode",
 ]
 make-bundle-builder = ["client"]
 client-traits = [

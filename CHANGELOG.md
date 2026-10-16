@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added `UserOps` builders for GT delegate and allowance changes.
 - sdk(decode): Added typed decoding for GT delegation updates.
 - cli(gmsol): Added user commands for GT delegate and allowance changes, including Squads proposals through the existing `--squads` mode.
+- sdk(solana-utils): Added `SendAndConfirm::send_and_confirm_transaction_detailed`, which returns `Error::SendUnresolved` (with the signature) whenever the transaction may have reached the cluster but its outcome is unknown: the send request timed out, the connection dropped, the response carried a malformed or mismatched signature, or confirmation failed. Only an explicit rejection by the RPC node (e.g. preflight failure) and on-chain failures are still `Error::Client`. It has a default implementation, and `send_and_confirm_transaction_with_config` is unchanged, so existing callers and implementors keep compiling.
+- sdk(solana-utils): Added `Error::SendUnresolved { signature, source }`, returned when a transaction may have been submitted but its outcome is unknown. The signature is taken from the signed transaction, so it is available even when the send response is lost. Its outcome is unknown, so callers should look up `signature` before retrying. `Error::unresolved_signature` returns it.
+
+### Changed
+
+- sdk(solana-utils): `compress_send_results` no longer lets a later failure replace a pending `Error::SendUnresolved`, so its signature stays visible.
+
+### Fixed
+
+- sdk(solana-utils): With `continue_on_error = false`, `Bundle::send_all_with_opts_detailed` now waits for the rest of the failing parallel batch and reports each transaction's real outcome. Transactions already submitted alongside the failure were previously reported as `Error::SendAborted` (never sent), so retrying them could execute an action twice. Only later batches are padded with `SendAborted` now.
 
 ## [0.11.0] - 2026-10-21
 
