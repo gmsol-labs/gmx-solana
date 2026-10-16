@@ -456,9 +456,18 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
     ///
     /// The returned vector has the same length as the number of transactions in the
     /// bundle. Index `i` corresponds to transaction `i` in build order (flat across
-    /// parallel batches). Each entry is `Ok(signature)` when that transaction was sent
-    /// and confirmed, or `Err(error)` when it failed. When `continue_on_error` is
-    /// `false`, remaining unsent transactions are reported as [`crate::Error::SendAborted`].
+    /// parallel batches). Each entry is one of:
+    ///
+    /// | Entry | Meaning | Safe to resend? |
+    /// |---|---|---|
+    /// | `Ok(signature)` | sent and confirmed | no, it landed |
+    /// | [`crate::Error::SendAborted`] | never sent: an earlier batch failed and `continue_on_error` is `false` | yes |
+    /// | [`crate::Error::SendUnresolved`] | may have been sent, outcome unknown (e.g. send timed out, blockhash expired) | only after looking up `signature` |
+    /// | any other `Err` | rejected by the RPC node (e.g. preflight), or failed on-chain | yes |
+    ///
+    /// Transactions in one parallel batch are sent together, so when `continue_on_error` is
+    /// `false` the failing batch still reports every real outcome; only later batches are
+    /// reported as [`crate::Error::SendAborted`].
     ///
     /// `before_sign` runs once per built transaction, before it is signed.
     pub async fn send_all_with_opts_detailed(
@@ -510,6 +519,8 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
                 before_sign,
             )
             .collect::<crate::Result<Vec<_>>>()?;
+        tracing::debug!(commitment = ?client.commitment(), ?config, "sending bundle");
+        let inspector_cluster = inspector_cluster.or_else(|| client.url().parse().ok());
         Ok(send_all_txns_detailed(
             &client,
             txns,
@@ -558,6 +569,10 @@ pub type SendAllSignaturesResult =
 /// the pending error (last failure wins and gets returned). [`crate::Error::SendAborted`] entries are
 /// ignored when selecting the returned error so early-abort padding does not replace
 /// the real failure.
+///
+/// Exception: a [`crate::Error::SendUnresolved`] is only replaced by a later unresolved one, so
+/// its signature stays visible for reconciliation. Callers that need every unresolved signature
+/// should inspect the detailed results with [`crate::Error::unresolved_signature`] instead.
 pub fn compress_send_results(
     results: Vec<Result<WithSlot<Signature>, crate::Error>>,
 ) -> SendAllSignaturesResult {
@@ -567,7 +582,14 @@ pub fn compress_send_results(
         match result {
             Ok(signature) => signatures.push(signature),
             Err(crate::Error::SendAborted { .. }) => {}
-            Err(err) => error = Some(err),
+            Err(err) => {
+                let pending_is_unresolved = error
+                    .as_ref()
+                    .is_some_and(|pending: &crate::Error| pending.unresolved_signature().is_some());
+                if !pending_is_unresolved || err.unresolved_signature().is_some() {
+                    error = Some(err);
+                }
+            }
         }
     }
     match error {
@@ -577,7 +599,7 @@ pub fn compress_send_results(
 }
 
 async fn send_all_txns_detailed(
-    client: &RpcClient,
+    client: &impl SendAndConfirm,
     txns: Vec<Vec<VersionedTransaction>>,
     config: RpcSendTransactionConfig,
     continue_on_error: bool,
@@ -587,29 +609,24 @@ async fn send_all_txns_detailed(
     let size = txns.iter().map(|txns| txns.len()).sum();
     let mut results = Vec::with_capacity(size);
     let mut failed_at = None;
-    'batches: for (batch_idx, txns) in txns.into_iter().enumerate() {
+    for (batch_idx, txns) in txns.into_iter().enumerate() {
         let mut batch = txns
             .iter()
             .enumerate()
             .map(|(idx, txn)| {
-                tracing::debug!(
-                    %batch_idx,
-                    commitment = ?client.commitment(),
-                    ?config,
-                    "sending transaction {idx}"
-                );
+                tracing::debug!(%batch_idx, "sending transaction {idx}");
                 let inspector_cluster = inspector_cluster.clone();
                 client
-                    .send_and_confirm_transaction_with_config(txn, config)
+                    .send_and_confirm_transaction_detailed(txn, config)
                     .then(move |res| match res {
                         Ok(signature) => std::future::ready(Ok(signature)),
                         Err(err) => {
                             if enable_tracing {
-                                let cluster = inspector_cluster
-                                    .clone()
-                                    .or_else(|| client.url().parse().ok());
-                                let inspector_url =
-                                    inspect_transaction(&txn.message, cluster.as_ref(), false);
+                                let inspector_url = inspect_transaction(
+                                    &txn.message,
+                                    inspector_cluster.as_ref(),
+                                    false,
+                                );
                                 let hash = txn.message.recent_blockhash();
                                 tracing::error!(%err, %hash, ?config, "[batch {batch_idx}] transaction {idx} failed: {inspector_url}");
                             }
@@ -618,21 +635,20 @@ async fn send_all_txns_detailed(
                     })
             })
             .collect::<FuturesOrdered<_>>();
+        // Every transaction in a batch is already in flight, so a failure must not stop us
+        // from recording the real outcome of the others: dropping them would report a
+        // submitted (maybe confirmed) transaction as never sent.
         while let Some(res) = batch.next().await {
-            match res {
-                Ok(signature) => results.push(Ok(signature)),
-                Err(err) => {
-                    let err: crate::Error = Box::new(err).into();
-                    let index = results.len();
-                    results.push(Err(err));
-                    if !continue_on_error {
-                        failed_at = Some(index);
-                        break 'batches;
-                    }
-                }
+            if res.is_err() && failed_at.is_none() {
+                failed_at = Some(results.len());
             }
+            results.push(res);
+        }
+        if failed_at.is_some() && !continue_on_error {
+            break;
         }
     }
+    // Pads only the batches that were never started; a no-op when `continue_on_error`.
     if let Some(failed_at) = failed_at {
         while results.len() < size {
             results.push(Err(crate::Error::SendAborted { failed_at }));
@@ -651,6 +667,166 @@ mod tests {
 
     fn err_msg(msg: &str) -> Result<WithSlot<Signature>, crate::Error> {
         Err(crate::Error::custom(msg))
+    }
+
+    /// What [`ScriptedClient`] returns for one transaction.
+    #[derive(Clone, Copy)]
+    enum Outcome {
+        Landed,
+        Failed,
+        Unresolved,
+    }
+
+    /// Fake RPC client that answers each transaction by its signature.
+    struct ScriptedClient(HashMap<Signature, Outcome>);
+
+    impl SendAndConfirm for ScriptedClient {
+        async fn send_and_confirm_transaction_with_config(
+            &self,
+            _transaction: &impl solana_client::rpc_client::SerializableTransaction,
+            _config: RpcSendTransactionConfig,
+        ) -> Result<WithSlot<Signature>, solana_client::client_error::ClientError> {
+            unreachable!("the bundle sender only calls `send_and_confirm_transaction_detailed`")
+        }
+
+        async fn send_and_confirm_transaction_detailed(
+            &self,
+            transaction: &impl solana_client::rpc_client::SerializableTransaction,
+            _config: RpcSendTransactionConfig,
+        ) -> crate::Result<WithSlot<Signature>> {
+            let signature = *transaction.get_signature();
+            match self.0[&signature] {
+                Outcome::Landed => Ok(WithSlot::new(1, signature)),
+                Outcome::Failed => Err(crate::Error::custom("failed")),
+                Outcome::Unresolved => Err(crate::Error::SendUnresolved {
+                    signature,
+                    source: Box::new(
+                        solana_client::rpc_request::RpcError::ForUser("timeout".to_string()).into(),
+                    ),
+                }),
+            }
+        }
+    }
+
+    /// Build one dummy transaction per outcome, grouped into the same batches.
+    fn scripted_bundle(batches: &[&[Outcome]]) -> (ScriptedClient, Vec<Vec<VersionedTransaction>>) {
+        let mut outcomes = HashMap::new();
+        let txns = batches
+            .iter()
+            .map(|batch| {
+                batch
+                    .iter()
+                    .map(|outcome| {
+                        let signature = Signature::new_unique();
+                        outcomes.insert(signature, *outcome);
+                        VersionedTransaction {
+                            signatures: vec![signature],
+                            message: VersionedMessage::Legacy(Default::default()),
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        (ScriptedClient(outcomes), txns)
+    }
+
+    async fn send_scripted(
+        batches: &[&[Outcome]],
+        continue_on_error: bool,
+    ) -> Vec<Result<WithSlot<Signature>, crate::Error>> {
+        let (client, txns) = scripted_bundle(batches);
+        send_all_txns_detailed(
+            &client,
+            txns,
+            RpcSendTransactionConfig::default(),
+            continue_on_error,
+            false,
+            None,
+        )
+        .await
+    }
+
+    /// Render results as short tags so a whole bundle fits in one `assert_eq!`.
+    fn tags(results: &[Result<WithSlot<Signature>, crate::Error>]) -> Vec<&'static str> {
+        results
+            .iter()
+            .map(|result| match result {
+                Ok(_) => "ok",
+                Err(crate::Error::SendAborted { .. }) => "aborted",
+                Err(crate::Error::SendUnresolved { .. }) => "unresolved",
+                Err(_) => "failed",
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn continue_on_error_reports_every_outcome() {
+        use Outcome::*;
+        let results = send_scripted(&[&[Failed, Landed], &[Unresolved, Landed]], true).await;
+        assert_eq!(tags(&results), ["failed", "ok", "unresolved", "ok"]);
+    }
+
+    #[tokio::test]
+    async fn abort_pads_later_batches_with_send_aborted() {
+        use Outcome::*;
+        let results = send_scripted(&[&[Failed], &[Landed, Landed]], false).await;
+        assert_eq!(tags(&results), ["failed", "aborted", "aborted"]);
+        assert!(matches!(
+            results[1],
+            Err(crate::Error::SendAborted { failed_at: 0 })
+        ));
+    }
+
+    #[tokio::test]
+    async fn abort_keeps_real_outcomes_of_the_failing_batch() {
+        use Outcome::*;
+        let results = send_scripted(
+            &[&[Landed, Failed, Landed, Unresolved], &[Landed, Landed]],
+            false,
+        )
+        .await;
+        assert_eq!(
+            tags(&results),
+            ["ok", "failed", "ok", "unresolved", "aborted", "aborted"]
+        );
+        assert!(matches!(
+            results[4],
+            Err(crate::Error::SendAborted { failed_at: 1 })
+        ));
+    }
+
+    #[tokio::test]
+    async fn abort_after_last_batch_pads_nothing() {
+        use Outcome::*;
+        let results = send_scripted(&[&[Landed], &[Failed, Landed]], false).await;
+        assert_eq!(tags(&results), ["ok", "failed", "ok"]);
+    }
+
+    fn err_unresolved() -> (Signature, Result<WithSlot<Signature>, crate::Error>) {
+        let signature = Signature::new_unique();
+        let source = solana_client::rpc_request::RpcError::ForUser("timeout".to_string());
+        let err = crate::Error::SendUnresolved {
+            signature,
+            source: Box::new(source.into()),
+        };
+        (signature, Err(err))
+    }
+
+    #[test]
+    fn compress_send_results_keeps_unresolved_over_later_failure() {
+        let (signature, unresolved) = err_unresolved();
+        let results = vec![ok_sig(1), unresolved, err_msg("later")];
+        let (sigs, err) = compress_send_results(results).unwrap_err();
+        assert_eq!(sigs.len(), 1);
+        assert_eq!(err.unresolved_signature(), Some(&signature));
+    }
+
+    #[test]
+    fn compress_send_results_later_unresolved_replaces_failure() {
+        let (signature, unresolved) = err_unresolved();
+        let results = vec![err_msg("first"), unresolved];
+        let (_, err) = compress_send_results(results).unwrap_err();
+        assert_eq!(err.unresolved_signature(), Some(&signature));
     }
 
     #[test]
