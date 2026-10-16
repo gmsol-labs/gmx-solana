@@ -9486,7 +9486,7 @@
         {
           "name": "delegate",
           "docs": [
-            "The intended GT delegate. Omit this account to clear the delegate."
+            "The intended GT delegate. Omit it when setting to clear the delegate; required for allowance changes."
           ],
           "optional": true
         },
@@ -15457,7 +15457,7 @@
         {
           "name": "delegate",
           "docs": [
-            "The intended GT delegate. Omit this account to clear the delegate."
+            "The intended GT delegate. Omit it when setting to clear the delegate; required for allowance changes."
           ],
           "optional": true
         },
@@ -20496,7 +20496,7 @@
         {
           "name": "delegate",
           "docs": [
-            "The intended GT delegate. Omit this account to clear the delegate."
+            "The intended GT delegate. Omit it when setting to clear the delegate; required for allowance changes."
           ],
           "optional": true
         },
