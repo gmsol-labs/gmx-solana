@@ -28,7 +28,7 @@ pub struct UpdateGtDelegation<'info> {
         bump = user.load()?.bump,
     )]
     pub user: AccountLoader<'info, UserHeader>,
-    /// The intended GT delegate. Omit this account to clear the delegate.
+    /// The intended GT delegate. Omit it when setting to clear the delegate; required for allowance changes.
     /// CHECK: used only as an address; increase and decrease verify it against the User Account.
     pub delegate: Option<UncheckedAccount<'info>>,
 }

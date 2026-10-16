@@ -27,7 +27,7 @@ use gmsol_sdk::{
 use {
     crate::commands::exchange::executor,
     gmsol_sdk::{
-        client::pyth::{pubkey_to_identifier, pull_oracle::hermes::Identifier, Hermes},
+        client::pyth::{pubkey_to_identifier, pull_oracle::hermes::Identifier},
         core::oracle::{pyth_price_with_confidence_to_price, PriceProviderKind},
         core::token_config::TokenConfig,
         programs::gmsol_store::accounts::Market,
@@ -376,7 +376,7 @@ impl super::Command for Treasury {
                         }
 
                         // Step 2: Fetch all prices from Pyth using Hermes
-                        let hermes = Hermes::default();
+                        let hermes = ctx.config().hermes()?;
 
                         // Helper function to get token config
                         let get_token_config = |token_mint: &Pubkey| -> eyre::Result<&TokenConfig> {
@@ -851,7 +851,7 @@ impl super::Command for Treasury {
                 let oracle = ctx.config().oracle()?;
                 let gt_exchange_vault = gt_exchange_vault.get(store, client).await?;
                 let builder = client.confirm_gt_buyback(store, &gt_exchange_vault, oracle);
-                let executor = args.build(client).await?;
+                let executor = args.build(client, ctx.config()).await?;
                 executor.execute(builder, options).await?;
                 return Ok(());
             }

@@ -395,6 +395,7 @@ pub struct CloseGtExchange<'info> {
         mut,
         close = owner,
         constraint = exchange.load()?.is_initialized() @ CoreError::InvalidArgument,
+        constraint = exchange.load()?.rent_receiver() == owner.key @ CoreError::RentReceiverMismatched,
         has_one = store,
         has_one = owner,
         has_one = vault,
@@ -419,6 +420,66 @@ pub(crate) fn unchecked_close_gt_exchange(ctx: Context<CloseGtExchange>) -> Resu
 }
 
 impl<'info> internal::Authentication<'info> for CloseGtExchange<'info> {
+    fn authority(&self) -> &Signer<'info> {
+        &self.authority
+    }
+
+    fn store(&self) -> &AccountLoader<'info, Store> {
+        &self.store
+    }
+}
+
+/// The accounts definition for
+/// [`close_gt_exchange_v2`](crate::close_gt_exchange_v2) instruction.
+#[derive(Accounts)]
+pub struct CloseGtExchangeV2<'info> {
+    pub authority: Signer<'info>,
+    #[account(
+        constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
+    )]
+    pub store: AccountLoader<'info, Store>,
+    /// CHECK: only used to validate the exchange owner and derive its address.
+    pub owner: UncheckedAccount<'info>,
+    #[account(
+        constraint = vault.load()?.is_initialized() @ CoreError::InvalidArgument,
+        constraint = vault.load()?.is_confirmed() @ CoreError::PreconditionsAreNotMet,
+        has_one = store,
+    )]
+    pub vault: AccountLoader<'info, GtExchangeVault>,
+    /// CHECK: only receives rent after its address is checked against the exchange.
+    #[account(mut)]
+    pub rent_receiver: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        close = rent_receiver,
+        constraint = exchange.load()?.is_initialized() @ CoreError::InvalidArgument,
+        constraint = exchange.load()?.rent_receiver() == rent_receiver.key @ CoreError::RentReceiverMismatched,
+        has_one = store,
+        has_one = owner,
+        has_one = vault,
+        seeds = [GtExchange::SEED, vault.key().as_ref(), owner.key().as_ref()],
+        bump = exchange.load()?.bump,
+    )]
+    pub exchange: AccountLoader<'info, GtExchange>,
+}
+
+impl CloseGtExchangeV2<'_> {
+    /// CHECK: only GT_CONTROLLER is allowed to use this instruction.
+    pub(crate) fn invoke_unchecked(ctx: Context<Self>) -> Result<()> {
+        let vault = ctx.accounts.vault.load()?;
+        let exchange = ctx.accounts.exchange.load()?;
+        msg!(
+            "[GT] Closing confirmed exchange: vault_index = {}, vault = {}, owner = {}, amount = {}",
+            vault.time_window_index(),
+            exchange.vault(),
+            exchange.owner(),
+            exchange.amount()
+        );
+        Ok(())
+    }
+}
+
+impl<'info> internal::Authentication<'info> for CloseGtExchangeV2<'info> {
     fn authority(&self) -> &Signer<'info> {
         &self.authority
     }
