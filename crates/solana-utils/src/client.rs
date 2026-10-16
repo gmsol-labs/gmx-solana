@@ -73,7 +73,7 @@ impl SendAndConfirm for RpcClient {
         let signature = self
             .send_transaction_with_config(transaction, config)
             .await
-            .map_err(|err| send_error(*transaction.get_signature(), err))?;
+            .map_err(|err| send_error(transaction, err))?;
 
         match confirm_transaction(self, &signature, transaction).await {
             Ok(Confirmation::Landed { slot }) => Ok(WithSlot::new(slot, signature)),
@@ -94,17 +94,33 @@ impl SendAndConfirm for RpcClient {
 /// rejected the transaction. Any other failure (timeout, dropped connection, malformed or
 /// mismatched signature in the response) can happen after the node accepted and forwarded it.
 /// The signature is computed locally at signing time, so it is known even without a response.
-fn send_error(signature: Signature, err: SolanaClientError) -> crate::Error {
-    if matches!(
+fn send_error(transaction: &impl SerializableTransaction, err: SolanaClientError) -> crate::Error {
+    // Checked before touching the signature, so a rejected unsigned transaction cannot panic.
+    let rejected = matches!(
         err.kind(),
         ClientErrorKind::RpcError(RpcError::RpcResponseError { .. })
-    ) {
-        return Box::new(err).into();
+    );
+    match first_signature(transaction) {
+        Some(signature) if !rejected => crate::Error::SendUnresolved {
+            signature,
+            source: Box::new(err),
+        },
+        // Rejected by the node, or unsigned and so impossible to execute on-chain.
+        _ => Box::new(err).into(),
     }
-    crate::Error::SendUnresolved {
-        signature,
-        source: Box::new(err),
+}
+
+/// First signature of `transaction`, or `None` if it has none.
+///
+/// `get_signature()` panics on a transaction with no signatures, so check the wire format
+/// first: it starts with the signature count (compact-u16), which is a single `0` byte when
+/// there are none.
+fn first_signature(transaction: &impl SerializableTransaction) -> Option<Signature> {
+    let bytes = bincode::serialize(transaction).ok()?;
+    if bytes.first() == Some(&0) {
+        return None;
     }
+    Some(*transaction.get_signature())
 }
 
 /// Final status of a submitted transaction.
@@ -248,26 +264,71 @@ mod tests {
         (tx, err)
     }
 
+    fn rejected_by_node() -> SolanaClientError {
+        RpcError::RpcResponseError {
+            code: -32002,
+            message: "Transaction simulation failed".to_string(),
+            data: RpcResponseErrorData::Empty,
+        }
+        .into()
+    }
+
+    fn timed_out() -> SolanaClientError {
+        io::Error::new(io::ErrorKind::TimedOut, "timed out").into()
+    }
+
+    fn unsigned_transaction() -> Transaction {
+        let payer = Keypair::new();
+        let ix = system_instruction::transfer(&payer.pubkey(), &payer.pubkey(), 1);
+        let tx = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
+        Transaction {
+            signatures: vec![],
+            ..tx
+        }
+    }
+
+    #[tokio::test]
+    async fn rejected_unsigned_transaction_is_an_error_not_a_panic() {
+        let client = RpcClient::new_sender(FailingSender(rejected_by_node), Default::default());
+        let tx = unsigned_transaction();
+
+        let detailed = client
+            .send_and_confirm_transaction_detailed(&tx, skip_preflight())
+            .await
+            .unwrap_err();
+        assert!(matches!(detailed, crate::Error::Client(_)), "{detailed:?}");
+
+        let legacy = client
+            .send_and_confirm_transaction_with_config(&tx, skip_preflight())
+            .await
+            .unwrap_err();
+        assert!(
+            legacy.to_string().contains("Transaction simulation failed"),
+            "{legacy}"
+        );
+    }
+
+    #[tokio::test]
+    async fn timed_out_unsigned_transaction_is_an_error_not_a_panic() {
+        let client = RpcClient::new_sender(FailingSender(timed_out), Default::default());
+
+        let err = client
+            .send_and_confirm_transaction_detailed(&unsigned_transaction(), skip_preflight())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, crate::Error::Client(_)), "{err:?}");
+    }
+
     #[tokio::test]
     async fn send_timeout_is_unresolved() {
-        let (tx, err) = send_with_failing_transport(|| {
-            io::Error::new(io::ErrorKind::TimedOut, "timed out").into()
-        })
-        .await;
+        let (tx, err) = send_with_failing_transport(timed_out).await;
         assert_eq!(err.unresolved_signature(), Some(&tx.signatures[0]));
     }
 
     #[tokio::test]
     async fn node_rejection_is_a_client_error() {
-        let (_, err) = send_with_failing_transport(|| {
-            RpcError::RpcResponseError {
-                code: -32002,
-                message: "Transaction simulation failed".to_string(),
-                data: RpcResponseErrorData::Empty,
-            }
-            .into()
-        })
-        .await;
+        let (_, err) = send_with_failing_transport(rejected_by_node).await;
         assert!(matches!(err, crate::Error::Client(_)), "{err:?}");
     }
 
