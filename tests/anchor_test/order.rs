@@ -6,21 +6,35 @@ use gmsol_programs::{
     anchor_lang::error::ErrorCode,
     gmsol_store::{
         client::{accounts, args},
-        events::{BuilderFeeCharged, TradeEvent},
+        events::{BuilderFeeCharged, BuilderFeeSettled, TradeEvent},
         types::{DecreasePositionSwapType, UpdateOrderParams},
     },
 };
 use gmsol_sdk::{
     builders::order::SetBuilderFeeHint,
-    client::ops::{BuilderFeeOps, ConfigOps, ExchangeOps, MarketOps, UserOps},
+    client::{
+        feeds_parser::FeedAddressMap,
+        ops::{
+            exchange::order::ExecuteOrderBuilder, BuilderFeeOps, ConfigOps, ExchangeOps, MarketOps,
+            UserOps,
+        },
+        pull_oracle::{FeedIds, PullOraclePriceConsumer},
+    },
     constants::MARKET_USD_UNIT,
     decode::gmsol::programs::GMSOLCPIEvent,
     pda::find_user_token_controller_address,
     Client,
 };
-use gmsol_solana_utils::signer::SignerRef;
+use gmsol_solana_utils::{
+    bundle_builder::{BundleBuilder, BundleOptions},
+    make_bundle_builder::MakeBundleBuilder,
+    signer::SignerRef,
+    transaction_builder::TransactionBuilder,
+};
 use gmsol_store::CoreError;
-use gmsol_utils::{action::ActionState, config::FactorKey, market::MarketConfigKey};
+use gmsol_utils::{
+    action::ActionState, config::FactorKey, market::MarketConfigKey, oracle::PriceProviderKind,
+};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tracing::Instrument;
 
@@ -2898,6 +2912,245 @@ async fn settle_built_before_execution_succeeds_after_it() -> eyre::Result<()> {
                 "the settled fee must land in the builder's claim vault"
             );
 
+            let signature = owner.close_order(&order)?.build().await?.send().await?;
+            tracing::info!(%order, %signature, "closed the settled order");
+
+            Ok::<_, eyre::Report>(())
+        })
+        .await?;
+
+    Ok(())
+}
+
+/// An execution with a settlement transaction appended after it, so that both land in one
+/// transaction.
+///
+/// The settlement is pushed as a mergeable group after everything the execution builds, which is
+/// what `Surround::post_transaction` does, and the bundle then packs it into the execution's own
+/// transaction when it fits. It stays after the execution, so it runs once the fee is recorded.
+/// The oracle wrapper needs the price-consumer side as well, which is forwarded untouched.
+struct ExecuteThenSettle<'a> {
+    execute: ExecuteOrderBuilder<'a, SignerRef>,
+    settle: TransactionBuilder<'a, SignerRef>,
+}
+
+impl PullOraclePriceConsumer for ExecuteThenSettle<'_> {
+    async fn feed_ids(&mut self) -> gmsol_sdk::Result<FeedIds> {
+        self.execute.feed_ids().await
+    }
+
+    fn process_feeds(
+        &mut self,
+        provider: PriceProviderKind,
+        map: FeedAddressMap,
+    ) -> gmsol_sdk::Result<()> {
+        self.execute.process_feeds(provider, map)
+    }
+}
+
+impl<'a> MakeBundleBuilder<'a, SignerRef> for ExecuteThenSettle<'a> {
+    async fn build_with_options(
+        &mut self,
+        options: BundleOptions,
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, SignerRef>> {
+        let mut bundle = self.execute.build_with_options(options).await?;
+        bundle.push(self.settle.clone())?;
+        Ok(bundle)
+    }
+}
+
+/// Read the builder fee events of the most recent transaction touching `order`.
+///
+/// Both come from that one transaction, so a caller finding the two together has found them in the
+/// same transaction. When the settlement is sent separately the last transaction carries only the
+/// settlement event.
+async fn last_builder_fee_events(
+    client: &Client<SignerRef>,
+    order: &Pubkey,
+) -> eyre::Result<(Option<BuilderFeeCharged>, Option<BuilderFeeSettled>)> {
+    let slot = client.get_slot(None).await?;
+    let events = client
+        .last_order_events(order, slot, CommitmentConfig::confirmed())
+        .await?;
+    eyre::ensure!(
+        !events.is_empty(),
+        "no events were read, so nothing can be concluded"
+    );
+
+    let mut charged = None;
+    let mut settled = None;
+    for event in events {
+        match event {
+            GMSOLCPIEvent::BuilderFeeCharged(event) => charged = Some(event),
+            GMSOLCPIEvent::BuilderFeeSettled(event) => settled = Some(event),
+            _ => {}
+        }
+    }
+    Ok((charged, settled))
+}
+
+/// Execution and settlement of a fee-bearing order in a single transaction.
+///
+/// The settlement is built while the order is pending, when nothing is recorded yet, and placed
+/// after the execution in the same transaction. The execution records the fee, then the
+/// settlement, which reads the recorded amount when it runs, moves it to the builder. Before the
+/// settlement carried its accounts for a builder that can still be charged, it was built without
+/// them for this very reason and the whole transaction, execution included, reverted with
+/// `TokenMintNotProvided`.
+///
+/// That both instructions share a transaction is asserted from the events: the most recent
+/// transaction touching the order carries `BuilderFeeCharged` and `BuilderFeeSettled` together.
+///
+/// Trades as the exclusive locked user, and takes that lock before the builder fee globals, like
+/// the other tests that execute a fee-bearing order.
+#[tokio::test]
+async fn execute_and_settle_in_one_transaction() -> eyre::Result<()> {
+    /// One percent, in the market factor unit.
+    const CAP: u128 = MARKET_USD_UNIT / 100;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let span = tracing::info_span!("execute_and_settle_in_one_transaction");
+    let _enter = span.enter();
+
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let builder = deployment.user_client(Deployment::USER_1)?;
+    let store = &deployment.store;
+    let oracle = &deployment.oracle();
+    let fbtc = deployment.token("fBTC").expect("must exist");
+
+    let market_token = deployment
+        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
+        .await?;
+
+    let owner = deployment.locked_user_client().await?;
+
+    for signature in [
+        owner.prepare_user(store)?.send_without_preflight().await?,
+        builder
+            .prepare_user(store)?
+            .send_without_preflight()
+            .await?,
+    ] {
+        tracing::info!(%signature, "prepared a user account");
+    }
+
+    // The vault settlement pays into; `set_builder_fee` requires it to exist.
+    let builder_user = builder.find_user_address(store, &builder.payer());
+    deployment
+        .mint_or_transfer_to("fBTC", &builder_user, 0)
+        .await?;
+
+    let collateral_amount = 10_000;
+    deployment
+        .mint_or_transfer_to("fBTC", &owner.payer(), collateral_amount)
+        .await?;
+
+    let size = 100 * MARKET_USD_UNIT;
+
+    deployment
+        .with_builder_fee_cap(CAP, async {
+            // Read under the lock, since this builder is shared with the other builder fee tests
+            // and some of them settle into this very vault.
+            let claim_vault_before = deployment
+                .get_ata_amount(&fbtc.address, &builder_user)
+                .await?
+                .ok_or_eyre("the claim vault must exist")?;
+
+            let signature = builder
+                .set_builder_fee_factor(store, CAP)?
+                .send_without_preflight()
+                .await?;
+            tracing::info!(%signature, "the builder advertised its factor");
+
+            let (rpc, order) = owner
+                .market_increase(store, market_token, true, collateral_amount, true, size)
+                .prepare_final_output_token_escrow(true)
+                .build_with_address()
+                .await?;
+            let checkpoint = owner
+                .set_builder_fee(
+                    store,
+                    &order,
+                    &builder_user,
+                    CAP,
+                    Some(builder_fee_hint(owner.find_market_address(store, market_token), fbtc.address)),
+                )
+                .await?;
+            let signature = rpc.merge(checkpoint).send_without_preflight().await?;
+            tracing::info!(%order, %signature, "created the increase order with its builder fee checkpoint");
+
+            let pending = owner.order(&order).await?;
+            assert_eq!(
+                pending.builder_fee_amount, 0,
+                "nothing may be recorded before the execution"
+            );
+            assert_ne!(pending.builder_fee_factor, 0);
+            let escrow = pending
+                .tokens
+                .final_output_token
+                .account()
+                .ok_or_eyre("the order must carry a final output token escrow")?;
+
+            // Built now, from the pending order: this is exactly the read a keeper composing the
+            // two into one transaction has to work from.
+            let settle = keeper.settle_builder_fee(store, &order, None).await?;
+
+            let mut execution = keeper.execute_order(store, oracle, &order, false)?;
+            execution
+                .add_alt(deployment.common_alt().clone())
+                .add_alt(deployment.market_alt().clone());
+            let mut execute_and_settle = ExecuteThenSettle {
+                execute: execution,
+                settle,
+            };
+            deployment
+                .execute_with_pyth(&mut execute_and_settle, None, true, true)
+                .await?;
+            tracing::info!(%order, "executed the order and settled its fee in one transaction");
+
+            // The two events come from the most recent transaction touching the order, so finding
+            // both is finding both in the same transaction.
+            let (charged, settled) = last_builder_fee_events(&keeper, &order).await?;
+            let charged = charged
+                .ok_or_eyre("the execution transaction must carry the `BuilderFeeCharged` event")?;
+            let settled = settled.ok_or_eyre(
+                "the same transaction must carry `BuilderFeeSettled`; the settlement did not land in the execution transaction",
+            )?;
+
+            let paid = u64::try_from(charged.paid_amount)?;
+            assert_ne!(paid, 0, "the fee must have been charged");
+            assert_eq!(settled.order, order);
+            assert_eq!(settled.builder, builder_user);
+            assert_eq!(settled.token, fbtc.address);
+            assert_eq!(
+                settled.recorded_amount, paid,
+                "the settlement must have seen the amount the execution recorded"
+            );
+            assert_eq!(
+                settled.settled_amount, paid,
+                "the whole recorded amount must have been paid out"
+            );
+
+            assert_eq!(
+                owner.order(&order).await?.builder_fee_amount,
+                0,
+                "no builder fee may be left outstanding"
+            );
+            assert_eq!(
+                deployment
+                    .get_ata_amount(&fbtc.address, &builder_user)
+                    .await?,
+                Some(claim_vault_before + paid),
+                "the claim vault must have grown by exactly the fee"
+            );
+            assert_eq!(
+                deployment.get_token_account_amount(&escrow).await?,
+                Some(0),
+                "the escrow of an increase order holds nothing but the fee, so it must be empty"
+            );
+
+            // Nothing is owed any more, so the order closes.
             let signature = owner.close_order(&order)?.build().await?.send().await?;
             tracing::info!(%order, %signature, "closed the settled order");
 
