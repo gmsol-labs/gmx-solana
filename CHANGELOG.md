@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- programs(store): GT exchange requests can also arrive through `request_gt_exchange_v2`, with owner or delegate authority and a separate rent payer. Consumers that identify requests only by `request_gt_exchange` must recognize the new instruction; the legacy accounts and behavior remain unchanged.
+
 ### Added
 
+- programs(store): Added `request_gt_exchange_v2` for owner or delegate authorized GT burns with a separate rent payer, and records that payer as the receiver when an exchange is created.
+- sdk(sdk): Added `GtOps::request_gt_exchange_v2_with_time_window_index` and current-window builder with distinct owner, authority, and rent-payer accounts.
 - programs(store): Added owner-signed instructions to replace or clear a GT delegate and allowance, increase the remaining allowance, or decrease it to a floor of zero. Each emits the resulting delegation state.
 - sdk(sdk): Added `UserOps` builders for GT delegate and allowance changes.
 - sdk(decode): Added typed decoding for GT delegation updates.

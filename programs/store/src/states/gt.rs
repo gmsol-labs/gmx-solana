@@ -679,6 +679,10 @@ impl GtExchange {
         optional_address(&self.rent_receiver).unwrap_or(&self.owner)
     }
 
+    pub(crate) fn set_rent_receiver(&mut self, receiver: Pubkey) {
+        self.rent_receiver = receiver;
+    }
+
     pub(crate) fn store(&self) -> &Pubkey {
         &self.store
     }
@@ -729,7 +733,7 @@ mod tests {
         );
         assert_eq!(exchange.rent_receiver(), &scub_owner);
 
-        exchange.rent_receiver = scub_receiver;
+        exchange.set_rent_receiver(scub_receiver);
         assert_eq!(exchange.rent_receiver(), &scub_receiver);
     }
 }
