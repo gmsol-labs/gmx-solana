@@ -159,9 +159,15 @@ async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
     assert_eq!(user.gt.allowance, 100);
     scub_assert_gt_delegation_event(&client, user_address, scub_delegate, 100).await?;
 
-    client.decrease_gt_allowance(store, 40)?.send().await?;
+    client
+        .decrease_gt_allowance(store, &scub_delegate, 40)?
+        .send()
+        .await?;
     scub_assert_gt_delegation_event(&client, user_address, scub_delegate, 60).await?;
-    client.increase_gt_allowance(store, 15)?.send().await?;
+    client
+        .increase_gt_allowance(store, &scub_delegate, 15)?
+        .send()
+        .await?;
     assert_eq!(client.user(&user_address).await?.gt.allowance, 75);
     scub_assert_gt_delegation_event(&client, user_address, scub_delegate, 75).await?;
 
@@ -174,25 +180,48 @@ async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
     assert_eq!(user.gt.allowance, 30);
     scub_assert_gt_delegation_event(&client, user_address, scub_next_delegate, 30).await?;
 
+    client
+        .increase_gt_allowance(store, &scub_delegate, 1)?
+        .send()
+        .await
+        .expect_err("a stale delegate must not receive an allowance increase");
+    client
+        .decrease_gt_allowance(store, &scub_delegate, 1)?
+        .send()
+        .await
+        .expect_err("a stale delegate must not reduce the new delegate's allowance");
+    client
+        .increase_gt_allowance(store, &scub_next_delegate, 0)?
+        .send()
+        .await
+        .expect_err("a zero increase must be rejected");
+    client
+        .decrease_gt_allowance(store, &scub_next_delegate, 0)?
+        .send()
+        .await
+        .expect_err("a zero decrease must be rejected");
+    assert_eq!(client.user(&user_address).await?.gt.allowance, 30);
+
     other
         .store_transaction()
         .anchor_accounts(accounts::SetGtDelegate {
             owner: other.payer(),
             store: *store,
             user: user_address,
+            delegate: Some(other.payer()),
             event_authority: other.store_event_authority(),
             program: *other.store_program_id(),
         })
-        .anchor_args(args::SetGtDelegate {
-            delegate: other.payer(),
-            allowance: 999,
-        })
+        .anchor_args(args::SetGtDelegate { allowance: 999 })
         .send()
         .await
         .expect_err("the delegate must not change the owner's delegation");
     assert_eq!(client.user(&user_address).await?.gt.allowance, 30);
 
-    client.decrease_gt_allowance(store, 100)?.send().await?;
+    client
+        .decrease_gt_allowance(store, &scub_next_delegate, 100)?
+        .send()
+        .await?;
     assert_eq!(client.user(&user_address).await?.gt.allowance, 0);
     scub_assert_gt_delegation_event(&client, user_address, scub_next_delegate, 0).await?;
     client
@@ -204,7 +233,7 @@ async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
     assert_eq!(user.gt.allowance, 0);
     scub_assert_gt_delegation_event(&client, user_address, Pubkey::default(), 0).await?;
     client
-        .increase_gt_allowance(store, 1)?
+        .increase_gt_allowance(store, &scub_next_delegate, 1)?
         .send()
         .await
         .expect_err("a user without a delegate cannot receive a positive allowance");

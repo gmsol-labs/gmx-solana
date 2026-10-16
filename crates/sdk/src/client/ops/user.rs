@@ -21,17 +21,19 @@ pub trait UserOps<C> {
         allowance: u64,
     ) -> crate::Result<TransactionBuilder<C>>;
 
-    /// Add to the payer's GT allowance at execution time.
+    /// Add to the payer's GT allowance at execution time if the expected delegate still matches.
     fn increase_gt_allowance(
         &self,
         store: &Pubkey,
+        delegate: &Pubkey,
         amount: u64,
     ) -> crate::Result<TransactionBuilder<C>>;
 
-    /// Subtract from the payer's GT allowance at execution time, stopping at zero.
+    /// Subtract from the payer's GT allowance at execution time if the expected delegate still matches.
     fn decrease_gt_allowance(
         &self,
         store: &Pubkey,
+        delegate: &Pubkey,
         amount: u64,
     ) -> crate::Result<TransactionBuilder<C>>;
 
@@ -100,18 +102,17 @@ impl<C: Deref<Target = impl Signer> + Clone> UserOps<C> for crate::Client<C> {
                 owner: self.payer(),
                 store: *store,
                 user: self.find_user_address(store, &self.payer()),
+                delegate: optional_address(delegate).copied(),
                 event_authority: self.store_event_authority(),
                 program: *self.store_program_id(),
             })
-            .anchor_args(args::SetGtDelegate {
-                delegate: *delegate,
-                allowance,
-            }))
+            .anchor_args(args::SetGtDelegate { allowance }))
     }
 
     fn increase_gt_allowance(
         &self,
         store: &Pubkey,
+        delegate: &Pubkey,
         amount: u64,
     ) -> crate::Result<TransactionBuilder<C>> {
         Ok(self
@@ -120,6 +121,7 @@ impl<C: Deref<Target = impl Signer> + Clone> UserOps<C> for crate::Client<C> {
                 owner: self.payer(),
                 store: *store,
                 user: self.find_user_address(store, &self.payer()),
+                delegate: Some(*delegate),
                 event_authority: self.store_event_authority(),
                 program: *self.store_program_id(),
             })
@@ -129,6 +131,7 @@ impl<C: Deref<Target = impl Signer> + Clone> UserOps<C> for crate::Client<C> {
     fn decrease_gt_allowance(
         &self,
         store: &Pubkey,
+        delegate: &Pubkey,
         amount: u64,
     ) -> crate::Result<TransactionBuilder<C>> {
         Ok(self
@@ -137,6 +140,7 @@ impl<C: Deref<Target = impl Signer> + Clone> UserOps<C> for crate::Client<C> {
                 owner: self.payer(),
                 store: *store,
                 user: self.find_user_address(store, &self.payer()),
+                delegate: Some(*delegate),
                 event_authority: self.store_event_authority(),
                 program: *self.store_program_id(),
             })

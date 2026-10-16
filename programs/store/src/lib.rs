@@ -3139,7 +3139,7 @@ pub mod gmsol_store {
 
     /// Set or clear the GT delegate and replace its remaining allowance.
     ///
-    /// The zero address clears the delegate and requires a zero allowance.
+    /// Omitting the delegate account clears the delegate and requires a zero allowance.
     /// Setting the current delegate also replaces the allowance. Only the
     /// owner of the User Account can sign this change. Emits the resulting
     /// delegate and allowance for indexers.
@@ -3150,12 +3150,8 @@ pub mod gmsol_store {
     /// # Errors
     /// - The owner must sign for its initialized User Account in this store.
     /// - A nonzero allowance requires a nonzero delegate.
-    pub fn set_gt_delegate(
-        ctx: Context<UpdateGtDelegation>,
-        delegate: Pubkey,
-        allowance: u64,
-    ) -> Result<()> {
-        UpdateGtDelegation::set(ctx, delegate, allowance)
+    pub fn set_gt_delegate(ctx: Context<UpdateGtDelegation>, allowance: u64) -> Result<()> {
+        UpdateGtDelegation::set(ctx, allowance)
     }
 
     /// Add an amount to the GT allowance remaining at execution time.
@@ -3165,7 +3161,8 @@ pub mod gmsol_store {
     ///
     /// # Errors
     /// - The owner must sign for its initialized User Account in this store.
-    /// - A positive amount requires a delegate and must not overflow `u64`.
+    /// - The amount must be nonzero, the provided delegate must match the current
+    ///   nonzero delegate, and the resulting allowance must not overflow `u64`.
     pub fn increase_gt_allowance(ctx: Context<UpdateGtDelegation>, amount: u64) -> Result<()> {
         UpdateGtDelegation::increase(ctx, amount)
     }
@@ -3177,6 +3174,8 @@ pub mod gmsol_store {
     ///
     /// # Errors
     /// - The owner must sign for its initialized User Account in this store.
+    /// - The amount must be nonzero and the provided delegate must match the
+    ///   current nonzero delegate.
     pub fn decrease_gt_allowance(ctx: Context<UpdateGtDelegation>, amount: u64) -> Result<()> {
         UpdateGtDelegation::decrease(ctx, amount)
     }

@@ -23,11 +23,15 @@ enum Command {
     },
     /// Add to the remaining GT allowance when the transaction executes.
     IncreaseGtAllowance {
+        /// Expected current delegate address.
+        delegate: Pubkey,
         /// Amount to add in raw GT units.
         amount: u64,
     },
     /// Subtract from the remaining GT allowance when the transaction executes, stopping at zero.
     DecreaseGtAllowance {
+        /// Expected current delegate address.
+        delegate: Pubkey,
         /// Amount to subtract in raw GT units.
         amount: u64,
     },
@@ -94,11 +98,11 @@ impl super::Command for User {
                 delegate,
                 allowance,
             } => client.set_gt_delegate(store, delegate, *allowance)?,
-            Command::IncreaseGtAllowance { amount } => {
-                client.increase_gt_allowance(store, *amount)?
+            Command::IncreaseGtAllowance { delegate, amount } => {
+                client.increase_gt_allowance(store, delegate, *amount)?
             }
-            Command::DecreaseGtAllowance { amount } => {
-                client.decrease_gt_allowance(store, *amount)?
+            Command::DecreaseGtAllowance { delegate, amount } => {
+                client.decrease_gt_allowance(store, delegate, *amount)?
             }
             Command::Prepare => client.prepare_user(store)?,
             Command::InitReferralCode { code } => {

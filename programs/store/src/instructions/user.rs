@@ -28,29 +28,49 @@ pub struct UpdateGtDelegation<'info> {
         bump = user.load()?.bump,
     )]
     pub user: AccountLoader<'info, UserHeader>,
+    /// The intended GT delegate. Omit this account to clear the delegate.
+    /// CHECK: used only as an address; increase and decrease verify it against the User Account.
+    pub delegate: Option<UncheckedAccount<'info>>,
 }
 
 impl UpdateGtDelegation<'_> {
-    pub(crate) fn set(ctx: Context<Self>, delegate: Pubkey, allowance: u64) -> Result<()> {
+    pub(crate) fn set(ctx: Context<Self>, allowance: u64) -> Result<()> {
+        let delegate = ctx.accounts.delegate.as_ref().map(|account| account.key());
         ctx.accounts
             .user
             .load_mut()?
             .gt
-            .set_delegate(delegate, allowance)?;
+            .set_delegate(delegate.unwrap_or_default(), allowance)?;
         Self::emit(&ctx)
     }
 
     pub(crate) fn increase(ctx: Context<Self>, amount: u64) -> Result<()> {
+        let delegate = ctx
+            .accounts
+            .delegate
+            .as_ref()
+            .ok_or(CoreError::InvalidArgument)?
+            .key();
         ctx.accounts
             .user
             .load_mut()?
             .gt
-            .increase_allowance(amount)?;
+            .increase_allowance(&delegate, amount)?;
         Self::emit(&ctx)
     }
 
     pub(crate) fn decrease(ctx: Context<Self>, amount: u64) -> Result<()> {
-        ctx.accounts.user.load_mut()?.gt.decrease_allowance(amount);
+        let delegate = ctx
+            .accounts
+            .delegate
+            .as_ref()
+            .ok_or(CoreError::InvalidArgument)?
+            .key();
+        ctx.accounts
+            .user
+            .load_mut()?
+            .gt
+            .decrease_allowance(&delegate, amount)?;
         Self::emit(&ctx)
     }
 

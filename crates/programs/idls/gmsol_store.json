@@ -9331,7 +9331,9 @@
         "*[See the documentation for the accounts.](UpdateGtDelegation)*",
         "",
         "# Errors",
-        "- The owner must sign for its initialized User Account in this store."
+        "- The owner must sign for its initialized User Account in this store.",
+        "- The amount must be nonzero and the provided delegate must match the",
+        "current nonzero delegate."
       ],
       "discriminator": [
         31,
@@ -9390,6 +9392,13 @@
               }
             ]
           }
+        },
+        {
+          "name": "delegate",
+          "docs": [
+            "The intended GT delegate. Omit this account to clear the delegate."
+          ],
+          "optional": true
         },
         {
           "name": "event_authority",
@@ -15294,7 +15303,8 @@
         "",
         "# Errors",
         "- The owner must sign for its initialized User Account in this store.",
-        "- A positive amount requires a delegate and must not overflow `u64`."
+        "- The amount must be nonzero, the provided delegate must match the current",
+        "nonzero delegate, and the resulting allowance must not overflow `u64`."
       ],
       "discriminator": [
         131,
@@ -15353,6 +15363,13 @@
               }
             ]
           }
+        },
+        {
+          "name": "delegate",
+          "docs": [
+            "The intended GT delegate. Omit this account to clear the delegate."
+          ],
+          "optional": true
         },
         {
           "name": "event_authority",
@@ -20316,7 +20333,7 @@
       "docs": [
         "Set or clear the GT delegate and replace its remaining allowance.",
         "",
-        "The zero address clears the delegate and requires a zero allowance.",
+        "Omitting the delegate account clears the delegate and requires a zero allowance.",
         "Setting the current delegate also replaces the allowance. Only the",
         "owner of the User Account can sign this change. Emits the resulting",
         "delegate and allowance for indexers.",
@@ -20387,6 +20404,13 @@
           }
         },
         {
+          "name": "delegate",
+          "docs": [
+            "The intended GT delegate. Omit this account to clear the delegate."
+          ],
+          "optional": true
+        },
+        {
           "name": "event_authority",
           "pda": {
             "seeds": [
@@ -20420,10 +20444,6 @@
         }
       ],
       "args": [
-        {
-          "name": "delegate",
-          "type": "pubkey"
-        },
         {
           "name": "allowance",
           "type": "u64"
