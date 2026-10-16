@@ -462,8 +462,8 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
     /// |---|---|---|
     /// | `Ok(signature)` | sent and confirmed | no, it landed |
     /// | [`crate::Error::SendAborted`] | never sent: an earlier batch failed and `continue_on_error` is `false` | yes |
-    /// | [`crate::Error::SendUnresolved`] | sent, outcome unknown (e.g. blockhash expired) | only after looking up `signature` |
-    /// | any other `Err` | rejected before sending, or failed on-chain | yes |
+    /// | [`crate::Error::SendUnresolved`] | may have been sent, outcome unknown (e.g. send timed out, blockhash expired) | only after looking up `signature` |
+    /// | any other `Err` | rejected by the RPC node (e.g. preflight), or failed on-chain | yes |
     ///
     /// Transactions in one parallel batch are sent together, so when `continue_on_error` is
     /// `false` the failing batch still reports every real outcome; only later batches are

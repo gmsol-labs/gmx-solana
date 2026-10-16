@@ -1,7 +1,7 @@
 use std::{future::Future, time::Duration};
 
 use solana_client::{
-    client_error::ClientError as SolanaClientError,
+    client_error::{ClientError as SolanaClientError, ClientErrorKind},
     nonblocking::rpc_client::RpcClient,
     rpc_client::SerializableTransaction,
     rpc_config::RpcSendTransactionConfig,
@@ -27,11 +27,12 @@ pub trait SendAndConfirm {
 
     /// Send and confirm a transaction, keeping the signature when the outcome is unknown.
     ///
-    /// Errors split by whether the transaction reached the cluster:
-    /// - [`crate::Error::Client`]: rejected before submission (e.g. preflight), or landed and
-    ///   failed on-chain. Either way the outcome is final.
-    /// - [`crate::Error::SendUnresolved`]: submitted, but confirmation failed. The outcome is
-    ///   unknown and must be looked up by signature before retrying.
+    /// Errors split by whether the transaction may have reached the cluster:
+    /// - [`crate::Error::Client`]: the RPC node rejected it (e.g. preflight failure), or it
+    ///   landed and failed on-chain. Either way the outcome is final.
+    /// - [`crate::Error::SendUnresolved`]: anything else (send timed out, connection dropped,
+    ///   bad signature in the send response, or confirmation failed). The node may have
+    ///   accepted it, so the outcome must be looked up by signature before retrying.
     ///
     /// The default implementation cannot tell these apart and returns every error as
     /// [`crate::Error::Client`]; [`RpcClient`] overrides it.
@@ -72,7 +73,7 @@ impl SendAndConfirm for RpcClient {
         let signature = self
             .send_transaction_with_config(transaction, config)
             .await
-            .map_err(Box::new)?;
+            .map_err(|err| send_error(*transaction.get_signature(), err))?;
 
         match confirm_transaction(self, &signature, transaction).await {
             Ok(Confirmation::Landed { slot }) => Ok(WithSlot::new(slot, signature)),
@@ -84,6 +85,25 @@ impl SendAndConfirm for RpcClient {
                 source: Box::new(err),
             }),
         }
+    }
+}
+
+/// Classify a failed `sendTransaction` call.
+///
+/// Only a JSON-RPC error response (e.g. preflight failure, node unhealthy) proves the node
+/// rejected the transaction. Any other failure (timeout, dropped connection, malformed or
+/// mismatched signature in the response) can happen after the node accepted and forwarded it.
+/// The signature is computed locally at signing time, so it is known even without a response.
+fn send_error(signature: Signature, err: SolanaClientError) -> crate::Error {
+    if matches!(
+        err.kind(),
+        ClientErrorKind::RpcError(RpcError::RpcResponseError { .. })
+    ) {
+        return Box::new(err).into();
+    }
+    crate::Error::SendUnresolved {
+        signature,
+        source: Box::new(err),
     }
 }
 
@@ -151,7 +171,14 @@ async fn confirm_transaction(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, future::Future, io, pin::Pin};
+
+    use solana_client::{
+        client_error::Result as ClientResult,
+        rpc_client::RpcClientConfig,
+        rpc_request::RpcResponseErrorData,
+        rpc_sender::{RpcSender, RpcTransportStats},
+    };
 
     use solana_sdk::{
         hash::Hash, signature::Keypair, signer::Signer, system_instruction,
@@ -180,6 +207,99 @@ mod tests {
 
     fn blockhash_valid(valid: bool) -> serde_json::Value {
         serde_json::json!({ "context": { "slot": 1 }, "value": valid })
+    }
+
+    /// RPC transport whose every request fails with the given error.
+    struct FailingSender(fn() -> SolanaClientError);
+
+    // Written out by hand because `RpcSender` is an `#[async_trait]` trait.
+    impl RpcSender for FailingSender {
+        fn send<'a, 'b>(
+            &'a self,
+            _request: RpcRequest,
+            _params: serde_json::Value,
+        ) -> Pin<Box<dyn Future<Output = ClientResult<serde_json::Value>> + Send + 'b>>
+        where
+            'a: 'b,
+            Self: 'b,
+        {
+            let err = (self.0)();
+            Box::pin(async move { Err(err) })
+        }
+
+        fn get_transport_stats(&self) -> RpcTransportStats {
+            RpcTransportStats::default()
+        }
+
+        fn url(&self) -> String {
+            "failing".to_string()
+        }
+    }
+
+    async fn send_with_failing_transport(
+        make_error: fn() -> SolanaClientError,
+    ) -> (Transaction, crate::Error) {
+        let client = RpcClient::new_sender(FailingSender(make_error), RpcClientConfig::default());
+        let tx = signed_transaction();
+        let err = client
+            .send_and_confirm_transaction_detailed(&tx, skip_preflight())
+            .await
+            .unwrap_err();
+        (tx, err)
+    }
+
+    #[tokio::test]
+    async fn send_timeout_is_unresolved() {
+        let (tx, err) = send_with_failing_transport(|| {
+            io::Error::new(io::ErrorKind::TimedOut, "timed out").into()
+        })
+        .await;
+        assert_eq!(err.unresolved_signature(), Some(&tx.signatures[0]));
+    }
+
+    #[tokio::test]
+    async fn node_rejection_is_a_client_error() {
+        let (_, err) = send_with_failing_transport(|| {
+            RpcError::RpcResponseError {
+                code: -32002,
+                message: "Transaction simulation failed".to_string(),
+                data: RpcResponseErrorData::Empty,
+            }
+            .into()
+        })
+        .await;
+        assert!(matches!(err, crate::Error::Client(_)), "{err:?}");
+    }
+
+    #[tokio::test]
+    async fn malformed_send_response_is_unresolved() {
+        let mocks = HashMap::from([(
+            RpcRequest::SendTransaction,
+            serde_json::json!("not-a-signature"),
+        )]);
+        let client = RpcClient::new_mock_with_mocks("succeeds".to_string(), mocks);
+        let tx = signed_transaction();
+
+        let err = client
+            .send_and_confirm_transaction_detailed(&tx, skip_preflight())
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.unresolved_signature(), Some(&tx.signatures[0]));
+    }
+
+    #[tokio::test]
+    async fn mismatched_send_response_keeps_the_local_signature() {
+        // "malicious" makes the mock return a signature that is not the transaction's.
+        let client = RpcClient::new_mock("malicious".to_string());
+        let tx = signed_transaction();
+
+        let err = client
+            .send_and_confirm_transaction_detailed(&tx, skip_preflight())
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.unresolved_signature(), Some(&tx.signatures[0]));
     }
 
     #[tokio::test]

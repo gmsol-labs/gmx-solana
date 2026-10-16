@@ -37,15 +37,18 @@ pub enum Error {
         /// Index of the transaction whose failure stopped the bundle send.
         failed_at: usize,
     },
-    /// The transaction was submitted, but confirming it failed (blockhash expired, or an RPC
-    /// error while polling its status). It may or may not have landed: look up `signature`
+    /// The transaction may have been submitted, but its outcome is unknown: the send request
+    /// got no valid answer (timeout, dropped connection, bad signature in the response), or
+    /// confirmation failed (blockhash expired, RPC error while polling). Look up `signature`
     /// before retrying, or the action may execute twice.
     #[cfg(feature = "solana-client")]
-    #[error("transaction {signature} was submitted but its outcome is unknown: {source}")]
+    #[error(
+        "transaction {signature} may have been submitted but its outcome is unknown: {source}"
+    )]
     SendUnresolved {
-        /// Signature of the submitted transaction.
+        /// Signature of the transaction, computed locally when it was signed.
         signature: solana_sdk::signature::Signature,
-        /// Why confirmation failed.
+        /// Why sending or confirming failed.
         source: Box<solana_client::client_error::ClientError>,
     },
     /// RPC client error.
