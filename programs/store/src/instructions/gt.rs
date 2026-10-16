@@ -430,9 +430,9 @@ impl<'info> internal::Authentication<'info> for CloseGtExchange<'info> {
 }
 
 /// The accounts definition for
-/// [`close_gt_exchange_to_rent_receiver`](crate::close_gt_exchange_to_rent_receiver) instruction.
+/// [`close_gt_exchange_v2`](crate::close_gt_exchange_v2) instruction.
 #[derive(Accounts)]
-pub struct CloseGtExchangeToRentReceiver<'info> {
+pub struct CloseGtExchangeV2<'info> {
     pub authority: Signer<'info>,
     #[account(
         constraint = store.load()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
@@ -441,7 +441,6 @@ pub struct CloseGtExchangeToRentReceiver<'info> {
     /// CHECK: only used to validate the exchange owner and derive its address.
     pub owner: UncheckedAccount<'info>,
     #[account(
-        mut,
         constraint = vault.load()?.is_initialized() @ CoreError::InvalidArgument,
         constraint = vault.load()?.is_confirmed() @ CoreError::PreconditionsAreNotMet,
         has_one = store,
@@ -464,23 +463,23 @@ pub struct CloseGtExchangeToRentReceiver<'info> {
     pub exchange: AccountLoader<'info, GtExchange>,
 }
 
-/// CHECK: only GT_CONTROLLER is allowed to use this instruction.
-pub(crate) fn unchecked_close_gt_exchange_to_rent_receiver(
-    ctx: Context<CloseGtExchangeToRentReceiver>,
-) -> Result<()> {
-    let vault = ctx.accounts.vault.load()?;
-    let exchange = ctx.accounts.exchange.load()?;
-    msg!(
-        "[GT] Closing confirmed exchange: vault_index = {}, vault = {}, owner = {}, amount = {}",
-        vault.time_window_index(),
-        exchange.vault(),
-        exchange.owner(),
-        exchange.amount()
-    );
-    Ok(())
+impl CloseGtExchangeV2<'_> {
+    /// CHECK: only GT_CONTROLLER is allowed to use this instruction.
+    pub(crate) fn invoke_unchecked(ctx: Context<Self>) -> Result<()> {
+        let vault = ctx.accounts.vault.load()?;
+        let exchange = ctx.accounts.exchange.load()?;
+        msg!(
+            "[GT] Closing confirmed exchange: vault_index = {}, vault = {}, owner = {}, amount = {}",
+            vault.time_window_index(),
+            exchange.vault(),
+            exchange.owner(),
+            exchange.amount()
+        );
+        Ok(())
+    }
 }
 
-impl<'info> internal::Authentication<'info> for CloseGtExchangeToRentReceiver<'info> {
+impl<'info> internal::Authentication<'info> for CloseGtExchangeV2<'info> {
     fn authority(&self) -> &Signer<'info> {
         &self.authority
     }

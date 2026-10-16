@@ -211,7 +211,7 @@
 //! - [`confirm_gt_exchange_vault_v2`]: Confirm GT exchange vault.
 //! - [`request_gt_exchange`](gmsol_store::request_gt_exchange): Request a GT exchange.
 //! - [`close_gt_exchange`]: Close a confirmed GT exchange.
-//! - [`close_gt_exchange_to_rent_receiver`]: Close a confirmed GT exchange to its rent receiver.
+//! - [`close_gt_exchange_v2`]: Close a confirmed GT exchange to its rent receiver.
 
 /// Instructions.
 pub mod instructions;
@@ -3038,21 +3038,19 @@ pub mod gmsol_store {
     /// Close a confirmed GT exchange to its recorded rent receiver.
     ///
     /// # Accounts
-    /// *[See the documentation for the accounts.](CloseGtExchangeToRentReceiver)*
+    /// *[See the documentation for the accounts.](CloseGtExchangeV2)*
     ///
     /// # Errors
-    /// - The [`authority`](CloseGtExchangeToRentReceiver::authority) must be a signer and have the GT_CONTROLLER role in the `store`.
-    /// - The [`store`](CloseGtExchangeToRentReceiver::store) must be properly initialized with an initialized GT state.
-    /// - The [`vault`](CloseGtExchangeToRentReceiver::vault) must be properly initialized, owned by the `store`,
+    /// - The [`authority`](CloseGtExchangeV2::authority) must be a signer and have the GT_CONTROLLER role in the `store`.
+    /// - The [`store`](CloseGtExchangeV2::store) must be properly initialized with an initialized GT state.
+    /// - The [`vault`](CloseGtExchangeV2::vault) must be properly initialized, owned by the `store`,
     ///   and confirmed.
-    /// - The [`exchange`](CloseGtExchangeToRentReceiver::exchange) must be properly initialized and owned by both
+    /// - The [`exchange`](CloseGtExchangeV2::exchange) must be properly initialized and owned by both
     ///   the `owner` and `vault`.
-    /// - The [`rent_receiver`](CloseGtExchangeToRentReceiver::rent_receiver) must match the exchange's effective rent receiver.
+    /// - The [`rent_receiver`](CloseGtExchangeV2::rent_receiver) must match the exchange's effective rent receiver.
     #[access_control(internal::Authenticate::only_gt_controller(&ctx))]
-    pub fn close_gt_exchange_to_rent_receiver(
-        ctx: Context<CloseGtExchangeToRentReceiver>,
-    ) -> Result<()> {
-        instructions::unchecked_close_gt_exchange_to_rent_receiver(ctx)
+    pub fn close_gt_exchange_v2(ctx: Context<CloseGtExchangeV2>) -> Result<()> {
+        CloseGtExchangeV2::invoke_unchecked(ctx)
     }
 
     /// Update the GT cumulative inverse cost factor.

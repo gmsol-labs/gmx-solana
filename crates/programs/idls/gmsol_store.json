@@ -3527,31 +3527,31 @@
       "args": []
     },
     {
-      "name": "close_gt_exchange_to_rent_receiver",
+      "name": "close_gt_exchange_v2",
       "docs": [
         "Close a confirmed GT exchange to its recorded rent receiver.",
         "",
         "# Accounts",
-        "*[See the documentation for the accounts.](CloseGtExchangeToRentReceiver)*",
+        "*[See the documentation for the accounts.](CloseGtExchangeV2)*",
         "",
         "# Errors",
-        "- The [`authority`](CloseGtExchangeToRentReceiver::authority) must be a signer and have the GT_CONTROLLER role in the `store`.",
-        "- The [`store`](CloseGtExchangeToRentReceiver::store) must be properly initialized with an initialized GT state.",
-        "- The [`vault`](CloseGtExchangeToRentReceiver::vault) must be properly initialized, owned by the `store`,",
+        "- The [`authority`](CloseGtExchangeV2::authority) must be a signer and have the GT_CONTROLLER role in the `store`.",
+        "- The [`store`](CloseGtExchangeV2::store) must be properly initialized with an initialized GT state.",
+        "- The [`vault`](CloseGtExchangeV2::vault) must be properly initialized, owned by the `store`,",
         "and confirmed.",
-        "- The [`exchange`](CloseGtExchangeToRentReceiver::exchange) must be properly initialized and owned by both",
+        "- The [`exchange`](CloseGtExchangeV2::exchange) must be properly initialized and owned by both",
         "the `owner` and `vault`.",
-        "- The [`rent_receiver`](CloseGtExchangeToRentReceiver::rent_receiver) must match the exchange's effective rent receiver."
+        "- The [`rent_receiver`](CloseGtExchangeV2::rent_receiver) must match the exchange's effective rent receiver."
       ],
       "discriminator": [
-        90,
-        51,
-        79,
-        80,
-        94,
-        212,
-        94,
-        207
+        118,
+        218,
+        83,
+        153,
+        41,
+        114,
+        148,
+        224
       ],
       "accounts": [
         {
@@ -3573,7 +3573,6 @@
         },
         {
           "name": "vault",
-          "writable": true,
           "relations": [
             "exchange"
           ]

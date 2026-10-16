@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- programs(store): Added `close_gt_exchange_to_rent_receiver` so a GT controller can close a confirmed GT exchange and return its rent to the recorded receiver. The existing `close_gt_exchange` still serves owner receivers and now rejects an exchange configured for another receiver.
+- programs(store): Added `close_gt_exchange_v2` so a GT controller can close a confirmed GT exchange and return its rent to the recorded receiver. The existing `close_gt_exchange` still serves owner receivers and now rejects an exchange configured for another receiver.
 
 ## [0.11.0] - 2026-10-21
 
