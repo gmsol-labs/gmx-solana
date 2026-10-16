@@ -3442,7 +3442,7 @@
     {
       "name": "close_gt_exchange",
       "docs": [
-        "Close a confirmed GT exchange.",
+        "Close a confirmed GT exchange whose rent receiver is its owner.",
         "",
         "# Accounts",
         "*[See the documentation for the accounts.](CloseGtExchange)*",
@@ -3453,7 +3453,7 @@
         "- The [`vault`](CloseGtExchange::vault) must be properly initialized, owned by the `store`,",
         "and confirmed.",
         "- The [`exchange`](CloseGtExchange::exchange) must be properly initialized and owned by both",
-        "the `owner` and `vault`."
+        "the `owner` and `vault`, with its rent receiver set to the owner or unset."
       ],
       "discriminator": [
         180,
@@ -3490,6 +3490,96 @@
           "relations": [
             "exchange"
           ]
+        },
+        {
+          "name": "exchange",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  116,
+                  95,
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_gt_exchange_v2",
+      "docs": [
+        "Close a confirmed GT exchange to its recorded rent receiver.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](CloseGtExchangeV2)*",
+        "",
+        "# Errors",
+        "- The [`authority`](CloseGtExchangeV2::authority) must be a signer and have the GT_CONTROLLER role in the `store`.",
+        "- The [`store`](CloseGtExchangeV2::store) must be properly initialized with an initialized GT state.",
+        "- The [`vault`](CloseGtExchangeV2::vault) must be properly initialized, owned by the `store`,",
+        "and confirmed.",
+        "- The [`exchange`](CloseGtExchangeV2::exchange) must be properly initialized and owned by both",
+        "the `owner` and `vault`.",
+        "- The [`rent_receiver`](CloseGtExchangeV2::rent_receiver) must match the exchange's effective rent receiver."
+      ],
+      "discriminator": [
+        118,
+        218,
+        83,
+        153,
+        41,
+        114,
+        148,
+        224
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "store",
+          "relations": [
+            "vault",
+            "exchange"
+          ]
+        },
+        {
+          "name": "owner",
+          "relations": [
+            "exchange"
+          ]
+        },
+        {
+          "name": "vault",
+          "relations": [
+            "exchange"
+          ]
+        },
+        {
+          "name": "rent_receiver",
+          "writable": true
         },
         {
           "name": "exchange",
