@@ -1,7 +1,8 @@
 use std::panic::{resume_unwind, AssertUnwindSafe};
 
 use anchor_spl::associated_token::spl_associated_token_account::get_associated_token_address;
-use futures_util::FutureExt;
+use eyre::OptionExt;
+use futures_util::{FutureExt, StreamExt};
 use gmsol_programs::{
     anchor_lang::error::ErrorCode,
     gmsol_store::{
@@ -12,12 +13,46 @@ use gmsol_programs::{
 use gmsol_sdk::{
     client::ops::{BuilderFeeOps, ConfigOps, UserOps},
     constants::MARKET_USD_UNIT,
+    decode::gmsol::programs::GMSOLCPIEvent,
+    Client,
 };
+use gmsol_solana_utils::signer::SignerRef;
 use gmsol_store::CoreError;
 use gmsol_utils::config::FactorKey;
-use solana_sdk::{signature::Keypair, signer::Signer};
+use solana_sdk::{
+    commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair, signer::Signer,
+};
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
+
+async fn scub_assert_gt_delegation_event(
+    client: &Client<SignerRef>,
+    user: Pubkey,
+    delegate: Pubkey,
+    allowance: u64,
+) -> eyre::Result<()> {
+    let events = client
+        .historical_store_cpi_events(&user, Some(CommitmentConfig::confirmed()))
+        .await?;
+    futures_util::pin_mut!(events);
+    let latest = events
+        .next()
+        .await
+        .ok_or_eyre("no GT delegation events")??;
+    let event = latest
+        .value()
+        .iter()
+        .find_map(|event| match event {
+            GMSOLCPIEvent::GtDelegationUpdated(event) => Some(event),
+            _ => None,
+        })
+        .ok_or_eyre("latest user transaction has no GT delegation update")?;
+    assert_eq!(event.user, user);
+    assert_eq!(event.owner, client.payer());
+    assert_eq!(event.delegate, delegate);
+    assert_eq!(event.allowance, allowance);
+    Ok(())
+}
 
 #[tokio::test]
 async fn referral() -> eyre::Result<()> {
@@ -100,6 +135,114 @@ async fn referral() -> eyre::Result<()> {
         Some(CoreError::MutualReferral.into())
     );
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let client = deployment.user_client(Deployment::USER_1)?;
+    let other = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let store = &deployment.store;
+    client.prepare_user(store)?.send().await?;
+    let user_address = client.find_user_address(store, &client.payer());
+    let scub_delegate = Keypair::new().pubkey();
+    let scub_next_delegate = other.payer();
+
+    client
+        .set_gt_delegate(store, &scub_delegate, 100)?
+        .send()
+        .await?;
+    let user = client.user(&user_address).await?;
+    assert_eq!(user.gt.delegate, scub_delegate);
+    assert_eq!(user.gt.allowance, 100);
+    scub_assert_gt_delegation_event(&client, user_address, scub_delegate, 100).await?;
+
+    client
+        .decrease_gt_allowance(store, &scub_delegate, 40)?
+        .send()
+        .await?;
+    scub_assert_gt_delegation_event(&client, user_address, scub_delegate, 60).await?;
+    client
+        .increase_gt_allowance(store, &scub_delegate, 15)?
+        .send()
+        .await?;
+    assert_eq!(client.user(&user_address).await?.gt.allowance, 75);
+    scub_assert_gt_delegation_event(&client, user_address, scub_delegate, 75).await?;
+
+    client
+        .set_gt_delegate(store, &scub_next_delegate, 30)?
+        .send()
+        .await?;
+    let user = client.user(&user_address).await?;
+    assert_eq!(user.gt.delegate, scub_next_delegate);
+    assert_eq!(user.gt.allowance, 30);
+    scub_assert_gt_delegation_event(&client, user_address, scub_next_delegate, 30).await?;
+
+    client
+        .increase_gt_allowance(store, &scub_delegate, 1)?
+        .send()
+        .await
+        .expect_err("a stale delegate must not receive an allowance increase");
+    client
+        .decrease_gt_allowance(store, &scub_delegate, 1)?
+        .send()
+        .await
+        .expect_err("a stale delegate must not reduce the new delegate's allowance");
+    client
+        .increase_gt_allowance(store, &scub_next_delegate, 0)?
+        .send()
+        .await
+        .expect_err("a zero increase must be rejected");
+    client
+        .decrease_gt_allowance(store, &scub_next_delegate, 0)?
+        .send()
+        .await
+        .expect_err("a zero decrease must be rejected");
+    assert_eq!(client.user(&user_address).await?.gt.allowance, 30);
+
+    other
+        .store_transaction()
+        .anchor_accounts(accounts::SetGtDelegate {
+            owner: other.payer(),
+            store: *store,
+            user: user_address,
+            delegate: Some(other.payer()),
+            event_authority: other.store_event_authority(),
+            program: *other.store_program_id(),
+        })
+        .anchor_args(args::SetGtDelegate { allowance: 999 })
+        .send()
+        .await
+        .expect_err("the delegate must not change the owner's delegation");
+    assert_eq!(client.user(&user_address).await?.gt.allowance, 30);
+
+    client
+        .decrease_gt_allowance(store, &scub_next_delegate, 100)?
+        .send()
+        .await?;
+    assert_eq!(client.user(&user_address).await?.gt.allowance, 0);
+    scub_assert_gt_delegation_event(&client, user_address, scub_next_delegate, 0).await?;
+    client
+        .set_gt_delegate(store, &Pubkey::default(), 0)?
+        .send()
+        .await?;
+    let user = client.user(&user_address).await?;
+    assert_eq!(user.gt.delegate, Pubkey::default());
+    assert_eq!(user.gt.allowance, 0);
+    scub_assert_gt_delegation_event(&client, user_address, Pubkey::default(), 0).await?;
+    client
+        .increase_gt_allowance(store, &scub_next_delegate, 1)?
+        .send()
+        .await
+        .expect_err("a user without a delegate cannot receive a positive allowance");
+    client
+        .set_gt_delegate(store, &Pubkey::default(), 1)?
+        .send()
+        .await
+        .expect_err("a zero delegate cannot be set with a positive allowance");
+    assert_eq!(client.user(&user_address).await?.gt.allowance, 0);
     Ok(())
 }
 

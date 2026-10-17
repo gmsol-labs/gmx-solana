@@ -12,6 +12,31 @@ use crate::{pda::ReferralCodeBytes, utils::zero_copy::ZeroCopy};
 
 /// Operations for user account.
 pub trait UserOps<C> {
+    /// Replace the payer's GT delegate and remaining allowance together.
+    /// Pass `Pubkey::default()` and zero to clear the delegate.
+    fn set_gt_delegate(
+        &self,
+        store: &Pubkey,
+        delegate: &Pubkey,
+        allowance: u64,
+    ) -> crate::Result<TransactionBuilder<C>>;
+
+    /// Add to the payer's GT allowance at execution time if the expected delegate still matches.
+    fn increase_gt_allowance(
+        &self,
+        store: &Pubkey,
+        delegate: &Pubkey,
+        amount: u64,
+    ) -> crate::Result<TransactionBuilder<C>>;
+
+    /// Subtract from the payer's GT allowance at execution time if the expected delegate still matches.
+    fn decrease_gt_allowance(
+        &self,
+        store: &Pubkey,
+        delegate: &Pubkey,
+        amount: u64,
+    ) -> crate::Result<TransactionBuilder<C>>;
+
     /// Prepare User.
     fn prepare_user(&self, store: &Pubkey) -> crate::Result<TransactionBuilder<C>>;
 
@@ -65,6 +90,63 @@ pub trait UserOps<C> {
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> UserOps<C> for crate::Client<C> {
+    fn set_gt_delegate(
+        &self,
+        store: &Pubkey,
+        delegate: &Pubkey,
+        allowance: u64,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        Ok(self
+            .store_transaction()
+            .anchor_accounts(accounts::SetGtDelegate {
+                owner: self.payer(),
+                store: *store,
+                user: self.find_user_address(store, &self.payer()),
+                delegate: optional_address(delegate).copied(),
+                event_authority: self.store_event_authority(),
+                program: *self.store_program_id(),
+            })
+            .anchor_args(args::SetGtDelegate { allowance }))
+    }
+
+    fn increase_gt_allowance(
+        &self,
+        store: &Pubkey,
+        delegate: &Pubkey,
+        amount: u64,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        Ok(self
+            .store_transaction()
+            .anchor_accounts(accounts::IncreaseGtAllowance {
+                owner: self.payer(),
+                store: *store,
+                user: self.find_user_address(store, &self.payer()),
+                delegate: Some(*delegate),
+                event_authority: self.store_event_authority(),
+                program: *self.store_program_id(),
+            })
+            .anchor_args(args::IncreaseGtAllowance { amount }))
+    }
+
+    fn decrease_gt_allowance(
+        &self,
+        store: &Pubkey,
+        delegate: &Pubkey,
+        amount: u64,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        Ok(self
+            .store_transaction()
+            .anchor_accounts(accounts::DecreaseGtAllowance {
+                owner: self.payer(),
+                store: *store,
+                user: self.find_user_address(store, &self.payer()),
+                delegate: Some(*delegate),
+                event_authority: self.store_event_authority(),
+                program: *self.store_program_id(),
+            })
+            .anchor_args(args::DecreaseGtAllowance { amount }))
+    }
+
     fn prepare_user(&self, store: &Pubkey) -> crate::Result<TransactionBuilder<C>> {
         let owner = self.payer();
         let user = self.find_user_address(store, &owner);

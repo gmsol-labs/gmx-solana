@@ -197,6 +197,9 @@
 //! - [`cancel_referral_code_transfer`](gmsol_store::cancel_referral_code_transfer): Cancel the referral code transfer.
 //! - [`accept_referral_code`](gmsol_store::accept_referral_code): Complete the referral code transfer.
 //! - [`set_builder_fee_factor`](gmsol_store::set_builder_fee_factor): Set the builder fee factor advertised by the user.
+//! - [`set_gt_delegate`](gmsol_store::set_gt_delegate): Replace the GT delegate and allowance.
+//! - [`increase_gt_allowance`](gmsol_store::increase_gt_allowance): Add to the remaining GT allowance.
+//! - [`decrease_gt_allowance`](gmsol_store::decrease_gt_allowance): Reduce the remaining GT allowance.
 //!
 //! ## GT Model
 //!
@@ -3151,6 +3154,49 @@ pub mod gmsol_store {
     ///   - Not have the `user` as their referrer (no circular references)
     pub fn set_referrer(ctx: Context<SetReferrer>, code: [u8; 8]) -> Result<()> {
         instructions::set_referrer(ctx, code)
+    }
+
+    /// Set or clear the GT delegate and replace its remaining allowance.
+    ///
+    /// Omitting the delegate account clears the delegate and requires a zero allowance.
+    /// Setting the current delegate also replaces the allowance. Only the
+    /// owner of the User Account can sign this change. Emits the resulting
+    /// delegate and allowance for indexers.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](UpdateGtDelegation)*
+    ///
+    /// # Errors
+    /// - The owner must sign for its initialized User Account in this store.
+    /// - A nonzero allowance requires a nonzero delegate.
+    pub fn set_gt_delegate(ctx: Context<UpdateGtDelegation>, allowance: u64) -> Result<()> {
+        UpdateGtDelegation::set(ctx, allowance)
+    }
+
+    /// Add an amount to the GT allowance remaining at execution time.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](UpdateGtDelegation)*
+    ///
+    /// # Errors
+    /// - The owner must sign for its initialized User Account in this store.
+    /// - The amount must be nonzero, the provided delegate must match the current
+    ///   nonzero delegate, and the resulting allowance must not overflow `u64`.
+    pub fn increase_gt_allowance(ctx: Context<UpdateGtDelegation>, amount: u64) -> Result<()> {
+        UpdateGtDelegation::increase(ctx, amount)
+    }
+
+    /// Subtract from the GT allowance remaining at execution time, stopping at zero.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](UpdateGtDelegation)*
+    ///
+    /// # Errors
+    /// - The owner must sign for its initialized User Account in this store.
+    /// - The amount must be nonzero and the provided delegate must match the
+    ///   current nonzero delegate.
+    pub fn decrease_gt_allowance(ctx: Context<UpdateGtDelegation>, amount: u64) -> Result<()> {
+        UpdateGtDelegation::decrease(ctx, amount)
     }
 
     /// Set the builder fee factor advertised by the user.
