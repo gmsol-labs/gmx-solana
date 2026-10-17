@@ -37,9 +37,11 @@ pub struct CloseOrderArgs {
     /// close instruction, so the escrow still exists when it runs and neither can land
     /// without the other.
     ///
-    /// Each hint must be built from a fresh read of its order account; only field
+    /// Each hint must be built from a read of its order account; only field
     /// presence is validated here, never freshness, and a stale hint reverts the close
-    /// along with the settle. See `SettleBuilderFeeHint` for which field fails how.
+    /// along with the settle. Set `builder_fee_factor` from the order so that a revoked
+    /// order (factor `0n`), whose builder may have no claim vault, is not sent one. See
+    /// `SettleBuilderFeeHint` for which field fails how.
     #[serde(default)]
     settle_builder_fee: Option<HashMap<StringPubkey, SettleBuilderFeeHint>>,
 }

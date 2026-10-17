@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Changed
+
+- sdk(sdk): Added an optional `builder_fee_factor` field to `SettleBuilderFeeHint`, filled by `FromRpcClientWith` and defaulting to unknown (`None`, treated as chargeable). Callers that use the typed builder, or deserialize the hint (JavaScript), need no change; Rust code that constructs the hint with a struct literal must now set the field.
+
+### Fixed
+
+- sdk(sdk): Fixed `SettleBuilderFee`, which attached `final_output_token`, `escrow`, `builder_user` and `claim_vault` only when the order already recorded a non-zero builder fee amount. The fee is recorded by the execution, so a settlement built from a pending order, or placed after an execution in the same transaction, carried no accounts and reverted with `TokenMintNotProvided` once the amount turned non-zero, taking the execution with it. The accounts are now attached for any order with a builder whose checkpointed factor can charge, whatever amount is recorded when the instruction is built. Orders without a builder, and orders whose checkpoint was revoked (builder kept, factor `0`, claim vault not required), keep the account-less path. `SettleBuilderFeeHint` gains an optional `builder_fee_factor`, filled by `FromRpcClientWith` and defaulting to unknown, which is treated as chargeable.
+
 ### Added
 
 - programs(store): Added `close_gt_exchange_v2` so a GT controller can close a confirmed GT exchange and return its rent to the recorded receiver. The existing `close_gt_exchange` still serves owner receivers and now rejects an exchange configured for another receiver.
@@ -20,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - sdk(solana-utils): With `continue_on_error = false`, `Bundle::send_all_with_opts_detailed` now waits for the rest of the failing parallel batch and reports each transaction's real outcome. Transactions already submitted alongside the failure were previously reported as `Error::SendAborted` (never sent), so retrying them could execute an action twice. Only later batches are padded with `SendAborted` now.
+
 
 ## [0.11.0] - 2026-10-21
 

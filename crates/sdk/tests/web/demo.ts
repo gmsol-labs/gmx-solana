@@ -579,6 +579,7 @@ const closeOrdersWithFee = close_orders({
       "11111111111111111111111111111116",
       {
         builder_fee_amount: 1_000_000,
+        builder_fee_factor: 1_000_000_000_000_000n,
         builder: builderPubkey,
         final_output_token: finalOutputToken,
         escrow: escrowPubkey,
@@ -589,6 +590,50 @@ const closeOrdersWithFee = close_orders({
 
 console.log("close orders with settle_builder_fee");
 for (const batch of closeOrdersWithFee.serialize()) {
+  for (const txn of batch) {
+    console.log(toBase64(txn));
+  }
+}
+
+// Builder fee: the hint of an order that is still pending (nothing recorded
+// yet), with a builder that can be charged. The settlement accounts are still
+// attached, so the settle works after an execution that records the fee.
+const closeOrdersPendingFee = close_orders({
+  recent_blockhash: recentBlockhash,
+  payer,
+  orders: new Map([
+    [
+      "11111111111111111111111111111116",
+      {
+        owner: payer,
+        receiver: payer,
+        rent_receiver: payer,
+        referrer: undefined,
+        initial_collateral_token: wsol,
+        final_output_token: wsol,
+        long_token: wsol,
+        short_token: usdc,
+        should_unwrap_native_token: true,
+        callback: undefined,
+      },
+    ],
+  ]),
+  settle_builder_fee: new Map([
+    [
+      "11111111111111111111111111111116",
+      {
+        builder_fee_amount: 0,
+        builder_fee_factor: 1_000_000_000_000_000n,
+        builder: builderPubkey,
+        final_output_token: finalOutputToken,
+        escrow: escrowPubkey,
+      },
+    ],
+  ]),
+});
+
+console.log("close orders with settle_builder_fee on a pending order");
+for (const batch of closeOrdersPendingFee.serialize()) {
   for (const txn of batch) {
     console.log(toBase64(txn));
   }
