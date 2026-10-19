@@ -1495,6 +1495,11 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                         match res.value() {
                             Some(order) => expected_id = Some(order.header.id),
                             None => {
+                                // Seen live while this order was open, so it is this
+                                // order's trade; history may not show it.
+                                if let Some(trade) = trade {
+                                    return Ok(OrderCompletion::Trade(Box::new(trade)));
+                                }
                                 let scan = LifecycleScan::new(address, expected_id);
                                 return self
                                     .order_completion_from_history(
