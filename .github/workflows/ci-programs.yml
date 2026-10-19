@@ -19,7 +19,7 @@ env:
   rust_stable: "1.88"
   # keep in sync with Anchor.toml [toolchain]
   solana_version: "2.1.21"
-  anchor_version: "0.31.1"
+  anchor_version: "0.32.1"
   libudev: "1.0"
 
 defaults:

@@ -81,7 +81,7 @@ Create a new Rust project and include `anchor_lang` and `bytemuck` as dependenci
 
 ```toml
 [dependencies]
-anchor-lang = "0.31.1"
+anchor-lang = "0.32.1"
 bytemuck = { version = "1.19.0", features = ["min_const_generics", "derive"] }
 ```
 
@@ -182,7 +182,7 @@ For a working implementation, check out the [gmx-solana-programs][gmx-solana-pro
 
 - [Rust](https://www.rust-lang.org/tools/install)
 - [Solana v2.1.21](https://docs.anza.xyz/cli/install)
-- [Anchor v0.31.1](https://www.anchor-lang.com/docs/installation)
+- [Anchor v0.32.1](https://www.anchor-lang.com/docs/installation)
 - [Node](https://nodejs.org/en/download)
 - [Just](https://github.com/casey/just?tab=readme-ov-file#installation)
 
