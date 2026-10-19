@@ -1,4 +1,4 @@
-use anchor_lang::solana_program::hash::hashv;
+use solana_sha256_hasher::hashv;
 
 /// Convert to fixed-size key.
 pub fn to_key(key: &str) -> [u8; 32] {

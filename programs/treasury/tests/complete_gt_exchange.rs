@@ -1,7 +1,8 @@
 use anchor_lang::{
-    solana_program::{instruction::Instruction, message::Message, pubkey::Pubkey},
+    solana_program::{instruction::Instruction, pubkey::Pubkey},
     InstructionData, ToAccountMetas,
 };
+use solana_sdk::message::Message;
 
 #[test]
 fn complete_gt_exchange_owner_is_writable_with_a_separate_fee_payer() {

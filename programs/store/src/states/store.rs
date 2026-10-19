@@ -1,6 +1,6 @@
 use std::{num::NonZeroU64, str::FromStr};
 
-use anchor_lang::{prelude::*, solana_program::last_restart_slot::LastRestartSlot};
+use anchor_lang::{prelude::*, solana_program::sysvar::last_restart_slot::LastRestartSlot};
 use bytemuck::Zeroable;
 use gmsol_utils::to_seed;
 

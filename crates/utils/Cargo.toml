@@ -22,6 +22,7 @@ security-txt = ["solana-security-txt"]
 
 [dependencies]
 anchor-lang = { workspace = true }
+solana-sha256-hasher = { workspace = true }
 thiserror = { workspace = true }
 paste = { workspace = true }
 bytemuck = { workspace = true, features = ["derive"] }

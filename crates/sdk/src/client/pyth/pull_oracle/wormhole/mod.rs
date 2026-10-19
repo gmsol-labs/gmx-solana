@@ -1,5 +1,6 @@
-use gmsol_programs::anchor_lang::solana_program::pubkey;
-use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction};
+use solana_sdk::pubkey;
+use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer};
+use solana_system_interface::instruction as system_instruction;
 
 use gmsol_solana_utils::{
     compute_budget::ComputeBudget, program::Program, transaction_builder::TransactionBuilder,

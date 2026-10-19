@@ -3,9 +3,9 @@ use std::num::NonZeroUsize;
 use gmsol_sdk::{
     ops::IdlOps,
     programs::anchor_lang::{self, prelude::Pubkey, system_program},
-    solana_utils::solana_sdk::bpf_loader_upgradeable,
     utils::base64::{decode_base64, encode_base64},
 };
+use solana_loader_v3_interface::instruction as bpf_loader_upgradeable;
 
 /// Miscellaneous useful commands.
 #[derive(Debug, clap::Args)]

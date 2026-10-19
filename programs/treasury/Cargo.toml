@@ -55,6 +55,9 @@ strum = { workspace = true, features = ["derive"] }
 derive_more = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
 
+[dev-dependencies]
+solana-sdk = { workspace = true }
+
 [package.metadata.docs.rs]
 features = ["doc"]
 rustdoc-args = ["--cfg", "docsrs"]

@@ -62,6 +62,7 @@ client = [
     "solana-client",
     "solana-account-decoder",
     "solana-transaction-status",
+    "solana-address-lookup-table-interface",
     "async-stream",
     "time",
 ]
@@ -75,6 +76,7 @@ chainlink = [
 ]
 pyth = [
     "pyth-sdk",
+    "solana-system-interface",
     "pyth-solana-receiver-sdk",
     "pythnet-sdk",
     "eventsource-stream",
@@ -165,6 +167,11 @@ tokio = { workspace = true, optional = true, features = ["full"] }
 tokio-stream = { workspace = true, optional = true, features = ["sync"] }
 solana-client = { workspace = true, optional = true }
 solana-account-decoder = { workspace = true, optional = true }
+solana-address-lookup-table-interface = { workspace = true, optional = true, features = [
+    "bincode",
+    "bytemuck",
+] }
+solana-system-interface = { workspace = true, optional = true, features = ["bincode"] }
 solana-transaction-status = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 async-stream = { workspace = true, optional = true }

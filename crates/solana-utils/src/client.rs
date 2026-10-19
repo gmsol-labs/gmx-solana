@@ -196,10 +196,8 @@ mod tests {
         rpc_sender::{RpcSender, RpcTransportStats},
     };
 
-    use solana_sdk::{
-        hash::Hash, signature::Keypair, signer::Signer, system_instruction,
-        transaction::Transaction,
-    };
+    use solana_sdk::{hash::Hash, signature::Keypair, signer::Signer, transaction::Transaction};
+    use solana_system_interface::instruction as system_instruction;
 
     use super::*;
 

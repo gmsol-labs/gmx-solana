@@ -4,12 +4,12 @@ use gmsol_solana_utils::{
     bundle_builder::BundleBuilder, transaction_builder::TransactionBuilder, utils::WithSlot,
 };
 use solana_account_decoder::UiAccountEncoding;
+use solana_address_lookup_table_interface::{
+    self as address_lookup_table, state::AddressLookupTable,
+};
 use solana_client::rpc_config::RpcAccountInfoConfig;
 use solana_sdk::{
-    account::ReadableAccount,
-    address_lookup_table::{self, state::AddressLookupTable, AddressLookupTableAccount},
-    pubkey::Pubkey,
-    signer::Signer,
+    account::ReadableAccount, message::AddressLookupTableAccount, pubkey::Pubkey, signer::Signer,
 };
 
 use crate::client::accounts::get_account_with_context;

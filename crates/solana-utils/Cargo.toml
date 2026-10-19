@@ -70,6 +70,7 @@ cfg_aliases = { workspace = true }
 
 [dev-dependencies]
 bincode = { workspace = true }
+solana-system-interface = { workspace = true, features = ["bincode"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 tokio = { workspace = true, features = [

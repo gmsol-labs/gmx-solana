@@ -6,7 +6,7 @@ use gmsol_sdk::{
     solana_utils::solana_sdk::{signature::Keypair, signer::EncodableKey},
     utils::{market::MarketDecimals, unsigned_amount_to_decimal, Amount, Value},
 };
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{rngs::StdRng, RngCore, SeedableRng};
 use rust_decimal::{Decimal, MathematicalOps};
 
 pub(crate) fn get_token_amount_with_token_map(
@@ -99,7 +99,9 @@ impl KeypairArgs {
                 } else {
                     StdRng::from_entropy()
                 };
-                Keypair::generate(&mut rng)
+                let mut secret_key = [0u8; 32];
+                rng.fill_bytes(&mut secret_key);
+                Keypair::new_from_array(secret_key)
             }
         };
         Ok(keypair)
@@ -135,5 +137,25 @@ impl Side {
     /// Is long side.
     pub(crate) fn is_long(&self) -> bool {
         matches!(self, Self::Long)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gmsol_sdk::solana_utils::solana_sdk::signer::Signer;
+
+    use super::*;
+
+    /// `--seed` must keep producing the same keypair it produced with the
+    /// deprecated `Keypair::generate`, which also reads 32 bytes from the RNG.
+    #[test]
+    #[allow(deprecated)]
+    fn seeded_keypair_matches_keypair_generate() {
+        let args = KeypairArgs {
+            keypair: None,
+            seed: Some(42),
+        };
+        let expected = Keypair::generate(&mut StdRng::seed_from_u64(42));
+        assert_eq!(args.to_keypair().unwrap().pubkey(), expected.pubkey());
     }
 }

@@ -81,6 +81,7 @@ tracing-subscriber = { workspace = true, optional = true, features = [
     "env-filter",
 ] }
 solana-remote-wallet = { workspace = true, optional = true }
+solana-loader-v3-interface = { workspace = true, features = ["bincode"] }
 gql_client = { workspace = true, optional = true }
 
 [build-dependencies]
