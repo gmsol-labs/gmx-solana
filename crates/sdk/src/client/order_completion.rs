@@ -126,7 +126,7 @@ impl LifecycleScan {
                 "latest close is for action id {}, expected {id}",
                 removed.id
             ));
-            self.removed = Some(removed.clone());
+            // Not stored: it is another order's close, and callers read `removed` as theirs.
             return true;
         }
         self.removed = Some(removed.clone());
@@ -138,15 +138,15 @@ impl LifecycleScan {
     pub(crate) fn finish(self, history_ended: bool) -> OrderCompletion {
         let inconclusive =
             |removed, reason: String| OrderCompletion::Inconclusive { removed, reason };
+        if let Some(reason) = self.failure {
+            return inconclusive(None, reason);
+        }
         let Some(removed) = self.removed else {
             return inconclusive(
                 None,
                 "no `OrderRemoved` event found for the order".to_owned(),
             );
         };
-        if let Some(reason) = self.failure {
-            return inconclusive(Some(removed), reason);
-        }
         if !(self.reached_start || history_ended) {
             return inconclusive(
                 Some(removed),
@@ -335,7 +335,7 @@ mod tests {
         let txs = [vec![removed(9)], vec![trade(ORDER, 1)]];
         assert!(matches!(
             scan(Some(7), &txs),
-            OrderCompletion::Inconclusive { .. }
+            OrderCompletion::Inconclusive { removed: None, .. }
         ));
     }
 
