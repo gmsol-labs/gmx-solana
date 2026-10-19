@@ -10,8 +10,13 @@ use std::{future::Future, ops::Deref, sync::Arc};
 mod accounts;
 mod instruction;
 
-/// Wormhole Core Bridge Program Address.
-pub const WORMHOLE_PROGRAM_ID: Pubkey = pubkey!("HDwcJBJXjL9FpJ7UBsYBtaDjsBUhuLCUYoz3zr8SWWaQ");
+/// Wormhole Core Bridge Program Address used by the Pyth receiver.
+///
+/// This is the Wormhole program that pairs with the `pro-compatible` receiver
+/// (`rec2HHDDnjLfj4kE7VyEtFA1HPGQLK33259532cRyHp`), as listed in Pyth's Solana
+/// upgrade docs. The receiver and push-oracle IDs come from
+/// `pyth-solana-receiver-sdk` with the `pro-compatible` feature; see the test below.
+pub const WORMHOLE_PROGRAM_ID: Pubkey = pubkey!("HDw2E7P8X1SkCyjvoGsfBGAVUutKcj874bXjHrpVYrVL");
 
 /// The start offset of the VAA bytes.
 pub const VAA_START: u64 = 46;
@@ -149,5 +154,29 @@ where
                 encoded_vaa: *encoded_vaa,
             })
             .compute_budget(ComputeBudget::default().with_limit(CLOSE_ENCODED_VAA_COMPUTE_BUDGET))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The receiver, push-oracle and Wormhole programs must all be the Pyth
+    /// `pro-compatible` set. Mixing them breaks posting: the receiver only
+    /// accepts VAAs verified by its own Wormhole program.
+    #[test]
+    fn pyth_program_ids_are_pro_compatible() {
+        assert_eq!(
+            pyth_solana_receiver_sdk::ID,
+            pubkey!("rec2HHDDnjLfj4kE7VyEtFA1HPGQLK33259532cRyHp")
+        );
+        assert_eq!(
+            pyth_solana_receiver_sdk::PYTH_PUSH_ORACLE_ID,
+            pubkey!("pyt2F414BA6dPttK6RddPZUdHfapoBN24GL5wbrPCou")
+        );
+        assert_eq!(
+            WORMHOLE_PROGRAM_ID,
+            pubkey!("HDw2E7P8X1SkCyjvoGsfBGAVUutKcj874bXjHrpVYrVL")
+        );
     }
 }
