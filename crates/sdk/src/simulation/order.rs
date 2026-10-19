@@ -9,7 +9,7 @@ use gmsol_model::{
     num::MulDiv,
     price::Price,
     utils::apply_factor,
-    MarketAction, PositionMutExt,
+    MarketAction, PositionExt, PositionMutExt,
 };
 use gmsol_programs::{
     constants::{MARKET_DECIMALS, MARKET_USD_UNIT},
@@ -20,27 +20,84 @@ use rust_decimal::prelude::Zero;
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
-use crate::builders::order::{CreateOrderKind, CreateOrderParams};
+use crate::builders::order::{CreateOrderKind, CreateOrderParams, DecreasePositionSwapType};
 
-use super::simulator::{SimulationOptions, Simulator, SwapOutput};
+use super::{
+    builder_fee::{self, BuilderFeeOutcome, TokenReceipt},
+    simulator::{SimulationOptions, Simulator, SwapOutput},
+};
 
 /// Order simulation output.
+///
+/// For an order that carries a builder fee, the amounts are those the program
+/// produces on execution: see `builder_fee_factor` on the order simulation builder.
 #[derive(Debug)]
 pub enum OrderSimulationOutput {
     /// Increase output.
     Increase {
         swaps: Vec<SwapReport<u128, i128>>,
+        /// The model's report. Its `params().collateral_increment_amount()` is
+        /// the **net** collateral the position received, i.e.
+        /// `gross_collateral_amount` minus the builder fee, as on chain.
         report: Box<IncreasePositionReport<u128, i128>>,
         position: PositionModel,
+        /// The collateral produced by the pay-token swap, before the builder fee.
+        gross_collateral_amount: u128,
+        /// The builder fee, if the order carries one.
+        builder_fee: Option<BuilderFeeOutcome>,
     },
     /// Decrease output.
     Decrease {
         swaps: Vec<SwapReport<u128, i128>>,
+        /// The model's report. It holds the **gross** payout: the program does
+        /// not net the builder fee out of the transferred output. See
+        /// `receipts` for the amounts after the fee.
         report: Box<DecreasePositionReport<u128, i128>>,
         position: PositionModel,
+        /// What the owner holds per token after the receive-token swap, with the
+        /// builder fee taken out of the final output token.
+        ///
+        /// The final output token always comes first. A secondary (pnl token)
+        /// output in the same token is merged into it, and one in another token
+        /// follows as its own entry, omitted when zero.
+        receipts: Vec<TokenReceipt>,
+        /// The builder fee, if the order carries one.
+        builder_fee: Option<BuilderFeeOutcome>,
     },
     /// Swap output.
     Swap(SwapOutput),
+}
+
+impl OrderSimulationOutput {
+    /// Returns the builder fee, if the order carries one.
+    ///
+    /// `None` means the order has no builder fee. `Some` with a zero
+    /// `paid_amount` means it has one but nothing was collectible.
+    pub fn builder_fee(&self) -> Option<&BuilderFeeOutcome> {
+        match self {
+            Self::Increase { builder_fee, .. } | Self::Decrease { builder_fee, .. } => {
+                builder_fee.as_ref()
+            }
+            Self::Swap(_) => None,
+        }
+    }
+
+    /// Returns the collateral the position received from an increase, after the
+    /// builder fee.
+    pub fn net_collateral_amount(&self) -> Option<u128> {
+        match self {
+            Self::Increase { report, .. } => Some(*report.params().collateral_increment_amount()),
+            _ => None,
+        }
+    }
+
+    /// Returns the per-token receipts of a decrease, after the builder fee.
+    pub fn receipts(&self) -> &[TokenReceipt] {
+        match self {
+            Self::Decrease { receipts, .. } => receipts,
+            _ => &[],
+        }
+    }
 }
 
 /// Order execution simulation.
@@ -58,6 +115,33 @@ pub struct OrderSimulation<'a> {
     swap_path: &'a [Pubkey],
     #[builder(default)]
     position: Option<&'a Arc<Position>>,
+    /// The builder fee factor checkpointed onto the order. `0` (the default)
+    /// means the order has no builder fee, and leaves every result unchanged.
+    ///
+    /// Models the program's builder fee at the same execution stages:
+    ///
+    /// - **Increase**: the fee is deducted from the swapped collateral before
+    ///   the position increases, and the simulation fails if the collateral
+    ///   cannot cover it.
+    /// - **Decrease**: the collateral withdrawal is topped up by an estimate of
+    ///   the fee, which can change a partial decrease into a full close. The
+    ///   fee is then charged on the executed size in the final output token,
+    ///   clamped to the outputs that fund its escrow. `CollateralToPnlToken` is
+    ///   rejected.
+    ///
+    /// Swap orders cannot carry a builder fee, so a non-zero factor is rejected.
+    ///
+    /// Read the factor from the order account (`Order.builder_fee_factor`) for an
+    /// order already checkpointed. That is what the program charges, not the
+    /// factor the builder advertises now. For an order not yet checkpointed, use
+    /// the builder's advertised factor (`UserHeader.builder_fee_factor`), which
+    /// is what `set_builder_fee` requires as `expected_factor`. An order that
+    /// will not be checkpointed executes with no fee: leave this at `0`.
+    ///
+    /// When a simulation with a non-zero factor fails, the simulator is restored
+    /// to its state before the call, as the failed execution would be on chain.
+    #[builder(default)]
+    builder_fee_factor: u128,
 }
 
 /// Options for prices update.
@@ -72,10 +156,26 @@ pub struct UpdatePriceOptions {
 impl OrderSimulation<'_> {
     /// Execute the simulation with the given options.
     pub fn execute_with_options(
-        self,
+        mut self,
         options: SimulationOptions,
     ) -> crate::Result<OrderSimulationOutput> {
-        match self.kind {
+        let is_position_order = !matches!(
+            self.kind,
+            CreateOrderKind::MarketSwap | CreateOrderKind::LimitSwap
+        );
+        if self.builder_fee_factor != 0 && !is_position_order {
+            return Err(crate::Error::custom(
+                "[sim] a builder fee applies to position orders only, but the order is a swap",
+            ));
+        }
+
+        // An order with a builder fee can fail on a condition the caller should
+        // expect (the fee exceeding the swapped collateral). On chain that
+        // failure reverts everything, including the swap that came before it, so
+        // the simulator is restored here rather than left with the swap applied.
+        let snapshot = (self.builder_fee_factor != 0).then(|| self.simulator.clone());
+
+        let result = match self.kind {
             CreateOrderKind::MarketIncrease | CreateOrderKind::LimitIncrease => {
                 self.increase(options)
             }
@@ -83,7 +183,14 @@ impl OrderSimulation<'_> {
             | CreateOrderKind::LimitDecrease
             | CreateOrderKind::StopLossDecrease => self.decrease(options),
             CreateOrderKind::MarketSwap | CreateOrderKind::LimitSwap => self.swap(options),
+        };
+
+        if result.is_err() {
+            if let Some(snapshot) = snapshot {
+                *self.simulator = snapshot;
+            }
         }
+        result
     }
 
     fn get_market(&self) -> crate::Result<&MarketModel> {
@@ -186,17 +293,15 @@ impl OrderSimulation<'_> {
         Ok(self)
     }
 
-    fn increase(self, options: SimulationOptions) -> crate::Result<OrderSimulationOutput> {
-        let Self {
-            kind,
-            simulator,
-            params,
-            collateral_or_swap_out_token,
-            position,
-            swap_path,
-            pay_token,
-            ..
-        } = self;
+    fn increase(&mut self, options: SimulationOptions) -> crate::Result<OrderSimulationOutput> {
+        let kind = self.kind;
+        let params = self.params;
+        let collateral_or_swap_out_token = self.collateral_or_swap_out_token;
+        let position = self.position;
+        let swap_path = self.swap_path;
+        let pay_token = self.pay_token;
+        let builder_fee_factor = self.builder_fee_factor;
+        let simulator = &mut *self.simulator;
 
         let prices = simulator.get_prices_for_market(&params.market_token)?;
 
@@ -254,17 +359,33 @@ impl OrderSimulation<'_> {
             Some(simulator.vis_mut())
         };
 
-        let (report, position) = with_vi_models_if_some(
+        let ((report, builder_fee), position) = with_vi_models_if_some(
             &market_snapshot,
             position,
             vi_ctx,
             params.is_long,
             collateral_or_swap_out_token,
             move |position_model: &mut PositionModel| {
+                // The fee is charged in the collateral token, after the pay token
+                // has been swapped into it, and is deducted from the collateral
+                // before the position increases.
+                let (collateral_increment_amount, builder_fee) =
+                    builder_fee::charge_on_collateral_increment(
+                        swap_amount,
+                        params.size,
+                        builder_fee_factor,
+                        collateral_or_swap_out_token,
+                        position_model.collateral_price(&prices),
+                    )?;
                 let report = position_model
-                    .increase(prices, swap_amount, params.size, params.acceptable_price)?
+                    .increase(
+                        prices,
+                        collateral_increment_amount,
+                        params.size,
+                        params.acceptable_price,
+                    )?
                     .execute()?;
-                Ok(report)
+                Ok((report, builder_fee))
             },
         )?;
 
@@ -280,20 +401,20 @@ impl OrderSimulation<'_> {
             swaps: swap_output.reports,
             report: Box::new(report),
             position,
+            gross_collateral_amount: swap_amount,
+            builder_fee,
         })
     }
 
-    fn decrease(self, options: SimulationOptions) -> crate::Result<OrderSimulationOutput> {
-        let Self {
-            kind,
-            simulator,
-            params,
-            collateral_or_swap_out_token,
-            position,
-            swap_path,
-            receive_token,
-            ..
-        } = self;
+    fn decrease(&mut self, options: SimulationOptions) -> crate::Result<OrderSimulationOutput> {
+        let kind = self.kind;
+        let params = self.params;
+        let collateral_or_swap_out_token = self.collateral_or_swap_out_token;
+        let position = self.position;
+        let swap_path = self.swap_path;
+        let receive_token = self.receive_token;
+        let builder_fee_factor = self.builder_fee_factor;
+        let simulator = &mut *self.simulator;
 
         let prices = simulator.get_prices_for_market(&params.market_token)?;
 
@@ -355,6 +476,29 @@ impl OrderSimulation<'_> {
             return Err(crate::Error::custom("[sim] collateral token mismatched"));
         }
 
+        // The final output token is where the builder fee is paid from. Resolve
+        // what it needs now, before the market is touched, so that these
+        // failures leave the simulator as it was.
+        let final_output_token = *receive_token.unwrap_or(collateral_or_swap_out_token);
+        let final_output_price = if builder_fee_factor != 0 {
+            if matches!(
+                params.decrease_position_swap_type,
+                Some(DecreasePositionSwapType::CollateralToPnlToken)
+            ) {
+                // Rejected by the program for any non-zero factor, whatever the
+                // fee estimate rounds to.
+                return Err(crate::Error::custom(
+                    "[sim] BuilderFeeSwapTypeNotAllowed: `CollateralToPnlToken` cannot be used \
+                     with a non-zero builder fee factor",
+                ));
+            }
+            Some(simulator.get_price(&final_output_token).ok_or_else(|| {
+                crate::Error::custom(format!("[sim] price for {final_output_token} is not ready"))
+            })?)
+        } else {
+            None
+        };
+
         // Execute the decrease against a cloned market model, while VI state
         // is managed exclusively via the simulator's global VI map.
         let market_snapshot = {
@@ -380,12 +524,22 @@ impl OrderSimulation<'_> {
             params.is_long,
             collateral_or_swap_out_token,
             move |position_model: &mut PositionModel| {
+                // Fold an estimate of the builder fee into the withdrawal, so
+                // that it is still funded when the position closes at a loss.
+                // This is what can turn a partial decrease into a full close.
+                let collateral_withdrawal_amount = builder_fee::withdrawal_with_estimate(
+                    params.amount,
+                    params.size,
+                    builder_fee_factor,
+                    position_model.collateral_price(&prices),
+                    params.decrease_position_swap_type,
+                )?;
                 let report = position_model
                     .decrease(
                         prices,
                         params.size,
                         params.acceptable_price,
-                        params.amount,
+                        collateral_withdrawal_amount,
                         DecreasePositionFlags {
                             is_insolvent_close_allowed: false,
                             is_liquidation_order: false,
@@ -411,6 +565,7 @@ impl OrderSimulation<'_> {
             *storage = position.market_model().clone();
         }
 
+        let mut final_output_amount = 0;
         let swaps = if !report.output_amount().is_zero() {
             let source_token = collateral_or_swap_out_token;
             let swap_output = simulator.swap_along_path_with_options(
@@ -432,28 +587,73 @@ impl OrderSimulation<'_> {
                     .get_market(&params.market_token)
                     .expect("market storage must exist"),
             );
+            final_output_amount = swap_output.amount();
             swap_output.reports
         } else {
             vec![]
         };
 
+        // The fee is charged in the final output token, after the receive-token
+        // swap, on the size that was actually executed (a decrease may have been
+        // enlarged into a full close) and at that token's price. It is computed
+        // and clamped but never netted from the report: the program transfers
+        // the whole output to the escrow and settlement moves the fee out of it.
+        //
+        // The secondary output is the pnl token, which the report knows as a side
+        // of the market.
+        let secondary_output_token = if report.is_secondary_output_token_long() {
+            market_snapshot.meta.long_token_mint
+        } else {
+            market_snapshot.meta.short_token_mint
+        };
+        let secondary_output_amount = *report.secondary_output_amount();
+        let builder_fee = match final_output_price {
+            Some(final_output_price) => {
+                let payable_amount = builder_fee::compute_amount(
+                    *report.size_delta_usd(),
+                    builder_fee_factor,
+                    &final_output_price,
+                )?;
+                let paid_amount = builder_fee::clamp_to_outputs(
+                    payable_amount,
+                    &final_output_token,
+                    final_output_amount,
+                    &secondary_output_token,
+                    secondary_output_amount,
+                )?;
+                Some(BuilderFeeOutcome {
+                    factor: builder_fee_factor,
+                    token: final_output_token,
+                    payable_amount,
+                    paid_amount,
+                })
+            }
+            None => None,
+        };
+        let receipts = builder_fee::build_receipts(
+            &final_output_token,
+            final_output_amount,
+            &secondary_output_token,
+            secondary_output_amount,
+            builder_fee.as_ref().map_or(0, |fee| fee.paid_amount),
+        )?;
+
         Ok(OrderSimulationOutput::Decrease {
             swaps,
             report,
             position,
+            receipts,
+            builder_fee,
         })
     }
 
-    fn swap(self, options: SimulationOptions) -> crate::Result<OrderSimulationOutput> {
-        let Self {
-            kind,
-            simulator,
-            params,
-            collateral_or_swap_out_token,
-            swap_path,
-            pay_token,
-            ..
-        } = self;
+    fn swap(&mut self, options: SimulationOptions) -> crate::Result<OrderSimulationOutput> {
+        let kind = self.kind;
+        let params = self.params;
+        let collateral_or_swap_out_token = self.collateral_or_swap_out_token;
+        let swap_path = self.swap_path;
+        let pay_token = self.pay_token;
+        let simulator = &mut *self.simulator;
 
         let swap_in = *pay_token.unwrap_or(collateral_or_swap_out_token);
 

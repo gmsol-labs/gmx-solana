@@ -163,6 +163,7 @@ impl JsSimulator {
             skip_limit_price_validation,
             limit_swap_slippage,
             update_prices_for_limit_order,
+            builder_fee_factor,
         } = args;
         let swap_path = convert_swap_path(swap_path.as_deref());
         let mut simulation = self
@@ -172,6 +173,7 @@ impl JsSimulator {
             .receive_token(receive_token.as_deref())
             .position(position.as_ref().map(|p| &p.position))
             .swap_path(&swap_path)
+            .builder_fee_factor(builder_fee_factor.unwrap_or_default())
             .build();
 
         if update_prices_for_limit_order.unwrap_or_default() {
@@ -414,4 +416,58 @@ fn convert_swap_path(swap_path: Option<&[StringPubkey]>) -> Vec<Pubkey> {
     swap_path
         .map(|path| path.iter().map(|p| **p).collect::<Vec<_>>())
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn swap_args(builder_fee_factor: Option<u128>) -> SimulateOrderArgs {
+        let mut args: SimulateOrderArgs = serde_json::from_str(
+            r#"{
+                "kind": "MarketSwap",
+                "params": {
+                    "market_token": "11111111111111111111111111111111",
+                    "is_long": true,
+                    "size": 0,
+                    "amount": 10
+                },
+                "collateral_or_swap_out_token": "11111111111111111111111111111111"
+            }"#,
+        )
+        .unwrap();
+        args.builder_fee_factor = builder_fee_factor;
+        args
+    }
+
+    fn empty() -> JsSimulator {
+        Simulator::from_parts(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        )
+        .into()
+    }
+
+    #[test]
+    fn the_factor_reaches_the_simulation() {
+        // A swap order cannot carry a builder fee. The rejection is the proof
+        // that the factor was forwarded; it happens before the (empty)
+        // simulator is consulted.
+        let err = empty()
+            .simulate_order(swap_args(Some(1)), None)
+            .err()
+            .expect("a swap order with a builder fee must be rejected")
+            .to_string();
+        assert!(err.contains("position orders only"), "{err}");
+    }
+
+    #[test]
+    fn an_absent_or_zero_factor_is_not_forwarded_as_a_fee() {
+        for factor in [None, Some(0)] {
+            // With no swap path the swap is a no-op, so it needs no market.
+            assert!(empty().simulate_order(swap_args(factor), None).is_ok());
+        }
+    }
 }

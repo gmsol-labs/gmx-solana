@@ -17,11 +17,21 @@ use typed_builder::TypedBuilder;
 use crate::{
     builders::order::{CreateOrderKind, CreateOrderParams},
     market_graph::{simulation::SimulationOptions, MarketGraph},
+    simulation::builder_fee,
 };
 
 pub use crate::simulation::order::OrderSimulationOutput;
 
 /// Order execution simulation.
+///
+/// # Builder fees
+/// This deprecated simulation does **not** model builder fees. Its results are
+/// those of an order with no builder fee, so for an order that has a non-zero
+/// builder fee factor checkpointed, the collateral, leverage, success and
+/// receipt it reports differ from execution. Use
+/// [`MarketGraph::to_simulator`] and
+/// [`Simulator::simulate_order`](crate::simulation::Simulator::simulate_order)
+/// with `builder_fee_factor` instead.
 #[derive(Debug, Clone, TypedBuilder)]
 pub struct OrderSimulation<'a> {
     graph: &'a MarketGraph,
@@ -130,6 +140,9 @@ impl OrderSimulation<'_> {
             swaps: swap_output.reports,
             report: Box::new(report),
             position,
+            // No builder fee is modeled here: gross and net are the same.
+            gross_collateral_amount: swap_output.amount,
+            builder_fee: None,
         })
     }
 
@@ -195,26 +208,45 @@ impl OrderSimulation<'_> {
             )
             .execute()?;
 
+        let receive_token = receive_token.unwrap_or(collateral_or_swap_out_token);
+        let mut final_output_amount = 0;
         let swaps = if !report.output_amount().is_zero() {
             let source_token = collateral_or_swap_out_token;
             let swap_output =
                 graph.swap_along_path(swap_path, source_token, *report.output_amount())?;
-            let receive_token = receive_token.unwrap_or(collateral_or_swap_out_token);
             if swap_output.output_token != *receive_token {
                 return Err(crate::Error::custom(format!(
                     "[sim] invalid swap path: output_token={}, receive_token={receive_token}",
                     swap_output.output_token
                 )));
             }
+            final_output_amount = swap_output.amount;
             swap_output.reports
         } else {
             vec![]
         };
 
+        // No builder fee is modeled here: the receipts are the gross outputs.
+        let meta = &position.market_model().meta;
+        let secondary_output_token = if report.is_secondary_output_token_long() {
+            meta.long_token_mint
+        } else {
+            meta.short_token_mint
+        };
+        let receipts = builder_fee::build_receipts(
+            receive_token,
+            final_output_amount,
+            &secondary_output_token,
+            *report.secondary_output_amount(),
+            0,
+        )?;
+
         Ok(OrderSimulationOutput::Decrease {
             swaps,
             report,
             position,
+            receipts,
+            builder_fee: None,
         })
     }
 
