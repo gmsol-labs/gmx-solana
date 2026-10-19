@@ -17,6 +17,8 @@ use std::ops::Deref;
 use gmsol_solana_utils::{
     bundle_builder::BundleBuilder, program::Program, transaction_builder::TransactionBuilder,
 };
+use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
+use solana_client::rpc_config::RpcAccountInfoConfig;
 use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
 use self::wormhole::WORMHOLE_PROGRAM_ID;
@@ -72,11 +74,21 @@ where
         let mut bundle = client.bundle();
         let mut closes = bundle.push_parallel();
         for chunk in accounts.chunks(MAX_ACCOUNTS_PER_FETCH) {
+            // Only existence and owner matter, so skip the account data.
+            let config = RpcAccountInfoConfig {
+                encoding: Some(UiAccountEncoding::Base64),
+                data_slice: Some(UiDataSliceConfig {
+                    offset: 0,
+                    length: 0,
+                }),
+                ..Default::default()
+            };
             let fetched = client
                 .rpc()
-                .get_multiple_accounts(chunk)
+                .get_multiple_accounts_with_config(chunk, config)
                 .await
-                .map_err(crate::Error::custom)?;
+                .map_err(crate::Error::custom)?
+                .value;
             for (address, account) in chunk.iter().zip(fetched) {
                 let Some(account) = account else {
                     continue;

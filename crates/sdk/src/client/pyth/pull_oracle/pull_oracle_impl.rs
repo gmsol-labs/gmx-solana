@@ -208,7 +208,6 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
         }
 
         // Post price updates.
-        let mut price_update_accounts = Vec::with_capacity(updates.len());
         let (post, close) = ixns.split_mut();
         {
             let mut post = post.push_parallel();
@@ -225,11 +224,10 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
                 prices.insert(Pubkey::new_from_array(feed_id.to_bytes()), price_update);
                 post.add(post_price_update);
                 close.add(pyth.reclaim_rent(&price_update));
-                price_update_accounts.push(price_update);
             }
         }
-        for price_update in price_update_accounts {
-            ixns.push_temporary_account(price_update);
+        for price_update in prices.values() {
+            ixns.push_temporary_account(*price_update);
         }
         Ok((ixns, HashMap::from([(PriceProviderKind::Pyth, prices)])))
     }
