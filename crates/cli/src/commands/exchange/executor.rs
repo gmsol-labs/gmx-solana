@@ -251,7 +251,13 @@ impl<'a> Executor<'a> {
         // cannot land, or that account would be missed.
         if is_unresolved(send_err) {
             tracing::info!("waiting for unresolved transactions to expire before closing temporary Pyth accounts");
-            wait_for_blockhash_expiry(self.client.rpc()).await?;
+            // A blockhash fetched now is newer than the bundle's, so it expires last.
+            let rpc = self.client.rpc();
+            let (_, last_valid_block_height) = rpc
+                .get_latest_blockhash_with_commitment(rpc.commitment())
+                .await
+                .map_err(gmsol_sdk::Error::custom)?;
+            wait_for_blockhash_expiry(rpc, last_valid_block_height).await?;
         }
         let bundle = self
             .pyth
