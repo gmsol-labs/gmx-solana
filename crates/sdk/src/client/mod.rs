@@ -1441,14 +1441,15 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                 if events.slot() < slot {
                     return Ok(None);
                 }
+                // The subscription carries every store event, so keep only the ones
+                // for the order we are waiting on.
                 let events = events
                     .into_value()
                     .into_iter()
-                    .filter(|event| {
-                        matches!(
-                            event,
-                            GMSOLCPIEvent::TradeEvent(_) | GMSOLCPIEvent::OrderRemoved(_)
-                        )
+                    .filter(|event| match event {
+                        GMSOLCPIEvent::TradeEvent(event) => event.order == address,
+                        GMSOLCPIEvent::OrderRemoved(event) => event.order == address,
+                        _ => false,
                     })
                     .map(Ok);
                 Ok(Some(futures_util::stream::iter(events)))
