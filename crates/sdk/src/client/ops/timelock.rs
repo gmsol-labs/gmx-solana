@@ -1,5 +1,6 @@
 use std::{future::Future, ops::Deref, sync::Arc};
 
+use anchor_lang::system_program;
 use gmsol_programs::{
     constants::roles,
     gmsol_timelock::{
@@ -13,7 +14,6 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
     signer::Signer,
-    system_program,
 };
 
 use crate::utils::zero_copy::ZeroCopy;

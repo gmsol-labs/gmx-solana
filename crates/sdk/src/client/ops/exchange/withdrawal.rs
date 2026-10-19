@@ -1,5 +1,6 @@
 use std::{collections::BTreeSet, ops::Deref};
 
+use anchor_lang::system_program;
 use anchor_spl::associated_token::get_associated_token_address;
 use gmsol_programs::gmsol_store::{
     accounts::Withdrawal,
@@ -19,7 +20,7 @@ use gmsol_utils::{
     swap::SwapActionParams,
     token_config::{TokenMapAccess, TokensWithFeed},
 };
-use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer, system_program};
+use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer};
 
 use crate::{
     builders::utils::{generate_nonce, get_ata_or_owner},

@@ -1,11 +1,12 @@
 use std::ops::Deref;
 
+use anchor_lang::system_program;
 use gmsol_programs::gmsol_competition::{
     client::{accounts, args},
     ID,
 };
 use gmsol_solana_utils::transaction_builder::TransactionBuilder;
-use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
+use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
 /// Operations for competition.
 pub trait CompetitionOps<C> {

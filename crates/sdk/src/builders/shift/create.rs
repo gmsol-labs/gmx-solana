@@ -1,3 +1,4 @@
+use anchor_lang::system_program;
 use anchor_spl::associated_token::{self, get_associated_token_address_with_program_id};
 use gmsol_model::num_traits::Zero;
 use gmsol_programs::gmsol_store::{
@@ -5,7 +6,6 @@ use gmsol_programs::gmsol_store::{
     types::CreateShiftParams,
 };
 use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup, ProgramExt};
-use solana_sdk::system_program;
 use typed_builder::TypedBuilder;
 
 use crate::{

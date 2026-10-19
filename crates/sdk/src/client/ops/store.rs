@@ -1,8 +1,9 @@
 use std::{ops::Deref, sync::Arc};
 
+use anchor_lang::system_program;
 use gmsol_programs::gmsol_store::client::{accounts, args};
 use gmsol_solana_utils::transaction_builder::TransactionBuilder;
-use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
+use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
 /// Operations for store account.
 pub trait StoreOps<C> {

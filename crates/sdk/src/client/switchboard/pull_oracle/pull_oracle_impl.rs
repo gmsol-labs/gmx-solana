@@ -2,11 +2,12 @@ use anchor_spl::associated_token::get_associated_token_address;
 use base64::prelude::*;
 use gmsol_solana_utils::bundle_builder::BundleOptions;
 
+use anchor_lang::system_program;
 use anchor_spl::token::spl_token::{native_mint::ID as NATIVE_MINT, ID as SPL_TOKEN_PROGRAM_ID};
 use gmsol_utils::oracle::PriceProviderKind;
 use rand::Rng;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{instruction::AccountMeta, system_program};
+use solana_sdk::instruction::AccountMeta;
 use solana_sdk::{pubkey::Pubkey, signer::Signer};
 use std::{collections::HashMap, num::NonZeroUsize, ops::Deref, sync::Arc};
 use switchboard_on_demand_client::{

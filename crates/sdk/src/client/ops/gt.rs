@@ -1,12 +1,13 @@
 use std::{future::Future, ops::Deref};
 
+use anchor_lang::system_program;
 use gmsol_programs::gmsol_store::{
     accounts::GtExchange,
     client::{accounts, args},
 };
 use gmsol_solana_utils::{transaction_builder::TransactionBuilder, IntoAtomicGroup};
 use gmsol_utils::gt::get_time_window_index;
-use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
+use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
 use crate::{builders::gt::MintGtReward, utils::zero_copy::ZeroCopy};
 

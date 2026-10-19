@@ -1,5 +1,6 @@
 use std::{collections::BTreeSet, ops::Deref};
 
+use anchor_lang::system_program;
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use gmsol_programs::gmsol_store::{
     accounts::Glv,
@@ -13,7 +14,7 @@ use gmsol_utils::{
     glv::GlvMarketFlag, oracle::PriceProviderKind, swap::SwapActionParams,
     token_config::TokensWithFeed,
 };
-use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
+use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
 use crate::{
     client::{

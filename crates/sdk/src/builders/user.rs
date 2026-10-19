@@ -1,9 +1,10 @@
+use anchor_lang::system_program;
 use gmsol_programs::{
     anchor_lang::{InstructionData, ToAccountMetas},
     gmsol_store::client::{accounts, args},
 };
 use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup, ProgramExt};
-use solana_sdk::{instruction::Instruction, system_program};
+use solana_sdk::instruction::Instruction;
 use typed_builder::TypedBuilder;
 
 use crate::serde::StringPubkey;

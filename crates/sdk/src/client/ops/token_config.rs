@@ -1,12 +1,13 @@
 use std::ops::Deref;
 
+use anchor_lang::system_program;
 use gmsol_programs::gmsol_store::client::{accounts, args};
 use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_utils::{
     oracle::PriceProviderKind, price::market_status::MarketStatusFlag,
     token_config::UpdateTokenConfigParams,
 };
-use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
+use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
 use crate::{serde::StringPubkey, utils::Value};
 

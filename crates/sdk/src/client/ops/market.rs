@@ -1,5 +1,6 @@
 use std::{future::Future, ops::Deref};
 
+use anchor_lang::system_program;
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use gmsol_model::{price::Prices, PnlFactorKind};
 use gmsol_programs::gmsol_store::{
@@ -16,7 +17,7 @@ use gmsol_utils::{
     token_config::{token_records, TokensWithFeed},
 };
 use indexmap::IndexMap;
-use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
+use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
 use crate::{
     builders::market::SetMarketConfigUpdatable,

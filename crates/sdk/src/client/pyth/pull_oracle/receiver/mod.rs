@@ -1,10 +1,11 @@
 use std::{ops::Deref, sync::Arc};
 
+use anchor_lang::system_program;
 use gmsol_solana_utils::{
     compute_budget::ComputeBudget, program::Program, transaction_builder::TransactionBuilder,
 };
 use pythnet_sdk::wire::v1::MerklePriceUpdate;
-use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer, system_program};
+use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer};
 
 mod accounts;
 mod instruction;

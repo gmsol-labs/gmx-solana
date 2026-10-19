@@ -1,14 +1,13 @@
 use std::{future::Future, ops::Deref};
 
+use anchor_lang::system_program;
 use gmsol_programs::gmsol_store::{
     accounts::Oracle,
     client::{accounts, args},
 };
 use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_utils::oracle::PriceProviderKind;
-use solana_sdk::{
-    pubkey::Pubkey, signer::Signer, system_instruction::create_account, system_program,
-};
+use solana_sdk::{pubkey::Pubkey, signer::Signer, system_instruction::create_account};
 
 /// Arguments for updating a Chainlink price feed.
 #[cfg(feature = "gmsol-chainlink-datastreams")]

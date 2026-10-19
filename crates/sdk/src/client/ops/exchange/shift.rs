@@ -1,6 +1,7 @@
 use std::{collections::BTreeSet, ops::Deref};
 
 use anchor_lang::prelude::AccountMeta;
+use anchor_lang::system_program;
 use anchor_spl::associated_token::get_associated_token_address;
 use gmsol_programs::gmsol_store::{
     accounts::{Shift, Store},
@@ -20,7 +21,7 @@ use gmsol_utils::{
     pubkey::optional_address,
     token_config::{token_records, TokenMapAccess, TokensWithFeed},
 };
-use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
+use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
 use crate::{
     builders::utils::generate_nonce,

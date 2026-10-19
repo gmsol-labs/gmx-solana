@@ -1,12 +1,13 @@
 use std::{future::Future, ops::Deref};
 
+use anchor_lang::system_program;
 use gmsol_programs::gmsol_store::{
     accounts::{ReferralCodeV2, UserHeader},
     client::{accounts, args},
 };
 use gmsol_solana_utils::transaction_builder::TransactionBuilder;
 use gmsol_utils::pubkey::optional_address;
-use solana_sdk::{pubkey::Pubkey, signer::Signer, system_program};
+use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
 use crate::{pda::ReferralCodeBytes, utils::zero_copy::ZeroCopy};
 

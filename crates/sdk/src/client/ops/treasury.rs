@@ -1,5 +1,6 @@
 use std::{future::Future, ops::Deref};
 
+use anchor_lang::system_program;
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use gmsol_programs::gmsol_treasury::{
     accounts::{Config, GtBank, GtExchange, TreasuryVaultConfig},
@@ -18,7 +19,7 @@ use gmsol_utils::{
 };
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::rpc_config::RpcAccountInfoConfig;
-use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer, system_program};
+use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey, signer::Signer};
 
 use crate::{
     builders::{

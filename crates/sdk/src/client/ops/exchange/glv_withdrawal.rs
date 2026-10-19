@@ -3,6 +3,7 @@ use std::{
     ops::Deref,
 };
 
+use anchor_lang::system_program;
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use gmsol_programs::gmsol_store::{
     accounts::{Glv, GlvWithdrawal},
@@ -25,7 +26,7 @@ use gmsol_utils::{
 };
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount, instruction::AccountMeta, pubkey::Pubkey,
-    signer::Signer, system_program,
+    signer::Signer,
 };
 
 use crate::{
