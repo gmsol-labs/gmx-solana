@@ -224,21 +224,29 @@ impl<'a> Executor<'a> {
         // Sign with a blockhash fetched here, so an unresolved send can be waited out exactly
         // until its last valid block height.
         let blockhash = self.bundle_blockhash().await?;
+        let mut landed = false;
         let sent = self
             .client
             .send_or_serialize_with_blockhash(
                 bundle,
                 blockhash.map(|(hash, _)| hash),
-                display_signatures,
+                |signatures, err, steps| {
+                    landed = !signatures.is_empty();
+                    display_signatures(signatures, err, steps)
+                },
             )
             .await;
         if let (Err(err), Some((_, last_valid_block_height))) = (&sent, blockhash) {
-            self.close_temporary_accounts(
-                with_pyth.temporary_accounts(),
-                err,
-                last_valid_block_height,
-            )
-            .await;
+            // No transaction landed and none is unresolved: nothing was created, so there is
+            // nothing to close (this also covers errors raised before sending).
+            if landed || is_unresolved(err) {
+                self.close_temporary_accounts(
+                    with_pyth.temporary_accounts(),
+                    err,
+                    last_valid_block_height,
+                )
+                .await;
+            }
         }
         sent
     }
@@ -299,7 +307,7 @@ impl<'a> Executor<'a> {
         if bundle.is_empty() {
             return Ok(());
         }
-        tracing::info!("closing temporary Pyth accounts left open by the failed execute");
+        println!("\nClosing temporary Pyth accounts left open by the failed execute:");
         self.client.send_or_serialize(bundle).await
     }
 }
