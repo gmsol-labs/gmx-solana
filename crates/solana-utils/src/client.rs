@@ -123,6 +123,30 @@ fn first_signature(transaction: &impl SerializableTransaction) -> Option<Signatu
     Some(*transaction.get_signature())
 }
 
+/// Wait until no transaction signed before this call can still land.
+///
+/// Fetches the latest blockhash, then polls every 500 ms until the cluster reports it invalid
+/// (about 60–90 s on mainnet). A transaction sent before this call used that blockhash or an
+/// older one, so once it expires the transaction is either already processed or will never
+/// be. Use it to settle [`crate::Error::SendUnresolved`] before reading the state the
+/// transaction would have changed.
+///
+/// Durable-nonce transactions do not expire with their blockhash and are not covered.
+pub async fn wait_for_blockhash_expiry(client: &RpcClient) -> crate::Result<()> {
+    let to_err = |err: SolanaClientError| -> crate::Error { Box::new(err).into() };
+    let blockhash = client.get_latest_blockhash().await.map_err(to_err)?;
+    while client
+        .is_blockhash_valid(&blockhash, CommitmentConfig::processed())
+        .await
+        .map_err(to_err)?
+    {
+        if cfg!(not(test)) {
+            sleep(Duration::from_millis(500)).await;
+        }
+    }
+    Ok(())
+}
+
 /// Final status of a submitted transaction.
 enum Confirmation {
     Landed { slot: u64 },
@@ -187,7 +211,16 @@ async fn confirm_transaction(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, future::Future, io, pin::Pin};
+    use std::{
+        collections::HashMap,
+        future::Future,
+        io,
+        pin::Pin,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+    };
 
     use solana_client::{
         client_error::Result as ClientResult,
@@ -436,5 +469,71 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.unresolved_signature(), Some(&tx.signatures[0]));
+    }
+
+    /// Answers `isBlockhashValid` with `true` for the first `valid_polls` calls, then `false`.
+    struct ExpiresAfter {
+        valid_polls: usize,
+        polls: Arc<AtomicUsize>,
+    }
+
+    impl RpcSender for ExpiresAfter {
+        fn send<'a, 'b>(
+            &'a self,
+            request: RpcRequest,
+            _params: serde_json::Value,
+        ) -> Pin<Box<dyn Future<Output = ClientResult<serde_json::Value>> + Send + 'b>>
+        where
+            'a: 'b,
+            Self: 'b,
+        {
+            let value = match request {
+                RpcRequest::GetLatestBlockhash => serde_json::json!({
+                    "context": { "slot": 1 },
+                    "value": {
+                        "blockhash": Hash::new_unique().to_string(),
+                        "lastValidBlockHeight": 150,
+                    },
+                }),
+                RpcRequest::IsBlockhashValid => {
+                    let polls = self.polls.fetch_add(1, Ordering::SeqCst);
+                    blockhash_valid(polls < self.valid_polls)
+                }
+                other => unreachable!("unexpected request {other}"),
+            };
+            Box::pin(async move { Ok(value) })
+        }
+
+        fn get_transport_stats(&self) -> RpcTransportStats {
+            RpcTransportStats::default()
+        }
+
+        fn url(&self) -> String {
+            "expires-after".to_string()
+        }
+    }
+
+    #[tokio::test]
+    async fn wait_for_blockhash_expiry_polls_until_invalid() {
+        let polls = Arc::new(AtomicUsize::new(0));
+        let sender = ExpiresAfter {
+            valid_polls: 3,
+            polls: polls.clone(),
+        };
+        let client = RpcClient::new_sender(sender, RpcClientConfig::default());
+
+        wait_for_blockhash_expiry(&client).await.unwrap();
+
+        // 3 "still valid" answers, then the "expired" one that ends the wait.
+        assert_eq!(polls.load(Ordering::SeqCst), 4);
+    }
+
+    #[tokio::test]
+    async fn wait_for_blockhash_expiry_returns_rpc_errors() {
+        let client = RpcClient::new_sender(FailingSender(timed_out), Default::default());
+
+        let err = wait_for_blockhash_expiry(&client).await.unwrap_err();
+
+        assert!(matches!(err, crate::Error::Client(_)), "{err:?}");
     }
 }
