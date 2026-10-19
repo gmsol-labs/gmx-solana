@@ -31,6 +31,10 @@ pub mod instruction_buffer;
 /// Program IDs.
 pub mod program_ids;
 
+/// Order completion outcome.
+#[cfg(feature = "decode")]
+pub mod order_completion;
+
 /// Chainlink support.
 #[cfg(feature = "chainlink")]
 pub mod chainlink;
@@ -115,7 +119,7 @@ use crate::builders::liquidity_provider::LiquidityProviderProgram;
 use gmsol_decode::{gmsol::programs::GMSOLCPIEvent, Decode};
 
 #[cfg(feature = "decode")]
-use gmsol_programs::gmsol_store::events as store_events;
+use order_completion::{completion_from_events, OrderCompletion};
 
 /// Discriminator offset.
 pub const DISC_OFFSET: usize = 8;
@@ -1349,13 +1353,15 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         Ok(events)
     }
 
-    /// Wait for an order to be completed using current slot as min context slot.
+    /// Wait for an order to be closed using current slot as min context slot.
+    ///
+    /// Returns how it finished; see [`OrderCompletion`].
     #[cfg(feature = "decode")]
     pub async fn complete_order(
         &self,
         address: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> crate::Result<Option<store_events::TradeEvent>> {
+    ) -> crate::Result<OrderCompletion> {
         let slot = self.get_slot(None).await?;
         self.complete_order_with_config(
             address,
@@ -1393,7 +1399,9 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         }
     }
 
-    /// Wait for an order to be completed with the given config.
+    /// Wait for an order to be closed with the given config.
+    ///
+    /// Returns how it finished; see [`OrderCompletion`].
     #[cfg(feature = "decode")]
     pub async fn complete_order_with_config(
         &self,
@@ -1401,7 +1409,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         mut slot: u64,
         polling: std::time::Duration,
         commitment: Option<CommitmentConfig>,
-    ) -> crate::Result<Option<store_events::TradeEvent>> {
+    ) -> crate::Result<OrderCompletion> {
         use futures_util::{StreamExt, TryStreamExt};
         use solana_account_decoder::UiAccountEncoding;
 
@@ -1423,16 +1431,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             let order = order.into_value();
             if order.is_none() {
                 let events = self.last_order_events(address, slot, commitment).await?;
-                return Ok(events
-                    .into_iter()
-                    .filter_map(|event| {
-                        if let GMSOLCPIEvent::TradeEvent(event) = event {
-                            Some(event)
-                        } else {
-                            None
-                        }
-                    })
-                    .next());
+                return Ok(completion_from_events(events));
             }
         }
         let address = *address;
@@ -1464,8 +1463,11 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                     GMSOLCPIEvent::TradeEvent(event) => {
                         trade = Some(event);
                     }
-                    GMSOLCPIEvent::OrderRemoved(_remove) => {
-                        return Ok(trade);
+                    GMSOLCPIEvent::OrderRemoved(removed) => {
+                        return Ok(match trade {
+                            Some(trade) => OrderCompletion::Trade(Box::new(trade)),
+                            None => OrderCompletion::NoTrade(removed),
+                        });
                     }
                     _ => unreachable!(),
                 },
@@ -1479,16 +1481,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                             let events = self
                                 .last_order_events(&address, res.slot(), commitment)
                                 .await?;
-                            return Ok(events
-                                .into_iter()
-                                .filter_map(|event| {
-                                    if let GMSOLCPIEvent::TradeEvent(event) = event {
-                                        Some(event)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .next());
+                            return Ok(completion_from_events(events));
                         }
                     } else {
                         slot_reached = self.get_slot(Some(commitment)).await? >= slot;
