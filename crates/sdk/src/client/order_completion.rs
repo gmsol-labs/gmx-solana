@@ -1,12 +1,28 @@
 //! The result of waiting for an order to finish, see [`Client::complete_order`].
 //!
-//! Owns: the [`OrderCompletion`] outcome type and how it is read from store CPI events.
-//! Does NOT own: subscribing or fetching history (see `Client::complete_order_with_config`).
+//! Owns: the [`OrderCompletion`] outcome type and [`LifecycleScan`], which rebuilds that
+//! outcome from an order's event history. Does NOT own: subscribing or fetching history
+//! (see `Client::complete_order_with_config`).
+//!
+//! Execution and close can land in different transactions, e.g. execute at slot 100
+//! (`TradeEvent`), settle the builder fee at 101, close at 102 (`OrderRemoved`). So the
+//! scan walks the order's transactions newest first, from its `OrderRemoved` back to the
+//! start of that order's lifecycle, and collects its `TradeEvent`.
+//!
+//! Invariants:
+//!   - events are fed newest first: transactions newest first, and each transaction's
+//!     events in reverse emission order
+//!   - an order address can be reused (it is a PDA of `(store, owner, nonce)`), so a
+//!     lifecycle ends at the first older event that belongs to a different action id
 //!
 //! [`Client::complete_order`]: crate::Client::complete_order
 
 use gmsol_decode::gmsol::programs::GMSOLCPIEvent;
-use gmsol_programs::gmsol_store::events::{OrderRemoved, TradeEvent};
+use gmsol_programs::gmsol_store::{
+    events::{OrderRemoved, TradeEvent},
+    types::{ActionState, OrderKind},
+};
+use solana_sdk::pubkey::Pubkey;
 
 /// How an order finished.
 #[derive(Debug, Clone)]
@@ -24,21 +40,334 @@ pub enum OrderCompletion {
     },
 }
 
-/// Read the outcome from the events of a single transaction.
-pub(crate) fn completion_from_events(events: Vec<GMSOLCPIEvent>) -> OrderCompletion {
-    let mut removed = None;
-    for event in events {
-        match event {
-            GMSOLCPIEvent::TradeEvent(trade) => return OrderCompletion::Trade(Box::new(trade)),
-            GMSOLCPIEvent::OrderRemoved(event) => removed = Some(event),
-            _ => {}
+/// Most event-bearing transactions read before giving up on finding the lifecycle start.
+// An order's own history is usually 2–4 transactions (create, execute, settle, close).
+pub(crate) const MAX_SCANNED_TXS: usize = 32;
+
+/// Rebuilds one order lifecycle's outcome from its events, fed newest first.
+///
+/// ```text
+/// tx 102: [OrderRemoved{order: O, id: 7}]      -> removed found
+/// tx 101: [BuilderFeeSettled]                  -> ignored
+/// tx 100: [TradeEvent{order: O}]               -> trade collected
+/// tx  99: [OrderUpdated{order: O, is_create}]  -> lifecycle start, done
+/// finish() -> OrderCompletion::Trade(..)
+/// ```
+pub(crate) struct LifecycleScan {
+    order: Pubkey,
+    /// Action id of the order when it was seen open, if it was.
+    expected_id: Option<u64>,
+    removed: Option<OrderRemoved>,
+    trades: Vec<TradeEvent>,
+    reached_start: bool,
+    scanned_txs: usize,
+    failure: Option<String>,
+}
+
+impl LifecycleScan {
+    pub(crate) fn new(order: Pubkey, expected_id: Option<u64>) -> Self {
+        Self {
+            order,
+            expected_id,
+            removed: None,
+            trades: Vec::new(),
+            reached_start: false,
+            scanned_txs: 0,
+            failure: None,
         }
     }
-    match removed {
-        Some(removed) => OrderCompletion::NoTrade(removed),
-        None => OrderCompletion::Inconclusive {
-            removed: None,
-            reason: "no `OrderRemoved` event found".to_owned(),
+
+    /// Feed one transaction's events in emission order. Returns `true` once nothing older
+    /// can change the outcome.
+    pub(crate) fn push_transaction(&mut self, events: &[GMSOLCPIEvent]) -> bool {
+        self.scanned_txs += 1;
+        for event in events.iter().rev() {
+            if self.push_event(event) {
+                return true;
+            }
+        }
+        self.scanned_txs >= MAX_SCANNED_TXS
+    }
+
+    /// Returns `true` when the scan is done.
+    fn push_event(&mut self, event: &GMSOLCPIEvent) -> bool {
+        let Some(removed) = &self.removed else {
+            // Events newer than the close belong to a later lifecycle; skip them.
+            if let GMSOLCPIEvent::OrderRemoved(event) = event {
+                if event.order == self.order {
+                    return self.set_removed(event);
+                }
+            }
+            return false;
+        };
+        match event {
+            GMSOLCPIEvent::TradeEvent(trade)
+                if trade.order == self.order && trade.store == removed.store =>
+            {
+                self.trades.push(*trade);
+                false
+            }
+            // The same close seen twice (live, then again in history) is not a boundary.
+            GMSOLCPIEvent::OrderRemoved(event) if event.order == self.order => {
+                self.reached_start = event.id != removed.id;
+                self.reached_start
+            }
+            GMSOLCPIEvent::OrderUpdated(event) if event.order == self.order => {
+                self.reached_start = event.is_create || event.id != removed.id;
+                self.reached_start
+            }
+            _ => false,
+        }
+    }
+
+    fn set_removed(&mut self, removed: &OrderRemoved) -> bool {
+        if let Some(id) = self.expected_id.filter(|id| *id != removed.id) {
+            self.failure = Some(format!(
+                "latest close is for action id {}, expected {id}",
+                removed.id
+            ));
+            self.removed = Some(removed.clone());
+            return true;
+        }
+        self.removed = Some(removed.clone());
+        false
+    }
+
+    /// The outcome. `history_ended` is `true` when there were no older transactions, so the
+    /// oldest one read is the start of the address's history.
+    pub(crate) fn finish(self, history_ended: bool) -> OrderCompletion {
+        let inconclusive =
+            |removed, reason: String| OrderCompletion::Inconclusive { removed, reason };
+        let Some(removed) = self.removed else {
+            return inconclusive(
+                None,
+                "no `OrderRemoved` event found for the order".to_owned(),
+            );
+        };
+        if let Some(reason) = self.failure {
+            return inconclusive(Some(removed), reason);
+        }
+        if !(self.reached_start || history_ended) {
+            return inconclusive(
+                Some(removed),
+                format!("lifecycle start not found within {MAX_SCANNED_TXS} transactions"),
+            );
+        }
+        let mut trades = self.trades;
+        match trades.len() {
+            0 if expects_trade(&removed) => inconclusive(
+                Some(removed),
+                "order completed but no `TradeEvent` was found".to_owned(),
+            ),
+            0 => OrderCompletion::NoTrade(removed),
+            1 => OrderCompletion::Trade(Box::new(trades.remove(0))),
+            n => inconclusive(
+                Some(removed),
+                format!("found {n} `TradeEvent`s for one order"),
+            ),
+        }
+    }
+}
+
+/// Executed position orders always emit a `TradeEvent`; swaps and cancelled orders don't.
+fn expects_trade(removed: &OrderRemoved) -> bool {
+    matches!(removed.state, ActionState::Completed)
+        && !matches!(removed.kind, OrderKind::MarketSwap | OrderKind::LimitSwap)
+}
+
+#[cfg(test)]
+mod tests {
+    use gmsol_programs::{
+        anchor_lang::AnchorDeserialize,
+        gmsol_store::{
+            events::OrderUpdated,
+            types::{DecreasePositionSwapType, OrderParamsForEvent},
         },
+    };
+
+    use super::*;
+
+    const STORE: Pubkey = Pubkey::new_from_array([1; 32]);
+    const ORDER: Pubkey = Pubkey::new_from_array([2; 32]);
+    const OTHER: Pubkey = Pubkey::new_from_array([3; 32]);
+
+    fn trade(order: Pubkey, trade_id: u64) -> GMSOLCPIEvent {
+        // Every `TradeEvent` field is a number or a key, so all-zero bytes decode.
+        let mut event = TradeEvent::deserialize(&mut &[0u8; 4096][..]).unwrap();
+        event.store = STORE;
+        event.order = order;
+        event.trade_id = trade_id;
+        GMSOLCPIEvent::TradeEvent(event)
+    }
+
+    fn removed_event(id: u64, kind: OrderKind, state: ActionState) -> OrderRemoved {
+        OrderRemoved {
+            id,
+            ts: 0,
+            slot: 0,
+            store: STORE,
+            order: ORDER,
+            kind,
+            market_token: Pubkey::default(),
+            owner: Pubkey::default(),
+            state,
+            reason: "executed".to_owned(),
+        }
+    }
+
+    fn removed(id: u64) -> GMSOLCPIEvent {
+        GMSOLCPIEvent::OrderRemoved(removed_event(
+            id,
+            OrderKind::MarketIncrease,
+            ActionState::Completed,
+        ))
+    }
+
+    fn created(id: u64) -> GMSOLCPIEvent {
+        let params = OrderParamsForEvent {
+            kind: OrderKind::MarketIncrease,
+            is_long: true,
+            decrease_position_swap_type: DecreasePositionSwapType::NoSwap,
+            position: None,
+            collateral_token: Pubkey::default(),
+            initial_collateral_token: None,
+            initial_collateral_delta_amount: 0,
+            size_delta_value: 0,
+            min_output: 0,
+            trigger_price: 0,
+            acceptable_price: 0,
+            valid_from_ts: 0,
+        };
+        GMSOLCPIEvent::OrderUpdated(OrderUpdated {
+            is_create: true,
+            id,
+            ts: 0,
+            slot: 0,
+            store: STORE,
+            order: ORDER,
+            market_token: Pubkey::default(),
+            owner: Pubkey::default(),
+            params,
+        })
+    }
+
+    /// Feeds transactions (newest first) and finishes as if history ended.
+    fn scan(expected_id: Option<u64>, txs: &[Vec<GMSOLCPIEvent>]) -> OrderCompletion {
+        let mut scan = LifecycleScan::new(ORDER, expected_id);
+        for events in txs {
+            if scan.push_transaction(events) {
+                return scan.finish(false);
+            }
+        }
+        scan.finish(true)
+    }
+
+    fn trade_id(completion: &OrderCompletion) -> Option<u64> {
+        match completion {
+            OrderCompletion::Trade(trade) => Some(trade.trade_id),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn finds_trade_in_earlier_transaction_than_close() {
+        let txs = [
+            vec![removed(7)],
+            vec![],
+            vec![trade(ORDER, 42)],
+            vec![created(7)],
+        ];
+        assert_eq!(trade_id(&scan(Some(7), &txs)), Some(42));
+    }
+
+    #[test]
+    fn finds_trade_in_same_transaction_as_close() {
+        let txs = [vec![trade(ORDER, 42), removed(7)], vec![created(7)]];
+        assert_eq!(trade_id(&scan(None, &txs)), Some(42));
+    }
+
+    #[test]
+    fn ignores_trade_of_another_order() {
+        let txs = [
+            vec![removed(7)],
+            vec![trade(OTHER, 1), trade(ORDER, 42)],
+            vec![created(7)],
+        ];
+        assert_eq!(trade_id(&scan(None, &txs)), Some(42));
+    }
+
+    #[test]
+    fn stops_at_previous_lifecycle_of_reused_address() {
+        // Lifecycle 8 was cancelled; lifecycle 7 at the same address traded.
+        let cancelled = GMSOLCPIEvent::OrderRemoved(removed_event(
+            8,
+            OrderKind::MarketIncrease,
+            ActionState::Cancelled,
+        ));
+        let txs = [vec![cancelled], vec![trade(ORDER, 1), removed(7)]];
+        assert!(matches!(scan(None, &txs), OrderCompletion::NoTrade(r) if r.id == 8));
+    }
+
+    #[test]
+    fn swap_without_trade_is_no_trade() {
+        let swap = GMSOLCPIEvent::OrderRemoved(removed_event(
+            7,
+            OrderKind::MarketSwap,
+            ActionState::Completed,
+        ));
+        assert!(matches!(
+            scan(None, &[vec![swap]]),
+            OrderCompletion::NoTrade(_)
+        ));
+    }
+
+    #[test]
+    fn completed_position_without_trade_is_inconclusive() {
+        let txs = [vec![removed(7)], vec![created(7)]];
+        assert!(matches!(
+            scan(None, &txs),
+            OrderCompletion::Inconclusive { .. }
+        ));
+    }
+
+    #[test]
+    fn close_of_unexpected_action_is_inconclusive() {
+        let txs = [vec![removed(9)], vec![trade(ORDER, 1)]];
+        assert!(matches!(
+            scan(Some(7), &txs),
+            OrderCompletion::Inconclusive { .. }
+        ));
+    }
+
+    #[test]
+    fn scan_limit_without_start_is_inconclusive() {
+        let mut txs = vec![vec![removed(7)], vec![trade(ORDER, 42)]];
+        txs.extend((0..MAX_SCANNED_TXS).map(|_| vec![]));
+        assert!(matches!(
+            scan(None, &txs),
+            OrderCompletion::Inconclusive { .. }
+        ));
+    }
+
+    #[test]
+    fn missing_close_is_inconclusive() {
+        let txs = [vec![trade(ORDER, 42)], vec![created(7)]];
+        assert!(matches!(
+            scan(None, &txs),
+            OrderCompletion::Inconclusive { removed: None, .. }
+        ));
+    }
+
+    #[test]
+    fn two_trades_in_one_lifecycle_is_inconclusive() {
+        let txs = [
+            vec![removed(7)],
+            vec![trade(ORDER, 1)],
+            vec![trade(ORDER, 2)],
+        ];
+        assert!(matches!(
+            scan(None, &txs),
+            OrderCompletion::Inconclusive { .. }
+        ));
     }
 }

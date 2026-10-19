@@ -119,7 +119,7 @@ use crate::builders::liquidity_provider::LiquidityProviderProgram;
 use gmsol_decode::{gmsol::programs::GMSOLCPIEvent, Decode};
 
 #[cfg(feature = "decode")]
-use order_completion::{completion_from_events, OrderCompletion};
+use order_completion::{LifecycleScan, OrderCompletion};
 
 /// Discriminator offset.
 pub const DISC_OFFSET: usize = 8;
@@ -1414,6 +1414,9 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         use solana_account_decoder::UiAccountEncoding;
 
         let mut trade = None;
+        // Action id of the order while it is open, so history can't hand back an older
+        // order that used the same address.
+        let mut expected_id = None;
         let commitment = commitment.unwrap_or(self.subscription_config.commitment);
 
         let events = self.subscribe_store_cpi_events(Some(commitment)).await?;
@@ -1428,10 +1431,14 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         if slot_reached {
             let order = self.order_with_config(address, config.clone()).await?;
             slot = order.slot();
-            let order = order.into_value();
-            if order.is_none() {
-                let events = self.last_order_events(address, slot, commitment).await?;
-                return Ok(completion_from_events(events));
+            match order.into_value() {
+                Some(order) => expected_id = Some(order.header.id),
+                None => {
+                    let scan = LifecycleScan::new(*address, None);
+                    return self
+                        .order_completion_from_history(scan, address, slot, commitment)
+                        .await;
+                }
             }
         }
         let address = *address;
@@ -1464,10 +1471,18 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                         trade = Some(event);
                     }
                     GMSOLCPIEvent::OrderRemoved(removed) => {
-                        return Ok(match trade {
-                            Some(trade) => OrderCompletion::Trade(Box::new(trade)),
-                            None => OrderCompletion::NoTrade(removed),
-                        });
+                        if let Some(trade) = trade {
+                            return Ok(OrderCompletion::Trade(Box::new(trade)));
+                        }
+                        // The trade may have landed before the subscription started.
+                        let before_slot = removed.slot;
+                        let mut scan = LifecycleScan::new(address, expected_id);
+                        if scan.push_transaction(&[GMSOLCPIEvent::OrderRemoved(removed)]) {
+                            return Ok(scan.finish(false));
+                        }
+                        return self
+                            .order_completion_from_history(scan, &address, before_slot, commitment)
+                            .await;
                     }
                     _ => unreachable!(),
                 },
@@ -1477,11 +1492,19 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                 Err(_elapsed) => {
                     if slot_reached {
                         let res = self.order_with_config(&address, config.clone()).await?;
-                        if res.value().is_none() {
-                            let events = self
-                                .last_order_events(&address, res.slot(), commitment)
-                                .await?;
-                            return Ok(completion_from_events(events));
+                        match res.value() {
+                            Some(order) => expected_id = Some(order.header.id),
+                            None => {
+                                let scan = LifecycleScan::new(address, expected_id);
+                                return self
+                                    .order_completion_from_history(
+                                        scan,
+                                        &address,
+                                        res.slot(),
+                                        commitment,
+                                    )
+                                    .await;
+                            }
                         }
                     } else {
                         slot_reached = self.get_slot(Some(commitment)).await? >= slot;
@@ -1490,6 +1513,33 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             }
         }
         Err(crate::Error::custom("the watch stream end"))
+    }
+
+    /// Finish `scan` by feeding it `order`'s transactions at or before `before_slot`, newest
+    /// first.
+    #[cfg(feature = "decode")]
+    async fn order_completion_from_history(
+        &self,
+        mut scan: LifecycleScan,
+        order: &Pubkey,
+        before_slot: u64,
+        commitment: CommitmentConfig,
+    ) -> crate::Result<OrderCompletion> {
+        use futures_util::TryStreamExt;
+
+        let events = self
+            .historical_store_cpi_events(order, Some(commitment))
+            .await?;
+        futures_util::pin_mut!(events);
+        while let Some(events) = events.try_next().await? {
+            if events.slot() > before_slot {
+                continue;
+            }
+            if scan.push_transaction(events.value()) {
+                return Ok(scan.finish(false));
+            }
+        }
+        Ok(scan.finish(true))
     }
 
     /// Shutdown the client gracefully.
