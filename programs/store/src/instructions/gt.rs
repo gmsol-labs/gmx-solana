@@ -310,6 +310,106 @@ impl RequestGtExchange<'_> {
     }
 }
 
+/// Request an exchange for the owner, signed by the owner or its GT delegate.
+#[event_cpi]
+#[derive(Accounts)]
+pub struct RequestGtExchangeV2<'info> {
+    /// GT owner; a program-controlled address need not sign this instruction.
+    /// CHECK: bound to the initialized User Account by has_one and PDA seeds.
+    pub owner: UncheckedAccount<'info>,
+    pub authority: Signer<'info>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        mut,
+        constraint = store.load()?.validate_not_restarted()?.gt().is_initialized() @ CoreError::PreconditionsAreNotMet,
+    )]
+    pub store: AccountLoader<'info, Store>,
+    #[account(
+        mut,
+        constraint = user.load()?.is_initialized() @ CoreError::InvalidUserAccount,
+        has_one = owner,
+        has_one = store,
+        seeds = [UserHeader::SEED, store.key().as_ref(), owner.key().as_ref()],
+        bump = user.load()?.bump,
+    )]
+    pub user: AccountLoader<'info, UserHeader>,
+    #[account(
+        mut,
+        constraint = vault.load()?.is_initialized() @ CoreError::InvalidArgument,
+        has_one = store,
+        seeds = [
+            GtExchangeVault::SEED,
+            store.key().as_ref(),
+            &vault.load()?.time_window_index().to_le_bytes(),
+            &vault.load()?.time_window_u32().to_le_bytes(),
+        ],
+        bump = vault.load()?.bump,
+    )]
+    pub vault: AccountLoader<'info, GtExchangeVault>,
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = 8 + GtExchange::INIT_SPACE,
+        seeds = [GtExchange::SEED, vault.key().as_ref(), owner.key().as_ref()],
+        bump,
+    )]
+    pub exchange: AccountLoader<'info, GtExchange>,
+    pub system_program: Program<'info, System>,
+}
+
+impl RequestGtExchangeV2<'_> {
+    pub(crate) fn invoke(ctx: Context<Self>, amount: u64) -> Result<()> {
+        let accounts = ctx.accounts;
+        match accounts.exchange.load_init() {
+            Ok(mut exchange) => {
+                exchange.init(
+                    ctx.bumps.exchange,
+                    &accounts.owner.key(),
+                    &accounts.store.key(),
+                    &accounts.vault.key(),
+                )?;
+                exchange.set_rent_receiver(accounts.payer.key());
+                drop(exchange);
+                accounts.exchange.exit(&crate::ID)?;
+            }
+            Err(Error::AnchorError(err))
+                if err.error_code_number == ErrorCode::AccountDiscriminatorAlreadySet as u32 => {}
+            Err(err) => return Err(err),
+        }
+
+        let exchange = accounts.exchange.load()?;
+        require!(exchange.is_initialized(), CoreError::PreconditionsAreNotMet);
+        require_keys_eq!(
+            *exchange.owner(),
+            accounts.owner.key(),
+            CoreError::OwnerMismatched
+        );
+        require_keys_eq!(
+            *exchange.store(),
+            accounts.store.key(),
+            CoreError::StoreMismatched
+        );
+        drop(exchange);
+
+        let mut store = accounts.store.load_mut()?;
+        let mut vault = accounts.vault.load_mut()?;
+        let mut user = accounts.user.load_mut()?;
+        let mut exchange = accounts.exchange.load_mut()?;
+
+        if accounts.authority.key() != accounts.owner.key() {
+            user.gt.spend_allowance(&accounts.authority.key(), amount)?;
+        }
+        store
+            .gt_mut()
+            .unchecked_request_exchange(&mut user, &mut vault, &mut exchange, amount)?;
+
+        EventEmitter::new(&accounts.event_authority, ctx.bumps.event_authority)
+            .emit_cpi(&GtUpdated::burned(amount, store.gt(), Some(&user)))?;
+        Ok(())
+    }
+}
+
 /// The accounts definition for [`confirm_gt_exchange_vault_v2`](crate::confirm_gt_exchange_vault_v2) instruction.
 #[event_cpi]
 #[derive(Accounts)]

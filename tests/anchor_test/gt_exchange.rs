@@ -5,12 +5,13 @@ use gmsol_sdk::client::ops::{gt::current_time_window_index, GtOps, UserOps};
 use gmsol_store::{constants::DEFAULT_GT_VAULT_TIME_WINDOW, CoreError};
 use gmsol_utils::gt::get_time_window_index;
 
-use crate::anchor_test::setup::{current_deployment, Deployment};
+use crate::anchor_test::setup::{current_deployment, Deployment, GT_EXCHANGE_WINDOW_LOCK};
 
 #[tokio::test]
 async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result<()> {
     const SCUB_WINDOW: u32 = 30;
 
+    let _window_guard = GT_EXCHANGE_WINDOW_LOCK.lock().await;
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
