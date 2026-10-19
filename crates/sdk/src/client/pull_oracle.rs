@@ -34,7 +34,7 @@ impl<O: PullOracle, T> WithPullOracle<O, T> {
         }
     }
 
-    /// Temporary oracle accounts created by the most recent build.
+    /// Temporary oracle accounts created by the most recent build. Empty if it failed.
     ///
     /// The built bundle closes them in its last batch. If sending stops before that batch,
     /// close them with
@@ -85,6 +85,8 @@ where
         &mut self,
         options: BundleOptions,
     ) -> gmsol_solana_utils::Result<BundleBuilder<'a, C>> {
+        // A failed build must not leave the previous build's accounts behind.
+        self.temporary_accounts.clear();
         let (instructions, map) = self
             .pull_oracle
             .fetch_price_update_instructions(&self.price_updates, options.clone())
@@ -334,7 +336,10 @@ mod tests {
         }
     }
 
-    struct FakeConsumer<'a>(&'a TestClient);
+    struct FakeConsumer<'a> {
+        client: &'a TestClient,
+        fail: bool,
+    }
 
     impl PullOraclePriceConsumer for FakeConsumer<'_> {
         async fn feed_ids(&mut self) -> crate::Result<FeedIds> {
@@ -351,15 +356,21 @@ mod tests {
             &mut self,
             options: BundleOptions,
         ) -> gmsol_solana_utils::Result<BundleBuilder<'a, Arc<Keypair>>> {
-            Ok(self.0.bundle_with_options(options))
+            if self.fail {
+                return Err(gmsol_solana_utils::Error::custom("consumer build failed"));
+            }
+            Ok(self.client.bundle_with_options(options))
         }
     }
 
     #[tokio::test]
     async fn keeps_only_the_last_build_temporary_accounts() {
         let client = Client::new(Cluster::Devnet, Arc::new(Keypair::new())).unwrap();
-        let mut with_oracle =
-            WithPullOracle::with_price_updates(FakeOracle(&client), FakeConsumer(&client), ());
+        let consumer = FakeConsumer {
+            client: &client,
+            fail: false,
+        };
+        let mut with_oracle = WithPullOracle::with_price_updates(FakeOracle(&client), consumer, ());
         assert!(with_oracle.temporary_accounts().is_empty());
 
         with_oracle.build().await.unwrap();
@@ -370,6 +381,23 @@ mod tests {
         assert_eq!(first.len(), 1);
         assert_eq!(second.len(), 1);
         assert_ne!(first, second);
+    }
+
+    #[tokio::test]
+    async fn failed_build_clears_temporary_accounts() {
+        let client = Client::new(Cluster::Devnet, Arc::new(Keypair::new())).unwrap();
+        let consumer = FakeConsumer {
+            client: &client,
+            fail: false,
+        };
+        let mut with_oracle = WithPullOracle::with_price_updates(FakeOracle(&client), consumer, ());
+        with_oracle.build().await.unwrap();
+        assert_eq!(with_oracle.temporary_accounts().len(), 1);
+
+        with_oracle.builder.fail = true;
+        assert!(with_oracle.build().await.is_err());
+
+        assert!(with_oracle.temporary_accounts().is_empty());
     }
 
     #[test]
