@@ -2459,7 +2459,13 @@ async fn wait_for_order<C: Deref<Target = impl Signer> + Clone>(
             tracing::info!(%order, "order completed with trade event: {trade:#?}");
         }
         OrderCompletion::NoTrade(removed) => {
-            tracing::warn!(%order, reason = %removed.reason, "order completed without trade event");
+            // Also reached by cancelled orders, so say which state it ended in.
+            tracing::warn!(
+                %order,
+                state = ?removed.state,
+                reason = %removed.reason,
+                "order closed without trade event"
+            );
         }
         OrderCompletion::Inconclusive { reason, .. } => {
             tracing::warn!(%order, %reason, "order closed, but its trade result could not be determined");
