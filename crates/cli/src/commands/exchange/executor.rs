@@ -11,8 +11,10 @@ use gmsol_sdk::{
         switchboard::pull_oracle::SwitchcboardPullOracleFactory,
     },
     core::token_config::TokensWithFeed,
+    programs::anchor_lang::prelude::Pubkey,
     solana_utils::{
         bundle_builder::BundleOptions,
+        client::wait_for_blockhash_expiry,
         make_bundle_builder::{EstimateFee, MakeBundleBuilder, SetExecutionFee},
         signer::LocalSignerRef,
     },
@@ -153,12 +155,13 @@ impl<'a> Executor<'a> {
             .as_ref()
             .map(|factory| factory.make_oracle(self.client));
 
-        let with_pyth = WithPullOracle::new(pyth, consumer, None).await?;
+        // Borrowed (not moved) below so its temporary accounts can be read after sending.
+        let mut with_pyth = WithPullOracle::new(pyth, consumer, None).await?;
 
         let bundle = match (chainlink.as_ref(), switchboard) {
             (None, None) => {
                 let mut estiamted_fee = EstimateFee::new(
-                    with_pyth,
+                    &mut with_pyth,
                     compute_unit_price,
                     compute_unit_min_priority_lamports,
                 );
@@ -166,7 +169,7 @@ impl<'a> Executor<'a> {
             }
             (Some(chainlink), None) => {
                 let (with_chainlink, feed_ids) =
-                    WithPullOracle::from_consumer(chainlink.clone(), with_pyth, None).await?;
+                    WithPullOracle::from_consumer(chainlink.clone(), &mut with_pyth, None).await?;
 
                 let mut bundle = chainlink
                     .prepare_feeds_bundle(&feed_ids, options.clone())
@@ -183,7 +186,8 @@ impl<'a> Executor<'a> {
                 bundle
             }
             (None, Some(switchboard)) => {
-                let with_switchboard = WithPullOracle::new(switchboard, with_pyth, None).await?;
+                let with_switchboard =
+                    WithPullOracle::new(switchboard, &mut with_pyth, None).await?;
 
                 let mut estiamted_fee = EstimateFee::new(
                     with_switchboard,
@@ -194,7 +198,7 @@ impl<'a> Executor<'a> {
             }
             (Some(chainlink), Some(switchboard)) => {
                 let (with_chainlink, feed_ids) =
-                    WithPullOracle::from_consumer(chainlink.clone(), with_pyth, None).await?;
+                    WithPullOracle::from_consumer(chainlink.clone(), &mut with_pyth, None).await?;
 
                 let with_switchboard =
                     WithPullOracle::new(switchboard, with_chainlink, None).await?;
@@ -215,10 +219,58 @@ impl<'a> Executor<'a> {
             }
         };
 
-        self.client.send_or_serialize(bundle).await?;
-
-        Ok(())
+        let sent = self.client.send_or_serialize(bundle).await;
+        if let Err(err) = &sent {
+            self.close_temporary_accounts(with_pyth.temporary_accounts(), err)
+                .await;
+        }
+        sent
     }
+
+    /// Close the temporary Pyth accounts left open when an execute bundle stopped before its
+    /// close batch. Never fails: a cleanup error is logged with the addresses.
+    async fn close_temporary_accounts(&self, accounts: &[Pubkey], send_err: &gmsol_sdk::Error) {
+        if accounts.is_empty() || !self.client.sends_directly() {
+            return;
+        }
+        if let Err(err) = self.try_close_temporary_accounts(accounts, send_err).await {
+            tracing::warn!(
+                %err,
+                ?accounts,
+                "failed to close temporary Pyth accounts, their rent stays locked until they are closed"
+            );
+        }
+    }
+
+    async fn try_close_temporary_accounts(
+        &self,
+        accounts: &[Pubkey],
+        send_err: &gmsol_sdk::Error,
+    ) -> gmsol_sdk::Result<()> {
+        // A transaction with an unknown outcome may still create an account; wait until it
+        // cannot land, or that account would be missed.
+        if is_unresolved(send_err) {
+            tracing::info!("waiting for unresolved transactions to expire before closing temporary Pyth accounts");
+            wait_for_blockhash_expiry(self.client.rpc()).await?;
+        }
+        let bundle = self
+            .pyth
+            .close_temporary_accounts(self.client, accounts)
+            .await?;
+        if bundle.is_empty() {
+            return Ok(());
+        }
+        tracing::info!("closing temporary Pyth accounts left open by the failed execute");
+        self.client.send_or_serialize(bundle).await
+    }
+}
+
+/// `true` when some transaction of the bundle has an unknown outcome.
+///
+/// `send_or_serialize` reports a compressed error, which keeps a `SendUnresolved` over any
+/// later failure, so this sees every bundle that had one.
+fn is_unresolved(err: &gmsol_sdk::Error) -> bool {
+    matches!(err, gmsol_sdk::Error::SolanaUtils(err) if err.unresolved_signature().is_some())
 }
 
 /// Errors when `feeds` contains a Pyth feed, since there is no API key to fetch it with.
@@ -244,6 +296,22 @@ mod tests {
             .map(|provider| TokenRecord::new(Pubkey::new_unique(), Pubkey::new_unique(), *provider))
             .collect();
         TokensWithFeed::try_from_records(records).unwrap()
+    }
+
+    #[test]
+    fn only_send_unresolved_counts_as_unresolved() {
+        use gmsol_sdk::solana_utils::{solana_sdk::signature::Signature, Error as UtilsError};
+
+        let timed_out = std::io::Error::new(std::io::ErrorKind::TimedOut, "timed out");
+        let unresolved = UtilsError::SendUnresolved {
+            signature: Signature::default(),
+            source: Box::new(timed_out.into()),
+        };
+        assert!(is_unresolved(&unresolved.into()));
+        assert!(!is_unresolved(
+            &UtilsError::custom("on-chain failure").into()
+        ));
+        assert!(!is_unresolved(&gmsol_sdk::Error::custom("no price")));
     }
 
     #[test]
