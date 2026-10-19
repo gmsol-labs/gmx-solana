@@ -37,7 +37,8 @@ impl<O: PullOracle, T> WithPullOracle<O, T> {
     /// Temporary oracle accounts created by the most recent build.
     ///
     /// The built bundle closes them in its last batch. If sending stops before that batch,
-    /// they stay open (holding the payer's rent) until closed separately.
+    /// close them with
+    /// [`PythPullOracle::close_temporary_accounts`](crate::client::pyth::PythPullOracle::close_temporary_accounts).
     /// Empty before the first build.
     pub fn temporary_accounts(&self) -> &[Pubkey] {
         &self.temporary_accounts
