@@ -20,6 +20,7 @@ where
     builder: T,
     pull_oracle: O,
     price_updates: O::PriceUpdates,
+    temporary_accounts: Vec<Pubkey>,
 }
 
 impl<O: PullOracle, T> WithPullOracle<O, T> {
@@ -29,7 +30,17 @@ impl<O: PullOracle, T> WithPullOracle<O, T> {
             builder,
             pull_oracle,
             price_updates,
+            temporary_accounts: vec![],
         }
+    }
+
+    /// Temporary oracle accounts created by the most recent build.
+    ///
+    /// The built bundle closes them in its last batch. If sending stops before that batch,
+    /// they stay open (holding the payer's rent) until closed separately.
+    /// Empty before the first build.
+    pub fn temporary_accounts(&self) -> &[Pubkey] {
+        &self.temporary_accounts
     }
 
     /// Fetch the required price updates and use them to construct transactions.
@@ -90,7 +101,10 @@ where
         let PriceUpdateInstructions {
             post: mut tx,
             close,
+            temporary_accounts,
         } = instructions;
+        // Overwrite, not extend: `EstimateFee` builds twice and only the last build is sent.
+        self.temporary_accounts = temporary_accounts;
 
         tx.append(consume, false)?;
         tx.append(close, true)?;
@@ -171,6 +185,7 @@ pub trait PullOracle {
 pub struct PriceUpdateInstructions<'a, C> {
     post: BundleBuilder<'a, C>,
     close: BundleBuilder<'a, C>,
+    temporary_accounts: Vec<Pubkey>,
 }
 
 impl<'a, C: Deref<Target = impl Signer> + Clone> PriceUpdateInstructions<'a, C> {
@@ -179,6 +194,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PriceUpdateInstructions<'a, C> 
         Self {
             post: client.bundle_with_options(options.clone()),
             close: client.bundle_with_options(options),
+            temporary_accounts: vec![],
         }
     }
 }
@@ -214,10 +230,22 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PriceUpdateInstructions<'a, C> 
         Ok(())
     }
 
+    /// Record an account that `post` creates and `close` closes, so it can still be closed
+    /// when the bundle stops before its `close` batch.
+    pub fn push_temporary_account(&mut self, account: Pubkey) {
+        self.temporary_accounts.push(account);
+    }
+
+    /// Accounts recorded with [`Self::push_temporary_account`].
+    pub fn temporary_accounts(&self) -> &[Pubkey] {
+        &self.temporary_accounts
+    }
+
     /// Merge.
     pub fn merge(&mut self, other: Self) -> gmsol_solana_utils::Result<()> {
         self.post.append(other.post, false)?;
         self.close.append(other.close, false)?;
+        self.temporary_accounts.extend(other.temporary_accounts);
         Ok(())
     }
 }
@@ -261,5 +289,99 @@ impl<T: PullOraclePriceConsumer> PullOraclePriceConsumer for &mut T {
         map: FeedAddressMap,
     ) -> crate::Result<()> {
         (**self).process_feeds(provider, map)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use gmsol_solana_utils::cluster::Cluster;
+    use solana_sdk::signature::Keypair;
+
+    use super::*;
+
+    type TestClient = Client<Arc<Keypair>>;
+
+    /// Records one new account per build, like Pyth does with fresh keypairs.
+    struct FakeOracle<'a>(&'a TestClient);
+
+    impl PullOracle for FakeOracle<'_> {
+        type PriceUpdates = ();
+
+        async fn fetch_price_updates(
+            &self,
+            _feed_ids: &FeedIds,
+            _after: Option<OffsetDateTime>,
+        ) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> PostPullOraclePrices<'a, Arc<Keypair>> for FakeOracle<'a> {
+        async fn fetch_price_update_instructions(
+            &self,
+            _price_updates: &(),
+            options: BundleOptions,
+        ) -> crate::Result<(
+            PriceUpdateInstructions<'a, Arc<Keypair>>,
+            HashMap<PriceProviderKind, FeedAddressMap>,
+        )> {
+            let mut ixns = PriceUpdateInstructions::new(self.0, options);
+            ixns.push_temporary_account(Pubkey::new_unique());
+            Ok((ixns, HashMap::new()))
+        }
+    }
+
+    struct FakeConsumer<'a>(&'a TestClient);
+
+    impl PullOraclePriceConsumer for FakeConsumer<'_> {
+        async fn feed_ids(&mut self) -> crate::Result<FeedIds> {
+            unreachable!("built with `with_price_updates`")
+        }
+
+        fn process_feeds(&mut self, _: PriceProviderKind, _: FeedAddressMap) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> MakeBundleBuilder<'a, Arc<Keypair>> for FakeConsumer<'a> {
+        async fn build_with_options(
+            &mut self,
+            options: BundleOptions,
+        ) -> gmsol_solana_utils::Result<BundleBuilder<'a, Arc<Keypair>>> {
+            Ok(self.0.bundle_with_options(options))
+        }
+    }
+
+    #[tokio::test]
+    async fn keeps_only_the_last_build_temporary_accounts() {
+        let client = Client::new(Cluster::Devnet, Arc::new(Keypair::new())).unwrap();
+        let mut with_oracle =
+            WithPullOracle::with_price_updates(FakeOracle(&client), FakeConsumer(&client), ());
+        assert!(with_oracle.temporary_accounts().is_empty());
+
+        with_oracle.build().await.unwrap();
+        let first = with_oracle.temporary_accounts().to_vec();
+        with_oracle.build().await.unwrap();
+        let second = with_oracle.temporary_accounts().to_vec();
+
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1);
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn merge_keeps_both_sides_temporary_accounts() {
+        let client = Client::new(Cluster::Devnet, Arc::new(Keypair::new())).unwrap();
+        let (a, b) = (Pubkey::new_unique(), Pubkey::new_unique());
+        let mut left = PriceUpdateInstructions::new(&client, Default::default());
+        left.push_temporary_account(a);
+        let mut right = PriceUpdateInstructions::new(&client, Default::default());
+        right.push_temporary_account(b);
+
+        left.merge(right).unwrap();
+
+        assert_eq!(left.temporary_accounts(), [a, b]);
     }
 }

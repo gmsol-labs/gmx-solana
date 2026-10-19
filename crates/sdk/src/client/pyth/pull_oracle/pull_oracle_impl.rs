@@ -204,9 +204,11 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
             let close_encoded_vaa = wormhole.close_encoded_vaa(draft_vaa);
             ixns.try_push_close(close_encoded_vaa)
                 .map_err(|(_, err)| err)?;
+            ixns.push_temporary_account(*draft_vaa);
         }
 
         // Post price updates.
+        let mut price_update_accounts = Vec::with_capacity(updates.len());
         let (post, close) = ixns.split_mut();
         {
             let mut post = post.push_parallel();
@@ -223,7 +225,11 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
                 prices.insert(Pubkey::new_from_array(feed_id.to_bytes()), price_update);
                 post.add(post_price_update);
                 close.add(pyth.reclaim_rent(&price_update));
+                price_update_accounts.push(price_update);
             }
+        }
+        for price_update in price_update_accounts {
+            ixns.push_temporary_account(price_update);
         }
         Ok((ixns, HashMap::from([(PriceProviderKind::Pyth, prices)])))
     }
