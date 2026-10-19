@@ -224,6 +224,10 @@ mod tests {
     }
 
     fn created(id: u64) -> GMSOLCPIEvent {
+        updated(id, true)
+    }
+
+    fn updated(id: u64, is_create: bool) -> GMSOLCPIEvent {
         let params = OrderParamsForEvent {
             kind: OrderKind::MarketIncrease,
             is_long: true,
@@ -239,7 +243,7 @@ mod tests {
             valid_from_ts: 0,
         };
         GMSOLCPIEvent::OrderUpdated(OrderUpdated {
-            is_create: true,
+            is_create,
             id,
             ts: 0,
             slot: 0,
@@ -369,5 +373,30 @@ mod tests {
             scan(None, &txs),
             OrderCompletion::Inconclusive { .. }
         ));
+    }
+
+    #[test]
+    fn same_close_seen_live_and_in_history_is_not_a_boundary() {
+        // The live path seeds the close, then history returns the same close again.
+        let txs = [
+            vec![removed(7)],
+            vec![removed(7)],
+            vec![trade(ORDER, 42)],
+            vec![created(7)],
+        ];
+        assert_eq!(trade_id(&scan(Some(7), &txs)), Some(42));
+    }
+
+    #[test]
+    fn update_of_another_action_is_a_boundary() {
+        // Lifecycle 6 at the same address left only an update in this window.
+        let txs = [
+            vec![removed(7)],
+            vec![updated(7, false)],
+            vec![trade(ORDER, 42)],
+            vec![updated(6, false)],
+            vec![trade(ORDER, 1)],
+        ];
+        assert_eq!(trade_id(&scan(Some(7), &txs)), Some(42));
     }
 }
