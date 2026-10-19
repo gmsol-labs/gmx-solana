@@ -81,6 +81,7 @@ pub trait GtOps<C> {
 
     /// Request an owner's GT exchange using a signer authorized as owner or delegate.
     /// The rent payer may be a third signer and becomes receiver on first creation.
+    #[allow(clippy::too_many_arguments)]
     fn request_gt_exchange_v2_with_time_window_index(
         &self,
         store: &Pubkey,
@@ -268,6 +269,7 @@ impl<C: Deref<Target = impl Signer> + Clone> GtOps<C> for crate::Client<C> {
             .anchor_args(args::RequestGtExchange { amount })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn request_gt_exchange_v2_with_time_window_index(
         &self,
         store: &Pubkey,
