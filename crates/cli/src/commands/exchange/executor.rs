@@ -17,10 +17,12 @@ use gmsol_sdk::{
         client::wait_for_blockhash_expiry,
         make_bundle_builder::{EstimateFee, MakeBundleBuilder, SetExecutionFee},
         signer::LocalSignerRef,
+        solana_sdk::hash::Hash,
     },
 };
 
 use crate::{
+    commands::display_signatures,
     config::{Config, MISSING_PYTH_API_KEY},
     CommandClient,
 };
@@ -219,21 +221,57 @@ impl<'a> Executor<'a> {
             }
         };
 
-        let sent = self.client.send_or_serialize(bundle).await;
-        if let Err(err) = &sent {
-            self.close_temporary_accounts(with_pyth.temporary_accounts(), err)
-                .await;
+        // Sign with a blockhash fetched here, so an unresolved send can be waited out exactly
+        // until its last valid block height.
+        let blockhash = self.bundle_blockhash().await?;
+        let sent = self
+            .client
+            .send_or_serialize_with_blockhash(
+                bundle,
+                blockhash.map(|(hash, _)| hash),
+                display_signatures,
+            )
+            .await;
+        if let (Err(err), Some((_, last_valid_block_height))) = (&sent, blockhash) {
+            self.close_temporary_accounts(
+                with_pyth.temporary_accounts(),
+                err,
+                last_valid_block_height,
+            )
+            .await;
         }
         sent
     }
 
+    /// The blockhash to sign a directly sent bundle with, and its last valid block height.
+    /// `None` when the bundle is only serialized or written to an instruction buffer.
+    async fn bundle_blockhash(&self) -> gmsol_sdk::Result<Option<(Hash, u64)>> {
+        if !self.client.sends_directly() {
+            return Ok(None);
+        }
+        let rpc = self.client.rpc();
+        let blockhash = rpc
+            .get_latest_blockhash_with_commitment(rpc.commitment())
+            .await
+            .map_err(gmsol_sdk::Error::custom)?;
+        Ok(Some(blockhash))
+    }
+
     /// Close the temporary Pyth accounts left open when an execute bundle stopped before its
     /// close batch. Never fails: a cleanup error is logged with the addresses.
-    async fn close_temporary_accounts(&self, accounts: &[Pubkey], send_err: &gmsol_sdk::Error) {
-        if accounts.is_empty() || !self.client.sends_directly() {
+    async fn close_temporary_accounts(
+        &self,
+        accounts: &[Pubkey],
+        send_err: &gmsol_sdk::Error,
+        last_valid_block_height: u64,
+    ) {
+        if accounts.is_empty() {
             return;
         }
-        if let Err(err) = self.try_close_temporary_accounts(accounts, send_err).await {
+        if let Err(err) = self
+            .try_close_temporary_accounts(accounts, send_err, last_valid_block_height)
+            .await
+        {
             tracing::warn!(
                 %err,
                 ?accounts,
@@ -246,18 +284,13 @@ impl<'a> Executor<'a> {
         &self,
         accounts: &[Pubkey],
         send_err: &gmsol_sdk::Error,
+        last_valid_block_height: u64,
     ) -> gmsol_sdk::Result<()> {
         // A transaction with an unknown outcome may still create an account; wait until it
         // cannot land, or that account would be missed.
         if is_unresolved(send_err) {
             tracing::info!("waiting for unresolved transactions to expire before closing temporary Pyth accounts");
-            // A blockhash fetched now is newer than the bundle's, so it expires last.
-            let rpc = self.client.rpc();
-            let (_, last_valid_block_height) = rpc
-                .get_latest_blockhash_with_commitment(rpc.commitment())
-                .await
-                .map_err(gmsol_sdk::Error::custom)?;
-            wait_for_blockhash_expiry(rpc, last_valid_block_height).await?;
+            wait_for_blockhash_expiry(self.client.rpc(), last_valid_block_height).await?;
         }
         let bundle = self
             .pyth

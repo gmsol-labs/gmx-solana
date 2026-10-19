@@ -21,6 +21,7 @@ use gmsol_sdk::{
         signer::LocalSignerRef,
         solana_client::rpc_config::RpcSendTransactionConfig,
         solana_sdk::{
+            hash::Hash,
             message::VersionedMessage,
             signature::{Keypair, NullSigner, Signature},
             transaction::VersionedTransaction,
@@ -262,7 +263,23 @@ impl CommandClient {
 
     pub(crate) async fn send_or_serialize_with_callback(
         &self,
+        bundle: BundleBuilder<'_, LocalSignerRef>,
+        callback: impl FnOnce(
+            Vec<WithSlot<Signature>>,
+            Option<gmsol_sdk::Error>,
+            usize,
+        ) -> gmsol_sdk::Result<()>,
+    ) -> gmsol_sdk::Result<()> {
+        self.send_or_serialize_with_blockhash(bundle, None, callback)
+            .await
+    }
+
+    /// Like [`Self::send_or_serialize_with_callback`], but a bundle sent directly is signed
+    /// with `recent_blockhash` (`None` fetches the latest). The other modes ignore it.
+    pub(crate) async fn send_or_serialize_with_blockhash(
+        &self,
         mut bundle: BundleBuilder<'_, LocalSignerRef>,
+        recent_blockhash: Option<Hash>,
         callback: impl FnOnce(
             Vec<WithSlot<Signature>>,
             Option<gmsol_sdk::Error>,
@@ -422,9 +439,11 @@ impl CommandClient {
                 tracing::info!("Cancelled");
                 return Ok(());
             }
-            self.send_bundle_with_callback(bundle, callback).await?;
+            self.send_bundle_with_callback(bundle, None, callback)
+                .await?;
         } else {
-            self.send_bundle_with_callback(bundle, callback).await?;
+            self.send_bundle_with_callback(bundle, recent_blockhash, callback)
+                .await?;
         }
         Ok(())
     }
@@ -469,6 +488,7 @@ impl CommandClient {
     async fn send_bundle_with_callback(
         &self,
         bundle: BundleBuilder<'_, LocalSignerRef>,
+        recent_blockhash: Option<Hash>,
         callback: impl FnOnce(
             Vec<WithSlot<Signature>>,
             Option<gmsol_sdk::Error>,
@@ -479,9 +499,13 @@ impl CommandClient {
         let bundle = bundle.build()?;
         let steps = bundle.len();
         match bundle
-            .send_all_with_opts_detailed(self.send_bundle_options(), |m| {
-                before_sign(&mut idx, steps, self.verbose, m)
-            })
+            .send_all_with_opts_detailed(
+                SendBundleOptions {
+                    recent_blockhash,
+                    ..self.send_bundle_options()
+                },
+                |m| before_sign(&mut idx, steps, self.verbose, m),
+            )
             .await
         {
             Ok(results) => match compress_send_results(results) {
@@ -498,7 +522,7 @@ impl CommandClient {
         &self,
         bundle: BundleBuilder<'_, LocalSignerRef>,
     ) -> gmsol_sdk::Result<()> {
-        self.send_bundle_with_callback(bundle, display_signatures)
+        self.send_bundle_with_callback(bundle, None, display_signatures)
             .await
     }
 }
