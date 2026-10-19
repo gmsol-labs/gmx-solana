@@ -369,52 +369,46 @@ mod tests {
     use crate::Client;
 
     #[test]
-    fn scub_gt_exchange_v2_builder_keeps_owner_authority_and_rent_payer_distinct() {
+    fn gt_exchange_v2_builder_keeps_owner_authority_and_rent_payer_distinct() {
         let client = Client::new(Cluster::Devnet, Arc::new(Keypair::new())).unwrap();
-        let scub_store = Pubkey::new_unique();
-        let scub_owner = Pubkey::new_unique();
-        let scub_delegate = Pubkey::new_unique();
-        let scub_payer = Pubkey::new_unique();
-        let scub_window_index = 2;
-        let scub_window = 86_400;
-        let vault =
-            client.find_gt_exchange_vault_address(&scub_store, scub_window_index, scub_window);
+        let store = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+        let delegate = Pubkey::new_unique();
+        let rent_payer = Pubkey::new_unique();
+        let window_index = 2;
+        let window = 86_400;
+        let vault = client.find_gt_exchange_vault_address(&store, window_index, window);
 
         let builder = client.request_gt_exchange_v2_with_time_window_index(
-            &scub_store,
-            &scub_owner,
-            &scub_delegate,
-            &scub_payer,
-            scub_window_index,
-            scub_window,
+            &store,
+            &owner,
+            &delegate,
+            &rent_payer,
+            window_index,
+            window,
             5,
         );
         let instructions = builder.instructions();
         let request = instructions.last().unwrap();
-        assert_eq!(request.accounts[0].pubkey, scub_owner);
+        assert_eq!(request.accounts[0].pubkey, owner);
         assert!(!request.accounts[0].is_signer);
-        assert_eq!(request.accounts[1].pubkey, scub_delegate);
+        assert_eq!(request.accounts[1].pubkey, delegate);
         assert!(request.accounts[1].is_signer);
-        assert_eq!(request.accounts[2].pubkey, scub_payer);
+        assert_eq!(request.accounts[2].pubkey, rent_payer);
         assert!(request.accounts[2].is_signer);
         assert!(request.accounts[2].is_writable);
         assert_eq!(
             request.accounts[4].pubkey,
-            client.find_user_address(&scub_store, &scub_owner)
+            client.find_user_address(&store, &owner)
         );
         assert_eq!(request.accounts[5].pubkey, vault);
         assert_eq!(
             request.accounts[6].pubkey,
-            client.find_gt_exchange_address(&vault, &scub_owner)
+            client.find_gt_exchange_address(&vault, &owner)
         );
 
         let legacy = client
-            .request_gt_exchange_with_time_window_index(
-                &scub_store,
-                scub_window_index,
-                scub_window,
-                5,
-            )
+            .request_gt_exchange_with_time_window_index(&store, window_index, window, 5)
             .instructions();
         assert_eq!(legacy.last().unwrap().accounts[0].pubkey, client.payer());
         assert_ne!(request.data[..8], legacy.last().unwrap().data[..8]);

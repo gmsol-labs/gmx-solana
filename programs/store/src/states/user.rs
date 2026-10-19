@@ -538,19 +538,19 @@ mod tests {
     }
 
     #[test]
-    fn scub_gt_delegate_spend_requires_current_delegate_and_remaining_allowance() {
+    fn gt_delegate_spend_requires_current_delegate_and_remaining_allowance() {
         let mut user: UserHeader = bytemuck::Zeroable::zeroed();
-        let scub_delegate = Pubkey::new_unique();
-        let scub_other = Pubkey::new_unique();
-        user.gt.set_delegate(scub_delegate, 10).unwrap();
-        assert!(user.gt.spend_allowance(&scub_other, 1).is_err());
+        let delegate = Pubkey::new_unique();
+        let unauthorized = Pubkey::new_unique();
+        user.gt.set_delegate(delegate, 10).unwrap();
+        assert!(user.gt.spend_allowance(&unauthorized, 1).is_err());
         assert_eq!(user.gt.allowance(), 10);
-        assert!(user.gt.spend_allowance(&scub_delegate, 11).is_err());
+        assert!(user.gt.spend_allowance(&delegate, 11).is_err());
         assert_eq!(user.gt.allowance(), 10);
-        user.gt.spend_allowance(&scub_delegate, 7).unwrap();
+        user.gt.spend_allowance(&delegate, 7).unwrap();
         assert_eq!(user.gt.allowance(), 3);
-        user.gt.set_delegate(scub_other, 2).unwrap();
-        assert!(user.gt.spend_allowance(&scub_delegate, 1).is_err());
+        user.gt.set_delegate(unauthorized, 2).unwrap();
+        assert!(user.gt.spend_allowance(&delegate, 1).is_err());
         assert_eq!(user.gt.allowance(), 2);
     }
 }

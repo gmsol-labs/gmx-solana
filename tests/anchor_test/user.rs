@@ -250,12 +250,12 @@ async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
 }
 
 #[tokio::test]
-async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
-    const SCUB_WINDOW: u32 = DEFAULT_GT_VAULT_TIME_WINDOW;
-    const SCUB_GT_BALANCE: u64 = 100;
-    const SCUB_ALLOWANCE: u64 = 20;
-    const SCUB_FIRST_SPEND: u64 = 5;
-    const SCUB_OWNER_SPEND: u64 = 3;
+async fn gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
+    const EXCHANGE_WINDOW: u32 = DEFAULT_GT_VAULT_TIME_WINDOW;
+    const INITIAL_GT_BALANCE: u64 = 100;
+    const INITIAL_ALLOWANCE: u64 = 20;
+    const DELEGATE_SPEND: u64 = 5;
+    const OWNER_SPEND: u64 = 3;
 
     let _window_guard = GT_EXCHANGE_WINDOW_LOCK.lock().await;
     let deployment = current_deployment().await?;
@@ -272,10 +272,14 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let payer = Keypair::new();
     let store = &deployment.store;
+    keeper
+        .gt_set_exchange_time_window(store, EXCHANGE_WINDOW)
+        .send()
+        .await?;
     let owner_address = owner.payer();
     let user_address = owner.find_user_address(store, &owner_address);
-    let index = current_time_window_index(SCUB_WINDOW)?;
-    let vault = owner.find_gt_exchange_vault_address(store, index, SCUB_WINDOW);
+    let index = current_time_window_index(EXCHANGE_WINDOW)?;
+    let vault = owner.find_gt_exchange_vault_address(store, index, EXCHANGE_WINDOW);
     let exchange_address = owner.find_gt_exchange_address(&vault, &owner_address);
 
     deployment
@@ -300,18 +304,18 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
         .await?;
     owner.prepare_user(store)?.send().await?;
     keeper
-        .mint_gt_reward(store, &owner_address, SCUB_GT_BALANCE)?
+        .mint_gt_reward(store, &owner_address, INITIAL_GT_BALANCE)?
         .send()
         .await?;
     owner
-        .set_gt_delegate(store, &delegate.payer(), SCUB_ALLOWANCE)?
+        .set_gt_delegate(store, &delegate.payer(), INITIAL_ALLOWANCE)?
         .send()
         .await?;
     keeper
-        .prepare_gt_exchange_vault_with_time_window_index(store, index, SCUB_WINDOW)
+        .prepare_gt_exchange_vault_with_time_window_index(store, index, EXCHANGE_WINDOW)
         .send()
         .await?;
-    let scub_rent_payer_balance = delegate.rpc().get_balance(&payer.pubkey()).await?;
+    let initial_rent_payer_balance = delegate.rpc().get_balance(&payer.pubkey()).await?;
 
     let err = unauthorized
         .request_gt_exchange_v2_with_time_window_index(
@@ -320,7 +324,7 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
             &unauthorized.payer(),
             &payer.pubkey(),
             index,
-            SCUB_WINDOW,
+            EXCHANGE_WINDOW,
             1,
         )
         .signer(&payer)
@@ -333,7 +337,7 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
     );
     assert_eq!(
         owner.user(&user_address).await?.gt.allowance,
-        SCUB_ALLOWANCE
+        INITIAL_ALLOWANCE
     );
     assert!(owner
         .account::<ZeroCopy<GtExchange>>(&exchange_address)
@@ -350,7 +354,7 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
             &delegate.payer(),
             &payer.pubkey(),
             index,
-            SCUB_WINDOW,
+            EXCHANGE_WINDOW,
             1,
         )
         .signer(&payer)
@@ -361,13 +365,16 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
         gmsol_sdk::Error::from(err).anchor_error_code(),
         Some(CoreError::PermissionDenied.into())
     );
-    assert_eq!(owner.user(&user_address).await?.gt.amount, SCUB_GT_BALANCE);
+    assert_eq!(
+        owner.user(&user_address).await?.gt.amount,
+        INITIAL_GT_BALANCE
+    );
     assert!(owner
         .account::<ZeroCopy<GtExchange>>(&exchange_address)
         .await?
         .is_none());
     owner
-        .set_gt_delegate(store, &delegate.payer(), SCUB_GT_BALANCE + 1)?
+        .set_gt_delegate(store, &delegate.payer(), INITIAL_GT_BALANCE + 1)?
         .send()
         .await?;
     let err = delegate
@@ -377,8 +384,8 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
             &delegate.payer(),
             &payer.pubkey(),
             index,
-            SCUB_WINDOW,
-            SCUB_GT_BALANCE + 1,
+            EXCHANGE_WINDOW,
+            INITIAL_GT_BALANCE + 1,
         )
         .signer(&payer)
         .send()
@@ -393,14 +400,14 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
         .await?
         .is_none());
     let user = owner.user(&user_address).await?;
-    assert_eq!(user.gt.allowance, SCUB_GT_BALANCE + 1);
-    assert_eq!(user.gt.amount, SCUB_GT_BALANCE);
+    assert_eq!(user.gt.allowance, INITIAL_GT_BALANCE + 1);
+    assert_eq!(user.gt.amount, INITIAL_GT_BALANCE);
     assert_eq!(
         delegate.rpc().get_balance(&payer.pubkey()).await?,
-        scub_rent_payer_balance
+        initial_rent_payer_balance
     );
     owner
-        .set_gt_delegate(store, &delegate.payer(), SCUB_ALLOWANCE)?
+        .set_gt_delegate(store, &delegate.payer(), INITIAL_ALLOWANCE)?
         .send()
         .await?;
     let err = delegate
@@ -410,8 +417,8 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
             &delegate.payer(),
             &payer.pubkey(),
             index,
-            SCUB_WINDOW,
-            SCUB_ALLOWANCE + 1,
+            EXCHANGE_WINDOW,
+            INITIAL_ALLOWANCE + 1,
         )
         .signer(&payer)
         .send()
@@ -426,11 +433,11 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
         .await?
         .is_none());
     let user = owner.user(&user_address).await?;
-    assert_eq!(user.gt.allowance, SCUB_ALLOWANCE);
-    assert_eq!(user.gt.amount, SCUB_GT_BALANCE);
+    assert_eq!(user.gt.allowance, INITIAL_ALLOWANCE);
+    assert_eq!(user.gt.amount, INITIAL_GT_BALANCE);
     assert_eq!(
         delegate.rpc().get_balance(&payer.pubkey()).await?,
-        scub_rent_payer_balance
+        initial_rent_payer_balance
     );
 
     delegate
@@ -440,8 +447,8 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
             &delegate.payer(),
             &payer.pubkey(),
             index,
-            SCUB_WINDOW,
-            SCUB_FIRST_SPEND,
+            EXCHANGE_WINDOW,
+            DELEGATE_SPEND,
         )
         .signer(&payer)
         .send()
@@ -452,13 +459,13 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
         .unwrap()
         .0;
     assert_eq!(exchange.owner, owner_address);
-    assert_eq!(exchange.amount, SCUB_FIRST_SPEND);
+    assert_eq!(exchange.amount, DELEGATE_SPEND);
     assert_eq!(exchange.rent_receiver, payer.pubkey());
-    let scub_balance_after_creation = delegate.rpc().get_balance(&payer.pubkey()).await?;
-    assert!(scub_balance_after_creation < scub_rent_payer_balance);
+    let rent_payer_balance_after_creation = delegate.rpc().get_balance(&payer.pubkey()).await?;
+    assert!(rent_payer_balance_after_creation < initial_rent_payer_balance);
     let user = owner.user(&user_address).await?;
-    assert_eq!(user.gt.allowance, SCUB_ALLOWANCE - SCUB_FIRST_SPEND);
-    assert_eq!(user.gt.amount, SCUB_GT_BALANCE - SCUB_FIRST_SPEND);
+    assert_eq!(user.gt.allowance, INITIAL_ALLOWANCE - DELEGATE_SPEND);
+    assert_eq!(user.gt.amount, INITIAL_GT_BALANCE - DELEGATE_SPEND);
 
     let err = delegate
         .request_gt_exchange_v2_with_time_window_index(
@@ -467,8 +474,8 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
             &delegate.payer(),
             &payer.pubkey(),
             index,
-            SCUB_WINDOW,
-            SCUB_ALLOWANCE,
+            EXCHANGE_WINDOW,
+            INITIAL_ALLOWANCE,
         )
         .signer(&payer)
         .send()
@@ -483,10 +490,10 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
         .await?
         .unwrap()
         .0;
-    assert_eq!(exchange.amount, SCUB_FIRST_SPEND);
+    assert_eq!(exchange.amount, DELEGATE_SPEND);
     let user = owner.user(&user_address).await?;
-    assert_eq!(user.gt.allowance, SCUB_ALLOWANCE - SCUB_FIRST_SPEND);
-    assert_eq!(user.gt.amount, SCUB_GT_BALANCE - SCUB_FIRST_SPEND);
+    assert_eq!(user.gt.allowance, INITIAL_ALLOWANCE - DELEGATE_SPEND);
+    assert_eq!(user.gt.amount, INITIAL_GT_BALANCE - DELEGATE_SPEND);
 
     owner
         .request_gt_exchange_v2_with_time_window_index(
@@ -495,8 +502,8 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
             &owner_address,
             &owner_address,
             index,
-            SCUB_WINDOW,
-            SCUB_OWNER_SPEND,
+            EXCHANGE_WINDOW,
+            OWNER_SPEND,
         )
         .send()
         .await?;
@@ -505,15 +512,15 @@ async fn scub_gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
         .await?
         .unwrap()
         .0;
-    assert_eq!(exchange.amount, SCUB_FIRST_SPEND + SCUB_OWNER_SPEND);
+    assert_eq!(exchange.amount, DELEGATE_SPEND + OWNER_SPEND);
     assert_eq!(exchange.rent_receiver, payer.pubkey());
     assert_eq!(
         delegate.rpc().get_balance(&payer.pubkey()).await?,
-        scub_balance_after_creation
+        rent_payer_balance_after_creation
     );
     assert_eq!(
         owner.user(&user_address).await?.gt.allowance,
-        SCUB_ALLOWANCE - SCUB_FIRST_SPEND
+        INITIAL_ALLOWANCE - DELEGATE_SPEND
     );
     Ok(())
 }

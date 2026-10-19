@@ -733,7 +733,7 @@ mod tests {
         );
         assert_eq!(exchange.rent_receiver(), &scub_owner);
 
-        exchange.set_rent_receiver(scub_receiver);
+        exchange.rent_receiver = scub_receiver;
         assert_eq!(exchange.rent_receiver(), &scub_receiver);
     }
 }
