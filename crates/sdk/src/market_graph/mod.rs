@@ -49,16 +49,27 @@ pub mod config;
 pub mod error;
 
 /// Execution simulation.
-#[deprecated(since = "0.8.0", note = "use `Simulator` instead")]
+///
+/// This simulation does not model builder fees: its order results are those of
+/// an order with no builder fee. Use [`Simulator`], which accepts the order's
+/// builder fee factor.
+#[deprecated(
+    since = "0.8.0",
+    note = "use `Simulator` instead; this simulation does not model builder fees"
+)]
 #[cfg(simulation)]
 pub mod simulation;
 
 type Graph = StableDiGraph<Node, Edge>;
 
 /// Order Simulation Builder.
+///
+/// This simulation does not model builder fees. Use
+/// [`OrderSimulationBuilderForSimulator`](crate::simulation::simulator::OrderSimulationBuilderForSimulator),
+/// whose `builder_fee_factor` does.
 #[deprecated(
     since = "0.8.0",
-    note = "use `OrderSimulationBuilderForSimulator` instead"
+    note = "use `OrderSimulationBuilderForSimulator` instead; this simulation does not model builder fees"
 )]
 #[allow(deprecated)]
 #[cfg(simulation)]
@@ -680,7 +691,18 @@ impl MarketGraph {
     }
 
     /// Create a builder for order simulation.
-    #[deprecated(since = "0.8.0", note = "use `to_simulator` instead")]
+    ///
+    /// # Builder fees
+    /// This does **not** model builder fees. Its results are those of an order
+    /// with no builder fee, so they differ from execution for an order that has
+    /// a non-zero builder fee factor checkpointed. Migrate to
+    /// [`to_simulator`](Self::to_simulator) and
+    /// [`Simulator::simulate_order`](crate::simulation::Simulator::simulate_order)
+    /// with `builder_fee_factor`.
+    #[deprecated(
+        since = "0.8.0",
+        note = "use `to_simulator` instead; this simulation does not model builder fees"
+    )]
     #[allow(deprecated)]
     #[cfg(simulation)]
     pub fn simulate_order<'a>(
@@ -906,6 +928,9 @@ fn distance_to_exchange_rate(d: Decimal) -> Decimal {
     (-d).exp()
 }
 
+#[cfg(all(test, simulation))]
+mod builder_fee_tests;
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -920,14 +945,15 @@ mod tests {
 
     use super::*;
 
-    const USDC: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-    const WSOL: &str = "So11111111111111111111111111111111111111112";
-    const BOME: &str = "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82";
+    pub(super) const USDC: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    pub(super) const WSOL: &str = "So11111111111111111111111111111111111111112";
+    pub(super) const BOME: &str = "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82";
 
     #[cfg(simulation)]
     use crate::glv::model::GlvModel;
     #[cfg(simulation)]
-    const SOL_BALANCED_MARKET_TOKEN: &str = "BwN2FWixP5JyKjJNyD1YcRKN1XhgvFtnzrPrkfyb4DkW";
+    pub(super) const SOL_BALANCED_MARKET_TOKEN: &str =
+        "BwN2FWixP5JyKjJNyD1YcRKN1XhgvFtnzrPrkfyb4DkW";
     #[cfg(simulation)]
     const BNB_BALANCED_MARKET_TOKEN: &str = "J42dzcHkgmzU7MARv7k29TrkKaGQ1j2mTaYjkBkN7pn5";
     #[cfg(simulation)]
@@ -1041,7 +1067,8 @@ mod tests {
         (glv_token, model)
     }
 
-    fn create_and_update_market_graph() -> crate::Result<(MarketGraph, HashSet<Pubkey>)> {
+    pub(super) fn create_and_update_market_graph() -> crate::Result<(MarketGraph, HashSet<Pubkey>)>
+    {
         let mut graph = MarketGraph::default();
         let updates = get_market_updates();
         let prices = get_price_updates();
