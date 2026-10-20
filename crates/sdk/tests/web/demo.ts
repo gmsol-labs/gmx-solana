@@ -134,6 +134,38 @@ console.log("simulation:", simulationOutput.increase());
 let outputPositionModel = simulationOutput.position_model()!;
 console.log("output position:", outputPositionModel.size());
 
+// Simulate the same order with a builder fee. `builder_fee_factor` is the factor
+// checkpointed onto the order (`Order.builder_fee_factor`): 0.1% here. The result
+// separates the gross collateral, the fee and the net collateral the position
+// received. Only `Simulator.simulate_order` models the fee: the deprecated
+// `MarketGraph.simulate_order` rejects a non-zero factor.
+// `simulate_order` takes ownership of the position it is given, so decode a fresh one.
+const feePosition = Position.decode_from_base64(encodedPosition);
+const feeSimulator = graph.to_simulator();
+const feeSimulationOutput = feeSimulator.simulate_order(
+  {
+    kind: "MarketIncrease",
+    params: {
+      market_token: "E6kfBQcdHL3fdWNaydrWViXVtQLTgpxzZicLy98ZNc5v",
+      is_long: true,
+      size: 100_000_000_000_000_000_000_000n,
+      amount: 100_000_000n,
+    },
+    collateral_or_swap_out_token: wsol,
+    builder_fee_factor: 100_000_000_000_000_000n,
+  },
+  feePosition
+);
+const feeIncrease = feeSimulationOutput.increase()!;
+console.log(
+  "builder fee:",
+  feeIncrease.builder_fee,
+  "gross collateral:",
+  feeIncrease.gross_collateral_amount,
+  "net collateral:",
+  feeIncrease.net_collateral_amount
+);
+
 // Create order.
 const recentBlockhash = "3KarAamyLd6dFFmMsh79fXjrdAWp5DB6dxF3BgLK3SuM";
 const payer = "11111111111111111111111111111112";

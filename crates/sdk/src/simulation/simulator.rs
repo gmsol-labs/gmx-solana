@@ -45,6 +45,7 @@ pub type OrderSimulationBuilderForSimulator<'a> = OrderSimulationBuilder<
         (),
         (),
         (),
+        (),
     ),
 >;
 
