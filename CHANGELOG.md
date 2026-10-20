@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - programs(store): Added `close_gt_exchange_v2` so a GT controller can close a confirmed GT exchange and return its rent to the recorded receiver. The existing `close_gt_exchange` still serves owner receivers and now rejects an exchange configured for another receiver.
 - programs(store): Added `request_gt_exchange_v2` for owner or delegate authorized GT burns with a separate rent payer, and records that payer as the receiver when an exchange is created.
+- programs(store): Added the `GtAllowanceConsumed` CPI event for successful delegated GT exchange requests, recording the owner, User Account, delegate, spent amount, and remaining allowance.
 - sdk(sdk): Added `GtOps::request_gt_exchange_v2_with_time_window_index` and current-window builder with distinct owner, authority, and rent-payer accounts.
 - programs(store): Added owner-signed instructions to replace or clear a GT delegate and allowance, increase the remaining allowance, or decrease it to a floor of zero. Each emits the resulting delegation state.
 - sdk(sdk): Added `UserOps` builders for GT delegate and allowance changes.

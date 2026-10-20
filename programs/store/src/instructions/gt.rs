@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use gmsol_utils::InitSpace;
 
 use crate::{
-    events::{EventEmitter, GtBuyback, GtUpdated},
+    events::{EventEmitter, GtAllowanceConsumed, GtBuyback, GtUpdated},
     states::{
         gt::{GtExchange, GtExchangeVault},
         user::UserHeader,
@@ -397,15 +397,26 @@ impl RequestGtExchangeV2<'_> {
         let mut user = accounts.user.load_mut()?;
         let mut exchange = accounts.exchange.load_mut()?;
 
-        if accounts.authority.key() != accounts.owner.key() {
-            user.gt.spend_allowance(&accounts.authority.key(), amount)?;
+        let delegate =
+            (accounts.authority.key() != accounts.owner.key()).then(|| accounts.authority.key());
+        if let Some(delegate) = delegate {
+            user.gt.spend_allowance(&delegate, amount)?;
         }
         store
             .gt_mut()
             .unchecked_request_exchange(&mut user, &mut vault, &mut exchange, amount)?;
 
-        EventEmitter::new(&accounts.event_authority, ctx.bumps.event_authority)
-            .emit_cpi(&GtUpdated::burned(amount, store.gt(), Some(&user)))?;
+        let emitter = EventEmitter::new(&accounts.event_authority, ctx.bumps.event_authority);
+        emitter.emit_cpi(&GtUpdated::burned(amount, store.gt(), Some(&user)))?;
+        if let Some(delegate) = delegate {
+            emitter.emit_cpi(&GtAllowanceConsumed {
+                user: accounts.user.key(),
+                owner: accounts.owner.key(),
+                delegate,
+                amount,
+                allowance: user.gt.allowance(),
+            })?;
+        }
         Ok(())
     }
 }

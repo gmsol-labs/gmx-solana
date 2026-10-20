@@ -433,7 +433,7 @@ impl UserGtState {
         self.allowance = self
             .allowance
             .checked_sub(amount)
-            .ok_or(CoreError::InvalidArgument)?;
+            .ok_or_else(|| error!(CoreError::InvalidArgument))?;
         Ok(())
     }
 }
@@ -545,7 +545,16 @@ mod tests {
         user.gt.set_delegate(delegate, 10).unwrap();
         assert!(user.gt.spend_allowance(&unauthorized, 1).is_err());
         assert_eq!(user.gt.allowance(), 10);
-        assert!(user.gt.spend_allowance(&delegate, 11).is_err());
+        let err = user.gt.spend_allowance(&delegate, 11).unwrap_err();
+        assert!(matches!(
+            err,
+            Error::AnchorError(ref err)
+                if matches!(
+                    err.error_origin.as_ref(),
+                    Some(anchor_lang::error::ErrorOrigin::Source(source))
+                        if source.filename.ends_with("user.rs") && source.line > 0
+                )
+        ));
         assert_eq!(user.gt.allowance(), 10);
         user.gt.spend_allowance(&delegate, 7).unwrap();
         assert_eq!(user.gt.allowance(), 3);

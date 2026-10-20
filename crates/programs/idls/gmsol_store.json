@@ -24165,6 +24165,19 @@
       ]
     },
     {
+      "name": "GtAllowanceConsumed",
+      "discriminator": [
+        106,
+        16,
+        89,
+        22,
+        3,
+        57,
+        43,
+        154
+      ]
+    },
+    {
       "name": "GtBuyback",
       "discriminator": [
         155,
@@ -28846,6 +28859,52 @@
                 128
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GtAllowanceConsumed",
+      "docs": [
+        "GT allowance consumed by a delegated exchange request."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "docs": [
+              "The GT owner's User Account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "The GT owner."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "delegate",
+            "docs": [
+              "The delegate that requested the exchange."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "The GT amount spent from the allowance."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "allowance",
+            "docs": [
+              "The remaining allowance after the spend."
+            ],
+            "type": "u64"
           }
         ]
       }

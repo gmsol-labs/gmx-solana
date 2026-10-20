@@ -57,6 +57,44 @@ async fn scub_assert_gt_delegation_event(
     Ok(())
 }
 
+async fn assert_gt_allowance_consumption(
+    client: &Client<SignerRef>,
+    user: Pubkey,
+    owner: Pubkey,
+    expected: Option<(Pubkey, u64, u64)>,
+) -> eyre::Result<()> {
+    let events = client
+        .historical_store_cpi_events(&user, Some(CommitmentConfig::confirmed()))
+        .await?;
+    futures_util::pin_mut!(events);
+    let latest = events.next().await.ok_or_eyre("no user transactions")??;
+    let consumption: Vec<_> = latest
+        .value()
+        .iter()
+        .filter_map(|event| match event {
+            GMSOLCPIEvent::GtAllowanceConsumed(event) => Some(event),
+            _ => None,
+        })
+        .collect();
+    match expected {
+        Some((delegate, amount, allowance)) => {
+            assert_eq!(
+                consumption.len(),
+                1,
+                "expected one GT allowance consumption event"
+            );
+            let event = consumption[0];
+            assert_eq!(event.user, user);
+            assert_eq!(event.owner, owner);
+            assert_eq!(event.delegate, delegate);
+            assert_eq!(event.amount, amount);
+            assert_eq!(event.allowance, allowance);
+        }
+        None => assert!(consumption.is_empty(), "owner request consumed allowance"),
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn referral() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
@@ -466,6 +504,17 @@ async fn gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
     let user = owner.user(&user_address).await?;
     assert_eq!(user.gt.allowance, INITIAL_ALLOWANCE - DELEGATE_SPEND);
     assert_eq!(user.gt.amount, INITIAL_GT_BALANCE - DELEGATE_SPEND);
+    assert_gt_allowance_consumption(
+        &delegate,
+        user_address,
+        owner_address,
+        Some((
+            delegate.payer(),
+            DELEGATE_SPEND,
+            INITIAL_ALLOWANCE - DELEGATE_SPEND,
+        )),
+    )
+    .await?;
 
     let err = delegate
         .request_gt_exchange_v2_with_time_window_index(
@@ -522,6 +571,7 @@ async fn gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
         owner.user(&user_address).await?.gt.allowance,
         INITIAL_ALLOWANCE - DELEGATE_SPEND
     );
+    assert_gt_allowance_consumption(&owner, user_address, owner_address, None).await?;
     Ok(())
 }
 
