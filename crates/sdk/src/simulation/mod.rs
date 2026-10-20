@@ -4,6 +4,9 @@ pub mod simulator;
 /// Order simulation.
 pub mod order;
 
+/// Builder fee effects for order simulation.
+pub mod builder_fee;
+
 /// Deposit simulation.
 pub mod deposit;
 
@@ -19,4 +22,5 @@ pub mod glv_deposit;
 /// GLV withdrawal simulation.
 pub mod glv_withdrawal;
 
+pub use builder_fee::{BuilderFeeOutcome, TokenReceipt};
 pub use simulator::{SimulationOptions, Simulator, SwapOutput, TokenState};
