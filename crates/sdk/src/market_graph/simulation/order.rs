@@ -226,18 +226,23 @@ impl OrderSimulation<'_> {
             vec![]
         };
 
-        // No builder fee is modeled here: the receipts are the gross outputs.
+        // No builder fee is modeled here: the receipts are the gross payouts,
+        // which include the funding rebates the execution transfers out.
         let meta = &position.market_model().meta;
         let secondary_output_token = if report.is_secondary_output_token_long() {
             meta.long_token_mint
         } else {
             meta.short_token_mint
         };
+        let (funding_long_amount, funding_short_amount) = report.claimable_funding_amounts();
         let receipts = builder_fee::build_receipts(
             receive_token,
             final_output_amount,
-            &secondary_output_token,
-            *report.secondary_output_amount(),
+            &[
+                (secondary_output_token, *report.secondary_output_amount()),
+                (meta.long_token_mint, *funding_long_amount),
+                (meta.short_token_mint, *funding_short_amount),
+            ],
             0,
         )?;
 

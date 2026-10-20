@@ -42,6 +42,9 @@ pub enum OrderSimulationOutput {
         report: Box<IncreasePositionReport<u128, i128>>,
         position: PositionModel,
         /// The collateral produced by the pay-token swap, before the builder fee.
+        ///
+        /// An increase can also owe the position's funding rebates; they are in
+        /// `report.claimable_funding_amounts()`.
         gross_collateral_amount: u128,
         /// The builder fee, if the order carries one.
         builder_fee: Option<BuilderFeeOutcome>,
@@ -57,9 +60,13 @@ pub enum OrderSimulationOutput {
         /// What the owner holds per token after the receive-token swap, with the
         /// builder fee taken out of the final output token.
         ///
-        /// The final output token always comes first. A secondary (pnl token)
-        /// output in the same token is merged into it, and one in another token
-        /// follows as its own entry, omitted when zero.
+        /// Everything the execution pays out is counted: the final output, the
+        /// secondary (pnl token) output, and the funding rebates
+        /// (`report.claimable_funding_amounts()`, in the market's long and short
+        /// tokens). Amounts in the same token share one entry. The final output
+        /// token always comes first, and the other tokens follow in the order
+        /// pnl token, long token, short token, omitted when zero. Claimable
+        /// collateral, which goes to separate claimable accounts, is not included.
         receipts: Vec<TokenReceipt>,
         /// The builder fee, if the order carries one.
         builder_fee: Option<BuilderFeeOutcome>,
@@ -630,11 +637,23 @@ impl OrderSimulation<'_> {
             }
             None => None,
         };
+
+        // What the owner is paid in each token. Besides the trade outputs this
+        // includes the funding rebates (`claimable_funding_amounts`), which the
+        // program transfers out to the order's long and short token escrows in the
+        // same execution. They are in the market's long and short tokens, so they
+        // merge by token with the outputs. They are deliberately not part of the
+        // fee cap above: the program clamps the fee to the final output and the
+        // same-token secondary output only.
+        let (funding_long_amount, funding_short_amount) = report.claimable_funding_amounts();
         let receipts = builder_fee::build_receipts(
             &final_output_token,
             final_output_amount,
-            &secondary_output_token,
-            secondary_output_amount,
+            &[
+                (secondary_output_token, secondary_output_amount),
+                (market_snapshot.meta.long_token_mint, *funding_long_amount),
+                (market_snapshot.meta.short_token_mint, *funding_short_amount),
+            ],
             builder_fee.as_ref().map_or(0, |fee| fee.paid_amount),
         )?;
 

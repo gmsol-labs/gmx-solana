@@ -84,7 +84,8 @@ impl From<&SimBuilderFee> for SimulatedBuilderFee {
 pub struct SimulatedTokenReceipt {
     /// The token.
     token: StringPubkey,
-    /// The amount produced in this token, before the builder fee.
+    /// The amount paid out in this token by the execution (trade outputs and
+    /// funding rebates), before the builder fee.
     gross_amount: u128,
     /// The builder fee reserved from this token.
     fee_amount: u128,
@@ -138,7 +139,9 @@ pub struct DecreaseOrderSimulationOutput {
     position: Option<String>,
     decrease_swap: Option<String>,
     /// What the owner holds per token, with the builder fee taken out of the
-    /// final output token. The final output token comes first.
+    /// final output token. Counts everything the execution pays out: the final
+    /// output, the secondary (pnl token) output and the funding rebates. Amounts
+    /// in the same token share one entry. The final output token comes first.
     receipts: Vec<SimulatedTokenReceipt>,
     /// The builder fee. Absent when the order has none.
     builder_fee: Option<SimulatedBuilderFee>,

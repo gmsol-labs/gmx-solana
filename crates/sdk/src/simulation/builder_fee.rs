@@ -51,6 +51,11 @@ pub struct BuilderFeeOutcome {
 
 /// What the owner ends up holding in one token after a decrease.
 ///
+/// A receipt adds up everything the execution pays out in its token: the trade
+/// outputs (the final output after the receive-token swap, and the secondary pnl
+/// output) and the funding rebates the position was owed. Claimable collateral,
+/// which goes to separate claimable accounts, is not included.
+///
 /// The model's report keeps the **gross** payout, because the program does not
 /// net the fee out of the transferred output: the whole output lands in the
 /// order's escrow and `settle_builder_fee` later moves the fee to the builder.
@@ -59,7 +64,8 @@ pub struct BuilderFeeOutcome {
 pub struct TokenReceipt {
     /// The token.
     pub token: Pubkey,
-    /// The amount produced in this token, before the builder fee.
+    /// The amount paid out in this token by the execution, before the builder
+    /// fee.
     pub gross_amount: u128,
     /// The builder fee reserved from this token.
     pub fee_amount: u64,
@@ -195,35 +201,46 @@ pub(crate) fn clamp_to_outputs(
 
 /// Builds the per-token receipts of a decrease.
 ///
-/// The final output token always has an entry. A secondary output in the same
-/// token is merged into it, because both land in the same escrow and the fee is
-/// taken from their sum. A secondary output in another token gets its own entry
-/// (omitted when zero), and never carries the fee.
+/// `other_outputs` are the remaining amounts the execution pays out, as
+/// `(token, amount)` pairs: the secondary (pnl token) output and the funding
+/// rebates in the market's long and short tokens. They are merged by token, in
+/// the order given, with the final output token's own amount.
+///
+/// The final output token always has the first entry, whatever its amount.
+/// Amounts in the same token share one entry, because they land in the same
+/// escrow and the fee is taken from their sum. Any other token gets its own
+/// entry (none when its amount is zero), and never carries the fee.
+///
+/// This only reports what is paid out. The cap on the fee itself is computed
+/// separately from the trade outputs, as the program does, and is not widened
+/// by the funding rebates listed here.
 pub(crate) fn build_receipts(
     final_output_token: &Pubkey,
     output_amount: u128,
-    secondary_output_token: &Pubkey,
-    secondary_output_amount: u128,
+    other_outputs: &[(Pubkey, u128)],
     paid_amount: u64,
 ) -> crate::Result<Vec<TokenReceipt>> {
-    let fee_amount = paid_amount;
-    let mut receipts = Vec::with_capacity(2);
-    if final_output_token == secondary_output_token {
-        let gross_amount = output_amount
-            .checked_add(secondary_output_amount)
-            .ok_or_else(overflow)?;
-        receipts.push(receipt(*final_output_token, gross_amount, fee_amount)?);
-    } else {
-        receipts.push(receipt(*final_output_token, output_amount, fee_amount)?);
-        if secondary_output_amount != 0 {
-            receipts.push(receipt(
-                *secondary_output_token,
-                secondary_output_amount,
-                0,
-            )?);
+    let mut amounts: Vec<(Pubkey, u128)> = Vec::with_capacity(1 + other_outputs.len());
+    amounts.push((*final_output_token, output_amount));
+    for (token, amount) in other_outputs {
+        if *amount == 0 {
+            continue;
+        }
+        match amounts.iter().position(|entry| entry.0 == *token) {
+            Some(idx) => {
+                amounts[idx].1 = amounts[idx].1.checked_add(*amount).ok_or_else(overflow)?;
+            }
+            None => amounts.push((*token, *amount)),
         }
     }
-    Ok(receipts)
+    amounts
+        .into_iter()
+        .enumerate()
+        // The fee is reserved from the final output token, which is first.
+        .map(|(idx, (token, gross_amount))| {
+            receipt(token, gross_amount, if idx == 0 { paid_amount } else { 0 })
+        })
+        .collect()
 }
 
 fn receipt(token: Pubkey, gross_amount: u128, fee_amount: u64) -> crate::Result<TokenReceipt> {
@@ -518,7 +535,7 @@ mod tests {
     #[test]
     fn same_token_receipts_merge_and_carry_the_fee() {
         let token = Pubkey::new_unique();
-        let receipts = build_receipts(&token, 20, &token, 80, 50).unwrap();
+        let receipts = build_receipts(&token, 20, &[(token, 80)], 50).unwrap();
         assert_eq!(
             receipts,
             vec![TokenReceipt {
@@ -534,7 +551,7 @@ mod tests {
     fn different_token_receipts_keep_the_fee_on_the_final_token() {
         let final_token = Pubkey::new_unique();
         let secondary_token = Pubkey::new_unique();
-        let receipts = build_receipts(&final_token, 20, &secondary_token, 80, 20).unwrap();
+        let receipts = build_receipts(&final_token, 20, &[(secondary_token, 80)], 20).unwrap();
         assert_eq!(receipts.len(), 2);
         assert_eq!(receipts[0].token, final_token);
         assert_eq!(
@@ -559,7 +576,7 @@ mod tests {
     #[test]
     fn an_empty_secondary_output_in_another_token_is_omitted() {
         let final_token = Pubkey::new_unique();
-        let receipts = build_receipts(&final_token, 20, &Pubkey::new_unique(), 0, 0).unwrap();
+        let receipts = build_receipts(&final_token, 20, &[(Pubkey::new_unique(), 0)], 0).unwrap();
         assert_eq!(receipts.len(), 1);
         assert_eq!(receipts[0].net_amount, 20);
     }
@@ -567,7 +584,7 @@ mod tests {
     #[test]
     fn the_final_token_always_has_a_receipt() {
         let token = Pubkey::new_unique();
-        let receipts = build_receipts(&token, 0, &Pubkey::new_unique(), 0, 0).unwrap();
+        let receipts = build_receipts(&token, 0, &[(Pubkey::new_unique(), 0)], 0).unwrap();
         assert_eq!(receipts.len(), 1);
         assert_eq!(receipts[0].gross_amount, 0);
     }
@@ -575,6 +592,136 @@ mod tests {
     #[test]
     fn a_fee_larger_than_the_gross_output_is_rejected() {
         let token = Pubkey::new_unique();
-        assert!(build_receipts(&token, 10, &Pubkey::new_unique(), 0, 11).is_err());
+        assert!(build_receipts(&token, 10, &[(Pubkey::new_unique(), 0)], 11).is_err());
+    }
+
+    #[test]
+    fn funding_rebates_in_the_final_token_join_its_receipt() {
+        let final_token = Pubkey::new_unique();
+        let pnl_token = Pubkey::new_unique();
+        let other_token = Pubkey::new_unique();
+        // The final token also receives a long funding rebate; the pnl token has
+        // its own output; the short funding rebate is in a third token.
+        let receipts = build_receipts(
+            &final_token,
+            100,
+            &[(pnl_token, 30), (final_token, 7), (other_token, 5)],
+            40,
+        )
+        .unwrap();
+        assert_eq!(
+            receipts,
+            vec![
+                TokenReceipt {
+                    token: final_token,
+                    gross_amount: 107,
+                    fee_amount: 40,
+                    net_amount: 67,
+                },
+                TokenReceipt {
+                    token: pnl_token,
+                    gross_amount: 30,
+                    fee_amount: 0,
+                    net_amount: 30,
+                },
+                TokenReceipt {
+                    token: other_token,
+                    gross_amount: 5,
+                    fee_amount: 0,
+                    net_amount: 5,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn funding_rebates_merge_with_a_secondary_output_in_the_same_token() {
+        let final_token = Pubkey::new_unique();
+        let pnl_token = Pubkey::new_unique();
+        let other_token = Pubkey::new_unique();
+        // The pnl output and the long funding rebate are both in `pnl_token`.
+        let receipts = build_receipts(
+            &final_token,
+            10,
+            &[(pnl_token, 30), (pnl_token, 7), (other_token, 5)],
+            0,
+        )
+        .unwrap();
+        assert_eq!(receipts.len(), 3);
+        assert_eq!(receipts[0].token, final_token);
+        assert_eq!(receipts[0].gross_amount, 10);
+        assert_eq!(receipts[1].token, pnl_token);
+        assert_eq!(receipts[1].gross_amount, 37);
+        assert_eq!(receipts[2].token, other_token);
+        assert_eq!(receipts[2].gross_amount, 5);
+    }
+
+    #[test]
+    fn a_funding_rebate_can_be_the_only_payout_in_its_token() {
+        // The position pays out only collateral in `final_token`, yet is owed a
+        // rebate in another token: that token must not be missing.
+        let final_token = Pubkey::new_unique();
+        let rebate_token = Pubkey::new_unique();
+        let receipts = build_receipts(&final_token, 10, &[(rebate_token, 9)], 0).unwrap();
+        assert_eq!(receipts.len(), 2);
+        assert_eq!(receipts[1].token, rebate_token);
+        assert_eq!(receipts[1].gross_amount, 9);
+        assert_eq!(receipts[1].net_amount, 9);
+    }
+
+    #[test]
+    fn long_and_short_rebates_of_a_single_token_market_are_one_receipt() {
+        // In a market whose long and short tokens are the same mint, both
+        // rebates (and the output) land in the same escrow.
+        let token = Pubkey::new_unique();
+        let receipts = build_receipts(&token, 10, &[(token, 3), (token, 4)], 5).unwrap();
+        assert_eq!(receipts.len(), 1);
+        assert_eq!(receipts[0].gross_amount, 17);
+        assert_eq!(receipts[0].fee_amount, 5);
+        assert_eq!(receipts[0].net_amount, 12);
+    }
+
+    #[test]
+    fn zero_funding_rebates_add_no_receipt() {
+        let final_token = Pubkey::new_unique();
+        let receipts = build_receipts(
+            &final_token,
+            10,
+            &[
+                (Pubkey::new_unique(), 0),
+                (final_token, 0),
+                (Pubkey::new_unique(), 0),
+            ],
+            0,
+        )
+        .unwrap();
+        assert_eq!(receipts.len(), 1);
+        assert_eq!(receipts[0].gross_amount, 10);
+    }
+
+    #[test]
+    fn only_the_final_token_carries_the_fee_even_with_rebates_elsewhere() {
+        let final_token = Pubkey::new_unique();
+        let rebate_token = Pubkey::new_unique();
+        let receipts = build_receipts(&final_token, 50, &[(rebate_token, 500)], 20).unwrap();
+        assert_eq!(receipts[0].fee_amount, 20);
+        assert_eq!(receipts[1].fee_amount, 0);
+        // A large rebate in another token neither pays the fee nor changes it.
+        assert_eq!(receipts[0].net_amount, 30);
+        assert_eq!(receipts[1].net_amount, 500);
+    }
+
+    #[test]
+    fn rebates_can_not_hide_a_fee_larger_than_the_final_token_total() {
+        // The fee is reserved from the final output token's receipt only.
+        let final_token = Pubkey::new_unique();
+        let rebate_token = Pubkey::new_unique();
+        assert!(build_receipts(&final_token, 10, &[(rebate_token, 500)], 11).is_err());
+    }
+
+    #[test]
+    fn merging_receipts_overflow_is_an_error() {
+        let token = Pubkey::new_unique();
+        assert!(build_receipts(&token, u128::MAX, &[(token, 1)], 0).is_err());
     }
 }

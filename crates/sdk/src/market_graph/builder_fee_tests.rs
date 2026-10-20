@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use gmsol_model::price::Price;
+use gmsol_model::{price::Price, PerpMarketMut, PoolExt};
 use gmsol_programs::{constants::MARKET_USD_UNIT, gmsol_store::accounts::Position};
 use solana_sdk::pubkey::Pubkey;
 
@@ -973,6 +973,232 @@ fn collateral_to_pnl_token_is_rejected_with_a_fee_and_allowed_without() {
     assert!(err.contains("BuilderFeeSwapTypeNotAllowed"), "{err}");
 
     market_decrease(&mut sim, &params, &usdc, &p.position, 0).unwrap();
+}
+
+// ----------------------------------------------------------------------------
+// Funding rebates
+//
+// Besides the trade outputs, an execution pays out the funding rebates the
+// position is owed, in the market's long and short tokens
+// (`report.claimable_funding_amounts()`). The receipts must count them, merged
+// by token with the outputs, while the builder fee cap must not: the program
+// clamps the fee to the final output and the same-token secondary output only.
+// ----------------------------------------------------------------------------
+
+/// Per-size deltas that leave the $500 positions of these tests owed a rebate in
+/// both the long and the short token (`size * delta / (adjustment * UNIT)`).
+const LONG_FUNDING_DELTA: i128 = 20_000_000_000_000;
+const SHORT_FUNDING_DELTA: i128 = 10_000_000_000_000;
+
+impl Fixture {
+    /// Makes the market owe the positions of its long side a funding rebate.
+    ///
+    /// Positions opened earlier hold the market's claimable funding amount per
+    /// size as of their opening. Raising the market's amount by `long_delta` /
+    /// `short_delta` leaves them owed the difference, in the long / short token.
+    fn add_funding_rebates(&self, simulator: &mut Simulator, long_delta: i128, short_delta: i128) {
+        let market = simulator.get_market_mut(&self.market_token).unwrap();
+        let pool = market
+            .claimable_funding_amount_per_size_pool_mut(true)
+            .unwrap();
+        pool.apply_delta_amount(true, &long_delta).unwrap();
+        pool.apply_delta_amount(false, &short_delta).unwrap();
+    }
+}
+
+/// The long and short token funding rebates of a decrease, from its report.
+fn rebates(output: &OrderSimulationOutput) -> (u128, u128) {
+    let OrderSimulationOutput::Decrease { report, .. } = output else {
+        panic!("not a decrease output");
+    };
+    let (long, short) = report.claimable_funding_amounts();
+    (*long, *short)
+}
+
+#[test]
+fn receipts_include_the_funding_rebates() {
+    let mut f = fixture();
+    let (wsol, usdc) = (f.wsol, f.usdc);
+    let position = f.open_long(&wsol, 1_000_000_000, 500);
+    let params = f.decrease_params(100, 500_000_000);
+
+    // Nothing is owed: the receipts hold the output alone.
+    let mut plain = f.simulator.clone();
+    let without_rebates = market_decrease(&mut plain, &params, &wsol, &position, 0).unwrap();
+    assert_eq!(rebates(&without_rebates), (0, 0));
+    assert_eq!(without_rebates.receipts().len(), 1);
+
+    let mut owed = f.simulator.clone();
+    f.add_funding_rebates(&mut owed, LONG_FUNDING_DELTA, SHORT_FUNDING_DELTA);
+    let output = market_decrease(&mut owed, &params, &wsol, &position, 0).unwrap();
+    let (long, short) = rebates(&output);
+    assert!(
+        long > 0 && short > 0,
+        "the position is owed a rebate in both tokens"
+    );
+
+    let OrderSimulationOutput::Decrease { report, .. } = &output else {
+        panic!("not a decrease output");
+    };
+    // WSOL is the collateral, the final output and the long token, so its
+    // receipt is the output plus the long rebate. The short rebate is USDC, a
+    // token the position pays nothing else in: it must not go missing.
+    let receipts = output.receipts();
+    assert_eq!(receipts.len(), 2);
+    assert_eq!(receipts[0].token, wsol);
+    assert_eq!(receipts[0].gross_amount, *report.output_amount() + long);
+    assert_eq!(receipts[0].fee_amount, 0);
+    assert_eq!(receipts[0].net_amount, receipts[0].gross_amount);
+    assert_eq!(receipts[1].token, usdc);
+    assert_eq!(receipts[1].gross_amount, short);
+    assert_eq!(receipts[1].net_amount, short);
+    assert!(output.builder_fee().is_none());
+    assert_consistent(&output);
+}
+
+#[test]
+fn funding_rebates_do_not_widen_the_builder_fee_cap() {
+    let mut f = fixture();
+    let wsol = f.wsol;
+    let position = f.open_long(&wsol, 1_000_000_000, 500);
+    // 50% of $500 is $250, more than the whole position is worth.
+    let params = f.decrease_params(500, 0);
+
+    let mut owed = f.simulator.clone();
+    f.add_funding_rebates(&mut owed, LONG_FUNDING_DELTA, SHORT_FUNDING_DELTA);
+    let output = market_decrease(&mut owed, &params, &wsol, &position, HALF).unwrap();
+    let (long, _) = rebates(&output);
+    assert!(long > 0, "the position is owed a long token rebate");
+
+    let OrderSimulationOutput::Decrease { report, .. } = &output else {
+        panic!("not a decrease output");
+    };
+    let fee = output.builder_fee().unwrap();
+    assert_eq!(fee.payable_amount, expected_fee(500, HALF, &f.price(&wsol)));
+    assert!(u128::from(fee.paid_amount) < fee.payable_amount);
+    assert_eq!(
+        u128::from(fee.paid_amount),
+        *report.output_amount(),
+        "the fee is clamped to the output, and the rebate does not fund it"
+    );
+
+    // The rebate is in the same WSOL escrow, and is what the owner keeps.
+    let receipt = &output.receipts()[0];
+    assert_eq!(receipt.token, wsol);
+    assert_eq!(receipt.gross_amount, *report.output_amount() + long);
+    assert_eq!(receipt.fee_amount, fee.paid_amount);
+    assert_eq!(receipt.net_amount, long);
+    assert_consistent(&output);
+}
+
+#[test]
+fn funding_rebates_merge_with_the_outputs_by_token() {
+    let p = profitable_usdc_long();
+    let (usdc, wsol) = (p.f.usdc, p.f.wsol);
+    let params = p.f.decrease_params(500, 0);
+
+    let mut plain = p.simulator.clone();
+    let without_rebates =
+        market_decrease(&mut plain, &params, &usdc, &p.position, ONE_PERCENT).unwrap();
+
+    let mut owed = p.simulator.clone();
+    p.f.add_funding_rebates(&mut owed, LONG_FUNDING_DELTA, SHORT_FUNDING_DELTA);
+    let output = market_decrease(&mut owed, &params, &usdc, &p.position, ONE_PERCENT).unwrap();
+    let (long, short) = rebates(&output);
+    assert!(
+        long > 0 && short > 0,
+        "the position is owed a rebate in both tokens"
+    );
+
+    let OrderSimulationOutput::Decrease { report, .. } = &output else {
+        panic!("not a decrease output");
+    };
+    let profit = *report.secondary_output_amount();
+    assert!(profit > 0, "the profit is paid in WSOL");
+
+    // USDC: the final output plus the short rebate, which carries the fee.
+    // WSOL: the pnl output plus the long rebate.
+    let receipts = output.receipts();
+    assert_eq!(receipts.len(), 2);
+    assert_eq!(receipts[0].token, usdc);
+    assert_eq!(receipts[0].gross_amount, *report.output_amount() + short);
+    assert_eq!(receipts[1].token, wsol);
+    assert_eq!(receipts[1].gross_amount, profit + long);
+    assert_eq!(receipts[1].fee_amount, 0);
+
+    // The fee is the one the same order is charged without any rebate.
+    let fee = output.builder_fee().unwrap();
+    assert_eq!(output.builder_fee(), without_rebates.builder_fee());
+    assert_eq!(receipts[0].fee_amount, fee.paid_amount);
+    assert_consistent(&output);
+}
+
+#[test]
+fn funding_rebates_join_a_receive_token_reached_through_a_swap() {
+    let p = profitable_usdc_long();
+    let (usdc, wsol, market_token) = (p.f.usdc, p.f.wsol, p.f.market_token);
+    let params = p.f.decrease_params(500, 0);
+
+    let mut plain = p.simulator.clone();
+    let without_rebates = run(
+        &mut plain,
+        CreateOrderKind::MarketDecrease,
+        &params,
+        &usdc,
+        None,
+        Some(&wsol),
+        &[market_token],
+        Some(&p.position),
+        ONE_PERCENT,
+    )
+    .unwrap();
+
+    let mut owed = p.simulator.clone();
+    p.f.add_funding_rebates(&mut owed, LONG_FUNDING_DELTA, SHORT_FUNDING_DELTA);
+    let output = run(
+        &mut owed,
+        CreateOrderKind::MarketDecrease,
+        &params,
+        &usdc,
+        None,
+        Some(&wsol),
+        &[market_token],
+        Some(&p.position),
+        ONE_PERCENT,
+    )
+    .unwrap();
+    let (long, short) = rebates(&output);
+    assert!(
+        long > 0 && short > 0,
+        "the position is owed a rebate in both tokens"
+    );
+
+    let OrderSimulationOutput::Decrease { swaps, report, .. } = &output else {
+        panic!("not a decrease output");
+    };
+    let swapped = *swaps[0].token_out_amount();
+    let profit = *report.secondary_output_amount();
+
+    // The final output token is WSOL: the swapped collateral, the pnl output and
+    // the long rebate share one receipt. The short rebate is a separate USDC one.
+    let fee = output.builder_fee().unwrap();
+    assert_eq!(fee.token, wsol);
+    let receipts = output.receipts();
+    assert_eq!(receipts.len(), 2);
+    assert_eq!(receipts[0].token, wsol);
+    assert_eq!(receipts[0].gross_amount, swapped + profit + long);
+    assert_eq!(receipts[0].fee_amount, fee.paid_amount);
+    assert_eq!(
+        receipts[0].net_amount,
+        swapped + profit + long - u128::from(fee.paid_amount)
+    );
+    assert_eq!(receipts[1].token, usdc);
+    assert_eq!(receipts[1].gross_amount, short);
+    assert_eq!(receipts[1].fee_amount, 0);
+
+    // The cap is unchanged by the rebates.
+    assert_eq!(output.builder_fee(), without_rebates.builder_fee());
+    assert_consistent(&output);
 }
 
 // ----------------------------------------------------------------------------
