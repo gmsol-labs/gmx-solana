@@ -1,8 +1,9 @@
 //! The result of waiting for an order to finish, see [`Client::complete_order`].
 //!
-//! Owns: the [`OrderCompletion`] outcome type and [`LifecycleScan`], which rebuilds that
-//! outcome from an order's event history. Does NOT own: subscribing or fetching history
-//! (see `Client::complete_order_with_config`).
+//! Owns: the [`OrderCompletion`] outcome and its [`InconclusiveReason`], [`LifecycleScan`],
+//! which rebuilds the outcome from an order's event history, the history re-read timing
+//! ([`DEFAULT_HISTORY_WAIT`]) and the "order not found" rule (`reject_unseen_order`). Does NOT
+//! own: subscribing or fetching history (see `Client::complete_order_with_config`).
 //!
 //! Execution and close can land in different transactions, e.g. execute at slot 100
 //! (`TradeEvent`), settle the builder fee at 101, close at 102 (`OrderRemoved`). So the
@@ -73,8 +74,9 @@ pub enum InconclusiveReason {
 }
 
 impl InconclusiveReason {
-    /// Whether asking again later can change the answer: the missing event must exist, the
-    /// history index just doesn't show it yet.
+    /// Whether asking again later can change the answer: a close or trade that must exist is
+    /// not indexed yet, or a fetch failed (timeout, rate limit). `complete_order` already
+    /// retries these within its history wait; a `true` here means it ran out of time.
     pub fn is_retryable(&self) -> bool {
         matches!(
             self,
