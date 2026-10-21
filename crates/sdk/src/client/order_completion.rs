@@ -135,6 +135,21 @@ impl LifecycleScan {
         false
     }
 
+    /// Whether this order's close has been found.
+    pub(crate) fn has_close(&self) -> bool {
+        self.removed.is_some()
+    }
+
+    /// The outcome when an older transaction could not be read, e.g. one from an earlier
+    /// program version that no longer decodes. Only used once the close is found: before
+    /// that, the read error itself is the answer.
+    pub(crate) fn finish_with_read_error(self, err: impl std::fmt::Display) -> OrderCompletion {
+        OrderCompletion::Inconclusive {
+            removed: self.removed,
+            reason: format!("failed to read older history: {err}"),
+        }
+    }
+
     /// The outcome. `history_ended` is `true` when there were no older transactions, so the
     /// oldest one read is the start of the address's history.
     pub(crate) fn finish(self, history_ended: bool) -> OrderCompletion {
@@ -368,6 +383,17 @@ mod tests {
         txs.extend((0..40).map(|_| vec![updated(7, false)]));
         txs.push(vec![created(7)]);
         assert_eq!(trade_id(&scan(Some(7), &txs)), Some(42));
+    }
+
+    #[test]
+    fn read_error_after_close_keeps_the_close() {
+        let mut scan = LifecycleScan::new(ORDER, Some(7));
+        assert!(!scan.push_transaction(&[removed(7)]));
+        assert!(scan.has_close());
+        assert!(matches!(
+            scan.finish_with_read_error("decode error"),
+            OrderCompletion::Inconclusive { removed: Some(r), .. } if r.id == 7
+        ));
     }
 
     #[test]

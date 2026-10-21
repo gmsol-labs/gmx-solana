@@ -1536,7 +1536,14 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             .historical_store_cpi_events(order, Some(commitment))
             .await?;
         futures_util::pin_mut!(events);
-        while let Some(events) = events.try_next().await? {
+        loop {
+            let events = match events.try_next().await {
+                Ok(Some(events)) => events,
+                Ok(None) => break,
+                // An unreadable older tx must not throw away the close we already have.
+                Err(err) if scan.has_close() => return Ok(scan.finish_with_read_error(err)),
+                Err(err) => return Err(err),
+            };
             if events.slot() > before_slot {
                 continue;
             }
