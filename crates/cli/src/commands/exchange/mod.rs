@@ -2449,15 +2449,39 @@ async fn wait_for_order<C: Deref<Target = impl Signer> + Clone>(
     client: &gmsol_sdk::Client<C>,
     order: &Pubkey,
 ) -> gmsol_sdk::Result<()> {
-    let trade = client
+    use gmsol_sdk::client::order_completion::OrderCompletion;
+
+    let completion = client
         .complete_order(order, Some(CommitmentConfig::confirmed()))
         .await?;
-    match trade {
-        Some(trade) => {
+    match completion {
+        OrderCompletion::Trade(trade) => {
             tracing::info!(%order, "order completed with trade event: {trade:#?}");
         }
-        None => {
-            tracing::warn!(%order, "order completed without trade event");
+        OrderCompletion::NoTrade(removed) => {
+            // Also reached by cancelled orders, so say which state it ended in.
+            tracing::warn!(
+                %order,
+                state = ?removed.state,
+                reason = %removed.reason,
+                "order closed without trade event"
+            );
+        }
+        // Not an error: the order was already sent, and a failing exit could make a script
+        // send it again.
+        OrderCompletion::Inconclusive { removed, reason } => {
+            tracing::warn!(
+                %order,
+                %reason,
+                retryable = reason.is_retryable(),
+                state = ?removed.as_ref().map(|removed| &removed.state),
+                close_reason = ?removed.as_ref().map(|removed| &removed.reason),
+                "order closed, but its trade result could not be determined"
+            );
+        }
+        // `OrderCompletion` is `#[non_exhaustive]`.
+        completion => {
+            tracing::warn!(%order, ?completion, "order finished with an unknown result");
         }
     }
     Ok(())
