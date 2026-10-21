@@ -64,15 +64,22 @@ pub enum InconclusiveReason {
     },
     /// The start of the order's lifecycle was not found within the scan limit.
     ScanLimitReached,
-    /// An older transaction in the order's history could not be read or decoded.
-    ReadFailed(String),
+    /// An older transaction in the order's history could not be fetched, e.g. an RPC timeout
+    /// or rate limit. Asking again later can succeed.
+    RpcFailed(String),
+    /// An older transaction in the order's history holds an event that can't be decoded, e.g.
+    /// one from an earlier program version. Asking again gives the same answer.
+    DecodeFailed(String),
 }
 
 impl InconclusiveReason {
     /// Whether asking again later can change the answer: the missing event must exist, the
     /// history index just doesn't show it yet.
     pub fn is_retryable(&self) -> bool {
-        matches!(self, Self::CloseNotFound | Self::TradeNotFound)
+        matches!(
+            self,
+            Self::CloseNotFound | Self::TradeNotFound | Self::RpcFailed(_)
+        )
     }
 }
 
@@ -92,7 +99,8 @@ impl std::fmt::Display for InconclusiveReason {
                 f,
                 "lifecycle start not found within {MAX_SCANNED_TXS} transactions"
             ),
-            Self::ReadFailed(err) => write!(f, "failed to read older history: {err}"),
+            Self::RpcFailed(err) => write!(f, "failed to fetch older history: {err}"),
+            Self::DecodeFailed(err) => write!(f, "failed to decode older history: {err}"),
         }
     }
 }
@@ -207,13 +215,17 @@ impl LifecycleScan {
         self.removed.is_some()
     }
 
-    /// The outcome when an older transaction could not be read, e.g. one from an earlier
-    /// program version that no longer decodes. Only used once the close is found: before
-    /// that, the read error itself is the answer.
-    pub(crate) fn finish_with_read_error(self, err: impl std::fmt::Display) -> OrderCompletion {
+    /// The outcome when an older transaction could not be read. Only used once the close is
+    /// found: before that, the read error itself is the answer.
+    pub(crate) fn finish_with_read_error(self, err: &crate::Error) -> OrderCompletion {
+        // Decoder errors come through as `Error::Decode`; fetch errors as `Error::Custom`.
+        let reason = match err {
+            crate::Error::Decode(_) => InconclusiveReason::DecodeFailed(err.to_string()),
+            _ => InconclusiveReason::RpcFailed(err.to_string()),
+        };
         OrderCompletion::Inconclusive {
             removed: self.removed,
-            reason: InconclusiveReason::ReadFailed(err.to_string()),
+            reason,
         }
     }
 
@@ -463,7 +475,7 @@ mod tests {
         assert!(!scan.push_transaction(&[removed(7)]));
         assert!(scan.has_close());
         assert!(matches!(
-            scan.finish_with_read_error("decode error"),
+            scan.finish_with_read_error(&crate::Error::custom("timeout")),
             OrderCompletion::Inconclusive { removed: Some(r), .. } if r.id == 7
         ));
     }
@@ -473,12 +485,25 @@ mod tests {
         assert!(InconclusiveReason::CloseNotFound.is_retryable());
         assert!(InconclusiveReason::TradeNotFound.is_retryable());
         assert!(!InconclusiveReason::ScanLimitReached.is_retryable());
-        assert!(!InconclusiveReason::ReadFailed("x".to_owned()).is_retryable());
+        assert!(InconclusiveReason::RpcFailed("x".to_owned()).is_retryable());
+        assert!(!InconclusiveReason::DecodeFailed("x".to_owned()).is_retryable());
         assert!(!InconclusiveReason::OtherOrderClosed {
             found_id: 9,
             expected_id: 7
         }
         .is_retryable());
+    }
+
+    #[test]
+    fn read_errors_split_into_rpc_and_decode() {
+        let decode_err = crate::Error::Decode(gmsol_decode::DecodeError::custom("unknown event"));
+        let rpc_err = crate::Error::custom("429 Too Many Requests");
+        for (err, retryable) in [(decode_err, false), (rpc_err, true)] {
+            let mut scan = LifecycleScan::new(ORDER, Some(7));
+            scan.push_transaction(&[removed(7)]);
+            let reason = reason(&scan.finish_with_read_error(&err)).unwrap();
+            assert_eq!(reason.is_retryable(), retryable, "{reason}");
+        }
     }
 
     #[test]
