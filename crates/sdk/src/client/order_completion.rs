@@ -252,6 +252,27 @@ impl LifecycleScan {
     }
 }
 
+/// Turns "no close in history" into a not-found error for an order that was never seen open.
+///
+/// Waiting before the create lands looks the same as waiting after the close: no account.
+/// Without a sighting of the account and without a close in history, the order most likely
+/// doesn't exist yet, and calling it closed (`Inconclusive`) would be wrong.
+pub(crate) fn reject_unseen_order(
+    order: &Pubkey,
+    seen_open: bool,
+    completion: OrderCompletion,
+) -> crate::Result<OrderCompletion> {
+    match completion {
+        OrderCompletion::Inconclusive {
+            reason: InconclusiveReason::CloseNotFound,
+            ..
+        } if !seen_open => Err(crate::Error::custom(format!(
+            "order {order} not found: no account and no close in its history (not created yet?)"
+        ))),
+        completion => Ok(completion),
+    }
+}
+
 /// Executed position orders always emit a `TradeEvent`; swaps and cancelled orders don't.
 fn expects_trade(removed: &OrderRemoved) -> bool {
     matches!(removed.state, ActionState::Completed)
@@ -504,6 +525,23 @@ mod tests {
             let reason = reason(&scan.finish_with_read_error(&err)).unwrap();
             assert_eq!(reason.is_retryable(), retryable, "{reason}");
         }
+    }
+
+    #[test]
+    fn unseen_order_without_close_is_not_found() {
+        let no_close = || OrderCompletion::Inconclusive {
+            removed: None,
+            reason: InconclusiveReason::CloseNotFound,
+        };
+        assert!(reject_unseen_order(&ORDER, false, no_close()).is_err());
+        // Seen open, so it was closed and the close is just not indexed yet.
+        assert!(reject_unseen_order(&ORDER, true, no_close()).is_ok());
+        let cancelled = OrderCompletion::NoTrade(removed_event(
+            7,
+            OrderKind::MarketIncrease,
+            ActionState::Cancelled,
+        ));
+        assert!(reject_unseen_order(&ORDER, false, cancelled).is_ok());
     }
 
     #[test]
