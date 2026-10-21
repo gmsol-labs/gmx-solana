@@ -6,14 +6,17 @@
 //!
 //! Execution and close can land in different transactions, e.g. execute at slot 100
 //! (`TradeEvent`), settle the builder fee at 101, close at 102 (`OrderRemoved`). So the
-//! scan walks the order's transactions newest first, from its `OrderRemoved` back to the
-//! start of that order's lifecycle, and collects its `TradeEvent`.
+//! scan walks the order's transactions newest first, from its `OrderRemoved` back to its
+//! `TradeEvent`. With no trade, it walks on to the start of that order's lifecycle to
+//! prove there was none.
 //!
 //! Invariants:
 //!   - events are fed newest first: transactions newest first, and each transaction's
 //!     events in reverse emission order
 //!   - an order address can be reused (it is a PDA of `(store, owner, nonce)`), so a
 //!     lifecycle ends at the first older event that belongs to a different action id
+//!   - an order executes at most once (`Pending -> Completed`), so the first `TradeEvent`
+//!     before any boundary is this order's; an older order's trade sits behind its own close
 //!
 //! [`Client::complete_order`]: crate::Client::complete_order
 
@@ -49,8 +52,7 @@ pub(crate) const MAX_SCANNED_TXS: usize = 32;
 /// ```text
 /// tx 102: [OrderRemoved{order: O, id: 7}]      -> removed found
 /// tx 101: [BuilderFeeSettled]                  -> ignored
-/// tx 100: [TradeEvent{order: O}]               -> trade collected
-/// tx  99: [OrderUpdated{order: O, is_create}]  -> lifecycle start, done
+/// tx 100: [TradeEvent{order: O}]               -> trade found, done
 /// finish() -> OrderCompletion::Trade(..)
 /// ```
 pub(crate) struct LifecycleScan {
@@ -58,7 +60,7 @@ pub(crate) struct LifecycleScan {
     /// Action id of the order when it was seen open, if it was.
     expected_id: Option<u64>,
     removed: Option<OrderRemoved>,
-    trades: Vec<TradeEvent>,
+    trade: Option<TradeEvent>,
     reached_start: bool,
     scanned_txs: usize,
     failure: Option<String>,
@@ -70,7 +72,7 @@ impl LifecycleScan {
             order,
             expected_id,
             removed: None,
-            trades: Vec::new(),
+            trade: None,
             reached_start: false,
             scanned_txs: 0,
             failure: None,
@@ -104,8 +106,8 @@ impl LifecycleScan {
             GMSOLCPIEvent::TradeEvent(trade)
                 if trade.order == self.order && trade.store == removed.store =>
             {
-                self.trades.push(*trade);
-                false
+                self.trade = Some(*trade);
+                true
             }
             // The same close seen twice (live, then again in history) is not a boundary.
             GMSOLCPIEvent::OrderRemoved(event) if event.order == self.order => {
@@ -147,25 +149,22 @@ impl LifecycleScan {
                 "no `OrderRemoved` event found for the order".to_owned(),
             );
         };
+        if let Some(trade) = self.trade {
+            return OrderCompletion::Trade(Box::new(trade));
+        }
         if !(self.reached_start || history_ended) {
             return inconclusive(
                 Some(removed),
                 format!("lifecycle start not found within {MAX_SCANNED_TXS} transactions"),
             );
         }
-        let mut trades = self.trades;
-        match trades.len() {
-            0 if expects_trade(&removed) => inconclusive(
+        if expects_trade(&removed) {
+            return inconclusive(
                 Some(removed),
                 "order completed but no `TradeEvent` was found".to_owned(),
-            ),
-            0 => OrderCompletion::NoTrade(removed),
-            1 => OrderCompletion::Trade(Box::new(trades.remove(0))),
-            n => inconclusive(
-                Some(removed),
-                format!("found {n} `TradeEvent`s for one order"),
-            ),
+            );
         }
+        OrderCompletion::NoTrade(removed)
     }
 }
 
@@ -345,7 +344,7 @@ mod tests {
 
     #[test]
     fn scan_limit_without_start_is_inconclusive() {
-        let mut txs = vec![vec![removed(7)], vec![trade(ORDER, 42)]];
+        let mut txs = vec![vec![removed(7)]];
         txs.extend((0..MAX_SCANNED_TXS).map(|_| vec![]));
         assert!(matches!(
             scan(None, &txs),
@@ -363,16 +362,12 @@ mod tests {
     }
 
     #[test]
-    fn two_trades_in_one_lifecycle_is_inconclusive() {
-        let txs = [
-            vec![removed(7)],
-            vec![trade(ORDER, 1)],
-            vec![trade(ORDER, 2)],
-        ];
-        assert!(matches!(
-            scan(None, &txs),
-            OrderCompletion::Inconclusive { .. }
-        ));
+    fn stops_at_first_trade_before_reaching_start() {
+        // Limit order edited 40 times: the start is further back than the scan limit.
+        let mut txs = vec![vec![removed(7)], vec![trade(ORDER, 42)]];
+        txs.extend((0..40).map(|_| vec![updated(7, false)]));
+        txs.push(vec![created(7)]);
+        assert_eq!(trade_id(&scan(Some(7), &txs)), Some(42));
     }
 
     #[test]
@@ -389,14 +384,18 @@ mod tests {
 
     #[test]
     fn update_of_another_action_is_a_boundary() {
-        // Lifecycle 6 at the same address left only an update in this window.
+        // Lifecycle 7 was cancelled; lifecycle 6 at the same address left an update and a trade.
+        let cancelled = GMSOLCPIEvent::OrderRemoved(removed_event(
+            7,
+            OrderKind::MarketIncrease,
+            ActionState::Cancelled,
+        ));
         let txs = [
-            vec![removed(7)],
+            vec![cancelled],
             vec![updated(7, false)],
-            vec![trade(ORDER, 42)],
             vec![updated(6, false)],
             vec![trade(ORDER, 1)],
         ];
-        assert_eq!(trade_id(&scan(Some(7), &txs)), Some(42));
+        assert!(matches!(scan(Some(7), &txs), OrderCompletion::NoTrade(r) if r.id == 7));
     }
 }
