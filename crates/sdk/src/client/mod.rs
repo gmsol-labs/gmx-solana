@@ -119,7 +119,12 @@ use crate::builders::liquidity_provider::LiquidityProviderProgram;
 use gmsol_decode::{gmsol::programs::GMSOLCPIEvent, Decode};
 
 #[cfg(feature = "decode")]
-use order_completion::{LifecycleScan, OrderCompletion};
+use gmsol_programs::gmsol_store::events::OrderRemoved;
+
+#[cfg(feature = "decode")]
+use order_completion::{
+    LifecycleScan, OrderCompletion, HISTORY_RETRY_DEADLINE, HISTORY_RETRY_INTERVAL,
+};
 
 /// Discriminator offset.
 pub const DISC_OFFSET: usize = 8;
@@ -1434,9 +1439,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             match order.into_value() {
                 Some(order) => expected_id = Some(order.header.id),
                 None => {
-                    let scan = LifecycleScan::new(*address, None);
                     return self
-                        .order_completion_from_history(scan, address, slot, commitment)
+                        .order_completion_from_history(address, None, None, slot, commitment)
                         .await;
                 }
             }
@@ -1476,12 +1480,14 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                         }
                         // The trade may have landed before the subscription started.
                         let before_slot = removed.slot;
-                        let mut scan = LifecycleScan::new(address, expected_id);
-                        if scan.push_transaction(&[GMSOLCPIEvent::OrderRemoved(removed)]) {
-                            return Ok(scan.finish(false));
-                        }
                         return self
-                            .order_completion_from_history(scan, &address, before_slot, commitment)
+                            .order_completion_from_history(
+                                &address,
+                                expected_id,
+                                Some(removed),
+                                before_slot,
+                                commitment,
+                            )
                             .await;
                     }
                     _ => unreachable!(),
@@ -1500,11 +1506,11 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                                 if let Some(trade) = trade {
                                     return Ok(OrderCompletion::Trade(Box::new(trade)));
                                 }
-                                let scan = LifecycleScan::new(address, expected_id);
                                 return self
                                     .order_completion_from_history(
-                                        scan,
                                         &address,
+                                        expected_id,
+                                        None,
                                         res.slot(),
                                         commitment,
                                     )
@@ -1520,17 +1526,61 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         Err(crate::Error::custom("the watch stream end"))
     }
 
-    /// Finish `scan` by feeding it `order`'s transactions at or before `before_slot`, newest
-    /// first.
+    /// Rebuild how `order` finished from its history at or before `before_slot`.
+    ///
+    /// The account can be seen gone before the history index has the close or the trade, so
+    /// while one of those is provably missing, read again every [`HISTORY_RETRY_INTERVAL`] for
+    /// up to [`HISTORY_RETRY_DEADLINE`], then return what the last read showed.
     #[cfg(feature = "decode")]
     async fn order_completion_from_history(
         &self,
-        mut scan: LifecycleScan,
         order: &Pubkey,
+        expected_id: Option<u64>,
+        seen_close: Option<OrderRemoved>,
+        before_slot: u64,
+        commitment: CommitmentConfig,
+    ) -> crate::Result<OrderCompletion> {
+        let deadline = tokio::time::Instant::now() + HISTORY_RETRY_DEADLINE;
+        loop {
+            let completion = self
+                .scan_order_history(
+                    order,
+                    expected_id,
+                    seen_close.clone(),
+                    before_slot,
+                    commitment,
+                )
+                .await?;
+            let retry = matches!(
+                &completion,
+                OrderCompletion::Inconclusive { reason, .. } if reason.is_retryable()
+            );
+            if !retry || tokio::time::Instant::now() >= deadline {
+                return Ok(completion);
+            }
+            tokio::time::sleep(HISTORY_RETRY_INTERVAL).await;
+        }
+    }
+
+    /// One read of `order`'s history at or before `before_slot`, newest first. `seen_close`
+    /// is a close already seen live, fed first in case the index doesn't have it yet.
+    #[cfg(feature = "decode")]
+    async fn scan_order_history(
+        &self,
+        order: &Pubkey,
+        expected_id: Option<u64>,
+        seen_close: Option<OrderRemoved>,
         before_slot: u64,
         commitment: CommitmentConfig,
     ) -> crate::Result<OrderCompletion> {
         use futures_util::TryStreamExt;
+
+        let mut scan = LifecycleScan::new(*order, expected_id);
+        if let Some(removed) = seen_close {
+            if scan.push_transaction(&[GMSOLCPIEvent::OrderRemoved(removed)]) {
+                return Ok(scan.finish(false));
+            }
+        }
 
         let events = self
             .historical_store_cpi_events(order, Some(commitment))

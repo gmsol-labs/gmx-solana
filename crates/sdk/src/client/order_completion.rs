@@ -26,6 +26,7 @@ use gmsol_programs::gmsol_store::{
     types::{ActionState, OrderKind},
 };
 use solana_sdk::pubkey::Pubkey;
+use std::time::Duration;
 
 /// How an order finished.
 #[derive(Debug, Clone)]
@@ -67,6 +68,14 @@ pub enum InconclusiveReason {
     ReadFailed(String),
 }
 
+impl InconclusiveReason {
+    /// Whether asking again later can change the answer: the missing event must exist, the
+    /// history index just doesn't show it yet.
+    pub fn is_retryable(&self) -> bool {
+        matches!(self, Self::CloseNotFound | Self::TradeNotFound)
+    }
+}
+
 impl std::fmt::Display for InconclusiveReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -87,6 +96,13 @@ impl std::fmt::Display for InconclusiveReason {
         }
     }
 }
+
+/// How long to wait between two history reads while the close or trade is not indexed yet.
+pub(crate) const HISTORY_RETRY_INTERVAL: Duration = Duration::from_secs(1);
+
+/// How long to keep re-reading history while the close or trade is not indexed yet.
+// The index usually lags by a second or two; there is no fixed bound, so give up eventually.
+pub(crate) const HISTORY_RETRY_DEADLINE: Duration = Duration::from_secs(30);
 
 /// Most event-bearing transactions read before giving up on finding the lifecycle start.
 // An order's own history is usually 2–4 transactions (create, execute, settle, close).
@@ -444,6 +460,19 @@ mod tests {
             scan.finish_with_read_error("decode error"),
             OrderCompletion::Inconclusive { removed: Some(r), .. } if r.id == 7
         ));
+    }
+
+    #[test]
+    fn only_missing_events_are_retryable() {
+        assert!(InconclusiveReason::CloseNotFound.is_retryable());
+        assert!(InconclusiveReason::TradeNotFound.is_retryable());
+        assert!(!InconclusiveReason::ScanLimitReached.is_retryable());
+        assert!(!InconclusiveReason::ReadFailed("x".to_owned()).is_retryable());
+        assert!(!InconclusiveReason::OtherOrderClosed {
+            found_id: 9,
+            expected_id: 7
+        }
+        .is_retryable());
     }
 
     #[test]
