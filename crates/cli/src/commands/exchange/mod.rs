@@ -2467,8 +2467,17 @@ async fn wait_for_order<C: Deref<Target = impl Signer> + Clone>(
                 "order closed without trade event"
             );
         }
-        OrderCompletion::Inconclusive { reason, .. } => {
-            tracing::warn!(%order, %reason, "order closed, but its trade result could not be determined");
+        // Not an error: the order was already sent, and a failing exit could make a script
+        // send it again.
+        OrderCompletion::Inconclusive { removed, reason } => {
+            tracing::warn!(
+                %order,
+                %reason,
+                retryable = reason.is_retryable(),
+                state = ?removed.as_ref().map(|removed| &removed.state),
+                close_reason = ?removed.as_ref().map(|removed| &removed.reason),
+                "order closed, but its trade result could not be determined"
+            );
         }
         // `OrderCompletion` is `#[non_exhaustive]`.
         completion => {
