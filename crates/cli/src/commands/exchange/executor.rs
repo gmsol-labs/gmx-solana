@@ -266,7 +266,7 @@ impl<'a> Executor<'a> {
     }
 
     /// Close the temporary Pyth accounts left open when an execute bundle stopped before its
-    /// close batch. Never fails: a cleanup error is logged with the addresses.
+    /// close batch. Never fails: a cleanup error is printed to stderr with the addresses.
     async fn close_temporary_accounts(
         &self,
         accounts: &[Pubkey],
@@ -280,11 +280,15 @@ impl<'a> Executor<'a> {
             .try_close_temporary_accounts(accounts, send_err, last_valid_block_height)
             .await
         {
-            tracing::warn!(
-                %err,
-                ?accounts,
-                "failed to close temporary Pyth accounts, their rent stays locked until they are closed"
+            // `eprintln!`, not `warn!`: this output is the only record of the addresses, so it
+            // must show whatever the log level is.
+            eprintln!(
+                "\nFailed to close temporary Pyth accounts: {err}\n\
+                 Their rent stays locked until they are closed. Addresses:"
             );
+            for account in accounts {
+                eprintln!("  {account}");
+            }
         }
     }
 
