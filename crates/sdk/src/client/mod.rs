@@ -1615,7 +1615,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                 Ok(Some(events)) => events,
                 Ok(None) => break,
                 // An unreadable older tx must not throw away the close we already have.
-                Err(err) if scan.has_close() => return Ok(scan.finish_with_read_error(err)),
+                Err(err) if scan.has_close() => return Ok(scan.finish_with_read_error(&err)),
                 Err(err) => return Err(err),
             };
             if events.slot() > before_slot {
