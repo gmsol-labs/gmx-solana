@@ -297,7 +297,9 @@ impl<'a> Executor<'a> {
         // A transaction with an unknown outcome may still create an account; wait until it
         // cannot land, or that account would be missed.
         if is_unresolved(send_err) {
-            tracing::info!("waiting for unresolved transactions to expire before closing temporary Pyth accounts");
+            // `println!`, not `info!`: the default log level hides info, and the wait can
+            // take minutes, which would look like a hang.
+            println!("\nWaiting for unresolved transactions to expire before closing temporary Pyth accounts (up to ~3 min)...");
             wait_for_blockhash_expiry(self.client.rpc(), last_valid_block_height).await?;
         }
         let bundle = self
