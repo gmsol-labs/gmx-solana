@@ -123,7 +123,8 @@ use gmsol_programs::gmsol_store::events::OrderRemoved;
 
 #[cfg(feature = "decode")]
 use order_completion::{
-    LifecycleScan, OrderCompletion, DEFAULT_HISTORY_WAIT, HISTORY_RETRY_FIRST_DELAY,
+    reject_unseen_order, LifecycleScan, OrderCompletion, DEFAULT_HISTORY_WAIT,
+    HISTORY_RETRY_FIRST_DELAY,
 };
 
 /// Discriminator offset.
@@ -1444,7 +1445,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             match order.into_value() {
                 Some(order) => expected_id = Some(order.header.id),
                 None => {
-                    return self
+                    let completion = self
                         .order_completion_from_history(
                             address,
                             None,
@@ -1453,7 +1454,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                             commitment,
                             history_wait,
                         )
-                        .await;
+                        .await?;
+                    return reject_unseen_order(address, false, completion);
                 }
             }
         }
@@ -1524,7 +1526,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                                     let trade = live_trades.remove(0);
                                     return Ok(OrderCompletion::Trade(Box::new(trade)));
                                 }
-                                return self
+                                let completion = self
                                     .order_completion_from_history(
                                         &address,
                                         expected_id,
@@ -1533,7 +1535,12 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                                         commitment,
                                         history_wait,
                                     )
-                                    .await;
+                                    .await?;
+                                return reject_unseen_order(
+                                    &address,
+                                    expected_id.is_some(),
+                                    completion,
+                                );
                             }
                         }
                     } else {
