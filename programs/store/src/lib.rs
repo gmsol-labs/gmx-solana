@@ -213,6 +213,7 @@
 //! - [`prepare_gt_exchange_vault`](gmsol_store::prepare_gt_exchange_vault): Prepare current GT exchange vault.
 //! - [`confirm_gt_exchange_vault_v2`]: Confirm GT exchange vault.
 //! - [`request_gt_exchange`](gmsol_store::request_gt_exchange): Request a GT exchange.
+//! - [`request_gt_exchange_v2`](gmsol_store::request_gt_exchange_v2): Request a GT exchange as owner or delegate with separate rent payer.
 //! - [`close_gt_exchange`]: Close a confirmed GT exchange.
 //! - [`close_gt_exchange_v2`]: Close a confirmed GT exchange to its rent receiver.
 
@@ -3019,6 +3020,26 @@ pub mod gmsol_store {
     ///   - Not exceed the owner's available (excluding reserved) GT balance in their user account
     pub fn request_gt_exchange(ctx: Context<RequestGtExchange>, amount: u64) -> Result<()> {
         instructions::request_gt_exchange(ctx, amount)
+    }
+
+    /// Request a GT exchange signed by the owner or its delegate, with separate rent payer.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](RequestGtExchangeV2)*
+    ///
+    /// # Arguments
+    /// - `amount`: The amount of GT to exchange for rewards.
+    ///
+    /// # Errors
+    /// - `authority` must sign as the owner or the owner's current GT delegate.
+    /// - A delegate's remaining allowance must cover `amount` and is reduced on success.
+    /// - `payer` must sign and pays rent if the exchange is first created.
+    /// - `user` must be the initialized User Account of `owner` in `store`.
+    /// - `vault` must belong to `store` and be open for requests.
+    /// - `exchange` must be the owner's exchange in `vault`, either uninitialized or valid.
+    /// - `amount` must not exceed the owner's available GT.
+    pub fn request_gt_exchange_v2(ctx: Context<RequestGtExchangeV2>, amount: u64) -> Result<()> {
+        RequestGtExchangeV2::invoke(ctx, amount)
     }
 
     /// Close a confirmed GT exchange whose rent receiver is its owner.

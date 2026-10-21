@@ -679,6 +679,10 @@ impl GtExchange {
         optional_address(&self.rent_receiver).unwrap_or(&self.owner)
     }
 
+    pub(crate) fn set_rent_receiver(&mut self, receiver: Pubkey) {
+        self.rent_receiver = receiver;
+    }
+
     pub(crate) fn store(&self) -> &Pubkey {
         &self.store
     }

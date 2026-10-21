@@ -79,6 +79,7 @@ const MAX_DEVIATION_FACTOR: u128 = MARKET_USD_UNIT / 100_000;
 /// Serializes the tests that move a builder fee global: the cap, or the
 /// `BuilderFee` feature flag. See [`Deployment::lock_builder_fee_globals`].
 static BUILDER_FEE_GLOBALS_LOCK: Mutex<()> = Mutex::const_new(());
+pub(super) static GT_EXCHANGE_WINDOW_LOCK: Mutex<()> = Mutex::const_new(());
 
 const PYTH_FETCH_MAX_RETRIES: usize = 3;
 const PYTH_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);

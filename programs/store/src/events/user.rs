@@ -24,6 +24,29 @@ impl gmsol_utils::InitSpace for GtDelegationUpdated {
 
 impl Event for GtDelegationUpdated {}
 
+/// GT allowance consumed by a delegated exchange request.
+#[event]
+#[cfg_attr(feature = "debug", derive(derive_more::Debug))]
+#[derive(InitSpace)]
+pub struct GtAllowanceConsumed {
+    /// The GT owner's User Account.
+    pub user: Pubkey,
+    /// The GT owner.
+    pub owner: Pubkey,
+    /// The delegate that requested the exchange.
+    pub delegate: Pubkey,
+    /// The GT amount spent from the allowance.
+    pub amount: u64,
+    /// The remaining allowance after the spend.
+    pub allowance: u64,
+}
+
+impl gmsol_utils::InitSpace for GtAllowanceConsumed {
+    const INIT_SPACE: usize = <Self as Space>::INIT_SPACE;
+}
+
+impl Event for GtAllowanceConsumed {}
+
 /// Builder fee factor set event.
 #[event]
 #[cfg_attr(feature = "debug", derive(derive_more::Debug))]

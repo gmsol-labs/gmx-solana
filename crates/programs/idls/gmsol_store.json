@@ -19629,6 +19629,206 @@
       ]
     },
     {
+      "name": "request_gt_exchange_v2",
+      "docs": [
+        "Request a GT exchange signed by the owner or its delegate, with separate rent payer.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](RequestGtExchangeV2)*",
+        "",
+        "# Arguments",
+        "- `amount`: The amount of GT to exchange for rewards.",
+        "",
+        "# Errors",
+        "- `authority` must sign as the owner or the owner's current GT delegate.",
+        "- A delegate's remaining allowance must cover `amount` and is reduced on success.",
+        "- `payer` must sign and pays rent if the exchange is first created.",
+        "- `user` must be the initialized User Account of `owner` in `store`.",
+        "- `vault` must belong to `store` and be open for requests.",
+        "- `exchange` must be the owner's exchange in `vault`, either uninitialized or valid.",
+        "- `amount` must not exceed the owner's available GT."
+      ],
+      "discriminator": [
+        102,
+        193,
+        172,
+        200,
+        149,
+        255,
+        223,
+        100
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "GT owner; a program-controlled address need not sign this instruction."
+          ],
+          "relations": [
+            "user"
+          ]
+        },
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "store",
+          "writable": true,
+          "relations": [
+            "user",
+            "vault"
+          ]
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  116,
+                  95,
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "exchange",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  116,
+                  95,
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "revoke_role",
       "docs": [
         "Revoke a role from the given user in the given store.",
@@ -23962,6 +24162,19 @@
         225,
         72,
         207
+      ]
+    },
+    {
+      "name": "GtAllowanceConsumed",
+      "discriminator": [
+        106,
+        16,
+        89,
+        22,
+        3,
+        57,
+        43,
+        154
       ]
     },
     {
@@ -28646,6 +28859,52 @@
                 128
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GtAllowanceConsumed",
+      "docs": [
+        "GT allowance consumed by a delegated exchange request."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "docs": [
+              "The GT owner's User Account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "The GT owner."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "delegate",
+            "docs": [
+              "The delegate that requested the exchange."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "The GT amount spent from the allowance."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "allowance",
+            "docs": [
+              "The remaining allowance after the spend."
+            ],
+            "type": "u64"
           }
         ]
       }

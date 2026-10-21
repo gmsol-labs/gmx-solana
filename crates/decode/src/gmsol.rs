@@ -11,10 +11,11 @@ pub mod programs {
         events::{
             BorrowingFeesUpdated, BuilderFeeCharged, BuilderFeeClaimed, BuilderFeeFactorSet,
             BuilderFeeSet, BuilderFeeSettled, DepositExecuted, DepositRemoved, GlvDepositRemoved,
-            GlvPricing, GlvTokenValue, GlvWithdrawalRemoved, GtBuyback, GtDelegationUpdated,
-            GtUpdated, InsufficientFundingFeePayment, MarketFeesUpdated, MarketStateUpdated,
-            MarketTokenValue, OrderRemoved, OrderUpdated, PositionDecreased, PositionIncreased,
-            ShiftRemoved, SwapExecuted, TradeEvent, WithdrawalExecuted, WithdrawalRemoved,
+            GlvPricing, GlvTokenValue, GlvWithdrawalRemoved, GtAllowanceConsumed, GtBuyback,
+            GtDelegationUpdated, GtUpdated, InsufficientFundingFeePayment, MarketFeesUpdated,
+            MarketStateUpdated, MarketTokenValue, OrderRemoved, OrderUpdated, PositionDecreased,
+            PositionIncreased, ShiftRemoved, SwapExecuted, TradeEvent, WithdrawalExecuted,
+            WithdrawalRemoved,
         },
     };
 
@@ -57,6 +58,7 @@ pub mod programs {
     impl_decode_for_cpi_event!(BuilderFeeCharged);
     impl_decode_for_cpi_event!(BuilderFeeFactorSet);
     impl_decode_for_cpi_event!(GtDelegationUpdated);
+    impl_decode_for_cpi_event!(GtAllowanceConsumed);
     impl_decode_for_cpi_event!(BuilderFeeSet);
     impl_decode_for_cpi_event!(BuilderFeeSettled);
     impl_decode_for_cpi_event!(BuilderFeeClaimed);
@@ -111,6 +113,7 @@ pub mod programs {
             BuilderFeeCharged,
             BuilderFeeFactorSet,
             GtDelegationUpdated,
+            GtAllowanceConsumed,
             BuilderFeeSet,
             BuilderFeeSettled,
             BuilderFeeClaimed,

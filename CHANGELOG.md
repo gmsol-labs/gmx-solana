@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Breaking Changes
 
 - sdk(sdk): `OrderSimulationOutput::Increase` gained `gross_collateral_amount` and `builder_fee`, and `OrderSimulationOutput::Decrease` gained `receipts` and `builder_fee`. Code that destructures these variants without `..` must name the new fields. `OrderSimulationBuilderForSimulator` gained one builder-state element, which matters only to code that spells the alias out. For an order with a builder fee, `report.params().collateral_increment_amount()` of an increase is now the net collateral, as in the program's trade event.
-
+- programs(store): GT exchange requests can also arrive through `request_gt_exchange_v2`, with owner or delegate authority and a separate rent payer. Consumers that identify requests only by `request_gt_exchange` must recognize the new instruction; the legacy accounts and behavior remain unchanged.
 
 ### Changed
 
@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(sdk): Added `builder_fee_factor` to `Simulator::simulate_order`. Increase simulations deduct the fee from the swapped collateral before the position grows and fail when it cannot be covered. Decrease simulations top up the collateral withdrawal by the fee estimate, charge the fee on the executed size in the final output token, clamp it to the outputs that fund its escrow, and reject `CollateralToPnlToken`. Swap orders reject a non-zero factor. Results report the gross amount, the fee (`BuilderFeeOutcome`: factor, token, computed and charged amounts), and the net amount: `net_collateral_amount()` for an increase and per-token `TokenReceipt`s for a decrease. A receipt counts everything the execution pays out in that token: the final output after the receive-token swap, the secondary pnl output and the funding rebates (`claimable_funding_amounts`), merged by token. The fee cap is computed from the trade outputs only, as in the program, so rebates do not widen it.
 - sdk(js): Added `builder_fee_factor` to `Simulator.simulate_order`, and `gross_collateral_amount`, `net_collateral_amount`, `receipts` and `builder_fee` to the increase and decrease simulation outputs.
 - programs(store): Added `close_gt_exchange_v2` so a GT controller can close a confirmed GT exchange and return its rent to the recorded receiver. The existing `close_gt_exchange` still serves owner receivers and now rejects an exchange configured for another receiver.
+- programs(store): Added `request_gt_exchange_v2` for owner or delegate authorized GT burns with a separate rent payer, and records that payer as the receiver when an exchange is created.
+- programs(store): Added the `GtAllowanceConsumed` CPI event for successful delegated GT exchange requests, recording the owner, User Account, delegate, spent amount, and remaining allowance.
+- sdk(sdk): Added `GtOps::request_gt_exchange_v2_with_time_window_index` and current-window builder with distinct owner, authority, and rent-payer accounts.
 - programs(store): Added owner-signed instructions to replace or clear a GT delegate and allowance, increase the remaining allowance, or decrease it to a floor of zero. Each emits the resulting delegation state.
 - sdk(sdk): Added `UserOps` builders for GT delegate and allowance changes.
 - sdk(decode): Added typed decoding for GT delegation updates.

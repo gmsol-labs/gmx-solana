@@ -6,24 +6,27 @@ use futures_util::{FutureExt, StreamExt};
 use gmsol_programs::{
     anchor_lang::error::ErrorCode,
     gmsol_store::{
-        accounts::ReferralCodeV2,
+        accounts::{GtExchange, ReferralCodeV2},
         client::{accounts, args},
     },
 };
 use gmsol_sdk::{
-    client::ops::{BuilderFeeOps, ConfigOps, UserOps},
+    client::ops::{
+        gt::current_time_window_index, BuilderFeeOps, ConfigOps, GtOps, SystemProgramOps, UserOps,
+    },
     constants::MARKET_USD_UNIT,
     decode::gmsol::programs::GMSOLCPIEvent,
+    utils::zero_copy::ZeroCopy,
     Client,
 };
-use gmsol_solana_utils::signer::SignerRef;
-use gmsol_store::CoreError;
+use gmsol_solana_utils::signer::{shared_signer, SignerRef};
+use gmsol_store::{constants::DEFAULT_GT_VAULT_TIME_WINDOW, CoreError};
 use gmsol_utils::config::FactorKey;
 use solana_sdk::{
     commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair, signer::Signer,
 };
 
-use crate::anchor_test::setup::{current_deployment, Deployment};
+use crate::anchor_test::setup::{current_deployment, Deployment, GT_EXCHANGE_WINDOW_LOCK};
 
 async fn scub_assert_gt_delegation_event(
     client: &Client<SignerRef>,
@@ -51,6 +54,44 @@ async fn scub_assert_gt_delegation_event(
     assert_eq!(event.owner, client.payer());
     assert_eq!(event.delegate, delegate);
     assert_eq!(event.allowance, allowance);
+    Ok(())
+}
+
+async fn assert_gt_allowance_consumption(
+    client: &Client<SignerRef>,
+    user: Pubkey,
+    owner: Pubkey,
+    expected: Option<(Pubkey, u64, u64)>,
+) -> eyre::Result<()> {
+    let events = client
+        .historical_store_cpi_events(&user, Some(CommitmentConfig::confirmed()))
+        .await?;
+    futures_util::pin_mut!(events);
+    let latest = events.next().await.ok_or_eyre("no user transactions")??;
+    let consumption: Vec<_> = latest
+        .value()
+        .iter()
+        .filter_map(|event| match event {
+            GMSOLCPIEvent::GtAllowanceConsumed(event) => Some(event),
+            _ => None,
+        })
+        .collect();
+    match expected {
+        Some((delegate, amount, allowance)) => {
+            assert_eq!(
+                consumption.len(),
+                1,
+                "expected one GT allowance consumption event"
+            );
+            let event = consumption[0];
+            assert_eq!(event.user, user);
+            assert_eq!(event.owner, owner);
+            assert_eq!(event.delegate, delegate);
+            assert_eq!(event.amount, amount);
+            assert_eq!(event.allowance, allowance);
+        }
+        None => assert!(consumption.is_empty(), "owner request consumed allowance"),
+    }
     Ok(())
 }
 
@@ -243,6 +284,294 @@ async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
         .await
         .expect_err("a zero delegate cannot be set with a positive allowance");
     assert_eq!(client.user(&user_address).await?.gt.allowance, 0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn gt_exchange_delegate_and_third_party_rent() -> eyre::Result<()> {
+    const EXCHANGE_WINDOW: u32 = DEFAULT_GT_VAULT_TIME_WINDOW;
+    const INITIAL_GT_BALANCE: u64 = 100;
+    const INITIAL_ALLOWANCE: u64 = 20;
+    const DELEGATE_SPEND: u64 = 5;
+    const OWNER_SPEND: u64 = 3;
+
+    let _window_guard = GT_EXCHANGE_WINDOW_LOCK.lock().await;
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let owner = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
+    let delegate = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
+    let unauthorized = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let payer = Keypair::new();
+    let store = &deployment.store;
+    keeper
+        .gt_set_exchange_time_window(store, EXCHANGE_WINDOW)
+        .send()
+        .await?;
+    let owner_address = owner.payer();
+    let user_address = owner.find_user_address(store, &owner_address);
+    let index = current_time_window_index(EXCHANGE_WINDOW)?;
+    let vault = owner.find_gt_exchange_vault_address(store, index, EXCHANGE_WINDOW);
+    let exchange_address = owner.find_gt_exchange_address(&vault, &owner_address);
+
+    deployment
+        .client
+        .transfer(&owner_address, 50_000_000)?
+        .send()
+        .await?;
+    deployment
+        .client
+        .transfer(&delegate.payer(), 20_000_000)?
+        .send()
+        .await?;
+    deployment
+        .client
+        .transfer(&unauthorized.payer(), 20_000_000)?
+        .send()
+        .await?;
+    deployment
+        .client
+        .transfer(&payer.pubkey(), 5_000_000)?
+        .send()
+        .await?;
+    owner.prepare_user(store)?.send().await?;
+    keeper
+        .mint_gt_reward(store, &owner_address, INITIAL_GT_BALANCE)?
+        .send()
+        .await?;
+    owner
+        .set_gt_delegate(store, &delegate.payer(), INITIAL_ALLOWANCE)?
+        .send()
+        .await?;
+    keeper
+        .prepare_gt_exchange_vault_with_time_window_index(store, index, EXCHANGE_WINDOW)
+        .send()
+        .await?;
+    let initial_rent_payer_balance = delegate.rpc().get_balance(&payer.pubkey()).await?;
+
+    let err = unauthorized
+        .request_gt_exchange_v2_with_time_window_index(
+            store,
+            &owner_address,
+            &unauthorized.payer(),
+            &payer.pubkey(),
+            index,
+            EXCHANGE_WINDOW,
+            1,
+        )
+        .signer(&payer)
+        .send()
+        .await
+        .expect_err("an unauthorized signer must be rejected");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::PermissionDenied.into())
+    );
+    assert_eq!(
+        owner.user(&user_address).await?.gt.allowance,
+        INITIAL_ALLOWANCE
+    );
+    assert!(owner
+        .account::<ZeroCopy<GtExchange>>(&exchange_address)
+        .await?
+        .is_none());
+    owner
+        .set_gt_delegate(store, &Pubkey::default(), 0)?
+        .send()
+        .await?;
+    let err = delegate
+        .request_gt_exchange_v2_with_time_window_index(
+            store,
+            &owner_address,
+            &delegate.payer(),
+            &payer.pubkey(),
+            index,
+            EXCHANGE_WINDOW,
+            1,
+        )
+        .signer(&payer)
+        .send()
+        .await
+        .expect_err("a revoked delegate must be rejected");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::PermissionDenied.into())
+    );
+    assert_eq!(
+        owner.user(&user_address).await?.gt.amount,
+        INITIAL_GT_BALANCE
+    );
+    assert!(owner
+        .account::<ZeroCopy<GtExchange>>(&exchange_address)
+        .await?
+        .is_none());
+    owner
+        .set_gt_delegate(store, &delegate.payer(), INITIAL_GT_BALANCE + 1)?
+        .send()
+        .await?;
+    let err = delegate
+        .request_gt_exchange_v2_with_time_window_index(
+            store,
+            &owner_address,
+            &delegate.payer(),
+            &payer.pubkey(),
+            index,
+            EXCHANGE_WINDOW,
+            INITIAL_GT_BALANCE + 1,
+        )
+        .signer(&payer)
+        .send()
+        .await
+        .expect_err("a sufficient allowance cannot spend unavailable GT");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::NotEnoughTokenAmount.into())
+    );
+    assert!(owner
+        .account::<ZeroCopy<GtExchange>>(&exchange_address)
+        .await?
+        .is_none());
+    let user = owner.user(&user_address).await?;
+    assert_eq!(user.gt.allowance, INITIAL_GT_BALANCE + 1);
+    assert_eq!(user.gt.amount, INITIAL_GT_BALANCE);
+    assert_eq!(
+        delegate.rpc().get_balance(&payer.pubkey()).await?,
+        initial_rent_payer_balance
+    );
+    owner
+        .set_gt_delegate(store, &delegate.payer(), INITIAL_ALLOWANCE)?
+        .send()
+        .await?;
+    let err = delegate
+        .request_gt_exchange_v2_with_time_window_index(
+            store,
+            &owner_address,
+            &delegate.payer(),
+            &payer.pubkey(),
+            index,
+            EXCHANGE_WINDOW,
+            INITIAL_ALLOWANCE + 1,
+        )
+        .signer(&payer)
+        .send()
+        .await
+        .expect_err("an over-allowance spend must not create an exchange");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::InvalidArgument.into())
+    );
+    assert!(owner
+        .account::<ZeroCopy<GtExchange>>(&exchange_address)
+        .await?
+        .is_none());
+    let user = owner.user(&user_address).await?;
+    assert_eq!(user.gt.allowance, INITIAL_ALLOWANCE);
+    assert_eq!(user.gt.amount, INITIAL_GT_BALANCE);
+    assert_eq!(
+        delegate.rpc().get_balance(&payer.pubkey()).await?,
+        initial_rent_payer_balance
+    );
+
+    delegate
+        .request_gt_exchange_v2_with_time_window_index(
+            store,
+            &owner_address,
+            &delegate.payer(),
+            &payer.pubkey(),
+            index,
+            EXCHANGE_WINDOW,
+            DELEGATE_SPEND,
+        )
+        .signer(&payer)
+        .send()
+        .await?;
+    let exchange = owner
+        .account::<ZeroCopy<GtExchange>>(&exchange_address)
+        .await?
+        .unwrap()
+        .0;
+    assert_eq!(exchange.owner, owner_address);
+    assert_eq!(exchange.amount, DELEGATE_SPEND);
+    assert_eq!(exchange.rent_receiver, payer.pubkey());
+    let rent_payer_balance_after_creation = delegate.rpc().get_balance(&payer.pubkey()).await?;
+    assert!(rent_payer_balance_after_creation < initial_rent_payer_balance);
+    let user = owner.user(&user_address).await?;
+    assert_eq!(user.gt.allowance, INITIAL_ALLOWANCE - DELEGATE_SPEND);
+    assert_eq!(user.gt.amount, INITIAL_GT_BALANCE - DELEGATE_SPEND);
+    assert_gt_allowance_consumption(
+        &delegate,
+        user_address,
+        owner_address,
+        Some((
+            delegate.payer(),
+            DELEGATE_SPEND,
+            INITIAL_ALLOWANCE - DELEGATE_SPEND,
+        )),
+    )
+    .await?;
+
+    let err = delegate
+        .request_gt_exchange_v2_with_time_window_index(
+            store,
+            &owner_address,
+            &delegate.payer(),
+            &payer.pubkey(),
+            index,
+            EXCHANGE_WINDOW,
+            INITIAL_ALLOWANCE,
+        )
+        .signer(&payer)
+        .send()
+        .await
+        .expect_err("spending above the remaining allowance must fail");
+    assert_eq!(
+        gmsol_sdk::Error::from(err).anchor_error_code(),
+        Some(CoreError::InvalidArgument.into())
+    );
+    let exchange = owner
+        .account::<ZeroCopy<GtExchange>>(&exchange_address)
+        .await?
+        .unwrap()
+        .0;
+    assert_eq!(exchange.amount, DELEGATE_SPEND);
+    let user = owner.user(&user_address).await?;
+    assert_eq!(user.gt.allowance, INITIAL_ALLOWANCE - DELEGATE_SPEND);
+    assert_eq!(user.gt.amount, INITIAL_GT_BALANCE - DELEGATE_SPEND);
+
+    owner
+        .request_gt_exchange_v2_with_time_window_index(
+            store,
+            &owner_address,
+            &owner_address,
+            &owner_address,
+            index,
+            EXCHANGE_WINDOW,
+            OWNER_SPEND,
+        )
+        .send()
+        .await?;
+    let exchange = owner
+        .account::<ZeroCopy<GtExchange>>(&exchange_address)
+        .await?
+        .unwrap()
+        .0;
+    assert_eq!(exchange.amount, DELEGATE_SPEND + OWNER_SPEND);
+    assert_eq!(exchange.rent_receiver, payer.pubkey());
+    assert_eq!(
+        delegate.rpc().get_balance(&payer.pubkey()).await?,
+        rent_payer_balance_after_creation
+    );
+    assert_eq!(
+        owner.user(&user_address).await?.gt.allowance,
+        INITIAL_ALLOWANCE - DELEGATE_SPEND
+    );
+    assert_gt_allowance_consumption(&owner, user_address, owner_address, None).await?;
     Ok(())
 }
 
