@@ -123,7 +123,7 @@ use gmsol_programs::gmsol_store::events::OrderRemoved;
 
 #[cfg(feature = "decode")]
 use order_completion::{
-    LifecycleScan, OrderCompletion, HISTORY_RETRY_DEADLINE, HISTORY_RETRY_INTERVAL,
+    LifecycleScan, OrderCompletion, HISTORY_RETRY_DEADLINE, HISTORY_RETRY_FIRST_DELAY,
 };
 
 /// Discriminator offset.
@@ -1535,8 +1535,9 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     /// Rebuild how `order` finished from its history at or before `before_slot`.
     ///
     /// The account can be seen gone before the history index has the close or the trade, so
-    /// while one of those is provably missing, read again every [`HISTORY_RETRY_INTERVAL`] for
-    /// up to [`HISTORY_RETRY_DEADLINE`], then return what the last read showed.
+    /// while one of those is provably missing, read again after [`HISTORY_RETRY_FIRST_DELAY`],
+    /// doubling the wait each time, for up to [`HISTORY_RETRY_DEADLINE`], then return what the
+    /// last read showed. With 1 s and 30 s that is reads at 0, 1, 3, 7, 15 and 30 s.
     #[cfg(feature = "decode")]
     async fn order_completion_from_history(
         &self,
@@ -1547,6 +1548,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         commitment: CommitmentConfig,
     ) -> crate::Result<OrderCompletion> {
         let deadline = tokio::time::Instant::now() + HISTORY_RETRY_DEADLINE;
+        let mut delay = HISTORY_RETRY_FIRST_DELAY;
         loop {
             let completion = self
                 .scan_order_history(
@@ -1561,10 +1563,12 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                 &completion,
                 OrderCompletion::Inconclusive { reason, .. } if reason.is_retryable()
             );
-            if !retry || tokio::time::Instant::now() >= deadline {
+            let now = tokio::time::Instant::now();
+            if !retry || now >= deadline {
                 return Ok(completion);
             }
-            tokio::time::sleep(HISTORY_RETRY_INTERVAL).await;
+            tokio::time::sleep(delay.min(deadline - now)).await;
+            delay *= 2;
         }
     }
 
