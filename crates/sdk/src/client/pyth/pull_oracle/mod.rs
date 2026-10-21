@@ -63,6 +63,10 @@ where
     ///
     /// Only the payer signs, and it must be the payer that created the accounts.
     ///
+    /// The lookup uses `client`'s commitment level, so a client set to `finalized` may not
+    /// yet see an account created seconds earlier and skips it. Calling this again later
+    /// closes it.
+    ///
     /// INVARIANT: no transaction that could still create one of `accounts` may be in flight,
     /// or that account is missed. Settle unresolved sends first, e.g. with
     /// [`wait_for_blockhash_expiry`](gmsol_solana_utils::client::wait_for_blockhash_expiry).
