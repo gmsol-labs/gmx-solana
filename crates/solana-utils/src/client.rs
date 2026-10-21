@@ -123,6 +123,54 @@ fn first_signature(transaction: &impl SerializableTransaction) -> Option<Signatu
     Some(*transaction.get_signature())
 }
 
+/// Pause between block height polls in [`wait_for_blockhash_expiry`].
+const EXPIRY_POLL_INTERVAL: Duration = Duration::from_millis(500);
+/// Polls before [`wait_for_blockhash_expiry`] gives up: ~3 min at 500 ms, about twice a
+/// blockhash lifetime (150 blocks, ~60–90 s on mainnet).
+const EXPIRY_MAX_POLLS: usize = 360;
+/// RPC errors in a row that [`wait_for_blockhash_expiry`] tolerates before failing.
+const EXPIRY_MAX_RPC_ERRORS: usize = 5;
+
+/// Wait until a transaction whose blockhash is valid up to `last_valid_block_height` can no
+/// longer land.
+///
+/// Polls the confirmed block height every 500 ms and returns once it is above
+/// `last_valid_block_height`, so it returns at once when the blockhash already expired.
+/// A lagging RPC node reports a lower height, which can only make the wait longer, never end
+/// it early. Use it to settle [`crate::Error::SendUnresolved`] before reading the state the
+/// transaction would have changed. `last_valid_block_height` comes with the blockhash from
+/// [`RpcClient::get_latest_blockhash_with_commitment`].
+///
+/// Fails after 5 RPC errors in a row, or when the height has not passed after ~3 minutes.
+/// Durable-nonce transactions do not expire with their blockhash and are not covered.
+pub async fn wait_for_blockhash_expiry(
+    client: &RpcClient,
+    last_valid_block_height: u64,
+) -> crate::Result<()> {
+    let mut rpc_errors = 0;
+    for _ in 0..EXPIRY_MAX_POLLS {
+        match client
+            .get_block_height_with_commitment(CommitmentConfig::confirmed())
+            .await
+        {
+            Ok(height) if height > last_valid_block_height => return Ok(()),
+            Ok(_) => rpc_errors = 0,
+            Err(err) => {
+                rpc_errors += 1;
+                if rpc_errors >= EXPIRY_MAX_RPC_ERRORS {
+                    return Err(Box::new(err).into());
+                }
+            }
+        }
+        if cfg!(not(test)) {
+            sleep(EXPIRY_POLL_INTERVAL).await;
+        }
+    }
+    Err(crate::Error::custom(format!(
+        "block height did not pass {last_valid_block_height} in time"
+    )))
+}
+
 /// Final status of a submitted transaction.
 enum Confirmation {
     Landed { slot: u64 },
@@ -187,7 +235,16 @@ async fn confirm_transaction(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, future::Future, io, pin::Pin};
+    use std::{
+        collections::HashMap,
+        future::Future,
+        io,
+        pin::Pin,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+    };
 
     use solana_client::{
         client_error::Result as ClientResult,
@@ -436,5 +493,91 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.unresolved_signature(), Some(&tx.signatures[0]));
+    }
+
+    /// Answers `getBlockHeight` from a script, one entry per call: `Some(height)`, or `None`
+    /// for an RPC error. The last entry repeats once the script runs out.
+    struct BlockHeights {
+        script: Vec<Option<u64>>,
+        polls: Arc<AtomicUsize>,
+    }
+
+    impl RpcSender for BlockHeights {
+        fn send<'a, 'b>(
+            &'a self,
+            request: RpcRequest,
+            _params: serde_json::Value,
+        ) -> Pin<Box<dyn Future<Output = ClientResult<serde_json::Value>> + Send + 'b>>
+        where
+            'a: 'b,
+            Self: 'b,
+        {
+            assert_eq!(request, RpcRequest::GetBlockHeight);
+            let poll = self.polls.fetch_add(1, Ordering::SeqCst);
+            let answer = self.script[poll.min(self.script.len() - 1)];
+            Box::pin(async move {
+                match answer {
+                    Some(height) => Ok(serde_json::json!(height)),
+                    None => Err(timed_out()),
+                }
+            })
+        }
+
+        fn get_transport_stats(&self) -> RpcTransportStats {
+            RpcTransportStats::default()
+        }
+
+        fn url(&self) -> String {
+            "block-heights".to_string()
+        }
+    }
+
+    /// Runs the wait with `last_valid_block_height = 150` and returns its result and poll count.
+    async fn wait_with_heights(script: Vec<Option<u64>>) -> (crate::Result<()>, usize) {
+        let polls = Arc::new(AtomicUsize::new(0));
+        let sender = BlockHeights {
+            script,
+            polls: polls.clone(),
+        };
+        let client = RpcClient::new_sender(sender, RpcClientConfig::default());
+        let result = wait_for_blockhash_expiry(&client, 150).await;
+        (result, polls.load(Ordering::SeqCst))
+    }
+
+    #[tokio::test]
+    async fn wait_returns_at_once_when_already_expired() {
+        let (result, polls) = wait_with_heights(vec![Some(151)]).await;
+        assert!(result.is_ok());
+        assert_eq!(polls, 1);
+    }
+
+    #[tokio::test]
+    async fn wait_polls_until_height_passes() {
+        // 150 is still valid: the blockhash expires only above its last valid height.
+        let (result, polls) = wait_with_heights(vec![Some(100), Some(150), Some(151)]).await;
+        assert!(result.is_ok());
+        assert_eq!(polls, 3);
+    }
+
+    #[tokio::test]
+    async fn wait_survives_transient_rpc_errors() {
+        let script = vec![None, None, None, None, Some(120), None, Some(151)];
+        let (result, polls) = wait_with_heights(script).await;
+        assert!(result.is_ok());
+        assert_eq!(polls, 7);
+    }
+
+    #[tokio::test]
+    async fn wait_fails_after_five_rpc_errors_in_a_row() {
+        let (result, polls) = wait_with_heights(vec![None]).await;
+        assert!(matches!(result, Err(crate::Error::Client(_))), "{result:?}");
+        assert_eq!(polls, 5);
+    }
+
+    #[tokio::test]
+    async fn wait_gives_up_when_height_never_passes() {
+        let (result, polls) = wait_with_heights(vec![Some(100)]).await;
+        assert!(result.is_err());
+        assert_eq!(polls, EXPIRY_MAX_POLLS);
     }
 }
