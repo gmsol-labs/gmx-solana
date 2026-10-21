@@ -1418,7 +1418,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         use futures_util::{StreamExt, TryStreamExt};
         use solana_account_decoder::UiAccountEncoding;
 
-        let mut trade = None;
+        // An order trades once, so a live trade is only trusted when it is the only one.
+        let mut live_trades = Vec::new();
         // Action id of the order while it is open, so history can't hand back an older
         // order that used the same address.
         let mut expected_id = None;
@@ -1472,13 +1473,17 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             match res {
                 Ok(Ok(event)) => match event {
                     GMSOLCPIEvent::TradeEvent(event) => {
-                        trade = Some(event);
+                        live_trades.push(event);
                     }
                     GMSOLCPIEvent::OrderRemoved(removed) => {
-                        if let Some(trade) = trade {
+                        // Same lifecycle check as the history scan.
+                        let same_order = expected_id.is_none_or(|id| id == removed.id);
+                        if same_order && live_trades.len() == 1 {
+                            let trade = live_trades.remove(0);
                             return Ok(OrderCompletion::Trade(Box::new(trade)));
                         }
-                        // The trade may have landed before the subscription started.
+                        // Otherwise ask history: the trade may have landed before the
+                        // subscription started, and the scan applies the same checks.
                         let before_slot = removed.slot;
                         return self
                             .order_completion_from_history(
@@ -1503,7 +1508,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                             None => {
                                 // Seen live while this order was open, so it is this
                                 // order's trade; history may not show it.
-                                if let Some(trade) = trade {
+                                if live_trades.len() == 1 {
+                                    let trade = live_trades.remove(0);
                                     return Ok(OrderCompletion::Trade(Box::new(trade)));
                                 }
                                 return self
