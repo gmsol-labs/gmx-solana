@@ -1,6 +1,6 @@
 //! The result of waiting for an order to finish, see [`Client::complete_order`].
 //!
-//! Owns: the [`OrderCompletion`] outcome and its [`InconclusiveReason`], [`LifecycleScan`],
+//! Owns: the [`OrderCompletion`] outcome and its [`InconclusiveReason`], `LifecycleScan`,
 //! which rebuilds the outcome from an order's event history, the history re-read timing
 //! ([`DEFAULT_HISTORY_WAIT`]) and the "order not found" rule (`reject_unseen_order`). Does NOT
 //! own: subscribing or fetching history (see `Client::complete_order_with_config`).
@@ -20,6 +20,9 @@
 //!     before any boundary is this order's; an older order's trade sits behind its own close
 //!
 //! [`Client::complete_order`]: crate::Client::complete_order
+//! [`OrderCompletion`]: crate::client::order_completion::OrderCompletion
+//! [`InconclusiveReason`]: crate::client::order_completion::InconclusiveReason
+//! [`DEFAULT_HISTORY_WAIT`]: crate::client::order_completion::DEFAULT_HISTORY_WAIT
 
 use gmsol_decode::gmsol::programs::GMSOLCPIEvent;
 use gmsol_programs::gmsol_store::{
