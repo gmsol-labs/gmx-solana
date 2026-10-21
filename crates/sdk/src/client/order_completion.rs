@@ -97,8 +97,9 @@ impl std::fmt::Display for InconclusiveReason {
     }
 }
 
-/// How long to wait between two history reads while the close or trade is not indexed yet.
-pub(crate) const HISTORY_RETRY_INTERVAL: Duration = Duration::from_secs(1);
+/// Wait before the first history re-read while the close or trade is not indexed yet. Each
+/// later wait doubles (1 s, 2 s, 4 s, ...), so a slow index costs a few reads, not one per second.
+pub(crate) const HISTORY_RETRY_FIRST_DELAY: Duration = Duration::from_secs(1);
 
 /// How long to keep re-reading history while the close or trade is not indexed yet.
 // The index usually lags by a second or two; there is no fixed bound, so give up eventually.
