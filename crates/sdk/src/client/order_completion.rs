@@ -29,6 +29,7 @@ use solana_sdk::pubkey::Pubkey;
 
 /// How an order finished.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum OrderCompletion {
     /// The order was executed and produced this trade.
     Trade(Box<TradeEvent>),
@@ -39,8 +40,52 @@ pub enum OrderCompletion {
         /// The close event, if one was found.
         removed: Option<OrderRemoved>,
         /// Why the result could not be established.
-        reason: String,
+        reason: InconclusiveReason,
     },
+}
+
+/// Why an [`OrderCompletion::Inconclusive`] result could not be established.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum InconclusiveReason {
+    /// The order account is gone, but its history has no close for it. The close must exist,
+    /// so the history is most likely not indexed yet: asking again later can succeed.
+    CloseNotFound,
+    /// A completed position order has no `TradeEvent` in its history. The trade must exist,
+    /// so the history is most likely not indexed yet: asking again later can succeed.
+    TradeNotFound,
+    /// The newest close at this address belongs to another order (the address was reused).
+    OtherOrderClosed {
+        /// Action id of the close that was found.
+        found_id: u64,
+        /// Action id of the order being waited on.
+        expected_id: u64,
+    },
+    /// The start of the order's lifecycle was not found within the scan limit.
+    ScanLimitReached,
+    /// An older transaction in the order's history could not be read or decoded.
+    ReadFailed(String),
+}
+
+impl std::fmt::Display for InconclusiveReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CloseNotFound => write!(f, "no `OrderRemoved` event found for the order"),
+            Self::TradeNotFound => write!(f, "order completed but no `TradeEvent` was found"),
+            Self::OtherOrderClosed {
+                found_id,
+                expected_id,
+            } => write!(
+                f,
+                "latest close is for action id {found_id}, expected {expected_id}"
+            ),
+            Self::ScanLimitReached => write!(
+                f,
+                "lifecycle start not found within {MAX_SCANNED_TXS} transactions"
+            ),
+            Self::ReadFailed(err) => write!(f, "failed to read older history: {err}"),
+        }
+    }
 }
 
 /// Most event-bearing transactions read before giving up on finding the lifecycle start.
@@ -63,7 +108,7 @@ pub(crate) struct LifecycleScan {
     trade: Option<TradeEvent>,
     reached_start: bool,
     scanned_txs: usize,
-    failure: Option<String>,
+    failure: Option<InconclusiveReason>,
 }
 
 impl LifecycleScan {
@@ -123,11 +168,11 @@ impl LifecycleScan {
     }
 
     fn set_removed(&mut self, removed: &OrderRemoved) -> bool {
-        if let Some(id) = self.expected_id.filter(|id| *id != removed.id) {
-            self.failure = Some(format!(
-                "latest close is for action id {}, expected {id}",
-                removed.id
-            ));
+        if let Some(expected_id) = self.expected_id.filter(|id| *id != removed.id) {
+            self.failure = Some(InconclusiveReason::OtherOrderClosed {
+                found_id: removed.id,
+                expected_id,
+            });
             // Not stored: it is another order's close, and callers read `removed` as theirs.
             return true;
         }
@@ -146,38 +191,28 @@ impl LifecycleScan {
     pub(crate) fn finish_with_read_error(self, err: impl std::fmt::Display) -> OrderCompletion {
         OrderCompletion::Inconclusive {
             removed: self.removed,
-            reason: format!("failed to read older history: {err}"),
+            reason: InconclusiveReason::ReadFailed(err.to_string()),
         }
     }
 
     /// The outcome. `history_ended` is `true` when there were no older transactions, so the
     /// oldest one read is the start of the address's history.
     pub(crate) fn finish(self, history_ended: bool) -> OrderCompletion {
-        let inconclusive =
-            |removed, reason: String| OrderCompletion::Inconclusive { removed, reason };
+        let inconclusive = |removed, reason| OrderCompletion::Inconclusive { removed, reason };
         if let Some(reason) = self.failure {
             return inconclusive(None, reason);
         }
         let Some(removed) = self.removed else {
-            return inconclusive(
-                None,
-                "no `OrderRemoved` event found for the order".to_owned(),
-            );
+            return inconclusive(None, InconclusiveReason::CloseNotFound);
         };
         if let Some(trade) = self.trade {
             return OrderCompletion::Trade(Box::new(trade));
         }
         if !(self.reached_start || history_ended) {
-            return inconclusive(
-                Some(removed),
-                format!("lifecycle start not found within {MAX_SCANNED_TXS} transactions"),
-            );
+            return inconclusive(Some(removed), InconclusiveReason::ScanLimitReached);
         }
         if expects_trade(&removed) {
-            return inconclusive(
-                Some(removed),
-                "order completed but no `TradeEvent` was found".to_owned(),
-            );
+            return inconclusive(Some(removed), InconclusiveReason::TradeNotFound);
         }
         OrderCompletion::NoTrade(removed)
     }
@@ -280,6 +315,13 @@ mod tests {
         scan.finish(true)
     }
 
+    fn reason(completion: &OrderCompletion) -> Option<InconclusiveReason> {
+        match completion {
+            OrderCompletion::Inconclusive { reason, .. } => Some(reason.clone()),
+            _ => None,
+        }
+    }
+
     fn trade_id(completion: &OrderCompletion) -> Option<u64> {
         match completion {
             OrderCompletion::Trade(trade) => Some(trade.trade_id),
@@ -342,38 +384,46 @@ mod tests {
     #[test]
     fn completed_position_without_trade_is_inconclusive() {
         let txs = [vec![removed(7)], vec![created(7)]];
-        assert!(matches!(
-            scan(None, &txs),
-            OrderCompletion::Inconclusive { .. }
-        ));
+        assert_eq!(
+            reason(&scan(None, &txs)),
+            Some(InconclusiveReason::TradeNotFound)
+        );
     }
 
     #[test]
     fn close_of_unexpected_action_is_inconclusive() {
         let txs = [vec![removed(9)], vec![trade(ORDER, 1)]];
+        let completion = scan(Some(7), &txs);
         assert!(matches!(
-            scan(Some(7), &txs),
+            completion,
             OrderCompletion::Inconclusive { removed: None, .. }
         ));
+        assert_eq!(
+            reason(&completion),
+            Some(InconclusiveReason::OtherOrderClosed {
+                found_id: 9,
+                expected_id: 7
+            })
+        );
     }
 
     #[test]
     fn scan_limit_without_start_is_inconclusive() {
         let mut txs = vec![vec![removed(7)]];
         txs.extend((0..MAX_SCANNED_TXS).map(|_| vec![]));
-        assert!(matches!(
-            scan(None, &txs),
-            OrderCompletion::Inconclusive { .. }
-        ));
+        assert_eq!(
+            reason(&scan(None, &txs)),
+            Some(InconclusiveReason::ScanLimitReached)
+        );
     }
 
     #[test]
     fn missing_close_is_inconclusive() {
         let txs = [vec![trade(ORDER, 42)], vec![created(7)]];
-        assert!(matches!(
-            scan(None, &txs),
-            OrderCompletion::Inconclusive { removed: None, .. }
-        ));
+        assert_eq!(
+            reason(&scan(None, &txs)),
+            Some(InconclusiveReason::CloseNotFound)
+        );
     }
 
     #[test]

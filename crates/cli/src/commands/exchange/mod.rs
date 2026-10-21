@@ -2470,6 +2470,10 @@ async fn wait_for_order<C: Deref<Target = impl Signer> + Clone>(
         OrderCompletion::Inconclusive { reason, .. } => {
             tracing::warn!(%order, %reason, "order closed, but its trade result could not be determined");
         }
+        // `OrderCompletion` is `#[non_exhaustive]`.
+        completion => {
+            tracing::warn!(%order, ?completion, "order finished with an unknown result");
+        }
     }
     Ok(())
 }
