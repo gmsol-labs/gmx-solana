@@ -509,9 +509,10 @@ mod tests {
 /// Runs [`Client::complete_order`] against real orders that are already closed, so it answers
 /// from their on-chain history.
 ///
-/// Needs an RPC node: set `GMSOL_DEVNET_RPC_URL` and/or `GMSOL_MAINNET_RPC_URL` (e.g. a Helius
-/// `https://...?api-key=...` URL; the websocket URL is derived from it). Each test is skipped
-/// when its variable is unset.
+/// Ignored by default so CI never depends on a live network. Run them with
+/// `cargo test -p gmsol-sdk --features client,decode --lib rpc_tests -- --ignored`, after setting
+/// `GMSOL_DEVNET_RPC_URL` and/or `GMSOL_MAINNET_RPC_URL` (e.g. a Helius `https://...?api-key=...`
+/// URL; the websocket URL is derived from it). A test whose variable is unset is skipped.
 ///
 /// The orders are pinned. If an owner reuses one of these order addresses, `complete_order`
 /// answers for the newest order there, and the pinned values must be updated.
@@ -564,6 +565,7 @@ mod rpc_tests {
     /// Traded at slot 513387144, closed at 513387156 in a later transaction. Before this
     /// change `complete_order` read only the close and returned no trade.
     #[tokio::test]
+    #[ignore = "needs an RPC node; run with --ignored"]
     async fn devnet_trade_closed_in_a_later_transaction() {
         const ORDER: &str = "HNatsufQwy7xHc7CQsvMvGcVuHCUAwuEUr5tpEmJLHXh";
         let Some(completion) = complete(DEVNET, ORDER).await else {
@@ -573,6 +575,7 @@ mod rpc_tests {
     }
 
     #[tokio::test]
+    #[ignore = "needs an RPC node; run with --ignored"]
     async fn devnet_cancelled_order() {
         const ORDER: &str = "8uSkNC8Qc793AqGUq5A2UmvF6C18crEYaqE2PvQxAyoQ";
         let Some(completion) = complete(DEVNET, ORDER).await else {
@@ -583,6 +586,7 @@ mod rpc_tests {
 
     /// Executed and closed in the same transaction, at slot 459743651.
     #[tokio::test]
+    #[ignore = "needs an RPC node; run with --ignored"]
     async fn mainnet_trade_closed_in_the_same_transaction() {
         const ORDER: &str = "7D5BgckJ8ZwRomaXyjMF14kJMDJTip4dJ5kpfcq4GoAt";
         let Some(completion) = complete(MAINNET, ORDER).await else {
@@ -592,6 +596,7 @@ mod rpc_tests {
     }
 
     #[tokio::test]
+    #[ignore = "needs an RPC node; run with --ignored"]
     async fn mainnet_cancelled_order() {
         const ORDER: &str = "Dz7adr2ATTh5bmBztcENT3bPhXN6T4moWzF5oPYZCwc7";
         let Some(completion) = complete(MAINNET, ORDER).await else {
