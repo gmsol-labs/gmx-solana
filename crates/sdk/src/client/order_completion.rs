@@ -505,3 +505,98 @@ mod tests {
         assert!(matches!(scan(Some(7), &txs), OrderCompletion::NoTrade(r) if r.id == 7));
     }
 }
+
+/// Runs [`Client::complete_order`] against real orders that are already closed, so it answers
+/// from their on-chain history.
+///
+/// Needs an RPC node: set `GMSOL_DEVNET_RPC_URL` and/or `GMSOL_MAINNET_RPC_URL` (e.g. a Helius
+/// `https://...?api-key=...` URL; the websocket URL is derived from it). Each test is skipped
+/// when its variable is unset.
+///
+/// The orders are pinned. If an owner reuses one of these order addresses, `complete_order`
+/// answers for the newest order there, and the pinned values must be updated.
+///
+/// [`Client::complete_order`]: crate::Client::complete_order
+#[cfg(test)]
+mod rpc_tests {
+    use std::sync::Arc;
+
+    use solana_sdk::{commitment_config::CommitmentConfig, signature::Keypair};
+
+    use super::*;
+    use crate::Client;
+
+    const DEVNET: &str = "GMSOL_DEVNET_RPC_URL";
+    const MAINNET: &str = "GMSOL_MAINNET_RPC_URL";
+
+    /// `None` when `env` is unset.
+    async fn complete(env: &str, order: &str) -> Option<OrderCompletion> {
+        let Ok(url) = std::env::var(env) else {
+            eprintln!("skipped: {env} is not set");
+            return None;
+        };
+        let client = Client::new(url.parse().unwrap(), Arc::new(Keypair::new())).unwrap();
+        let order = order.parse().unwrap();
+        let completion = client
+            .complete_order(&order, Some(CommitmentConfig::confirmed()))
+            .await
+            .unwrap();
+        Some(completion)
+    }
+
+    /// Returns `(trade slot, trade id)`; panics on anything but `Trade` for `order`.
+    fn expect_trade(completion: OrderCompletion, order: &str) -> (u64, u64) {
+        let OrderCompletion::Trade(trade) = completion else {
+            panic!("expected a trade, got {completion:?}");
+        };
+        assert_eq!(trade.order.to_string(), order);
+        (trade.slot, trade.trade_id)
+    }
+
+    fn expect_cancelled(completion: OrderCompletion, order: &str) {
+        let OrderCompletion::NoTrade(removed) = completion else {
+            panic!("expected no trade, got {completion:?}");
+        };
+        assert_eq!(removed.order.to_string(), order);
+        assert!(matches!(removed.state, ActionState::Cancelled));
+    }
+
+    /// Traded at slot 513387144, closed at 513387156 in a later transaction. Before this
+    /// change `complete_order` read only the close and returned no trade.
+    #[tokio::test]
+    async fn devnet_trade_closed_in_a_later_transaction() {
+        const ORDER: &str = "HNatsufQwy7xHc7CQsvMvGcVuHCUAwuEUr5tpEmJLHXh";
+        let Some(completion) = complete(DEVNET, ORDER).await else {
+            return;
+        };
+        assert_eq!(expect_trade(completion, ORDER), (513_387_144, 151_817));
+    }
+
+    #[tokio::test]
+    async fn devnet_cancelled_order() {
+        const ORDER: &str = "8uSkNC8Qc793AqGUq5A2UmvF6C18crEYaqE2PvQxAyoQ";
+        let Some(completion) = complete(DEVNET, ORDER).await else {
+            return;
+        };
+        expect_cancelled(completion, ORDER);
+    }
+
+    /// Executed and closed in the same transaction, at slot 459743651.
+    #[tokio::test]
+    async fn mainnet_trade_closed_in_the_same_transaction() {
+        const ORDER: &str = "7D5BgckJ8ZwRomaXyjMF14kJMDJTip4dJ5kpfcq4GoAt";
+        let Some(completion) = complete(MAINNET, ORDER).await else {
+            return;
+        };
+        assert_eq!(expect_trade(completion, ORDER), (459_743_651, 596_988));
+    }
+
+    #[tokio::test]
+    async fn mainnet_cancelled_order() {
+        const ORDER: &str = "Dz7adr2ATTh5bmBztcENT3bPhXN6T4moWzF5oPYZCwc7";
+        let Some(completion) = complete(MAINNET, ORDER).await else {
+            return;
+        };
+        expect_cancelled(completion, ORDER);
+    }
+}
