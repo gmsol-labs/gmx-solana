@@ -590,7 +590,10 @@ mod tests {
 mod rpc_tests {
     use std::sync::Arc;
 
-    use solana_sdk::{commitment_config::CommitmentConfig, signature::Keypair};
+    use solana_sdk::{
+        commitment_config::CommitmentConfig,
+        signature::{Keypair, Signer},
+    };
 
     use super::*;
     use crate::Client;
@@ -640,6 +643,27 @@ mod rpc_tests {
             return;
         };
         assert_eq!(expect_trade(completion, ORDER), (513_387_144, 151_817));
+    }
+
+    /// No order ever used this address: after the default history wait, an error, not
+    /// `Inconclusive` ("closed, result unknown").
+    #[tokio::test]
+    #[ignore = "needs an RPC node; run with --ignored"]
+    async fn devnet_unknown_order_is_not_found() {
+        let Ok(url) = std::env::var(DEVNET) else {
+            eprintln!("skipped: {DEVNET} is not set");
+            return;
+        };
+        let client = Client::new(url.parse().unwrap(), Arc::new(Keypair::new())).unwrap();
+        // Random, so no account exists there (`Pubkey::new_unique` gives low addresses that do).
+        let order = Keypair::new().pubkey();
+        let started = std::time::Instant::now();
+        let err = client
+            .complete_order(&order, Some(CommitmentConfig::confirmed()))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("not found"), "{err}");
+        assert!(started.elapsed() >= DEFAULT_HISTORY_WAIT);
     }
 
     #[tokio::test]
