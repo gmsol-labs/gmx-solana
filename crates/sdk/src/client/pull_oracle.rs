@@ -40,6 +40,18 @@ impl<O: PullOracle, T> WithPullOracle<O, T> {
     /// close them with
     /// [`PythPullOracle::close_temporary_accounts`](crate::client::pyth::PythPullOracle::close_temporary_accounts).
     /// Empty before the first build.
+    ///
+    /// Only the layer whose oracle creates the accounts records them; an outer layer wrapping
+    /// it does not see the inner list. When nesting oracles, pass the Pyth layer as `&mut` so
+    /// it can still be read after sending:
+    ///
+    /// ```ignore
+    /// let mut with_pyth = WithPullOracle::new(pyth, consumer, None).await?;
+    /// let mut with_switchboard = WithPullOracle::new(switchboard, &mut with_pyth, None).await?;
+    /// let bundle = with_switchboard.build().await?;
+    /// // ...send `bundle`; if it fails before its close batch:
+    /// let accounts = with_pyth.temporary_accounts();
+    /// ```
     pub fn temporary_accounts(&self) -> &[Pubkey] {
         &self.temporary_accounts
     }
