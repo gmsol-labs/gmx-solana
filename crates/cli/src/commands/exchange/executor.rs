@@ -237,9 +237,7 @@ impl<'a> Executor<'a> {
             )
             .await;
         if let (Err(err), Some((_, last_valid_block_height))) = (&sent, blockhash) {
-            // No transaction landed and none is unresolved: nothing was created, so there is
-            // nothing to close (this also covers errors raised before sending).
-            if landed || is_unresolved(err) {
+            if needs_cleanup(landed, err) {
                 self.close_temporary_accounts(
                     with_pyth.temporary_accounts(),
                     err,
@@ -318,6 +316,13 @@ impl<'a> Executor<'a> {
     }
 }
 
+/// `true` when a failed execute bundle may have left temporary accounts open: some
+/// transaction landed, or one has an unknown outcome. When neither holds, nothing was created
+/// (this also covers errors raised before anything was sent), so there is nothing to close.
+fn needs_cleanup(landed: bool, send_err: &gmsol_sdk::Error) -> bool {
+    landed || is_unresolved(send_err)
+}
+
 /// `true` when some transaction of the bundle has an unknown outcome.
 ///
 /// `send_or_serialize` reports a compressed error, which keeps a `SendUnresolved` over any
@@ -351,16 +356,40 @@ mod tests {
         TokensWithFeed::try_from_records(records).unwrap()
     }
 
-    #[test]
-    fn only_send_unresolved_counts_as_unresolved() {
+    fn unresolved_error() -> gmsol_sdk::Error {
         use gmsol_sdk::solana_utils::{solana_sdk::signature::Signature, Error as UtilsError};
 
         let timed_out = std::io::Error::new(std::io::ErrorKind::TimedOut, "timed out");
-        let unresolved = UtilsError::SendUnresolved {
+        UtilsError::SendUnresolved {
             signature: Signature::default(),
             source: Box::new(timed_out.into()),
-        };
-        assert!(is_unresolved(&unresolved.into()));
+        }
+        .into()
+    }
+
+    #[test]
+    fn cleanup_when_a_transaction_landed() {
+        let on_chain_failure = gmsol_sdk::Error::custom("execute failed on-chain");
+        assert!(needs_cleanup(true, &on_chain_failure));
+    }
+
+    #[test]
+    fn cleanup_when_an_outcome_is_unknown() {
+        assert!(needs_cleanup(false, &unresolved_error()));
+    }
+
+    #[test]
+    fn no_cleanup_when_nothing_was_created() {
+        // e.g. the first setup transaction failed, or a lookup table fetch failed before sending.
+        let failure = gmsol_sdk::Error::custom("rejected before landing");
+        assert!(!needs_cleanup(false, &failure));
+    }
+
+    #[test]
+    fn only_send_unresolved_counts_as_unresolved() {
+        use gmsol_sdk::solana_utils::Error as UtilsError;
+
+        assert!(is_unresolved(&unresolved_error()));
         assert!(!is_unresolved(
             &UtilsError::custom("on-chain failure").into()
         ));
