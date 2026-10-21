@@ -101,9 +101,14 @@ impl std::fmt::Display for InconclusiveReason {
 /// later wait doubles (1 s, 2 s, 4 s, ...), so a slow index costs a few reads, not one per second.
 pub(crate) const HISTORY_RETRY_FIRST_DELAY: Duration = Duration::from_secs(1);
 
-/// How long to keep re-reading history while the close or trade is not indexed yet.
+/// Default for how long [`Client::complete_order`] keeps re-reading history while the close
+/// or trade is not indexed yet: reads at 0, 1, 3 and 5 s. Pass another limit to
+/// [`Client::complete_order_with_config`].
+///
+/// [`Client::complete_order`]: crate::Client::complete_order
+/// [`Client::complete_order_with_config`]: crate::Client::complete_order_with_config
 // The index usually lags by a second or two; there is no fixed bound, so give up eventually.
-pub(crate) const HISTORY_RETRY_DEADLINE: Duration = Duration::from_secs(30);
+pub const DEFAULT_HISTORY_WAIT: Duration = Duration::from_secs(5);
 
 /// Most event-bearing transactions read before giving up on finding the lifecycle start.
 // An order's own history is usually 2–4 transactions (create, execute, settle, close).

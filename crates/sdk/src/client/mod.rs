@@ -123,7 +123,7 @@ use gmsol_programs::gmsol_store::events::OrderRemoved;
 
 #[cfg(feature = "decode")]
 use order_completion::{
-    LifecycleScan, OrderCompletion, HISTORY_RETRY_DEADLINE, HISTORY_RETRY_FIRST_DELAY,
+    LifecycleScan, OrderCompletion, DEFAULT_HISTORY_WAIT, HISTORY_RETRY_FIRST_DELAY,
 };
 
 /// Discriminator offset.
@@ -1372,6 +1372,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             address,
             slot,
             std::time::Duration::from_secs(5),
+            DEFAULT_HISTORY_WAIT,
             commitment,
         )
         .await
@@ -1406,13 +1407,16 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
 
     /// Wait for an order to be closed with the given config.
     ///
-    /// Returns how it finished; see [`OrderCompletion`].
+    /// Returns how it finished; see [`OrderCompletion`]. Once the order is gone, its history
+    /// can lag behind; `history_wait` caps how long to keep re-reading it (see
+    /// [`DEFAULT_HISTORY_WAIT`]). `Duration::ZERO` reads it once.
     #[cfg(feature = "decode")]
     pub async fn complete_order_with_config(
         &self,
         address: &Pubkey,
         mut slot: u64,
         polling: std::time::Duration,
+        history_wait: std::time::Duration,
         commitment: Option<CommitmentConfig>,
     ) -> crate::Result<OrderCompletion> {
         use futures_util::{StreamExt, TryStreamExt};
@@ -1441,7 +1445,14 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                 Some(order) => expected_id = Some(order.header.id),
                 None => {
                     return self
-                        .order_completion_from_history(address, None, None, slot, commitment)
+                        .order_completion_from_history(
+                            address,
+                            None,
+                            None,
+                            slot,
+                            commitment,
+                            history_wait,
+                        )
                         .await;
                 }
             }
@@ -1492,6 +1503,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                                 Some(removed),
                                 before_slot,
                                 commitment,
+                                history_wait,
                             )
                             .await;
                     }
@@ -1519,6 +1531,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                                         None,
                                         res.slot(),
                                         commitment,
+                                        history_wait,
                                     )
                                     .await;
                             }
@@ -1536,8 +1549,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     ///
     /// The account can be seen gone before the history index has the close or the trade, so
     /// while one of those is provably missing, read again after [`HISTORY_RETRY_FIRST_DELAY`],
-    /// doubling the wait each time, for up to [`HISTORY_RETRY_DEADLINE`], then return what the
-    /// last read showed. With 1 s and 30 s that is reads at 0, 1, 3, 7, 15 and 30 s.
+    /// doubling the wait each time, for up to `history_wait`, then return what the last read
+    /// showed. With 1 s and 5 s that is reads at 0, 1, 3 and 5 s.
     #[cfg(feature = "decode")]
     async fn order_completion_from_history(
         &self,
@@ -1546,8 +1559,9 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         seen_close: Option<OrderRemoved>,
         before_slot: u64,
         commitment: CommitmentConfig,
+        history_wait: std::time::Duration,
     ) -> crate::Result<OrderCompletion> {
-        let deadline = tokio::time::Instant::now() + HISTORY_RETRY_DEADLINE;
+        let deadline = tokio::time::Instant::now() + history_wait;
         let mut delay = HISTORY_RETRY_FIRST_DELAY;
         loop {
             let completion = self
