@@ -285,6 +285,9 @@ impl Deployment {
 
         deployment.setup().await?;
 
+        // Initialize Treasury and restore the Store receiver before concurrent tests start.
+        super::gt_exchange::prepare_treasury_for_completion_test(&deployment, 0).await?;
+
         Ok(deployment)
     }
 

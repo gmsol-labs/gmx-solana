@@ -22,10 +22,10 @@ use solana_sdk::{
 
 use crate::anchor_test::setup::{current_deployment, Deployment, GT_EXCHANGE_WINDOW_LOCK};
 
-async fn prepare_treasury_for_completion_test(
+pub(super) async fn prepare_treasury_for_completion_test(
     deployment: &Deployment,
     gt_factor: u128,
-) -> eyre::Result<bool> {
+) -> eyre::Result<()> {
     let admin = &deployment.client;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let store = &deployment.store;
@@ -50,6 +50,18 @@ async fn prepare_treasury_for_completion_test(
             .send()
             .await?;
         admin.initialize_config(store).send().await?;
+        TreasuryOps::transfer_receiver(admin, store, &admin.payer())
+            .send()
+            .await?;
+        admin
+            .store_transaction()
+            .anchor_accounts(accounts::AcceptReceiver {
+                next_receiver: admin.payer(),
+                store: *store,
+            })
+            .anchor_args(args::AcceptReceiver {})
+            .send()
+            .await?;
         admin
             .grant_role(store, &config, "GT_CONTROLLER")
             .send()
@@ -95,7 +107,7 @@ async fn prepare_treasury_for_completion_test(
     if current_factor != gt_factor {
         admin.set_gt_factor(store, gt_factor)?.send().await?;
     }
-    Ok(initialized_now)
+    Ok(())
 }
 
 async fn fund_validator_payer_if_needed() -> eyre::Result<()> {
@@ -179,7 +191,7 @@ async fn scub_permissionless_treasury_completion_refunds_recorded_receiver() -> 
         .send()
         .await?;
     let vault_config = admin.find_treasury_vault_config_address(&config, 0);
-    let initialized_now = prepare_treasury_for_completion_test(deployment, 0).await?;
+    prepare_treasury_for_completion_test(deployment, 0).await?;
     deployment
         .mint_or_transfer_to("WSOL", &treasury_receiver, 1)
         .await?;
@@ -354,28 +366,8 @@ async fn scub_permissionless_treasury_completion_refunds_recorded_receiver() -> 
         .gt_set_exchange_time_window(store, DEFAULT_GT_VAULT_TIME_WINDOW)
         .send()
         .await;
-    let restore_receiver = async {
-        if !initialized_now {
-            return Ok::<(), eyre::Report>(());
-        }
-        TreasuryOps::transfer_receiver(admin, store, &admin.payer())
-            .send()
-            .await?;
-        admin
-            .store_transaction()
-            .anchor_accounts(accounts::AcceptReceiver {
-                next_receiver: admin.payer(),
-                store: *store,
-            })
-            .anchor_args(args::AcceptReceiver {})
-            .send()
-            .await?;
-        Ok::<(), eyre::Report>(())
-    }
-    .await;
     result?;
     restore_window?;
-    restore_receiver?;
     Ok(())
 }
 
@@ -419,9 +411,8 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
         .transfer(&rent_payer.pubkey(), 50_000_000)?
         .send()
         .await?;
-    let initialized_now =
-        prepare_treasury_for_completion_test(deployment, gmsol_store::constants::MARKET_USD_UNIT)
-            .await?;
+    prepare_treasury_for_completion_test(deployment, gmsol_store::constants::MARKET_USD_UNIT)
+        .await?;
 
     keeper
         .gt_set_exchange_time_window(store, WINDOW)
@@ -709,29 +700,9 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
         .gt_set_exchange_time_window(store, DEFAULT_GT_VAULT_TIME_WINDOW)
         .send()
         .await;
-    let restore_receiver = async {
-        if !initialized_now {
-            return Ok::<(), eyre::Report>(());
-        }
-        TreasuryOps::transfer_receiver(admin, store, &admin.payer())
-            .send()
-            .await?;
-        admin
-            .store_transaction()
-            .anchor_accounts(accounts::AcceptReceiver {
-                next_receiver: admin.payer(),
-                store: *store,
-            })
-            .anchor_args(args::AcceptReceiver {})
-            .send()
-            .await?;
-        Ok::<(), eyre::Report>(())
-    }
-    .await;
     let restore_factor = admin.set_gt_factor(store, 0)?.send().await;
     result?;
     restore_window?;
-    restore_receiver?;
     restore_factor?;
     Ok(())
 }

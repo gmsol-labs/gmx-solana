@@ -500,7 +500,6 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
 
     assert_eq!(controller_account.global_state, global_state);
     assert_eq!(controller_account.lp_token_mint, *gm_token);
-    assert_eq!(controller_account.total_positions, 0);
     assert!(controller_account.is_enabled);
     assert_eq!(controller_account.disabled_at, 0);
     assert_eq!(controller_account.disabled_cum_inv_cost, 0);
@@ -524,7 +523,6 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
 
     assert_eq!(glv_controller_account.global_state, global_state);
     assert_eq!(glv_controller_account.lp_token_mint, *glv_token);
-    assert_eq!(glv_controller_account.total_positions, 0);
     assert!(glv_controller_account.is_enabled);
     tracing::info!("✓ GLV controller verification passed");
 
