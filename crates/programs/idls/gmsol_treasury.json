@@ -492,6 +492,77 @@
       "args": []
     },
     {
+      "name": "complete_gt_exchange_v2",
+      "docs": [
+        "Complete a confirmed GT exchange and return rent to its recorded receiver."
+      ],
+      "discriminator": [
+        12,
+        244,
+        15,
+        204,
+        35,
+        149,
+        168,
+        16
+      ],
+      "accounts": [
+        {
+          "name": "owner"
+        },
+        {
+          "name": "rent_receiver",
+          "writable": true
+        },
+        {
+          "name": "store",
+          "relations": [
+            "config",
+            "gt_exchange_vault"
+          ]
+        },
+        {
+          "name": "config",
+          "relations": [
+            "treasury_vault_config"
+          ]
+        },
+        {
+          "name": "treasury_vault_config",
+          "relations": [
+            "gt_bank"
+          ]
+        },
+        {
+          "name": "gt_exchange_vault",
+          "relations": [
+            "gt_bank"
+          ]
+        },
+        {
+          "name": "gt_bank",
+          "writable": true
+        },
+        {
+          "name": "exchange",
+          "writable": true
+        },
+        {
+          "name": "store_program",
+          "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "confirm_gt_buyback",
       "docs": [
         "Confirm GT buyback."
