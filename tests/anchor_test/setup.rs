@@ -793,7 +793,7 @@ impl Deployment {
                         &ID,
                         &token.pubkey(),
                         &payer,
-                        None,
+                        (name == "fBTC").then_some(&payer),
                         config.decimals,
                     )?,
                     true,
