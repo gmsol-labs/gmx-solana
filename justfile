@@ -80,7 +80,7 @@ update-idls: build-idls
 check-idls: build-idls
   @status=0; \
   for name in $(basename -a {{PROGRAMS_IDL_DIR}}/*.json {{IDL_OUT_DIR}}/*.json | sort -u); do \
-    diff -u {{PROGRAMS_IDL_DIR}}/"$name" {{IDL_OUT_DIR}}/"$name" || status=1; \
+    diff --strip-trailing-cr -u {{PROGRAMS_IDL_DIR}}/"$name" {{IDL_OUT_DIR}}/"$name" || status=1; \
   done; \
   if [ "$status" -ne 0 ]; then \
     echo "IDLs are out of date. Run 'just update-idls' and commit the changes."; \
