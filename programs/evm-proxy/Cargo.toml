@@ -1,0 +1,44 @@
+[package]
+name = "gmsol-evm-proxy"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+description.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/gmsol-evm-proxy"
+readme.workspace = true
+keywords.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "gmsol_evm_proxy"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+anchor-debug = ["anchor-lang/anchor-debug"]
+debug = []
+devnet = []
+test-only = []
+sbf-test = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = { workspace = true, features = ["init-if-needed"] }
+bytemuck = { workspace = true, features = ["min_const_generics"] }
+gmsol-utils = { workspace = true, features = ["security-txt"] }
+
+[dev-dependencies]
+solana-program-test = "2.1.21"
+solana-accounts-db = "2.1.21"
+solana-runtime = { version = "2.1.21", features = ["dev-context-only-utils"] }
+solana-sdk = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+
+[[test]]
+name = "create_proxy"
+required-features = ["sbf-test"]

@@ -619,6 +619,14 @@ pub fn find_participant_address(
     )
 }
 
+/// Find the proxy PDA for one raw EVM address.
+#[cfg(feature = "evm-proxy")]
+pub fn find_proxy_address(evm_address: &[u8; 20], program_id: &Pubkey) -> (Pubkey, u8) {
+    use gmsol_programs::gmsol_evm_proxy::constants::PROXY_SEED;
+
+    Pubkey::find_program_address(&[PROXY_SEED, evm_address], program_id)
+}
+
 /// Find PDA for global state account for the LP program.
 #[cfg(liquidity_provider)]
 pub fn find_lp_global_state_address(lp_program_id: &Pubkey) -> (Pubkey, u8) {

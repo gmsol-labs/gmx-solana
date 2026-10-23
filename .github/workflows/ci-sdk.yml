@@ -21,8 +21,9 @@ env:
   rust_stable: "1.88"
   rust_clippy: "1.88"
   rust_min: "1.86"
+  solana_version: "2.1.21"
   libudev: "1.0"
-  exclude_packages: "--exclude gmsol-store --exclude gmsol-treasury --exclude gmsol-timelock --exclude gmsol-competition --exclude gmsol-callback --exclude gmsol-mock-chainlink-verifier --exclude gmsol-liquidity-provider --exclude gmsol-gt-incentive --exclude gmsol-tests"
+  exclude_packages: "--exclude gmsol-store --exclude gmsol-treasury --exclude gmsol-timelock --exclude gmsol-competition --exclude gmsol-callback --exclude gmsol-mock-chainlink-verifier --exclude gmsol-liquidity-provider --exclude gmsol-gt-incentive --exclude gmsol-evm-proxy --exclude gmsol-tests"
 
 defaults:
   run:
@@ -42,6 +43,7 @@ jobs:
       - minrust
       - features
       - test
+      - test-evm-proxy
     steps:
       - run: exit 0
 
@@ -165,3 +167,40 @@ jobs:
         env:
           RUSTFLAGS: "" # remove -Dwarnings: program crates are not warning-gated (excluded from clippy)
           PYTH_API_KEY: ${{ secrets.PYTH_API_KEY }}
+
+  test-evm-proxy:
+    name: test evm proxy
+    needs: basics
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      RUSTFLAGS: ""
+      SBF_OUT_DIR: ${{ github.workspace }}/target/deploy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: libudev-dev
+          version: ${{ env.libudev }}
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+      - name: Install Solana ${{ env.solana_version }}
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.solana_version }}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-workspace-crates: true
+          cache-directories: ~/.cache/solana
+      - name: Build and test proxy SBF
+        run: |
+          trap 'if test -f "$SBF_OUT_DIR/gmsol_evm_proxy-keypair.json"; then rm -- "$SBF_OUT_DIR/gmsol_evm_proxy-keypair.json"; fi' EXIT
+          cargo build-sbf --manifest-path programs/evm-proxy/Cargo.toml --sbf-out-dir "$SBF_OUT_DIR"
+          test -f "$SBF_OUT_DIR/gmsol_evm_proxy.so"
+          test_count=$(cargo test --locked -p gmsol-evm-proxy --features sbf-test --test create_proxy -- --list | grep -c ': test$')
+          test "$test_count" -eq 10
+          cargo test --locked -p gmsol-evm-proxy --features sbf-test --test create_proxy
