@@ -302,7 +302,10 @@ impl<'a> Executor<'a> {
             // `println!`, not `info!`: the default log level hides info, and the wait can
             // take minutes, which would look like a hang.
             println!("\nWaiting for unresolved transactions to expire before closing temporary Pyth accounts (up to ~3 min)...");
-            wait_for_blockhash_expiry(self.client.rpc(), last_valid_block_height).await?;
+            // Wait at the client's own commitment: the lookup below reads at that level, so
+            // a stricter level there (e.g. `finalized`) must not lag behind the wait.
+            let rpc = self.client.rpc();
+            wait_for_blockhash_expiry(rpc, last_valid_block_height, rpc.commitment()).await?;
         }
         let bundle = self
             .pyth

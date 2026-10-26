@@ -134,25 +134,28 @@ const EXPIRY_MAX_RPC_ERRORS: usize = 5;
 /// Wait until a transaction whose blockhash is valid up to `last_valid_block_height` can no
 /// longer land.
 ///
-/// Polls the confirmed block height every 500 ms and returns once it is above
+/// Polls the block height at `commitment` every 500 ms and returns once it is above
 /// `last_valid_block_height`, so it returns at once when the blockhash already expired.
 /// A lagging RPC node reports a lower height, which can only make the wait longer, never end
 /// it early. Use it to settle [`crate::Error::SendUnresolved`] before reading the state the
 /// transaction would have changed. `last_valid_block_height` comes with the blockhash from
 /// [`RpcClient::get_latest_blockhash_with_commitment`].
 ///
+/// Pass the same `commitment` the later reads use. Once the height at that level is past
+/// `last_valid_block_height`, every block that could hold the transaction is at that level
+/// too, so the reads see it. A stricter read (e.g. `finalized` after a `confirmed` wait) can
+/// lag by seconds and miss a transaction that did land.
+///
 /// Fails after 5 RPC errors in a row, or when the height has not passed after ~3 minutes.
 /// Durable-nonce transactions do not expire with their blockhash and are not covered.
 pub async fn wait_for_blockhash_expiry(
     client: &RpcClient,
     last_valid_block_height: u64,
+    commitment: CommitmentConfig,
 ) -> crate::Result<()> {
     let mut rpc_errors = 0;
     for _ in 0..EXPIRY_MAX_POLLS {
-        match client
-            .get_block_height_with_commitment(CommitmentConfig::confirmed())
-            .await
-        {
+        match client.get_block_height_with_commitment(commitment).await {
             Ok(height) if height > last_valid_block_height => return Ok(()),
             Ok(_) => rpc_errors = 0,
             Err(err) => {
@@ -496,23 +499,29 @@ mod tests {
     }
 
     /// Answers `getBlockHeight` from a script, one entry per call: `Some(height)`, or `None`
-    /// for an RPC error. The last entry repeats once the script runs out.
+    /// for an RPC error. The last entry repeats once the script runs out. Every request
+    /// must carry `expected_commitment`.
     struct BlockHeights {
         script: Vec<Option<u64>>,
         polls: Arc<AtomicUsize>,
+        expected_commitment: &'static str,
     }
 
     impl RpcSender for BlockHeights {
         fn send<'a, 'b>(
             &'a self,
             request: RpcRequest,
-            _params: serde_json::Value,
+            params: serde_json::Value,
         ) -> Pin<Box<dyn Future<Output = ClientResult<serde_json::Value>> + Send + 'b>>
         where
             'a: 'b,
             Self: 'b,
         {
             assert_eq!(request, RpcRequest::GetBlockHeight);
+            assert_eq!(
+                params[0]["commitment"], self.expected_commitment,
+                "{params}"
+            );
             let poll = self.polls.fetch_add(1, Ordering::SeqCst);
             let answer = self.script[poll.min(self.script.len() - 1)];
             Box::pin(async move {
@@ -532,16 +541,32 @@ mod tests {
         }
     }
 
-    /// Runs the wait with `last_valid_block_height = 150` and returns its result and poll count.
+    /// Runs the wait with `last_valid_block_height = 150` at `confirmed` and returns its
+    /// result and poll count.
     async fn wait_with_heights(script: Vec<Option<u64>>) -> (crate::Result<()>, usize) {
         let polls = Arc::new(AtomicUsize::new(0));
         let sender = BlockHeights {
             script,
             polls: polls.clone(),
+            expected_commitment: "confirmed",
         };
         let client = RpcClient::new_sender(sender, RpcClientConfig::default());
-        let result = wait_for_blockhash_expiry(&client, 150).await;
+        let result = wait_for_blockhash_expiry(&client, 150, CommitmentConfig::confirmed()).await;
         (result, polls.load(Ordering::SeqCst))
+    }
+
+    #[tokio::test]
+    async fn wait_polls_at_the_given_commitment() {
+        let sender = BlockHeights {
+            script: vec![Some(151)],
+            polls: Default::default(),
+            expected_commitment: "finalized",
+        };
+        let client = RpcClient::new_sender(sender, RpcClientConfig::default());
+
+        let result = wait_for_blockhash_expiry(&client, 150, CommitmentConfig::finalized()).await;
+
+        assert!(result.is_ok(), "{result:?}");
     }
 
     #[tokio::test]

@@ -63,13 +63,12 @@ where
     ///
     /// Only the payer signs, and it must be the payer that created the accounts.
     ///
-    /// The lookup uses `client`'s commitment level, so a client set to `finalized` may not
-    /// yet see an account created seconds earlier and skips it. Calling this again later
-    /// closes it.
-    ///
     /// INVARIANT: no transaction that could still create one of `accounts` may be in flight,
-    /// or that account is missed. Settle unresolved sends first, e.g. with
-    /// [`wait_for_blockhash_expiry`](gmsol_solana_utils::client::wait_for_blockhash_expiry).
+    /// or that account is missed. Settle unresolved sends first with
+    /// [`wait_for_blockhash_expiry`](gmsol_solana_utils::client::wait_for_blockhash_expiry),
+    /// passing `client`'s commitment level: the lookup reads at that level, and a wait at a
+    /// weaker level (e.g. `confirmed` for a `finalized` client) can end seconds before the
+    /// account is visible.
     pub async fn close_temporary_accounts<'a>(
         &'a self,
         client: &'a crate::Client<C>,
