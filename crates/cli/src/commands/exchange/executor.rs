@@ -264,7 +264,7 @@ impl<'a> Executor<'a> {
     }
 
     /// Close the temporary Pyth accounts left open when an execute bundle stopped before its
-    /// close batch. Never fails: a cleanup error is printed to stderr with the addresses.
+    /// close batch. Never fails: every account not confirmed closed is printed to stderr.
     async fn close_temporary_accounts(
         &self,
         accounts: &[Pubkey],
@@ -274,28 +274,39 @@ impl<'a> Executor<'a> {
         if accounts.is_empty() {
             return;
         }
-        if let Err(err) = self
+        let still_open = match self
             .try_close_temporary_accounts(accounts, send_err, last_valid_block_height)
             .await
         {
-            // `eprintln!`, not `warn!`: this output is the only record of the addresses, so it
-            // must show whatever the log level is.
-            eprintln!(
-                "\nFailed to close temporary Pyth accounts: {err}\n\
-                 Their rent stays locked until they are closed. Addresses:"
-            );
-            for account in accounts {
-                eprintln!("  {account}");
+            Ok(still_open) => still_open,
+            Err(err) => {
+                // The state of every account is unknown, so report them all.
+                eprintln!("\nFailed to close temporary Pyth accounts: {err}");
+                accounts.to_vec()
             }
+        };
+        if still_open.is_empty() {
+            return;
+        }
+        // `eprintln!`, not `warn!`: this output is the only record of the addresses, so it
+        // must show whatever the log level is.
+        eprintln!(
+            "Temporary Pyth accounts still open; their rent stays locked until they are closed. \
+             Retry closing them later:"
+        );
+        for account in &still_open {
+            eprintln!("  {account}");
         }
     }
 
+    /// Returns the accounts that are still open after the cleanup, read at the client's
+    /// commitment level.
     async fn try_close_temporary_accounts(
         &self,
         accounts: &[Pubkey],
         send_err: &gmsol_sdk::Error,
         last_valid_block_height: u64,
-    ) -> gmsol_sdk::Result<()> {
+    ) -> gmsol_sdk::Result<Vec<Pubkey>> {
         // A transaction with an unknown outcome may still create an account; wait until it
         // cannot land, or that account would be missed.
         if is_unresolved(send_err) {
@@ -312,10 +323,23 @@ impl<'a> Executor<'a> {
             .close_temporary_accounts(self.client, accounts)
             .await?;
         if bundle.is_empty() {
-            return Ok(());
+            let commitment = self.client.rpc().commitment().commitment;
+            println!(
+                "\nNo temporary Pyth accounts found on-chain at {commitment}; nothing to close. Checked:"
+            );
+            for account in accounts {
+                println!("  {account}");
+            }
+            return Ok(vec![]);
         }
         println!("\nClosing temporary Pyth accounts left open by the failed execute:");
-        self.client.send_or_serialize(bundle).await
+        if let Err(err) = self.client.send_or_serialize(bundle).await {
+            // Not fatal: the lookup below reports exactly what is still open.
+            eprintln!("Closing failed: {err}");
+        }
+        self.pyth
+            .open_temporary_accounts(self.client, accounts)
+            .await
     }
 }
 

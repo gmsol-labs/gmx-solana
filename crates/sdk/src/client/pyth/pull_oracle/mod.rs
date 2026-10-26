@@ -76,6 +76,36 @@ where
     ) -> crate::Result<BundleBuilder<'a, C>> {
         let mut bundle = client.bundle();
         let mut closes = bundle.push_parallel();
+        for (address, owner) in self.fetch_open_temporary_accounts(client, accounts).await? {
+            if let Some(close) = self.close_temporary_account(&address, &owner) {
+                closes.add(close);
+            }
+        }
+        drop(closes);
+        Ok(bundle)
+    }
+
+    /// The given temporary accounts that still exist, read at `client`'s commitment level.
+    ///
+    /// Call it after sending the bundle from [`Self::close_temporary_accounts`] to learn which
+    /// accounts are still open (their close did not land) and must be retried.
+    pub async fn open_temporary_accounts(
+        &self,
+        client: &crate::Client<C>,
+        accounts: &[Pubkey],
+    ) -> crate::Result<Vec<Pubkey>> {
+        let open = self.fetch_open_temporary_accounts(client, accounts).await?;
+        Ok(open.into_iter().map(|(address, _)| address).collect())
+    }
+
+    /// `(address, owner)` of each account in `accounts` that exists and is a temporary Pyth
+    /// account. Fetches only the owner, 100 addresses per RPC call.
+    async fn fetch_open_temporary_accounts(
+        &self,
+        client: &crate::Client<C>,
+        accounts: &[Pubkey],
+    ) -> crate::Result<Vec<(Pubkey, Pubkey)>> {
+        let mut open = Vec::new();
         for chunk in accounts.chunks(MAX_ACCOUNTS_PER_FETCH) {
             // Only existence and owner matter, so skip the account data.
             let config = RpcAccountInfoConfig {
@@ -92,19 +122,33 @@ where
                 .await
                 .map_err(crate::Error::custom)?
                 .value;
-            for (address, account) in chunk.iter().zip(fetched) {
-                let Some(account) = account else {
-                    continue;
-                };
-                let Some(close) = self.close_temporary_account(address, &account.owner) else {
-                    tracing::warn!(%address, owner = %account.owner, "not a temporary Pyth account, skipped");
-                    continue;
-                };
-                closes.add(close);
-            }
+            let owners = chunk
+                .iter()
+                .zip(fetched)
+                .map(|(address, account)| (*address, account.map(|account| account.owner)));
+            open.extend(self.filter_temporary_accounts(owners));
         }
-        drop(closes);
-        Ok(bundle)
+        Ok(open)
+    }
+
+    /// Keeps `(address, owner)` for the accounts that exist and belong to the Wormhole or
+    /// Pyth receiver program. Missing accounts are dropped; other owners are dropped with a
+    /// warning, since they are not ours to close.
+    fn filter_temporary_accounts(
+        &self,
+        owners: impl IntoIterator<Item = (Pubkey, Option<Pubkey>)>,
+    ) -> Vec<(Pubkey, Pubkey)> {
+        owners
+            .into_iter()
+            .filter_map(|(address, owner)| {
+                let owner = owner?;
+                if self.close_temporary_account(&address, &owner).is_none() {
+                    tracing::warn!(%address, %owner, "not a temporary Pyth account, skipped");
+                    return None;
+                }
+                Some((address, owner))
+            })
+            .collect()
     }
 
     /// The close instruction for a temporary account, picked by the program that owns it.
@@ -149,5 +193,32 @@ mod tests {
         );
         assert_eq!(closing_program(&oracle, &receiver), Some(receiver));
         assert_eq!(closing_program(&oracle, &Pubkey::new_unique()), None);
+    }
+
+    #[test]
+    fn keeps_only_existing_accounts_with_a_known_owner() {
+        let client = crate::Client::new(Cluster::Devnet, Arc::new(Keypair::new())).unwrap();
+        let oracle = PythPullOracle::try_new(&client).unwrap();
+        let (vaa, price_update, foreign, missing) = (
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+        );
+
+        let open = oracle.filter_temporary_accounts([
+            (vaa, Some(WORMHOLE_PROGRAM_ID)),
+            (price_update, Some(pyth_solana_receiver_sdk::ID)),
+            (foreign, Some(Pubkey::new_unique())),
+            (missing, None),
+        ]);
+
+        assert_eq!(
+            open,
+            [
+                (vaa, WORMHOLE_PROGRAM_ID),
+                (price_update, pyth_solana_receiver_sdk::ID)
+            ]
+        );
     }
 }
