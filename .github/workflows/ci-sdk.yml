@@ -167,6 +167,13 @@ jobs:
         env:
           RUSTFLAGS: "" # remove -Dwarnings: program crates are not warning-gated (excluded from clippy)
           PYTH_API_KEY: ${{ secrets.PYTH_API_KEY }}
+      - name: Test EVM proxy SDK client
+        run: |
+          test_count=$(cargo test --locked -p gmsol-sdk --features client,evm-proxy,js,decode --lib evm_proxy -- --list | grep -c ': test$')
+          test "$test_count" -eq 11
+          cargo test --locked -p gmsol-sdk --features client,evm-proxy,js,decode --lib evm_proxy
+        env:
+          RUSTFLAGS: ""
 
   test-evm-proxy:
     name: test evm proxy
@@ -199,8 +206,12 @@ jobs:
       - name: Build and test proxy SBF
         run: |
           trap 'if test -f "$SBF_OUT_DIR/gmsol_evm_proxy-keypair.json"; then rm -- "$SBF_OUT_DIR/gmsol_evm_proxy-keypair.json"; fi' EXIT
+          cargo build-sbf --manifest-path programs/store/Cargo.toml --sbf-out-dir "$SBF_OUT_DIR"
           cargo build-sbf --manifest-path programs/evm-proxy/Cargo.toml --sbf-out-dir "$SBF_OUT_DIR"
+          test -f "$SBF_OUT_DIR/gmsol_store.so"
           test -f "$SBF_OUT_DIR/gmsol_evm_proxy.so"
-          test_count=$(cargo test --locked -p gmsol-evm-proxy --features sbf-test --test create_proxy -- --list | grep -c ': test$')
-          test "$test_count" -eq 10
-          cargo test --locked -p gmsol-evm-proxy --features sbf-test --test create_proxy
+          proxy_count=$(cargo test --locked -p gmsol-evm-proxy --features sbf-test --test create_proxy -- --list | grep -c ': test$')
+          config_count=$(cargo test --locked -p gmsol-evm-proxy --features sbf-test --test config -- --list | grep -c ': test$')
+          test "$proxy_count" -eq 10
+          test "$config_count" -eq 11
+          cargo test --locked -p gmsol-evm-proxy --features sbf-test --test create_proxy --test config

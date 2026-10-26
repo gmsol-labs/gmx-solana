@@ -27,12 +27,13 @@ devnet = []
 test-only = []
 migration = []
 sbf-test = []
-idl-build = ["anchor-lang/idl-build"]
+idl-build = ["anchor-lang/idl-build", "gmsol-store/idl-build"]
 
 [dependencies]
 anchor-lang = { workspace = true, features = ["init-if-needed"] }
 bytemuck = { workspace = true, features = ["min_const_generics"] }
 gmsol-utils = { workspace = true, features = ["security-txt"] }
+gmsol-store = { workspace = true, features = ["no-entrypoint"] }
 
 [dev-dependencies]
 solana-program-test = "2.1.21"
@@ -40,8 +41,14 @@ solana-accounts-db = "2.1.21"
 solana-runtime = { version = "2.1.21", features = ["dev-context-only-utils"] }
 solana-sdk = { workspace = true }
 serde_json = { workspace = true }
+base64 = { workspace = true }
+bincode = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 
 [[test]]
 name = "create_proxy"
+required-features = ["sbf-test"]
+
+[[test]]
+name = "config"
 required-features = ["sbf-test"]
