@@ -1,25 +1,39 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use gmsol_programs::gmsol_store::client::{accounts, args};
-use gmsol_sdk::client::ops::{gt::current_time_window_index, GtOps, UserOps};
+use gmsol_sdk::client::ops::{GtOps, SystemProgramOps, UserOps};
+use gmsol_solana_utils::signer::shared_signer;
 use gmsol_store::{constants::DEFAULT_GT_VAULT_TIME_WINDOW, CoreError};
 use gmsol_utils::gt::get_time_window_index;
+use solana_sdk::signature::Keypair;
 
 use crate::anchor_test::setup::{current_deployment, Deployment, GT_EXCHANGE_WINDOW_LOCK};
 
 #[tokio::test]
 async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result<()> {
-    const SCUB_WINDOW: u32 = 30;
+    const SCUB_WINDOW: u32 = 120;
 
     let _window_guard = GT_EXCHANGE_WINDOW_LOCK.lock().await;
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
-    let owner = deployment.user_client(Deployment::USER_1)?;
-    let second_owner = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let owner = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
+    let second_owner = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
     let store = &deployment.store;
     let owner_address = owner.payer();
     let second_owner_address = second_owner.payer();
+
+    for address in [owner_address, second_owner_address] {
+        deployment
+            .client
+            .transfer(&address, 50_000_000)?
+            .send()
+            .await?;
+    }
 
     keeper
         .gt_set_exchange_time_window(store, SCUB_WINDOW)
@@ -37,12 +51,26 @@ async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result
             .send()
             .await?;
 
-        let scub_seconds = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-        let scub_remaining = u64::from(SCUB_WINDOW) - scub_seconds % u64::from(SCUB_WINDOW);
-        if scub_remaining < 10 {
-            tokio::time::sleep(Duration::from_secs(scub_remaining + 1)).await;
+        let scub_clock_account = keeper
+            .rpc()
+            .get_account(&solana_sdk::sysvar::clock::id())
+            .await?;
+        let scub_clock: solana_sdk::clock::Clock =
+            solana_sdk::account::from_account(&scub_clock_account)
+                .ok_or_else(|| eyre::eyre!("invalid validator clock"))?;
+        let window = i64::from(SCUB_WINDOW);
+        let scub_remaining = window - scub_clock.unix_timestamp.rem_euclid(window);
+        if scub_remaining < 30 {
+            tokio::time::sleep(Duration::from_secs(u64::try_from(scub_remaining + 1)?)).await;
         }
-        let index = current_time_window_index(SCUB_WINDOW)?;
+        let scub_clock_account = keeper
+            .rpc()
+            .get_account(&solana_sdk::sysvar::clock::id())
+            .await?;
+        let scub_clock: solana_sdk::clock::Clock =
+            solana_sdk::account::from_account(&scub_clock_account)
+                .ok_or_else(|| eyre::eyre!("invalid validator clock"))?;
+        let index = get_time_window_index(scub_clock.unix_timestamp, window);
         let vault = keeper.find_gt_exchange_vault_address(store, index, SCUB_WINDOW);
         let exchange = keeper.find_gt_exchange_address(&vault, &owner_address);
         let second_exchange = keeper.find_gt_exchange_address(&vault, &second_owner_address);

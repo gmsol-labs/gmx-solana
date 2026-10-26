@@ -118,7 +118,7 @@ async fn token_metadata() -> eyre::Result<()> {
         )
         .swap_output(());
     tracing::info!(%market_token, "creating token metadata: {metadata}");
-    let signature = rpc.send_without_preflight().await?;
+    let signature = rpc.send().await?;
 
     tracing::info!(%signature, %market_token, "created token metadata: {metadata}");
 
@@ -130,7 +130,7 @@ async fn token_metadata() -> eyre::Result<()> {
             "GM1".to_string(),
             "metadata-uri-2".to_string(),
         )
-        .send_without_preflight()
+        .send()
         .await?;
 
     tracing::info!(%signature, %market_token, "updated token metadata: {metadata}");
@@ -146,7 +146,7 @@ async fn token_metadata() -> eyre::Result<()> {
         )
         .swap_output(());
     tracing::info!(%glv_token, "creating token metadata: {metadata}");
-    let signature = rpc.send_without_preflight().await?;
+    let signature = rpc.send().await?;
 
     tracing::info!(%signature, %glv_token, "created token metadata: {metadata}");
 
@@ -158,7 +158,7 @@ async fn token_metadata() -> eyre::Result<()> {
             "GLV1".to_string(),
             "metadata-uri-2".to_string(),
         )
-        .send_without_preflight()
+        .send()
         .await?;
 
     tracing::info!(%signature, %glv_token, "updated token metadata: {metadata}");

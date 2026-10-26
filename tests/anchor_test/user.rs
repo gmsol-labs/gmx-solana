@@ -183,9 +183,16 @@ async fn referral() -> eyre::Result<()> {
 async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
-    let client = deployment.user_client(Deployment::USER_1)?;
+    let client = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
     let other = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let store = &deployment.store;
+    deployment
+        .client
+        .transfer(&client.payer(), 50_000_000)?
+        .send()
+        .await?;
     client.prepare_user(store)?.send().await?;
     let user_address = client.find_user_address(store, &client.payer());
     let scub_delegate = Keypair::new().pubkey();
