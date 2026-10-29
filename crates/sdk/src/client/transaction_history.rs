@@ -51,7 +51,22 @@ pub async fn fetch_transaction_history_with_config(
     Ok(stream)
 }
 
+/// Whether a fetched transaction failed; `None` when the RPC response has no status.
+///
+/// A failed transaction is rolled back, but its inner instructions stay in the record, so
+/// CPI events emitted before the failure are still there, e.g. a `TradeEvent` from an
+/// execution whose bundled close then failed. Those events never happened.
+#[cfg(feature = "decode")]
+fn transaction_failed(
+    meta: Option<&solana_transaction_status::UiTransactionStatusMeta>,
+) -> Option<bool> {
+    meta.map(|meta| meta.err.is_some())
+}
+
 /// Extract encoded CPI events from transaction history.
+///
+/// Failed transactions are skipped: their events were rolled back. A transaction whose
+/// status is missing gives an error, since its events can't be trusted either way.
 #[cfg(feature = "decode")]
 pub fn extract_cpi_events(
     stream: impl Stream<Item = crate::Result<WithSlot<Signature>>>,
@@ -84,6 +99,19 @@ pub fn extract_cpi_events(
                         )
                         .await
                         .map_err(crate::Error::custom)?;
+                    match transaction_failed(tx.transaction.meta.as_ref()) {
+                        Some(false) => {}
+                        Some(true) => {
+                            tracing::debug!(%signature, "skipping failed transaction");
+                            continue;
+                        }
+                        None => {
+                            yield Err(crate::Error::custom(format!(
+                                "transaction {signature} has no status"
+                            )));
+                            continue;
+                        }
+                    }
                     let mut decoder = TransactionDecoder::new(tx.slot, signature, &tx.transaction);
                     match decoder
                         .add_cpi_event_authority_and_program_id(event_authority, program_id)
@@ -111,6 +139,26 @@ mod tests {
 
     use super::*;
     use crate::test::{default_cluster, setup_fmt_tracing};
+
+    #[cfg(feature = "decode")]
+    #[test]
+    fn failed_transactions_are_detected() {
+        use solana_sdk::{instruction::InstructionError, transaction::TransactionError};
+        use solana_transaction_status::{TransactionStatusMeta, UiTransactionStatusMeta};
+
+        let ok = UiTransactionStatusMeta::from(TransactionStatusMeta::default());
+        // Shape seen on devnet: a later instruction (index 3) fails with a custom error.
+        let failed = UiTransactionStatusMeta::from(TransactionStatusMeta {
+            status: Err(TransactionError::InstructionError(
+                3,
+                InstructionError::Custom(1),
+            )),
+            ..Default::default()
+        });
+        assert_eq!(transaction_failed(Some(&ok)), Some(false));
+        assert_eq!(transaction_failed(Some(&failed)), Some(true));
+        assert_eq!(transaction_failed(None), None);
+    }
 
     #[tokio::test]
     async fn test_transaction_hisotry_fetching() -> crate::Result<()> {
