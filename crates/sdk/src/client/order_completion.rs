@@ -15,7 +15,11 @@
 //!   - events are fed newest first: transactions newest first, and each transaction's
 //!     events in reverse emission order
 //!   - an order address can be reused (it is a PDA of `(store, owner, nonce)`), so a
-//!     lifecycle ends at the first older event that belongs to a different action id
+//!     lifecycle starts at its create (`OrderUpdated { is_create: true }`) or right after an
+//!     older close at the same address
+//!   - an edit (`update_order`) gives the same order a new action id, so a different id on an
+//!     edit is NOT a new lifecycle; the order is ours if its expected id shows up anywhere in
+//!     the lifecycle (close, edit or create)
 //!   - an order executes at most once (`Pending -> Completed`), so the first `TradeEvent`
 //!     before any boundary is this order's; an older order's trade sits behind its own close
 //!
@@ -142,8 +146,9 @@ pub(crate) struct LifecycleScan {
     removed: Option<OrderRemoved>,
     trade: Option<TradeEvent>,
     reached_start: bool,
+    /// Whether the lifecycle carries `expected_id` (always true when there is none).
+    id_confirmed: bool,
     scanned_txs: usize,
-    failure: Option<InconclusiveReason>,
 }
 
 impl LifecycleScan {
@@ -154,8 +159,8 @@ impl LifecycleScan {
             removed: None,
             trade: None,
             reached_start: false,
+            id_confirmed: expected_id.is_none(),
             scanned_txs: 0,
-            failure: None,
         }
     }
 
@@ -177,7 +182,8 @@ impl LifecycleScan {
             // Events newer than the close belong to a later lifecycle; skip them.
             if let GMSOLCPIEvent::OrderRemoved(event) = event {
                 if event.order == self.order {
-                    return self.set_removed(event);
+                    self.confirm_id(event.id);
+                    self.removed = Some(event.clone());
                 }
             }
             return false;
@@ -186,33 +192,27 @@ impl LifecycleScan {
             GMSOLCPIEvent::TradeEvent(trade)
                 if trade.order == self.order && trade.store == removed.store =>
             {
-                self.trade = Some(*trade);
-                true
+                self.trade.get_or_insert(*trade);
             }
-            // The same close seen twice (live, then again in history) is not a boundary.
             GMSOLCPIEvent::OrderRemoved(event) if event.order == self.order => {
-                self.reached_start = event.id != removed.id;
-                self.reached_start
+                // The same close seen twice (live, then again in history) is not a boundary.
+                let same_close = event.id == removed.id && event.slot == removed.slot;
+                self.reached_start = !same_close;
             }
             GMSOLCPIEvent::OrderUpdated(event) if event.order == self.order => {
-                self.reached_start = event.is_create || event.id != removed.id;
-                self.reached_start
+                self.confirm_id(event.id);
+                self.reached_start = event.is_create;
             }
-            _ => false,
+            _ => {}
         }
+        // A trade is only returned once the lifecycle is known to be the expected order's.
+        self.reached_start || (self.trade.is_some() && self.id_confirmed)
     }
 
-    fn set_removed(&mut self, removed: &OrderRemoved) -> bool {
-        if let Some(expected_id) = self.expected_id.filter(|id| *id != removed.id) {
-            self.failure = Some(InconclusiveReason::OtherOrderClosed {
-                found_id: removed.id,
-                expected_id,
-            });
-            // Not stored: it is another order's close, and callers read `removed` as theirs.
-            return true;
+    fn confirm_id(&mut self, id: u64) {
+        if self.expected_id == Some(id) {
+            self.id_confirmed = true;
         }
-        self.removed = Some(removed.clone());
-        false
     }
 
     /// Whether this order's close has been found.
@@ -238,16 +238,26 @@ impl LifecycleScan {
     /// oldest one read is the start of the address's history.
     pub(crate) fn finish(self, history_ended: bool) -> OrderCompletion {
         let inconclusive = |removed, reason| OrderCompletion::Inconclusive { removed, reason };
-        if let Some(reason) = self.failure {
-            return inconclusive(None, reason);
-        }
         let Some(removed) = self.removed else {
             return inconclusive(None, InconclusiveReason::CloseNotFound);
         };
+        let lifecycle_read = self.reached_start || history_ended;
+        if !self.id_confirmed {
+            // `removed` is not reported: it may be another order's close, and callers read it
+            // as theirs.
+            let reason = match (lifecycle_read, self.expected_id) {
+                (true, Some(expected_id)) => InconclusiveReason::OtherOrderClosed {
+                    found_id: removed.id,
+                    expected_id,
+                },
+                _ => InconclusiveReason::ScanLimitReached,
+            };
+            return inconclusive(None, reason);
+        }
         if let Some(trade) = self.trade {
             return OrderCompletion::Trade(Box::new(trade));
         }
-        if !(self.reached_start || history_ended) {
+        if !lifecycle_read {
             return inconclusive(Some(removed), InconclusiveReason::ScanLimitReached);
         }
         if expects_trade(&removed) {
@@ -562,20 +572,77 @@ mod tests {
     }
 
     #[test]
-    fn update_of_another_action_is_a_boundary() {
-        // Lifecycle 7 was cancelled; lifecycle 6 at the same address left an update and a trade.
+    fn edit_then_execute_keeps_the_trade() {
+        // Seen open as id 7, edited twice (ids 8, 9), then filled and closed as id 9.
+        let txs = [
+            vec![removed(9)],
+            vec![trade(ORDER, 42)],
+            vec![updated(9, false)],
+            vec![updated(8, false)],
+            vec![created(7)],
+        ];
+        assert_eq!(trade_id(&scan(Some(7), &txs)), Some(42));
+    }
+
+    #[test]
+    fn edit_carrying_the_expected_id_confirms_the_order() {
+        // Seen open as id 8: the edit that set id 8 is enough, no need to reach the create.
+        let mut scan = LifecycleScan::new(ORDER, Some(8));
+        assert!(!scan.push_transaction(&[removed(9)]));
+        assert!(!scan.push_transaction(&[trade(ORDER, 42)]));
+        assert!(!scan.push_transaction(&[updated(9, false)]));
+        assert!(scan.push_transaction(&[updated(8, false)]));
+        assert_eq!(trade_id(&scan.finish(false)), Some(42));
+    }
+
+    #[test]
+    fn edited_then_cancelled_order_is_no_trade() {
         let cancelled = GMSOLCPIEvent::OrderRemoved(removed_event(
-            7,
+            9,
             OrderKind::MarketIncrease,
             ActionState::Cancelled,
         ));
         let txs = [
             vec![cancelled],
-            vec![updated(7, false)],
-            vec![updated(6, false)],
+            vec![updated(9, false)],
+            vec![updated(8, false)],
+            vec![created(7)],
+        ];
+        assert!(matches!(scan(Some(7), &txs), OrderCompletion::NoTrade(r) if r.id == 9));
+    }
+
+    #[test]
+    fn trade_of_another_order_at_the_same_address_is_not_returned() {
+        // We saw order id 9 open, but the newest close here is an older order's (id 7).
+        let txs = [vec![removed(7)], vec![trade(ORDER, 1)], vec![created(7)]];
+        let completion = scan(Some(9), &txs);
+        assert!(matches!(
+            completion,
+            OrderCompletion::Inconclusive { removed: None, .. }
+        ));
+        assert_eq!(
+            reason(&completion),
+            Some(InconclusiveReason::OtherOrderClosed {
+                found_id: 7,
+                expected_id: 9
+            })
+        );
+    }
+
+    #[test]
+    fn a_different_close_with_the_same_id_is_a_boundary() {
+        // Same id, different slot: an older order at this address, not the same close twice.
+        let mut older = removed_event(7, OrderKind::MarketIncrease, ActionState::Completed);
+        older.slot = 1;
+        let txs = [
+            vec![removed(7)],
+            vec![GMSOLCPIEvent::OrderRemoved(older)],
             vec![trade(ORDER, 1)],
         ];
-        assert!(matches!(scan(Some(7), &txs), OrderCompletion::NoTrade(r) if r.id == 7));
+        assert_eq!(
+            reason(&scan(Some(7), &txs)),
+            Some(InconclusiveReason::TradeNotFound)
+        );
     }
 }
 
