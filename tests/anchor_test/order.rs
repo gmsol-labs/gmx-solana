@@ -16,7 +16,7 @@ use gmsol_sdk::{
         feeds_parser::FeedAddressMap,
         ops::{
             exchange::order::ExecuteOrderBuilder, BuilderFeeOps, ConfigOps, ExchangeOps, MarketOps,
-            UserOps,
+            SystemProgramOps, UserOps,
         },
         pull_oracle::{FeedIds, PullOraclePriceConsumer},
     },
@@ -28,14 +28,14 @@ use gmsol_sdk::{
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions},
     make_bundle_builder::MakeBundleBuilder,
-    signer::SignerRef,
+    signer::{shared_signer, SignerRef},
     transaction_builder::TransactionBuilder,
 };
 use gmsol_store::CoreError;
 use gmsol_utils::{
     action::ActionState, config::FactorKey, market::MarketConfigKey, oracle::PriceProviderKind,
 };
-use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
+use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair};
 use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
@@ -1785,7 +1785,7 @@ async fn set_builder_fee_rejects_collateral_to_pnl_swap() -> eyre::Result<()> {
     let builder = deployment.user_client(Deployment::USER_1)?;
     let store = &deployment.store;
     let oracle = &deployment.oracle();
-    let scub_fbtc = deployment.token("fBTC").expect("must exist");
+    let fbtc_token = deployment.token("fBTC").expect("must exist");
 
     let market_token = deployment
         .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
@@ -1838,9 +1838,9 @@ async fn set_builder_fee_rejects_collateral_to_pnl_swap() -> eyre::Result<()> {
 
     // Never executed, only checkpointed onto and then cancelled. A limit order
     // permits the later zero-factor checkpoint after the swap-type rejection.
-    let scub_price = 400_000 * MARKET_USD_UNIT / 10u128.pow(scub_fbtc.config.decimals as u32);
+    let limit_price = 400_000 * MARKET_USD_UNIT / 10u128.pow(fbtc_token.config.decimals as u32);
     let (rpc, order) = owner
-        .limit_decrease(store, market_token, true, size, scub_price, true, 0)
+        .limit_decrease(store, market_token, true, size, limit_price, true, 0)
         .decrease_position_swap_type(Some(DecreasePositionSwapType::CollateralToPnlToken))
         .build_with_address()
         .await?;
@@ -2117,7 +2117,7 @@ async fn revoked_builder_fee_still_closes_in_bundle() -> eyre::Result<()> {
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let store = &deployment.store;
     let oracle = &deployment.oracle();
-    let scub_fbtc = deployment.token("fBTC").expect("must exist");
+    let fbtc_token = deployment.token("fBTC").expect("must exist");
 
     let market_token = deployment
         .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
@@ -2160,7 +2160,7 @@ async fn revoked_builder_fee_still_closes_in_bundle() -> eyre::Result<()> {
                     &order,
                     &owner_user,
                     0,
-                    Some(builder_fee_hint(owner.find_market_address(store, market_token), scub_fbtc.address)),
+                    Some(builder_fee_hint(owner.find_market_address(store, market_token), fbtc_token.address)),
                 )
                 .await?;
             let signature = rpc.merge(checkpoint).send_without_preflight().await?;
@@ -2253,7 +2253,7 @@ async fn soft_failed_execution_records_no_builder_fee() -> eyre::Result<()> {
     let builder = deployment.user_client(Deployment::USER_1)?;
     let store = &deployment.store;
     let oracle = &deployment.oracle();
-    let scub_fbtc = deployment.token("fBTC").expect("must exist");
+    let fbtc_token = deployment.token("fBTC").expect("must exist");
 
     let market_token = deployment
         .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_011, 6_000_000_000_007, true)
@@ -2328,7 +2328,7 @@ async fn soft_failed_execution_records_no_builder_fee() -> eyre::Result<()> {
                     &order,
                     &builder_user,
                     CAP,
-                    Some(builder_fee_hint(owner.find_market_address(store, market_token), scub_fbtc.address)),
+                    Some(builder_fee_hint(owner.find_market_address(store, market_token), fbtc_token.address)),
                 )
                 .await?;
             let signature = rpc.merge(checkpoint).send_without_preflight().await?;
@@ -3193,7 +3193,14 @@ async fn revoked_order_settles_as_a_no_op_without_a_claim_vault() -> eyre::Resul
         .await?;
 
     let owner = deployment.locked_user_client().await?;
-    let zero_advertiser = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let zero_advertiser = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
+    deployment
+        .client
+        .transfer(&zero_advertiser.payer(), 50_000_000)?
+        .send()
+        .await?;
 
     for signature in [
         owner.prepare_user(store)?.send_without_preflight().await?,

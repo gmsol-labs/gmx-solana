@@ -450,6 +450,7 @@ impl CommandClient {
 
     /// `true` when [`Self::send_or_serialize`] sends to the cluster, `false` when it only
     /// serializes or writes to an instruction buffer.
+    #[cfg(feature = "execute")]
     pub(crate) fn sends_directly(&self) -> bool {
         self.serialize_only.is_none() && self.ix_buffer_ctx.is_none()
     }

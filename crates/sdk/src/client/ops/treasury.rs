@@ -36,6 +36,69 @@ use crate::{
 
 use super::{gt::GtOps, token_account::TokenAccountOps};
 
+async fn completion_token_metas<C: Deref<Target = impl Signer> + Clone>(
+    client: &crate::Client<C>,
+    gt_bank: &Pubkey,
+    owner: &Pubkey,
+    tokens_hint: Option<Vec<(Pubkey, Pubkey)>>,
+    legacy_missing_bank_error: bool,
+) -> crate::Result<Vec<AccountMeta>> {
+    let tokens = match tokens_hint {
+        Some(tokens) => tokens,
+        None => {
+            let bank = client.account::<ZeroCopy<GtBank>>(gt_bank).await?;
+            let bank = match bank {
+                Some(bank) => bank.0,
+                None if legacy_missing_bank_error => {
+                    return Err(crate::Error::custom("treasury vault config not exist"));
+                }
+                None => return Err(crate::Error::NotFound),
+            };
+            let mints = bank.tokens().collect::<Vec<_>>();
+            client
+                .treasury_program()
+                .rpc()
+                .get_multiple_accounts_with_config(
+                    &mints,
+                    RpcAccountInfoConfig {
+                        encoding: Some(UiAccountEncoding::Base64),
+                        data_slice: Some(solana_account_decoder::UiDataSliceConfig {
+                            offset: 0,
+                            length: 0,
+                        }),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .map_err(crate::Error::custom)?
+                .value
+                .into_iter()
+                .zip(&mints)
+                .map(|(account, address)| {
+                    let account = account.ok_or(crate::Error::NotFound)?;
+                    Ok((*address, account.owner))
+                })
+                .collect::<crate::Result<Vec<_>>>()?
+        }
+    };
+    let mints = tokens
+        .iter()
+        .map(|(mint, _)| AccountMeta::new_readonly(*mint, false));
+    let vaults = tokens.iter().map(|(mint, program)| {
+        AccountMeta::new(
+            get_associated_token_address_with_program_id(gt_bank, mint, program),
+            false,
+        )
+    });
+    let targets = tokens.iter().map(|(mint, program)| {
+        AccountMeta::new(
+            get_associated_token_address_with_program_id(owner, mint, program),
+            false,
+        )
+    });
+    Ok(mints.chain(vaults).chain(targets).collect())
+}
+
 /// Operations for treasury.
 pub trait TreasuryOps<C> {
     /// Initialize [`Config`] account.
@@ -157,6 +220,16 @@ pub trait TreasuryOps<C> {
 
     /// Complete GT exchange.
     fn complete_gt_exchange(
+        &self,
+        store: &Pubkey,
+        exchange: &Pubkey,
+        treasury_vault_config_hint: Option<&Pubkey>,
+        tokens_hint: Option<Vec<(Pubkey, Pubkey)>>,
+        gt_exchange_vault_hint: Option<&Pubkey>,
+    ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
+
+    /// Complete a confirmed GT exchange without the owner's signature.
+    fn complete_gt_exchange_v2(
         &self,
         store: &Pubkey,
         exchange: &Pubkey,
@@ -615,64 +688,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
         };
         let gt_bank = self.find_gt_bank_address(&treasury_vault_config, &gt_exchange_vault);
 
-        let tokens = match tokens_hint {
-            Some(tokens) => tokens,
-            None => {
-                let gt_bank = self
-                    .account::<ZeroCopy<GtBank>>(&gt_bank)
-                    .await?
-                    .ok_or_else(|| crate::Error::custom("treasury vault config not exist"))?
-                    .0;
-
-                let tokens = gt_bank.tokens().collect::<Vec<_>>();
-                self.treasury_program()
-                    .rpc()
-                    .get_multiple_accounts_with_config(
-                        &tokens,
-                        RpcAccountInfoConfig {
-                            encoding: Some(UiAccountEncoding::Base64),
-                            data_slice: Some(solana_account_decoder::UiDataSliceConfig {
-                                offset: 0,
-                                length: 0,
-                            }),
-                            ..Default::default()
-                        },
-                    )
-                    .await
-                    .map_err(crate::Error::custom)?
-                    .value
-                    .into_iter()
-                    .zip(&tokens)
-                    .map(|(account, address)| {
-                        let account = account.ok_or(crate::Error::NotFound)?;
-                        Ok((*address, account.owner))
-                    })
-                    .collect::<crate::Result<Vec<_>>>()?
-            }
-        };
-
-        let token_mints = tokens.iter().map(|pubkey| AccountMeta {
-            pubkey: pubkey.0,
-            is_signer: false,
-            is_writable: false,
-        });
-        let gt_bank_vaults = tokens.iter().map(|(mint, token_program_id)| {
-            let gt_bank_vault =
-                get_associated_token_address_with_program_id(&gt_bank, mint, token_program_id);
-            AccountMeta {
-                pubkey: gt_bank_vault,
-                is_signer: false,
-                is_writable: true,
-            }
-        });
-        let atas = tokens.iter().map(|(mint, token_program_id)| {
-            let ata = get_associated_token_address_with_program_id(&owner, mint, token_program_id);
-            AccountMeta {
-                pubkey: ata,
-                is_signer: false,
-                is_writable: true,
-            }
-        });
+        let token_metas = completion_token_metas(self, &gt_bank, &owner, tokens_hint, true).await?;
 
         Ok(self
             .treasury_transaction()
@@ -689,12 +705,56 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
                 token_program: anchor_spl::token::ID,
                 token_2022_program: anchor_spl::token_2022::ID,
             })
-            .accounts(
-                token_mints
-                    .chain(gt_bank_vaults)
-                    .chain(atas)
-                    .collect::<Vec<_>>(),
-            ))
+            .accounts(token_metas))
+    }
+
+    async fn complete_gt_exchange_v2(
+        &self,
+        store: &Pubkey,
+        exchange: &Pubkey,
+        treasury_vault_config_hint: Option<&Pubkey>,
+        tokens_hint: Option<Vec<(Pubkey, Pubkey)>>,
+        gt_exchange_vault_hint: Option<&Pubkey>,
+    ) -> crate::Result<TransactionBuilder<C>> {
+        let exchange_data = self
+            .account::<ZeroCopy<GtExchange>>(exchange)
+            .await?
+            .ok_or(crate::Error::NotFound)?
+            .0;
+        let owner = exchange_data.owner;
+        let rent_receiver = *optional_address(&exchange_data.rent_receiver).unwrap_or(&owner);
+        let gt_exchange_vault = exchange_data.vault;
+        if let Some(hint) = gt_exchange_vault_hint {
+            if *hint != gt_exchange_vault {
+                return Err(crate::Error::custom(
+                    "GT exchange vault hint does not match exchange",
+                ));
+            }
+        }
+        let (config, treasury_vault_config) =
+            find_config_addresses(self, store, treasury_vault_config_hint).await?;
+        let gt_bank = self.find_gt_bank_address(&treasury_vault_config, &gt_exchange_vault);
+
+        let token_metas =
+            completion_token_metas(self, &gt_bank, &owner, tokens_hint, false).await?;
+
+        Ok(self
+            .treasury_transaction()
+            .anchor_args(args::CompleteGtExchangeV2 {})
+            .anchor_accounts(accounts::CompleteGtExchangeV2 {
+                owner,
+                rent_receiver,
+                store: *store,
+                config,
+                treasury_vault_config,
+                gt_exchange_vault,
+                gt_bank,
+                exchange: *exchange,
+                store_program: *self.store_program_id(),
+                token_program: anchor_spl::token::ID,
+                token_2022_program: anchor_spl::token_2022::ID,
+            })
+            .accounts(token_metas))
     }
 
     async fn create_treasury_swap(

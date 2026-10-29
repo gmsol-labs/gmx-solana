@@ -15,12 +15,13 @@ use event_listener::Event;
 use eyre::{eyre, OptionExt};
 
 use futures_util::{FutureExt, StreamExt};
+use gmsol_programs::gmsol_store::client::{accounts as store_accounts, args as store_args};
 use gmsol_sdk::{
     client::{
         chainlink::pull_oracle::ChainlinkPullOracleFactory,
         ops::{
             AddressLookupTableOps, ConfigOps, ExchangeOps, GlvOps, GtOps, MarketOps, OracleOps,
-            RoleOps, StoreOps, SystemProgramOps, TokenConfigOps,
+            RoleOps, StoreOps, SystemProgramOps, TokenAccountOps, TokenConfigOps, TreasuryOps,
         },
         pull_oracle::{PullOraclePriceConsumer, WithPullOracle},
         pyth::{pull_oracle::PythPullOracleWithHermes, Hermes, PythPullOracle},
@@ -28,6 +29,7 @@ use gmsol_sdk::{
     },
     constants::MARKET_USD_UNIT,
     ops::{token_config::UpdateFeedConfig, VirtualInventoryOps},
+    utils::zero_copy::ZeroCopy,
     Client,
 };
 use gmsol_solana_utils::{
@@ -43,7 +45,7 @@ use gmsol_utils::{
     market::MarketConfigKey,
     oracle::PriceProviderKind,
     role::RoleKey,
-    token_config::UpdateTokenConfigParams,
+    token_config::{TokenFlag, UpdateTokenConfigParams},
 };
 use rand::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
 use solana_client::rpc_config::RpcSendTransactionConfig;
@@ -110,6 +112,8 @@ pub struct Deployment {
     token_map: Keypair,
     /// Oracle.
     oracle: Keypair,
+    /// Treasury oracle, controlled by Treasury Config.
+    treasury_oracle: Keypair,
     /// GLV mint.
     pub glv_token: Pubkey,
     /// Tokens.
@@ -222,6 +226,7 @@ impl Deployment {
         let mut rng = Self::get_rng()?;
         let (client, store_key, store) = Self::get_client_and_store().await?;
         let oracle = Keypair::generate(&mut rng);
+        let treasury_oracle = Keypair::generate(&mut rng);
         let token_map = Keypair::generate(&mut rng);
 
         let (rpc, common_alt) = client.create_alt().await?;
@@ -254,6 +259,7 @@ impl Deployment {
             store,
             token_map,
             oracle,
+            treasury_oracle,
             glv_token: Default::default(),
             tokens: Default::default(),
             synthetic_tokens: Default::default(),
@@ -422,6 +428,99 @@ impl Deployment {
         )
         .await?;
 
+        self.initialize_treasury().await?;
+        Ok(())
+    }
+
+    async fn initialize_treasury(&self) -> eyre::Result<()> {
+        let admin = &self.client;
+        let keeper = self.user_client(Self::DEFAULT_KEEPER)?;
+        let store = &self.store;
+        let config = admin.find_treasury_config_address(store);
+        let vault_config = admin.find_treasury_vault_config_address(&config, 0);
+        let initialized_now = admin
+            .account::<ZeroCopy<gmsol_programs::gmsol_treasury::accounts::Config>>(&config)
+            .await?
+            .is_none();
+
+        if initialized_now {
+            for role in ["TREASURY_OWNER", "TREASURY_ADMIN", "TREASURY_KEEPER"] {
+                admin.enable_role(store, role).send().await?;
+                admin.grant_role(store, &admin.payer(), role).send().await?;
+            }
+            admin.enable_role(store, "ORACLE_CONTROLLER").send().await?;
+            admin
+                .grant_role(store, &keeper.payer(), "TREASURY_KEEPER")
+                .send()
+                .await?;
+            let receiver = admin.find_treasury_receiver_address(&config);
+            StoreOps::transfer_receiver(admin, store, &receiver)
+                .send()
+                .await?;
+            admin.initialize_config(store).send().await?;
+            TreasuryOps::transfer_receiver(admin, store, &admin.payer())
+                .send()
+                .await?;
+            admin
+                .store_transaction()
+                .anchor_accounts(store_accounts::AcceptReceiver {
+                    next_receiver: admin.payer(),
+                    store: *store,
+                })
+                .anchor_args(store_args::AcceptReceiver {})
+                .send()
+                .await?;
+            admin
+                .grant_role(store, &config, "GT_CONTROLLER")
+                .send()
+                .await?;
+            admin
+                .grant_role(store, &config, "ORACLE_CONTROLLER")
+                .send()
+                .await?;
+            admin
+                .initialize_treasury_vault_config(store, 0)
+                .send()
+                .await?;
+            admin
+                .set_treasury_vault_config(store, &vault_config)
+                .send()
+                .await?;
+            for name in ["WSOL", "fBTC"] {
+                let token = self.token(name).expect("fixture token must exist").address;
+                admin
+                    .insert_token_to_treasury(store, Some(&vault_config), &token)
+                    .await?
+                    .send()
+                    .await?;
+                admin
+                    .toggle_token_flag(
+                        store,
+                        Some(&vault_config),
+                        &token,
+                        TokenFlag::AllowDeposit,
+                        true,
+                    )
+                    .await?
+                    .send()
+                    .await?;
+                admin
+                    .prepare_associated_token_account(
+                        &token,
+                        &anchor_spl::token::ID,
+                        Some(&vault_config),
+                    )
+                    .send()
+                    .await?;
+            }
+        }
+
+        admin
+            .initialize_oracle(store, &self.treasury_oracle, Some(&config))
+            .await?
+            .0
+            .send()
+            .await?;
         Ok(())
     }
 
@@ -2067,6 +2166,10 @@ impl Deployment {
 
     pub(crate) fn oracle(&self) -> Pubkey {
         self.oracle.pubkey()
+    }
+
+    pub(crate) fn treasury_oracle(&self) -> Pubkey {
+        self.treasury_oracle.pubkey()
     }
 
     pub(crate) fn liquidity_provider_oracle(&self) -> Pubkey {

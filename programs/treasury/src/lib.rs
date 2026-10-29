@@ -154,6 +154,13 @@ pub mod gmsol_treasury {
         instructions::complete_gt_exchange(ctx)
     }
 
+    /// Complete a confirmed GT exchange and return rent to its recorded receiver.
+    pub fn complete_gt_exchange_v2<'info>(
+        ctx: Context<'_, '_, 'info, 'info, CompleteGtExchangeV2<'info>>,
+    ) -> Result<()> {
+        CompleteGtExchangeV2::invoke(ctx)
+    }
+
     /// Create a swap.
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_KEEPER))]
     pub fn create_swap_v2<'info>(
