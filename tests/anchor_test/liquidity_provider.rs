@@ -9,6 +9,9 @@ use solana_sdk::{pubkey::Pubkey, signer::keypair::Keypair, signer::Signer};
 use std::num::NonZeroU64;
 use tracing::Instrument;
 
+static LP_CONTROLLER_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+const GLV_TEST_POSITION_ID: u64 = 424_242;
+
 // Test helpers ----------------------------------------------------------------
 
 // Tests -----------------------------------------------------------------------
@@ -384,6 +387,7 @@ async fn comprehensive_gm_flow() -> eyre::Result<()> {
 /// Comprehensive GLV staking flow with real pricing: deposit → value check → stake
 #[tokio::test]
 async fn comprehensive_glv_flow() -> eyre::Result<()> {
+    let _controller_guard = LP_CONTROLLER_TEST_LOCK.lock().await;
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
     let span = tracing::info_span!("comprehensive_glv_flow");
@@ -448,15 +452,17 @@ async fn comprehensive_glv_flow() -> eyre::Result<()> {
 
     // Step 4: Stake GLV tokens using the SDK builder with real pricing
     // Note: GLV controller should already be created during deployment setup
-    let mut stake_builder = user.stake_lp_token(StakeLpTokenParams {
-        store,
-        lp_token_kind: LpTokenKind::Glv,
-        lp_token_mint: glv_token,
-        oracle: lp_oracle,
-        amount: NonZeroU64::new(glv_amount).expect("amount must be non-zero"),
-        controller_index,
-        controller_address: None,
-    });
+    let mut stake_builder = user
+        .stake_lp_token(StakeLpTokenParams {
+            store,
+            lp_token_kind: LpTokenKind::Glv,
+            lp_token_mint: glv_token,
+            oracle: lp_oracle,
+            amount: NonZeroU64::new(glv_amount).expect("amount must be non-zero"),
+            controller_index,
+            controller_address: None,
+        })
+        .with_position_id(GLV_TEST_POSITION_ID);
 
     deployment
         .execute_with_pyth(&mut stake_builder, None, false, true)
@@ -471,6 +477,7 @@ async fn comprehensive_glv_flow() -> eyre::Result<()> {
 /// Test LP token controller functionality
 #[tokio::test]
 async fn lp_token_controller_tests() -> eyre::Result<()> {
+    let _controller_guard = LP_CONTROLLER_TEST_LOCK.lock().await;
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
     let span = tracing::info_span!("lp_token_controller_tests");
@@ -500,6 +507,7 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
 
     assert_eq!(controller_account.global_state, global_state);
     assert_eq!(controller_account.lp_token_mint, *gm_token);
+    assert_eq!(controller_account.total_positions, 0);
     assert!(controller_account.is_enabled);
     assert_eq!(controller_account.disabled_at, 0);
     assert_eq!(controller_account.disabled_cum_inv_cost, 0);
@@ -523,6 +531,26 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
 
     assert_eq!(glv_controller_account.global_state, global_state);
     assert_eq!(glv_controller_account.lp_token_mint, *glv_token);
+    let glv_owner = deployment.user_client(Deployment::DEFAULT_USER)?.payer();
+    let (glv_position, _) = Pubkey::find_program_address(
+        &[
+            lp::POSITION_SEED,
+            glv_controller.as_ref(),
+            glv_owner.as_ref(),
+            &GLV_TEST_POSITION_ID.to_le_bytes(),
+        ],
+        &lp::ID,
+    );
+    let expected_glv_positions = u64::from(
+        keeper
+            .account::<lp::Position>(&glv_position)
+            .await?
+            .is_some(),
+    );
+    assert_eq!(
+        glv_controller_account.total_positions,
+        expected_glv_positions
+    );
     assert!(glv_controller_account.is_enabled);
     tracing::info!("✓ GLV controller verification passed");
 

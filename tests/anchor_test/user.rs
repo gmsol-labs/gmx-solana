@@ -28,7 +28,7 @@ use solana_sdk::{
 
 use crate::anchor_test::setup::{current_deployment, Deployment, GT_EXCHANGE_WINDOW_LOCK};
 
-async fn scub_assert_gt_delegation_event(
+async fn assert_gt_delegation_event(
     client: &Client<SignerRef>,
     user: Pubkey,
     delegate: Pubkey,
@@ -180,64 +180,71 @@ async fn referral() -> eyre::Result<()> {
 }
 
 #[tokio::test]
-async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
+async fn gt_delegation_owner_controls() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
-    let client = deployment.user_client(Deployment::USER_1)?;
+    let client = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
     let other = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let store = &deployment.store;
+    deployment
+        .client
+        .transfer(&client.payer(), 50_000_000)?
+        .send()
+        .await?;
     client.prepare_user(store)?.send().await?;
     let user_address = client.find_user_address(store, &client.payer());
-    let scub_delegate = Keypair::new().pubkey();
-    let scub_next_delegate = other.payer();
+    let initial_delegate = Keypair::new().pubkey();
+    let replacement_delegate = other.payer();
 
     client
-        .set_gt_delegate(store, &scub_delegate, 100)?
+        .set_gt_delegate(store, &initial_delegate, 100)?
         .send()
         .await?;
     let user = client.user(&user_address).await?;
-    assert_eq!(user.gt.delegate, scub_delegate);
+    assert_eq!(user.gt.delegate, initial_delegate);
     assert_eq!(user.gt.allowance, 100);
-    scub_assert_gt_delegation_event(&client, user_address, scub_delegate, 100).await?;
+    assert_gt_delegation_event(&client, user_address, initial_delegate, 100).await?;
 
     client
-        .decrease_gt_allowance(store, &scub_delegate, 40)?
+        .decrease_gt_allowance(store, &initial_delegate, 40)?
         .send()
         .await?;
-    scub_assert_gt_delegation_event(&client, user_address, scub_delegate, 60).await?;
+    assert_gt_delegation_event(&client, user_address, initial_delegate, 60).await?;
     client
-        .increase_gt_allowance(store, &scub_delegate, 15)?
+        .increase_gt_allowance(store, &initial_delegate, 15)?
         .send()
         .await?;
     assert_eq!(client.user(&user_address).await?.gt.allowance, 75);
-    scub_assert_gt_delegation_event(&client, user_address, scub_delegate, 75).await?;
+    assert_gt_delegation_event(&client, user_address, initial_delegate, 75).await?;
 
     client
-        .set_gt_delegate(store, &scub_next_delegate, 30)?
+        .set_gt_delegate(store, &replacement_delegate, 30)?
         .send()
         .await?;
     let user = client.user(&user_address).await?;
-    assert_eq!(user.gt.delegate, scub_next_delegate);
+    assert_eq!(user.gt.delegate, replacement_delegate);
     assert_eq!(user.gt.allowance, 30);
-    scub_assert_gt_delegation_event(&client, user_address, scub_next_delegate, 30).await?;
+    assert_gt_delegation_event(&client, user_address, replacement_delegate, 30).await?;
 
     client
-        .increase_gt_allowance(store, &scub_delegate, 1)?
+        .increase_gt_allowance(store, &initial_delegate, 1)?
         .send()
         .await
         .expect_err("a stale delegate must not receive an allowance increase");
     client
-        .decrease_gt_allowance(store, &scub_delegate, 1)?
+        .decrease_gt_allowance(store, &initial_delegate, 1)?
         .send()
         .await
         .expect_err("a stale delegate must not reduce the new delegate's allowance");
     client
-        .increase_gt_allowance(store, &scub_next_delegate, 0)?
+        .increase_gt_allowance(store, &replacement_delegate, 0)?
         .send()
         .await
         .expect_err("a zero increase must be rejected");
     client
-        .decrease_gt_allowance(store, &scub_next_delegate, 0)?
+        .decrease_gt_allowance(store, &replacement_delegate, 0)?
         .send()
         .await
         .expect_err("a zero decrease must be rejected");
@@ -260,11 +267,11 @@ async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
     assert_eq!(client.user(&user_address).await?.gt.allowance, 30);
 
     client
-        .decrease_gt_allowance(store, &scub_next_delegate, 100)?
+        .decrease_gt_allowance(store, &replacement_delegate, 100)?
         .send()
         .await?;
     assert_eq!(client.user(&user_address).await?.gt.allowance, 0);
-    scub_assert_gt_delegation_event(&client, user_address, scub_next_delegate, 0).await?;
+    assert_gt_delegation_event(&client, user_address, replacement_delegate, 0).await?;
     client
         .set_gt_delegate(store, &Pubkey::default(), 0)?
         .send()
@@ -272,9 +279,9 @@ async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
     let user = client.user(&user_address).await?;
     assert_eq!(user.gt.delegate, Pubkey::default());
     assert_eq!(user.gt.allowance, 0);
-    scub_assert_gt_delegation_event(&client, user_address, Pubkey::default(), 0).await?;
+    assert_gt_delegation_event(&client, user_address, Pubkey::default(), 0).await?;
     client
-        .increase_gt_allowance(store, &scub_next_delegate, 1)?
+        .increase_gt_allowance(store, &replacement_delegate, 1)?
         .send()
         .await
         .expect_err("a user without a delegate cannot receive a positive allowance");

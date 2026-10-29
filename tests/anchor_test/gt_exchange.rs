@@ -5,128 +5,23 @@ use gmsol_programs::gmsol_treasury::client::{
     accounts as treasury_accounts, args as treasury_args,
 };
 use gmsol_sdk::client::ops::{
-    GtOps, RoleOps, StoreOps, SystemProgramOps, TokenAccountOps, TreasuryOps, UserOps,
+    GtOps, SystemProgramOps, TokenAccountOps, TokenConfigOps, TreasuryOps, UserOps,
 };
 use gmsol_sdk::utils::zero_copy::ZeroCopy;
 use gmsol_solana_utils::signer::{shared_signer, SignerRef};
 use gmsol_store::{constants::DEFAULT_GT_VAULT_TIME_WINDOW, CoreError};
-use gmsol_utils::{gt::get_time_window_index, token_config::TokenFlag};
+use gmsol_utils::gt::get_time_window_index;
+use gmsol_utils::token_config::{TokenFlag, UpdateTokenConfigParams};
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     program_pack::Pack,
     pubkey::Pubkey,
-    signature::{EncodableKey, Keypair},
+    signature::Keypair,
     signer::Signer,
     system_instruction,
 };
 
 use crate::anchor_test::setup::{current_deployment, Deployment, GT_EXCHANGE_WINDOW_LOCK};
-
-pub(super) async fn prepare_treasury_for_completion_test(
-    deployment: &Deployment,
-    gt_factor: u128,
-) -> eyre::Result<()> {
-    let admin = &deployment.client;
-    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
-    let store = &deployment.store;
-    let config = admin.find_treasury_config_address(store);
-    let vault_config = admin.find_treasury_vault_config_address(&config, 0);
-    let initialized_now = admin
-        .account::<ZeroCopy<gmsol_programs::gmsol_treasury::accounts::Config>>(&config)
-        .await?
-        .is_none();
-
-    if initialized_now {
-        for role in ["TREASURY_OWNER", "TREASURY_ADMIN", "TREASURY_KEEPER"] {
-            admin.enable_role(store, role).send().await?;
-            admin.grant_role(store, &admin.payer(), role).send().await?;
-        }
-        admin
-            .grant_role(store, &keeper.payer(), "TREASURY_KEEPER")
-            .send()
-            .await?;
-        let receiver = admin.find_treasury_receiver_address(&config);
-        StoreOps::transfer_receiver(admin, store, &receiver)
-            .send()
-            .await?;
-        admin.initialize_config(store).send().await?;
-        TreasuryOps::transfer_receiver(admin, store, &admin.payer())
-            .send()
-            .await?;
-        admin
-            .store_transaction()
-            .anchor_accounts(accounts::AcceptReceiver {
-                next_receiver: admin.payer(),
-                store: *store,
-            })
-            .anchor_args(args::AcceptReceiver {})
-            .send()
-            .await?;
-        admin
-            .grant_role(store, &config, "GT_CONTROLLER")
-            .send()
-            .await?;
-        admin
-            .initialize_treasury_vault_config(store, 0)
-            .send()
-            .await?;
-        admin
-            .set_treasury_vault_config(store, &vault_config)
-            .send()
-            .await?;
-        for name in ["WSOL", "fBTC"] {
-            let token = deployment
-                .token(name)
-                .expect("fixture token must exist")
-                .address;
-            admin
-                .insert_token_to_treasury(store, Some(&vault_config), &token)
-                .await?
-                .send()
-                .await?;
-            admin
-                .toggle_token_flag(
-                    store,
-                    Some(&vault_config),
-                    &token,
-                    TokenFlag::AllowDeposit,
-                    true,
-                )
-                .await?
-                .send()
-                .await?;
-        }
-    }
-
-    let current_factor = admin
-        .account::<ZeroCopy<gmsol_programs::gmsol_treasury::accounts::Config>>(&config)
-        .await?
-        .expect("treasury config must exist")
-        .0
-        .gt_factor;
-    if current_factor != gt_factor {
-        admin.set_gt_factor(store, gt_factor)?.send().await?;
-    }
-    Ok(())
-}
-
-async fn fund_validator_payer_if_needed() -> eyre::Result<()> {
-    let endpoint = std::env::var("ANCHOR_PROVIDER_URL")?;
-    if endpoint.starts_with("http://127.0.0.1:") {
-        let wallet_path = std::env::var("ANCHOR_WALLET")?;
-        let wallet = shellexpand::full(&wallet_path)?;
-        let payer = Keypair::read_from_file(wallet.as_ref())
-            .map_err(|err| eyre::eyre!("could not read validator payer: {err}"))?;
-        let rpc = solana_client::nonblocking::rpc_client::RpcClient::new(endpoint);
-        if rpc.get_balance(&payer.pubkey()).await? == 0 {
-            let signature = rpc
-                .request_airdrop(&payer.pubkey(), 500_000_000_000)
-                .await?;
-            rpc.confirm_transaction(&signature).await?;
-        }
-    }
-    Ok(())
-}
 
 async fn assert_completion_rejected_atomically(
     caller: &gmsol_sdk::Client<SignerRef>,
@@ -136,16 +31,16 @@ async fn assert_completion_rejected_atomically(
     bank: &Pubkey,
     receiver: &Pubkey,
     owner: &Pubkey,
-    tokens: &[Pubkey; 2],
+    tokens: &[Pubkey],
 ) -> eyre::Result<Option<u32>> {
     let rpc = caller.rpc();
     let before_exchange = rpc.get_account(exchange).await?;
     let before_bank = rpc.get_account(bank).await?;
     let before_receiver = rpc.get_balance(receiver).await?;
-    let before_tokens = [
-        deployment.get_ata_amount(&tokens[0], owner).await?,
-        deployment.get_ata_amount(&tokens[1], owner).await?,
-    ];
+    let mut before_tokens = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        before_tokens.push(deployment.get_ata_amount(token, owner).await?);
+    }
     let result = caller
         .treasury_transaction()
         .accounts(instruction.accounts)
@@ -156,23 +51,17 @@ async fn assert_completion_rejected_atomically(
     assert_eq!(rpc.get_account(exchange).await?, before_exchange);
     assert_eq!(rpc.get_account(bank).await?, before_bank);
     assert_eq!(rpc.get_balance(receiver).await?, before_receiver);
-    assert_eq!(
-        deployment.get_ata_amount(&tokens[0], owner).await?,
-        before_tokens[0]
-    );
-    assert_eq!(
-        deployment.get_ata_amount(&tokens[1], owner).await?,
-        before_tokens[1]
-    );
+    for (token, amount) in tokens.iter().zip(before_tokens) {
+        assert_eq!(deployment.get_ata_amount(token, owner).await?, amount);
+    }
     Ok(gmsol_sdk::Error::from(error).anchor_error_code())
 }
 
 #[tokio::test]
-async fn scub_permissionless_treasury_completion_refunds_recorded_receiver() -> eyre::Result<()> {
+async fn permissionless_treasury_completion_refunds_recorded_receiver() -> eyre::Result<()> {
     const WINDOW: u32 = 30;
 
     let _window_guard = GT_EXCHANGE_WINDOW_LOCK.lock().await;
-    fund_validator_payer_if_needed().await?;
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
     let admin = &deployment.client;
@@ -191,7 +80,6 @@ async fn scub_permissionless_treasury_completion_refunds_recorded_receiver() -> 
         .send()
         .await?;
     let vault_config = admin.find_treasury_vault_config_address(&config, 0);
-    prepare_treasury_for_completion_test(deployment, 0).await?;
     deployment
         .mint_or_transfer_to("WSOL", &treasury_receiver, 1)
         .await?;
@@ -296,26 +184,9 @@ async fn scub_permissionless_treasury_completion_refunds_recorded_receiver() -> 
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-        keeper
-            .confirm_gt_exchange_vault(store, &vault, 0, None)
-            .send()
-            .await?;
-        admin
-            .treasury_transaction()
-            .accounts(vec![
-                AccountMeta::new_readonly(admin.payer(), true),
-                AccountMeta::new_readonly(*store, false),
-                AccountMeta::new_readonly(config, false),
-                AccountMeta::new_readonly(vault_config, false),
-                AccountMeta::new_readonly(vault, false),
-                AccountMeta::new(bank, false),
-                AccountMeta::new_readonly(*admin.store_program_id(), false),
-            ])
-            .args(
-                solana_sdk::hash::hash(b"global:confirm_gt_bank_for_test").to_bytes()[..8]
-                    .to_vec(),
-            )
-            .send()
+        let mut confirm = keeper.confirm_gt_buyback(store, &vault, &deployment.treasury_oracle());
+        deployment
+            .execute_with_pyth(&mut confirm, None, true, true)
             .await?;
 
         let rent = caller.rpc().get_balance(&exchange).await?;
@@ -372,11 +243,11 @@ async fn scub_permissionless_treasury_completion_refunds_recorded_receiver() -> 
 }
 
 #[tokio::test]
-async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -> eyre::Result<()> {
+async fn permissionless_completion_uses_recorded_bank_balance_and_order() -> eyre::Result<()> {
     const WINDOW: u32 = 30;
+    const CLAIM_GT: u64 = 100 * 10_000_000;
 
     let _window_guard = GT_EXCHANGE_WINDOW_LOCK.lock().await;
-    fund_validator_payer_if_needed().await?;
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
     let admin = &deployment.client;
@@ -385,20 +256,89 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
     let owners = [Keypair::new(), Keypair::new(), Keypair::new()];
     let fallback_owner = Keypair::new();
     let rent_payer = Keypair::new();
-    let tokens = [
-        deployment
-            .token("WSOL")
-            .expect("WSOL token must exist")
-            .address,
-        deployment
-            .token("fBTC")
-            .expect("fBTC token must exist")
-            .address,
-    ];
     let store = &deployment.store;
+    let wsol_mint = deployment
+        .token("WSOL")
+        .expect("WSOL token must exist")
+        .address;
+    let isolated_mint = loop {
+        let mint = Keypair::new();
+        if mint.pubkey().to_bytes() < wsol_mint.to_bytes() {
+            break mint;
+        }
+    };
+    let btc = deployment.token("fBTC").expect("fBTC token must exist");
+    let mint_rent = admin
+        .rpc()
+        .get_minimum_balance_for_rent_exemption(
+            <anchor_spl::token::spl_token::state::Mint as Pack>::LEN,
+        )
+        .await?;
+    admin
+        .store_transaction()
+        .signer(&isolated_mint)
+        .pre_instruction(
+            system_instruction::create_account(
+                &admin.payer(),
+                &isolated_mint.pubkey(),
+                mint_rent,
+                <anchor_spl::token::spl_token::state::Mint as Pack>::LEN as u64,
+                &anchor_spl::token::ID,
+            ),
+            true,
+        )
+        .pre_instruction(
+            anchor_spl::token::spl_token::instruction::initialize_mint2(
+                &anchor_spl::token::ID,
+                &isolated_mint.pubkey(),
+                &admin.payer(),
+                Some(&admin.payer()),
+                btc.config.decimals,
+            )?,
+            true,
+        )
+        .send()
+        .await?;
+    let token_map = admin
+        .authorized_token_map_address(store)
+        .await?
+        .expect("fixture token map must exist");
+    let token_config = UpdateTokenConfigParams::default()
+        .update_price_feed(&btc.config.provider, btc.config.feed_id, None)?
+        .with_expected_provider(btc.config.provider)
+        .with_precision(btc.config.precision);
+    keeper
+        .insert_token_config(
+            store,
+            &token_map,
+            "isolated-btc",
+            &isolated_mint.pubkey(),
+            token_config,
+            true,
+            true,
+        )
+        .send()
+        .await?;
+    let tokens = [wsol_mint, btc.address, isolated_mint.pubkey()];
     let config = admin.find_treasury_config_address(store);
     let treasury_receiver = admin.find_treasury_receiver_address(&config);
     let vault_config = admin.find_treasury_vault_config_address(&config, 0);
+    admin
+        .insert_token_to_treasury(store, Some(&vault_config), &tokens[2])
+        .await?
+        .send()
+        .await?;
+    admin
+        .toggle_token_flag(
+            store,
+            Some(&vault_config),
+            &tokens[2],
+            TokenFlag::AllowDeposit,
+            true,
+        )
+        .await?
+        .send()
+        .await?;
 
     for owner in &owners {
         admin.transfer(&owner.pubkey(), 50_000_000)?.send().await?;
@@ -411,7 +351,13 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
         .transfer(&rent_payer.pubkey(), 50_000_000)?
         .send()
         .await?;
-    prepare_treasury_for_completion_test(deployment, gmsol_store::constants::MARKET_USD_UNIT)
+    admin
+        .set_gt_factor(store, gmsol_store::constants::MARKET_USD_UNIT)?
+        .send()
+        .await?;
+    admin
+        .set_buyback_factor(store, gmsol_store::constants::MARKET_USD_UNIT / 2)?
+        .send()
         .await?;
 
     keeper
@@ -422,7 +368,7 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
         for owner in &owners {
             let client = admin.try_clone_with_payer(shared_signer(Keypair::from_bytes(&owner.to_bytes())?))?;
             client.prepare_user(store)?.send().await?;
-            keeper.mint_gt_reward(store, &owner.pubkey(), 2)?.send().await?;
+            keeper.mint_gt_reward(store, &owner.pubkey(), 2 * CLAIM_GT)?.send().await?;
             for token in tokens {
                 client.prepare_associated_token_account(&token, &anchor_spl::token::ID, None)
                     .send().await?;
@@ -452,9 +398,28 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
             keeper.prepare_gt_exchange_vault_with_time_window_index(store, index, WINDOW)
                 .send().await?;
             keeper.prepare_gt_bank(store, Some(&vault_config), &vault).await?.send().await?;
-
-            for (name, token, amount) in [("WSOL", tokens[0], 3_u64), ("fBTC", tokens[1], 2)] {
-                deployment.mint_or_transfer_to(name, &treasury_receiver, amount).await?;
+            for owner in &owners {
+                let client = admin.try_clone_with_payer(shared_signer(Keypair::from_bytes(&owner.to_bytes())?))?;
+                client.request_gt_exchange_v2_with_time_window_index(
+                    store, &owner.pubkey(), &owner.pubkey(), &rent_payer.pubkey(), index, WINDOW, CLAIM_GT,
+                ).signer(&rent_payer).send().await?;
+            }
+            fallback_client.request_gt_exchange_with_time_window_index(store, index, WINDOW, 0)
+                .send().await?;
+            for (token, amount) in [(tokens[0], 3_000_000_u64), (tokens[1], 0), (tokens[2], 3)] {
+                admin.prepare_associated_token_account(&token, &anchor_spl::token::ID,
+                    Some(&treasury_receiver)).send().await?;
+                if token == tokens[0] {
+                    deployment.mint_or_transfer_to("WSOL", &treasury_receiver, amount).await?;
+                } else if token == tokens[2] {
+                    let receiver_ata = anchor_spl::associated_token::spl_associated_token_account::get_associated_token_address(
+                        &treasury_receiver, &token);
+                    admin.store_transaction().pre_instruction(
+                        anchor_spl::token::spl_token::instruction::mint_to_checked(
+                            &anchor_spl::token::ID, &token, &receiver_ata, &admin.payer(),
+                            &[], amount, btc.config.decimals,
+                        )?, true).send().await?;
+                }
                 admin.prepare_associated_token_account(&token, &anchor_spl::token::ID, Some(&vault_config))
                     .send().await?;
                 admin.prepare_associated_token_account(&token, &anchor_spl::token::ID, Some(&bank))
@@ -473,40 +438,24 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
                     .anchor_args(treasury_args::DepositToTreasuryVault {})
                     .send().await?;
             }
-            for owner in &owners {
-                let client = admin.try_clone_with_payer(shared_signer(Keypair::from_bytes(&owner.to_bytes())?))?;
-                client.request_gt_exchange_v2_with_time_window_index(
-                    store, &owner.pubkey(), &owner.pubkey(), &rent_payer.pubkey(), index, WINDOW, 1,
-                ).signer(&rent_payer).send().await?;
-            }
-            fallback_client.request_gt_exchange_with_time_window_index(store, index, WINDOW, 0)
-                .send().await?;
+            let bank_tokens = caller.account::<ZeroCopy<gmsol_programs::gmsol_treasury::accounts::GtBank>>(&bank)
+                .await?.expect("funded bank must exist").0.tokens().collect::<Vec<_>>();
+            assert_eq!(bank_tokens.len(), tokens.len());
+            assert!(tokens.iter().all(|token| bank_tokens.contains(token)));
+            let wsol_index = bank_tokens.iter().position(|token| *token == wsol_mint)
+                .expect("WSOL must be in the bank");
+            assert!(wsol_index > 0, "isolated mint must precede WSOL in bank order");
 
-            let hook_accounts = |authority| vec![
-                AccountMeta::new_readonly(authority, true),
-                AccountMeta::new_readonly(*store, false),
-                AccountMeta::new_readonly(config, false),
-                AccountMeta::new_readonly(vault_config, false),
-                AccountMeta::new_readonly(vault, false),
-                AccountMeta::new(bank, false),
-                AccountMeta::new_readonly(*admin.store_program_id(), false),
-            ];
-            let hook_data = solana_sdk::hash::hash(b"global:confirm_gt_bank_for_test").to_bytes()[..8].to_vec();
             let first_exchange = keeper.find_gt_exchange_address(&vault, &owners[order[0]].pubkey());
             let first_instruction = caller.complete_gt_exchange_v2(
                 store, &first_exchange, Some(&vault_config),
-                Some(tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
+                Some(bank_tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
                 Some(&vault),
             ).await?.take_instruction().expect("completion instruction");
             assert_completion_rejected_atomically(
                 &caller, deployment, first_instruction, &first_exchange, &bank,
                 &rent_payer.pubkey(), &owners[order[0]].pubkey(), &tokens,
             ).await?;
-            let bank_before_hook = caller.rpc().get_account(&bank).await?;
-            assert!(admin.treasury_transaction().accounts(hook_accounts(admin.payer()))
-                .args(hook_data.clone()).send().await.is_err());
-            assert_eq!(caller.rpc().get_account(&bank).await?, bank_before_hook);
-
             loop {
                 let clock_account = keeper.rpc().get_account(&solana_sdk::sysvar::clock::id()).await?;
                 let clock: solana_sdk::clock::Clock = solana_sdk::account::from_account(&clock_account)
@@ -514,28 +463,41 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
                 if get_time_window_index(clock.unix_timestamp, i64::from(WINDOW)) > index { break; }
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
-            keeper.confirm_gt_exchange_vault(store, &vault, 3, None).send().await?;
-            let bank_before_denial = caller.rpc().get_account(&bank).await?;
-            assert!(caller.treasury_transaction().accounts(hook_accounts(caller.payer()))
-                .args(hook_data.clone()).send().await.is_err());
-            assert_eq!(caller.rpc().get_account(&bank).await?, bank_before_denial);
-            admin.treasury_transaction()
-                .accounts(hook_accounts(admin.payer()))
-                .args(hook_data)
-                .send().await?;
+            let mut confirm = keeper.confirm_gt_buyback(store, &vault, &deployment.treasury_oracle());
+            deployment.execute_with_pyth(&mut confirm, None, true, true).await?;
+            let confirmed = caller.account::<ZeroCopy<gmsol_programs::gmsol_treasury::accounts::GtBank>>(&bank)
+                .await?.expect("confirmed bank must exist").0;
+            assert_eq!(confirmed.tokens().collect::<Vec<_>>(), bank_tokens,
+                "bank token order must remain stable through confirmation");
+            let mut bank_balances = tokens.map(|token| confirmed.balances.data.iter()
+                .find(|entry| entry.key == token.to_bytes())
+                .expect("bank token must be recorded").value.amount);
+            assert!(bank_balances[0] >= 3, "WSOL must retain a positive per-owner payout");
+            assert_eq!(bank_balances[1], 0, "unfunded fBTC stays zero");
+            assert_eq!(bank_balances[2], 1,
+                "fBTC must retain one unit for three equal GT claims");
 
             let first_owner = owners[order[0]].pubkey();
             let base = caller.complete_gt_exchange_v2(
                 store, &first_exchange, Some(&vault_config),
-                Some(tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
+                Some(bank_tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
                 Some(&vault),
             ).await?.take_instruction().expect("completion instruction");
-            assert_eq!(base.accounts.len(), 17);
+            assert_eq!(base.accounts.len(), 20);
             assert_eq!(base.accounts[0].pubkey, first_owner);
             assert_eq!(base.accounts[1].pubkey, rent_payer.pubkey());
             assert!(!base.accounts[0].is_signer);
             assert!(base.accounts[1].is_writable);
-            assert_eq!([base.accounts[11].pubkey, base.accounts[12].pubkey], tokens);
+            assert_eq!([base.accounts[11].pubkey, base.accounts[12].pubkey,
+                base.accounts[13].pubkey], bank_tokens.as_slice());
+            for (index, token) in bank_tokens.iter().enumerate() {
+                let bank_ata = anchor_spl::associated_token::spl_associated_token_account::get_associated_token_address(
+                    &bank, token);
+                let owner_ata = anchor_spl::associated_token::spl_associated_token_account::get_associated_token_address(
+                    &first_owner, token);
+                assert_eq!(base.accounts[14 + index].pubkey, bank_ata);
+                assert_eq!(base.accounts[17 + index].pubkey, owner_ata);
+            }
 
             let noncanonical = Keypair::new();
             let token_rent = caller.rpc().get_minimum_balance_for_rent_exemption(
@@ -559,14 +521,14 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
             wrong_receiver.accounts[1].pubkey = admin.payer();
             invalid.push(("wrong receiver", wrong_receiver, Some(CoreError::InvalidArgument.into())));
             let mut noncanonical_target = base.clone();
-            noncanonical_target.accounts[15].pubkey = noncanonical.pubkey();
+            noncanonical_target.accounts[17 + wsol_index].pubkey = noncanonical.pubkey();
             invalid.push(("noncanonical target", noncanonical_target,
                 Some(gmsol_programs::anchor_lang::error::ErrorCode::AccountNotAssociatedTokenAccount.into())));
             let mut wrong_mint = base.clone();
-            wrong_mint.accounts[11].pubkey = tokens[1];
+            wrong_mint.accounts[11 + wsol_index].pubkey = bank_tokens[(wsol_index + 1) % bank_tokens.len()];
             invalid.push(("wrong mint", wrong_mint, Some(CoreError::InvalidArgument.into())));
             let mut wrong_vault = base.clone();
-            wrong_vault.accounts[13].pubkey = base.accounts[15].pubkey;
+            wrong_vault.accounts[14 + wsol_index].pubkey = base.accounts[17 + wsol_index].pubkey;
             invalid.push(("wrong vault", wrong_vault, None));
             let mut wrong_program = base.clone();
             wrong_program.accounts[9].pubkey = *admin.store_program_id();
@@ -593,7 +555,7 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
             let owner_client = admin.try_clone_with_payer(shared_signer(Keypair::from_bytes(&owners[order[0]].to_bytes())?))?;
             let legacy = owner_client.complete_gt_exchange(
                 store, &first_exchange, Some(&vault_config),
-                Some(tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
+                Some(bank_tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
                 Some(&vault),
             ).await?.take_instruction().expect("legacy completion instruction");
             assert_completion_rejected_atomically(
@@ -611,7 +573,7 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
             } else {
                 let legacy_fallback = fallback_client.complete_gt_exchange(
                     store, &fallback_exchange, Some(&vault_config),
-                    Some(tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
+                    Some(bank_tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
                     Some(&vault),
                 ).await?.take_instruction().expect("legacy completion instruction");
                 caller.treasury_transaction().accounts(legacy_fallback.accounts)
@@ -624,64 +586,63 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
             for (step, owner_index) in order.into_iter().enumerate() {
                 let owner = owners[owner_index].pubkey();
                 let exchange = keeper.find_gt_exchange_address(&vault, &owner);
-                if step < 2 {
-                    let target = anchor_spl::associated_token::spl_associated_token_account::get_associated_token_address(&owner, &tokens[1]);
+                let remaining_gt = (3 - step as u64) * CLAIM_GT;
+                let payouts = bank_balances.map(|balance| balance / (3 - step as u64));
+                assert_eq!(payouts[2], u64::from(step == 2),
+                    "only the last owner receives the fBTC unit");
+                let isolated_ata = anchor_spl::associated_token::spl_associated_token_account::get_associated_token_address(
+                    &owner, &tokens[2]);
+                if step == 0 || step == 2 {
                     admin.store_transaction().pre_instruction(
                         anchor_spl::token::spl_token::instruction::freeze_account(
-                            &anchor_spl::token::ID, &target, &tokens[1], &admin.payer(), &[],
-                        )?, true,
-                    ).send().await?;
-                    if step == 1 {
-                        let frozen_positive = caller.complete_gt_exchange_v2(
-                            store, &exchange, Some(&vault_config),
-                            Some(tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
-                            Some(&vault),
-                        ).await?.take_instruction().expect("completion instruction");
-                        assert_completion_rejected_atomically(
-                            &caller, deployment, frozen_positive, &exchange, &bank,
-                            &rent_payer.pubkey(), &owner, &tokens,
-                        ).await?;
-                        admin.store_transaction().pre_instruction(
-                            anchor_spl::token::spl_token::instruction::thaw_account(
-                                &anchor_spl::token::ID, &target, &tokens[1], &admin.payer(), &[],
-                            )?, true,
-                        ).send().await?;
-                    }
+                            &anchor_spl::token::ID, &isolated_ata, &tokens[2],
+                            &admin.payer(), &[],
+                        )?, true).send().await?;
                 }
-                let before = [
-                    deployment.get_ata_amount(&tokens[0], &owner).await?.unwrap_or(0),
-                    deployment.get_ata_amount(&tokens[1], &owner).await?.unwrap_or(0),
-                ];
+                let mut before = Vec::with_capacity(tokens.len());
+                for token in tokens {
+                    before.push(deployment.get_ata_amount(&token, &owner).await?.unwrap_or(0));
+                }
                 let duplicate = caller.complete_gt_exchange_v2(
                     store, &exchange, Some(&vault_config),
-                    Some(tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
+                    Some(bank_tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
                     Some(&vault),
                 ).await?.take_instruction().expect("completion instruction");
+                if step == 2 {
+                    assert_completion_rejected_atomically(
+                        &caller, deployment, duplicate.clone(), &exchange, &bank,
+                        &rent_payer.pubkey(), &owner, &tokens,
+                    ).await?;
+                    admin.store_transaction().pre_instruction(
+                        anchor_spl::token::spl_token::instruction::thaw_account(
+                            &anchor_spl::token::ID, &isolated_ata, &tokens[2],
+                            &admin.payer(), &[],
+                        )?, true).send().await?;
+                }
                 caller.complete_gt_exchange_v2(
                     store, &exchange, Some(&vault_config),
-                    Some(tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
+                    Some(bank_tokens.iter().map(|token| (*token, anchor_spl::token::ID)).collect()),
                     Some(&vault),
                 ).await?.send().await?;
                 if step == 0 {
-                    let target = anchor_spl::associated_token::spl_associated_token_account::get_associated_token_address(&owner, &tokens[1]);
                     admin.store_transaction().pre_instruction(
                         anchor_spl::token::spl_token::instruction::thaw_account(
-                            &anchor_spl::token::ID, &target, &tokens[1], &admin.payer(), &[],
-                        )?, true,
-                    ).send().await?;
+                            &anchor_spl::token::ID, &isolated_ata, &tokens[2],
+                            &admin.payer(), &[],
+                        )?, true).send().await?;
                 }
-                let payouts = [1, if step == 0 { 0 } else { 1 }];
                 for (token_index, token) in tokens.iter().enumerate() {
                     assert_eq!(deployment.get_ata_amount(token, &owner).await?, Some(before[token_index] + payouts[token_index]));
                 }
                 let recorded = caller.account::<ZeroCopy<gmsol_programs::gmsol_treasury::accounts::GtBank>>(&bank)
                     .await?.expect("confirmed bank must exist").0;
-                assert_eq!(recorded.remaining_confirmed_gt_amount, 2 - step as u64);
-                for (token, expected) in [(tokens[0], 2 - step as u64), (tokens[1], 2 - step as u64)] {
+                assert_eq!(recorded.remaining_confirmed_gt_amount, remaining_gt - CLAIM_GT);
+                for (token_index, token) in tokens.iter().enumerate() {
                     let entry = recorded.balances.data.iter()
                         .find(|entry| entry.key == token.to_bytes())
                         .expect("bank token must be recorded");
-                    assert_eq!(entry.value.amount, expected);
+                    bank_balances[token_index] -= payouts[token_index];
+                    assert_eq!(entry.value.amount, bank_balances[token_index]);
                 }
                 assert_eq!(caller.rpc().get_balance(&exchange).await?, 0);
                 let bank_after = caller.rpc().get_account(&bank).await?;
@@ -701,29 +662,47 @@ async fn scub_permissionless_completion_uses_recorded_bank_balance_and_order() -
         .send()
         .await;
     let restore_factor = admin.set_gt_factor(store, 0)?.send().await;
+    let restore_buyback_factor = admin.set_buyback_factor(store, 0)?.send().await;
+    let remove_isolated_token = admin
+        .remove_token_from_treasury(store, Some(&vault_config), &tokens[2])
+        .await?
+        .send()
+        .await;
     result?;
     restore_window?;
     restore_factor?;
+    restore_buyback_factor?;
+    remove_isolated_token?;
     Ok(())
 }
 
 #[tokio::test]
-async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result<()> {
-    const SCUB_WINDOW: u32 = 30;
+async fn close_gt_exchange_checks_receiver_and_controller() -> eyre::Result<()> {
+    const EXCHANGE_WINDOW: u32 = 30;
 
     let _window_guard = GT_EXCHANGE_WINDOW_LOCK.lock().await;
-    fund_validator_payer_if_needed().await?;
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
-    let owner = deployment.user_client(Deployment::USER_1)?;
-    let second_owner = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let owner = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
+    let second_owner = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
     let store = &deployment.store;
     let owner_address = owner.payer();
     let second_owner_address = second_owner.payer();
+    for address in [owner_address, second_owner_address] {
+        deployment
+            .client
+            .transfer(&address, 50_000_000)?
+            .send()
+            .await?;
+    }
 
     keeper
-        .gt_set_exchange_time_window(store, SCUB_WINDOW)
+        .gt_set_exchange_time_window(store, EXCHANGE_WINDOW)
         .send()
         .await?;
     let result = async {
@@ -744,10 +723,10 @@ async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result
             .await?;
         let clock: solana_sdk::clock::Clock = solana_sdk::account::from_account(&clock_account)
             .ok_or_else(|| eyre::eyre!("invalid validator clock"))?;
-        let scub_remaining =
-            i64::from(SCUB_WINDOW) - clock.unix_timestamp.rem_euclid(i64::from(SCUB_WINDOW));
-        if scub_remaining < 10 {
-            tokio::time::sleep(Duration::from_secs((scub_remaining + 1) as u64)).await;
+        let window_remaining = i64::from(EXCHANGE_WINDOW)
+            - clock.unix_timestamp.rem_euclid(i64::from(EXCHANGE_WINDOW));
+        if window_remaining < 10 {
+            tokio::time::sleep(Duration::from_secs((window_remaining + 1) as u64)).await;
         }
         let clock_account = keeper
             .rpc()
@@ -755,32 +734,34 @@ async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result
             .await?;
         let clock: solana_sdk::clock::Clock = solana_sdk::account::from_account(&clock_account)
             .ok_or_else(|| eyre::eyre!("invalid validator clock"))?;
-        let index = get_time_window_index(clock.unix_timestamp, i64::from(SCUB_WINDOW));
-        let vault = keeper.find_gt_exchange_vault_address(store, index, SCUB_WINDOW);
+        let index = get_time_window_index(clock.unix_timestamp, i64::from(EXCHANGE_WINDOW));
+        let vault = keeper.find_gt_exchange_vault_address(store, index, EXCHANGE_WINDOW);
         let exchange = keeper.find_gt_exchange_address(&vault, &owner_address);
         let second_exchange = keeper.find_gt_exchange_address(&vault, &second_owner_address);
         keeper
-            .prepare_gt_exchange_vault_with_time_window_index(store, index, SCUB_WINDOW)
+            .prepare_gt_exchange_vault_with_time_window_index(store, index, EXCHANGE_WINDOW)
             .send()
             .await?;
         owner
-            .request_gt_exchange_with_time_window_index(store, index, SCUB_WINDOW, 1)
+            .request_gt_exchange_with_time_window_index(store, index, EXCHANGE_WINDOW, 1)
             .send()
             .await?;
         second_owner
-            .request_gt_exchange_with_time_window_index(store, index, SCUB_WINDOW, 1)
+            .request_gt_exchange_with_time_window_index(store, index, EXCHANGE_WINDOW, 1)
             .send()
             .await?;
 
         loop {
-            let scub_clock_account = keeper
+            let window_clock_account = keeper
                 .rpc()
                 .get_account(&solana_sdk::sysvar::clock::id())
                 .await?;
-            let scub_clock: solana_sdk::clock::Clock =
-                solana_sdk::account::from_account(&scub_clock_account)
+            let window_clock: solana_sdk::clock::Clock =
+                solana_sdk::account::from_account(&window_clock_account)
                     .ok_or_else(|| eyre::eyre!("invalid validator clock"))?;
-            if get_time_window_index(scub_clock.unix_timestamp, i64::from(SCUB_WINDOW)) > index {
+            if get_time_window_index(window_clock.unix_timestamp, i64::from(EXCHANGE_WINDOW))
+                > index
+            {
                 break;
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
@@ -790,9 +771,9 @@ async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result
             .send()
             .await?;
 
-        let scub_rent = keeper.rpc().get_balance(&exchange).await?;
-        let scub_owner_balance = keeper.rpc().get_balance(&owner_address).await?;
-        let scub_wrong_receiver = second_owner_address;
+        let exchange_rent = keeper.rpc().get_balance(&exchange).await?;
+        let owner_balance = keeper.rpc().get_balance(&owner_address).await?;
+        let wrong_receiver = second_owner_address;
         let err = keeper
             .store_transaction()
             .anchor_accounts(accounts::CloseGtExchangeV2 {
@@ -800,7 +781,7 @@ async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result
                 store: *store,
                 owner: owner_address,
                 vault,
-                rent_receiver: scub_wrong_receiver,
+                rent_receiver: wrong_receiver,
                 exchange,
             })
             .anchor_args(args::CloseGtExchangeV2 {})
@@ -811,10 +792,10 @@ async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result
             gmsol_sdk::Error::from(err).anchor_error_code(),
             Some(CoreError::RentReceiverMismatched.into())
         );
-        assert_eq!(keeper.rpc().get_balance(&exchange).await?, scub_rent);
+        assert_eq!(keeper.rpc().get_balance(&exchange).await?, exchange_rent);
         assert_eq!(
             keeper.rpc().get_balance(&owner_address).await?,
-            scub_owner_balance
+            owner_balance
         );
 
         owner
@@ -831,7 +812,8 @@ async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result
             .send()
             .await
             .expect_err("the owner is not a GT controller");
-        assert_eq!(keeper.rpc().get_balance(&exchange).await?, scub_rent);
+        assert_eq!(keeper.rpc().get_balance(&exchange).await?, exchange_rent);
+        let owner_balance_after_failed_close = keeper.rpc().get_balance(&owner_address).await?;
 
         keeper
             .store_transaction()
@@ -849,11 +831,11 @@ async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result
         assert_eq!(keeper.rpc().get_balance(&exchange).await?, 0);
         assert_eq!(
             keeper.rpc().get_balance(&owner_address).await?,
-            scub_owner_balance + scub_rent
+            owner_balance_after_failed_close + exchange_rent
         );
 
-        let scub_second_rent = keeper.rpc().get_balance(&second_exchange).await?;
-        let scub_second_balance = keeper.rpc().get_balance(&second_owner_address).await?;
+        let second_exchange_rent = keeper.rpc().get_balance(&second_exchange).await?;
+        let second_owner_balance = keeper.rpc().get_balance(&second_owner_address).await?;
         keeper
             .close_gt_exchange(
                 store,
@@ -867,7 +849,7 @@ async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result
         assert_eq!(keeper.rpc().get_balance(&second_exchange).await?, 0);
         assert_eq!(
             keeper.rpc().get_balance(&second_owner_address).await?,
-            scub_second_balance + scub_second_rent
+            second_owner_balance + second_exchange_rent
         );
         Ok::<(), eyre::Report>(())
     }

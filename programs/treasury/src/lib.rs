@@ -117,13 +117,6 @@ pub mod gmsol_treasury {
         instructions::unchecked_confirm_gt_buyback(ctx)
     }
 
-    /// Confirm a GT Bank in validator tests without the external oracle path.
-    #[cfg(feature = "test-only")]
-    #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_KEEPER))]
-    pub fn confirm_gt_bank_for_test(ctx: Context<ConfirmGtBankForTest>) -> Result<()> {
-        instructions::confirm_gt_bank_for_test(ctx)
-    }
-
     /// Transfer the receiver permission to a new address.
     #[access_control(CpiAuthenticate::only(&ctx, roles::TREASURY_OWNER))]
     pub fn transfer_receiver(ctx: Context<TransferReceiver>) -> Result<()> {
