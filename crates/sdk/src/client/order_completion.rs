@@ -267,6 +267,79 @@ impl LifecycleScan {
     }
 }
 
+/// Whether a live store event is about `order`: its trade, an edit or create, or its close.
+pub(crate) fn is_order_event(order: &Pubkey, event: &GMSOLCPIEvent) -> bool {
+    match event {
+        GMSOLCPIEvent::TradeEvent(event) => event.order == *order,
+        GMSOLCPIEvent::OrderUpdated(event) => event.order == *order,
+        GMSOLCPIEvent::OrderRemoved(event) => event.order == *order,
+        _ => false,
+    }
+}
+
+/// What the live event stream has shown for the order being waited on.
+///
+/// ```text
+/// account seen open as id 7  -> expected_id = 7
+/// OrderUpdated { id: 8 }     -> expected_id = 8   (an edit gives the order a new id)
+/// TradeEvent                 -> trades = [T]
+/// OrderRemoved { id: 8 }     -> close; take_trusted_trade -> Some(T)
+/// ```
+pub(crate) struct LiveOrder {
+    order: Pubkey,
+    /// Current action id, from the account or the latest edit.
+    expected_id: Option<u64>,
+    trades: Vec<TradeEvent>,
+}
+
+impl LiveOrder {
+    pub(crate) fn new(order: Pubkey) -> Self {
+        Self {
+            order,
+            expected_id: None,
+            trades: Vec::new(),
+        }
+    }
+
+    pub(crate) fn expected_id(&self) -> Option<u64> {
+        self.expected_id
+    }
+
+    /// Record the action id read from the order account.
+    pub(crate) fn set_id(&mut self, id: u64) {
+        self.expected_id = Some(id);
+    }
+
+    /// Feed one live event. Returns the order's close when it arrives.
+    pub(crate) fn push(&mut self, event: GMSOLCPIEvent) -> Option<OrderRemoved> {
+        if !is_order_event(&self.order, &event) {
+            return None;
+        }
+        match event {
+            GMSOLCPIEvent::TradeEvent(trade) => self.trades.push(trade),
+            GMSOLCPIEvent::OrderUpdated(update) if !update.is_create => {
+                self.expected_id = Some(update.id);
+            }
+            GMSOLCPIEvent::OrderRemoved(removed) => return Some(removed),
+            _ => {}
+        }
+        None
+    }
+
+    /// The trade seen live, if it can be trusted: it is the only one (an order trades once),
+    /// and the close, when there is one, carries the order's current id.
+    pub(crate) fn take_trusted_trade(
+        &mut self,
+        removed: Option<&OrderRemoved>,
+    ) -> Option<TradeEvent> {
+        let same_order = match (removed, self.expected_id) {
+            (Some(removed), Some(id)) => removed.id == id,
+            _ => true,
+        };
+        (same_order && self.trades.len() == 1).then(|| self.trades.remove(0))
+    }
+}
+
 /// Turns "no close in history" into a not-found error for an order that was never seen open.
 ///
 /// Waiting before the create lands looks the same as waiting after the close: no account.
@@ -569,6 +642,45 @@ mod tests {
             vec![created(7)],
         ];
         assert_eq!(trade_id(&scan(Some(7), &txs)), Some(42));
+    }
+
+    #[test]
+    fn live_edit_then_execute_keeps_the_trade() {
+        // Seen open as id 7; edited to 8, then filled and closed before the next poll.
+        let mut live = LiveOrder::new(ORDER);
+        live.set_id(7);
+        assert!(live.push(updated(8, false)).is_none());
+        assert!(live.push(trade(ORDER, 42)).is_none());
+        let close = live.push(removed(8)).expect("close");
+        assert_eq!(live.expected_id(), Some(8));
+        let trade = live.take_trusted_trade(Some(&close)).expect("trusted");
+        assert_eq!(trade.trade_id, 42);
+    }
+
+    #[test]
+    fn live_trade_is_not_trusted_for_an_unknown_close() {
+        let mut live = LiveOrder::new(ORDER);
+        live.set_id(7);
+        live.push(trade(ORDER, 42));
+        // An edit was missed: the close carries an id we never saw, so ask history instead.
+        let close = live.push(removed(9)).expect("close");
+        assert!(live.take_trusted_trade(Some(&close)).is_none());
+    }
+
+    #[test]
+    fn live_ignores_other_orders_and_doubles() {
+        let mut live = LiveOrder::new(ORDER);
+        live.push(trade(OTHER, 1));
+        assert!(live
+            .push(GMSOLCPIEvent::OrderRemoved(OrderRemoved {
+                order: OTHER,
+                ..removed_event(1, OrderKind::MarketIncrease, ActionState::Completed)
+            }))
+            .is_none());
+        live.push(trade(ORDER, 2));
+        live.push(trade(ORDER, 3));
+        // Two trades for one order can't both be right.
+        assert!(live.take_trusted_trade(None).is_none());
     }
 
     #[test]

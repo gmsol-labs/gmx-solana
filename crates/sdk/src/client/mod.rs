@@ -123,8 +123,8 @@ use gmsol_programs::gmsol_store::events::OrderRemoved;
 
 #[cfg(feature = "decode")]
 use order_completion::{
-    reject_unseen_order, LifecycleScan, OrderCompletion, DEFAULT_HISTORY_WAIT,
-    HISTORY_RETRY_FIRST_DELAY,
+    is_order_event, reject_unseen_order, LifecycleScan, LiveOrder, OrderCompletion,
+    DEFAULT_HISTORY_WAIT, HISTORY_RETRY_FIRST_DELAY,
 };
 
 /// Discriminator offset.
@@ -1423,11 +1423,9 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         use futures_util::{StreamExt, TryStreamExt};
         use solana_account_decoder::UiAccountEncoding;
 
-        // An order trades once, so a live trade is only trusted when it is the only one.
-        let mut live_trades = Vec::new();
-        // Action id of the order while it is open, so history can't hand back an older
-        // order that used the same address.
-        let mut expected_id = None;
+        // Trades, edits (new action id) and the close seen live, so history can't hand back
+        // an older order that used the same address.
+        let mut live = LiveOrder::new(*address);
         let commitment = commitment.unwrap_or(self.subscription_config.commitment);
 
         let events = self.subscribe_store_cpi_events(Some(commitment)).await?;
@@ -1443,7 +1441,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             let order = self.order_with_config(address, config.clone()).await?;
             slot = order.slot();
             match order.into_value() {
-                Some(order) => expected_id = Some(order.header.id),
+                Some(order) => live.set_id(order.header.id),
                 None => {
                     let completion = self
                         .order_completion_from_history(
@@ -1470,11 +1468,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                 let events = events
                     .into_value()
                     .into_iter()
-                    .filter(|event| match event {
-                        GMSOLCPIEvent::TradeEvent(event) => event.order == address,
-                        GMSOLCPIEvent::OrderRemoved(event) => event.order == address,
-                        _ => false,
-                    })
+                    .filter(|event| is_order_event(&address, event))
                     .map(Ok);
                 Ok(Some(futures_util::stream::iter(events)))
             })
@@ -1484,33 +1478,27 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         futures_util::pin_mut!(stream);
         while let Some(res) = stream.next().await {
             match res {
-                Ok(Ok(event)) => match event {
-                    GMSOLCPIEvent::TradeEvent(event) => {
-                        live_trades.push(event);
+                Ok(Ok(event)) => {
+                    let Some(removed) = live.push(event) else {
+                        continue;
+                    };
+                    if let Some(trade) = live.take_trusted_trade(Some(&removed)) {
+                        return Ok(OrderCompletion::Trade(Box::new(trade)));
                     }
-                    GMSOLCPIEvent::OrderRemoved(removed) => {
-                        // Same lifecycle check as the history scan.
-                        let same_order = expected_id.is_none_or(|id| id == removed.id);
-                        if same_order && live_trades.len() == 1 {
-                            let trade = live_trades.remove(0);
-                            return Ok(OrderCompletion::Trade(Box::new(trade)));
-                        }
-                        // Otherwise ask history: the trade may have landed before the
-                        // subscription started, and the scan applies the same checks.
-                        let before_slot = removed.slot;
-                        return self
-                            .order_completion_from_history(
-                                &address,
-                                expected_id,
-                                Some(removed),
-                                before_slot,
-                                commitment,
-                                history_wait,
-                            )
-                            .await;
-                    }
-                    _ => unreachable!(),
-                },
+                    // Otherwise ask history: the trade may have landed before the
+                    // subscription started, and the scan applies the same checks.
+                    let before_slot = removed.slot;
+                    return self
+                        .order_completion_from_history(
+                            &address,
+                            live.expected_id(),
+                            Some(removed),
+                            before_slot,
+                            commitment,
+                            history_wait,
+                        )
+                        .await;
+                }
                 Ok(Err(err)) => {
                     return Err(err);
                 }
@@ -1518,18 +1506,17 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                     if slot_reached {
                         let res = self.order_with_config(&address, config.clone()).await?;
                         match res.value() {
-                            Some(order) => expected_id = Some(order.header.id),
+                            Some(order) => live.set_id(order.header.id),
                             None => {
                                 // Seen live while this order was open, so it is this
                                 // order's trade; history may not show it.
-                                if live_trades.len() == 1 {
-                                    let trade = live_trades.remove(0);
+                                if let Some(trade) = live.take_trusted_trade(None) {
                                     return Ok(OrderCompletion::Trade(Box::new(trade)));
                                 }
                                 let completion = self
                                     .order_completion_from_history(
                                         &address,
-                                        expected_id,
+                                        live.expected_id(),
                                         None,
                                         res.slot(),
                                         commitment,
@@ -1538,7 +1525,7 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                                     .await?;
                                 return reject_unseen_order(
                                     &address,
-                                    expected_id.is_some(),
+                                    live.expected_id().is_some(),
                                     completion,
                                 );
                             }
