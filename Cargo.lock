@@ -2783,6 +2783,7 @@ dependencies = [
  "gmsol-callback",
  "gmsol-chainlink-datastreams",
  "gmsol-competition",
+ "gmsol-evm-proxy",
  "gmsol-gt-incentive",
  "gmsol-liquidity-provider",
  "gmsol-mock-chainlink-verifier",

@@ -207,3 +207,50 @@ impl PriceFeed {
             .map_err(|_| error!(CoreError::InvalidPriceFeedPrice))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gmsol_utils::token_config::{FeedConfig, UpdateTokenConfigParams};
+
+    #[test]
+    fn default_heartbeat_accepts_thirty_seconds_and_rejects_thirty_one() {
+        let provider = PriceProviderKind::ChainlinkDataStreams;
+        let feed_id = Pubkey::new_unique();
+        let mut feed = PriceFeed::default();
+        feed.init(
+            0,
+            0,
+            provider,
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+            &feed_id,
+        )
+        .expect("feed initializes");
+        feed.price = PriceFeedPrice::new(0, 100, 100, 100, 100, 0);
+
+        let mut config = TokenConfig::zeroed();
+        config
+            .set_feed_config(&provider, FeedConfig::new(feed_id))
+            .expect("feed config is valid");
+        config.set_expected_provider(provider);
+        config.heartbeat_duration = UpdateTokenConfigParams::default().heartbeat_duration;
+        assert_eq!(config.heartbeat_duration, 30);
+
+        for age in [29, 30] {
+            let clock = Clock {
+                unix_timestamp: 100 + age,
+                ..Clock::default()
+            };
+            assert!(feed.check_and_get_price(&clock, &config, true).is_ok());
+        }
+        let stale_clock = Clock {
+            unix_timestamp: 131,
+            ..Clock::default()
+        };
+        assert!(feed
+            .check_and_get_price(&stale_clock, &config, true)
+            .is_err());
+    }
+}

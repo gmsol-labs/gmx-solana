@@ -83,7 +83,6 @@ pub(super) static GT_EXCHANGE_WINDOW_LOCK: Mutex<()> = Mutex::const_new(());
 
 const PYTH_FETCH_MAX_RETRIES: usize = 3;
 const PYTH_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
-const TEST_ORACLE_HEARTBEAT_DURATION: u32 = 120;
 
 /// Delay before fetching Pyth prices so the validator clock advances past the
 /// action's creation time; otherwise the freshly fetched price can be rejected
@@ -952,7 +951,6 @@ impl Deployment {
                         let config = UpdateTokenConfigParams::default()
                             .update_price_feed(&token.config.provider, token.config.feed_id, None)?
                             .with_expected_provider(token.config.provider)
-                            .with_heartbeat_duration(TEST_ORACLE_HEARTBEAT_DURATION)
                             .with_precision(token.config.precision);
                         let insert = if synthetic {
                             client.insert_synthetic_token_config(
