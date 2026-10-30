@@ -204,6 +204,7 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
             let close_encoded_vaa = wormhole.close_encoded_vaa(draft_vaa);
             ixns.try_push_close(close_encoded_vaa)
                 .map_err(|(_, err)| err)?;
+            ixns.push_temporary_account(*draft_vaa);
         }
 
         // Post price updates.
@@ -225,6 +226,9 @@ impl<'a, C: Deref<Target = impl Signer> + Clone> PostPullOraclePrices<'a, C>
                 close.add(pyth.reclaim_rent(&price_update));
             }
         }
+        for price_update in prices.values() {
+            ixns.push_temporary_account(*price_update);
+        }
         Ok((ixns, HashMap::from([(PriceProviderKind::Pyth, prices)])))
     }
 }
@@ -245,5 +249,135 @@ where
         (*self)
             .fetch_price_update_instructions(price_updates, options)
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        io::{BufRead, BufReader, Write},
+        net::TcpListener,
+        sync::Arc,
+    };
+
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use pythnet_sdk::{
+        accumulators::merkle::MerklePath,
+        messages::PriceFeedMessage,
+        wire::{
+            to_vec,
+            v1::{MerklePriceUpdate, Proof},
+        },
+    };
+
+    use super::*;
+    use crate::client::pyth::pull_oracle::utils::PRICE_FEED_MESSAGE_VARIANT;
+
+    /// Serves JSON-RPC on localhost, answering every request with `result: 1_000_000`.
+    /// `fetch_price_update_instructions` only asks for the rent-exempt balance.
+    fn serve_rent_rpc() -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let mut reader = BufReader::new(stream.unwrap());
+                // One connection carries several requests (keep-alive).
+                while let Some(body) = read_http_body(&mut reader) {
+                    let request: serde_json::Value = serde_json::from_slice(&body).unwrap();
+                    let response = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "result": 1_000_000,
+                        "id": request["id"],
+                    })
+                    .to_string();
+                    let reply = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{response}",
+                        response.len()
+                    );
+                    reader.get_mut().write_all(reply.as_bytes()).unwrap();
+                }
+            }
+        });
+        url
+    }
+
+    /// Reads one HTTP request and returns its body, or `None` when the connection closes.
+    fn read_http_body(reader: &mut impl BufRead) -> Option<Vec<u8>> {
+        let mut content_length = 0;
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).ok()? == 0 {
+                return None;
+            }
+            if line == "\r\n" {
+                break;
+            }
+            if let Some((name, value)) = line.split_once(':') {
+                if name.eq_ignore_ascii_case("content-length") {
+                    content_length = value.trim().parse().ok()?;
+                }
+            }
+        }
+        let mut body = vec![0; content_length];
+        reader.read_exact(&mut body).ok()?;
+        Some(body)
+    }
+
+    /// A price feed message for `feed_id`, as Hermes puts it in a Merkle price update.
+    fn price_update(feed_id: [u8; 32]) -> MerklePriceUpdate {
+        let message = PriceFeedMessage {
+            feed_id,
+            price: 100,
+            conf: 1,
+            exponent: -2,
+            publish_time: 1,
+            prev_publish_time: 0,
+            ema_price: 100,
+            ema_conf: 1,
+        };
+        let mut bytes = vec![PRICE_FEED_MESSAGE_VARIANT];
+        bytes.extend(to_vec::<_, byteorder::BE>(&message).unwrap());
+        MerklePriceUpdate {
+            message: bytes.into(),
+            proof: MerklePath::default(),
+        }
+    }
+
+    /// Two feeds proven by one VAA: Pyth creates one encoded VAA and two price update accounts.
+    #[tokio::test]
+    async fn records_encoded_vaa_and_price_update_accounts() {
+        let cluster = serve_rent_rpc().parse().unwrap();
+        let client = crate::Client::new(cluster, Arc::new(Keypair::new())).unwrap();
+        let hermes = Hermes::default();
+        let pyth = PythPullOracle::try_new(&client).unwrap();
+        let oracle = PythPullOracleWithHermes::from_parts(&client, &hermes, &pyth);
+
+        // Version 1, guardian set 0; the rest of the VAA is not parsed by the SDK.
+        let mut vaa = vec![1, 0, 0, 0, 0];
+        vaa.resize(100, 0);
+        let data = AccumulatorUpdateData::new(Proof::WormholeMerkle {
+            vaa: vaa.into(),
+            updates: vec![price_update([1; 32]), price_update([2; 32])],
+        });
+        let encoded = STANDARD.encode(to_vec::<_, byteorder::BE>(&data).unwrap());
+        let updates = PriceUpdates::from(vec![BinaryPriceUpdate {
+            encoding: EncodingType::Base64,
+            data: vec![encoded],
+        }]);
+
+        let (ixns, feeds) = oracle
+            .fetch_price_update_instructions(&updates, Default::default())
+            .await
+            .unwrap();
+
+        let price_updates = &feeds[&PriceProviderKind::Pyth];
+        let recorded = ixns.temporary_accounts();
+        assert_eq!(price_updates.len(), 2);
+        assert_eq!(recorded.len(), 3, "one encoded VAA and two price updates");
+        assert!(price_updates.values().all(|p| recorded.contains(p)));
+        let encoded_vaa = recorded
+            .iter()
+            .find(|account| !price_updates.values().any(|p| p == *account));
+        assert!(encoded_vaa.is_some());
     }
 }

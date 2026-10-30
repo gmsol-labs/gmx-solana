@@ -56,6 +56,113 @@
       "args": []
     },
     {
+      "name": "cancel",
+      "docs": [
+        "Consume one signed Cancel pair without changing the proxy's business state."
+      ],
+      "discriminator": [
+        232,
+        219,
+        223,
+        41,
+        219,
+        236,
+        220,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "submitter",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proxy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  120,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "evm_address"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "evm_address",
+          "type": {
+            "array": [
+              "u8",
+              20
+            ]
+          }
+        },
+        {
+          "name": "chain_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "generation",
+          "type": "u64"
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "deadline",
+          "type": "u64"
+        },
+        {
+          "name": "signature",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "recovery_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "create_config",
       "docs": [
         "Initialize the singleton Config under the current program upgrade authority.",
@@ -495,6 +602,19 @@
         26,
         193
       ]
+    },
+    {
+      "name": "IntentConsumed",
+      "discriminator": [
+        142,
+        216,
+        106,
+        77,
+        223,
+        216,
+        165,
+        48
+      ]
     }
   ],
   "errors": [
@@ -527,6 +647,36 @@
       "code": 6005,
       "name": "NotPendingAdmin",
       "msg": "Signer is not the pending admin"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidIntentPair",
+      "msg": "Intent pair is not the proxy's next pair"
+    },
+    {
+      "code": 6007,
+      "name": "IntentGenerationOverflow",
+      "msg": "Intent generation cannot advance past its maximum"
+    },
+    {
+      "code": 6008,
+      "name": "Paused",
+      "msg": "Intent verification is paused"
+    },
+    {
+      "code": 6009,
+      "name": "ChainNotAllowed",
+      "msg": "EVM chain is not allowed"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidDeadline",
+      "msg": "Intent deadline is outside the execution window"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidSignature",
+      "msg": "Invalid EVM signature"
     }
   ],
   "types": [
@@ -1091,6 +1241,30 @@
                 256
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "IntentConsumed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proxy",
+            "type": "pubkey"
+          },
+          {
+            "name": "generation",
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
           }
         ]
       }

@@ -1,14 +1,20 @@
 use anchor_lang::prelude::*;
 
+mod intent_verifier;
+
 declare_id!("Dodg22E8BxfCtYBzHVHmAzFqD5bZy6q9Tp4NdYSxkmp6");
 
 #[constant]
 pub const PROXY_SEED: &[u8] = b"proxy";
 pub const PROXY_VERSION: u8 = 1;
+pub const PROXY_GENERATION_OFFSET: usize = 0;
+pub const PROXY_LAST_NONCE_OFFSET: usize = 8;
+const PROXY_PAIR_END: usize = 16;
 #[constant]
 pub const CONFIG_SEED: &[u8] = b"config";
 pub const MAX_ALLOWED_CHAINS: usize = 32;
 const INITIAL_PAUSED: bool = true;
+pub const INTENT_KIND_CANCEL: u8 = 1;
 
 /// Program-wide intent policy.
 #[account]
@@ -63,6 +69,14 @@ pub struct ConfigAdminAccepted {
     pub pending_admin: Option<Pubkey>,
 }
 
+#[event]
+pub struct IntentConsumed {
+    pub proxy: Pubkey,
+    pub generation: u64,
+    pub nonce: u64,
+    pub kind: u8,
+}
+
 /// One permanent account for a 20-byte EVM address.
 #[account(zero_copy)]
 pub struct Proxy {
@@ -72,6 +86,60 @@ pub struct Proxy {
     pub evm_address: [u8; 20],
     pub padding_1: [u8; 4],
     pub reserved: [u8; 256],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct IntentPair {
+    pub generation: u64,
+    pub nonce: u64,
+}
+
+impl Proxy {
+    pub fn validate_identity(&self, evm_address: [u8; 20], bump: u8) -> Result<()> {
+        require_eq!(self.version, PROXY_VERSION, ProxyError::InvalidProxy);
+        require_eq!(self.bump, bump, ProxyError::InvalidProxy);
+        require!(self.evm_address == evm_address, ProxyError::InvalidProxy);
+        Ok(())
+    }
+
+    pub fn consumed_pair(&self) -> IntentPair {
+        let mut generation = [0; 8];
+        generation
+            .copy_from_slice(&self.reserved[PROXY_GENERATION_OFFSET..PROXY_LAST_NONCE_OFFSET]);
+        let mut nonce = [0; 8];
+        nonce.copy_from_slice(&self.reserved[PROXY_LAST_NONCE_OFFSET..PROXY_PAIR_END]);
+        IntentPair {
+            generation: u64::from_le_bytes(generation),
+            nonce: u64::from_le_bytes(nonce),
+        }
+    }
+
+    pub fn expected_next_pair(&self) -> Result<IntentPair> {
+        let consumed = self.consumed_pair();
+        let (generation, nonce) = match consumed.nonce.checked_add(1) {
+            Some(nonce) => (consumed.generation, nonce),
+            None => (
+                consumed
+                    .generation
+                    .checked_add(1)
+                    .ok_or(error!(ProxyError::IntentGenerationOverflow))?,
+                0,
+            ),
+        };
+        Ok(IntentPair { generation, nonce })
+    }
+
+    pub fn consume_next_pair(&mut self, pair: IntentPair) -> Result<()> {
+        require!(
+            pair == self.expected_next_pair()?,
+            ProxyError::InvalidIntentPair
+        );
+        self.reserved[PROXY_GENERATION_OFFSET..PROXY_LAST_NONCE_OFFSET]
+            .copy_from_slice(&pair.generation.to_le_bytes());
+        self.reserved[PROXY_LAST_NONCE_OFFSET..PROXY_PAIR_END]
+            .copy_from_slice(&pair.nonce.to_le_bytes());
+        Ok(())
+    }
 }
 
 #[program]
@@ -249,10 +317,74 @@ pub mod gmsol_evm_proxy {
         }
         ctx.accounts.proxy.exit(&crate::ID)?;
         let proxy = ctx.accounts.proxy.load()?;
-        require_eq!(proxy.version, PROXY_VERSION, ProxyError::InvalidProxy);
-        require_eq!(proxy.bump, ctx.bumps.proxy, ProxyError::InvalidProxy);
-        require!(proxy.evm_address == evm_address, ProxyError::InvalidProxy);
+        proxy.validate_identity(evm_address, ctx.bumps.proxy)
+    }
+
+    /// Consume one signed Cancel pair without changing the proxy's business state.
+    pub fn cancel(
+        ctx: Context<Cancel>,
+        evm_address: [u8; 20],
+        chain_id: [u8; 32],
+        generation: u64,
+        nonce: u64,
+        deadline: u64,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> Result<()> {
+        let pair = IntentPair { generation, nonce };
+        let proxy_key = ctx.accounts.proxy.key();
+        {
+            let proxy = ctx.accounts.proxy.load()?;
+            proxy.validate_identity(evm_address, ctx.bumps.proxy)?;
+            require!(
+                pair == proxy.expected_next_pair()?,
+                ProxyError::InvalidIntentPair
+            );
+        }
+
+        let struct_hash = intent_verifier::cancel_struct_hash(&proxy_key, pair, deadline);
+        intent_verifier::verify(
+            &ctx.accounts.config,
+            evm_address,
+            chain_id,
+            deadline,
+            struct_hash,
+            signature,
+            recovery_id,
+        )?;
+
+        ctx.accounts.proxy.load_mut()?.consume_next_pair(pair)?;
+        emit!(IntentConsumed {
+            proxy: proxy_key,
+            generation,
+            nonce,
+            kind: INTENT_KIND_CANCEL,
+        });
         Ok(())
+    }
+
+    /// Exercises intent verification in the test SBF artifact without consuming an intent.
+    #[cfg(feature = "test-only")]
+    pub fn verify_intent_probe(
+        ctx: Context<VerifyIntentProbe>,
+        evm_address: [u8; 20],
+        chain_id: [u8; 32],
+        deadline: u64,
+        struct_hash: [u8; 32],
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> Result<()> {
+        let proxy = ctx.accounts.proxy.load()?;
+        proxy.validate_identity(evm_address, ctx.bumps.proxy)?;
+        intent_verifier::verify(
+            &ctx.accounts.config,
+            evm_address,
+            chain_id,
+            deadline,
+            struct_hash,
+            signature,
+            recovery_id,
+        )
     }
 }
 
@@ -308,6 +440,26 @@ pub struct CreateProxy<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+#[instruction(evm_address: [u8; 20])]
+pub struct Cancel<'info> {
+    pub submitter: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump)]
+    pub config: Account<'info, Config>,
+    #[account(mut, seeds = [PROXY_SEED, evm_address.as_ref()], bump)]
+    pub proxy: AccountLoader<'info, Proxy>,
+}
+
+#[cfg(feature = "test-only")]
+#[derive(Accounts)]
+#[instruction(evm_address: [u8; 20])]
+pub struct VerifyIntentProbe<'info> {
+    #[account(seeds = [CONFIG_SEED], bump)]
+    pub config: Account<'info, Config>,
+    #[account(seeds = [PROXY_SEED, evm_address.as_ref()], bump)]
+    pub proxy: AccountLoader<'info, Proxy>,
+}
+
 #[error_code]
 pub enum ProxyError {
     #[msg("Proxy account data does not match its EVM address")]
@@ -322,6 +474,18 @@ pub enum ProxyError {
     AllowedChainsFull,
     #[msg("Signer is not the pending admin")]
     NotPendingAdmin,
+    #[msg("Intent pair is not the proxy's next pair")]
+    InvalidIntentPair,
+    #[msg("Intent generation cannot advance past its maximum")]
+    IntentGenerationOverflow,
+    #[msg("Intent verification is paused")]
+    Paused,
+    #[msg("EVM chain is not allowed")]
+    ChainNotAllowed,
+    #[msg("Intent deadline is outside the execution window")]
+    InvalidDeadline,
+    #[msg("Invalid EVM signature")]
+    InvalidSignature,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]
@@ -330,11 +494,96 @@ gmsol_utils::security_txt!("GMX-Solana EVM Proxy Program");
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytemuck::Zeroable;
+
+    fn pair(generation: u64, nonce: u64) -> IntentPair {
+        IntentPair { generation, nonce }
+    }
 
     #[test]
     fn account_layout() {
         assert_eq!(std::mem::size_of::<Proxy>(), 288);
         assert_eq!(std::mem::offset_of!(Proxy, evm_address), 8);
         assert_eq!(std::mem::offset_of!(Proxy, reserved), 32);
+        assert_eq!(8 + std::mem::offset_of!(Proxy, reserved), 40);
+        assert_eq!(
+            8 + std::mem::offset_of!(Proxy, reserved) + PROXY_LAST_NONCE_OFFSET,
+            48
+        );
+        assert_eq!(
+            8 + std::mem::offset_of!(Proxy, reserved) + PROXY_PAIR_END,
+            56
+        );
+    }
+
+    #[test]
+    fn first_and_ordinary_pair_preserve_other_reserved_bytes() {
+        let mut proxy = Proxy::zeroed();
+        proxy.reserved[PROXY_PAIR_END] = 0x5a;
+        let first = pair(0, 1);
+        assert_eq!(proxy.consumed_pair(), pair(0, 0));
+        assert_eq!(proxy.expected_next_pair().unwrap(), first);
+        proxy.consume_next_pair(first).unwrap();
+        proxy.consume_next_pair(pair(0, 2)).unwrap();
+        assert_eq!(proxy.consumed_pair(), pair(0, 2));
+        assert_eq!(
+            &proxy.reserved[..PROXY_PAIR_END],
+            &[0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(proxy.reserved[PROXY_PAIR_END], 0x5a);
+    }
+
+    #[test]
+    fn wrong_and_repeated_pairs_cannot_change_state() {
+        let mut proxy = Proxy::zeroed();
+        let first = pair(0, 1);
+        for wrong in [pair(1, 1), pair(0, 2)] {
+            let before = proxy.reserved;
+            assert!(proxy.consume_next_pair(wrong).is_err());
+            assert_eq!(proxy.reserved, before);
+        }
+        proxy.consume_next_pair(first).unwrap();
+        let before = proxy.reserved;
+        assert!(proxy.consume_next_pair(first).is_err());
+        assert_eq!(proxy.reserved, before);
+    }
+
+    #[test]
+    fn max_nonce_waits_for_next_generation_zero() {
+        let mut proxy = Proxy::zeroed();
+        proxy.reserved[PROXY_GENERATION_OFFSET..PROXY_LAST_NONCE_OFFSET]
+            .copy_from_slice(&7_u64.to_le_bytes());
+        proxy.reserved[PROXY_LAST_NONCE_OFFSET..PROXY_PAIR_END]
+            .copy_from_slice(&(u64::MAX - 1).to_le_bytes());
+        let max = pair(7, u64::MAX);
+        assert_eq!(proxy.expected_next_pair().unwrap(), max);
+        proxy.consume_next_pair(max).unwrap();
+        assert_eq!(proxy.consumed_pair(), max);
+        let before = proxy.reserved;
+        assert!(proxy.consume_next_pair(pair(7, 0)).is_err());
+        assert_eq!(proxy.reserved, before);
+        let zero = pair(8, 0);
+        assert_eq!(proxy.expected_next_pair().unwrap(), zero);
+        proxy.consume_next_pair(zero).unwrap();
+        proxy.consume_next_pair(pair(8, 1)).unwrap();
+        assert_eq!(proxy.consumed_pair(), pair(8, 1));
+    }
+
+    #[test]
+    fn terminal_generation_overflow_fails_without_write() {
+        let mut proxy = Proxy::zeroed();
+        proxy.reserved[PROXY_GENERATION_OFFSET..PROXY_LAST_NONCE_OFFSET]
+            .copy_from_slice(&u64::MAX.to_le_bytes());
+        proxy.reserved[PROXY_LAST_NONCE_OFFSET..PROXY_PAIR_END]
+            .copy_from_slice(&u64::MAX.to_le_bytes());
+        let before = proxy.reserved;
+        match proxy.expected_next_pair() {
+            Err(Error::AnchorError(err)) => {
+                assert_eq!(err.error_name, "IntentGenerationOverflow");
+            }
+            other => panic!("expected terminal generation error, got {other:?}"),
+        }
+        assert!(proxy.consume_next_pair(pair(0, 0)).is_err());
+        assert_eq!(proxy.reserved, before);
     }
 }
