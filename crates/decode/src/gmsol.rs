@@ -179,6 +179,26 @@ pub mod evm_proxy {
         Ok(None)
     }
 
+    /// Decode a consumed intent from a successful EVM proxy transaction's log.
+    pub fn decode_intent_event_log(
+        line: &str,
+    ) -> Result<Option<events::IntentConsumed>, crate::DecodeError> {
+        let Some(encoded) = line.strip_prefix("Program data: ") else {
+            return Ok(None);
+        };
+        let data = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(crate::DecodeError::custom)?;
+        if !data.starts_with(events::IntentConsumed::DISCRIMINATOR) {
+            return Ok(None);
+        }
+        events::IntentConsumed::deserialize(
+            &mut &data[events::IntentConsumed::DISCRIMINATOR.len()..],
+        )
+        .map(Some)
+        .map_err(crate::DecodeError::custom)
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -225,6 +245,26 @@ pub mod evm_proxy {
             assert_eq!(decoded.config, event.config);
             assert!(decoded.previous_paused);
             assert!(!decoded.paused);
+        }
+
+        #[test]
+        fn decodes_consumed_pair_event() {
+            let event = events::IntentConsumed {
+                proxy: Pubkey::new_unique(),
+                generation: 8,
+                nonce: 0,
+                kind: 1,
+            };
+            let line = format!(
+                "Program data: {}",
+                base64::engine::general_purpose::STANDARD.encode(event.data())
+            );
+            let decoded = decode_intent_event_log(&line).unwrap().unwrap();
+            assert_eq!(decoded.proxy, event.proxy);
+            assert_eq!(decoded.generation, event.generation);
+            assert_eq!(decoded.nonce, event.nonce);
+            assert_eq!(decoded.kind, event.kind);
+            assert!(decode_config_event_log(&line).unwrap().is_none());
         }
     }
 }

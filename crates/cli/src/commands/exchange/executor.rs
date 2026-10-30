@@ -11,14 +11,18 @@ use gmsol_sdk::{
         switchboard::pull_oracle::SwitchcboardPullOracleFactory,
     },
     core::token_config::TokensWithFeed,
+    programs::anchor_lang::prelude::Pubkey,
     solana_utils::{
         bundle_builder::BundleOptions,
+        client::wait_for_blockhash_expiry,
         make_bundle_builder::{EstimateFee, MakeBundleBuilder, SetExecutionFee},
         signer::LocalSignerRef,
+        solana_sdk::hash::Hash,
     },
 };
 
 use crate::{
+    commands::display_signatures,
     config::{Config, MISSING_PYTH_API_KEY},
     CommandClient,
 };
@@ -153,12 +157,13 @@ impl<'a> Executor<'a> {
             .as_ref()
             .map(|factory| factory.make_oracle(self.client));
 
-        let with_pyth = WithPullOracle::new(pyth, consumer, None).await?;
+        // Borrowed (not moved) below so its temporary accounts can be read after sending.
+        let mut with_pyth = WithPullOracle::new(pyth, consumer, None).await?;
 
         let bundle = match (chainlink.as_ref(), switchboard) {
             (None, None) => {
                 let mut estiamted_fee = EstimateFee::new(
-                    with_pyth,
+                    &mut with_pyth,
                     compute_unit_price,
                     compute_unit_min_priority_lamports,
                 );
@@ -166,7 +171,7 @@ impl<'a> Executor<'a> {
             }
             (Some(chainlink), None) => {
                 let (with_chainlink, feed_ids) =
-                    WithPullOracle::from_consumer(chainlink.clone(), with_pyth, None).await?;
+                    WithPullOracle::from_consumer(chainlink.clone(), &mut with_pyth, None).await?;
 
                 let mut bundle = chainlink
                     .prepare_feeds_bundle(&feed_ids, options.clone())
@@ -183,7 +188,8 @@ impl<'a> Executor<'a> {
                 bundle
             }
             (None, Some(switchboard)) => {
-                let with_switchboard = WithPullOracle::new(switchboard, with_pyth, None).await?;
+                let with_switchboard =
+                    WithPullOracle::new(switchboard, &mut with_pyth, None).await?;
 
                 let mut estiamted_fee = EstimateFee::new(
                     with_switchboard,
@@ -194,7 +200,7 @@ impl<'a> Executor<'a> {
             }
             (Some(chainlink), Some(switchboard)) => {
                 let (with_chainlink, feed_ids) =
-                    WithPullOracle::from_consumer(chainlink.clone(), with_pyth, None).await?;
+                    WithPullOracle::from_consumer(chainlink.clone(), &mut with_pyth, None).await?;
 
                 let with_switchboard =
                     WithPullOracle::new(switchboard, with_chainlink, None).await?;
@@ -215,10 +221,141 @@ impl<'a> Executor<'a> {
             }
         };
 
-        self.client.send_or_serialize(bundle).await?;
-
-        Ok(())
+        // Sign with a blockhash fetched here, so an unresolved send can be waited out exactly
+        // until its last valid block height.
+        let blockhash = self.bundle_blockhash().await?;
+        let mut landed = false;
+        let sent = self
+            .client
+            .send_or_serialize_with_blockhash(
+                bundle,
+                blockhash.map(|(hash, _)| hash),
+                |signatures, err, steps| {
+                    landed = !signatures.is_empty();
+                    display_signatures(signatures, err, steps)
+                },
+            )
+            .await;
+        if let (Err(err), Some((_, last_valid_block_height))) = (&sent, blockhash) {
+            if needs_cleanup(landed, err) {
+                self.close_temporary_accounts(
+                    with_pyth.temporary_accounts(),
+                    err,
+                    last_valid_block_height,
+                )
+                .await;
+            }
+        }
+        sent
     }
+
+    /// The blockhash to sign a directly sent bundle with, and its last valid block height.
+    /// `None` when the bundle is only serialized or written to an instruction buffer.
+    async fn bundle_blockhash(&self) -> gmsol_sdk::Result<Option<(Hash, u64)>> {
+        if !self.client.sends_directly() {
+            return Ok(None);
+        }
+        let rpc = self.client.rpc();
+        let blockhash = rpc
+            .get_latest_blockhash_with_commitment(rpc.commitment())
+            .await
+            .map_err(gmsol_sdk::Error::custom)?;
+        Ok(Some(blockhash))
+    }
+
+    /// Close the temporary Pyth accounts left open when an execute bundle stopped before its
+    /// close batch. Never fails: every account not confirmed closed is printed to stderr.
+    async fn close_temporary_accounts(
+        &self,
+        accounts: &[Pubkey],
+        send_err: &gmsol_sdk::Error,
+        last_valid_block_height: u64,
+    ) {
+        if accounts.is_empty() {
+            return;
+        }
+        let still_open = match self
+            .try_close_temporary_accounts(accounts, send_err, last_valid_block_height)
+            .await
+        {
+            Ok(still_open) => still_open,
+            Err(err) => {
+                // The state of every account is unknown, so report them all.
+                eprintln!("\nFailed to close temporary Pyth accounts: {err}");
+                accounts.to_vec()
+            }
+        };
+        if still_open.is_empty() {
+            return;
+        }
+        // `eprintln!`, not `warn!`: this output is the only record of the addresses, so it
+        // must show whatever the log level is.
+        eprintln!(
+            "Temporary Pyth accounts still open; their rent stays locked until they are closed. \
+             Retry closing them later:"
+        );
+        for account in &still_open {
+            eprintln!("  {account}");
+        }
+    }
+
+    /// Returns the accounts that are still open after the cleanup, read at the client's
+    /// commitment level.
+    async fn try_close_temporary_accounts(
+        &self,
+        accounts: &[Pubkey],
+        send_err: &gmsol_sdk::Error,
+        last_valid_block_height: u64,
+    ) -> gmsol_sdk::Result<Vec<Pubkey>> {
+        // A transaction with an unknown outcome may still create an account; wait until it
+        // cannot land, or that account would be missed.
+        if is_unresolved(send_err) {
+            // `println!`, not `info!`: the default log level hides info, and the wait can
+            // take minutes, which would look like a hang.
+            println!("\nWaiting for unresolved transactions to expire before closing temporary Pyth accounts (up to ~3 min)...");
+            // Wait at the client's own commitment: the lookup below reads at that level, so
+            // a stricter level there (e.g. `finalized`) must not lag behind the wait.
+            let rpc = self.client.rpc();
+            wait_for_blockhash_expiry(rpc, last_valid_block_height, rpc.commitment()).await?;
+        }
+        let bundle = self
+            .pyth
+            .close_temporary_accounts(self.client, accounts)
+            .await?;
+        if bundle.is_empty() {
+            let commitment = self.client.rpc().commitment().commitment;
+            println!(
+                "\nNo temporary Pyth accounts found on-chain at {commitment}; nothing to close. Checked:"
+            );
+            for account in accounts {
+                println!("  {account}");
+            }
+            return Ok(vec![]);
+        }
+        println!("\nClosing temporary Pyth accounts left open by the failed execute:");
+        if let Err(err) = self.client.send_or_serialize(bundle).await {
+            // Not fatal: the lookup below reports exactly what is still open.
+            eprintln!("Closing failed: {err}");
+        }
+        self.pyth
+            .open_temporary_accounts(self.client, accounts)
+            .await
+    }
+}
+
+/// `true` when a failed execute bundle may have left temporary accounts open: some
+/// transaction landed, or one has an unknown outcome. When neither holds, nothing was created
+/// (this also covers errors raised before anything was sent), so there is nothing to close.
+fn needs_cleanup(landed: bool, send_err: &gmsol_sdk::Error) -> bool {
+    landed || is_unresolved(send_err)
+}
+
+/// `true` when some transaction of the bundle has an unknown outcome.
+///
+/// `send_or_serialize` reports a compressed error, which keeps a `SendUnresolved` over any
+/// later failure, so this sees every bundle that had one.
+fn is_unresolved(err: &gmsol_sdk::Error) -> bool {
+    matches!(err, gmsol_sdk::Error::SolanaUtils(err) if err.unresolved_signature().is_some())
 }
 
 /// Errors when `feeds` contains a Pyth feed, since there is no API key to fetch it with.
@@ -244,6 +381,46 @@ mod tests {
             .map(|provider| TokenRecord::new(Pubkey::new_unique(), Pubkey::new_unique(), *provider))
             .collect();
         TokensWithFeed::try_from_records(records).unwrap()
+    }
+
+    fn unresolved_error() -> gmsol_sdk::Error {
+        use gmsol_sdk::solana_utils::{solana_sdk::signature::Signature, Error as UtilsError};
+
+        let timed_out = std::io::Error::new(std::io::ErrorKind::TimedOut, "timed out");
+        UtilsError::SendUnresolved {
+            signature: Signature::default(),
+            source: Box::new(timed_out.into()),
+        }
+        .into()
+    }
+
+    #[test]
+    fn cleanup_when_a_transaction_landed() {
+        let on_chain_failure = gmsol_sdk::Error::custom("execute failed on-chain");
+        assert!(needs_cleanup(true, &on_chain_failure));
+    }
+
+    #[test]
+    fn cleanup_when_an_outcome_is_unknown() {
+        assert!(needs_cleanup(false, &unresolved_error()));
+    }
+
+    #[test]
+    fn no_cleanup_when_nothing_was_created() {
+        // e.g. the first setup transaction failed, or a lookup table fetch failed before sending.
+        let failure = gmsol_sdk::Error::custom("rejected before landing");
+        assert!(!needs_cleanup(false, &failure));
+    }
+
+    #[test]
+    fn only_send_unresolved_counts_as_unresolved() {
+        use gmsol_sdk::solana_utils::Error as UtilsError;
+
+        assert!(is_unresolved(&unresolved_error()));
+        assert!(!is_unresolved(
+            &UtilsError::custom("on-chain failure").into()
+        ));
+        assert!(!is_unresolved(&gmsol_sdk::Error::custom("no price")));
     }
 
     #[test]

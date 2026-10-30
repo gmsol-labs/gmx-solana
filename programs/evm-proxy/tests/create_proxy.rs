@@ -1,5 +1,5 @@
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
-use gmsol_evm_proxy::{accounts, instruction, Proxy, ID, PROXY_SEED, PROXY_VERSION};
+use gmsol_evm_proxy::{accounts, instruction, IntentPair, Proxy, ID, PROXY_SEED, PROXY_VERSION};
 use solana_accounts_db::accounts_index::ScanConfig;
 use solana_program_test::ProgramTest;
 use solana_runtime::bank::Bank;
@@ -164,7 +164,9 @@ async fn another_payer_cannot_reset_an_existing_proxy() {
         .await
         .unwrap()
         .unwrap();
-    account.data[40..48].copy_from_slice(&42_u64.to_le_bytes());
+    account.data[40..48].copy_from_slice(&7_u64.to_le_bytes());
+    account.data[48..56].copy_from_slice(&42_u64.to_le_bytes());
+    account.data[56] = 0x5a;
     let before = account.clone();
     context.set_account(&proxy, &AccountSharedData::from(account));
 
@@ -190,10 +192,21 @@ async fn another_payer_cannot_reset_an_existing_proxy() {
     assert_eq!(after.data.len(), 296);
     assert_eq!(
         u64::from_le_bytes(after.data[40..48].try_into().unwrap()),
+        7
+    );
+    assert_eq!(
+        u64::from_le_bytes(after.data[48..56].try_into().unwrap()),
         42
     );
     let decoded = Proxy::try_deserialize(&mut after.data.as_slice()).unwrap();
     assert_eq!(decoded.evm_address, address);
+    assert_eq!(
+        decoded.consumed_pair(),
+        IntentPair {
+            generation: 7,
+            nonce: 42
+        }
+    );
 }
 
 #[tokio::test]

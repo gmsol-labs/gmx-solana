@@ -44,6 +44,8 @@ serde_json = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
+libsecp256k1 = "0.7.2"
+rand = "0.8.5"
 
 [[test]]
 name = "create_proxy"
@@ -52,3 +54,11 @@ required-features = ["sbf-test"]
 [[test]]
 name = "config"
 required-features = ["sbf-test"]
+
+[[test]]
+name = "cancel"
+required-features = ["sbf-test"]
+
+[[test]]
+name = "verification_probe"
+required-features = ["sbf-test", "test-only"]

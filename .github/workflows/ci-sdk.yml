@@ -170,7 +170,7 @@ jobs:
       - name: Test EVM proxy SDK client
         run: |
           test_count=$(cargo test --locked -p gmsol-sdk --features client,evm-proxy,js,decode --lib evm_proxy -- --list | grep -c ': test$')
-          test "$test_count" -eq 11
+          test "$test_count" -eq 12
           cargo test --locked -p gmsol-sdk --features client,evm-proxy,js,decode --lib evm_proxy
         env:
           RUSTFLAGS: ""
@@ -212,6 +212,18 @@ jobs:
           test -f "$SBF_OUT_DIR/gmsol_evm_proxy.so"
           proxy_count=$(cargo test --locked -p gmsol-evm-proxy --features sbf-test --test create_proxy -- --list | grep -c ': test$')
           config_count=$(cargo test --locked -p gmsol-evm-proxy --features sbf-test --test config -- --list | grep -c ': test$')
+          cancel_count=$(cargo test --locked -p gmsol-evm-proxy --features sbf-test --test cancel -- --list | grep -c ': test$')
           test "$proxy_count" -eq 10
           test "$config_count" -eq 11
-          cargo test --locked -p gmsol-evm-proxy --features sbf-test --test create_proxy --test config
+          test "$cancel_count" -eq 7
+          cargo test --locked -p gmsol-evm-proxy --features sbf-test --test create_proxy --test config --test cancel
+      - name: Build and test test-only proxy verifier
+        run: |
+          trap 'if test -f "$SBF_OUT_DIR/gmsol_evm_proxy-keypair.json"; then rm -- "$SBF_OUT_DIR/gmsol_evm_proxy-keypair.json"; fi' EXIT
+          cargo build-sbf --manifest-path programs/evm-proxy/Cargo.toml --features test-only --sbf-out-dir "$SBF_OUT_DIR"
+          test -f "$SBF_OUT_DIR/gmsol_evm_proxy.so"
+          probe_count=$(cargo test --locked -p gmsol-evm-proxy --features sbf-test,test-only --test verification_probe -- --list | grep -c ': test$')
+          test "$probe_count" -eq 8
+          cargo test --locked -p gmsol-evm-proxy --features sbf-test,test-only --test verification_probe
+        env:
+          SBF_OUT_DIR: ${{ github.workspace }}/target/deploy-verification-probe

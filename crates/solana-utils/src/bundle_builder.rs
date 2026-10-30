@@ -3,8 +3,9 @@ use std::{collections::HashMap, ops::Deref};
 use futures_util::{stream::FuturesOrdered, FutureExt, StreamExt};
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig};
 use solana_sdk::{
-    commitment_config::CommitmentConfig, message::VersionedMessage, packet::PACKET_DATA_SIZE,
-    pubkey::Pubkey, signature::Signature, signer::Signer, transaction::VersionedTransaction,
+    commitment_config::CommitmentConfig, hash::Hash, message::VersionedMessage,
+    packet::PACKET_DATA_SIZE, pubkey::Pubkey, signature::Signature, signer::Signer,
+    transaction::VersionedTransaction,
 };
 
 use crate::{
@@ -73,6 +74,12 @@ pub struct SendBundleOptions {
     pub disable_error_tracing: bool,
     /// Cluster of the inspector url.
     pub inspector_cluster: Option<Cluster>,
+    /// Blockhash to sign every transaction with. `None` fetches the latest one.
+    ///
+    /// Set it when you need the blockhash's last valid block height afterwards, e.g. to wait
+    /// with [`crate::client::wait_for_blockhash_expiry`] until an unresolved send can no
+    /// longer land: fetch both with `get_latest_blockhash_with_commitment` and pass the hash.
+    pub recent_blockhash: Option<Hash>,
 }
 
 /// Builder for transaction bundle.
@@ -483,6 +490,7 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
             mut config,
             disable_error_tracing,
             inspector_cluster,
+            recent_blockhash,
         } = opts;
         config.preflight_commitment = config
             .preflight_commitment
@@ -498,10 +506,13 @@ impl<C: Deref<Target = impl Signer> + Clone> Bundle<'_, C> {
             group,
         } = self;
 
-        let latest_hash = client
-            .get_latest_blockhash()
-            .await
-            .map_err(|err| -> crate::Error { Box::new(err).into() })?;
+        let latest_hash = match recent_blockhash {
+            Some(hash) => hash,
+            None => client
+                .get_latest_blockhash()
+                .await
+                .map_err(|err| -> crate::Error { Box::new(err).into() })?,
+        };
 
         let mut transaction_signers = cfg_signers.to_local();
         transaction_signers.extend(signers.into_values());
@@ -870,5 +881,48 @@ mod tests {
         let (sigs, err) = compress_send_results(results).unwrap_err();
         assert!(sigs.is_empty());
         assert_eq!(err.to_string(), "custom: first");
+    }
+
+    #[tokio::test]
+    async fn send_signs_with_the_given_blockhash() {
+        use std::sync::Arc;
+
+        use solana_sdk::{signature::Keypair, system_instruction, system_program};
+
+        use crate::transaction_builder::Config;
+
+        let payer = Arc::new(Keypair::new());
+        let cfg = Config::new(
+            Cluster::Devnet,
+            payer.clone(),
+            CommitmentConfig::confirmed(),
+        );
+        let transfer = system_instruction::transfer(&payer.pubkey(), &payer.pubkey(), 1);
+        let txn =
+            TransactionBuilder::new(system_program::ID, &cfg).pre_instruction(transfer, false);
+        let mut bundle =
+            BundleBuilder::from_rpc_client(RpcClient::new_mock("succeeds".to_string()));
+        bundle.push(txn).unwrap();
+
+        let given = Hash::new_unique();
+        let mut signed_with = vec![];
+        let results = bundle
+            .build()
+            .unwrap()
+            .send_all_with_opts_detailed(
+                SendBundleOptions {
+                    recent_blockhash: Some(given),
+                    ..Default::default()
+                },
+                |message| {
+                    signed_with.push(*message.recent_blockhash());
+                    Ok(())
+                },
+            )
+            .await
+            .unwrap();
+
+        assert!(results.iter().all(Result::is_ok), "{results:?}");
+        assert_eq!(signed_with, [given]);
     }
 }

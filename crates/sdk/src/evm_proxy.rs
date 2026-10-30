@@ -1,4 +1,4 @@
-//! Typed decoding for EVM proxy Config log events.
+//! Typed decoding for EVM proxy log events.
 
 use anchor_lang::Discriminator;
 use base64::Engine;
@@ -47,6 +47,19 @@ pub fn decode_config_event_log(line: &str) -> crate::Result<Option<ConfigEvent>>
     Ok(None)
 }
 
+/// Decode a consumed intent from a successful EVM proxy transaction's log.
+pub fn decode_intent_event_log(line: &str) -> crate::Result<Option<events::IntentConsumed>> {
+    let Some(encoded) = line.strip_prefix("Program data: ") else {
+        return Ok(None);
+    };
+    let data = base64::engine::general_purpose::STANDARD.decode(encoded)?;
+    if !data.starts_with(events::IntentConsumed::DISCRIMINATOR) {
+        return Ok(None);
+    }
+    crate::utils::events::decode_anchor_event_with_options::<events::IntentConsumed>(&data, false)
+        .map(Some)
+}
+
 #[cfg(test)]
 mod tests {
     use anchor_lang::Event;
@@ -76,5 +89,25 @@ mod tests {
         assert!(decode_config_event_log("Program log: other")
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn decodes_consumed_pair_event() {
+        let event = events::IntentConsumed {
+            proxy: Pubkey::new_unique(),
+            generation: 8,
+            nonce: 0,
+            kind: 1,
+        };
+        let log = format!(
+            "Program data: {}",
+            base64::engine::general_purpose::STANDARD.encode(event.data())
+        );
+        let decoded = decode_intent_event_log(&log).unwrap().unwrap();
+        assert_eq!(decoded.proxy, event.proxy);
+        assert_eq!(decoded.generation, event.generation);
+        assert_eq!(decoded.nonce, event.nonce);
+        assert_eq!(decoded.kind, event.kind);
+        assert!(decode_config_event_log(&log).unwrap().is_none());
     }
 }
