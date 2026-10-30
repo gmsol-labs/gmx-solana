@@ -79,6 +79,17 @@ pub mod gmsol_evm_proxy {
     use super::*;
 
     /// Initialize the singleton Config under the current program upgrade authority.
+    /// The caller supplies the genesis hash; the program does not attest it against
+    /// the cluster. Checked SDK initialization compares it with RPC before sending.
+    /// This implementation starts paused with no allowed chains.
+    ///
+    /// # Errors
+    ///
+    /// Anchor rejects a missing signer, a noncanonical or already initialized Config,
+    /// ProgramData not linked to this program, an authority other than its current
+    /// upgrade authority, or an invalid Store account. Returns `InvalidAdmin` for a
+    /// zero first admin and `InvalidStore` for undersized Store data. Loading
+    /// malformed Store data also fails.
     pub fn create_config(
         ctx: Context<CreateConfig>,
         genesis_hash: [u8; 32],
@@ -110,6 +121,13 @@ pub mod gmsol_evm_proxy {
     }
 
     /// Set whether one full-width EIP-155 chain ID is accepted by Config.
+    ///
+    /// # Errors
+    ///
+    /// Anchor rejects a missing current-admin signature, a noncanonical Config,
+    /// or a Config whose admin does not match the signer. Returns `NoConfigChange`
+    /// if the requested allow status already holds, or `AllowedChainsFull` when
+    /// adding a chain to the full set.
     pub fn set_chain_allowed(
         ctx: Context<CurrentConfigAdmin>,
         chain_id: [u8; 32],
@@ -142,6 +160,12 @@ pub mod gmsol_evm_proxy {
     }
 
     /// Pause or unpause every intent governed by Config.
+    ///
+    /// # Errors
+    ///
+    /// Anchor rejects a missing current-admin signature, a noncanonical Config,
+    /// or a Config whose admin does not match the signer. Returns `NoConfigChange`
+    /// if Config already has the requested pause state.
     pub fn set_paused(ctx: Context<CurrentConfigAdmin>, paused: bool) -> Result<()> {
         let config = &mut ctx.accounts.config;
         require!(config.paused != paused, ProxyError::NoConfigChange);
@@ -156,6 +180,13 @@ pub mod gmsol_evm_proxy {
     }
 
     /// Propose or replace an unaccepted next admin.
+    ///
+    /// # Errors
+    ///
+    /// Anchor rejects a missing current-admin signature, a noncanonical Config,
+    /// or a Config whose admin does not match the signer. Returns `InvalidAdmin`
+    /// for a zero next admin, or `NoConfigChange` if it is the current or already
+    /// pending admin.
     pub fn propose_admin(ctx: Context<CurrentConfigAdmin>, next_admin: Pubkey) -> Result<()> {
         let config = &mut ctx.accounts.config;
         require_keys_neq!(next_admin, Pubkey::default(), ProxyError::InvalidAdmin);
@@ -176,6 +207,11 @@ pub mod gmsol_evm_proxy {
     }
 
     /// Complete a pending handover when the nominated admin signs.
+    ///
+    /// # Errors
+    ///
+    /// Anchor rejects a missing next-admin signature or a noncanonical Config.
+    /// Returns `NotPendingAdmin` if the signer is not the pending admin.
     pub fn accept_admin(ctx: Context<AcceptConfigAdmin>) -> Result<()> {
         let config = &mut ctx.accounts.config;
         require!(
