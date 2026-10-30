@@ -47,6 +47,20 @@ pub fn find_proxy_address(
     })
 }
 
+/// Derive the singleton Config PDA. An omitted program ID uses this SDK's proxy program.
+#[wasm_bindgen(js_name = findProxyConfigAddress)]
+pub fn find_proxy_config_address(program_id: Option<String>) -> crate::Result<ProxyAddress> {
+    let program_id = match program_id {
+        Some(value) => Pubkey::from_str(&value)?,
+        None => gmsol_programs::gmsol_evm_proxy::ID,
+    };
+    let (address, bump) = crate::pda::find_proxy_config_address(&program_id);
+    Ok(ProxyAddress {
+        address: address.to_string(),
+        bump,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,5 +86,14 @@ mod tests {
     fn rejects_malformed_address() {
         assert!(parse_evm_address("0x1234").is_err());
         assert!(parse_evm_address("0xgg23456789abcdef0123456789abcdef01234567").is_err());
+    }
+
+    #[test]
+    fn derives_config_address() {
+        let program_id = gmsol_programs::gmsol_evm_proxy::ID;
+        let expected = crate::pda::find_proxy_config_address(&program_id);
+        let result = find_proxy_config_address(None).unwrap();
+        assert_eq!(result.address, expected.0.to_string());
+        assert_eq!(result.bump, expected.1);
     }
 }

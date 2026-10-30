@@ -2557,7 +2557,10 @@ name = "gmsol-evm-proxy"
 version = "0.12.0"
 dependencies = [
  "anchor-lang",
+ "base64 0.22.1",
+ "bincode",
  "bytemuck",
+ "gmsol-store",
  "gmsol-utils",
  "serde_json",
  "solana-accounts-db",

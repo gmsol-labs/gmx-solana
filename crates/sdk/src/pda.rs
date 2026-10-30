@@ -627,6 +627,14 @@ pub fn find_proxy_address(evm_address: &[u8; 20], program_id: &Pubkey) -> (Pubke
     Pubkey::find_program_address(&[PROXY_SEED, evm_address], program_id)
 }
 
+/// Find the singleton EVM proxy Config PDA.
+#[cfg(feature = "evm-proxy")]
+pub fn find_proxy_config_address(program_id: &Pubkey) -> (Pubkey, u8) {
+    use gmsol_programs::gmsol_evm_proxy::constants::CONFIG_SEED;
+
+    Pubkey::find_program_address(&[CONFIG_SEED], program_id)
+}
+
 /// Find PDA for global state account for the LP program.
 #[cfg(liquidity_provider)]
 pub fn find_lp_global_state_address(lp_program_id: &Pubkey) -> (Pubkey, u8) {

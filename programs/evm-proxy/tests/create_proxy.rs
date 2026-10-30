@@ -450,12 +450,15 @@ async fn creator_cannot_sign_for_proxy_or_dispatch_a_mutation() {
 }
 
 #[test]
-fn proxy_idl_has_only_create_instruction() {
+fn proxy_idl_retains_create_instruction() {
     let idl: serde_json::Value = serde_json::from_str(include_str!(
         "../../../crates/programs/idls/gmsol_evm_proxy.json"
     ))
     .unwrap();
     let instructions = idl["instructions"].as_array().unwrap();
-    assert_eq!(instructions.len(), 1);
-    assert_eq!(instructions[0]["name"], "create_proxy");
+    let create = instructions
+        .iter()
+        .find(|instruction| instruction["name"] == "create_proxy")
+        .expect("create_proxy remains in the IDL");
+    assert_eq!(create["args"][0]["name"], "evm_address");
 }

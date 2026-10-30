@@ -9,6 +9,139 @@
   },
   "instructions": [
     {
+      "name": "accept_admin",
+      "docs": [
+        "Complete a pending handover when the nominated admin signs.",
+        "",
+        "# Errors",
+        "",
+        "Anchor rejects a missing next-admin signature or a noncanonical Config.",
+        "Returns `NotPendingAdmin` if the signer is not the pending admin."
+      ],
+      "discriminator": [
+        112,
+        42,
+        45,
+        90,
+        116,
+        181,
+        13,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "next_admin",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_config",
+      "docs": [
+        "Initialize the singleton Config under the current program upgrade authority.",
+        "The caller supplies the genesis hash; the program does not attest it against",
+        "the cluster. Checked SDK initialization compares it with RPC before sending.",
+        "This implementation starts paused with no allowed chains.",
+        "",
+        "# Errors",
+        "",
+        "Anchor rejects a missing signer, a noncanonical or already initialized Config,",
+        "ProgramData not linked to this program, an authority other than its current",
+        "upgrade authority, or an invalid Store account. Returns `InvalidAdmin` for a",
+        "zero first admin and `InvalidStore` for undersized Store data. Loading",
+        "malformed Store data also fails."
+      ],
+      "discriminator": [
+        201,
+        207,
+        243,
+        114,
+        75,
+        111,
+        47,
+        189
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "upgrade_authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program",
+          "address": "Dodg22E8BxfCtYBzHVHmAzFqD5bZy6q9Tp4NdYSxkmp6"
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "store"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "genesis_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "first_admin",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "create_proxy",
       "docs": [
         "Create a proxy for an EVM address. Anyone may pay; the payer gains no authority.",
@@ -75,9 +208,201 @@
           }
         }
       ]
+    },
+    {
+      "name": "propose_admin",
+      "docs": [
+        "Propose or replace an unaccepted next admin.",
+        "",
+        "# Errors",
+        "",
+        "Anchor rejects a missing current-admin signature, a noncanonical Config,",
+        "or a Config whose admin does not match the signer. Returns `InvalidAdmin`",
+        "for a zero next admin, or `NoConfigChange` if it is the current or already",
+        "pending admin."
+      ],
+      "discriminator": [
+        121,
+        214,
+        199,
+        212,
+        87,
+        39,
+        117,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "next_admin",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_chain_allowed",
+      "docs": [
+        "Set whether one full-width EIP-155 chain ID is accepted by Config.",
+        "",
+        "# Errors",
+        "",
+        "Anchor rejects a missing current-admin signature, a noncanonical Config,",
+        "or a Config whose admin does not match the signer. Returns `NoConfigChange`",
+        "if the requested allow status already holds, or `AllowedChainsFull` when",
+        "adding a chain to the full set."
+      ],
+      "discriminator": [
+        9,
+        29,
+        118,
+        102,
+        151,
+        253,
+        249,
+        79
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "chain_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "allowed",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "set_paused",
+      "docs": [
+        "Pause or unpause every intent governed by Config.",
+        "",
+        "# Errors",
+        "",
+        "Anchor rejects a missing current-admin signature, a noncanonical Config,",
+        "or a Config whose admin does not match the signer. Returns `NoConfigChange`",
+        "if Config already has the requested pause state."
+      ],
+      "discriminator": [
+        91,
+        60,
+        125,
+        192,
+        176,
+        225,
+        166,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
     }
   ],
   "accounts": [
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    },
     {
       "name": "Proxy",
       "discriminator": [
@@ -90,6 +415,86 @@
         75,
         41
       ]
+    },
+    {
+      "name": "Store",
+      "discriminator": [
+        130,
+        48,
+        247,
+        244,
+        182,
+        191,
+        30,
+        26
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ConfigAdminAccepted",
+      "discriminator": [
+        129,
+        63,
+        185,
+        175,
+        92,
+        100,
+        64,
+        139
+      ]
+    },
+    {
+      "name": "ConfigAdminProposed",
+      "discriminator": [
+        8,
+        228,
+        244,
+        29,
+        148,
+        78,
+        141,
+        191
+      ]
+    },
+    {
+      "name": "ConfigChainAllowedChanged",
+      "discriminator": [
+        22,
+        129,
+        90,
+        128,
+        234,
+        47,
+        88,
+        34
+      ]
+    },
+    {
+      "name": "ConfigCreated",
+      "discriminator": [
+        195,
+        73,
+        104,
+        161,
+        166,
+        245,
+        4,
+        120
+      ]
+    },
+    {
+      "name": "ConfigPauseChanged",
+      "discriminator": [
+        44,
+        35,
+        237,
+        103,
+        217,
+        92,
+        26,
+        193
+      ]
     }
   ],
   "errors": [
@@ -97,9 +502,743 @@
       "code": 6000,
       "name": "InvalidProxy",
       "msg": "Proxy account data does not match its EVM address"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidStore",
+      "msg": "Store account data is too short"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidAdmin",
+      "msg": "Admin address cannot be zero"
+    },
+    {
+      "code": 6003,
+      "name": "NoConfigChange",
+      "msg": "Config change has no effect"
+    },
+    {
+      "code": 6004,
+      "name": "AllowedChainsFull",
+      "msg": "Allowed EVM chain set is full"
+    },
+    {
+      "code": 6005,
+      "name": "NotPendingAdmin",
+      "msg": "Signer is not the pending admin"
     }
   ],
   "types": [
+    {
+      "name": "Addresses",
+      "docs": [
+        "Addresses."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "holding",
+            "type": "pubkey"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "pubkey",
+                30
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Amounts",
+      "docs": [
+        "Amounts."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "claimable_time_window",
+            "type": "u64"
+          },
+          {
+            "name": "recent_time_window",
+            "type": "u64"
+          },
+          {
+            "name": "request_expiration",
+            "type": "u64"
+          },
+          {
+            "name": "oracle_max_age",
+            "type": "u64"
+          },
+          {
+            "name": "oracle_max_timestamp_range",
+            "type": "u64"
+          },
+          {
+            "name": "oracle_max_future_timestamp_excess",
+            "type": "u64"
+          },
+          {
+            "name": "adl_prices_max_staleness",
+            "type": "u64"
+          },
+          {
+            "name": "min_position_age_for_manual_close",
+            "type": "u64"
+          },
+          {
+            "name": "market_closed_prices_max_staleness",
+            "type": "u64"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u64",
+                124
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Config",
+      "docs": [
+        "Program-wide intent policy."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "store",
+            "type": "pubkey"
+          },
+          {
+            "name": "genesis_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_admin",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "allowed_chain_ids",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigAdminAccepted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "previous_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_admin",
+            "type": {
+              "option": "pubkey"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigAdminProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "previous_pending_admin",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "next_admin",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigChainAllowedChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "chain_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "allowed",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "store",
+            "type": "pubkey"
+          },
+          {
+            "name": "genesis_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "allowed_chain_ids",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigPauseChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "previous_paused",
+            "type": "bool"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DisabledFeatures",
+      "docs": [
+        "Disabled Features State."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "map",
+            "type": {
+              "defined": {
+                "name": "DisabledMap"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "DisabledMap",
+      "docs": [
+        "Fixed size map generated by the macro."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "data",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "DisabledMapEntry"
+                  }
+                },
+                64
+              ]
+            }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u8",
+                0
+              ]
+            }
+          },
+          {
+            "name": "count",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DisabledMapEntry",
+      "docs": [
+        "Entry."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "key",
+            "type": {
+              "array": [
+                "u8",
+                2
+              ]
+            }
+          },
+          {
+            "name": "value",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Factors",
+      "docs": [
+        "Factors."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oracle_ref_price_deviation",
+            "type": "u128"
+          },
+          {
+            "name": "order_fee_discount_for_referred_user",
+            "type": "u128"
+          },
+          {
+            "name": "max_builder_fee_factor",
+            "docs": [
+              "Max builder fee factor. Reads as `0` on existing stores until a",
+              "CONFIG_KEEPER explicitly raises it via `insert_factor`, so no",
+              "non-zero builder fee factor can be configured by default.",
+              "",
+              "The cap the boundedness invariant is stated against; see the builder",
+              "fee invariants on [`crate::states::order`]."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u128",
+                63
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GtState",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "decimals",
+            "type": "u8"
+          },
+          {
+            "name": "padding_0",
+            "type": {
+              "array": [
+                "u8",
+                7
+              ]
+            }
+          },
+          {
+            "name": "last_minted_at",
+            "type": "i64"
+          },
+          {
+            "name": "total_minted",
+            "type": "u64"
+          },
+          {
+            "name": "grow_step_amount",
+            "docs": [
+              "Grow step amount. It must be immutable."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "grow_steps",
+            "type": "u64"
+          },
+          {
+            "name": "supply",
+            "docs": [
+              "Supply of buybackable GT."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "last_cumulative_inv_cost_factor_ts",
+            "docs": [
+              "Timestamp of the last update to `cumulative_inv_cost_factor`."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "gt_vault",
+            "docs": [
+              "Vault for non-buybackable GT."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "cumulative_inv_cost_factor",
+            "docs": [
+              "Cumulative `1 / minting_cost` factor."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "minting_cost_grow_factor",
+            "type": "u128"
+          },
+          {
+            "name": "minting_cost",
+            "type": "u128"
+          },
+          {
+            "name": "padding_3",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "exchange_time_window",
+            "type": "u32"
+          },
+          {
+            "name": "padding_4",
+            "type": {
+              "array": [
+                "u8",
+                12
+              ]
+            }
+          },
+          {
+            "name": "max_rank",
+            "type": "u64"
+          },
+          {
+            "name": "ranks",
+            "type": {
+              "array": [
+                "u64",
+                15
+              ]
+            }
+          },
+          {
+            "name": "order_fee_discount_factors",
+            "type": {
+              "array": [
+                "u128",
+                16
+              ]
+            }
+          },
+          {
+            "name": "referral_reward_factors",
+            "type": {
+              "array": [
+                "u128",
+                16
+              ]
+            }
+          },
+          {
+            "name": "padding_5",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                256
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketConfigFactorContainer",
+      "docs": [
+        "Flags container generated by the macro."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "value",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketConfigFlagContainer",
+      "docs": [
+        "Flags container generated by the macro."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "value",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketConfigPermissions",
+      "docs": [
+        "Permission store related to market config."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "updatable_market_config_flags",
+            "docs": [
+              "Market config flags updatable by a [`MARKET_CONFIG_KEEPER`](`gmsol_utils::role::RoleKey::MARKET_CONFIG_KEEPER`)."
+            ],
+            "type": {
+              "defined": {
+                "name": "MarketConfigFlagContainer"
+              }
+            }
+          },
+          {
+            "name": "updatable_market_config_factors",
+            "docs": [
+              "Market config factors updatable by a [`MARKET_CONFIG_KEEPER`](`gmsol_utils::role::RoleKey::MARKET_CONFIG_KEEPER`)."
+            ],
+            "type": {
+              "defined": {
+                "name": "MarketConfigFactorContainer"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Members",
+      "docs": [
+        "Fixed size map generated by the macro."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "data",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "MembersEntry"
+                  }
+                },
+                64
+              ]
+            }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u8",
+                0
+              ]
+            }
+          },
+          {
+            "name": "count",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MembersEntry",
+      "docs": [
+        "Entry."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "key",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "value",
+            "type": "u32"
+          }
+        ]
+      }
+    },
     {
       "name": "Proxy",
       "docs": [
@@ -158,9 +1297,380 @@
           }
         ]
       }
+    },
+    {
+      "name": "RoleMap",
+      "docs": [
+        "Fixed size map generated by the macro."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "data",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "RoleMapEntry"
+                  }
+                },
+                32
+              ]
+            }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u8",
+                0
+              ]
+            }
+          },
+          {
+            "name": "count",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoleMapEntry",
+      "docs": [
+        "Entry."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "key",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "value",
+            "type": {
+              "defined": {
+                "name": "RoleMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoleMetadata",
+      "docs": [
+        "Role Metadata."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "enabled",
+            "type": "u8"
+          },
+          {
+            "name": "index",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoleStore",
+      "docs": [
+        "Roles Store."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "roles",
+            "type": {
+              "defined": {
+                "name": "RoleMap"
+              }
+            }
+          },
+          {
+            "name": "members",
+            "type": {
+              "defined": {
+                "name": "Members"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Store",
+      "docs": [
+        "Data Store."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": {
+              "array": [
+                "u8",
+                1
+              ]
+            }
+          },
+          {
+            "name": "key_seed",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "key",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "padding_0",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          },
+          {
+            "name": "role",
+            "type": {
+              "defined": {
+                "name": "RoleStore"
+              }
+            }
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Store authority."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "next_authority",
+            "docs": [
+              "Next authority."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "token_map",
+            "docs": [
+              "The token map to used."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "disabled_features",
+            "docs": [
+              "Disabled features."
+            ],
+            "type": {
+              "defined": {
+                "name": "DisabledFeatures"
+              }
+            }
+          },
+          {
+            "name": "padding_1",
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "last_restarted_slot",
+            "docs": [
+              "Cached last cluster restart slot."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Treasury Config."
+            ],
+            "type": {
+              "defined": {
+                "name": "Treasury"
+              }
+            }
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Amounts."
+            ],
+            "type": {
+              "defined": {
+                "name": "Amounts"
+              }
+            }
+          },
+          {
+            "name": "padding_2",
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
+          },
+          {
+            "name": "factor",
+            "docs": [
+              "Factors."
+            ],
+            "type": {
+              "defined": {
+                "name": "Factors"
+              }
+            }
+          },
+          {
+            "name": "address",
+            "docs": [
+              "Addresses."
+            ],
+            "type": {
+              "defined": {
+                "name": "Addresses"
+              }
+            }
+          },
+          {
+            "name": "gt",
+            "docs": [
+              "GT State."
+            ],
+            "type": {
+              "defined": {
+                "name": "GtState"
+              }
+            }
+          },
+          {
+            "name": "market_config_permissions",
+            "type": {
+              "defined": {
+                "name": "MarketConfigPermissions"
+              }
+            }
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                992
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Treasury",
+      "docs": [
+        "Treasury."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "receiver",
+            "docs": [
+              "Receiver."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "next_receiver",
+            "docs": [
+              "Next receiver."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          }
+        ]
+      }
     }
   ],
   "constants": [
+    {
+      "name": "CONFIG_SEED",
+      "type": "bytes",
+      "value": "[99, 111, 110, 102, 105, 103]"
+    },
     {
       "name": "PROXY_SEED",
       "type": "bytes",
