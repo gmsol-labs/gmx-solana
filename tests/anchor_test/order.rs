@@ -16,7 +16,7 @@ use gmsol_sdk::{
         feeds_parser::FeedAddressMap,
         ops::{
             exchange::order::ExecuteOrderBuilder, BuilderFeeOps, ConfigOps, ExchangeOps, MarketOps,
-            UserOps,
+            SystemProgramOps, UserOps,
         },
         pull_oracle::{FeedIds, PullOraclePriceConsumer},
     },
@@ -28,14 +28,14 @@ use gmsol_sdk::{
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions},
     make_bundle_builder::MakeBundleBuilder,
-    signer::SignerRef,
+    signer::{shared_signer, SignerRef},
     transaction_builder::TransactionBuilder,
 };
 use gmsol_store::CoreError;
 use gmsol_utils::{
     action::ActionState, config::FactorKey, market::MarketConfigKey, oracle::PriceProviderKind,
 };
-use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
+use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair};
 use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
@@ -3164,8 +3164,8 @@ async fn execute_and_settle_in_one_transaction() -> eyre::Result<()> {
 /// A revoked checkpoint keeps its builder, charges nothing, and does not need the builder to have a
 /// claim vault, so `settle_builder_fee` for it must stay account-less and succeed as a no-op.
 ///
-/// The builder here is the default user's User Account, which advertises zero and has no claim vault
-/// for the order's mint (no test opens one for it, and the precondition below checks): that is the case a settlement which attached the vault for every order with a
+/// The builder here has a fresh User Account, which advertises zero and has no claim vault
+/// for the order's mint (the precondition below checks): that is the case a settlement which attached the vault for every order with a
 /// builder would break, since the program validates every account it is handed and the vault does
 /// not exist. Revocation only requires the vault for a non-zero factor.
 ///
@@ -3193,7 +3193,14 @@ async fn revoked_order_settles_as_a_no_op_without_a_claim_vault() -> eyre::Resul
         .await?;
 
     let owner = deployment.locked_user_client().await?;
-    let zero_advertiser = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let zero_advertiser = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
+    deployment
+        .client
+        .transfer(&zero_advertiser.payer(), 50_000_000)?
+        .send()
+        .await?;
 
     for signature in [
         owner.prepare_user(store)?.send_without_preflight().await?,
@@ -3205,7 +3212,7 @@ async fn revoked_order_settles_as_a_no_op_without_a_claim_vault() -> eyre::Resul
         tracing::info!(%signature, "prepared a user account");
     }
 
-    // Deliberately not opened: nothing in this test, and no other test, mints to this account.
+    // Deliberately not opened: this test's fresh builder has no token account for fBTC.
     let zero_user = zero_advertiser.find_user_address(store, &zero_advertiser.payer());
     assert_eq!(
         deployment.get_ata_amount(&fbtc.address, &zero_user).await?,
