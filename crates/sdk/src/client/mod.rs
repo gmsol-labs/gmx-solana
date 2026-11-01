@@ -31,6 +31,10 @@ pub mod instruction_buffer;
 /// Program IDs.
 pub mod program_ids;
 
+/// Order completion outcome.
+#[cfg(feature = "decode")]
+pub mod order_completion;
+
 /// Chainlink support.
 #[cfg(feature = "chainlink")]
 pub mod chainlink;
@@ -115,7 +119,13 @@ use crate::builders::liquidity_provider::LiquidityProviderProgram;
 use gmsol_decode::{gmsol::programs::GMSOLCPIEvent, Decode};
 
 #[cfg(feature = "decode")]
-use gmsol_programs::gmsol_store::events as store_events;
+use gmsol_programs::gmsol_store::events::OrderRemoved;
+
+#[cfg(feature = "decode")]
+use order_completion::{
+    is_order_event, reject_unseen_order, LifecycleScan, LiveOrder, OrderCompletion,
+    DEFAULT_HISTORY_WAIT, HISTORY_RETRY_FIRST_DELAY,
+};
 
 /// Discriminator offset.
 pub const DISC_OFFSET: usize = 8;
@@ -1349,18 +1359,21 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         Ok(events)
     }
 
-    /// Wait for an order to be completed using current slot as min context slot.
+    /// Wait for an order to be closed using current slot as min context slot.
+    ///
+    /// Returns how it finished; see [`OrderCompletion`].
     #[cfg(feature = "decode")]
     pub async fn complete_order(
         &self,
         address: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> crate::Result<Option<store_events::TradeEvent>> {
+    ) -> crate::Result<OrderCompletion> {
         let slot = self.get_slot(None).await?;
         self.complete_order_with_config(
             address,
             slot,
             std::time::Duration::from_secs(5),
+            DEFAULT_HISTORY_WAIT,
             commitment,
         )
         .await
@@ -1393,19 +1406,26 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         }
     }
 
-    /// Wait for an order to be completed with the given config.
+    /// Wait for an order to be closed with the given config.
+    ///
+    /// Returns how it finished; see [`OrderCompletion`]. Once the order is gone, its history
+    /// can lag behind; `history_wait` caps how long to keep re-reading it (see
+    /// [`DEFAULT_HISTORY_WAIT`]). `Duration::ZERO` reads it once.
     #[cfg(feature = "decode")]
     pub async fn complete_order_with_config(
         &self,
         address: &Pubkey,
         mut slot: u64,
         polling: std::time::Duration,
+        history_wait: std::time::Duration,
         commitment: Option<CommitmentConfig>,
-    ) -> crate::Result<Option<store_events::TradeEvent>> {
+    ) -> crate::Result<OrderCompletion> {
         use futures_util::{StreamExt, TryStreamExt};
         use solana_account_decoder::UiAccountEncoding;
 
-        let mut trade = None;
+        // Trades, edits (new action id) and the close seen live, so history can't hand back
+        // an older order that used the same address.
+        let mut live = LiveOrder::new(*address);
         let commitment = commitment.unwrap_or(self.subscription_config.commitment);
 
         let events = self.subscribe_store_cpi_events(Some(commitment)).await?;
@@ -1420,19 +1440,21 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         if slot_reached {
             let order = self.order_with_config(address, config.clone()).await?;
             slot = order.slot();
-            let order = order.into_value();
-            if order.is_none() {
-                let events = self.last_order_events(address, slot, commitment).await?;
-                return Ok(events
-                    .into_iter()
-                    .filter_map(|event| {
-                        if let GMSOLCPIEvent::TradeEvent(event) = event {
-                            Some(event)
-                        } else {
-                            None
-                        }
-                    })
-                    .next());
+            match order.into_value() {
+                Some(order) => live.set_id(order.header.id),
+                None => {
+                    let completion = self
+                        .order_completion_from_history(
+                            address,
+                            None,
+                            None,
+                            slot,
+                            commitment,
+                            history_wait,
+                        )
+                        .await?;
+                    return reject_unseen_order(address, false, completion);
+                }
             }
         }
         let address = *address;
@@ -1441,15 +1463,12 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                 if events.slot() < slot {
                     return Ok(None);
                 }
+                // The subscription carries every store event, so keep only the ones
+                // for the order we are waiting on.
                 let events = events
                     .into_value()
                     .into_iter()
-                    .filter(|event| {
-                        matches!(
-                            event,
-                            GMSOLCPIEvent::TradeEvent(_) | GMSOLCPIEvent::OrderRemoved(_)
-                        )
-                    })
+                    .filter(|event| is_order_event(&address, event))
                     .map(Ok);
                 Ok(Some(futures_util::stream::iter(events)))
             })
@@ -1459,35 +1478,57 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         futures_util::pin_mut!(stream);
         while let Some(res) = stream.next().await {
             match res {
-                Ok(Ok(event)) => match event {
-                    GMSOLCPIEvent::TradeEvent(event) => {
-                        trade = Some(event);
+                Ok(Ok(event)) => {
+                    let Some(removed) = live.push(event) else {
+                        continue;
+                    };
+                    if let Some(trade) = live.take_trusted_trade(Some(&removed)) {
+                        return Ok(OrderCompletion::Trade(Box::new(trade)));
                     }
-                    GMSOLCPIEvent::OrderRemoved(_remove) => {
-                        return Ok(trade);
-                    }
-                    _ => unreachable!(),
-                },
+                    // Otherwise ask history: the trade may have landed before the
+                    // subscription started, and the scan applies the same checks.
+                    let before_slot = removed.slot;
+                    return self
+                        .order_completion_from_history(
+                            &address,
+                            live.expected_id(),
+                            Some(removed),
+                            before_slot,
+                            commitment,
+                            history_wait,
+                        )
+                        .await;
+                }
                 Ok(Err(err)) => {
                     return Err(err);
                 }
                 Err(_elapsed) => {
                     if slot_reached {
                         let res = self.order_with_config(&address, config.clone()).await?;
-                        if res.value().is_none() {
-                            let events = self
-                                .last_order_events(&address, res.slot(), commitment)
-                                .await?;
-                            return Ok(events
-                                .into_iter()
-                                .filter_map(|event| {
-                                    if let GMSOLCPIEvent::TradeEvent(event) = event {
-                                        Some(event)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .next());
+                        match res.value() {
+                            Some(order) => live.set_id(order.header.id),
+                            None => {
+                                // Seen live while this order was open, so it is this
+                                // order's trade; history may not show it.
+                                if let Some(trade) = live.take_trusted_trade(None) {
+                                    return Ok(OrderCompletion::Trade(Box::new(trade)));
+                                }
+                                let completion = self
+                                    .order_completion_from_history(
+                                        &address,
+                                        live.expected_id(),
+                                        None,
+                                        res.slot(),
+                                        commitment,
+                                        history_wait,
+                                    )
+                                    .await?;
+                                return reject_unseen_order(
+                                    &address,
+                                    live.expected_id().is_some(),
+                                    completion,
+                                );
+                            }
                         }
                     } else {
                         slot_reached = self.get_slot(Some(commitment)).await? >= slot;
@@ -1496,6 +1537,89 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             }
         }
         Err(crate::Error::custom("the watch stream end"))
+    }
+
+    /// Rebuild how `order` finished from its history at or before `before_slot`.
+    ///
+    /// The account can be seen gone before the history index has the close or the trade, so
+    /// while one of those is provably missing, read again after [`HISTORY_RETRY_FIRST_DELAY`],
+    /// doubling the wait each time, for up to `history_wait`, then return what the last read
+    /// showed. With 1 s and 5 s that is reads at 0, 1, 3 and 5 s.
+    #[cfg(feature = "decode")]
+    async fn order_completion_from_history(
+        &self,
+        order: &Pubkey,
+        expected_id: Option<u64>,
+        seen_close: Option<OrderRemoved>,
+        before_slot: u64,
+        commitment: CommitmentConfig,
+        history_wait: std::time::Duration,
+    ) -> crate::Result<OrderCompletion> {
+        let deadline = tokio::time::Instant::now() + history_wait;
+        let mut delay = HISTORY_RETRY_FIRST_DELAY;
+        loop {
+            let completion = self
+                .scan_order_history(
+                    order,
+                    expected_id,
+                    seen_close.clone(),
+                    before_slot,
+                    commitment,
+                )
+                .await?;
+            let retry = matches!(
+                &completion,
+                OrderCompletion::Inconclusive { reason, .. } if reason.is_retryable()
+            );
+            let now = tokio::time::Instant::now();
+            if !retry || now >= deadline {
+                return Ok(completion);
+            }
+            tokio::time::sleep(delay.min(deadline - now)).await;
+            delay *= 2;
+        }
+    }
+
+    /// One read of `order`'s history at or before `before_slot`, newest first. `seen_close`
+    /// is a close already seen live, fed first in case the index doesn't have it yet.
+    #[cfg(feature = "decode")]
+    async fn scan_order_history(
+        &self,
+        order: &Pubkey,
+        expected_id: Option<u64>,
+        seen_close: Option<OrderRemoved>,
+        before_slot: u64,
+        commitment: CommitmentConfig,
+    ) -> crate::Result<OrderCompletion> {
+        use futures_util::TryStreamExt;
+
+        let mut scan = LifecycleScan::new(*order, expected_id);
+        if let Some(removed) = seen_close {
+            if scan.push_transaction(&[GMSOLCPIEvent::OrderRemoved(removed)]) {
+                return Ok(scan.finish(false));
+            }
+        }
+
+        let events = self
+            .historical_store_cpi_events(order, Some(commitment))
+            .await?;
+        futures_util::pin_mut!(events);
+        loop {
+            let events = match events.try_next().await {
+                Ok(Some(events)) => events,
+                Ok(None) => break,
+                // An unreadable older tx must not throw away the close we already have.
+                Err(err) if scan.has_close() => return Ok(scan.finish_with_read_error(&err)),
+                Err(err) => return Err(err),
+            };
+            if events.slot() > before_slot {
+                continue;
+            }
+            if scan.push_transaction(events.value()) {
+                return Ok(scan.finish(false));
+            }
+        }
+        Ok(scan.finish(true))
     }
 
     /// Shutdown the client gracefully.
