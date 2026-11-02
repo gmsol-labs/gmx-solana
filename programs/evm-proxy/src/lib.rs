@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
 
 mod intent_verifier;
 
@@ -15,6 +16,7 @@ pub const CONFIG_SEED: &[u8] = b"config";
 pub const MAX_ALLOWED_CHAINS: usize = 32;
 const INITIAL_PAUSED: bool = true;
 pub const INTENT_KIND_CANCEL: u8 = 1;
+pub const INTENT_KIND_WITHDRAW: u8 = 2;
 
 /// Program-wide intent policy.
 #[account]
@@ -75,6 +77,17 @@ pub struct IntentConsumed {
     pub generation: u64,
     pub nonce: u64,
     pub kind: u8,
+}
+
+/// A successful transfer from a proxy-controlled token account.
+#[event]
+pub struct Withdrawn {
+    pub proxy: Pubkey,
+    pub generation: u64,
+    pub nonce: u64,
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub recipient: Pubkey,
 }
 
 /// One permanent account for a 20-byte EVM address.
@@ -363,6 +376,111 @@ pub mod gmsol_evm_proxy {
         Ok(())
     }
 
+    /// Transfer a signed amount of a legacy SPL mint from the proxy ATA to the
+    /// existing ATA of the signed recipient wallet. Any Solana payer may submit
+    /// the EVM owner's signature; the payer does not become the token recipient.
+    /// The signature binds the mint, recipient wallet, amount, decimals, pair,
+    /// deadline, chain, and deployment domain. Both token accounts must exist,
+    /// use the legacy Token program, and be unfrozen.
+    ///
+    /// # Errors
+    /// Returns `ZeroAmount` for zero, `SelfRecipient` when the recipient wallet
+    /// is the proxy, and `InvalidDecimals` for a mint decimal mismatch. Account
+    /// constraints reject noncanonical or missing ATAs, wrong mint or Token
+    /// program. The checked token transfer rejects frozen token accounts.
+    /// Identity and pair checks reject a
+    /// wrong proxy or consumed pair. Verification rejects an expired deadline,
+    /// disallowed chain, paused Config, or invalid EVM signature. A failed
+    /// transfer leaves the pair unconsumed and token balances unchanged.
+    pub fn withdraw(
+        ctx: Context<Withdraw>,
+        evm_address: [u8; 20],
+        chain_id: [u8; 32],
+        amount: u64,
+        decimals: u8,
+        generation: u64,
+        nonce: u64,
+        deadline: u64,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> Result<()> {
+        require!(amount > 0, ProxyError::ZeroAmount);
+        let proxy_key = ctx.accounts.proxy.key();
+        let recipient = ctx.accounts.recipient.key();
+        require_keys_neq!(proxy_key, recipient, ProxyError::SelfRecipient);
+        require_eq!(
+            decimals,
+            ctx.accounts.mint.decimals,
+            ProxyError::InvalidDecimals
+        );
+
+        let pair = IntentPair { generation, nonce };
+        {
+            let proxy = ctx.accounts.proxy.load()?;
+            proxy.validate_identity(evm_address, ctx.bumps.proxy)?;
+            require!(
+                pair == proxy.expected_next_pair()?,
+                ProxyError::InvalidIntentPair
+            );
+        }
+
+        let mint = ctx.accounts.mint.key();
+        let struct_hash =
+            gmsol_evm_proxy_intent::withdraw_struct_hash(&gmsol_evm_proxy_intent::WithdrawFields {
+                proxy: proxy_key,
+                mint,
+                amount,
+                decimals,
+                recipient,
+                generation,
+                nonce,
+                deadline,
+            });
+        intent_verifier::verify(
+            &ctx.accounts.config,
+            evm_address,
+            chain_id,
+            deadline,
+            struct_hash,
+            signature,
+            recovery_id,
+        )?;
+
+        let bump = [ctx.bumps.proxy];
+        let signer_seeds: &[&[u8]] = &[PROXY_SEED, evm_address.as_ref(), &bump];
+        transfer_checked(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.source.to_account_info(),
+                    mint: ctx.accounts.mint.to_account_info(),
+                    to: ctx.accounts.destination.to_account_info(),
+                    authority: ctx.accounts.proxy.to_account_info(),
+                },
+            )
+            .with_signer(&[signer_seeds]),
+            amount,
+            decimals,
+        )?;
+
+        ctx.accounts.proxy.load_mut()?.consume_next_pair(pair)?;
+        emit!(IntentConsumed {
+            proxy: proxy_key,
+            generation,
+            nonce,
+            kind: INTENT_KIND_WITHDRAW,
+        });
+        emit!(Withdrawn {
+            proxy: proxy_key,
+            generation,
+            nonce,
+            mint,
+            amount,
+            recipient,
+        });
+        Ok(())
+    }
+
     /// Exercises intent verification in the test SBF artifact without consuming an intent.
     #[cfg(feature = "test-only")]
     pub fn verify_intent_probe(
@@ -450,6 +568,24 @@ pub struct Cancel<'info> {
     pub proxy: AccountLoader<'info, Proxy>,
 }
 
+#[derive(Accounts)]
+#[instruction(evm_address: [u8; 20])]
+pub struct Withdraw<'info> {
+    pub submitter: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump)]
+    pub config: Account<'info, Config>,
+    #[account(mut, seeds = [PROXY_SEED, evm_address.as_ref()], bump)]
+    pub proxy: AccountLoader<'info, Proxy>,
+    pub mint: Account<'info, Mint>,
+    /// CHECK: the key is signed in the Withdraw digest; its canonical ATA is checked below.
+    pub recipient: UncheckedAccount<'info>,
+    #[account(mut, associated_token::mint = mint, associated_token::authority = proxy)]
+    pub source: Account<'info, TokenAccount>,
+    #[account(mut, associated_token::mint = mint, associated_token::authority = recipient)]
+    pub destination: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
 #[cfg(feature = "test-only")]
 #[derive(Accounts)]
 #[instruction(evm_address: [u8; 20])]
@@ -486,6 +622,12 @@ pub enum ProxyError {
     InvalidDeadline,
     #[msg("Invalid EVM signature")]
     InvalidSignature,
+    #[msg("Withdraw amount must be positive")]
+    ZeroAmount,
+    #[msg("Proxy cannot withdraw to itself")]
+    SelfRecipient,
+    #[msg("Signed decimals differ from the mint")]
+    InvalidDecimals,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]

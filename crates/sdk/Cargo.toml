@@ -19,7 +19,7 @@ timelock = ["gmsol-programs/timelock", "gmsol-utils/instruction"]
 competition = ["gmsol-programs/competition"]
 liquidity-provider = ["gmsol-programs/liquidity-provider"]
 gt-incentive = ["gmsol-programs/gt-incentive"]
-evm-proxy = ["gmsol-programs/evm-proxy"]
+evm-proxy = ["gmsol-programs/evm-proxy", "dep:gmsol-evm-proxy-intent"]
 devnet = ["gmsol-utils/devnet", "switchboard-on-demand-client?/devnet"]
 js = [
     "evm-proxy",
@@ -106,6 +106,7 @@ gmsol-programs = { workspace = true, features = [
     "utils",
     "gmsol-utils",
 ] }
+gmsol-evm-proxy-intent = { path = "../evm-proxy-intent", optional = true }
 gmsol-model = { workspace = true, features = ["u128", "strum", "glv"] }
 gmsol-solana-utils = { workspace = true, features = [
     "client-traits",

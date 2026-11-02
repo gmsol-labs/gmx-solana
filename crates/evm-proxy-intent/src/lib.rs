@@ -1,0 +1,104 @@
+//! Canonical EIP-712 encoding for EVM proxy intents.
+
+use anchor_lang::{prelude::Pubkey, solana_program::keccak};
+
+/// Domain name shared by every proxy intent.
+pub const DOMAIN_NAME: &str = "GMX Solana EVM Proxy";
+/// Domain version shared by every proxy intent.
+pub const DOMAIN_VERSION: &str = "1";
+/// Exact primary type used by Cancel.
+pub const CANCEL_TYPE: &str =
+    "Cancel(bytes32 proxyAccount,uint64 generation,uint64 nonce,uint64 deadline)";
+/// Exact primary type used by Withdraw.
+pub const WITHDRAW_TYPE: &str = "Withdraw(bytes32 proxyAccount,string mint,uint64 amount,uint8 decimals,string recipient,uint64 generation,uint64 nonce,uint64 deadline)";
+const DOMAIN_TYPE: &[u8] = b"EIP712Domain(string name,string version,uint256 chainId,bytes32 salt)";
+
+fn u64_word(value: u64) -> [u8; 32] {
+    let mut word = [0; 32];
+    word[24..].copy_from_slice(&value.to_be_bytes());
+    word
+}
+
+fn u8_word(value: u8) -> [u8; 32] {
+    let mut word = [0; 32];
+    word[31] = value;
+    word
+}
+
+/// Hash the Cancel fields without changing the existing signed bytes.
+pub fn cancel_struct_hash(proxy: &Pubkey, generation: u64, nonce: u64, deadline: u64) -> [u8; 32] {
+    let generation = u64_word(generation);
+    let nonce = u64_word(nonce);
+    let deadline = u64_word(deadline);
+    keccak::hashv(&[
+        keccak::hash(CANCEL_TYPE.as_bytes()).as_ref(),
+        proxy.as_ref(),
+        &generation,
+        &nonce,
+        &deadline,
+    ])
+    .to_bytes()
+}
+
+/// Fields covered by the signed Withdraw schema.
+pub struct WithdrawFields {
+    pub proxy: Pubkey,
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub decimals: u8,
+    pub recipient: Pubkey,
+    pub generation: u64,
+    pub nonce: u64,
+    pub deadline: u64,
+}
+
+/// Hash canonical account keys and the complete signed Withdraw pair.
+pub fn withdraw_struct_hash(fields: &WithdrawFields) -> [u8; 32] {
+    let mint = fields.mint.to_string();
+    let recipient = fields.recipient.to_string();
+    let amount = u64_word(fields.amount);
+    let decimals = u8_word(fields.decimals);
+    let generation = u64_word(fields.generation);
+    let nonce = u64_word(fields.nonce);
+    let deadline = u64_word(fields.deadline);
+    keccak::hashv(&[
+        keccak::hash(WITHDRAW_TYPE.as_bytes()).as_ref(),
+        fields.proxy.as_ref(),
+        keccak::hash(mint.as_bytes()).as_ref(),
+        &amount,
+        &decimals,
+        keccak::hash(recipient.as_bytes()).as_ref(),
+        &generation,
+        &nonce,
+        &deadline,
+    ])
+    .to_bytes()
+}
+
+/// Domain salt ties signatures to one deployment, Store and Solana cluster.
+pub fn domain_salt(program: &Pubkey, store: &Pubkey, genesis_hash: &[u8; 32]) -> [u8; 32] {
+    keccak::hashv(&[program.as_ref(), store.as_ref(), genesis_hash]).to_bytes()
+}
+
+/// EIP-712 domain separator for the exact configured chain and deployment.
+pub fn domain_separator(
+    program: &Pubkey,
+    store: &Pubkey,
+    genesis_hash: &[u8; 32],
+    chain_id: &[u8; 32],
+) -> [u8; 32] {
+    let salt = domain_salt(program, store, genesis_hash);
+    keccak::hashv(&[
+        keccak::hash(DOMAIN_TYPE).as_ref(),
+        keccak::hash(DOMAIN_NAME.as_bytes()).as_ref(),
+        keccak::hash(DOMAIN_VERSION.as_bytes()).as_ref(),
+        chain_id,
+        &salt,
+    ])
+    .to_bytes()
+}
+
+/// Digest recovered by the on-chain verifier and exposed to SDK tests.
+pub fn intent_digest(domain: &[u8; 32], struct_hash: &[u8; 32]) -> [u8; 32] {
+    keccak::hashv(&[b"\x19\x01", domain, struct_hash]).to_bytes()
+}

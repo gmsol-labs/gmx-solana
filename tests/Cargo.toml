@@ -43,6 +43,7 @@ tokio = { workspace = true, features = ["full"] }
 rand = { workspace = true }
 solana-sdk = { workspace = true }
 solana-client = { workspace = true }
+libsecp256k1 = { workspace = true }
 anchor-spl = { workspace = true, default-features = false, features = [
     "token",
     "token_2022",

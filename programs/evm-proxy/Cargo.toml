@@ -27,10 +27,13 @@ devnet = []
 test-only = []
 migration = []
 sbf-test = []
-idl-build = ["anchor-lang/idl-build", "gmsol-store/idl-build"]
+manual-js-sbf = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build", "gmsol-store/idl-build"]
 
 [dependencies]
 anchor-lang = { workspace = true, features = ["init-if-needed"] }
+anchor-spl = { workspace = true, features = ["associated_token", "token"] }
+gmsol-evm-proxy-intent = { path = "../../crates/evm-proxy-intent" }
 bytemuck = { workspace = true, features = ["min_const_generics"] }
 gmsol-utils = { workspace = true, features = ["security-txt"] }
 gmsol-store = { workspace = true, features = ["no-entrypoint"] }
@@ -46,6 +49,9 @@ bincode = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 libsecp256k1 = "0.7.2"
 rand = "0.8.5"
+spl-token = { workspace = true }
+spl-associated-token-account = { workspace = true }
+spl-token-2022 = "6.0.0"
 
 [[test]]
 name = "create_proxy"
@@ -58,6 +64,14 @@ required-features = ["sbf-test"]
 [[test]]
 name = "cancel"
 required-features = ["sbf-test"]
+
+[[test]]
+name = "withdraw"
+required-features = ["sbf-test"]
+
+[[test]]
+name = "withdraw_js"
+required-features = ["sbf-test", "manual-js-sbf"]
 
 [[test]]
 name = "verification_probe"

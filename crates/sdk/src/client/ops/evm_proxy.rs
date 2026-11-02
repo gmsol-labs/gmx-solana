@@ -12,7 +12,11 @@ use solana_sdk::{
     signer::Signer, system_program,
 };
 
-use crate::{pda::find_proxy_config_address, Client};
+use crate::{
+    evm_proxy::{withdraw_instruction, WithdrawIntent},
+    pda::find_proxy_config_address,
+    Client,
+};
 
 fn instruction(
     program_id: Pubkey,
@@ -197,6 +201,23 @@ impl<C: Deref<Target = impl Signer> + Clone> Client<C> {
             .transaction()
             .accounts(ix.accounts)
             .args(ix.data)
+    }
+
+    /// Build a Withdraw transaction paid by this client's Solana signer.
+    pub fn withdraw_proxy_transaction(
+        &self,
+        intent: &WithdrawIntent,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let ix = withdraw_instruction(
+            gmsol_programs::gmsol_evm_proxy::ID,
+            self.payer(),
+            intent,
+            signature,
+            recovery_id,
+        )?;
+        Ok(self.evm_proxy_instruction(ix))
     }
 
     fn create_config_transaction<'a>(

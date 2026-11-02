@@ -1,0 +1,12 @@
+[package]
+name = "gmsol-evm-proxy-intent"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+
+[dependencies]
+anchor-lang = { workspace = true }
