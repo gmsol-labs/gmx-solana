@@ -15,8 +15,8 @@ async fn scub_close_gt_exchange_checks_receiver_and_controller() -> eyre::Result
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
-    let owner = deployment.user_client(Deployment::USER_1)?;
-    let second_owner = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let owner = deployment.funded_client().await?;
+    let second_owner = deployment.funded_client().await?;
     let store = &deployment.store;
     let owner_address = owner.payer();
     let second_owner_address = second_owner.payer();
