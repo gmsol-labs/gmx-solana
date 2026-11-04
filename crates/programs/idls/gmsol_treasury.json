@@ -492,6 +492,111 @@
       "args": []
     },
     {
+      "name": "complete_gt_exchange_v2",
+      "docs": [
+        "Complete a confirmed GT exchange for its owner, returning the rent to its rent receiver."
+      ],
+      "discriminator": [
+        12,
+        244,
+        15,
+        204,
+        35,
+        149,
+        168,
+        16
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "Owner."
+          ]
+        },
+        {
+          "name": "rent_receiver",
+          "docs": [
+            "Rent receiver."
+          ],
+          "writable": true
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store."
+          ],
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Config."
+          ],
+          "relations": [
+            "treasury_vault_config"
+          ]
+        },
+        {
+          "name": "treasury_vault_config",
+          "docs": [
+            "Treasury Config."
+          ],
+          "relations": [
+            "gt_bank"
+          ]
+        },
+        {
+          "name": "gt_exchange_vault",
+          "docs": [
+            "GT exchange vault."
+          ],
+          "writable": true,
+          "relations": [
+            "gt_bank"
+          ]
+        },
+        {
+          "name": "gt_bank",
+          "docs": [
+            "GT bank."
+          ],
+          "writable": true
+        },
+        {
+          "name": "exchange",
+          "docs": [
+            "Exchange to complete.",
+            "The ownership should be checked by the CPI."
+          ],
+          "writable": true
+        },
+        {
+          "name": "store_program",
+          "docs": [
+            "Store program."
+          ],
+          "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "The token program."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token_2022_program",
+          "docs": [
+            "The token-2022 program."
+          ],
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "confirm_gt_buyback",
       "docs": [
         "Confirm GT buyback."
