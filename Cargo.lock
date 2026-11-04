@@ -2397,6 +2397,7 @@ version = "0.12.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
+ "bytemuck",
  "gmsol-programs",
  "gmsol-utils",
 ]
