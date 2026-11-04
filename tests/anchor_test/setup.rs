@@ -50,6 +50,7 @@ use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount,
     commitment_config::CommitmentConfig,
+    native_token::LAMPORTS_PER_SOL,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
     signer::{EncodableKey, Signer},
@@ -167,6 +168,9 @@ impl Deployment {
 
     /// Default keeper.
     pub const DEFAULT_KEEPER: &'static str = "keeper";
+
+    /// Lamports given to each client created by [`Deployment::funded_client`].
+    pub const FUNDED_CLIENT_LAMPORTS: u64 = LAMPORTS_PER_SOL / 10;
 
     /// Market selector for liquidation test.
     pub const SELECT_LIQUIDATION_MARKET: [&'static str; 3] = ["fBTC", "USDG", "fBTC"];
@@ -1743,6 +1747,19 @@ impl Deployment {
                 self.extra_user_count
             ))
         }
+    }
+
+    /// Returns a client with a fresh payer funded by the admin, so that no other
+    /// test touches its balances.
+    pub(crate) async fn funded_client(&self) -> eyre::Result<Client<SignerRef>> {
+        let client = self
+            .client
+            .try_clone_with_payer(shared_signer(Keypair::new()))?;
+        self.client
+            .transfer(&client.payer(), Self::FUNDED_CLIENT_LAMPORTS)?
+            .send()
+            .await?;
+        Ok(client)
     }
 
     pub(crate) async fn get_ata_amount(
