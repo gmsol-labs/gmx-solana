@@ -7,7 +7,10 @@ use gmsol_sdk::{
 };
 use solana_sdk::{pubkey::Pubkey, signer::keypair::Keypair, signer::Signer};
 use std::num::NonZeroU64;
+use tokio::sync::Mutex;
 use tracing::Instrument;
+
+static GLV_CONTROLLER_LIFECYCLE_LOCK: Mutex<()> = Mutex::const_new(());
 
 // Test helpers ----------------------------------------------------------------
 
@@ -449,6 +452,7 @@ async fn comprehensive_glv_flow() -> eyre::Result<()> {
     // Step 4: Stake GLV tokens using the SDK builder with real pricing
     // Note: GLV controller should already be created during deployment setup
     let position_id = 100_001u64;
+    let _glv_controller_guard = GLV_CONTROLLER_LIFECYCLE_LOCK.lock().await;
     let mut stake_builder = user
         .stake_lp_token(StakeLpTokenParams {
             store,
@@ -570,6 +574,7 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
     tracing::info!("✓ GM controller verification passed");
 
     // Test GLV controller
+    let glv_controller_guard = GLV_CONTROLLER_LIFECYCLE_LOCK.lock().await;
     let glv_token = &deployment.glv_token;
     let glv_controller_index = 0u64;
     let glv_controller_seeds = &[
@@ -590,6 +595,7 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
     assert_eq!(glv_controller_account.total_positions, 0);
     assert!(glv_controller_account.is_enabled);
     tracing::info!("✓ GLV controller verification passed");
+    drop(glv_controller_guard);
 
     // Test 2: Create a new controller for testing (use a token that doesn't have a controller yet)
     let test_token = deployment
