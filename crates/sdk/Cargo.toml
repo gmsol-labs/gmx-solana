@@ -22,7 +22,6 @@ gt-incentive = ["gmsol-programs/gt-incentive"]
 evm-proxy = ["gmsol-programs/evm-proxy"]
 devnet = ["gmsol-utils/devnet", "switchboard-on-demand-client?/devnet"]
 js = [
-    "evm-proxy",
     "simulation",
     "market-graph",
     "wasm-bindgen",

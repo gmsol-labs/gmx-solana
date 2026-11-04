@@ -4,9 +4,6 @@ pub mod price;
 /// Program.
 pub mod program;
 
-/// EVM proxy address derivation.
-pub mod evm_proxy;
-
 /// Market.
 pub mod market;
 

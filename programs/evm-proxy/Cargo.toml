@@ -22,26 +22,15 @@ no-log-ix-name = []
 anchor-debug = ["anchor-lang/anchor-debug"]
 debug = []
 debug-msg = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 mock = []
+multi-store = []
 devnet = []
 test-only = []
 migration = []
-sbf-test = []
-idl-build = ["anchor-lang/idl-build"]
 
 [dependencies]
-anchor-lang = { workspace = true, features = ["init-if-needed"] }
-bytemuck = { workspace = true, features = ["min_const_generics"] }
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true, features = ["token", "token_2022"] }
+gmsol-programs = { workspace = true }
 gmsol-utils = { workspace = true, features = ["security-txt"] }
-
-[dev-dependencies]
-solana-program-test = "2.1.21"
-solana-accounts-db = "2.1.21"
-solana-runtime = { version = "2.1.21", features = ["dev-context-only-utils"] }
-solana-sdk = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
-
-[[test]]
-name = "create_proxy"
-required-features = ["sbf-test"]

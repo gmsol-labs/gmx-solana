@@ -9,162 +9,29 @@
   },
   "instructions": [
     {
-      "name": "create_proxy",
-      "docs": [
-        "Create a proxy for an EVM address. Anyone may pay; the payer gains no authority.",
-        "",
-        "# Errors",
-        "",
-        "Returns an error if account initialization fails or an existing proxy has a",
-        "different version, bump, or EVM address."
-      ],
+      "name": "initialize",
       "discriminator": [
-        56,
-        181,
-        228,
-        122,
-        166,
-        134,
-        127,
-        234
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
       ],
       "accounts": [
         {
-          "name": "payer",
-          "docs": [
-            "Pays account rent only."
-          ],
+          "name": "authority",
           "writable": true,
           "signer": true
-        },
-        {
-          "name": "proxy",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  120,
-                  121
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "evm_address"
-              }
-            ]
-          }
         },
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": [
-        {
-          "name": "evm_address",
-          "type": {
-            "array": [
-              "u8",
-              20
-            ]
-          }
-        }
-      ]
-    }
-  ],
-  "accounts": [
-    {
-      "name": "Proxy",
-      "discriminator": [
-        36,
-        36,
-        123,
-        35,
-        158,
-        89,
-        75,
-        41
-      ]
-    }
-  ],
-  "errors": [
-    {
-      "code": 6000,
-      "name": "InvalidProxy",
-      "msg": "Proxy account data does not match its EVM address"
-    }
-  ],
-  "types": [
-    {
-      "name": "Proxy",
-      "docs": [
-        "One permanent account for a 20-byte EVM address."
-      ],
-      "serialization": "bytemuck",
-      "repr": {
-        "kind": "c"
-      },
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "version",
-            "type": "u8"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          },
-          {
-            "name": "padding_0",
-            "type": {
-              "array": [
-                "u8",
-                6
-              ]
-            }
-          },
-          {
-            "name": "evm_address",
-            "type": {
-              "array": [
-                "u8",
-                20
-              ]
-            }
-          },
-          {
-            "name": "padding_1",
-            "type": {
-              "array": [
-                "u8",
-                4
-              ]
-            }
-          },
-          {
-            "name": "reserved",
-            "type": {
-              "array": [
-                "u8",
-                256
-              ]
-            }
-          }
-        ]
-      }
-    }
-  ],
-  "constants": [
-    {
-      "name": "PROXY_SEED",
-      "type": "bytes",
-      "value": "[112, 114, 111, 120, 121]"
+      "args": []
     }
   ]
 }

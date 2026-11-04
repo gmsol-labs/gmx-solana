@@ -37,7 +37,7 @@ gmsol-competition = { workspace = true, features = ["no-entrypoint", "debug"] }
 gmsol-chainlink-datastreams = { workspace = true }
 gmsol-liquidity-provider = { workspace = true, features = ["no-entrypoint", "debug"] }
 gmsol-gt-incentive = { workspace = true, features = ["no-entrypoint", "debug"] }
-gmsol-evm-proxy = { workspace = true, features = ["no-entrypoint"] }
+gmsol-evm-proxy = { workspace = true, features = ["no-entrypoint", "debug"] }
 
 tokio = { workspace = true, features = ["full"] }
 rand = { workspace = true }
