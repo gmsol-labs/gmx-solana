@@ -83,7 +83,6 @@ pub(super) static GT_EXCHANGE_WINDOW_LOCK: Mutex<()> = Mutex::const_new(());
 
 const PYTH_FETCH_MAX_RETRIES: usize = 3;
 const PYTH_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
-const TEST_ORACLE_HEARTBEAT_DURATION: u32 = 120;
 
 /// Delay before fetching Pyth prices so the validator clock advances past the
 /// action's creation time; otherwise the freshly fetched price can be rejected
@@ -398,6 +397,7 @@ impl Deployment {
         self.initialize_lp_token_controllers().await?;
 
         self.initialize_gt_incentive().await?;
+        self.initialize_evm_proxy().await?;
 
         self.initialize_claim_fees_sleep().await?;
 
@@ -595,6 +595,25 @@ impl Deployment {
 
         let signature = init_ix.send().await?;
         tracing::info!(%signature, "initialized gt-incentive program");
+
+        Ok(())
+    }
+
+    async fn initialize_evm_proxy(&mut self) -> eyre::Result<()> {
+        use gmsol_evm_proxy as evm_proxy;
+
+        let client = self.user_client(Self::DEFAULT_KEEPER)?;
+        let init_ix = client
+            .store_transaction()
+            .program(evm_proxy::ID)
+            .anchor_args(evm_proxy::instruction::Initialize {})
+            .anchor_accounts(evm_proxy::accounts::Initialize {
+                authority: client.payer(),
+                system_program: system_program::ID,
+            });
+
+        let signature = init_ix.send().await?;
+        tracing::info!(%signature, "initialized evm-proxy program");
 
         Ok(())
     }
@@ -952,7 +971,6 @@ impl Deployment {
                         let config = UpdateTokenConfigParams::default()
                             .update_price_feed(&token.config.provider, token.config.feed_id, None)?
                             .with_expected_provider(token.config.provider)
-                            .with_heartbeat_duration(TEST_ORACLE_HEARTBEAT_DURATION)
                             .with_precision(token.config.precision);
                         let insert = if synthetic {
                             client.insert_synthetic_token_config(

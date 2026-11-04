@@ -19,6 +19,7 @@ gmsol-sdk = { workspace = true, features = [
     "decode",
     "liquidity-provider",
     "gt-incentive",
+    "evm-proxy",
 ] }
 gmsol-programs = { workspace = true, features = [
     "model",
@@ -36,11 +37,15 @@ gmsol-competition = { workspace = true, features = ["no-entrypoint", "debug"] }
 gmsol-chainlink-datastreams = { workspace = true }
 gmsol-liquidity-provider = { workspace = true, features = ["no-entrypoint", "debug"] }
 gmsol-gt-incentive = { workspace = true, features = ["no-entrypoint", "debug"] }
+gmsol-evm-proxy = { workspace = true, features = ["no-entrypoint", "debug"] }
 
 tokio = { workspace = true, features = ["full"] }
 rand = { workspace = true }
 solana-sdk = { workspace = true }
 solana-client = { workspace = true }
+solana-transaction-status = { workspace = true }
+bincode = { workspace = true }
+base64 = { workspace = true }
 anchor-spl = { workspace = true, default-features = false, features = [
     "token",
     "token_2022",
