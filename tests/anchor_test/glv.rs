@@ -1,9 +1,12 @@
 use gmsol_programs::anchor_lang;
 use gmsol_sdk::client::ops::{ExchangeOps, GlvOps};
 use gmsol_store::CoreError;
+use tokio::sync::Mutex;
 use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, Deployment};
+
+static SHARED_GLV_MARKET_CONFIG_LOCK: Mutex<()> = Mutex::const_new(());
 
 #[tokio::test]
 async fn initialize_glv() -> eyre::Result<()> {
@@ -34,6 +37,7 @@ async fn initialize_glv() -> eyre::Result<()> {
 async fn glv_deposit() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
+    let _market_config_guard = SHARED_GLV_MARKET_CONFIG_LOCK.lock().await;
     let span = tracing::info_span!("glv_deposit");
     let _enter = span.enter();
 
@@ -250,6 +254,7 @@ async fn glv_withdrawal() -> eyre::Result<()> {
 async fn glv_shift() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
+    let _market_config_guard = SHARED_GLV_MARKET_CONFIG_LOCK.lock().await;
     let span = tracing::info_span!("glv_shift");
     let _enter = span.enter();
 
