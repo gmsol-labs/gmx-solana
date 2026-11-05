@@ -1,4 +1,4 @@
-//! EVM proxy intent data and typed log events.
+//! Signed EVM proxy intent data and instructions.
 
 use anchor_lang::Discriminator;
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
@@ -147,125 +147,11 @@ pub fn withdraw_instruction(
     })
 }
 
-/// One decoded Config change event.
-#[derive(Debug)]
-pub enum ConfigEvent {
-    /// Config creation.
-    Created(events::ConfigCreated),
-    /// Allowed-chain mutation.
-    ChainAllowedChanged(events::ConfigChainAllowedChanged),
-    /// Pause mutation.
-    PauseChanged(events::ConfigPauseChanged),
-    /// Pending-admin proposal or replacement.
-    AdminProposed(events::ConfigAdminProposed),
-    /// Pending-admin acceptance.
-    AdminAccepted(events::ConfigAdminAccepted),
-}
-
-/// Decode a `Program data:` log produced by the EVM proxy program.
-///
-/// The caller must associate the log with this program's invocation and count it
-/// only when the containing transaction succeeded. Other log lines return `None`.
-pub fn decode_config_event_log(line: &str) -> crate::Result<Option<ConfigEvent>> {
-    let Some(encoded) = line.strip_prefix("Program data: ") else {
-        return Ok(None);
-    };
-    let data = base64::engine::general_purpose::STANDARD.decode(encoded)?;
-    macro_rules! decode {
-        ($event:ty, $variant:ident) => {
-            if data.starts_with(<$event>::DISCRIMINATOR) {
-                return crate::utils::events::decode_anchor_event_with_options::<$event>(
-                    &data, false,
-                )
-                .map(ConfigEvent::$variant)
-                .map(Some);
-            }
-        };
-    }
-    decode!(events::ConfigCreated, Created);
-    decode!(events::ConfigChainAllowedChanged, ChainAllowedChanged);
-    decode!(events::ConfigPauseChanged, PauseChanged);
-    decode!(events::ConfigAdminProposed, AdminProposed);
-    decode!(events::ConfigAdminAccepted, AdminAccepted);
-    Ok(None)
-}
-
-/// Decode a consumed intent from a successful EVM proxy transaction's log.
-pub fn decode_intent_event_log(line: &str) -> crate::Result<Option<events::IntentConsumed>> {
-    let Some(encoded) = line.strip_prefix("Program data: ") else {
-        return Ok(None);
-    };
-    let data = base64::engine::general_purpose::STANDARD.decode(encoded)?;
-    if !data.starts_with(events::IntentConsumed::DISCRIMINATOR) {
-        return Ok(None);
-    }
-    crate::utils::events::decode_anchor_event_with_options::<events::IntentConsumed>(&data, false)
-        .map(Some)
-}
-
-/// Decode one successful Withdraw event after transaction success is confirmed.
-pub fn decode_withdraw_event_log(line: &str) -> crate::Result<Option<events::Withdrawn>> {
-    let Some(encoded) = line.strip_prefix("Program data: ") else {
-        return Ok(None);
-    };
-    let data = base64::engine::general_purpose::STANDARD.decode(encoded)?;
-    if !data.starts_with(events::Withdrawn::DISCRIMINATOR) {
-        return Ok(None);
-    }
-    crate::utils::events::decode_anchor_event_with_options::<events::Withdrawn>(&data, false)
-        .map(Some)
-}
-
 #[cfg(test)]
 mod tests {
+    use super::*;
     use anchor_lang::{AnchorDeserialize, Event};
     use solana_sdk::pubkey::Pubkey;
-
-    use super::*;
-
-    #[test]
-    fn decodes_config_event_and_ignores_other_logs() {
-        let config = Pubkey::new_unique();
-        let event = events::ConfigPauseChanged {
-            config,
-            previous_paused: true,
-            paused: false,
-        };
-        let log = format!(
-            "Program data: {}",
-            base64::engine::general_purpose::STANDARD.encode(event.data())
-        );
-        let Some(ConfigEvent::PauseChanged(decoded)) = decode_config_event_log(&log).unwrap()
-        else {
-            panic!("expected pause change event");
-        };
-        assert_eq!(decoded.config, config);
-        assert!(decoded.previous_paused);
-        assert!(!decoded.paused);
-        assert!(decode_config_event_log("Program log: other")
-            .unwrap()
-            .is_none());
-    }
-
-    #[test]
-    fn decodes_consumed_pair_event() {
-        let event = events::IntentConsumed {
-            proxy: Pubkey::new_unique(),
-            generation: 8,
-            nonce: 0,
-            kind: 1,
-        };
-        let log = format!(
-            "Program data: {}",
-            base64::engine::general_purpose::STANDARD.encode(event.data())
-        );
-        let decoded = decode_intent_event_log(&log).unwrap().unwrap();
-        assert_eq!(decoded.proxy, event.proxy);
-        assert_eq!(decoded.generation, event.generation);
-        assert_eq!(decoded.nonce, event.nonce);
-        assert_eq!(decoded.kind, event.kind);
-        assert!(decode_config_event_log(&log).unwrap().is_none());
-    }
 
     #[test]
     fn withdraw_builder_binds_canonical_accounts_and_signed_generation() {
@@ -355,7 +241,7 @@ mod tests {
     #[test]
     fn rust_typed_data_and_digest_match_independent_vector() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../programs/evm-proxy/tests/fixtures/withdraw-vectors.json"
+            "../../evm-proxy-intent/fixtures/withdraw-vectors.json"
         ))
         .unwrap();
         let vector = &fixture["vectors"][0];
@@ -384,4 +270,126 @@ mod tests {
         assert_eq!(typed.recipient, vector["recipientBase58"]);
         assert_eq!(intent.digest(&program, &store, &genesis), array("digest"));
     }
+}
+
+/// Decode a consumed intent from a successful EVM proxy transaction's log.
+pub fn decode_intent_event_log(line: &str) -> crate::Result<Option<events::IntentConsumed>> {
+    let Some(encoded) = line.strip_prefix("Program data: ") else {
+        return Ok(None);
+    };
+    let data = base64::engine::general_purpose::STANDARD.decode(encoded)?;
+    if !data.starts_with(events::IntentConsumed::DISCRIMINATOR) {
+        return Ok(None);
+    }
+    crate::utils::events::decode_anchor_event_with_options::<events::IntentConsumed>(&data, false)
+        .map(Some)
+}
+
+/// Decode one successful Withdraw event after transaction success is confirmed.
+pub fn decode_withdraw_event_log(line: &str) -> crate::Result<Option<events::Withdrawn>> {
+    let Some(encoded) = line.strip_prefix("Program data: ") else {
+        return Ok(None);
+    };
+    let data = base64::engine::general_purpose::STANDARD.decode(encoded)?;
+    if !data.starts_with(events::Withdrawn::DISCRIMINATOR) {
+        return Ok(None);
+    }
+    crate::utils::events::decode_anchor_event_with_options::<events::Withdrawn>(&data, false)
+        .map(Some)
+}
+
+/// Signed fields for one Cancel operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CancelIntent {
+    pub evm_address: [u8; 20],
+    pub chain_id: [u8; 32],
+    pub generation: u64,
+    pub nonce: u64,
+    pub deadline: u64,
+}
+
+/// Exact EIP-712 fields presented to the EVM signer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CancelTypedData {
+    pub name: &'static str,
+    pub version: &'static str,
+    pub chain_id: [u8; 32],
+    pub salt: [u8; 32],
+    pub type_signature: &'static str,
+    pub proxy_account: Pubkey,
+    pub generation: u64,
+    pub nonce: u64,
+    pub deadline: u64,
+}
+
+impl CancelIntent {
+    /// Build typed fields from the same canonical encoding used by the program.
+    pub fn typed_data(
+        &self,
+        program_id: &Pubkey,
+        store: &Pubkey,
+        genesis_hash: &[u8; 32],
+    ) -> CancelTypedData {
+        CancelTypedData {
+            name: gmsol_evm_proxy_intent::DOMAIN_NAME,
+            version: gmsol_evm_proxy_intent::DOMAIN_VERSION,
+            chain_id: self.chain_id,
+            salt: gmsol_evm_proxy_intent::domain_salt(program_id, store, genesis_hash),
+            type_signature: gmsol_evm_proxy_intent::CANCEL_TYPE,
+            proxy_account: crate::pda::find_proxy_address(&self.evm_address, program_id).0,
+            generation: self.generation,
+            nonce: self.nonce,
+            deadline: self.deadline,
+        }
+    }
+
+    /// Digest that the on-chain verifier recovers against the EVM address.
+    pub fn digest(&self, program_id: &Pubkey, store: &Pubkey, genesis_hash: &[u8; 32]) -> [u8; 32] {
+        let proxy = crate::pda::find_proxy_address(&self.evm_address, program_id).0;
+        let domain = gmsol_evm_proxy_intent::domain_separator(
+            program_id,
+            store,
+            genesis_hash,
+            &self.chain_id,
+        );
+        let fields = gmsol_evm_proxy_intent::cancel_struct_hash(
+            &proxy,
+            self.generation,
+            self.nonce,
+            self.deadline,
+        );
+        gmsol_evm_proxy_intent::intent_digest(&domain, &fields)
+    }
+}
+
+/// Build a Cancel instruction against the canonical Config and proxy PDAs.
+pub fn cancel_instruction(
+    program_id: Pubkey,
+    submitter: Pubkey,
+    intent: &CancelIntent,
+    signature: [u8; 64],
+    recovery_id: u8,
+) -> crate::Result<Instruction> {
+    if recovery_id > 1 {
+        return Err(crate::Error::custom("invalid EVM recovery ID"));
+    }
+    Ok(Instruction {
+        program_id,
+        accounts: accounts::Cancel {
+            submitter,
+            config: crate::pda::find_proxy_config_address(&program_id).0,
+            proxy: crate::pda::find_proxy_address(&intent.evm_address, &program_id).0,
+        }
+        .to_account_metas(None),
+        data: args::Cancel {
+            evm_address: intent.evm_address,
+            chain_id: intent.chain_id,
+            generation: intent.generation,
+            nonce: intent.nonce,
+            deadline: intent.deadline,
+            signature,
+            recovery_id,
+        }
+        .data(),
+    })
 }

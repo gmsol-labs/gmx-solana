@@ -102,3 +102,108 @@ pub fn domain_separator(
 pub fn intent_digest(domain: &[u8; 32], struct_hash: &[u8; 32]) -> [u8; 32] {
     keccak::hashv(&[b"\x19\x01", domain, struct_hash]).to_bytes()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    fn field<const N: usize>(value: &Value, key: &str) -> [u8; N] {
+        let encoded = value[key].as_str().unwrap().strip_prefix("0x").unwrap();
+        let bytes = hex::decode(encoded).unwrap();
+        bytes.try_into().unwrap()
+    }
+
+    #[test]
+    fn independent_viem_vectors_match_cancel_encoding() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../fixtures/cancel-pair-vectors.json")).unwrap();
+        assert_eq!(fixture["generator"], "viem@2.57.7");
+        assert_eq!(fixture["vectors"].as_array().unwrap().len(), 22);
+        for vector in fixture["vectors"].as_array().unwrap() {
+            let program = Pubkey::new_from_array(field(vector, "program"));
+            let store = Pubkey::new_from_array(field(vector, "store"));
+            let genesis = field(vector, "genesis");
+            let chain_id = field(vector, "chainId");
+            let proxy = Pubkey::new_from_array(field(vector, "proxyAccount"));
+            let generation = vector["generation"].as_str().unwrap().parse().unwrap();
+            let nonce = vector["nonce"].as_str().unwrap().parse().unwrap();
+            let deadline = vector["deadline"].as_str().unwrap().parse().unwrap();
+            let domain = domain_separator(&program, &store, &genesis, &chain_id);
+            let structure = cancel_struct_hash(&proxy, generation, nonce, deadline);
+            if matches!(
+                vector["name"].as_str(),
+                Some("other-name" | "other-version")
+            ) {
+                assert_ne!(
+                    domain,
+                    field(vector, "domainSeparator"),
+                    "{}",
+                    vector["name"]
+                );
+                assert_ne!(
+                    intent_digest(&domain, &structure),
+                    field(vector, "digest"),
+                    "{}",
+                    vector["name"]
+                );
+                continue;
+            }
+            assert_eq!(
+                domain,
+                field(vector, "domainSeparator"),
+                "{}",
+                vector["name"]
+            );
+            assert_eq!(structure, field(vector, "structHash"), "{}", vector["name"]);
+            assert_eq!(
+                intent_digest(&domain, &structure),
+                field(vector, "digest"),
+                "{}",
+                vector["name"]
+            );
+        }
+    }
+
+    #[test]
+    fn independent_viem_vectors_match_withdraw_encoding() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../fixtures/withdraw-vectors.json")).unwrap();
+        assert_eq!(fixture["generator"], "viem@2.57.7");
+        assert_eq!(fixture["type"], WITHDRAW_TYPE);
+        assert_eq!(fixture["vectors"].as_array().unwrap().len(), 12);
+        for vector in fixture["vectors"].as_array().unwrap() {
+            let program = Pubkey::new_from_array(field(vector, "program"));
+            let store = Pubkey::new_from_array(field(vector, "store"));
+            let genesis = field(vector, "genesis");
+            let chain_id = field(vector, "chainId");
+            let fields = WithdrawFields {
+                proxy: Pubkey::new_from_array(field(vector, "proxy")),
+                mint: Pubkey::new_from_array(field(vector, "mint")),
+                amount: vector["amount"].as_str().unwrap().parse().unwrap(),
+                decimals: vector["decimals"].as_u64().unwrap().try_into().unwrap(),
+                recipient: Pubkey::new_from_array(field(vector, "recipient")),
+                generation: vector["generation"].as_str().unwrap().parse().unwrap(),
+                nonce: vector["nonce"].as_str().unwrap().parse().unwrap(),
+                deadline: vector["deadline"].as_str().unwrap().parse().unwrap(),
+            };
+            assert_eq!(fields.mint.to_string(), vector["mintBase58"]);
+            assert_eq!(fields.recipient.to_string(), vector["recipientBase58"]);
+            let domain = domain_separator(&program, &store, &genesis, &chain_id);
+            let structure = withdraw_struct_hash(&fields);
+            assert_eq!(
+                domain,
+                field(vector, "domainSeparator"),
+                "{}",
+                vector["name"]
+            );
+            assert_eq!(structure, field(vector, "structHash"), "{}", vector["name"]);
+            assert_eq!(
+                intent_digest(&domain, &structure),
+                field(vector, "digest"),
+                "{}",
+                vector["name"]
+            );
+        }
+    }
+}

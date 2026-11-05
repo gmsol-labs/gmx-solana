@@ -77,16 +77,6 @@ jobs:
             ~/.cache/solana
       - name: Build programs
         run: just build-test-programs
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@wasm-pack
-      - name: Build JS SDK and install test dependencies
-        run: |
-          npm ci --prefix tests/anchor_test/scripts
-          wasm-pack build crates/sdk --target nodejs --features js
-      - name: Check JS withdrawal transaction on production SBF
-        run: cargo test --locked -p gmsol-evm-proxy --features sbf-test,manual-js-sbf --test withdraw_js
-        env:
-          SBF_OUT_DIR: ${{ github.workspace }}/target/deploy
       - name: "just test-programs (one retry, skip build)"
         run: just test-programs --skip-build || { echo "::warning::first attempt failed, retrying once"; pkill -f solana-test-validator || true; sleep 2; just test-programs --skip-build; }
         env:

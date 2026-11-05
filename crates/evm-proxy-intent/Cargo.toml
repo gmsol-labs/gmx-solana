@@ -10,3 +10,7 @@ keywords.workspace = true
 
 [dependencies]
 anchor-lang = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+hex = { workspace = true }

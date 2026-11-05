@@ -11,12 +11,12 @@
     {
       "name": "accept_admin",
       "docs": [
-        "Complete a pending handover when the nominated admin signs.",
+        "Complete a nominated admin handover with the nominee's signature.",
         "",
         "# Errors",
         "",
-        "Anchor rejects a missing next-admin signature or a noncanonical Config.",
-        "Returns `NotPendingAdmin` if the signer is not the pending admin."
+        "Anchor rejects a missing signer or noncanonical Config. Returns",
+        "`NotPendingAdmin` when the signer is not the nominated admin."
       ],
       "discriminator": [
         112,
@@ -165,18 +165,16 @@
     {
       "name": "create_config",
       "docs": [
-        "Initialize the singleton Config under the current program upgrade authority.",
-        "The caller supplies the genesis hash; the program does not attest it against",
-        "the cluster. Checked SDK initialization compares it with RPC before sending.",
-        "This implementation starts paused with no allowed chains.",
+        "Bind the singleton Config to one Store and a caller-supplied genesis hash.",
+        "The current program upgrade authority must sign; the program does not",
+        "independently attest the supplied hash against the cluster.",
         "",
         "# Errors",
         "",
-        "Anchor rejects a missing signer, a noncanonical or already initialized Config,",
-        "ProgramData not linked to this program, an authority other than its current",
-        "upgrade authority, or an invalid Store account. Returns `InvalidAdmin` for a",
-        "zero first admin and `InvalidStore` for undersized Store data. Loading",
-        "malformed Store data also fails."
+        "Anchor rejects an absent or wrong upgrade authority, unrelated ProgramData,",
+        "noncanonical or existing Config, or invalid Store ownership/discriminator.",
+        "Returns `InvalidAdmin` for a zero first admin and `InvalidStore` when the",
+        "Store account is too short to load."
       ],
       "discriminator": [
         201,
@@ -251,12 +249,12 @@
     {
       "name": "create_proxy",
       "docs": [
-        "Create a proxy for an EVM address. Anyone may pay; the payer gains no authority.",
+        "Create the permanent proxy for an EVM address; the payer gains no authority.",
         "",
         "# Errors",
         "",
-        "Returns an error if account initialization fails or an existing proxy has a",
-        "different version, bump, or EVM address."
+        "Fails if account creation or PDA validation fails, or if an existing proxy",
+        "has a different version, bump, or EVM address."
       ],
       "discriminator": [
         56,
@@ -272,7 +270,7 @@
         {
           "name": "payer",
           "docs": [
-            "Pays account rent only."
+            "Pays rent but has no authority over the proxy."
           ],
           "writable": true,
           "signer": true
@@ -317,16 +315,40 @@
       ]
     },
     {
+      "name": "initialize",
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "propose_admin",
       "docs": [
-        "Propose or replace an unaccepted next admin.",
+        "Nominate or replace the next admin without transferring current control.",
         "",
         "# Errors",
         "",
-        "Anchor rejects a missing current-admin signature, a noncanonical Config,",
-        "or a Config whose admin does not match the signer. Returns `InvalidAdmin`",
-        "for a zero next admin, or `NoConfigChange` if it is the current or already",
-        "pending admin."
+        "Anchor rejects a missing current-admin signature or noncanonical Config.",
+        "Returns `InvalidAdmin` for the zero address or `NoConfigChange` when",
+        "nominating the current or already pending admin."
       ],
       "discriminator": [
         121,
@@ -376,14 +398,13 @@
     {
       "name": "set_chain_allowed",
       "docs": [
-        "Set whether one full-width EIP-155 chain ID is accepted by Config.",
+        "Change whether one full-width EIP-155 chain ID is allowed.",
         "",
         "# Errors",
         "",
-        "Anchor rejects a missing current-admin signature, a noncanonical Config,",
-        "or a Config whose admin does not match the signer. Returns `NoConfigChange`",
-        "if the requested allow status already holds, or `AllowedChainsFull` when",
-        "adding a chain to the full set."
+        "Anchor rejects a missing current-admin signature or noncanonical Config.",
+        "Returns `NoConfigChange` if the requested status already holds and",
+        "`AllowedChainsFull` if the bounded set cannot accept another chain."
       ],
       "discriminator": [
         9,
@@ -442,13 +463,12 @@
     {
       "name": "set_paused",
       "docs": [
-        "Pause or unpause every intent governed by Config.",
+        "Pause or unpause the intent policy recorded in Config.",
         "",
         "# Errors",
         "",
-        "Anchor rejects a missing current-admin signature, a noncanonical Config,",
-        "or a Config whose admin does not match the signer. Returns `NoConfigChange`",
-        "if Config already has the requested pause state."
+        "Anchor rejects a missing current-admin signature or noncanonical Config.",
+        "Returns `NoConfigChange` when the requested pause state already holds."
       ],
       "discriminator": [
         91,
@@ -1119,7 +1139,7 @@
     {
       "name": "Config",
       "docs": [
-        "Program-wide intent policy."
+        "Program-wide policy, initialized once by the current upgrade authority."
       ],
       "type": {
         "kind": "struct",
@@ -1764,7 +1784,7 @@
     {
       "name": "Proxy",
       "docs": [
-        "One permanent account for a 20-byte EVM address."
+        "Permanent account for one EVM address."
       ],
       "serialization": "bytemuck",
       "repr": {

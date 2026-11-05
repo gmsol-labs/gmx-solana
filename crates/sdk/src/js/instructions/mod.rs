@@ -128,6 +128,7 @@ pub struct BuildTransactionOptions {
 }
 
 impl TransactionGroup {
+    /// Wrap one instruction in an unsigned transaction for a caller-supplied payer.
     pub(crate) fn from_single_instruction(ix: Instruction, payer: Pubkey, blockhash: Hash) -> Self {
         let message = Message::new_with_blockhash(&[ix], Some(&payer), &blockhash);
         let signatures =

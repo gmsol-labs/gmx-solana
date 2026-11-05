@@ -13,7 +13,7 @@ use solana_sdk::{
 };
 
 use crate::{
-    evm_proxy::{withdraw_instruction, WithdrawIntent},
+    evm_proxy::{cancel_instruction, withdraw_instruction, CancelIntent, WithdrawIntent},
     pda::find_proxy_config_address,
     Client,
 };
@@ -211,6 +211,23 @@ impl<C: Deref<Target = impl Signer> + Clone> Client<C> {
         recovery_id: u8,
     ) -> crate::Result<TransactionBuilder<'_, C>> {
         let ix = withdraw_instruction(
+            gmsol_programs::gmsol_evm_proxy::ID,
+            self.payer(),
+            intent,
+            signature,
+            recovery_id,
+        )?;
+        Ok(self.evm_proxy_instruction(ix))
+    }
+
+    /// Build a signed Cancel transaction paid by this client's Solana signer.
+    pub fn cancel_proxy_transaction(
+        &self,
+        intent: &CancelIntent,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let ix = cancel_instruction(
             gmsol_programs::gmsol_evm_proxy::ID,
             self.payer(),
             intent,

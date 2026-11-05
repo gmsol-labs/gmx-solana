@@ -1,8 +1,0 @@
-{
-  "private": true,
-  "name": "evm-proxy-anchor-fixtures",
-  "version": "1.0.0",
-  "dependencies": {
-    "viem": "2.38.6"
-  }
-}

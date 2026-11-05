@@ -30,6 +30,10 @@ pub type ReferralCodeBytes = [u8; 8];
 /// Seed for event authority.
 pub const EVENT_AUTHORITY_SEED: &[u8] = b"__event_authority";
 
+/// Seed for the singleton EVM proxy Config.
+#[cfg(feature = "evm-proxy")]
+pub use gmsol_programs::gmsol_evm_proxy::constants::CONFIG_SEED;
+
 /// Seed for [`Store`](store_accounts::Store).
 pub const STORE_SEED: &[u8] = b"data_store";
 
@@ -143,6 +147,12 @@ fn to_seed(key: &str) -> [u8; 32] {
 /// Find PDA for `event_authority` account.
 pub fn find_event_authority_address(program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[EVENT_AUTHORITY_SEED], program_id)
+}
+
+/// Find the singleton EVM proxy Config PDA.
+#[cfg(feature = "evm-proxy")]
+pub fn find_proxy_config_address(program_id: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[CONFIG_SEED], program_id)
 }
 
 /// Find PDA for [`Store`](store_accounts::Store) account.
@@ -619,7 +629,7 @@ pub fn find_participant_address(
     )
 }
 
-/// Find the proxy PDA for one raw EVM address.
+/// Find the proxy PDA for a raw 20-byte EVM address.
 #[cfg(feature = "evm-proxy")]
 pub fn find_proxy_address(evm_address: &[u8; 20], program_id: &Pubkey) -> (Pubkey, u8) {
     use gmsol_programs::gmsol_evm_proxy::constants::PROXY_SEED;
@@ -627,12 +637,28 @@ pub fn find_proxy_address(evm_address: &[u8; 20], program_id: &Pubkey) -> (Pubke
     Pubkey::find_program_address(&[PROXY_SEED, evm_address], program_id)
 }
 
-/// Find the singleton EVM proxy Config PDA.
-#[cfg(feature = "evm-proxy")]
-pub fn find_proxy_config_address(program_id: &Pubkey) -> (Pubkey, u8) {
-    use gmsol_programs::gmsol_evm_proxy::constants::CONFIG_SEED;
+#[cfg(all(test, feature = "evm-proxy"))]
+mod proxy_tests {
+    use super::*;
 
-    Pubkey::find_program_address(&[CONFIG_SEED], program_id)
+    #[test]
+    fn proxy_address_uses_raw_evm_bytes_and_program_id() {
+        let evm_address = hex::decode("0123456789abcdef0123456789abcdef01234567")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let program_id = gmsol_programs::gmsol_evm_proxy::ID;
+        let (address, bump) = find_proxy_address(&evm_address, &program_id);
+        assert_eq!(
+            address.to_string(),
+            "7jzFUkMMsunBEez71rLLmuuQkifyA5r56MGtCABsd9Zi"
+        );
+        assert_eq!(bump, 255);
+        assert_ne!(
+            address,
+            find_proxy_address(&evm_address, &Pubkey::new_unique()).0
+        );
+    }
 }
 
 /// Find PDA for global state account for the LP program.
