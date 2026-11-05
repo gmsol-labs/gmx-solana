@@ -119,8 +119,16 @@ async fn balanced_market_order() -> eyre::Result<()> {
     let _enter = span.enter();
 
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
-    let client = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let client = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
     let store = &deployment.store;
+    deployment
+        .client
+        .transfer(&client.payer(), 2_000_000_000)?
+        .send()
+        .await?;
+    client.prepare_user(store)?.send().await?;
     let oracle = &deployment.oracle();
     let usdg = deployment.token("USDG").expect("must exist");
 
@@ -141,18 +149,10 @@ async fn balanced_market_order() -> eyre::Result<()> {
     let times = 8;
 
     deployment
-        .mint_or_transfer_to_user(
-            "fBTC",
-            Deployment::DEFAULT_USER,
-            long_collateral_amount * times,
-        )
+        .mint_or_transfer_to("fBTC", &client.payer(), long_collateral_amount * times)
         .await?;
     deployment
-        .mint_or_transfer_to_user(
-            "USDG",
-            Deployment::DEFAULT_USER,
-            short_collateral_amount * times,
-        )
+        .mint_or_transfer_to("USDG", &client.payer(), short_collateral_amount * times)
         .await?;
 
     // Increase position.
@@ -1766,10 +1766,9 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
 /// empty on every such order. A zero factor stays allowed, since it charges
 /// nothing and is how a checkpoint gets cleared.
 ///
-/// A decrease order needs a position, and the position for
-/// [`Deployment::DEFAULT_USER`] on this market is opened and fully closed by
-/// `balanced_market_order` running concurrently, so this one trades as the
-/// exclusive locked user instead. It takes that lock before the builder fee
+/// A decrease order needs a position. Other tests trade as
+/// [`Deployment::DEFAULT_USER`] on this market concurrently, so this test uses the
+/// exclusive locked user. It takes that lock before the builder fee
 /// globals; no other test takes them in the opposite order.
 #[tokio::test]
 async fn set_builder_fee_rejects_collateral_to_pnl_swap() -> eyre::Result<()> {
@@ -2235,10 +2234,10 @@ async fn revoked_builder_fee_still_closes_in_bundle() -> eyre::Result<()> {
 /// rather than on the close guard tripping. Closing is then exercised separately, since being unable
 /// to close without an extra settlement is the user-visible half of the defect.
 ///
-/// Trades as the exclusive locked user: it needs a position of its own, and the position for
-/// [`Deployment::DEFAULT_USER`] on this market is opened and closed by `balanced_market_order`
-/// running concurrently. It takes that lock before the builder fee globals, matching
-/// `set_builder_fee_rejects_collateral_to_pnl_swap`; no test takes them in the opposite order.
+/// Trades as the exclusive locked user because it needs a position of its own while other
+/// tests trade as [`Deployment::DEFAULT_USER`] on this market concurrently. It takes that
+/// lock before the builder fee globals, like `set_builder_fee_rejects_collateral_to_pnl_swap`;
+/// no test takes them in the opposite order.
 #[tokio::test]
 async fn soft_failed_execution_records_no_builder_fee() -> eyre::Result<()> {
     /// One percent, in the market factor unit.
@@ -3164,8 +3163,8 @@ async fn execute_and_settle_in_one_transaction() -> eyre::Result<()> {
 /// A revoked checkpoint keeps its builder, charges nothing, and does not need the builder to have a
 /// claim vault, so `settle_builder_fee` for it must stay account-less and succeed as a no-op.
 ///
-/// The builder here has a fresh User Account, which advertises zero and has no claim vault
-/// for the order's mint (the precondition below checks): that is the case a settlement which attached the vault for every order with a
+/// The builder here is the default user's User Account, which advertises zero and has no claim vault
+/// for the order's mint (no test opens one for it, and the precondition below checks): that is the case a settlement which attached the vault for every order with a
 /// builder would break, since the program validates every account it is handed and the vault does
 /// not exist. Revocation only requires the vault for a non-zero factor.
 ///
@@ -3212,7 +3211,7 @@ async fn revoked_order_settles_as_a_no_op_without_a_claim_vault() -> eyre::Resul
         tracing::info!(%signature, "prepared a user account");
     }
 
-    // Deliberately not opened: this test's fresh builder has no token account for fBTC.
+    // No fBTC is minted to this builder's User PDA.
     let zero_user = zero_advertiser.find_user_address(store, &zero_advertiser.payer());
     assert_eq!(
         deployment.get_ata_amount(&fbtc.address, &zero_user).await?,

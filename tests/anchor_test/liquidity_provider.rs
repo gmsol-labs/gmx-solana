@@ -1,13 +1,16 @@
 use crate::anchor_test::setup::{current_deployment, Deployment};
 use gmsol_liquidity_provider as lp;
 use gmsol_sdk::{
-    builders::liquidity_provider::{LpTokenKind, StakeLpTokenParams},
-    client::ops::liquidity_provider::LiquidityProviderOps,
+    builders::liquidity_provider::{LpTokenKind, StakeLpTokenParams, UnstakeLpTokenParams},
+    client::ops::{liquidity_provider::LiquidityProviderOps, UserOps},
     ops::{ExchangeOps, GlvOps, MarketOps},
 };
 use solana_sdk::{pubkey::Pubkey, signer::keypair::Keypair, signer::Signer};
 use std::num::NonZeroU64;
+use tokio::sync::Mutex;
 use tracing::Instrument;
+
+static GLV_CONTROLLER_LIFECYCLE_LOCK: Mutex<()> = Mutex::const_new(());
 
 // Test helpers ----------------------------------------------------------------
 
@@ -381,7 +384,7 @@ async fn comprehensive_gm_flow() -> eyre::Result<()> {
     Ok(())
 }
 
-/// Comprehensive GLV staking flow with real pricing: deposit → value check → stake
+/// Comprehensive GLV flow with real pricing: deposit, value check, stake, and full unstake.
 #[tokio::test]
 async fn comprehensive_glv_flow() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
@@ -448,15 +451,19 @@ async fn comprehensive_glv_flow() -> eyre::Result<()> {
 
     // Step 4: Stake GLV tokens using the SDK builder with real pricing
     // Note: GLV controller should already be created during deployment setup
-    let mut stake_builder = user.stake_lp_token(StakeLpTokenParams {
-        store,
-        lp_token_kind: LpTokenKind::Glv,
-        lp_token_mint: glv_token,
-        oracle: lp_oracle,
-        amount: NonZeroU64::new(glv_amount).expect("amount must be non-zero"),
-        controller_index,
-        controller_address: None,
-    });
+    let position_id = 100_001u64;
+    let _glv_controller_guard = GLV_CONTROLLER_LIFECYCLE_LOCK.lock().await;
+    let mut stake_builder = user
+        .stake_lp_token(StakeLpTokenParams {
+            store,
+            lp_token_kind: LpTokenKind::Glv,
+            lp_token_mint: glv_token,
+            oracle: lp_oracle,
+            amount: NonZeroU64::new(glv_amount).expect("amount must be non-zero"),
+            controller_index,
+            controller_address: None,
+        })
+        .with_position_id(position_id);
 
     deployment
         .execute_with_pyth(&mut stake_builder, None, false, true)
@@ -464,6 +471,66 @@ async fn comprehensive_glv_flow() -> eyre::Result<()> {
         .await?;
 
     tracing::info!("GLV tokens staked successfully with real pricing!");
+
+    let global_state = deployment.liquidity_provider_global_state;
+    let (controller, _) = Pubkey::find_program_address(
+        &[
+            lp::LP_TOKEN_CONTROLLER_SEED,
+            global_state.as_ref(),
+            glv_token.as_ref(),
+            &controller_index.to_le_bytes(),
+        ],
+        &lp::ID,
+    );
+    let owner = user.payer();
+    let (position, _) = Pubkey::find_program_address(
+        &[
+            lp::POSITION_SEED,
+            controller.as_ref(),
+            owner.as_ref(),
+            &position_id.to_le_bytes(),
+        ],
+        &lp::ID,
+    );
+    let (position_vault, _) =
+        Pubkey::find_program_address(&[lp::VAULT_SEED, position.as_ref()], &lp::ID);
+    let staked_position = keeper
+        .account::<lp::Position>(&position)
+        .await?
+        .expect("GLV stake position must exist");
+    assert_eq!(staked_position.owner, owner);
+    assert_eq!(staked_position.controller, controller);
+    assert_eq!(staked_position.lp_mint, *glv_token);
+    assert_eq!(staked_position.staked_amount, glv_amount);
+    let controller_after_stake = keeper
+        .account::<lp::LpTokenController>(&controller)
+        .await?
+        .expect("GLV controller must exist");
+    assert_eq!(controller_after_stake.total_positions, 1);
+
+    user.prepare_user(store)?.send().await?;
+    user.unstake_lp_token(UnstakeLpTokenParams {
+        store,
+        lp_token_kind: LpTokenKind::Glv,
+        lp_token_mint: glv_token,
+        position_id,
+        unstake_amount: staked_position.staked_amount,
+        controller_index,
+        controller_address: None,
+    })?
+    .send()
+    .await?;
+
+    let controller_after_unstake = keeper
+        .account::<lp::LpTokenController>(&controller)
+        .await?
+        .expect("GLV controller must exist");
+    assert_eq!(controller_after_unstake.total_positions, 0);
+    assert!(keeper.account::<lp::Position>(&position).await?.is_none());
+    assert!(keeper
+        .account::<anchor_spl::token_interface::TokenAccount>(&position_vault)
+        .await?
+        .is_none());
     tracing::info!("Comprehensive GLV flow completed successfully!");
     Ok(())
 }
@@ -507,6 +574,7 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
     tracing::info!("✓ GM controller verification passed");
 
     // Test GLV controller
+    let glv_controller_guard = GLV_CONTROLLER_LIFECYCLE_LOCK.lock().await;
     let glv_token = &deployment.glv_token;
     let glv_controller_index = 0u64;
     let glv_controller_seeds = &[
@@ -527,6 +595,7 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
     assert_eq!(glv_controller_account.total_positions, 0);
     assert!(glv_controller_account.is_enabled);
     tracing::info!("✓ GLV controller verification passed");
+    drop(glv_controller_guard);
 
     // Test 2: Create a new controller for testing (use a token that doesn't have a controller yet)
     let test_token = deployment

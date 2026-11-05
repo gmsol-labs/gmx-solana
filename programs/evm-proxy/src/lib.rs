@@ -13,10 +13,9 @@ const PROXY_PAIR_END: usize = 16;
 #[constant]
 pub const CONFIG_SEED: &[u8] = b"config";
 pub const MAX_ALLOWED_CHAINS: usize = 32;
-const INITIAL_PAUSED: bool = true;
 pub const INTENT_KIND_CANCEL: u8 = 1;
 
-/// Program-wide intent policy.
+/// Program-wide policy, initialized once by the current upgrade authority.
 #[account]
 #[derive(InitSpace)]
 pub struct Config {
@@ -77,7 +76,7 @@ pub struct IntentConsumed {
     pub kind: u8,
 }
 
-/// One permanent account for a 20-byte EVM address.
+/// Permanent account for one EVM address.
 #[account(zero_copy)]
 pub struct Proxy {
     pub version: u8,
@@ -146,18 +145,16 @@ impl Proxy {
 pub mod gmsol_evm_proxy {
     use super::*;
 
-    /// Initialize the singleton Config under the current program upgrade authority.
-    /// The caller supplies the genesis hash; the program does not attest it against
-    /// the cluster. Checked SDK initialization compares it with RPC before sending.
-    /// This implementation starts paused with no allowed chains.
+    /// Bind the singleton Config to one Store and a caller-supplied genesis hash.
+    /// The current program upgrade authority must sign; the program does not
+    /// independently attest the supplied hash against the cluster.
     ///
     /// # Errors
     ///
-    /// Anchor rejects a missing signer, a noncanonical or already initialized Config,
-    /// ProgramData not linked to this program, an authority other than its current
-    /// upgrade authority, or an invalid Store account. Returns `InvalidAdmin` for a
-    /// zero first admin and `InvalidStore` for undersized Store data. Loading
-    /// malformed Store data also fails.
+    /// Anchor rejects an absent or wrong upgrade authority, unrelated ProgramData,
+    /// noncanonical or existing Config, or invalid Store ownership/discriminator.
+    /// Returns `InvalidAdmin` for a zero first admin and `InvalidStore` when the
+    /// Store account is too short to load.
     pub fn create_config(
         ctx: Context<CreateConfig>,
         genesis_hash: [u8; 32],
@@ -175,7 +172,7 @@ pub mod gmsol_evm_proxy {
         config.genesis_hash = genesis_hash;
         config.admin = first_admin;
         config.pending_admin = None;
-        config.paused = INITIAL_PAUSED;
+        config.paused = true;
         config.allowed_chain_ids = Vec::new();
         emit!(ConfigCreated {
             config: config.key(),
@@ -188,14 +185,13 @@ pub mod gmsol_evm_proxy {
         Ok(())
     }
 
-    /// Set whether one full-width EIP-155 chain ID is accepted by Config.
+    /// Change whether one full-width EIP-155 chain ID is allowed.
     ///
     /// # Errors
     ///
-    /// Anchor rejects a missing current-admin signature, a noncanonical Config,
-    /// or a Config whose admin does not match the signer. Returns `NoConfigChange`
-    /// if the requested allow status already holds, or `AllowedChainsFull` when
-    /// adding a chain to the full set.
+    /// Anchor rejects a missing current-admin signature or noncanonical Config.
+    /// Returns `NoConfigChange` if the requested status already holds and
+    /// `AllowedChainsFull` if the bounded set cannot accept another chain.
     pub fn set_chain_allowed(
         ctx: Context<CurrentConfigAdmin>,
         chain_id: [u8; 32],
@@ -227,13 +223,12 @@ pub mod gmsol_evm_proxy {
         Ok(())
     }
 
-    /// Pause or unpause every intent governed by Config.
+    /// Pause or unpause the intent policy recorded in Config.
     ///
     /// # Errors
     ///
-    /// Anchor rejects a missing current-admin signature, a noncanonical Config,
-    /// or a Config whose admin does not match the signer. Returns `NoConfigChange`
-    /// if Config already has the requested pause state.
+    /// Anchor rejects a missing current-admin signature or noncanonical Config.
+    /// Returns `NoConfigChange` when the requested pause state already holds.
     pub fn set_paused(ctx: Context<CurrentConfigAdmin>, paused: bool) -> Result<()> {
         let config = &mut ctx.accounts.config;
         require!(config.paused != paused, ProxyError::NoConfigChange);
@@ -247,14 +242,13 @@ pub mod gmsol_evm_proxy {
         Ok(())
     }
 
-    /// Propose or replace an unaccepted next admin.
+    /// Nominate or replace the next admin without transferring current control.
     ///
     /// # Errors
     ///
-    /// Anchor rejects a missing current-admin signature, a noncanonical Config,
-    /// or a Config whose admin does not match the signer. Returns `InvalidAdmin`
-    /// for a zero next admin, or `NoConfigChange` if it is the current or already
-    /// pending admin.
+    /// Anchor rejects a missing current-admin signature or noncanonical Config.
+    /// Returns `InvalidAdmin` for the zero address or `NoConfigChange` when
+    /// nominating the current or already pending admin.
     pub fn propose_admin(ctx: Context<CurrentConfigAdmin>, next_admin: Pubkey) -> Result<()> {
         let config = &mut ctx.accounts.config;
         require_keys_neq!(next_admin, Pubkey::default(), ProxyError::InvalidAdmin);
@@ -274,12 +268,12 @@ pub mod gmsol_evm_proxy {
         Ok(())
     }
 
-    /// Complete a pending handover when the nominated admin signs.
+    /// Complete a nominated admin handover with the nominee's signature.
     ///
     /// # Errors
     ///
-    /// Anchor rejects a missing next-admin signature or a noncanonical Config.
-    /// Returns `NotPendingAdmin` if the signer is not the pending admin.
+    /// Anchor rejects a missing signer or noncanonical Config. Returns
+    /// `NotPendingAdmin` when the signer is not the nominated admin.
     pub fn accept_admin(ctx: Context<AcceptConfigAdmin>) -> Result<()> {
         let config = &mut ctx.accounts.config;
         require!(
@@ -298,12 +292,17 @@ pub mod gmsol_evm_proxy {
         Ok(())
     }
 
-    /// Create a proxy for an EVM address. Anyone may pay; the payer gains no authority.
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        msg!("Greetings from: {:?}", ctx.program_id);
+        Ok(())
+    }
+
+    /// Create the permanent proxy for an EVM address; the payer gains no authority.
     ///
     /// # Errors
     ///
-    /// Returns an error if account initialization fails or an existing proxy has a
-    /// different version, bump, or EVM address.
+    /// Fails if account creation or PDA validation fails, or if an existing proxy
+    /// has a different version, bump, or EVM address.
     pub fn create_proxy(ctx: Context<CreateProxy>, evm_address: [u8; 20]) -> Result<()> {
         match ctx.accounts.proxy.load_init() {
             Ok(mut proxy) => {
@@ -362,30 +361,14 @@ pub mod gmsol_evm_proxy {
         });
         Ok(())
     }
+}
 
-    /// Exercises intent verification in the test SBF artifact without consuming an intent.
-    #[cfg(feature = "test-only")]
-    pub fn verify_intent_probe(
-        ctx: Context<VerifyIntentProbe>,
-        evm_address: [u8; 20],
-        chain_id: [u8; 32],
-        deadline: u64,
-        struct_hash: [u8; 32],
-        signature: [u8; 64],
-        recovery_id: u8,
-    ) -> Result<()> {
-        let proxy = ctx.accounts.proxy.load()?;
-        proxy.validate_identity(evm_address, ctx.bumps.proxy)?;
-        intent_verifier::verify(
-            &ctx.accounts.config,
-            evm_address,
-            chain_id,
-            deadline,
-            struct_hash,
-            signature,
-            recovery_id,
-        )
-    }
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -426,7 +409,7 @@ pub struct AcceptConfigAdmin<'info> {
 #[derive(Accounts)]
 #[instruction(evm_address: [u8; 20])]
 pub struct CreateProxy<'info> {
-    /// Pays account rent only.
+    /// Pays rent but has no authority over the proxy.
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(
@@ -447,16 +430,6 @@ pub struct Cancel<'info> {
     #[account(seeds = [CONFIG_SEED], bump)]
     pub config: Account<'info, Config>,
     #[account(mut, seeds = [PROXY_SEED, evm_address.as_ref()], bump)]
-    pub proxy: AccountLoader<'info, Proxy>,
-}
-
-#[cfg(feature = "test-only")]
-#[derive(Accounts)]
-#[instruction(evm_address: [u8; 20])]
-pub struct VerifyIntentProbe<'info> {
-    #[account(seeds = [CONFIG_SEED], bump)]
-    pub config: Account<'info, Config>,
-    #[account(seeds = [PROXY_SEED, evm_address.as_ref()], bump)]
     pub proxy: AccountLoader<'info, Proxy>,
 }
 
@@ -501,7 +474,7 @@ mod tests {
     }
 
     #[test]
-    fn account_layout() {
+    fn proxy_account_binary_layout() {
         assert_eq!(std::mem::size_of::<Proxy>(), 288);
         assert_eq!(std::mem::offset_of!(Proxy, evm_address), 8);
         assert_eq!(std::mem::offset_of!(Proxy, reserved), 32);

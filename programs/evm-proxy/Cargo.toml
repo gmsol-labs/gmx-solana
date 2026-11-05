@@ -22,43 +22,18 @@ no-log-ix-name = []
 anchor-debug = ["anchor-lang/anchor-debug"]
 debug = []
 debug-msg = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build", "gmsol-store/idl-build"]
 mock = []
+multi-store = []
 devnet = []
 test-only = []
 migration = []
-sbf-test = []
-idl-build = ["anchor-lang/idl-build", "gmsol-store/idl-build"]
 
 [dependencies]
 anchor-lang = { workspace = true, features = ["init-if-needed"] }
+anchor-spl = { workspace = true, features = ["token", "token_2022"] }
 bytemuck = { workspace = true, features = ["min_const_generics"] }
-gmsol-utils = { workspace = true, features = ["security-txt"] }
+gmsol-programs = { workspace = true }
+gmsol-evm-proxy-intent = { path = "../../crates/evm-proxy-intent" }
 gmsol-store = { workspace = true, features = ["no-entrypoint"] }
-
-[dev-dependencies]
-solana-program-test = "2.1.21"
-solana-accounts-db = "2.1.21"
-solana-runtime = { version = "2.1.21", features = ["dev-context-only-utils"] }
-solana-sdk = { workspace = true }
-serde_json = { workspace = true }
-base64 = { workspace = true }
-bincode = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
-libsecp256k1 = "0.7.2"
-rand = "0.8.5"
-
-[[test]]
-name = "create_proxy"
-required-features = ["sbf-test"]
-
-[[test]]
-name = "config"
-required-features = ["sbf-test"]
-
-[[test]]
-name = "cancel"
-required-features = ["sbf-test"]
-
-[[test]]
-name = "verification_probe"
-required-features = ["sbf-test", "test-only"]
+gmsol-utils = { workspace = true, features = ["security-txt"] }
