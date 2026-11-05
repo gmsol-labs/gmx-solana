@@ -52,7 +52,7 @@ where
         + Pnl::<Signed>::INIT_SPACE
         + 1
         + InsolventCloseStep::INIT_SPACE
-        + 3 * bool::INIT_SPACE
+        + 3 * <bool as gmsol_utils::InitSpace>::INIT_SPACE
         + OutputAmounts::<Unsigned>::INIT_SPACE
         + 2 * Unsigned::INIT_SPACE
         + 2 * ClaimableCollateral::<Unsigned>::INIT_SPACE;
