@@ -138,10 +138,7 @@ pub fn build_cancel_typed_data(args: CancelIntentArgs) -> crate::Result<CancelSi
     let fields = |items: &[(&'static str, &'static str)]| {
         items
             .iter()
-            .map(|(name, field_type)| CancelField {
-                name: *name,
-                field_type: *field_type,
-            })
+            .map(|(name, field_type)| CancelField { name, field_type })
             .collect()
     };
     Ok(CancelSigningPayload {
