@@ -47,9 +47,37 @@ pub fn find_proxy_address(
     })
 }
 
+/// Derive the singleton Config PDA with the Rust SDK seed helper.
+#[wasm_bindgen(js_name = findProxyConfigAddress)]
+pub fn find_proxy_config_address(program_id: Option<String>) -> crate::Result<ProxyAddress> {
+    let program_id = match program_id {
+        Some(value) => Pubkey::from_str(&value)?,
+        None => gmsol_programs::gmsol_evm_proxy::ID,
+    };
+    let (address, bump) = crate::pda::find_proxy_config_address(&program_id);
+    Ok(ProxyAddress {
+        address: address.to_string(),
+        bump,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn config_address_matches_rust_derivation() {
+        let program_id = gmsol_programs::gmsol_evm_proxy::ID;
+        let (address, bump) = crate::pda::find_proxy_config_address(&program_id);
+        let result = find_proxy_config_address(None).unwrap();
+        assert_eq!((result.address, result.bump), (address.to_string(), bump));
+        assert_eq!(
+            address.to_string(),
+            "E13dsYehufSsFWGktSYNREVHnogUsrDeJQH6swaL5pJA"
+        );
+        assert_eq!(bump, 252);
+        assert!(find_proxy_config_address(Some("invalid program".into())).is_err());
+    }
 
     #[test]
     fn proxy_address_hex_variants_match_rust_derivation() {

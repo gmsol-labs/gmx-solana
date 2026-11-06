@@ -2399,6 +2399,7 @@ dependencies = [
  "anchor-spl",
  "bytemuck",
  "gmsol-programs",
+ "gmsol-store",
  "gmsol-utils",
 ]
 
@@ -2612,6 +2613,8 @@ name = "gmsol-tests"
 version = "0.12.0"
 dependencies = [
  "anchor-spl",
+ "base64 0.22.1",
+ "bincode",
  "event-listener 5.4.0",
  "eyre",
  "futures-util",
@@ -2633,6 +2636,7 @@ dependencies = [
  "shellexpand",
  "solana-client",
  "solana-sdk",
+ "solana-transaction-status",
  "time",
  "tokio",
  "tracing",
