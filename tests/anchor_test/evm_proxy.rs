@@ -4,6 +4,7 @@ use gmsol_evm_proxy as evm_proxy;
 #[tokio::test]
 async fn evm_proxy_initializes_through_anchor() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
     let client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let instruction = client
         .store_transaction()
