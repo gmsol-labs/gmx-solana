@@ -3163,10 +3163,10 @@ async fn execute_and_settle_in_one_transaction() -> eyre::Result<()> {
 /// A revoked checkpoint keeps its builder, charges nothing, and does not need the builder to have a
 /// claim vault, so `settle_builder_fee` for it must stay account-less and succeed as a no-op.
 ///
-/// The builder here is the default user's User Account, which advertises zero and has no claim vault
-/// for the order's mint (no test opens one for it, and the precondition below checks): that is the case a settlement which attached the vault for every order with a
-/// builder would break, since the program validates every account it is handed and the vault does
-/// not exist. Revocation only requires the vault for a non-zero factor.
+/// The builder has a fresh, separately funded owner and a real User account. Its claim vault is
+/// deliberately absent, as the precondition below verifies. A settlement that attached the vault
+/// for every order with a builder would fail because the program validates every supplied account.
+/// Revocation only requires the vault for a non-zero factor.
 ///
 /// Executes with the bundled close disabled, so the settlement is exercised after the execution as
 /// well, then closes by hand.
