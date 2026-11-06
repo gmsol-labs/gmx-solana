@@ -160,6 +160,10 @@ path = "programs/liquidity-provider"
 version = "0.12.0"
 path = "programs/gt-incentive"
 
+[workspace.dependencies.gmsol-evm-proxy]
+version = "0.12.0"
+path = "programs/evm-proxy"
+
 [workspace.dependencies.gmsol-decode]
 version = "0.12.0"
 path = "crates/decode"
