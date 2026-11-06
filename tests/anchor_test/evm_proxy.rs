@@ -321,6 +321,7 @@ async fn config_creation_binds_store_and_emits_event() -> eyre::Result<()> {
     assert_eq!(event.admin, admin);
     assert!(event.paused);
     assert!(event.allowed_chain_ids.is_empty());
+    super::cancel::verify_signed_cancel(&deployment, config_address, genesis_hash).await?;
     super::config_policy::verify_policy_and_handover(&deployment, config_address, genesis_hash)
         .await?;
     Ok(())
@@ -729,6 +730,7 @@ fn proxy_future_reserved_bytes_preserve_identity_and_abi() -> eyre::Result<()> {
         names,
         [
             "accept_admin",
+            "cancel",
             "create_config",
             "create_proxy",
             "initialize",

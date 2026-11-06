@@ -101,6 +101,7 @@ nightly-pyth-historical-api = []
 
 [dependencies]
 gmsol-utils = { workspace = true, features = ["enum-iter", "debug", "display"] }
+gmsol-evm-proxy-intent = { path = "../evm-proxy-intent" }
 gmsol-programs = { workspace = true, features = [
     "model",
     "utils",

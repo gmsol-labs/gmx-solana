@@ -2398,9 +2398,19 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "bytemuck",
+ "gmsol-evm-proxy-intent",
  "gmsol-programs",
  "gmsol-store",
  "gmsol-utils",
+]
+
+[[package]]
+name = "gmsol-evm-proxy-intent"
+version = "0.12.0"
+dependencies = [
+ "anchor-lang",
+ "hex",
+ "serde_json",
 ]
 
 [[package]]
@@ -2503,6 +2513,7 @@ dependencies = [
  "futures-util",
  "gmsol-chainlink-datastreams",
  "gmsol-decode",
+ "gmsol-evm-proxy-intent",
  "gmsol-model",
  "gmsol-programs",
  "gmsol-solana-utils",
@@ -2630,7 +2641,9 @@ dependencies = [
  "gmsol-solana-utils",
  "gmsol-store",
  "gmsol-utils",
+ "libsecp256k1 0.7.2",
  "rand 0.7.3",
+ "rand 0.8.5",
  "rust_decimal_macros",
  "serde_json",
  "shellexpand",
