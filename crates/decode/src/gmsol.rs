@@ -199,6 +199,24 @@ pub mod evm_proxy {
         .map_err(crate::DecodeError::custom)
     }
 
+    /// Decode a successful Withdraw event from an attributed `Program data:` log.
+    pub fn decode_withdraw_event_log(
+        line: &str,
+    ) -> Result<Option<events::Withdrawn>, crate::DecodeError> {
+        let Some(encoded) = line.strip_prefix("Program data: ") else {
+            return Ok(None);
+        };
+        let data = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(crate::DecodeError::custom)?;
+        if !data.starts_with(events::Withdrawn::DISCRIMINATOR) {
+            return Ok(None);
+        }
+        events::Withdrawn::deserialize(&mut &data[events::Withdrawn::DISCRIMINATOR.len()..])
+            .map(Some)
+            .map_err(crate::DecodeError::custom)
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -265,6 +283,34 @@ pub mod evm_proxy {
             assert_eq!(decoded.nonce, event.nonce);
             assert_eq!(decoded.kind, event.kind);
             assert!(decode_config_event_log(&line).unwrap().is_none());
+        }
+
+        #[test]
+        fn decodes_withdraw_event_log() {
+            let event = events::Withdrawn {
+                proxy: Pubkey::new_unique(),
+                generation: 2,
+                nonce: 7,
+                mint: Pubkey::new_unique(),
+                amount: 125,
+                recipient: Pubkey::new_unique(),
+            };
+            let line = format!(
+                "Program data: {}",
+                base64::engine::general_purpose::STANDARD.encode(event.data())
+            );
+            let decoded = decode_withdraw_event_log(&line).unwrap().unwrap();
+            assert_eq!(
+                (decoded.proxy, decoded.generation, decoded.nonce),
+                (event.proxy, 2, 7)
+            );
+            assert_eq!(
+                (decoded.mint, decoded.amount, decoded.recipient),
+                (event.mint, 125, event.recipient)
+            );
+            assert!(decode_withdraw_event_log("Program log: other")
+                .unwrap()
+                .is_none());
         }
     }
 }

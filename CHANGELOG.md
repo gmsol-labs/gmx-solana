@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- programs(evm-proxy): Added EVM-owner-signed Withdraw of legacy SPL tokens to an existing recipient ATA, with exact amount and pair consumption events. Cancel and Withdraw use the same deployment domain and signed pair format.
+- sdk(sdk): Added Rust Withdraw intent, typed hash, transaction builder and event decoding.
+- sdk(js): Added typed-data and unsigned transaction builders for signed Withdraw intents.
+- sdk(decode): Added typed decoding for Withdraw events.
 - programs(evm-proxy): Added a signed Cancel instruction that consumes the next `(generation, nonce)` pair without transferring tokens and emits an intent event. The Rust SDK and JavaScript bindings expose the same EIP-712 fields and transaction construction.
 - programs(evm-proxy): Added a singleton Config bound to one Store and a supplied genesis hash. Its administrator can update the full-width EVM chain allowlist and pause state, then hand over administration through proposal and acceptance; effective changes emit typed events.
 - sdk(sdk): Added Config instruction builders, account and event decoding, and an initialization API that checks the supplied genesis hash against its configured RPC before sending and verifies the immutable Store and hash after confirmation.

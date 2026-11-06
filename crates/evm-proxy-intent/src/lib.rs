@@ -9,11 +9,19 @@ pub const DOMAIN_VERSION: &str = "1";
 /// Exact primary type used by Cancel.
 pub const CANCEL_TYPE: &str =
     "Cancel(bytes32 proxyAccount,uint64 generation,uint64 nonce,uint64 deadline)";
+/// Exact primary type used by Withdraw.
+pub const WITHDRAW_TYPE: &str = "Withdraw(bytes32 proxyAccount,string mint,uint64 amount,uint8 decimals,string recipient,uint64 generation,uint64 nonce,uint64 deadline)";
 const DOMAIN_TYPE: &[u8] = b"EIP712Domain(string name,string version,uint256 chainId,bytes32 salt)";
 
 fn u64_word(value: u64) -> [u8; 32] {
     let mut word = [0; 32];
     word[24..].copy_from_slice(&value.to_be_bytes());
+    word
+}
+
+fn u8_word(value: u8) -> [u8; 32] {
+    let mut word = [0; 32];
+    word[31] = value;
     word
 }
 
@@ -25,6 +33,41 @@ pub fn cancel_struct_hash(proxy: &Pubkey, generation: u64, nonce: u64, deadline:
     keccak::hashv(&[
         keccak::hash(CANCEL_TYPE.as_bytes()).as_ref(),
         proxy.as_ref(),
+        &generation,
+        &nonce,
+        &deadline,
+    ])
+    .to_bytes()
+}
+
+/// Fields covered by the signed Withdraw schema.
+pub struct WithdrawFields {
+    pub proxy: Pubkey,
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub decimals: u8,
+    pub recipient: Pubkey,
+    pub generation: u64,
+    pub nonce: u64,
+    pub deadline: u64,
+}
+
+/// Hash canonical account keys and the complete signed Withdraw pair.
+pub fn withdraw_struct_hash(fields: &WithdrawFields) -> [u8; 32] {
+    let mint = fields.mint.to_string();
+    let recipient = fields.recipient.to_string();
+    let amount = u64_word(fields.amount);
+    let decimals = u8_word(fields.decimals);
+    let generation = u64_word(fields.generation);
+    let nonce = u64_word(fields.nonce);
+    let deadline = u64_word(fields.deadline);
+    keccak::hashv(&[
+        keccak::hash(WITHDRAW_TYPE.as_bytes()).as_ref(),
+        fields.proxy.as_ref(),
+        keccak::hash(mint.as_bytes()).as_ref(),
+        &amount,
+        &decimals,
+        keccak::hash(recipient.as_bytes()).as_ref(),
         &generation,
         &nonce,
         &deadline,
@@ -106,6 +149,48 @@ mod tests {
                 );
                 continue;
             }
+            assert_eq!(
+                domain,
+                field(vector, "domainSeparator"),
+                "{}",
+                vector["name"]
+            );
+            assert_eq!(structure, field(vector, "structHash"), "{}", vector["name"]);
+            assert_eq!(
+                intent_digest(&domain, &structure),
+                field(vector, "digest"),
+                "{}",
+                vector["name"]
+            );
+        }
+    }
+
+    #[test]
+    fn independent_viem_vectors_match_withdraw_encoding() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../fixtures/withdraw-vectors.json")).unwrap();
+        assert_eq!(fixture["generator"], "viem@2.57.7");
+        assert_eq!(fixture["type"], WITHDRAW_TYPE);
+        assert_eq!(fixture["vectors"].as_array().unwrap().len(), 12);
+        for vector in fixture["vectors"].as_array().unwrap() {
+            let program = Pubkey::new_from_array(field(vector, "program"));
+            let store = Pubkey::new_from_array(field(vector, "store"));
+            let genesis = field(vector, "genesis");
+            let chain_id = field(vector, "chainId");
+            let fields = WithdrawFields {
+                proxy: Pubkey::new_from_array(field(vector, "proxy")),
+                mint: Pubkey::new_from_array(field(vector, "mint")),
+                amount: vector["amount"].as_str().unwrap().parse().unwrap(),
+                decimals: vector["decimals"].as_u64().unwrap().try_into().unwrap(),
+                recipient: Pubkey::new_from_array(field(vector, "recipient")),
+                generation: vector["generation"].as_str().unwrap().parse().unwrap(),
+                nonce: vector["nonce"].as_str().unwrap().parse().unwrap(),
+                deadline: vector["deadline"].as_str().unwrap().parse().unwrap(),
+            };
+            assert_eq!(fields.mint.to_string(), vector["mintBase58"]);
+            assert_eq!(fields.recipient.to_string(), vector["recipientBase58"]);
+            let domain = domain_separator(&program, &store, &genesis, &chain_id);
+            let structure = withdraw_struct_hash(&fields);
             assert_eq!(
                 domain,
                 field(vector, "domainSeparator"),

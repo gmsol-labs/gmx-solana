@@ -394,6 +394,17 @@ pub(super) async fn verify_signed_cancel(
     );
     assert_eq!(admin.rpc().get_account(&proxy).await?, after);
 
+    super::withdraw::verify_signed_withdraw(
+        deployment,
+        &owner,
+        evm_address,
+        proxy,
+        chain_id,
+        genesis_hash,
+        deadline,
+    )
+    .await?;
+
     admin
         .store_transaction()
         .program(evm_proxy::ID)
