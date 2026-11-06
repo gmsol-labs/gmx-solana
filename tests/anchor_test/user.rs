@@ -2,7 +2,7 @@ use std::panic::{resume_unwind, AssertUnwindSafe};
 
 use anchor_spl::associated_token::spl_associated_token_account::get_associated_token_address;
 use eyre::OptionExt;
-use futures_util::{FutureExt, StreamExt};
+use futures_util::{stream, FutureExt, StreamExt};
 use gmsol_programs::{
     anchor_lang::error::ErrorCode,
     gmsol_store::{
@@ -11,45 +11,68 @@ use gmsol_programs::{
     },
 };
 use gmsol_sdk::{
-    client::ops::{
-        gt::current_time_window_index, BuilderFeeOps, ConfigOps, GtOps, SystemProgramOps, UserOps,
+    client::{
+        ops::{
+            gt::current_time_window_index, BuilderFeeOps, ConfigOps, GtOps, SystemProgramOps,
+            UserOps,
+        },
+        transaction_history::extract_cpi_events,
     },
     constants::MARKET_USD_UNIT,
-    decode::gmsol::programs::GMSOLCPIEvent,
+    decode::{gmsol::programs::GMSOLCPIEvent, Decode},
     utils::zero_copy::ZeroCopy,
     Client,
 };
-use gmsol_solana_utils::signer::{shared_signer, SignerRef};
+use gmsol_solana_utils::{
+    signer::{shared_signer, SignerRef},
+    transaction_builder::default_before_sign,
+    utils::WithSlot,
+};
 use gmsol_store::{constants::DEFAULT_GT_VAULT_TIME_WINDOW, CoreError};
 use gmsol_utils::config::FactorKey;
 use solana_sdk::{
-    commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair, signer::Signer,
+    commitment_config::CommitmentConfig,
+    pubkey::Pubkey,
+    signature::{Keypair, Signature},
+    signer::Signer,
 };
 
 use crate::anchor_test::setup::{current_deployment, Deployment, GT_EXCHANGE_WINDOW_LOCK};
 
-async fn scub_assert_gt_delegation_event(
+async fn assert_gt_delegation_event(
     client: &Client<SignerRef>,
+    signature: WithSlot<Signature>,
     user: Pubkey,
     delegate: Pubkey,
     allowance: u64,
 ) -> eyre::Result<()> {
-    let events = client
-        .historical_store_cpi_events(&user, Some(CommitmentConfig::confirmed()))
-        .await?;
+    let events = extract_cpi_events(
+        stream::iter([Ok::<_, gmsol_sdk::Error>(signature)]),
+        client.rpc(),
+        client.store_program_id(),
+        &client.store_event_authority(),
+        CommitmentConfig::confirmed(),
+        Some(1),
+    );
     futures_util::pin_mut!(events);
-    let latest = events
+    let transaction = events
         .next()
         .await
-        .ok_or_eyre("no GT delegation events")??;
-    let event = latest
+        .ok_or_eyre("no events in the delegation transaction")??;
+    assert_eq!(transaction.value().signature, *signature.value());
+    let decoded = transaction
         .value()
+        .events
+        .iter()
+        .map(GMSOLCPIEvent::decode)
+        .collect::<Result<Vec<_>, _>>()?;
+    let event = decoded
         .iter()
         .find_map(|event| match event {
             GMSOLCPIEvent::GtDelegationUpdated(event) => Some(event),
             _ => None,
         })
-        .ok_or_eyre("latest user transaction has no GT delegation update")?;
+        .ok_or_eyre("delegation transaction has no GT delegation update")?;
     assert_eq!(event.user, user);
     assert_eq!(event.owner, client.payer());
     assert_eq!(event.delegate, delegate);
@@ -180,64 +203,71 @@ async fn referral() -> eyre::Result<()> {
 }
 
 #[tokio::test]
-async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
+async fn gt_delegation_owner_controls() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
-    let client = deployment.user_client(Deployment::USER_1)?;
+    let client = deployment
+        .client
+        .try_clone_with_payer(shared_signer(Keypair::new()))?;
     let other = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let store = &deployment.store;
+    deployment
+        .client
+        .transfer(&client.payer(), 50_000_000)?
+        .send()
+        .await?;
     client.prepare_user(store)?.send().await?;
     let user_address = client.find_user_address(store, &client.payer());
-    let scub_delegate = Keypair::new().pubkey();
-    let scub_next_delegate = other.payer();
+    let initial_delegate = Keypair::new().pubkey();
+    let next_delegate = other.payer();
 
-    client
-        .set_gt_delegate(store, &scub_delegate, 100)?
-        .send()
+    let signature = client
+        .set_gt_delegate(store, &initial_delegate, 100)?
+        .send_with_options(false, None, None, Default::default(), default_before_sign)
         .await?;
     let user = client.user(&user_address).await?;
-    assert_eq!(user.gt.delegate, scub_delegate);
+    assert_eq!(user.gt.delegate, initial_delegate);
     assert_eq!(user.gt.allowance, 100);
-    scub_assert_gt_delegation_event(&client, user_address, scub_delegate, 100).await?;
+    assert_gt_delegation_event(&client, signature, user_address, initial_delegate, 100).await?;
 
-    client
-        .decrease_gt_allowance(store, &scub_delegate, 40)?
-        .send()
+    let signature = client
+        .decrease_gt_allowance(store, &initial_delegate, 40)?
+        .send_with_options(false, None, None, Default::default(), default_before_sign)
         .await?;
-    scub_assert_gt_delegation_event(&client, user_address, scub_delegate, 60).await?;
-    client
-        .increase_gt_allowance(store, &scub_delegate, 15)?
-        .send()
+    assert_gt_delegation_event(&client, signature, user_address, initial_delegate, 60).await?;
+    let signature = client
+        .increase_gt_allowance(store, &initial_delegate, 15)?
+        .send_with_options(false, None, None, Default::default(), default_before_sign)
         .await?;
     assert_eq!(client.user(&user_address).await?.gt.allowance, 75);
-    scub_assert_gt_delegation_event(&client, user_address, scub_delegate, 75).await?;
+    assert_gt_delegation_event(&client, signature, user_address, initial_delegate, 75).await?;
 
-    client
-        .set_gt_delegate(store, &scub_next_delegate, 30)?
-        .send()
+    let signature = client
+        .set_gt_delegate(store, &next_delegate, 30)?
+        .send_with_options(false, None, None, Default::default(), default_before_sign)
         .await?;
     let user = client.user(&user_address).await?;
-    assert_eq!(user.gt.delegate, scub_next_delegate);
+    assert_eq!(user.gt.delegate, next_delegate);
     assert_eq!(user.gt.allowance, 30);
-    scub_assert_gt_delegation_event(&client, user_address, scub_next_delegate, 30).await?;
+    assert_gt_delegation_event(&client, signature, user_address, next_delegate, 30).await?;
 
     client
-        .increase_gt_allowance(store, &scub_delegate, 1)?
+        .increase_gt_allowance(store, &initial_delegate, 1)?
         .send()
         .await
         .expect_err("a stale delegate must not receive an allowance increase");
     client
-        .decrease_gt_allowance(store, &scub_delegate, 1)?
+        .decrease_gt_allowance(store, &initial_delegate, 1)?
         .send()
         .await
         .expect_err("a stale delegate must not reduce the new delegate's allowance");
     client
-        .increase_gt_allowance(store, &scub_next_delegate, 0)?
+        .increase_gt_allowance(store, &next_delegate, 0)?
         .send()
         .await
         .expect_err("a zero increase must be rejected");
     client
-        .decrease_gt_allowance(store, &scub_next_delegate, 0)?
+        .decrease_gt_allowance(store, &next_delegate, 0)?
         .send()
         .await
         .expect_err("a zero decrease must be rejected");
@@ -259,22 +289,22 @@ async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
         .expect_err("the delegate must not change the owner's delegation");
     assert_eq!(client.user(&user_address).await?.gt.allowance, 30);
 
-    client
-        .decrease_gt_allowance(store, &scub_next_delegate, 100)?
-        .send()
+    let signature = client
+        .decrease_gt_allowance(store, &next_delegate, 100)?
+        .send_with_options(false, None, None, Default::default(), default_before_sign)
         .await?;
     assert_eq!(client.user(&user_address).await?.gt.allowance, 0);
-    scub_assert_gt_delegation_event(&client, user_address, scub_next_delegate, 0).await?;
-    client
+    assert_gt_delegation_event(&client, signature, user_address, next_delegate, 0).await?;
+    let signature = client
         .set_gt_delegate(store, &Pubkey::default(), 0)?
-        .send()
+        .send_with_options(false, None, None, Default::default(), default_before_sign)
         .await?;
     let user = client.user(&user_address).await?;
     assert_eq!(user.gt.delegate, Pubkey::default());
     assert_eq!(user.gt.allowance, 0);
-    scub_assert_gt_delegation_event(&client, user_address, Pubkey::default(), 0).await?;
+    assert_gt_delegation_event(&client, signature, user_address, Pubkey::default(), 0).await?;
     client
-        .increase_gt_allowance(store, &scub_next_delegate, 1)?
+        .increase_gt_allowance(store, &next_delegate, 1)?
         .send()
         .await
         .expect_err("a user without a delegate cannot receive a positive allowance");
