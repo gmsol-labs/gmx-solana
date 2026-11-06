@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 use tracing::Instrument;
 
 static GLV_CONTROLLER_LIFECYCLE_LOCK: Mutex<()> = Mutex::const_new(());
+static LP_AUTHORITY_LOCK: Mutex<()> = Mutex::const_new(());
 
 // Test helpers ----------------------------------------------------------------
 
@@ -186,115 +187,159 @@ async fn liquidity_provider_tests() -> eyre::Result<()> {
     }
     tracing::info!("✓ Range APY gradient update test passed");
 
-    // Test 4: Transfer and accept authority
-    // Use an existing user as the new authority
+    let _authority_lock = LP_AUTHORITY_LOCK.lock().await;
     let new_auth_client = deployment.user_client(Deployment::USER_1)?;
     let new_auth = new_auth_client.payer();
-
-    let transfer_ix = client
-        .store_transaction()
-        .program(lp::id())
-        .anchor_args(lp::instruction::TransferAuthority {
-            new_authority: new_auth,
-        })
-        .anchor_accounts(lp::accounts::TransferAuthority {
-            global_state,
-            authority: client.payer(),
-        });
-
-    let signature = transfer_ix.send().await?;
-    tracing::info!(%signature, "proposed authority transfer");
-
-    // Accept the authority transfer using the new authority client
-    let accept_ix = new_auth_client
-        .store_transaction()
-        .program(lp::id())
-        .anchor_args(lp::instruction::AcceptAuthority {})
-        .anchor_accounts(lp::accounts::AcceptAuthority {
-            global_state,
-            pending_authority: new_auth,
-        });
-
-    let signature = accept_ix.send().await?;
-    tracing::info!(%signature, "accepted authority transfer");
-
-    let gs = client
-        .account::<lp::GlobalState>(&global_state)
-        .await?
-        .expect("global_state must exist");
-    assert_eq!(gs.authority, new_auth);
-    assert_eq!(gs.pending_authority, Pubkey::default());
-    tracing::info!("✓ Authority transfer test passed");
-
-    // Test 5: Try unauthorized update (should fail)
-    let wrong = Keypair::new();
-    let update_ix = client
-        .store_transaction()
-        .program(lp::id())
-        .anchor_args(lp::instruction::UpdateMinStakeValue {
-            new_min_stake_value: 7_000_000_000_000_000_000_000u128,
-        })
-        .anchor_accounts(lp::accounts::UpdateMinStakeValue {
-            global_state,
-            authority: wrong.pubkey(),
-        });
-
-    let res = update_ix.send().await;
-    assert!(res.is_err(), "unauthorized update should fail");
-    tracing::info!("✓ Unauthorized update test passed");
-
-    // Test 6: Try transfer to default address (should fail)
-    let transfer_ix = new_auth_client
-        .store_transaction()
-        .program(lp::id())
-        .anchor_args(lp::instruction::TransferAuthority {
-            new_authority: Pubkey::default(),
-        })
-        .anchor_accounts(lp::accounts::TransferAuthority {
-            global_state,
-            authority: new_auth, // Use the new authority we just set
-        });
-
-    let res = transfer_ix.send().await;
-    assert!(res.is_err(), "transfer to default address should fail");
-    tracing::info!("✓ Reject default address test passed");
-
-    // Test 7: Transfer authority back to original keeper to not affect other tests
     let original_keeper = client.payer();
-    let transfer_back_ix = new_auth_client
-        .store_transaction()
-        .program(lp::id())
-        .anchor_args(lp::instruction::TransferAuthority {
-            new_authority: original_keeper,
-        })
-        .anchor_accounts(lp::accounts::TransferAuthority {
-            global_state,
-            authority: new_auth,
-        });
+    let authority_result: eyre::Result<()> = async {
+        // Test 4: Transfer and accept authority
+        // Use an existing user as the new authority
 
-    let signature = transfer_back_ix.send().await?;
-    tracing::info!(%signature, "proposed authority transfer back to keeper");
+        let transfer_ix = client
+            .store_transaction()
+            .program(lp::id())
+            .anchor_args(lp::instruction::TransferAuthority {
+                new_authority: new_auth,
+            })
+            .anchor_accounts(lp::accounts::TransferAuthority {
+                global_state,
+                authority: client.payer(),
+            });
 
-    // Accept the authority transfer back using the original keeper client
-    let accept_back_ix = client
-        .store_transaction()
-        .program(lp::id())
-        .anchor_args(lp::instruction::AcceptAuthority {})
-        .anchor_accounts(lp::accounts::AcceptAuthority {
-            global_state,
-            pending_authority: original_keeper,
-        });
+        let signature = transfer_ix.send().await?;
+        tracing::info!(%signature, "proposed authority transfer");
 
-    let signature = accept_back_ix.send().await?;
-    tracing::info!(%signature, "accepted authority transfer back to keeper");
+        // Accept the authority transfer using the new authority client
+        let accept_ix = new_auth_client
+            .store_transaction()
+            .program(lp::id())
+            .anchor_args(lp::instruction::AcceptAuthority {})
+            .anchor_accounts(lp::accounts::AcceptAuthority {
+                global_state,
+                pending_authority: new_auth,
+            });
 
-    // Verify authority is back to original keeper
-    let gs_final = client
-        .account::<lp::GlobalState>(&global_state)
-        .await?
-        .expect("global_state must exist");
-    assert_eq!(gs_final.authority, original_keeper);
-    assert_eq!(gs_final.pending_authority, Pubkey::default());
+        let signature = accept_ix.send().await?;
+        tracing::info!(%signature, "accepted authority transfer");
+
+        let gs = client
+            .account::<lp::GlobalState>(&global_state)
+            .await?
+            .ok_or_else(|| eyre::eyre!("global_state must exist"))?;
+        eyre::ensure!(
+            gs.authority == new_auth,
+            "new LP authority was not accepted"
+        );
+        eyre::ensure!(
+            gs.pending_authority == Pubkey::default(),
+            "LP handover remained pending"
+        );
+        tracing::info!("✓ Authority transfer test passed");
+
+        // Test 5: Try unauthorized update (should fail)
+        let wrong = Keypair::new();
+        let update_ix = client
+            .store_transaction()
+            .program(lp::id())
+            .anchor_args(lp::instruction::UpdateMinStakeValue {
+                new_min_stake_value: 7_000_000_000_000_000_000_000u128,
+            })
+            .anchor_accounts(lp::accounts::UpdateMinStakeValue {
+                global_state,
+                authority: wrong.pubkey(),
+            });
+
+        let res = update_ix.send().await;
+        eyre::ensure!(res.is_err(), "unauthorized update should fail");
+        tracing::info!("✓ Unauthorized update test passed");
+
+        // Test 6: Try transfer to default address (should fail)
+        let transfer_ix = new_auth_client
+            .store_transaction()
+            .program(lp::id())
+            .anchor_args(lp::instruction::TransferAuthority {
+                new_authority: Pubkey::default(),
+            })
+            .anchor_accounts(lp::accounts::TransferAuthority {
+                global_state,
+                authority: new_auth, // Use the new authority we just set
+            });
+
+        let res = transfer_ix.send().await;
+        eyre::ensure!(res.is_err(), "transfer to default address should fail");
+        tracing::info!("✓ Reject default address test passed");
+
+        Ok(())
+    }
+    .await;
+
+    // Restore authority even if an earlier instruction returned an error.
+    let restoration_result: eyre::Result<()> = async {
+        let state = client
+            .account::<lp::GlobalState>(&global_state)
+            .await?
+            .ok_or_else(|| eyre::eyre!("global_state missing during authority restoration"))?;
+        eyre::ensure!(
+            state.authority == new_auth || state.authority == original_keeper,
+            "unexpected LP authority during restoration: {}",
+            state.authority
+        );
+        if state.authority != original_keeper || state.pending_authority != Pubkey::default() {
+            let authority_client = if state.authority == new_auth {
+                &new_auth_client
+            } else {
+                &client
+            };
+            let signature = authority_client
+                .store_transaction()
+                .program(lp::id())
+                .anchor_args(lp::instruction::TransferAuthority {
+                    new_authority: original_keeper,
+                })
+                .anchor_accounts(lp::accounts::TransferAuthority {
+                    global_state,
+                    authority: state.authority,
+                })
+                .send()
+                .await?;
+            tracing::info!(%signature, "proposed authority transfer back to keeper");
+            let signature = client
+                .store_transaction()
+                .program(lp::id())
+                .anchor_args(lp::instruction::AcceptAuthority {})
+                .anchor_accounts(lp::accounts::AcceptAuthority {
+                    global_state,
+                    pending_authority: original_keeper,
+                })
+                .send()
+                .await?;
+            tracing::info!(%signature, "accepted authority transfer back to keeper");
+        }
+        let gs_final = client
+            .account::<lp::GlobalState>(&global_state)
+            .await?
+            .ok_or_else(|| eyre::eyre!("global_state missing after authority restoration"))?;
+        eyre::ensure!(
+            gs_final.authority == original_keeper,
+            "LP keeper authority not restored"
+        );
+        eyre::ensure!(
+            gs_final.pending_authority == Pubkey::default(),
+            "LP authority handover remains pending"
+        );
+        Ok(())
+    }
+    .await;
+    match (authority_result, restoration_result) {
+        (Err(primary), Err(restore)) => {
+            return Err(eyre::eyre!(
+                "{primary}; authority restoration also failed: {restore}"
+            ));
+        }
+        (Err(primary), _) => return Err(primary),
+        (_, Err(restore)) => return Err(restore),
+        _ => {}
+    }
     tracing::info!("✓ Authority transferred back to original keeper");
 
     tracing::info!("All liquidity provider tests passed!");
@@ -612,6 +657,7 @@ async fn lp_token_controller_tests() -> eyre::Result<()> {
     let (test_controller, _) = Pubkey::find_program_address(test_controller_seeds, &lp::ID);
 
     // Check if controller already exists, if so skip creation test
+    let _authority_lock = LP_AUTHORITY_LOCK.lock().await;
     let existing_controller = keeper
         .account::<lp::LpTokenController>(&test_controller)
         .await?;
@@ -822,6 +868,8 @@ async fn position_controller_relationship_tests() -> eyre::Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     tracing::info!("Sleep completed, proceeding with controller disable test");
 
+    let _authority_lock = LP_AUTHORITY_LOCK.lock().await;
+
     // Test 2: Disable controller and verify behavior
     let disable_ix = keeper
         .store_transaction()
@@ -883,6 +931,7 @@ async fn position_controller_relationship_tests() -> eyre::Result<()> {
 
     enable_claim_ix.send().await?;
     tracing::info!("Enabled claim functionality for testing");
+    drop(_authority_lock);
 
     // Now test claim operation using the position created in Test 1 (before controller was disabled)
     let position_id_bytes = test_position_id.to_le_bytes();
