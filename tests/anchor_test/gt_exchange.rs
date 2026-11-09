@@ -433,7 +433,7 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
         let code = reject_without_change(
             admin,
             caller
-                .complete_gt_exchange_v2(store, &dust_exchange, None, None)
+                .complete_gt_exchange_v2(store, &dust_exchange, None, None, None, None)
                 .await?,
             &[dust_exchange, window.bank],
         )
@@ -442,7 +442,7 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
 
         // The caller can create them earlier in the same transaction.
         let mut complete = caller
-            .complete_gt_exchange_v2(store, &dust_exchange, None, None)
+            .complete_gt_exchange_v2(store, &dust_exchange, None, None, None, None)
             .await?;
         for token in &tokens {
             complete = complete.pre_instruction(
@@ -559,7 +559,7 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
         let rent = admin.rpc().get_balance(&exchange).await?;
         let rent_payer_lamports = admin.rpc().get_balance(&rent_payer.pubkey()).await?;
         caller
-            .complete_gt_exchange_v2(store, &exchange, None, None)
+            .complete_gt_exchange_v2(store, &exchange, None, None, None, None)
             .await?
             .send()
             .await?;
@@ -650,7 +650,7 @@ async fn permissionless_completion_requires_confirmed_gt_bank() -> eyre::Result<
         let code = reject_without_change(
             admin,
             caller
-                .complete_gt_exchange_v2(store, &exchange, None, None)
+                .complete_gt_exchange_v2(store, &exchange, None, None, None, None)
                 .await?,
             &[exchange, window.bank, owner.payer()],
         )

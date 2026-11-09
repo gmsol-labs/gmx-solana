@@ -176,6 +176,8 @@ pub trait TreasuryOps<C> {
         exchange: &Pubkey,
         treasury_vault_config_hint: Option<&Pubkey>,
         tokens_hint: Option<Vec<(Pubkey, Pubkey)>>,
+        gt_exchange_vault_hint: Option<&Pubkey>,
+        owner_and_rent_receiver_hint: Option<(&Pubkey, &Pubkey)>,
     ) -> impl Future<Output = crate::Result<TransactionBuilder<C>>>;
 
     /// Create a swap.
@@ -716,17 +718,26 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
         exchange: &Pubkey,
         treasury_vault_config_hint: Option<&Pubkey>,
         tokens_hint: Option<Vec<(Pubkey, Pubkey)>>,
+        gt_exchange_vault_hint: Option<&Pubkey>,
+        owner_and_rent_receiver_hint: Option<(&Pubkey, &Pubkey)>,
     ) -> crate::Result<TransactionBuilder<C>> {
         let (config, treasury_vault_config) =
             find_config_addresses(self, store, treasury_vault_config_hint).await?;
-        let exchange_account = self
-            .account::<ZeroCopy<GtExchange>>(exchange)
-            .await?
-            .ok_or(crate::Error::NotFound)?
-            .0;
-        let owner = exchange_account.owner;
-        let rent_receiver = *optional_address(&exchange_account.rent_receiver).unwrap_or(&owner);
-        let gt_exchange_vault = exchange_account.vault;
+        let (gt_exchange_vault, owner, rent_receiver) =
+            match (gt_exchange_vault_hint, owner_and_rent_receiver_hint) {
+                (Some(address), Some((owner, rent_receiver))) => (*address, *owner, *rent_receiver),
+                _ => {
+                    let exchange = self
+                        .account::<ZeroCopy<GtExchange>>(exchange)
+                        .await?
+                        .ok_or(crate::Error::NotFound)?
+                        .0;
+                    let owner = exchange.owner;
+                    let rent_receiver =
+                        *optional_address(&exchange.rent_receiver).unwrap_or(&owner);
+                    (exchange.vault, owner, rent_receiver)
+                }
+            };
         let gt_bank = self.find_gt_bank_address(&treasury_vault_config, &gt_exchange_vault);
 
         let tokens = match tokens_hint {
