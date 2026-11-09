@@ -1,11 +1,14 @@
 use crate::anchor_test::setup::{current_deployment, Deployment};
 use gmsol_liquidity_provider as lp;
+use gmsol_programs::anchor_lang::error::ErrorCode;
 use gmsol_sdk::{
     builders::liquidity_provider::{LpTokenKind, StakeLpTokenParams, UnstakeLpTokenParams},
     client::ops::{liquidity_provider::LiquidityProviderOps, UserOps},
     ops::{ExchangeOps, GlvOps, MarketOps},
 };
-use solana_sdk::{pubkey::Pubkey, signer::keypair::Keypair, signer::Signer};
+use solana_sdk::{
+    commitment_config::CommitmentConfig, pubkey::Pubkey, signer::keypair::Keypair, signer::Signer,
+};
 use std::num::NonZeroU64;
 use tokio::sync::Mutex;
 use tracing::Instrument;
@@ -240,6 +243,7 @@ async fn liquidity_provider_tests() -> eyre::Result<()> {
         let wrong = Keypair::new();
         let update_ix = client
             .store_transaction()
+            .signer(&wrong)
             .program(lp::id())
             .anchor_args(lp::instruction::UpdateMinStakeValue {
                 new_min_stake_value: 7_000_000_000_000_000_000_000u128,
@@ -249,8 +253,28 @@ async fn liquidity_provider_tests() -> eyre::Result<()> {
                 authority: wrong.pubkey(),
             });
 
+        let before = client
+            .rpc()
+            .get_account_with_commitment(&global_state, CommitmentConfig::confirmed())
+            .await?
+            .value
+            .ok_or_else(|| eyre::eyre!("global_state must exist before unauthorized update"))?;
         let res = update_ix.send().await;
-        eyre::ensure!(res.is_err(), "unauthorized update should fail");
+        let after = client
+            .rpc()
+            .get_account_with_commitment(&global_state, CommitmentConfig::confirmed())
+            .await?
+            .value
+            .ok_or_else(|| eyre::eyre!("global_state must exist after unauthorized update"))?;
+        let err = res
+            .err()
+            .ok_or_else(|| eyre::eyre!("unauthorized update should fail"))?;
+        let err = gmsol_sdk::Error::from(err);
+        eyre::ensure!(
+            err.anchor_error_code() == Some(ErrorCode::ConstraintHasOne.into()),
+            "expected LP authority ConstraintHasOne, got {err:?}"
+        );
+        eyre::ensure!(before == after, "unauthorized update changed GlobalState");
         tracing::info!("✓ Unauthorized update test passed");
 
         // Test 6: Try transfer to default address (should fail)

@@ -266,19 +266,18 @@ async fn cross_market_swap_order_mints_withdrawable_phantom_inventory() -> eyre:
 async fn create_swap_with_empty_path_should_fail() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
-    let client = deployment.user_client(Deployment::DEFAULT_USER)?;
+    let client = deployment.funded_client().await?;
     let store = &deployment.store;
     let fbtc = deployment.token("fBTC").expect("must exist");
     let swap_amount = 100_000;
 
-    // Initialize the market independently so this test does not rely on
-    // any other test having run first.
+    // Deployment setup creates this market; the rejection needs no liquidity.
     let market_token = deployment
-        .prepare_market(["fBTC", "fBTC", "USDG"], 1_000_000, 6_000_000_000, true)
-        .await?;
+        .market_token("fBTC", "fBTC", "USDG")
+        .expect("must exist");
 
     deployment
-        .mint_or_transfer_to_user("fBTC", Deployment::DEFAULT_USER, swap_amount + 17)
+        .mint_or_transfer_to("fBTC", &client.payer(), swap_amount + 17)
         .await?;
 
     let (rpc, _order) = client
