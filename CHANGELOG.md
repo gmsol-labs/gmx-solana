@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-21
+
 ### Breaking Changes
 
 - programs(store): Creating an increase order now requires its final output token to be the position's collateral token, and executing one whose final output token was recorded at creation revalidates the same thing. Creating an order with a different final output token used to succeed and silently ignore the value; it now reverts with `TokenMintMismatched`. Existing orders with an uninitialized final output token are unaffected and keep executing.
@@ -16,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(treasury): `complete_gt_exchange` now requires the owner signer account to be writable. Clients constructing account metas from an older IDL must mark it writable.
 - programs(store): A newly initialized market uses the 50% reserve-factor default instead of the former 70% fee-receiver default until configured explicitly.
 - programs(store): Insolvent liquidation and auto-deleveraging closes no longer credit GT rewards for order and borrowing fees that were not collected, so affected closes mint less GT than before.
+- sdk(sdk): `OrderSimulationOutput::Increase` gained `gross_collateral_amount` and `builder_fee`, and `OrderSimulationOutput::Decrease` gained `receipts` and `builder_fee`. Code that destructures these variants without `..` must name the new fields. `OrderSimulationBuilderForSimulator` gained one builder-state element, which matters only to code that spells the alias out. For an order with a builder fee, `report.params().collateral_increment_amount()` of an increase is now the net collateral, as in the program's trade event.
 
 ### Added
 
@@ -41,9 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - programs(store): Added the `BuilderFeeClaimed` event, emitted when a builder withdraws from its claim vault.
 - programs(store): Added nine builder fee error codes, `6129` through `6137`, appended after the existing codes so no existing code shifts: `BuilderFeeFactorExceedsMaxFactor` (6129), `UnsettledBuilderFee` (6130), `BuilderFeeExceedsCollateral` (6131), `BuilderFeeFinalOutputTokenMismatch` (6132), `BuilderFeeSwapTypeNotAllowed` (6133), `BuilderFeeFactorMismatched` (6134), `BuilderFeeOrderKindNotAllowed` (6135), `BuilderFeeFinalOutputTokenNotInitialized` (6136) and `BuilderFeeFinalOutputTokenEscrowNotInitialized` (6137).
 - sdk(decode): Added `BuilderFeeCharged` to `GMSOLCPIEvent`, so the event decodes into its typed form instead of `UnknownOwnedData`.
-- sdk(sdk): Added the `SettleBuilderFee`, `ClaimBuilderFees` and `SetBuilderFeeFactor` atomic-group builders, completing the set for the four builder fee instructions. Only `set_builder_fee` had one before, so the other three could not be composed into a single transaction with anything else, and the JS surface had nothing to wrap since it is built on the builder layer. `SettleBuilderFee` carries a hint resolvable from the order account; the other two need none, because every account they take is derived from the payer, the store and the mint.
+- sdk(sdk): Added the `SettleBuilderFee`, `ClaimBuilderFees` and `SetBuilderFeeFactor` atomic-group builders, completing the set for the four builder fee instructions. Only `set_builder_fee` had one before, so the other three could not be composed into a single transaction with anything else, and the JS surface had nothing to wrap since it is built on the builder layer. `SettleBuilderFee` carries a hint resolvable from the order account; the other two need none, because every account they take is derived from the payer, the store and the mint. `SettleBuilderFee` attaches the settlement accounts for any order whose builder has a factor that can charge, so it also works when built from a pending order or placed after the execution in the same transaction; the hint's optional `builder_fee_factor`, filled by `FromRpcClientWith`, is treated as chargeable when unknown.
 - sdk(js): Exposed the builder fee instructions to JavaScript clients, including order creation with a final output token escrow and the builders for setting, settling and claiming fees.
 - cli(gmsol): Added `user set-builder-fee`, `user set-builder-fee-factor` and `user claim-builder-fees`, wrapping the existing `BuilderFeeOps`/`UserOps` SDK operations. `claim-builder-fees` defaults `--destination` to the payer's associated token account and creates it if missing; an explicitly passed account is never created. `settle_builder_fee` has no CLI command yet.
+- cli: Added a `[pyth]` config section with `endpoint` and `api_key` (also `GMSOL_PYTH__ENDPOINT` / `GMSOL_PYTH__API_KEY`), used by the executor (`execute` commands), `inspect pyth` and treasury batch `claim-fees`, falling back to `PYTH_API_KEY` and the public Hermes endpoint. A Pyth fetch without a configured key fails with a configuration error naming these settings; the executor only requires a key when the action has Pyth feeds.
+- sdk(sdk): Added `builder_fee_factor` to `Simulator::simulate_order`. Increase simulations deduct the fee from the swapped collateral before the position grows and fail when it cannot be covered. Decrease simulations top up the collateral withdrawal by the fee estimate, charge the fee on the executed size in the final output token, clamp it to the outputs that fund its escrow, and reject `CollateralToPnlToken`. Swap orders reject a non-zero factor. Results report the gross amount, the fee (`BuilderFeeOutcome`: factor, token, computed and charged amounts), and the net amount: `net_collateral_amount()` for an increase and per-token `TokenReceipt`s for a decrease. A receipt counts everything the execution pays out in that token: the final output after the receive-token swap, the secondary pnl output and the funding rebates (`claimable_funding_amounts`), merged by token. The fee cap is computed from the trade outputs only, as in the program, so rebates do not widen it. A failed simulation with a non-zero factor leaves the simulator unchanged, as the failed execution would revert on chain. The deprecated `MarketGraph::simulate_order` does not model builder fees, and its JavaScript binding rejects a non-zero `builder_fee_factor`; use `Simulator` for orders that carry a builder fee.
+- sdk(js): Added `builder_fee_factor` to `Simulator.simulate_order`, and `gross_collateral_amount`, `net_collateral_amount`, `receipts` and `builder_fee` to the increase and decrease simulation outputs.
 
 ### Changed
 
@@ -556,7 +562,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provided SDK (`gmsol`) and other utility crates.
 - Provided a command-line interface (`gmsol`).
 
-[unreleased]: https://github.com/gmsol-labs/gmx-solana/compare/v0.10.0...HEAD
+[unreleased]: https://github.com/gmsol-labs/gmx-solana/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.11.0
 [0.10.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.10.0
 [0.9.1]: https://github.com/gmsol-labs/gmx-solana/releases/tag/programs-v0.9.1
 [0.9.0]: https://github.com/gmsol-labs/gmx-solana/releases/tag/v0.9.0

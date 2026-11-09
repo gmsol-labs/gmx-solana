@@ -134,6 +134,38 @@ console.log("simulation:", simulationOutput.increase());
 let outputPositionModel = simulationOutput.position_model()!;
 console.log("output position:", outputPositionModel.size());
 
+// Simulate the same order with a builder fee. `builder_fee_factor` is the factor
+// checkpointed onto the order (`Order.builder_fee_factor`): 0.1% here. The result
+// separates the gross collateral, the fee and the net collateral the position
+// received. Only `Simulator.simulate_order` models the fee: the deprecated
+// `MarketGraph.simulate_order` rejects a non-zero factor.
+// `simulate_order` takes ownership of the position it is given, so decode a fresh one.
+const feePosition = Position.decode_from_base64(encodedPosition);
+const feeSimulator = graph.to_simulator();
+const feeSimulationOutput = feeSimulator.simulate_order(
+  {
+    kind: "MarketIncrease",
+    params: {
+      market_token: "E6kfBQcdHL3fdWNaydrWViXVtQLTgpxzZicLy98ZNc5v",
+      is_long: true,
+      size: 100_000_000_000_000_000_000_000n,
+      amount: 100_000_000n,
+    },
+    collateral_or_swap_out_token: wsol,
+    builder_fee_factor: 100_000_000_000_000_000n,
+  },
+  feePosition
+);
+const feeIncrease = feeSimulationOutput.increase()!;
+console.log(
+  "builder fee:",
+  feeIncrease.builder_fee,
+  "gross collateral:",
+  feeIncrease.gross_collateral_amount,
+  "net collateral:",
+  feeIncrease.net_collateral_amount
+);
+
 // Create order.
 const recentBlockhash = "3KarAamyLd6dFFmMsh79fXjrdAWp5DB6dxF3BgLK3SuM";
 const payer = "11111111111111111111111111111112";
@@ -579,6 +611,7 @@ const closeOrdersWithFee = close_orders({
       "11111111111111111111111111111116",
       {
         builder_fee_amount: 1_000_000,
+        builder_fee_factor: 1_000_000_000_000_000n,
         builder: builderPubkey,
         final_output_token: finalOutputToken,
         escrow: escrowPubkey,
@@ -589,6 +622,50 @@ const closeOrdersWithFee = close_orders({
 
 console.log("close orders with settle_builder_fee");
 for (const batch of closeOrdersWithFee.serialize()) {
+  for (const txn of batch) {
+    console.log(toBase64(txn));
+  }
+}
+
+// Builder fee: the hint of an order that is still pending (nothing recorded
+// yet), with a builder that can be charged. The settlement accounts are still
+// attached, so the settle works after an execution that records the fee.
+const closeOrdersPendingFee = close_orders({
+  recent_blockhash: recentBlockhash,
+  payer,
+  orders: new Map([
+    [
+      "11111111111111111111111111111116",
+      {
+        owner: payer,
+        receiver: payer,
+        rent_receiver: payer,
+        referrer: undefined,
+        initial_collateral_token: wsol,
+        final_output_token: wsol,
+        long_token: wsol,
+        short_token: usdc,
+        should_unwrap_native_token: true,
+        callback: undefined,
+      },
+    ],
+  ]),
+  settle_builder_fee: new Map([
+    [
+      "11111111111111111111111111111116",
+      {
+        builder_fee_amount: 0,
+        builder_fee_factor: 1_000_000_000_000_000n,
+        builder: builderPubkey,
+        final_output_token: finalOutputToken,
+        escrow: escrowPubkey,
+      },
+    ],
+  ]),
+});
+
+console.log("close orders with settle_builder_fee on a pending order");
+for (const batch of closeOrdersPendingFee.serialize()) {
   for (const txn of batch) {
     console.log(toBase64(txn));
   }
