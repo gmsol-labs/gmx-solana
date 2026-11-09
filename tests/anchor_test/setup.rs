@@ -19,11 +19,13 @@ use gmsol_programs::gmsol_store::client::{accounts as store_accounts, args as st
 use gmsol_sdk::{
     client::{
         chainlink::pull_oracle::ChainlinkPullOracleFactory,
+        feeds_parser::FeedAddressMap,
         ops::{
-            AddressLookupTableOps, ConfigOps, ExchangeOps, GlvOps, GtOps, MarketOps, OracleOps,
-            RoleOps, StoreOps, SystemProgramOps, TokenConfigOps, TreasuryOps,
+            exchange::order::ExecuteOrderBuilder, AddressLookupTableOps, ConfigOps, ExchangeOps,
+            GlvOps, GtOps, MarketOps, OracleOps, RoleOps, StoreOps, SystemProgramOps,
+            TokenConfigOps, TreasuryOps,
         },
-        pull_oracle::{PullOraclePriceConsumer, WithPullOracle},
+        pull_oracle::{FeedIds, PullOraclePriceConsumer, WithPullOracle},
         pyth::{pull_oracle::PythPullOracleWithHermes, Hermes, PythPullOracle},
         ClientOptions,
     },
@@ -32,7 +34,7 @@ use gmsol_sdk::{
     Client,
 };
 use gmsol_solana_utils::{
-    bundle_builder::{compress_send_results, BundleBuilder, SendBundleOptions},
+    bundle_builder::{compress_send_results, BundleBuilder, BundleOptions, SendBundleOptions},
     cluster::Cluster,
     make_bundle_builder::MakeBundleBuilder,
     signer::{shared_signer, SignerRef},
@@ -90,6 +92,49 @@ const PYTH_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
 /// action's creation time; otherwise the freshly fetched price can be rejected
 /// on-chain as `OracleTimestampsAreSmallerThanRequired`.
 const PYTH_EXECUTE_CLOCK_ADVANCE_DELAY: Duration = Duration::from_secs(5);
+
+/// Select execution metadata after oracle preparation, before deriving claimable accounts.
+pub(crate) struct CurrentOrderTimestamp<'a, 'b> {
+    pub(crate) execute: &'b mut ExecuteOrderBuilder<'a, SignerRef>,
+    pub(crate) clock_client: &'b Client<SignerRef>,
+}
+
+impl PullOraclePriceConsumer for CurrentOrderTimestamp<'_, '_> {
+    async fn feed_ids(&mut self) -> gmsol_sdk::Result<FeedIds> {
+        self.execute.feed_ids().await
+    }
+
+    fn process_feeds(
+        &mut self,
+        provider: PriceProviderKind,
+        map: FeedAddressMap,
+    ) -> gmsol_sdk::Result<()> {
+        self.execute.process_feeds(provider, map)
+    }
+}
+
+impl<'a> MakeBundleBuilder<'a, SignerRef> for CurrentOrderTimestamp<'a, '_> {
+    async fn build_with_options(
+        &mut self,
+        options: BundleOptions,
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, SignerRef>> {
+        let account = self
+            .clock_client
+            .rpc()
+            .get_account_with_commitment(
+                &solana_sdk::sysvar::clock::id(),
+                CommitmentConfig::processed(),
+            )
+            .await
+            .map_err(gmsol_solana_utils::Error::custom)?
+            .value
+            .ok_or_else(|| gmsol_solana_utils::Error::custom("validator clock account missing"))?;
+        let clock: solana_sdk::clock::Clock = solana_sdk::account::from_account(&account)
+            .ok_or_else(|| gmsol_solana_utils::Error::custom("invalid validator clock"))?;
+        self.execute.recent_timestamp(clock.unix_timestamp);
+        self.execute.build_with_options(options).await
+    }
+}
 
 /// Deployment.
 pub struct Deployment {

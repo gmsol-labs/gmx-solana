@@ -5,7 +5,7 @@ use gmsol_sdk::{
 };
 use solana_sdk::{pubkey::Pubkey, system_program};
 
-use crate::anchor_test::setup::{current_deployment, Deployment};
+use crate::anchor_test::setup::{current_deployment, CurrentOrderTimestamp, Deployment};
 
 #[tokio::test]
 async fn callback() -> eyre::Result<()> {
@@ -221,9 +221,12 @@ async fn callback() -> eyre::Result<()> {
     let mut builder = keeper.execute_order(store, oracle, &order, false)?;
     deployment
         .execute_with_pyth(
-            builder
-                .add_alt(deployment.common_alt().clone())
-                .add_alt(deployment.market_alt().clone()),
+            &mut CurrentOrderTimestamp {
+                execute: builder
+                    .add_alt(deployment.common_alt().clone())
+                    .add_alt(deployment.market_alt().clone()),
+                clock_client: &keeper,
+            },
             None,
             true,
             true,
@@ -278,9 +281,12 @@ async fn callback() -> eyre::Result<()> {
     let mut builder = keeper.execute_order(store, oracle, &order, false)?;
     deployment
         .execute_with_pyth(
-            builder
-                .add_alt(deployment.common_alt().clone())
-                .add_alt(deployment.market_alt().clone()),
+            &mut CurrentOrderTimestamp {
+                execute: builder
+                    .add_alt(deployment.common_alt().clone())
+                    .add_alt(deployment.market_alt().clone()),
+                clock_client: &keeper,
+            },
             None,
             true,
             true,
@@ -328,9 +334,12 @@ async fn callback() -> eyre::Result<()> {
     let mut builder = keeper.execute_order(store, oracle, &order, false)?;
     deployment
         .execute_with_pyth(
-            builder
-                .add_alt(deployment.common_alt().clone())
-                .add_alt(deployment.market_alt().clone()),
+            &mut CurrentOrderTimestamp {
+                execute: builder
+                    .add_alt(deployment.common_alt().clone())
+                    .add_alt(deployment.market_alt().clone()),
+                clock_client: &keeper,
+            },
             None,
             true,
             true,
@@ -378,9 +387,12 @@ async fn callback() -> eyre::Result<()> {
     let mut builder = keeper.execute_order(store, oracle, &order, false)?;
     deployment
         .execute_with_pyth(
-            builder
-                .add_alt(deployment.common_alt().clone())
-                .add_alt(deployment.market_alt().clone()),
+            &mut CurrentOrderTimestamp {
+                execute: builder
+                    .add_alt(deployment.common_alt().clone())
+                    .add_alt(deployment.market_alt().clone()),
+                clock_client: &keeper,
+            },
             None,
             true,
             true,
