@@ -507,6 +507,10 @@ impl<'info> CompleteGtExchangeV2<'info> {
         let ctx = self.close_gt_exchange_ctx();
         close_gt_exchange_v2(ctx.with_signer(&[&signer.as_seeds()]))?;
 
+        if gt_amount == 0 {
+            return Ok(());
+        }
+
         let len = self.gt_bank.load()?.num_tokens();
         let gt_bank_tokens = self.gt_bank.load()?.tokens().collect::<Vec<_>>();
         let total_len = len.checked_mul(3).expect("must not overflow");
@@ -526,6 +530,11 @@ impl<'info> CompleteGtExchangeV2<'info> {
             require_gte!(total_gt_amount, gt_amount, CoreError::Internal);
 
             for (idx, token) in gt_bank_tokens.iter().enumerate() {
+                let balance = self.gt_bank.load()?.get_balance(token).expect("must exist");
+                let amount = balance
+                    .checked_mul_div(&gt_amount, &total_gt_amount)
+                    .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?;
+
                 let mint = &tokens[idx];
                 require_keys_eq!(*mint.key, *token, CoreError::InvalidArgument);
                 let token_program = if mint.owner == self.token_program.key {
@@ -545,14 +554,6 @@ impl<'info> CompleteGtExchangeV2<'info> {
                     &token_program.key(),
                 )?;
 
-                let balance = self.gt_bank.load()?.get_balance(token).expect("must exist");
-                let amount = if gt_amount == 0 {
-                    0
-                } else {
-                    balance
-                        .checked_mul_div(&gt_amount, &total_gt_amount)
-                        .ok_or_else(|| error!(CoreError::TokenAmountOverflow))?
-                };
                 if amount == 0 {
                     continue;
                 }
