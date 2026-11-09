@@ -2192,7 +2192,7 @@ impl super::Command for Exchange {
                     .await?
                     .into_value()
                     .ok_or_eyre("account not found")?;
-                let executor = args.build(client).await?;
+                let executor = args.build(client, ctx.config()).await?;
                 let oracle = ctx.config().oracle()?;
                 match decoded {
                     GMSOLAccountData::Deposit(_) => {
@@ -2283,7 +2283,7 @@ impl super::Command for Exchange {
                 ctx.require_not_serialize_only_mode()?;
                 ctx.require_not_ix_buffer_mode()?;
 
-                let executor = args.build(client).await?;
+                let executor = args.build(client, ctx.config()).await?;
                 let oracle = ctx.config().oracle()?;
                 let (for_long, for_short) = match side {
                     Some(Side::Long) => (true, false),
@@ -2300,7 +2300,7 @@ impl super::Command for Exchange {
                 ctx.require_not_serialize_only_mode()?;
                 ctx.require_not_ix_buffer_mode()?;
 
-                let executor = args.build(client).await?;
+                let executor = args.build(client, ctx.config()).await?;
                 let oracle = ctx.config().oracle()?;
                 let builder = client.update_closed_state(store, oracle, market_token);
                 executor.execute(builder, options).await?;
@@ -2316,7 +2316,7 @@ impl super::Command for Exchange {
                 ctx.require_not_serialize_only_mode()?;
                 ctx.require_not_ix_buffer_mode()?;
 
-                let executor = args.build(client).await?;
+                let executor = args.build(client, ctx.config()).await?;
                 let oracle = ctx.config().oracle()?;
                 let size = match size {
                     Some(size) => *size,
@@ -2339,7 +2339,7 @@ impl super::Command for Exchange {
                 ctx.require_not_serialize_only_mode()?;
                 ctx.require_not_ix_buffer_mode()?;
 
-                let executor = args.build(client).await?;
+                let executor = args.build(client, ctx.config()).await?;
                 let oracle = ctx.config().oracle()?;
                 let mut builder = client.liquidate(oracle, position)?;
                 for alt in ctx.config().alts() {
@@ -2392,7 +2392,7 @@ impl super::Command for Exchange {
                 ctx.require_not_serialize_only_mode()?;
                 ctx.require_not_ix_buffer_mode()?;
 
-                let executor = args.build(client).await?;
+                let executor = args.build(client, ctx.config()).await?;
                 let oracle = ctx.config().oracle()?;
 
                 let market_tokens = if market_tokens.is_empty() {
