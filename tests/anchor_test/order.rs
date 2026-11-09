@@ -1084,7 +1084,7 @@ async fn increase_order_with_mismatched_final_output_token_should_fail() -> eyre
 
     let size = 5_000 * MARKET_USD_UNIT;
     let price = 400_000 * MARKET_USD_UNIT / 10u128.pow(fbtc.config.decimals as u32);
-    let (rpc, order) = client
+    let (mut rpc, order) = client
         .limit_increase(
             store,
             market_token,
@@ -1124,6 +1124,7 @@ async fn increase_order_with_mismatched_final_output_token_should_fail() -> eyre
 
     let err = client
         .store_transaction()
+        .compute_budget(*rpc.compute_budget_mut())
         .pre_instructions(instructions, true)
         .send()
         .await
