@@ -15,7 +15,10 @@ use gmsol_store::{
         gt::{GtExchange, GtExchangeVault},
         Seed, Store,
     },
-    utils::{token::validate_associated_token_account, CpiAuthentication, WithStore},
+    utils::{
+        token::{is_associated_token_account_with_program_id, validate_associated_token_account},
+        CpiAuthentication, WithStore,
+    },
     CoreError,
 };
 use gmsol_utils::InitSpace;
@@ -545,14 +548,17 @@ impl<'info> CompleteGtExchangeV2<'info> {
                     return err!(CoreError::InvalidArgument);
                 };
 
-                // The owner's associated token account is required even if nothing is paid.
+                // The target must be the owner's associated token account even if nothing is paid.
                 let target = &targets[idx];
-                validate_associated_token_account(
-                    target,
-                    &owner_address,
-                    token,
-                    &token_program.key(),
-                )?;
+                require!(
+                    is_associated_token_account_with_program_id(
+                        target.key,
+                        &owner_address,
+                        token,
+                        &token_program.key(),
+                    ),
+                    ErrorCode::AccountNotAssociatedTokenAccount
+                );
 
                 if amount == 0 {
                     continue;
@@ -562,6 +568,13 @@ impl<'info> CompleteGtExchangeV2<'info> {
                 validate_associated_token_account(
                     vault,
                     &gt_bank_address,
+                    token,
+                    &token_program.key(),
+                )?;
+
+                validate_associated_token_account(
+                    target,
+                    &owner_address,
                     token,
                     &token_program.key(),
                 )?;

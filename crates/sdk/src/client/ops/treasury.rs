@@ -168,8 +168,8 @@ pub trait TreasuryOps<C> {
     /// Complete a confirmed GT exchange on behalf of its owner.
     ///
     /// The payer does not need to be the owner. The GT Bank share goes to the owner's
-    /// associated token accounts, which must already exist, and the rent to the
-    /// exchange's rent receiver.
+    /// associated token accounts, which must already exist for non-zero payouts, and
+    /// the rent to the exchange's rent receiver.
     fn complete_gt_exchange_v2(
         &self,
         store: &Pubkey,
