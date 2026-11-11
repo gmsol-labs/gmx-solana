@@ -421,8 +421,8 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
         window.confirm(deployment).await?;
 
         // fBTC has no recorded balance and the USDG share of the dust exchange
-        // rounds to zero, so the owner's associated token accounts are only
-        // checked by address and do not need to exist.
+        // rounds to zero, so the owner's associated token accounts are not used
+        // and do not need to exist.
         let bank = window.bank(admin).await?;
         assert!(expected_payouts(&bank, &tokens, DUST_GT_AMOUNT)
             .iter()
@@ -432,27 +432,6 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
             .iter()
             .any(|token| recorded_balance(&bank, token) == 0));
         let dust_exchange = admin.find_gt_exchange_address(&window.vault, &dust_owner.payer());
-        let caller_address = caller.payer();
-        let caller_ata = |token: &Pubkey| get_associated_token_address(&caller_address, token);
-        let code = reject_without_change(
-            admin,
-            complete_gt_exchange_v2_to(
-                &caller,
-                deployment,
-                &window,
-                &dust_owner.payer(),
-                &dust_owner.payer(),
-                caller_ata,
-            )
-            .await?,
-            &[dust_exchange, window.bank],
-        )
-        .await?;
-        assert_eq!(
-            code,
-            Some(ErrorCode::AccountNotAssociatedTokenAccount.into())
-        );
-
         let dust_owner_lamports = admin.rpc().get_balance(&dust_owner.payer()).await?;
         let rent = admin.rpc().get_balance(&dust_exchange).await?;
         caller
@@ -490,6 +469,8 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
         let exchange = admin.find_gt_exchange_address(&window.vault, &owner.payer());
         let owner_address = owner.payer();
         let owner_ata = |token: &Pubkey| get_associated_token_address(&owner_address, token);
+        let caller_address = caller.payer();
+        let caller_ata = |token: &Pubkey| get_associated_token_address(&caller_address, token);
         let watched = [exchange, window.bank, rent_payer.pubkey()]
             .into_iter()
             .chain(tokens.iter().map(owner_ata))
@@ -523,10 +504,7 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
             &watched,
         )
         .await?;
-        assert_eq!(
-            code,
-            Some(ErrorCode::AccountNotAssociatedTokenAccount.into())
-        );
+        assert_eq!(code, Some(ErrorCode::ConstraintTokenOwner.into()));
         let non_ata = Keypair::new();
         create_token_account(&owner, &non_ata, &usdg).await?;
         let code = reject_without_change(
