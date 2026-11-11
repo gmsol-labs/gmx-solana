@@ -183,7 +183,7 @@ async fn referral() -> eyre::Result<()> {
 async fn scub_gt_delegation_owner_controls() -> eyre::Result<()> {
     let deployment = current_deployment().await?;
     let _guard = deployment.use_accounts().await?;
-    let client = deployment.user_client(Deployment::USER_1)?;
+    let client = deployment.funded_client().await?;
     let other = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let store = &deployment.store;
     client.prepare_user(store)?.send().await?;
