@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
+use super::instructions::TransactionGroup;
+use crate::evm_proxy::{cancel_instruction, CancelIntent};
 use serde::{Deserialize, Serialize};
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
@@ -26,6 +29,167 @@ fn parse_evm_address(input: &str) -> crate::Result<[u8; 20]> {
     let mut address = [0_u8; 20];
     hex::decode_to_slice(hex_address, &mut address).map_err(crate::Error::custom)?;
     Ok(address)
+}
+
+fn parse_hex<const N: usize>(input: &str, name: &str) -> crate::Result<[u8; N]> {
+    let value = input
+        .strip_prefix("0x")
+        .or_else(|| input.strip_prefix("0X"))
+        .unwrap_or(input);
+    if value.len() != N * 2 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(crate::Error::custom(format!(
+            "{name} must contain {N} hex bytes"
+        )));
+    }
+    let mut bytes = [0; N];
+    hex::decode_to_slice(value, &mut bytes).map_err(crate::Error::custom)?;
+    Ok(bytes)
+}
+
+/// Fields shared by the signable Cancel payload and its Solana instruction.
+#[derive(Clone, Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelIntentArgs {
+    evm_address: String,
+    chain_id: String,
+    nonce: String,
+    deadline: String,
+    store: String,
+    genesis_hash: String,
+    #[serde(default)]
+    program_id: Option<String>,
+}
+
+impl CancelIntentArgs {
+    fn parse(&self) -> crate::Result<(Pubkey, Pubkey, [u8; 32], CancelIntent)> {
+        let program = match &self.program_id {
+            Some(value) => Pubkey::from_str(value)?,
+            None => gmsol_programs::gmsol_evm_proxy::ID,
+        };
+        Ok((
+            program,
+            Pubkey::from_str(&self.store)?,
+            parse_hex(&self.genesis_hash, "genesisHash")?,
+            CancelIntent {
+                evm_address: parse_evm_address(&self.evm_address)?,
+                chain_id: parse_hex(&self.chain_id, "chainId")?,
+                nonce: self.nonce.parse().map_err(crate::Error::custom)?,
+                deadline: self.deadline.parse().map_err(crate::Error::custom)?,
+            },
+        ))
+    }
+}
+
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct CancelSigningPayload {
+    domain: CancelDomain,
+    types: CancelTypes,
+    #[serde(rename = "primaryType")]
+    primary_type: &'static str,
+    message: CancelMessage,
+}
+
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelDomain {
+    name: &'static str,
+    version: &'static str,
+    chain_id: String,
+    salt: String,
+}
+
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelMessage {
+    proxy_account: String,
+    nonce: String,
+    deadline: String,
+}
+
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct CancelField {
+    name: &'static str,
+    #[serde(rename = "type")]
+    field_type: &'static str,
+}
+
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct CancelTypes {
+    #[serde(rename = "EIP712Domain")]
+    eip712_domain: Vec<CancelField>,
+    #[serde(rename = "Cancel")]
+    cancel: Vec<CancelField>,
+}
+
+/// Return viem-compatible EIP-712 data without converting uint64 values to JS numbers.
+#[wasm_bindgen(js_name = buildCancelTypedData)]
+pub fn build_cancel_typed_data(args: CancelIntentArgs) -> crate::Result<CancelSigningPayload> {
+    let (program, store, genesis, intent) = args.parse()?;
+    let data = intent.typed_data(&program, &store, &genesis);
+    let fields = |items: &[(&'static str, &'static str)]| {
+        items
+            .iter()
+            .map(|(name, field_type)| CancelField { name, field_type })
+            .collect()
+    };
+    Ok(CancelSigningPayload {
+        domain: CancelDomain {
+            name: data.name,
+            version: data.version,
+            chain_id: format!("0x{}", hex::encode(data.chain_id)),
+            salt: format!("0x{}", hex::encode(data.salt)),
+        },
+        types: CancelTypes {
+            eip712_domain: fields(&[
+                ("name", "string"),
+                ("version", "string"),
+                ("chainId", "uint256"),
+                ("salt", "bytes32"),
+            ]),
+            cancel: fields(&[
+                ("proxyAccount", "bytes32"),
+                ("nonce", "uint64"),
+                ("deadline", "uint64"),
+            ]),
+        },
+        primary_type: "Cancel",
+        message: CancelMessage {
+            proxy_account: format!("0x{}", hex::encode(data.proxy_account.to_bytes())),
+            nonce: data.nonce.to_string(),
+            deadline: data.deadline.to_string(),
+        },
+    })
+}
+
+/// Build an unsigned Solana Cancel transaction for an arbitrary fee payer.
+#[wasm_bindgen(js_name = buildCancelTransaction)]
+pub fn build_cancel_transaction(
+    args: CancelIntentArgs,
+    payer: &str,
+    recent_blockhash: &str,
+    signature: &str,
+    recovery_id: u8,
+) -> crate::Result<TransactionGroup> {
+    let (program, _, _, intent) = args.parse()?;
+    let payer = Pubkey::from_str(payer)?;
+    let ix = cancel_instruction(
+        program,
+        payer,
+        &intent,
+        parse_hex(signature, "signature")?,
+        recovery_id,
+    )?;
+    Ok(TransactionGroup::from_single_instruction(
+        ix,
+        payer,
+        Hash::from_str(recent_blockhash).map_err(crate::Error::custom)?,
+    ))
 }
 
 /// Derive a proxy PDA from exactly 20 EVM address bytes in hex.
@@ -64,6 +228,38 @@ pub fn find_proxy_config_address(program_id: Option<String>) -> crate::Result<Pr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cancel_payload_keeps_full_width_single_nonce_strings() {
+        for nonce in ["0", "9007199254740993", "18446744073709551615"] {
+            let payload = build_cancel_typed_data(CancelIntentArgs {
+                evm_address: "0x1111111111111111111111111111111111111111".into(),
+                chain_id: hex::encode([1; 32]),
+                nonce: nonce.into(),
+                deadline: "1700000120".into(),
+                store: Pubkey::new_unique().to_string(),
+                genesis_hash: hex::encode([2; 32]),
+                program_id: None,
+            })
+            .unwrap();
+            assert_eq!(payload.message.nonce, nonce);
+            assert_eq!(payload.message.deadline, "1700000120");
+            assert_eq!(payload.primary_type, "Cancel");
+            assert_eq!(
+                payload
+                    .types
+                    .cancel
+                    .iter()
+                    .map(|field| (field.name, field.field_type))
+                    .collect::<Vec<_>>(),
+                vec![
+                    ("proxyAccount", "bytes32"),
+                    ("nonce", "uint64"),
+                    ("deadline", "uint64")
+                ]
+            );
+        }
+    }
 
     #[test]
     fn config_address_matches_rust_derivation() {

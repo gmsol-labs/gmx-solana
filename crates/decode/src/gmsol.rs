@@ -179,6 +179,24 @@ pub mod evm_proxy {
         Ok(None)
     }
 
+    /// Decode a consumed intent from a successful EVM proxy transaction's log.
+    pub fn decode_intent_event_log(
+        line: &str,
+    ) -> Result<Option<events::IntentConsumed>, crate::DecodeError> {
+        let Some(encoded) = line.strip_prefix("Program data: ") else {
+            return Ok(None);
+        };
+        let data = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(crate::DecodeError::custom)?;
+        if !data.starts_with(events::IntentConsumed::DISCRIMINATOR) {
+            return Ok(None);
+        }
+        events::IntentConsumed::try_from_slice(&data[events::IntentConsumed::DISCRIMINATOR.len()..])
+            .map(Some)
+            .map_err(crate::DecodeError::custom)
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -225,6 +243,43 @@ pub mod evm_proxy {
             assert_eq!(decoded.config, event.config);
             assert!(decoded.previous_paused);
             assert!(!decoded.paused);
+        }
+
+        #[test]
+        fn decodes_consumed_nonce_event() {
+            let event = events::IntentConsumed {
+                proxy: Pubkey::new_unique(),
+                nonce: 0,
+                kind: 1,
+            };
+            let line = format!(
+                "Program data: {}",
+                base64::engine::general_purpose::STANDARD.encode(event.data())
+            );
+            let decoded = decode_intent_event_log(&line).unwrap().unwrap();
+            assert_eq!(decoded.proxy, event.proxy);
+            assert_eq!(decoded.nonce, event.nonce);
+            assert_eq!(decoded.kind, event.kind);
+            assert!(decode_config_event_log(&line).unwrap().is_none());
+
+            let encode = |data: &[u8]| {
+                format!(
+                    "Program data: {}",
+                    base64::engine::general_purpose::STANDARD.encode(data)
+                )
+            };
+            let mut extra = event.data();
+            extra.push(0);
+            assert!(decode_intent_event_log(&encode(&extra)).is_err());
+            let mut old = events::IntentConsumed::DISCRIMINATOR.to_vec();
+            old.extend_from_slice(event.proxy.as_ref());
+            old.extend_from_slice(&8_u64.to_le_bytes());
+            old.extend_from_slice(&event.nonce.to_le_bytes());
+            old.push(event.kind);
+            assert!(decode_intent_event_log(&encode(&old)).is_err());
+            assert!(decode_intent_event_log(&encode(&event.data()[..48])).is_err());
+            assert!(decode_intent_event_log("Program data: %%%").is_err());
+            assert!(decode_intent_event_log("unrelated log").unwrap().is_none());
         }
     }
 }
