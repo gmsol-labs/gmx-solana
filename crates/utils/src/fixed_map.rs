@@ -1,4 +1,4 @@
-use anchor_lang::solana_program::hash::hashv;
+use solana_program::hash::hashv;
 
 /// Convert to fixed-size key.
 pub fn to_key(key: &str) -> [u8; 32] {
@@ -200,7 +200,7 @@ macro_rules! impl_fixed_map {
 
 #[cfg(test)]
 mod tests {
-    use anchor_lang::solana_program::pubkey::Pubkey;
+    use solana_program::pubkey::Pubkey;
 
     fixed_map!(FixedFactorMap, u128, 32, 12);
 
