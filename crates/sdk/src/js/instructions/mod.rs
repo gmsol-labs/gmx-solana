@@ -9,7 +9,14 @@ use gmsol_solana_utils::{
     transaction_builder::default_before_sign,
 };
 use serde::{Deserialize, Serialize};
-use solana_sdk::{signature::NullSigner, transaction::VersionedTransaction};
+use solana_sdk::{
+    hash::Hash,
+    instruction::Instruction,
+    message::{Message, VersionedMessage},
+    pubkey::Pubkey,
+    signature::{NullSigner, Signature},
+    transaction::VersionedTransaction,
+};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -121,6 +128,17 @@ pub struct BuildTransactionOptions {
 }
 
 impl TransactionGroup {
+    /// Wrap one instruction in an unsigned transaction for a caller-supplied payer.
+    pub(crate) fn from_single_instruction(ix: Instruction, payer: Pubkey, blockhash: Hash) -> Self {
+        let message = Message::new_with_blockhash(&[ix], Some(&payer), &blockhash);
+        let signatures =
+            vec![Signature::default(); message.header.num_required_signatures as usize];
+        Self(vec![vec![VersionedTransaction {
+            signatures,
+            message: VersionedMessage::Legacy(message),
+        }]])
+    }
+
     fn new(
         group: &gmsol_solana_utils::TransactionGroup,
         recent_blockhash: &str,

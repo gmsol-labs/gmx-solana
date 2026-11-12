@@ -56,6 +56,125 @@
       "args": []
     },
     {
+      "name": "cancel",
+      "docs": [
+        "Consume the next signed Cancel nonce, wrapping from u64::MAX to zero,",
+        "without changing the proxy's business state.",
+        "",
+        "# Errors",
+        "",
+        "Anchor rejects a missing submitter signature, invalid account ownership or",
+        "discriminators, noncanonical Config or Proxy PDAs, or a readonly Proxy.",
+        "Account loading/borrowing and Clock access errors propagate.",
+        "Returns `InvalidProxy` for a stored version, bump or EVM address mismatch,",
+        "and `InvalidIntentNonce` when the signed nonce is not the next nonce.",
+        "Returns `Paused` while Config is paused and `ChainNotAllowed` when the",
+        "signed chain ID is not allowed by Config.",
+        "Returns `InvalidDeadline` for a negative Clock timestamp or a deadline",
+        "outside the inclusive window from now through now plus 3600 seconds.",
+        "Returns `InvalidSignature` for an invalid recovery ID, zero or high `s`,",
+        "failed recovery, or a recovered address that does not match the EVM owner",
+        "for the computed domain and Cancel digest."
+      ],
+      "discriminator": [
+        232,
+        219,
+        223,
+        41,
+        219,
+        236,
+        220,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "submitter",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proxy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  120,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "evm_address"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "evm_address",
+          "type": {
+            "array": [
+              "u8",
+              20
+            ]
+          }
+        },
+        {
+          "name": "chain_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "deadline",
+          "type": "u64"
+        },
+        {
+          "name": "signature",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "recovery_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "create_config",
       "docs": [
         "Bind the singleton Config to one Store and a caller-supplied genesis hash.",
@@ -515,6 +634,19 @@
         26,
         193
       ]
+    },
+    {
+      "name": "IntentConsumed",
+      "discriminator": [
+        142,
+        216,
+        106,
+        77,
+        223,
+        216,
+        165,
+        48
+      ]
     }
   ],
   "errors": [
@@ -547,6 +679,36 @@
       "code": 6005,
       "name": "NotPendingAdmin",
       "msg": "Signer is not the pending admin"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidIntentNonce",
+      "msg": "Intent nonce is not the proxy's next nonce"
+    },
+    {
+      "code": 6007,
+      "name": "ReservedIntentError",
+      "msg": "Reserved proxy intent error"
+    },
+    {
+      "code": 6008,
+      "name": "Paused",
+      "msg": "Intent verification is paused"
+    },
+    {
+      "code": 6009,
+      "name": "ChainNotAllowed",
+      "msg": "EVM chain is not allowed"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidDeadline",
+      "msg": "Intent deadline is outside the execution window"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidSignature",
+      "msg": "Invalid EVM signature"
     }
   ],
   "types": [
@@ -1111,6 +1273,26 @@
                 256
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "IntentConsumed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proxy",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
           }
         ]
       }
