@@ -1,15 +1,330 @@
 use crate::anchor_test::setup::{current_deployment, Deployment};
+use base64::Engine;
 use gmsol_evm_proxy as evm_proxy;
-use gmsol_programs::anchor_lang::{error::ErrorCode, AccountDeserialize, Discriminator};
+use gmsol_programs::anchor_lang::{
+    error::ErrorCode, AccountDeserialize, AnchorDeserialize, Discriminator,
+};
+use gmsol_sdk::client::ops::evm_proxy::ConfigInitialization;
 use gmsol_sdk::client::ops::SystemProgramOps;
 use gmsol_solana_utils::signer::shared_signer;
 use solana_sdk::{
+    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     commitment_config::CommitmentConfig,
     instruction::{AccountMeta, InstructionError},
-    signature::{Keypair, Signer},
+    signature::{EncodableKey, Keypair, Signer},
     system_program,
     transaction::TransactionError,
 };
+use solana_transaction_status::{option_serializer::OptionSerializer, UiTransactionEncoding};
+
+#[tokio::test]
+async fn config_creation_binds_store_and_emits_event() -> eyre::Result<()> {
+    use solana_client::rpc_config::RpcTransactionConfig;
+
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let client = &deployment.client;
+    let program_data = bpf_loader_upgradeable::get_program_data_address(&evm_proxy::ID);
+    let program_data_account = client.rpc().get_account(&program_data).await?;
+    assert_eq!(program_data_account.owner, bpf_loader_upgradeable::ID);
+    let metadata_len = UpgradeableLoaderState::size_of_programdata_metadata();
+    let state: UpgradeableLoaderState =
+        bincode::deserialize(&program_data_account.data[..metadata_len])?;
+    assert!(matches!(
+        state,
+        UpgradeableLoaderState::ProgramData {
+            upgrade_authority_address: Some(authority),
+            ..
+        } if authority == client.payer()
+    ));
+
+    let (config_address, _) =
+        solana_sdk::pubkey::Pubkey::find_program_address(&[evm_proxy::CONFIG_SEED], &evm_proxy::ID);
+    let genesis_hash = client.rpc().get_genesis_hash().await?.to_bytes();
+    let admin = client.payer();
+    let other_client = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let wrong_authority = other_client
+        .store_transaction()
+        .program(evm_proxy::ID)
+        .anchor_args(evm_proxy::instruction::CreateConfig {
+            genesis_hash,
+            first_admin: admin,
+        })
+        .anchor_accounts(evm_proxy::accounts::CreateConfig {
+            payer: other_client.payer(),
+            upgrade_authority: other_client.payer(),
+            config: config_address,
+            program: evm_proxy::ID,
+            program_data,
+            store: deployment.store,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await
+        .expect_err("the keeper is not the program upgrade authority");
+    assert_eq!(
+        gmsol_sdk::Error::from(wrong_authority).anchor_error_code(),
+        Some(ErrorCode::ConstraintRaw.into())
+    );
+    assert!(client
+        .rpc()
+        .get_account_with_commitment(&config_address, CommitmentConfig::processed())
+        .await?
+        .value
+        .is_none());
+
+    let zero_admin = client
+        .store_transaction()
+        .program(evm_proxy::ID)
+        .anchor_args(evm_proxy::instruction::CreateConfig {
+            genesis_hash,
+            first_admin: solana_sdk::pubkey::Pubkey::default(),
+        })
+        .anchor_accounts(evm_proxy::accounts::CreateConfig {
+            payer: client.payer(),
+            upgrade_authority: client.payer(),
+            config: config_address,
+            program: evm_proxy::ID,
+            program_data,
+            store: deployment.store,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await
+        .expect_err("a zero first admin must not initialize Config");
+    assert_eq!(
+        gmsol_sdk::Error::from(zero_admin).anchor_error_code(),
+        Some(6002)
+    );
+    assert!(client
+        .rpc()
+        .get_account_with_commitment(&config_address, CommitmentConfig::processed())
+        .await?
+        .value
+        .is_none());
+
+    let foreign_store = client
+        .store_transaction()
+        .program(evm_proxy::ID)
+        .anchor_args(evm_proxy::instruction::CreateConfig {
+            genesis_hash,
+            first_admin: admin,
+        })
+        .anchor_accounts(evm_proxy::accounts::CreateConfig {
+            payer: client.payer(),
+            upgrade_authority: client.payer(),
+            config: config_address,
+            program: evm_proxy::ID,
+            program_data,
+            store: system_program::ID,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await
+        .expect_err("a foreign-owned account cannot be bound as Store");
+    assert_eq!(
+        gmsol_sdk::Error::from(foreign_store).anchor_error_code(),
+        Some(ErrorCode::AccountOwnedByWrongProgram.into())
+    );
+    assert!(client
+        .rpc()
+        .get_account_with_commitment(&config_address, CommitmentConfig::processed())
+        .await?
+        .value
+        .is_none());
+
+    let wrong_program_data = bpf_loader_upgradeable::get_program_data_address(&gmsol_store::ID);
+    let unrelated = client.rpc().get_account(&wrong_program_data).await?;
+    assert_eq!(unrelated.owner, bpf_loader_upgradeable::ID);
+    let error = client
+        .store_transaction()
+        .program(evm_proxy::ID)
+        .anchor_args(evm_proxy::instruction::CreateConfig {
+            genesis_hash,
+            first_admin: admin,
+        })
+        .anchor_accounts(evm_proxy::accounts::CreateConfig {
+            payer: client.payer(),
+            upgrade_authority: client.payer(),
+            config: config_address,
+            program: evm_proxy::ID,
+            program_data: wrong_program_data,
+            store: deployment.store,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await
+        .expect_err("another program's ProgramData must not authorize Config");
+    assert_eq!(
+        gmsol_sdk::Error::from(error).anchor_error_code(),
+        Some(ErrorCode::ConstraintRaw.into())
+    );
+    assert!(client
+        .rpc()
+        .get_account_with_commitment(&config_address, CommitmentConfig::processed())
+        .await?
+        .value
+        .is_none());
+
+    let forged_config = solana_sdk::pubkey::Pubkey::new_unique();
+    let error = client
+        .store_transaction()
+        .program(evm_proxy::ID)
+        .anchor_args(evm_proxy::instruction::CreateConfig {
+            genesis_hash,
+            first_admin: admin,
+        })
+        .anchor_accounts(evm_proxy::accounts::CreateConfig {
+            payer: client.payer(),
+            upgrade_authority: client.payer(),
+            config: forged_config,
+            program: evm_proxy::ID,
+            program_data,
+            store: deployment.store,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await
+        .expect_err("a noncanonical Config address must fail seed validation");
+    assert_eq!(
+        gmsol_sdk::Error::from(error).anchor_error_code(),
+        Some(ErrorCode::ConstraintSeeds.into())
+    );
+    assert!(client
+        .rpc()
+        .get_account_with_commitment(&forged_config, CommitmentConfig::processed())
+        .await?
+        .value
+        .is_none());
+
+    let mut wrong_genesis_hash = genesis_hash;
+    wrong_genesis_hash[0] ^= 1;
+    let wallet = std::env::var("ANCHOR_WALLET")?;
+    let upgrade_authority = Keypair::read_from_file(&wallet)
+        .map_err(|error| eyre::eyre!("upgrade authority wallet unavailable: {error}"))?;
+    assert_eq!(upgrade_authority.pubkey(), admin);
+    let mismatch = client
+        .initialize_proxy_config(
+            deployment.store,
+            wrong_genesis_hash,
+            admin,
+            &upgrade_authority,
+        )
+        .await
+        .expect_err("a mismatched RPC genesis hash must reject before send");
+    assert!(matches!(
+        mismatch,
+        gmsol_sdk::Error::Custom(ref message)
+            if message == "supplied genesis hash differs from RPC"
+    ));
+    assert!(client
+        .rpc()
+        .get_account_with_commitment(&config_address, CommitmentConfig::processed())
+        .await?
+        .value
+        .is_none());
+
+    let signature = match client
+        .initialize_proxy_config(deployment.store, genesis_hash, admin, &upgrade_authority)
+        .await?
+    {
+        ConfigInitialization::Verified {
+            signature,
+            current_admin,
+        } => {
+            assert_eq!(current_admin, admin);
+            signature
+        }
+        ConfigInitialization::VerificationIncomplete { reason, .. } => {
+            eyre::bail!("confirmed Config creation failed readback: {reason}")
+        }
+    };
+
+    let account = client.rpc().get_account(&config_address).await?;
+    assert_eq!(account.owner, evm_proxy::ID);
+    assert_eq!(&account.data[..8], evm_proxy::Config::DISCRIMINATOR);
+    let config = evm_proxy::Config::try_deserialize(&mut account.data.as_slice())?;
+    assert_eq!(config.store, deployment.store);
+    assert_eq!(config.genesis_hash, genesis_hash);
+    assert_eq!(config.admin, admin);
+    assert_eq!(config.pending_admin, None);
+    assert!(config.paused);
+    assert!(config.allowed_chain_ids.is_empty());
+
+    let duplicate_error = client
+        .store_transaction()
+        .program(evm_proxy::ID)
+        .anchor_args(evm_proxy::instruction::CreateConfig {
+            genesis_hash,
+            first_admin: admin,
+        })
+        .anchor_accounts(evm_proxy::accounts::CreateConfig {
+            payer: client.payer(),
+            upgrade_authority: client.payer(),
+            config: config_address,
+            program: evm_proxy::ID,
+            program_data,
+            store: deployment.store,
+            system_program: system_program::ID,
+        })
+        .send()
+        .await
+        .expect_err("a second Config initialization must fail");
+    let duplicate_transaction_error = match &duplicate_error {
+        gmsol_solana_utils::Error::Client(error) => error.get_transaction_error(),
+        _ => panic!("unexpected duplicate initialization error: {duplicate_error:?}"),
+    };
+    assert!(
+        matches!(
+            duplicate_transaction_error,
+            Some(TransactionError::InstructionError(
+                _,
+                InstructionError::Custom(0)
+            ))
+        ),
+        "unexpected duplicate initialization error: {duplicate_error:?}"
+    );
+    assert_eq!(client.rpc().get_account(&config_address).await?, account);
+
+    let transaction = client
+        .rpc()
+        .get_transaction_with_config(
+            &signature,
+            RpcTransactionConfig {
+                encoding: Some(UiTransactionEncoding::Json),
+                commitment: Some(CommitmentConfig::confirmed()),
+                max_supported_transaction_version: Some(0),
+            },
+        )
+        .await?;
+    let logs = match transaction
+        .transaction
+        .meta
+        .expect("transaction metadata")
+        .log_messages
+    {
+        OptionSerializer::Some(logs) => logs,
+        other => panic!("transaction logs unavailable: {other:?}"),
+    };
+    let events: Vec<_> = logs
+        .iter()
+        .filter_map(|line| line.strip_prefix("Program data: "))
+        .filter_map(|data| base64::engine::general_purpose::STANDARD.decode(data).ok())
+        .filter(|data| data.starts_with(evm_proxy::ConfigCreated::DISCRIMINATOR))
+        .map(|data| evm_proxy::ConfigCreated::deserialize(&mut &data[8..]))
+        .collect::<Result<_, _>>()?;
+    assert_eq!(events.len(), 1);
+    let event = &events[0];
+    assert_eq!(event.config, config_address);
+    assert_eq!(event.store, deployment.store);
+    assert_eq!(event.genesis_hash, genesis_hash);
+    assert_eq!(event.admin, admin);
+    assert!(event.paused);
+    assert!(event.allowed_chain_ids.is_empty());
+    super::config_policy::verify_policy_and_handover(&deployment, config_address, genesis_hash)
+        .await?;
+    Ok(())
+}
 
 #[tokio::test]
 async fn evm_proxy_initializes_through_anchor() -> eyre::Result<()> {
@@ -410,6 +725,17 @@ fn proxy_future_reserved_bytes_preserve_identity_and_abi() -> eyre::Result<()> {
         .iter()
         .map(|instruction| instruction["name"].as_str().expect("instruction name"))
         .collect();
-    assert_eq!(names, ["create_proxy", "initialize"]);
+    assert_eq!(
+        names,
+        [
+            "accept_admin",
+            "create_config",
+            "create_proxy",
+            "initialize",
+            "propose_admin",
+            "set_chain_allowed",
+            "set_paused",
+        ]
+    );
     Ok(())
 }

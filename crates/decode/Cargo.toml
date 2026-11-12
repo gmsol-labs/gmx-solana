@@ -11,7 +11,7 @@ keywords.workspace = true
 
 [features]
 default = []
-gmsol-programs = ["dep:gmsol-programs"]
+gmsol-programs = ["dep:gmsol-programs", "gmsol-programs/evm-proxy"]
 solana-decoder = ["bs58"]
 
 [dependencies]
