@@ -197,6 +197,9 @@
 //! - [`cancel_referral_code_transfer`](gmsol_store::cancel_referral_code_transfer): Cancel the referral code transfer.
 //! - [`accept_referral_code`](gmsol_store::accept_referral_code): Complete the referral code transfer.
 //! - [`set_builder_fee_factor`](gmsol_store::set_builder_fee_factor): Set the builder fee factor advertised by the user.
+//! - [`set_gt_delegate`](gmsol_store::set_gt_delegate): Replace the GT delegate and allowance.
+//! - [`increase_gt_allowance`](gmsol_store::increase_gt_allowance): Add to the remaining GT allowance.
+//! - [`decrease_gt_allowance`](gmsol_store::decrease_gt_allowance): Reduce the remaining GT allowance.
 //!
 //! ## GT Model
 //!
@@ -210,7 +213,9 @@
 //! - [`prepare_gt_exchange_vault`](gmsol_store::prepare_gt_exchange_vault): Prepare current GT exchange vault.
 //! - [`confirm_gt_exchange_vault_v2`]: Confirm GT exchange vault.
 //! - [`request_gt_exchange`](gmsol_store::request_gt_exchange): Request a GT exchange.
+//! - [`request_gt_exchange_v2`](gmsol_store::request_gt_exchange_v2): Request a GT exchange as owner or delegate with separate rent payer.
 //! - [`close_gt_exchange`]: Close a confirmed GT exchange.
+//! - [`close_gt_exchange_v2`]: Close a confirmed GT exchange to its rent receiver.
 
 /// Instructions.
 pub mod instructions;
@@ -3017,7 +3022,27 @@ pub mod gmsol_store {
         instructions::request_gt_exchange(ctx, amount)
     }
 
-    /// Close a confirmed GT exchange.
+    /// Request a GT exchange signed by the owner or its delegate, with separate rent payer.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](RequestGtExchangeV2)*
+    ///
+    /// # Arguments
+    /// - `amount`: The amount of GT to exchange for rewards.
+    ///
+    /// # Errors
+    /// - `authority` must sign as the owner or the owner's current GT delegate.
+    /// - A delegate's remaining allowance must cover `amount` and is reduced on success.
+    /// - `payer` must sign and pays rent if the exchange is first created.
+    /// - `user` must be the initialized User Account of `owner` in `store`.
+    /// - `vault` must belong to `store` and be open for requests.
+    /// - `exchange` must be the owner's exchange in `vault`, either uninitialized or valid.
+    /// - `amount` must not exceed the owner's available GT.
+    pub fn request_gt_exchange_v2(ctx: Context<RequestGtExchangeV2>, amount: u64) -> Result<()> {
+        RequestGtExchangeV2::invoke(ctx, amount)
+    }
+
+    /// Close a confirmed GT exchange whose rent receiver is its owner.
     ///
     /// # Accounts
     /// *[See the documentation for the accounts.](CloseGtExchange)*
@@ -3028,10 +3053,28 @@ pub mod gmsol_store {
     /// - The [`vault`](CloseGtExchange::vault) must be properly initialized, owned by the `store`,
     ///   and confirmed.
     /// - The [`exchange`](CloseGtExchange::exchange) must be properly initialized and owned by both
-    ///   the `owner` and `vault`.
+    ///   the `owner` and `vault`, with its rent receiver set to the owner or unset.
     #[access_control(internal::Authenticate::only_gt_controller(&ctx))]
     pub fn close_gt_exchange(ctx: Context<CloseGtExchange>) -> Result<()> {
         instructions::unchecked_close_gt_exchange(ctx)
+    }
+
+    /// Close a confirmed GT exchange to its recorded rent receiver.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](CloseGtExchangeV2)*
+    ///
+    /// # Errors
+    /// - The [`authority`](CloseGtExchangeV2::authority) must be a signer and have the GT_CONTROLLER role in the `store`.
+    /// - The [`store`](CloseGtExchangeV2::store) must be properly initialized with an initialized GT state.
+    /// - The [`vault`](CloseGtExchangeV2::vault) must be properly initialized, owned by the `store`,
+    ///   and confirmed.
+    /// - The [`exchange`](CloseGtExchangeV2::exchange) must be properly initialized and owned by both
+    ///   the `owner` and `vault`.
+    /// - The [`rent_receiver`](CloseGtExchangeV2::rent_receiver) must match the exchange's effective rent receiver.
+    #[access_control(internal::Authenticate::only_gt_controller(&ctx))]
+    pub fn close_gt_exchange_v2(ctx: Context<CloseGtExchangeV2>) -> Result<()> {
+        CloseGtExchangeV2::invoke_unchecked(ctx)
     }
 
     /// Update the GT cumulative inverse cost factor.
@@ -3134,6 +3177,49 @@ pub mod gmsol_store {
         instructions::set_referrer(ctx, code)
     }
 
+    /// Set or clear the GT delegate and replace its remaining allowance.
+    ///
+    /// Omitting the delegate account clears the delegate and requires a zero allowance.
+    /// Setting the current delegate also replaces the allowance. Only the
+    /// owner of the User Account can sign this change. Emits the resulting
+    /// delegate and allowance for indexers.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](UpdateGtDelegation)*
+    ///
+    /// # Errors
+    /// - The owner must sign for its initialized User Account in this store.
+    /// - A nonzero allowance requires a nonzero delegate.
+    pub fn set_gt_delegate(ctx: Context<UpdateGtDelegation>, allowance: u64) -> Result<()> {
+        UpdateGtDelegation::set(ctx, allowance)
+    }
+
+    /// Add an amount to the GT allowance remaining at execution time.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](UpdateGtDelegation)*
+    ///
+    /// # Errors
+    /// - The owner must sign for its initialized User Account in this store.
+    /// - The amount must be nonzero, the provided delegate must match the current
+    ///   nonzero delegate, and the resulting allowance must not overflow `u64`.
+    pub fn increase_gt_allowance(ctx: Context<UpdateGtDelegation>, amount: u64) -> Result<()> {
+        UpdateGtDelegation::increase(ctx, amount)
+    }
+
+    /// Subtract from the GT allowance remaining at execution time, stopping at zero.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](UpdateGtDelegation)*
+    ///
+    /// # Errors
+    /// - The owner must sign for its initialized User Account in this store.
+    /// - The amount must be nonzero and the provided delegate must match the
+    ///   current nonzero delegate.
+    pub fn decrease_gt_allowance(ctx: Context<UpdateGtDelegation>, amount: u64) -> Result<()> {
+        UpdateGtDelegation::decrease(ctx, amount)
+    }
+
     /// Set the builder fee factor advertised by the user.
     ///
     /// This instruction is permissionless: any User Account owner can set the
@@ -3174,7 +3260,7 @@ pub mod gmsol_store {
     /// Submit this instruction with order creation in the same transaction if
     /// the order must carry a builder fee. The market-counter ID is not knowable
     /// before the transaction lands, so such a checkpoint cannot name it; pass
-    /// any placeholder, `0` by convention. The program accepts it only when
+    /// `0` as the placeholder. The program accepts it only when
     /// a preceding instruction in this transaction created that order. With
     /// separate transactions, a keeper can execute the order before the checkpoint
     /// lands, charging no builder fee. The checkpoint cannot be attached after
@@ -3190,11 +3276,18 @@ pub mod gmsol_store {
     /// address, whose recorded ID has moved on. An order update also advances
     /// the ID, so a checkpoint signed before an update must be rebuilt.
     ///
-    /// Calling again on a still-pending order re-runs every validation and
+    /// Calling again on an eligible pending order re-runs every validation and
     /// overwrites the checkpoint. Since a User Account advertises a zero factor
     /// until its owner sets one, checkpointing an account that advertises zero
     /// is how an owner cancels a builder fee it no longer wants, even when the
-    /// BuilderFee feature is disabled.
+    /// BuilderFee feature is disabled. Every successful call refreshes the
+    /// order's oracle timestamp and slot lower bounds, including same-factor
+    /// checkpoints and zero-factor revocation.
+    ///
+    /// A Market Order accepts a checkpoint only in its creation slot, so this
+    /// refresh does not extend its expiration. An earlier oracle observation
+    /// from that same slot can still qualify. Later fee changes and revocation
+    /// are unavailable on a pending Market Order; the owner can cancel it.
     ///
     /// # Accounts
     /// *[See the documentation for the accounts.](SetBuilderFee)*
@@ -3219,13 +3312,15 @@ pub mod gmsol_store {
     /// - The [`store`](SetBuilderFee::store) must be properly initialized and
     ///   must pass restart validation. For a nonzero factor, it must not have
     ///   the [`BuilderFee`](crate::states::feature::DomainDisabledFlag::BuilderFee)
-    ///   feature disabled; a zero-factor revocation is allowed while disabled.
+    ///   feature disabled; an otherwise eligible zero-factor revocation is
+    ///   allowed while disabled.
     /// - The [`order`](SetBuilderFee::order) must:
     ///   - Belong to the `store`
     ///   - Belong to the passed [`market`](SetBuilderFee::market)
     ///   - Still be pending execution
     ///   - Record `expected_order_id` as its ID, or have
     ///     been created earlier in this transaction
+    ///   - Be in its creation slot if it is a Market Order
     ///   - Be a user-initiated position order, so swap orders and the
     ///     keeper-initiated kinds are rejected
     ///   - Have an initialized final output token, equal to the passed

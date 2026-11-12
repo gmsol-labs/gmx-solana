@@ -50,26 +50,57 @@ impl fmt::Debug for Hermes {
     }
 }
 
+/// Normalize a base URL so endpoint paths can be joined onto it without
+/// discarding a path prefix.
+///
+/// `Url::join` follows RFC 3986: joining `/v2/...` onto
+/// `https://host/hermes` yields `https://host/v2/...`, dropping `/hermes`.
+/// Making the base path end with `/` and joining relative paths keeps it.
+fn normalize_base(mut base: Url) -> crate::Result<Url> {
+    if base.cannot_be_a_base() {
+        return Err(crate::Error::custom(format!(
+            "invalid Hermes base URL: {base}"
+        )));
+    }
+    if !base.path().ends_with('/') {
+        let path = format!("{}/", base.path());
+        base.set_path(&path);
+    }
+    Ok(base)
+}
+
 impl Hermes {
     /// Create a new hermes client with the given base URL.
+    ///
+    /// A path prefix in the base (e.g. `https://host/hermes`) is preserved.
     pub fn try_new(base: impl IntoUrl) -> crate::Result<Self> {
         Ok(Self {
-            base: base.into_url()?,
+            base: normalize_base(base.into_url()?)?,
             api_key: None,
             client: Client::new(),
         })
     }
 
     /// Create a new hermes client with the given base URL and API key.
+    ///
+    /// A path prefix in the base (e.g. `https://host/hermes`) is preserved.
     pub fn try_new_with_api_key(
         base: impl IntoUrl,
         api_key: impl Into<String>,
     ) -> crate::Result<Self> {
         Ok(Self {
-            base: base.into_url()?,
+            base: normalize_base(base.into_url()?)?,
             api_key: Some(api_key.into()),
             client: Client::new(),
         })
+    }
+
+    /// Resolve an endpoint path against the base URL, keeping any base path
+    /// prefix.
+    fn endpoint(&self, path: &str) -> crate::Result<Url> {
+        self.base
+            .join(path.trim_start_matches('/'))
+            .map_err(crate::Error::custom)
     }
 
     /// Create a new Hermes client from default ENVs.
@@ -95,11 +126,7 @@ impl Hermes {
     ) -> crate::Result<impl Stream<Item = crate::Result<PriceUpdate>> + 'static> {
         let params = get_query(feed_ids, encoding);
         let stream = self
-            .authorize(
-                self.client
-                    .get(self.base.join(PRICE_STREAM).map_err(crate::Error::custom)?)
-                    .query(&params),
-            )
+            .authorize(self.client.get(self.endpoint(PRICE_STREAM)?).query(&params))
             .send()
             .await?
             .bytes_stream()
@@ -124,11 +151,7 @@ impl Hermes {
     ) -> crate::Result<PriceUpdate> {
         let params = get_query(feed_ids, encoding);
         let update = self
-            .authorize(
-                self.client
-                    .get(self.base.join(PRICE_LATEST).map_err(crate::Error::custom)?)
-                    .query(&params),
-            )
+            .authorize(self.client.get(self.endpoint(PRICE_LATEST)?).query(&params))
             .send()
             .await?
             .json()
@@ -149,11 +172,7 @@ impl Hermes {
         let params = get_query(feed_ids, encoding);
         let path = format!("{PRICE_HISTORICAL}{publish_time}");
         let update = self
-            .authorize(
-                self.client
-                    .get(self.base.join(&path).map_err(crate::Error::custom)?)
-                    .query(&params),
-            )
+            .authorize(self.client.get(self.endpoint(&path)?).query(&params))
             .send()
             .await?
             .json()
@@ -228,11 +247,7 @@ impl Hermes {
 
 impl Default for Hermes {
     fn default() -> Self {
-        Self {
-            base: DEFAULT_HERMES_BASE.parse().unwrap(),
-            api_key: None,
-            client: Default::default(),
-        }
+        Self::try_new(DEFAULT_HERMES_BASE).expect("default Hermes base must be valid")
     }
 }
 
@@ -413,20 +428,26 @@ mod tests {
         assert!(debug.contains("[redacted]"));
     }
 
+    /// Build the request exactly as the client methods do, so the assertions
+    /// cover the real URL and headers.
+    fn build_request(hermes: &Hermes, path: &str) -> reqwest::Request {
+        let params = get_query([&sample_feed_id()], None);
+        hermes
+            .authorize(
+                hermes
+                    .client
+                    .get(hermes.endpoint(path).unwrap())
+                    .query(&params),
+            )
+            .build()
+            .unwrap()
+    }
+
     #[test]
     fn latest_request_includes_bearer_token() {
         let hermes =
             Hermes::try_new_with_api_key("https://example.com/hermes", "test-token").unwrap();
-        let params = get_query([&sample_feed_id()], None);
-        let request = hermes
-            .authorize(
-                hermes
-                    .client
-                    .get(hermes.base.join(PRICE_LATEST).unwrap())
-                    .query(&params),
-            )
-            .build()
-            .unwrap();
+        let request = build_request(&hermes, PRICE_LATEST);
 
         assert_eq!(
             request
@@ -435,7 +456,7 @@ mod tests {
                 .and_then(|v| v.to_str().ok()),
             Some("Bearer test-token")
         );
-        assert!(request.url().path().ends_with(PRICE_LATEST));
+        assert_eq!(request.url().path(), "/hermes/v2/updates/price/latest");
         assert!(request.url().query().unwrap().contains("ids"));
     }
 
@@ -443,16 +464,7 @@ mod tests {
     fn stream_request_includes_bearer_token() {
         let hermes =
             Hermes::try_new_with_api_key("https://example.com/hermes", "test-token").unwrap();
-        let params = get_query([&sample_feed_id()], None);
-        let request = hermes
-            .authorize(
-                hermes
-                    .client
-                    .get(hermes.base.join(PRICE_STREAM).unwrap())
-                    .query(&params),
-            )
-            .build()
-            .unwrap();
+        let request = build_request(&hermes, PRICE_STREAM);
 
         assert_eq!(
             request
@@ -461,28 +473,69 @@ mod tests {
                 .and_then(|v| v.to_str().ok()),
             Some("Bearer test-token")
         );
-        assert!(request.url().path().ends_with(PRICE_STREAM));
+        assert_eq!(request.url().path(), "/hermes/v2/updates/price/stream");
         assert!(request.url().query().unwrap().contains("ids"));
     }
 
     #[test]
     fn request_omits_authorization_without_api_key() {
         let hermes = Hermes::try_new("https://example.com/hermes").unwrap();
-        let params = get_query([&sample_feed_id()], None);
-        let request = hermes
-            .authorize(
-                hermes
-                    .client
-                    .get(hermes.base.join(PRICE_LATEST).unwrap())
-                    .query(&params),
-            )
-            .build()
-            .unwrap();
+        let request = build_request(&hermes, PRICE_LATEST);
 
         assert!(request
             .headers()
             .get(reqwest::header::AUTHORIZATION)
             .is_none());
+    }
+
+    #[test]
+    fn base_path_prefix_is_kept_with_or_without_trailing_slash() {
+        for base in ["https://example.com/hermes", "https://example.com/hermes/"] {
+            let hermes = Hermes::try_new(base).unwrap();
+            assert_eq!(
+                hermes.endpoint(PRICE_LATEST).unwrap().as_str(),
+                "https://example.com/hermes/v2/updates/price/latest",
+                "base {base}"
+            );
+            assert_eq!(
+                hermes.endpoint(PRICE_STREAM).unwrap().as_str(),
+                "https://example.com/hermes/v2/updates/price/stream",
+                "base {base}"
+            );
+        }
+    }
+
+    #[test]
+    fn default_base_resolves_to_hermes_pyth_network() {
+        let hermes = Hermes::default();
+        assert_eq!(
+            hermes.endpoint(PRICE_LATEST).unwrap().as_str(),
+            "https://hermes.pyth.network/v2/updates/price/latest"
+        );
+        assert_eq!(
+            hermes.endpoint(PRICE_STREAM).unwrap().as_str(),
+            "https://hermes.pyth.network/v2/updates/price/stream"
+        );
+    }
+
+    #[test]
+    fn nested_base_path_is_kept() {
+        let hermes = Hermes::try_new("https://example.com/a/b").unwrap();
+        assert_eq!(
+            hermes.endpoint(PRICE_LATEST).unwrap().as_str(),
+            "https://example.com/a/b/v2/updates/price/latest"
+        );
+    }
+
+    #[cfg(feature = "nightly-pyth-historical-api")]
+    #[test]
+    fn historical_path_keeps_base_prefix() {
+        let hermes = Hermes::try_new("https://example.com/hermes").unwrap();
+        let path = format!("{PRICE_HISTORICAL}1700000000");
+        assert_eq!(
+            hermes.endpoint(&path).unwrap().as_str(),
+            "https://example.com/hermes/v2/updates/price/1700000000"
+        );
     }
 
     #[test]
@@ -499,15 +552,20 @@ mod tests {
         }
     }
 
+    /// Live request. Hermes rejects unauthenticated price requests since the
+    /// Pyth Core upgrade, so this only runs when `PYTH_API_KEY` is set.
     #[cfg(feature = "nightly-pyth-historical-api")]
     #[tokio::test]
     async fn test_historical_price_updates() -> eyre::Result<()> {
         use std::time::{SystemTime, UNIX_EPOCH};
 
+        let Ok(hermes) = Hermes::from_default_envs() else {
+            eprintln!("skipping test_historical_price_updates: {ENV_API_KEY} is not set");
+            return Ok(());
+        };
+
         // ETH/USD feed
         let feed_id = sample_feed_id();
-
-        let hermes = Hermes::default();
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
         let publish_time = now - 300;
         let update = hermes

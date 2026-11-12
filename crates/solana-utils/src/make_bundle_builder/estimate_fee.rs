@@ -38,6 +38,18 @@ pub trait SetExecutionFee {
     fn set_execution_fee(&mut self, lamports: u64) -> &mut Self;
 }
 
+// Lets a caller wrap `&mut builder` in `EstimateFee` and still read `builder` after sending.
+impl<T: SetExecutionFee> SetExecutionFee for &mut T {
+    fn is_execution_fee_estimation_required(&self) -> bool {
+        (**self).is_execution_fee_estimation_required()
+    }
+
+    fn set_execution_fee(&mut self, lamports: u64) -> &mut Self {
+        (**self).set_execution_fee(lamports);
+        self
+    }
+}
+
 impl<'a, C: Deref<Target = impl Signer> + Clone, T> MakeBundleBuilder<'a, C> for EstimateFee<T>
 where
     T: SetExecutionFee,
@@ -60,5 +72,42 @@ where
         }
 
         Ok(tx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Fee {
+        lamports: u64,
+        required: bool,
+    }
+
+    impl SetExecutionFee for Fee {
+        fn is_execution_fee_estimation_required(&self) -> bool {
+            self.required
+        }
+
+        fn set_execution_fee(&mut self, lamports: u64) -> &mut Self {
+            self.lamports = lamports;
+            self
+        }
+    }
+
+    /// Same bound `EstimateFee` uses, so `&mut Fee` must go through the blanket impl.
+    fn estimate<T: SetExecutionFee>(mut builder: T) -> bool {
+        builder.set_execution_fee(5_000);
+        builder.is_execution_fee_estimation_required()
+    }
+
+    #[test]
+    fn mut_ref_forwards_to_the_builder() {
+        let mut fee = Fee {
+            lamports: 0,
+            required: false,
+        };
+        assert!(!estimate(&mut fee));
+        assert_eq!(fee.lamports, 5_000);
     }
 }

@@ -176,28 +176,28 @@ mod tests {
 
     #[test]
     fn zero_factor_uses_the_optional_account_sentinel() -> crate::Result<()> {
-        let scub_owner = Pubkey::new_unique();
-        let scub_order = Pubkey::new_unique();
-        let scub_builder = Pubkey::new_unique();
-        let scub_market = Pubkey::new_unique();
-        let scub_mint = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+        let order = Pubkey::new_unique();
+        let builder = Pubkey::new_unique();
+        let market = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
         for (factor, order_id) in [(0, 0u64), (1, 42), (1, 0)] {
             let hint = SetBuilderFeeHint::builder()
-                .market(scub_market)
-                .final_output_token(scub_mint)
+                .market(market)
+                .final_output_token(mint)
                 .order_id(order_id)
                 .build();
             let expected_vault = (factor != 0).then(|| {
                 get_associated_token_address_with_program_id(
-                    &scub_builder,
-                    &scub_mint,
+                    &builder,
+                    &mint,
                     &anchor_spl::token::ID,
                 )
             });
             let builder = SetBuilderFee::builder()
-                .payer(scub_owner)
-                .order(scub_order)
-                .builder(scub_builder)
+                .payer(owner)
+                .order(order)
+                .builder(builder)
                 .expected_factor(factor)
                 .build();
             let program_id = builder.program.id.0;

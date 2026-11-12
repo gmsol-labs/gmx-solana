@@ -28,8 +28,11 @@ pub struct SettleBuilderFeeArgs {
     payer: StringPubkey,
     /// Orders to settle, keyed by order address.
     ///
-    /// Each hint must be built from a fresh read of its order account; only field
-    /// presence is validated here, never freshness. See `SettleBuilderFeeHint`.
+    /// Each hint must be built from a read of its order account; only field
+    /// presence is validated here, never freshness. Set `builder_fee_factor`
+    /// from the order: with it, a revoked order (factor `0n`) stays on the
+    /// account-less path, and without it any order with a builder gets the
+    /// settlement accounts. See `SettleBuilderFeeHint`.
     orders: HashMap<StringPubkey, SettleBuilderFeeHint>,
     #[serde(default)]
     program: Option<StoreProgram>,

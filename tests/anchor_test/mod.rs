@@ -34,3 +34,5 @@ mod competition;
 mod liquidity_provider;
 
 mod gt_incentive;
+
+mod gt_exchange;

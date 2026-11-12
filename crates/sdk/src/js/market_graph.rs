@@ -144,7 +144,14 @@ impl JsMarketGraph {
     }
 
     /// Simulates order execution.
-    #[deprecated(since = "0.8.0", note = "use `to_simulator` instead")]
+    ///
+    /// Does **not** model builder fees, so its results are those of an order
+    /// with no builder fee. A non-zero `builder_fee_factor` is rejected rather
+    /// than ignored. Use `to_simulator().simulate_order(...)` instead.
+    #[deprecated(
+        since = "0.8.0",
+        note = "use `to_simulator` instead; this simulation does not model builder fees"
+    )]
     #[allow(deprecated)]
     pub fn simulate_order(
         &self,
@@ -161,8 +168,15 @@ impl JsMarketGraph {
             receive_token,
             swap_path,
             prefer_swap_out_token_update,
+            builder_fee_factor,
             ..
         } = args;
+        if builder_fee_factor.unwrap_or_default() != 0 {
+            return Err(crate::Error::custom(
+                "MarketGraph.simulate_order is deprecated and does not model builder fees; \
+                 use `graph.to_simulator().simulate_order(...)` with `builder_fee_factor` instead",
+            ));
+        }
         let swap_path = swap_path
             .map(|path| path.iter().map(|p| **p).collect::<Vec<_>>())
             .unwrap_or_default();
@@ -252,5 +266,57 @@ impl JsMarketGraph {
     #[wasm_bindgen(js_name = clone)]
     pub fn js_clone(&self) -> Self {
         self.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(builder_fee_factor: Option<u128>) -> SimulateOrderArgs {
+        let mut args: SimulateOrderArgs = serde_json::from_str(
+            r#"{
+                "kind": "MarketIncrease",
+                "params": {
+                    "market_token": "11111111111111111111111111111111",
+                    "is_long": true,
+                    "size": 1000,
+                    "amount": 10
+                },
+                "collateral_or_swap_out_token": "11111111111111111111111111111111"
+            }"#,
+        )
+        .unwrap();
+        args.builder_fee_factor = builder_fee_factor;
+        args
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn the_deprecated_simulation_rejects_a_builder_fee_instead_of_ignoring_it() {
+        let graph = JsMarketGraph::new(Default::default());
+        let err = graph
+            .simulate_order(args(Some(1)), None)
+            .err()
+            .expect("a builder fee must be rejected")
+            .to_string();
+        assert!(err.contains("does not model builder fees"), "{err}");
+        assert!(err.contains("to_simulator"), "{err}");
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn the_deprecated_simulation_accepts_an_absent_or_zero_factor() {
+        let graph = JsMarketGraph::new(Default::default());
+        for factor in [None, Some(0)] {
+            // The empty graph has no such market: the simulation proceeds far
+            // enough to say so, which is not the builder fee rejection.
+            let err = graph
+                .simulate_order(args(factor), None)
+                .err()
+                .expect("the empty graph has no such market")
+                .to_string();
+            assert!(!err.contains("builder fee"), "{err}");
+        }
     }
 }

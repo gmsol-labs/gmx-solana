@@ -15,14 +15,17 @@ use event_listener::Event;
 use eyre::{eyre, OptionExt};
 
 use futures_util::{FutureExt, StreamExt};
+use gmsol_programs::gmsol_store::client::{accounts as store_accounts, args as store_args};
 use gmsol_sdk::{
     client::{
         chainlink::pull_oracle::ChainlinkPullOracleFactory,
+        feeds_parser::FeedAddressMap,
         ops::{
-            AddressLookupTableOps, ConfigOps, ExchangeOps, GlvOps, GtOps, MarketOps, OracleOps,
-            RoleOps, StoreOps, SystemProgramOps, TokenConfigOps,
+            exchange::order::ExecuteOrderBuilder, AddressLookupTableOps, ConfigOps, ExchangeOps,
+            GlvOps, GtOps, MarketOps, OracleOps, RoleOps, StoreOps, SystemProgramOps,
+            TokenConfigOps, TreasuryOps,
         },
-        pull_oracle::{PullOraclePriceConsumer, WithPullOracle},
+        pull_oracle::{FeedIds, PullOraclePriceConsumer, WithPullOracle},
         pyth::{pull_oracle::PythPullOracleWithHermes, Hermes, PythPullOracle},
         ClientOptions,
     },
@@ -31,7 +34,7 @@ use gmsol_sdk::{
     Client,
 };
 use gmsol_solana_utils::{
-    bundle_builder::{compress_send_results, BundleBuilder, SendBundleOptions},
+    bundle_builder::{compress_send_results, BundleBuilder, BundleOptions, SendBundleOptions},
     cluster::Cluster,
     make_bundle_builder::MakeBundleBuilder,
     signer::{shared_signer, SignerRef},
@@ -43,13 +46,14 @@ use gmsol_utils::{
     market::MarketConfigKey,
     oracle::PriceProviderKind,
     role::RoleKey,
-    token_config::UpdateTokenConfigParams,
+    token_config::{TokenFlag, UpdateTokenConfigParams},
 };
 use rand::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount,
     commitment_config::CommitmentConfig,
+    native_token::LAMPORTS_PER_SOL,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
     signer::{EncodableKey, Signer},
@@ -79,6 +83,7 @@ const MAX_DEVIATION_FACTOR: u128 = MARKET_USD_UNIT / 100_000;
 /// Serializes the tests that move a builder fee global: the cap, or the
 /// `BuilderFee` feature flag. See [`Deployment::lock_builder_fee_globals`].
 static BUILDER_FEE_GLOBALS_LOCK: Mutex<()> = Mutex::const_new(());
+pub(super) static GT_EXCHANGE_WINDOW_LOCK: Mutex<()> = Mutex::const_new(());
 
 const PYTH_FETCH_MAX_RETRIES: usize = 3;
 const PYTH_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
@@ -87,6 +92,49 @@ const PYTH_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
 /// action's creation time; otherwise the freshly fetched price can be rejected
 /// on-chain as `OracleTimestampsAreSmallerThanRequired`.
 const PYTH_EXECUTE_CLOCK_ADVANCE_DELAY: Duration = Duration::from_secs(5);
+
+/// Select execution metadata after oracle preparation, before deriving claimable accounts.
+pub(crate) struct CurrentOrderTimestamp<'a, 'b> {
+    pub(crate) execute: &'b mut ExecuteOrderBuilder<'a, SignerRef>,
+    pub(crate) clock_client: &'b Client<SignerRef>,
+}
+
+impl PullOraclePriceConsumer for CurrentOrderTimestamp<'_, '_> {
+    async fn feed_ids(&mut self) -> gmsol_sdk::Result<FeedIds> {
+        self.execute.feed_ids().await
+    }
+
+    fn process_feeds(
+        &mut self,
+        provider: PriceProviderKind,
+        map: FeedAddressMap,
+    ) -> gmsol_sdk::Result<()> {
+        self.execute.process_feeds(provider, map)
+    }
+}
+
+impl<'a> MakeBundleBuilder<'a, SignerRef> for CurrentOrderTimestamp<'a, '_> {
+    async fn build_with_options(
+        &mut self,
+        options: BundleOptions,
+    ) -> gmsol_solana_utils::Result<BundleBuilder<'a, SignerRef>> {
+        let account = self
+            .clock_client
+            .rpc()
+            .get_account_with_commitment(
+                &solana_sdk::sysvar::clock::id(),
+                CommitmentConfig::processed(),
+            )
+            .await
+            .map_err(gmsol_solana_utils::Error::custom)?
+            .value
+            .ok_or_else(|| gmsol_solana_utils::Error::custom("validator clock account missing"))?;
+        let clock: solana_sdk::clock::Clock = solana_sdk::account::from_account(&account)
+            .ok_or_else(|| gmsol_solana_utils::Error::custom("invalid validator clock"))?;
+        self.execute.recent_timestamp(clock.unix_timestamp);
+        self.execute.build_with_options(options).await
+    }
+}
 
 /// Deployment.
 pub struct Deployment {
@@ -109,6 +157,8 @@ pub struct Deployment {
     token_map: Keypair,
     /// Oracle.
     oracle: Keypair,
+    /// Treasury oracle, controlled by the treasury config.
+    treasury_oracle: Keypair,
     /// GLV mint.
     pub glv_token: Pubkey,
     /// Tokens.
@@ -167,6 +217,9 @@ impl Deployment {
     /// Default keeper.
     pub const DEFAULT_KEEPER: &'static str = "keeper";
 
+    /// Lamports given to each client created by [`Deployment::funded_client`].
+    pub const FUNDED_CLIENT_LAMPORTS: u64 = LAMPORTS_PER_SOL / 10;
+
     /// Market selector for liquidation test.
     pub const SELECT_LIQUIDATION_MARKET: [&'static str; 3] = ["fBTC", "USDG", "fBTC"];
 
@@ -177,6 +230,12 @@ impl Deployment {
     pub const SELECT_FIRST_DEPOSIT_MARKET: [&'static str; 3] = ["fBTC", "USDG", "WSOL"];
 
     pub const TOKEN_FOR_SWAP_TEST: &'static str = "qBTC";
+
+    /// Tokens accepted by the treasury vault.
+    pub const TREASURY_TOKENS: [&'static str; 2] = ["USDG", "fBTC"];
+
+    /// Index of the treasury vault config.
+    pub const TREASURY_VAULT_CONFIG_INDEX: u16 = 0;
 
     /// Market selector for cross-market swap source test.
     pub const SELECT_SWAP_SOURCE_MARKET: [&'static str; 3] =
@@ -221,6 +280,7 @@ impl Deployment {
         let mut rng = Self::get_rng()?;
         let (client, store_key, store) = Self::get_client_and_store().await?;
         let oracle = Keypair::generate(&mut rng);
+        let treasury_oracle = Keypair::generate(&mut rng);
         let token_map = Keypair::generate(&mut rng);
 
         let (rpc, common_alt) = client.create_alt().await?;
@@ -253,6 +313,7 @@ impl Deployment {
             store,
             token_map,
             oracle,
+            treasury_oracle,
             glv_token: Default::default(),
             tokens: Default::default(),
             synthetic_tokens: Default::default(),
@@ -390,6 +451,8 @@ impl Deployment {
         self.initialize_alts().await?;
 
         self.initialize_gt(7).await?;
+
+        self.initialize_treasury().await?;
 
         self.initialize_liquidity_provider().await?;
 
@@ -1293,6 +1356,95 @@ impl Deployment {
         Ok(())
     }
 
+    async fn initialize_treasury(&self) -> eyre::Result<()> {
+        const TREASURY_ROLES: [&str; 3] = ["TREASURY_OWNER", "TREASURY_ADMIN", "TREASURY_KEEPER"];
+
+        let client = &self.client;
+        let store = &self.store;
+        let admin = client.payer();
+        let config = client.find_treasury_config_address(store);
+        let receiver = client.find_treasury_receiver_address(&config);
+        let vault_config =
+            client.find_treasury_vault_config_address(&config, Self::TREASURY_VAULT_CONFIG_INDEX);
+
+        let mut builder = client.bundle();
+        builder
+            .push_many(
+                TREASURY_ROLES
+                    .iter()
+                    .chain([&RoleKey::ORACLE_CONTROLLER])
+                    .map(|role| client.enable_role(store, role)),
+                false,
+            )?
+            .push_many(
+                TREASURY_ROLES
+                    .iter()
+                    .map(|role| client.grant_role(store, &admin, role)),
+                false,
+            )?
+            .push(client.grant_role(store, &config, RoleKey::GT_CONTROLLER))?
+            .push(client.grant_role(store, &config, RoleKey::ORACLE_CONTROLLER))?
+            // Initializing the config takes the store receiver role.
+            // Hand it back to the admin, which other tests use to claim fees.
+            .push(StoreOps::transfer_receiver(client, store, &receiver))?
+            .push(client.initialize_config(store).clear_output())?
+            .push(TreasuryOps::transfer_receiver(client, store, &admin))?
+            .push(
+                client
+                    .store_transaction()
+                    .anchor_accounts(store_accounts::AcceptReceiver {
+                        next_receiver: admin,
+                        store: *store,
+                    })
+                    .anchor_args(store_args::AcceptReceiver {}),
+            )?
+            .push(
+                client
+                    .initialize_treasury_vault_config(store, Self::TREASURY_VAULT_CONFIG_INDEX)
+                    .clear_output(),
+            )?
+            .push(client.set_treasury_vault_config(store, &vault_config))?
+            .push(client.set_gt_factor(store, MARKET_USD_UNIT)?)?
+            .push(client.set_buyback_factor(store, MARKET_USD_UNIT)?)?
+            .push(
+                client
+                    .initialize_oracle(store, &self.treasury_oracle, Some(&config))
+                    .await?
+                    .0,
+            )?;
+        for name in Self::TREASURY_TOKENS {
+            let token = self.token(name).ok_or_eyre("treasury token must exist")?;
+            builder
+                .push(
+                    client
+                        .insert_token_to_treasury(store, Some(&vault_config), &token.address)
+                        .await?,
+                )?
+                .push(
+                    client
+                        .toggle_token_flag(
+                            store,
+                            Some(&vault_config),
+                            &token.address,
+                            TokenFlag::AllowDeposit,
+                            true,
+                        )
+                        .await?,
+                )?;
+        }
+
+        builder
+            .build()?
+            .send_all(false)
+            .instrument(tracing::info_span!("initialize treasury"))
+            .await
+            .map_err(|(signatures, err)| {
+                eyre!("failed to initialize treasury: {err}, successful txns: {signatures:#?}")
+            })?;
+
+        Ok(())
+    }
+
     async fn initialize_claim_fees_sleep(&mut self) -> eyre::Result<()> {
         let wait = match std::env::var(ENV_GMSOL_CLAIM_FEES_WAIT) {
             Ok(wait) => Duration::from_secs(wait.parse()?),
@@ -1744,6 +1896,19 @@ impl Deployment {
         }
     }
 
+    /// Returns a client with a fresh payer funded by the admin, so that no other
+    /// test touches its balances.
+    pub(crate) async fn funded_client(&self) -> eyre::Result<Client<SignerRef>> {
+        let client = self
+            .client
+            .try_clone_with_payer(shared_signer(Keypair::new()))?;
+        self.client
+            .transfer(&client.payer(), Self::FUNDED_CLIENT_LAMPORTS)?
+            .send()
+            .await?;
+        Ok(client)
+    }
+
     pub(crate) async fn get_ata_amount(
         &self,
         token: &Pubkey,
@@ -2070,6 +2235,10 @@ impl Deployment {
 
     pub(crate) fn liquidity_provider_oracle(&self) -> Pubkey {
         self.liquidity_provider_oracle.pubkey()
+    }
+
+    pub(crate) fn treasury_oracle(&self) -> Pubkey {
+        self.treasury_oracle.pubkey()
     }
 
     pub(crate) async fn chainlink_pull_oracle(

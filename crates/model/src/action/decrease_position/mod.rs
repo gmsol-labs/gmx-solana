@@ -807,6 +807,22 @@ mod tests {
 
     use super::*;
 
+    fn assert_gt_credit_matches_collected_fees(fees: &PositionFees<u64>, min_price: u64) {
+        let scub_order_amounts = fees.order_fees().fee_amounts();
+        let scub_collected_amount = scub_order_amounts
+            .fee_amount_for_pool()
+            .checked_add(scub_order_amounts.fee_amount_for_receiver())
+            .and_then(|amount| amount.checked_add(*fees.borrowing_fees().fee_amount()))
+            .expect("collected fee sum fits in u64");
+        assert!(scub_collected_amount > 0);
+        assert_eq!(
+            *fees.paid_order_and_borrowing_fee_value(),
+            scub_collected_amount
+                .checked_mul(min_price)
+                .expect("collected fee value fits in u64")
+        );
+    }
+
     #[test]
     fn basic() -> crate::Result<()> {
         let mut market = TestMarket::<u64, 9>::default();
@@ -824,6 +840,7 @@ mod tests {
                 None,
             )?
             .execute()?;
+        assert_gt_credit_matches_collected_fees(report.fees(), 123);
         println!("{report:#?}");
         println!("{position:#?}");
 
@@ -837,6 +854,7 @@ mod tests {
                 Default::default(),
             )?
             .execute()?;
+        assert_gt_credit_matches_collected_fees(report.fees(), 125);
         println!("{report:#?}");
         println!("{position:#?}");
         println!("{market:#?}");

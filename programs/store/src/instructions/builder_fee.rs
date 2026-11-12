@@ -401,12 +401,12 @@ impl SetBuilderFee<'_> {
             // revocation path: it is how an owner clears a builder it no
             // longer wants. Gating on `factor != 0` aims the rule at the harm
             // it exists for, a charge that would be trivially bypassable, and
-            // leaves revocation reachable on every order regardless of swap
-            // type. The scenario that needs that: should a later change ever
-            // let an order's swap type move after a checkpoint is written
-            // (`update_order_v2` cannot today), an unconditional guard would
-            // strand the existing checkpoint, since the only instruction that
-            // could clear it would itself be rejected.
+            // leaves revocation reachable on every otherwise eligible order
+            // regardless of swap type. If a later change lets an order's swap
+            // type move after a checkpoint (`update_order_v2` cannot today),
+            // an unconditional guard would strand the existing checkpoint,
+            // since the only instruction that could clear it would itself be
+            // rejected.
             //
             // Note this runs on every user-initiated position order, not only
             // decrease orders. An increase order leaves the field at
@@ -458,10 +458,11 @@ impl SetBuilderFee<'_> {
         };
 
         let builder = ctx.accounts.builder.key();
+        let clock = Clock::get()?;
         ctx.accounts
             .order
             .load_mut()?
-            .set_builder_fee(builder, factor);
+            .set_builder_fee(builder, factor, &clock)?;
 
         let event_emitter =
             EventEmitter::new(&ctx.accounts.event_authority, ctx.bumps.event_authority);
@@ -549,8 +550,8 @@ mod instance_binding_tests {
 
     #[test]
     fn only_prior_creation_of_the_same_order_allows_placeholder() {
-        let scub_keys: [Pubkey; 6] = std::array::from_fn(|_| Pubkey::new_unique());
-        let scub_accounts = scub_keys
+        let account_keys: [Pubkey; 6] = std::array::from_fn(|_| Pubkey::new_unique());
+        let create_accounts = account_keys
             .iter()
             .map(|pubkey| BorrowedAccountMeta {
                 pubkey,
@@ -558,51 +559,52 @@ mod instance_binding_tests {
                 is_writable: false,
             })
             .collect();
-        let scub_create = BorrowedInstruction {
+        let create_instruction = BorrowedInstruction {
             program_id: &crate::ID,
-            accounts: scub_accounts,
+            accounts: create_accounts,
             data: crate::instruction::CreateOrderV2::DISCRIMINATOR,
         };
-        let scub_checkpoint = BorrowedInstruction {
+        let checkpoint_instruction = BorrowedInstruction {
             program_id: &crate::ID,
             accounts: vec![],
             data: &[],
         };
-        let mut scub_data = construct_instructions_data(&[scub_create, scub_checkpoint]);
-        store_current_index(&mut scub_data, 1);
-        let mut scub_lamports = 0;
-        let scub_sysvar_id = anchor_lang::solana_program::sysvar::instructions::ID;
-        let scub_info = AccountInfo::new(
-            &scub_sysvar_id,
+        let mut instructions_data =
+            construct_instructions_data(&[create_instruction, checkpoint_instruction]);
+        store_current_index(&mut instructions_data, 1);
+        let mut sysvar_lamports = 0;
+        let instructions_sysvar_id = anchor_lang::solana_program::sysvar::instructions::ID;
+        let instructions_account = AccountInfo::new(
+            &instructions_sysvar_id,
             false,
             false,
-            &mut scub_lamports,
-            &mut scub_data,
+            &mut sysvar_lamports,
+            &mut instructions_data,
             &crate::ID,
             false,
             0,
         );
 
-        assert!(has_preceding_create_order(&scub_info, &scub_keys[5]).unwrap());
-        assert!(!has_preceding_create_order(&scub_info, &Pubkey::new_unique()).unwrap());
-        store_current_index(&mut scub_info.try_borrow_mut_data().unwrap(), 0);
-        assert!(!has_preceding_create_order(&scub_info, &scub_keys[5]).unwrap());
+        assert!(has_preceding_create_order(&instructions_account, &account_keys[5]).unwrap());
+        assert!(!has_preceding_create_order(&instructions_account, &Pubkey::new_unique()).unwrap());
+        store_current_index(&mut instructions_account.try_borrow_mut_data().unwrap(), 0);
+        assert!(!has_preceding_create_order(&instructions_account, &account_keys[5]).unwrap());
     }
 
     #[test]
     fn create_order_account_index_matches_generated_instruction() {
-        let scub_other = Pubkey::new_unique();
-        let scub_order = Pubkey::new_unique();
+        let other_account = Pubkey::new_unique();
+        let order_address = Pubkey::new_unique();
         let accounts = crate::accounts::CreateOrderV2 {
-            owner: scub_other,
-            receiver: scub_other,
-            store: scub_other,
-            market: scub_other,
-            user: scub_other,
-            order: scub_order,
+            owner: other_account,
+            receiver: other_account,
+            store: other_account,
+            market: other_account,
+            user: other_account,
+            order: order_address,
             position: None,
             initial_collateral_token: None,
-            final_output_token: scub_other,
+            final_output_token: other_account,
             long_token: None,
             short_token: None,
             initial_collateral_token_escrow: None,
@@ -610,19 +612,19 @@ mod instance_binding_tests {
             long_token_escrow: None,
             short_token_escrow: None,
             initial_collateral_token_source: None,
-            system_program: scub_other,
-            token_program: scub_other,
-            associated_token_program: scub_other,
+            system_program: other_account,
+            token_program: other_account,
+            associated_token_program: other_account,
             callback_authority: None,
             callback_program: None,
             callback_shared_data_account: None,
             callback_partitioned_data_account: None,
-            event_authority: scub_other,
+            event_authority: other_account,
             program: crate::ID,
         }
         .to_account_metas(None);
 
-        assert_eq!(accounts[5].pubkey, scub_order);
+        assert_eq!(accounts[5].pubkey, order_address);
     }
 }
 

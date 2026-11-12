@@ -20,6 +20,7 @@ client = [
     "serde_json",
     "tokio",
     "futures-util",
+    "dep:bincode",
 ]
 make-bundle-builder = ["client"]
 client-traits = [
@@ -29,7 +30,7 @@ client-traits = [
     "serde",
     "serde_json",
 ]
-http-rpc-sender = ["client-traits", "reqwest/json", "backon"]
+http-rpc-sender = ["client-traits", "reqwest/json", "backon", "dep:web-time"]
 openssl-vendored = ["reqwest?/native-tls-vendored"]
 jito = ["client", "serde_json", "dep:serde", "reqwest/json", "dep:jito-sdk-rust", "dep:bincode"]
 
@@ -61,6 +62,7 @@ solana-account-decoder-client-types = { workspace = true, optional = true }
 # feat:http-sender
 reqwest = { workspace = true, optional = true }
 backon = { workspace = true, optional = true }
+web-time = { workspace = true, optional = true }
 jito-sdk-rust = { workspace = true, optional = true }
 bincode = { workspace = true, optional = true }
 

@@ -3,7 +3,7 @@ use std::num::NonZeroU64;
 use bytemuck::Zeroable;
 
 use crate::gmsol_store::{
-    accounts::{Glv, GtExchange, Market, Position, ReferralCodeV2, Store, VirtualInventory},
+    accounts::{Glv, Market, Position, ReferralCodeV2, Store, VirtualInventory},
     types::{ActionHeader, EventPositionState, Pool, PositionState, UpdateOrderParams},
 };
 
@@ -53,12 +53,8 @@ impl Default for ActionHeader {
     }
 }
 
-impl Default for GtExchange {
-    fn default() -> Self {
-        Zeroable::zeroed()
-    }
-}
-
+// The IDL-generated GtExchange derives Default with its 32-byte reserved field.
+// A manual implementation here would conflict; the on-chain type is separate.
 impl Store {
     /// Get claimable time window size.
     pub fn claimable_time_window(&self) -> crate::Result<NonZeroU64> {
