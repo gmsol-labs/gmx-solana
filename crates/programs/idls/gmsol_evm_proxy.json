@@ -9,6 +9,74 @@
   },
   "instructions": [
     {
+      "name": "create_proxy",
+      "docs": [
+        "Create the permanent proxy for an EVM address; the payer gains no authority.",
+        "",
+        "# Errors",
+        "",
+        "Fails if account creation or PDA validation fails, or if an existing proxy",
+        "has a different version, bump, or EVM address."
+      ],
+      "discriminator": [
+        56,
+        181,
+        228,
+        122,
+        166,
+        134,
+        127,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Pays rent but has no authority over the proxy."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "proxy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  120,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "evm_address"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "evm_address",
+          "type": {
+            "array": [
+              "u8",
+              20
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "initialize",
       "discriminator": [
         175,
@@ -32,6 +100,96 @@
         }
       ],
       "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Proxy",
+      "discriminator": [
+        36,
+        36,
+        123,
+        35,
+        158,
+        89,
+        75,
+        41
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidProxy",
+      "msg": "Proxy account data does not match its EVM address"
+    }
+  ],
+  "types": [
+    {
+      "name": "Proxy",
+      "docs": [
+        "Permanent account for one EVM address."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "padding_0",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          },
+          {
+            "name": "evm_address",
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "padding_1",
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                256
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "constants": [
+    {
+      "name": "PROXY_SEED",
+      "type": "bytes",
+      "value": "[112, 114, 111, 120, 121]"
     }
   ]
 }
