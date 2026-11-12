@@ -2392,6 +2392,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gmsol-evm-proxy"
+version = "0.12.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "gmsol-programs",
+ "gmsol-utils",
+]
+
+[[package]]
 name = "gmsol-examples"
 version = "0.12.0"
 dependencies = [
@@ -2607,6 +2617,7 @@ dependencies = [
  "gmsol-callback",
  "gmsol-chainlink-datastreams",
  "gmsol-competition",
+ "gmsol-evm-proxy",
  "gmsol-gt-incentive",
  "gmsol-liquidity-provider",
  "gmsol-mock-chainlink-verifier",
