@@ -201,6 +201,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 wasm-bindgen-test = { workspace = true }
 serde_json = { workspace = true }
 eyre = { workspace = true }
+sol-rpc-mini = { git = "https://github.com/mv-reyes/sol-rpc-mini", rev = "33e594badae29c69efb569198ea2b0112bf637d1" }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 tokio = { workspace = true, features = [
