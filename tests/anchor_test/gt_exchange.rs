@@ -1,9 +1,17 @@
 use std::time::Duration;
 
+use anchor_spl::associated_token::{
+    get_associated_token_address,
+    spl_associated_token_account::instruction::create_associated_token_account_idempotent,
+};
 use eyre::OptionExt;
 use gmsol_programs::{
+    anchor_lang::error::ErrorCode,
     gmsol_store::client::{accounts, args},
-    gmsol_treasury::accounts::GtBank,
+    gmsol_treasury::{
+        accounts::GtBank,
+        client::{accounts as treasury_accounts, args as treasury_args},
+    },
 };
 use gmsol_sdk::{
     client::ops::{GtOps, SystemProgramOps, TokenAccountOps, TreasuryOps, UserOps},
@@ -15,7 +23,8 @@ use gmsol_store::{constants::DEFAULT_GT_VAULT_TIME_WINDOW, CoreError};
 use gmsol_utils::gt::get_time_window_index;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
-    commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair, signer::Signer,
+    commitment_config::CommitmentConfig, instruction::AccountMeta, pubkey::Pubkey,
+    signature::Keypair, signer::Signer, system_instruction,
 };
 
 use crate::anchor_test::setup::{current_deployment, Deployment, GT_EXCHANGE_WINDOW_LOCK};
@@ -318,6 +327,350 @@ async fn legacy_treasury_completion_pays_owner_and_rejects_distinct_rent_receive
     Ok(())
 }
 
+#[tokio::test]
+async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::Result<()> {
+    const GT_AMOUNT: u64 = 1_000;
+    const DUST_GT_AMOUNT: u64 = 1;
+    /// Fewer USDG units than the total GT, so the USDG share of the dust exchange rounds to zero.
+    const USDG_DEPOSIT: u64 = GT_AMOUNT;
+
+    let _window_guard = GT_EXCHANGE_WINDOW_LOCK.lock().await;
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let admin = &deployment.client;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let store = &deployment.store;
+    let tokens = treasury_tokens(deployment)?;
+    let usdg = deployment
+        .token("USDG")
+        .ok_or_eyre("USDG must exist")?
+        .address;
+    let dust_owner = deployment.funded_client().await?;
+    let owner = deployment.funded_client().await?;
+    let legacy_owner = deployment.funded_client().await?;
+    let caller = deployment.funded_client().await?;
+    let rent_payer = Keypair::new();
+    admin
+        .transfer(&rent_payer.pubkey(), Deployment::FUNDED_CLIENT_LAMPORTS)?
+        .send()
+        .await?;
+
+    keeper
+        .gt_set_exchange_time_window(store, TREASURY_WINDOW)
+        .send()
+        .await?;
+    let result = async {
+        for (client, amount) in [
+            (&dust_owner, DUST_GT_AMOUNT),
+            (&owner, GT_AMOUNT),
+            (&legacy_owner, GT_AMOUNT),
+        ] {
+            client.prepare_user(store)?.send().await?;
+            keeper
+                .mint_gt_reward(store, &client.payer(), amount)?
+                .send()
+                .await?;
+        }
+        // The dust owner never gets associated token accounts, and the owner's are
+        // created only when completing.
+        for client in [&legacy_owner, &caller] {
+            for token in &tokens {
+                admin
+                    .prepare_associated_token_account(
+                        token,
+                        &anchor_spl::token::ID,
+                        Some(&client.payer()),
+                    )
+                    .send()
+                    .await?;
+            }
+        }
+        let window =
+            TreasuryWindow::open(deployment, &[("USDG", USDG_DEPOSIT), ("fBTC", 0)]).await?;
+        dust_owner
+            .request_gt_exchange_with_time_window_index(
+                store,
+                window.index,
+                TREASURY_WINDOW,
+                DUST_GT_AMOUNT,
+            )
+            .send()
+            .await?;
+        owner
+            .request_gt_exchange_v2_with_time_window_index(
+                store,
+                &owner.payer(),
+                &owner.payer(),
+                &rent_payer.pubkey(),
+                window.index,
+                TREASURY_WINDOW,
+                GT_AMOUNT,
+            )
+            .signer(&rent_payer)
+            .send()
+            .await?;
+        legacy_owner
+            .request_gt_exchange_with_time_window_index(
+                store,
+                window.index,
+                TREASURY_WINDOW,
+                GT_AMOUNT,
+            )
+            .send()
+            .await?;
+        window.confirm(deployment).await?;
+
+        // fBTC has no recorded balance and the USDG share of the dust exchange
+        // rounds to zero, so the owner's associated token accounts are not used
+        // and do not need to exist.
+        let bank = window.bank(admin).await?;
+        assert!(expected_payouts(&bank, &tokens, DUST_GT_AMOUNT)
+            .iter()
+            .all(|payout| *payout == 0));
+        assert!(recorded_balance(&bank, &usdg) > 0);
+        assert!(tokens
+            .iter()
+            .any(|token| recorded_balance(&bank, token) == 0));
+        let dust_exchange = admin.find_gt_exchange_address(&window.vault, &dust_owner.payer());
+        let dust_owner_lamports = admin.rpc().get_balance(&dust_owner.payer()).await?;
+        let rent = admin.rpc().get_balance(&dust_exchange).await?;
+        caller
+            .complete_gt_exchange_v2(store, &dust_exchange, None, None, None, None)
+            .await?
+            .send()
+            .await?;
+        for token in &tokens {
+            assert_eq!(
+                deployment
+                    .get_ata_amount(token, &dust_owner.payer())
+                    .await?,
+                None
+            );
+        }
+        assert_eq!(admin.rpc().get_balance(&dust_exchange).await?, 0);
+        assert_eq!(
+            admin.rpc().get_balance(&dust_owner.payer()).await?,
+            dust_owner_lamports + rent
+        );
+        let bank_after = window.bank(admin).await?;
+        for token in &tokens {
+            assert_eq!(
+                recorded_balance(&bank_after, token),
+                recorded_balance(&bank, token)
+            );
+        }
+        assert_eq!(
+            bank_after.remaining_confirmed_gt_amount,
+            bank.remaining_confirmed_gt_amount - DUST_GT_AMOUNT
+        );
+
+        // Payouts go only to the owner's associated token accounts, and the rent
+        // only to the recorded rent receiver.
+        let exchange = admin.find_gt_exchange_address(&window.vault, &owner.payer());
+        let owner_address = owner.payer();
+        let owner_ata = |token: &Pubkey| get_associated_token_address(&owner_address, token);
+        let caller_address = caller.payer();
+        let caller_ata = |token: &Pubkey| get_associated_token_address(&caller_address, token);
+        let watched = [exchange, window.bank, rent_payer.pubkey()]
+            .into_iter()
+            .chain(tokens.iter().map(owner_ata))
+            .collect::<Vec<_>>();
+        let code = reject_without_change(
+            admin,
+            complete_gt_exchange_v2_to(
+                &caller,
+                deployment,
+                &window,
+                &owner_address,
+                &caller_address,
+                owner_ata,
+            )
+            .await?,
+            &watched,
+        )
+        .await?;
+        assert_eq!(code, Some(CoreError::RentReceiverMismatched.into()));
+        let code = reject_without_change(
+            admin,
+            complete_gt_exchange_v2_to(
+                &caller,
+                deployment,
+                &window,
+                &owner_address,
+                &rent_payer.pubkey(),
+                caller_ata,
+            )
+            .await?,
+            &watched,
+        )
+        .await?;
+        assert_eq!(code, Some(ErrorCode::ConstraintTokenOwner.into()));
+        let non_ata = Keypair::new();
+        create_token_account(&owner, &non_ata, &usdg).await?;
+        let code = reject_without_change(
+            admin,
+            complete_gt_exchange_v2_to(
+                &caller,
+                deployment,
+                &window,
+                &owner_address,
+                &rent_payer.pubkey(),
+                |token| {
+                    if *token == usdg {
+                        non_ata.pubkey()
+                    } else {
+                        owner_ata(token)
+                    }
+                },
+            )
+            .await?,
+            &watched,
+        )
+        .await?;
+        assert_eq!(
+            code,
+            Some(ErrorCode::AccountNotAssociatedTokenAccount.into())
+        );
+
+        let payouts = expected_payouts(&window.bank(admin).await?, &tokens, GT_AMOUNT);
+        assert!(
+            payouts.iter().any(|payout| *payout > 0),
+            "the GT Bank must pay out"
+        );
+        // Non-zero payouts require the owner's associated token accounts to exist.
+        let code = reject_without_change(
+            admin,
+            caller
+                .complete_gt_exchange_v2(store, &exchange, None, None, None, None)
+                .await?,
+            &watched,
+        )
+        .await?;
+        assert_eq!(code, Some(ErrorCode::AccountNotInitialized.into()));
+
+        // The caller can create them earlier in the same transaction.
+        let rent = admin.rpc().get_balance(&exchange).await?;
+        let rent_payer_lamports = admin.rpc().get_balance(&rent_payer.pubkey()).await?;
+        let mut complete = caller
+            .complete_gt_exchange_v2(store, &exchange, None, None, None, None)
+            .await?;
+        for token in &tokens {
+            complete = complete.pre_instruction(
+                create_associated_token_account_idempotent(
+                    &caller_address,
+                    &owner_address,
+                    token,
+                    &anchor_spl::token::ID,
+                ),
+                true,
+            );
+        }
+        complete.send().await?;
+        for (token, payout) in tokens.iter().zip(payouts) {
+            assert_eq!(
+                deployment.get_ata_amount(token, &owner_address).await?,
+                Some(payout)
+            );
+        }
+        assert_eq!(admin.rpc().get_balance(&exchange).await?, 0);
+        assert_eq!(
+            admin.rpc().get_balance(&rent_payer.pubkey()).await?,
+            rent_payer_lamports + rent
+        );
+
+        // The legacy completion follows the same rule, and the last exchange
+        // receives the remaining recorded balance.
+        let bank = window.bank(admin).await?;
+        assert_eq!(bank.remaining_confirmed_gt_amount, GT_AMOUNT);
+        let legacy_exchange = admin.find_gt_exchange_address(&window.vault, &legacy_owner.payer());
+        legacy_owner
+            .complete_gt_exchange(store, &legacy_exchange, None, None, None)
+            .await?
+            .send()
+            .await?;
+        for token in &tokens {
+            assert_eq!(
+                deployment
+                    .get_ata_amount(token, &legacy_owner.payer())
+                    .await?,
+                Some(recorded_balance(&bank, token))
+            );
+        }
+        Ok::<(), eyre::Report>(())
+    }
+    .await;
+    let restore = keeper
+        .gt_set_exchange_time_window(store, DEFAULT_GT_VAULT_TIME_WINDOW)
+        .send()
+        .await;
+    result?;
+    restore?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn permissionless_completion_requires_confirmed_gt_bank() -> eyre::Result<()> {
+    const GT_AMOUNT: u64 = 1;
+    const NO_BUYBACK_VALUE: u128 = 0;
+
+    let _window_guard = GT_EXCHANGE_WINDOW_LOCK.lock().await;
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let admin = &deployment.client;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let store = &deployment.store;
+    let owner = deployment.funded_client().await?;
+    let caller = deployment.funded_client().await?;
+
+    keeper
+        .gt_set_exchange_time_window(store, TREASURY_WINDOW)
+        .send()
+        .await?;
+    let result = async {
+        owner.prepare_user(store)?.send().await?;
+        keeper
+            .mint_gt_reward(store, &owner.payer(), GT_AMOUNT)?
+            .send()
+            .await?;
+        let window = TreasuryWindow::open(deployment, &[("USDG", 0)]).await?;
+        owner
+            .request_gt_exchange_with_time_window_index(
+                store,
+                window.index,
+                TREASURY_WINDOW,
+                GT_AMOUNT,
+            )
+            .send()
+            .await?;
+        window.wait_until_ended(admin).await?;
+        // Confirm the GT exchange vault outside the treasury, leaving the GT Bank unconfirmed.
+        keeper
+            .confirm_gt_exchange_vault(store, &window.vault, NO_BUYBACK_VALUE, None)
+            .send()
+            .await?;
+
+        let exchange = admin.find_gt_exchange_address(&window.vault, &owner.payer());
+        let code = reject_without_change(
+            admin,
+            caller
+                .complete_gt_exchange_v2(store, &exchange, None, None, None, None)
+                .await?,
+            &[exchange, window.bank, owner.payer()],
+        )
+        .await?;
+        assert_eq!(code, Some(CoreError::PreconditionsAreNotMet.into()));
+        Ok::<(), eyre::Report>(())
+    }
+    .await;
+    let restore = keeper
+        .gt_set_exchange_time_window(store, DEFAULT_GT_VAULT_TIME_WINDOW)
+        .send()
+        .await;
+    result?;
+    restore?;
+    Ok(())
+}
+
 /// A GT exchange window whose GT Bank is funded through the treasury.
 struct TreasuryWindow {
     index: i64,
@@ -411,12 +764,15 @@ fn expected_payouts(bank: &GtBank, tokens: &[Pubkey], gt_amount: u64) -> Vec<u64
     tokens
         .iter()
         .map(|token| {
-            let balance = bank.balances.get(token).map_or(0, |balance| balance.amount);
-            let payout = u128::from(balance) * u128::from(gt_amount)
+            let payout = u128::from(recorded_balance(bank, token)) * u128::from(gt_amount)
                 / u128::from(bank.remaining_confirmed_gt_amount);
             u64::try_from(payout).expect("a payout never exceeds the balance")
         })
         .collect()
+}
+
+fn recorded_balance(bank: &GtBank, token: &Pubkey) -> u64 {
+    bank.balances.get(token).map_or(0, |balance| balance.amount)
 }
 
 /// Sends a transaction that must fail and checks that it leaves the given accounts unchanged.
@@ -430,6 +786,90 @@ async fn reject_without_change(
     let err = txn.send().await.expect_err("the transaction must fail");
     assert_eq!(rpc.get_multiple_accounts(accounts).await?, before);
     Ok(gmsol_sdk::Error::from(err).anchor_error_code())
+}
+
+/// Builds `complete_gt_exchange_v2` for the owner's exchange in the window with the
+/// given rent receiver, paying each GT Bank token to `target(token)`.
+async fn complete_gt_exchange_v2_to<'a>(
+    caller: &'a Client<SignerRef>,
+    deployment: &Deployment,
+    window: &TreasuryWindow,
+    owner: &Pubkey,
+    rent_receiver: &Pubkey,
+    target: impl Fn(&Pubkey) -> Pubkey,
+) -> eyre::Result<TransactionBuilder<'a, SignerRef>> {
+    let store = &deployment.store;
+    let config = caller.find_treasury_config_address(store);
+    let treasury_vault_config =
+        caller.find_treasury_vault_config_address(&config, Deployment::TREASURY_VAULT_CONFIG_INDEX);
+    let tokens = window.bank(caller).await?.tokens().collect::<Vec<_>>();
+    let mints = tokens
+        .iter()
+        .map(|token| AccountMeta::new_readonly(*token, false));
+    let vaults = tokens
+        .iter()
+        .map(|token| AccountMeta::new(get_associated_token_address(&window.bank, token), false));
+    let targets = tokens
+        .iter()
+        .map(|token| AccountMeta::new(target(token), false));
+    Ok(caller
+        .treasury_transaction()
+        .anchor_accounts(treasury_accounts::CompleteGtExchangeV2 {
+            store: *store,
+            config,
+            treasury_vault_config,
+            gt_exchange_vault: window.vault,
+            gt_bank: window.bank,
+            owner: *owner,
+            rent_receiver: *rent_receiver,
+            exchange: caller.find_gt_exchange_address(&window.vault, owner),
+            store_program: *caller.store_program_id(),
+            token_program: anchor_spl::token::ID,
+            token_2022_program: anchor_spl::token_2022::ID,
+        })
+        .anchor_args(treasury_args::CompleteGtExchangeV2 {})
+        .accounts(mints.chain(vaults).chain(targets).collect()))
+}
+
+/// Creates a token account of `mint` owned by `owner` that is not its associated token account.
+async fn create_token_account(
+    owner: &Client<SignerRef>,
+    account: &Keypair,
+    mint: &Pubkey,
+) -> eyre::Result<()> {
+    use anchor_spl::token::spl_token::{
+        instruction::initialize_account3, solana_program::program_pack::Pack, state::Account,
+    };
+
+    let rent = owner
+        .rpc()
+        .get_minimum_balance_for_rent_exemption(Account::LEN)
+        .await?;
+    owner
+        .store_transaction()
+        .signer(account)
+        .pre_instruction(
+            system_instruction::create_account(
+                &owner.payer(),
+                &account.pubkey(),
+                rent,
+                Account::LEN as u64,
+                &anchor_spl::token::ID,
+            ),
+            true,
+        )
+        .pre_instruction(
+            initialize_account3(
+                &anchor_spl::token::ID,
+                &account.pubkey(),
+                mint,
+                &owner.payer(),
+            )?,
+            true,
+        )
+        .send()
+        .await?;
+    Ok(())
 }
 
 fn treasury_tokens(deployment: &Deployment) -> eyre::Result<Vec<Pubkey>> {

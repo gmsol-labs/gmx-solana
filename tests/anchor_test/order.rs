@@ -16,7 +16,7 @@ use gmsol_sdk::{
         feeds_parser::FeedAddressMap,
         ops::{
             exchange::order::ExecuteOrderBuilder, BuilderFeeOps, ConfigOps, ExchangeOps, MarketOps,
-            SystemProgramOps, UserOps,
+            UserOps,
         },
         pull_oracle::{FeedIds, PullOraclePriceConsumer},
     },
@@ -28,14 +28,14 @@ use gmsol_sdk::{
 use gmsol_solana_utils::{
     bundle_builder::{BundleBuilder, BundleOptions},
     make_bundle_builder::MakeBundleBuilder,
-    signer::{shared_signer, SignerRef},
+    signer::SignerRef,
     transaction_builder::TransactionBuilder,
 };
 use gmsol_store::CoreError;
 use gmsol_utils::{
     action::ActionState, config::FactorKey, market::MarketConfigKey, oracle::PriceProviderKind,
 };
-use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair};
+use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tracing::Instrument;
 
 use crate::anchor_test::setup::{current_deployment, CurrentOrderTimestamp, Deployment};
@@ -119,15 +119,8 @@ async fn balanced_market_order() -> eyre::Result<()> {
     let _enter = span.enter();
 
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
-    let client = deployment
-        .client
-        .try_clone_with_payer(shared_signer(Keypair::new()))?;
+    let client = deployment.funded_client().await?;
     let store = &deployment.store;
-    deployment
-        .client
-        .transfer(&client.payer(), 2_000_000_000)?
-        .send()
-        .await?;
     client.prepare_user(store)?.send().await?;
     let oracle = &deployment.oracle();
     let usdg = deployment.token("USDG").expect("must exist");
@@ -145,7 +138,7 @@ async fn balanced_market_order() -> eyre::Result<()> {
         .await?;
 
     let long_collateral_amount = 100_000;
-    let short_collateral_amount = 200 * 100_000_000;
+    let short_collateral_amount = 100 * 100_000_000;
     let times = 8;
 
     deployment
@@ -1603,14 +1596,7 @@ async fn set_builder_fee_rejects_ineligible_orders() -> eyre::Result<()> {
     let span = tracing::info_span!("set_builder_fee_rejects_ineligible_orders");
     let _enter = span.enter();
 
-    let client = deployment
-        .client
-        .try_clone_with_payer(shared_signer(Keypair::new()))?;
-    deployment
-        .client
-        .transfer(&client.payer(), 2_000_000_000)?
-        .send()
-        .await?;
+    let client = deployment.funded_client().await?;
     let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
     let store = &deployment.store;
     let fbtc = deployment.token("fBTC").expect("must exist");
@@ -3248,14 +3234,7 @@ async fn revoked_order_settles_as_a_no_op_without_a_claim_vault() -> eyre::Resul
         .await?;
 
     let owner = deployment.locked_user_client().await?;
-    let zero_advertiser = deployment
-        .client
-        .try_clone_with_payer(shared_signer(Keypair::new()))?;
-    deployment
-        .client
-        .transfer(&zero_advertiser.payer(), 50_000_000)?
-        .send()
-        .await?;
+    let zero_advertiser = deployment.funded_client().await?;
 
     for signature in [
         owner.prepare_user(store)?.send_without_preflight().await?,
