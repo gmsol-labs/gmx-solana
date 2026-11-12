@@ -155,6 +155,11 @@ pub mod gmsol_treasury {
     }
 
     /// Complete a confirmed GT exchange for its owner, returning the rent to its rent receiver.
+    ///
+    /// # Errors
+    /// - Each associated token account of the [`owner`](CompleteGtExchangeV2::owner) that
+    ///   receives a non-zero amount must be owned by the `owner`. An SPL Token associated token
+    ///   account whose owner has been changed fails this check until its owner is set back.
     pub fn complete_gt_exchange_v2<'info>(
         ctx: Context<'_, '_, 'info, 'info, CompleteGtExchangeV2<'info>>,
     ) -> Result<()> {
