@@ -1,8 +1,11 @@
 /// Implement [`Decode`](crate::Decode) for types defined in [`gmsol-programs`].
 #[cfg(feature = "gmsol-programs")]
 pub mod programs {
-    use crate::{impl_decode_for_cpi_event, impl_decode_for_zero_copy};
+    use crate::{
+        impl_decode_for_account_deserialize, impl_decode_for_cpi_event, impl_decode_for_zero_copy,
+    };
     use crate::{untagged, value::UnknownOwnedData};
+    use gmsol_programs::gmsol_evm_proxy::accounts::Config;
     use gmsol_programs::gmsol_store::{
         accounts::{
             Deposit, Glv, GlvDeposit, GlvShift, GlvWithdrawal, Market, Order, Position, Shift,
@@ -20,6 +23,7 @@ pub mod programs {
     };
 
     impl_decode_for_zero_copy!(Store);
+    impl_decode_for_account_deserialize!(Config);
     impl_decode_for_zero_copy!(Position);
     impl_decode_for_zero_copy!(Market);
     impl_decode_for_zero_copy!(VirtualInventory);
@@ -79,6 +83,7 @@ pub mod programs {
             VirtualInventory,
             Position,
             UserHeader,
+            Config,
             UnknownOwnedData
         ]
     );
@@ -124,4 +129,102 @@ pub mod programs {
     type CPIEvents = crate::value::AnchorCPIEvents<GMSOLCPIEvent>;
 
     untagged!(GMSOLData, [Account, CPIEvents]);
+}
+
+/// Decoding for EVM proxy Config logs, which use Anchor `emit!` rather than CPI events.
+#[cfg(feature = "gmsol-programs")]
+pub mod evm_proxy {
+    use anchor_lang::{AnchorDeserialize, Discriminator};
+    use base64::Engine;
+    use gmsol_programs::gmsol_evm_proxy::events;
+
+    /// One decoded Config change event.
+    #[derive(Debug)]
+    pub enum ConfigEvent {
+        /// Initial Config state.
+        Created(events::ConfigCreated),
+        /// Chain policy change.
+        ChainAllowedChanged(events::ConfigChainAllowedChanged),
+        /// Pause state change.
+        PauseChanged(events::ConfigPauseChanged),
+        /// Pending administrator proposal or replacement.
+        AdminProposed(events::ConfigAdminProposed),
+        /// Administrator acceptance.
+        AdminAccepted(events::ConfigAdminAccepted),
+    }
+
+    /// Decode a proxy `Program data:` log. Callers must first attribute it to this
+    /// program and require a successful transaction before applying its change.
+    pub fn decode_config_event_log(line: &str) -> Result<Option<ConfigEvent>, crate::DecodeError> {
+        let Some(encoded) = line.strip_prefix("Program data: ") else {
+            return Ok(None);
+        };
+        let data = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(crate::DecodeError::custom)?;
+        macro_rules! decode {
+            ($event:ty, $variant:ident) => {
+                if data.starts_with(<$event>::DISCRIMINATOR) {
+                    let event = <$event>::deserialize(&mut &data[<$event>::DISCRIMINATOR.len()..])
+                        .map_err(crate::DecodeError::custom)?;
+                    return Ok(Some(ConfigEvent::$variant(event)));
+                }
+            };
+        }
+        decode!(events::ConfigCreated, Created);
+        decode!(events::ConfigChainAllowedChanged, ChainAllowedChanged);
+        decode!(events::ConfigPauseChanged, PauseChanged);
+        decode!(events::ConfigAdminProposed, AdminProposed);
+        decode!(events::ConfigAdminAccepted, AdminAccepted);
+        Ok(None)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::{gmsol::programs::GMSOLAccountData, value::OwnedDataDecoder, Decode};
+        use anchor_lang::{AnchorSerialize, Event};
+        use gmsol_programs::gmsol_evm_proxy::{accounts::Config, ID};
+        use solana_sdk::pubkey::Pubkey;
+
+        #[test]
+        fn decodes_proxy_config_account() {
+            let config = Config {
+                store: Pubkey::new_unique(),
+                genesis_hash: [7; 32],
+                admin: Pubkey::new_unique(),
+                pending_admin: None,
+                paused: true,
+                allowed_chain_ids: vec![],
+            };
+            let mut data = Config::DISCRIMINATOR.to_vec();
+            config.serialize(&mut data).unwrap();
+            let decoded = GMSOLAccountData::decode(OwnedDataDecoder::new(&ID, &data)).unwrap();
+            let GMSOLAccountData::Config(decoded) = decoded else {
+                panic!("expected Config account");
+            };
+            assert_eq!(decoded.store, config.store);
+            assert_eq!(decoded.genesis_hash, config.genesis_hash);
+        }
+
+        #[test]
+        fn decodes_proxy_event_log() {
+            let event = events::ConfigPauseChanged {
+                config: Pubkey::new_unique(),
+                previous_paused: true,
+                paused: false,
+            };
+            let line = format!(
+                "Program data: {}",
+                base64::engine::general_purpose::STANDARD.encode(event.data())
+            );
+            let Some(ConfigEvent::PauseChanged(decoded)) = decode_config_event_log(&line).unwrap()
+            else {
+                panic!("expected pause event");
+            };
+            assert_eq!(decoded.config, event.config);
+            assert!(decoded.previous_paused);
+            assert!(!decoded.paused);
+        }
+    }
 }
