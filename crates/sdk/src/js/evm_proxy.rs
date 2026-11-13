@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use super::instructions::TransactionGroup;
-use crate::evm_proxy::{cancel_instruction, CancelIntent};
+use crate::evm_proxy::{cancel_instruction, withdraw_instruction, CancelIntent, WithdrawIntent};
 use serde::{Deserialize, Serialize};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -192,6 +192,183 @@ pub fn build_cancel_transaction(
     ))
 }
 
+/// Inputs shared by the signable payload and Solana transaction builder.
+#[derive(Clone, Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct WithdrawIntentArgs {
+    evm_address: String,
+    chain_id: String,
+    mint: String,
+    amount: String,
+    decimals: u8,
+    recipient: String,
+    nonce: String,
+    deadline: String,
+    store: String,
+    genesis_hash: String,
+    #[serde(default)]
+    program_id: Option<String>,
+}
+
+impl WithdrawIntentArgs {
+    fn parse(&self) -> crate::Result<(Pubkey, Pubkey, [u8; 32], WithdrawIntent)> {
+        let program = match &self.program_id {
+            Some(value) => Pubkey::from_str(value)?,
+            None => gmsol_programs::gmsol_evm_proxy::ID,
+        };
+        let store = Pubkey::from_str(&self.store)?;
+        let genesis = parse_hex(&self.genesis_hash, "genesisHash")?;
+        let intent = WithdrawIntent {
+            evm_address: parse_evm_address(&self.evm_address)?,
+            chain_id: parse_hex(&self.chain_id, "chainId")?,
+            mint: Pubkey::from_str(&self.mint)?,
+            amount: self.amount.parse().map_err(crate::Error::custom)?,
+            decimals: self.decimals,
+            recipient: Pubkey::from_str(&self.recipient)?,
+            nonce: self.nonce.parse().map_err(crate::Error::custom)?,
+            deadline: self.deadline.parse().map_err(crate::Error::custom)?,
+        };
+        let proxy = crate::pda::find_proxy_address(&intent.evm_address, &program).0;
+        if intent.amount == 0 || intent.recipient == proxy {
+            return Err(crate::Error::custom("invalid Withdraw amount or recipient"));
+        }
+        Ok((program, store, genesis, intent))
+    }
+}
+
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct TypedField {
+    name: String,
+    #[serde(rename = "type")]
+    field_type: String,
+}
+
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct WithdrawTypes {
+    #[serde(rename = "EIP712Domain")]
+    eip712_domain: Vec<TypedField>,
+    #[serde(rename = "Withdraw")]
+    withdraw: Vec<TypedField>,
+}
+
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct WithdrawDomain {
+    name: &'static str,
+    version: &'static str,
+    chain_id: String,
+    salt: String,
+}
+
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct WithdrawMessage {
+    proxy_account: String,
+    mint: String,
+    amount: String,
+    decimals: u8,
+    recipient: String,
+    nonce: String,
+    deadline: String,
+}
+
+/// viem-compatible EIP-712 object. Numeric strings are typed as uints below.
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct WithdrawSigningPayload {
+    domain: WithdrawDomain,
+    types: WithdrawTypes,
+    #[serde(rename = "primaryType")]
+    primary_type: &'static str,
+    message: WithdrawMessage,
+}
+
+fn fields(items: &[(&str, &str)]) -> Vec<TypedField> {
+    items
+        .iter()
+        .map(|(name, field_type)| TypedField {
+            name: (*name).to_string(),
+            field_type: (*field_type).to_string(),
+        })
+        .collect()
+}
+
+/// Construct the exact signable Withdraw typed data without JS Number conversion.
+#[wasm_bindgen(js_name = buildWithdrawTypedData)]
+pub fn build_withdraw_typed_data(
+    args: WithdrawIntentArgs,
+) -> crate::Result<WithdrawSigningPayload> {
+    let (program, store, genesis, intent) = args.parse()?;
+    let data = intent.typed_data(&program, &store, &genesis);
+    let types = WithdrawTypes {
+        eip712_domain: fields(&[
+            ("name", "string"),
+            ("version", "string"),
+            ("chainId", "uint256"),
+            ("salt", "bytes32"),
+        ]),
+        withdraw: fields(&[
+            ("proxyAccount", "bytes32"),
+            ("mint", "string"),
+            ("amount", "uint64"),
+            ("decimals", "uint8"),
+            ("recipient", "string"),
+            ("nonce", "uint64"),
+            ("deadline", "uint64"),
+        ]),
+    };
+    Ok(WithdrawSigningPayload {
+        domain: WithdrawDomain {
+            name: data.name,
+            version: data.version,
+            chain_id: format!("0x{}", hex::encode(data.chain_id)),
+            salt: format!("0x{}", hex::encode(data.salt)),
+        },
+        types,
+        primary_type: "Withdraw",
+        message: WithdrawMessage {
+            proxy_account: format!("0x{}", hex::encode(data.proxy_account.to_bytes())),
+            mint: data.mint,
+            amount: data.amount.to_string(),
+            decimals: data.decimals,
+            recipient: data.recipient,
+            nonce: data.nonce.to_string(),
+            deadline: data.deadline.to_string(),
+        },
+    })
+}
+
+/// Build one unsigned Solana transaction for an arbitrary fee payer and signed intent.
+#[wasm_bindgen(js_name = buildWithdrawTransaction)]
+pub fn build_withdraw_transaction(
+    args: WithdrawIntentArgs,
+    payer: &str,
+    recent_blockhash: &str,
+    signature: &str,
+    recovery_id: u8,
+) -> crate::Result<TransactionGroup> {
+    let (program, _, _, intent) = args.parse()?;
+    let ix = withdraw_instruction(
+        program,
+        Pubkey::from_str(payer)?,
+        &intent,
+        parse_hex(signature, "signature")?,
+        recovery_id,
+    )?;
+    Ok(TransactionGroup::from_single_instruction(
+        ix,
+        Pubkey::from_str(payer)?,
+        Hash::from_str(recent_blockhash).map_err(crate::Error::custom)?,
+    ))
+}
+
 /// Derive a proxy PDA from exactly 20 EVM address bytes in hex.
 /// An omitted program ID uses the declared proxy program.
 #[wasm_bindgen(js_name = findProxyAddress)]
@@ -298,6 +475,91 @@ mod tests {
         assert_eq!(alternate.address, alternate_expected.0.to_string());
         assert_eq!(alternate.bump, alternate_expected.1);
         assert_ne!(alternate.address, result.address);
+    }
+
+    #[test]
+    fn withdraw_js_builders_preserve_signed_numbers_and_fee_payer() {
+        let payer = Pubkey::new_unique();
+        let recipient = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        let store = Pubkey::new_unique();
+        let args = WithdrawIntentArgs {
+            evm_address: "0x0123456789abcdef0123456789abcdef01234567".to_string(),
+            chain_id: format!("0x{}", hex::encode([0x12; 32])),
+            mint: mint.to_string(),
+            amount: u64::MAX.to_string(),
+            decimals: 6,
+            recipient: recipient.to_string(),
+            nonce: "0".to_string(),
+            deadline: "1700000120".to_string(),
+            store: store.to_string(),
+            genesis_hash: format!("0x{}", hex::encode([0x42; 32])),
+            program_id: None,
+        };
+        let payload = build_withdraw_typed_data(args.clone()).unwrap();
+        assert_eq!(payload.primary_type, "Withdraw");
+        let serialized = serde_json::to_value(&payload).unwrap();
+        assert_eq!(serialized["primaryType"], "Withdraw");
+        assert!(serialized.get("primary_type").is_none());
+        assert_eq!(payload.message.amount, u64::MAX.to_string());
+        assert_eq!(payload.message.nonce, "0");
+        for nonce in ["0", "9007199254740993", "18446744073709551615"] {
+            let typed = build_withdraw_typed_data(WithdrawIntentArgs {
+                nonce: nonce.to_string(),
+                ..args.clone()
+            })
+            .unwrap();
+            assert_eq!(typed.message.nonce, nonce);
+            assert_eq!(typed.types.withdraw.len(), 7);
+            assert_eq!(typed.types.withdraw[5].name, "nonce");
+            assert!(serde_json::to_value(typed).unwrap()["message"]
+                .get("generation")
+                .is_none());
+        }
+        assert_eq!(payload.message.mint, mint.to_string());
+        assert_eq!(payload.message.recipient, recipient.to_string());
+        assert_eq!(payload.domain.name, gmsol_evm_proxy_intent::DOMAIN_NAME);
+        assert_eq!(
+            payload.domain.salt,
+            format!(
+                "0x{}",
+                hex::encode(gmsol_evm_proxy_intent::domain_salt(
+                    &gmsol_programs::gmsol_evm_proxy::ID,
+                    &store,
+                    &[0x42; 32]
+                ))
+            )
+        );
+        assert_eq!(payload.types.withdraw[5].name, "nonce");
+
+        let transaction = build_withdraw_transaction(
+            WithdrawIntentArgs {
+                amount: "42".to_string(),
+                ..args
+            },
+            &payer.to_string(),
+            &Hash::default().to_string(),
+            &format!("0x{}", hex::encode([3; 64])),
+            1,
+        )
+        .unwrap();
+        let wire: Vec<Vec<Vec<u8>>> =
+            bincode::deserialize(&bincode::serialize(&transaction.serialize().unwrap()).unwrap())
+                .unwrap();
+        assert_eq!(wire.len(), 1);
+        assert_eq!(wire[0].len(), 1);
+        let signed: solana_sdk::transaction::VersionedTransaction =
+            bincode::deserialize(&wire[0][0]).unwrap();
+        assert_eq!(signed.signatures.len(), 1);
+        let solana_sdk::message::VersionedMessage::Legacy(message) = signed.message else {
+            panic!("expected legacy transaction")
+        };
+        assert_eq!(message.account_keys[0], payer);
+        assert_eq!(message.instructions.len(), 1);
+        assert_eq!(
+            message.account_keys[message.instructions[0].program_id_index as usize],
+            gmsol_programs::gmsol_evm_proxy::ID
+        );
     }
 
     #[test]
