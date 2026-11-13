@@ -197,6 +197,24 @@ pub mod evm_proxy {
             .map_err(crate::DecodeError::custom)
     }
 
+    /// Decode a successful Withdraw event from an attributed `Program data:` log.
+    pub fn decode_withdraw_event_log(
+        line: &str,
+    ) -> Result<Option<events::Withdrawn>, crate::DecodeError> {
+        let Some(encoded) = line.strip_prefix("Program data: ") else {
+            return Ok(None);
+        };
+        let data = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(crate::DecodeError::custom)?;
+        if !data.starts_with(events::Withdrawn::DISCRIMINATOR) {
+            return Ok(None);
+        }
+        events::Withdrawn::try_from_slice(&data[events::Withdrawn::DISCRIMINATOR.len()..])
+            .map(Some)
+            .map_err(crate::DecodeError::custom)
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -280,6 +298,46 @@ pub mod evm_proxy {
             assert!(decode_intent_event_log(&encode(&event.data()[..48])).is_err());
             assert!(decode_intent_event_log("Program data: %%%").is_err());
             assert!(decode_intent_event_log("unrelated log").unwrap().is_none());
+        }
+
+        #[test]
+        fn decodes_withdraw_event_log() {
+            let event = events::Withdrawn {
+                proxy: Pubkey::new_unique(),
+                nonce: 7,
+                mint: Pubkey::new_unique(),
+                amount: 125,
+                recipient: Pubkey::new_unique(),
+            };
+            let line = format!(
+                "Program data: {}",
+                base64::engine::general_purpose::STANDARD.encode(event.data())
+            );
+            let decoded = decode_withdraw_event_log(&line).unwrap().unwrap();
+            let encode = |data: &[u8]| {
+                format!(
+                    "Program data: {}",
+                    base64::engine::general_purpose::STANDARD.encode(data)
+                )
+            };
+            let mut trailing = event.data();
+            trailing.push(0);
+            assert!(decode_withdraw_event_log(&encode(&trailing)).is_err());
+            let mut old = events::Withdrawn::DISCRIMINATOR.to_vec();
+            old.extend_from_slice(event.proxy.as_ref());
+            old.extend_from_slice(&2_u64.to_le_bytes());
+            old.extend_from_slice(&event.data()[40..]);
+            assert!(decode_withdraw_event_log(&encode(&old)).is_err());
+            assert!(decode_withdraw_event_log(&encode(&event.data()[..119])).is_err());
+            assert!(decode_withdraw_event_log("Program data: %%%").is_err());
+            assert_eq!((decoded.proxy, decoded.nonce), (event.proxy, 7));
+            assert_eq!(
+                (decoded.mint, decoded.amount, decoded.recipient),
+                (event.mint, 125, event.recipient)
+            );
+            assert!(decode_withdraw_event_log("Program log: other")
+                .unwrap()
+                .is_none());
         }
     }
 }

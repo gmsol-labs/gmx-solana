@@ -737,6 +737,7 @@ fn proxy_future_reserved_bytes_preserve_identity_and_abi() -> eyre::Result<()> {
             "propose_admin",
             "set_chain_allowed",
             "set_paused",
+            "withdraw",
         ]
     );
     Ok(())

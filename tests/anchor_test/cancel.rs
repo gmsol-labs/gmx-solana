@@ -462,6 +462,17 @@ pub(super) async fn verify_signed_cancel(
         (proxy, 2, evm_proxy::INTENT_KIND_CANCEL)
     );
 
+    super::withdraw::verify_signed_withdraw(
+        deployment,
+        &owner,
+        evm_address,
+        proxy,
+        chain_id,
+        genesis_hash,
+        deadline,
+    )
+    .await?;
+
     admin
         .store_transaction()
         .program(evm_proxy::ID)
