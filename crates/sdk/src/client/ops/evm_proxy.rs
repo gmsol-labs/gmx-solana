@@ -13,7 +13,10 @@ use solana_sdk::{
 };
 
 use crate::{
-    evm_proxy::{cancel_instruction, withdraw_instruction, CancelIntent, WithdrawIntent},
+    evm_proxy::{
+        cancel_instruction, set_referral_code_instruction, withdraw_instruction, CancelIntent,
+        SetReferralCodeIntent, WithdrawIntent,
+    },
     pda::find_proxy_config_address,
     Client,
 };
@@ -201,6 +204,24 @@ impl<C: Deref<Target = impl Signer> + Clone> Client<C> {
             .transaction()
             .accounts(ix.accounts)
             .args(ix.data)
+    }
+
+    /// Build registration sponsored by this client's Solana signer.
+    pub fn set_proxy_referral_code_transaction(
+        &self,
+        store: Pubkey,
+        intent: &SetReferralCodeIntent,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        Ok(self.evm_proxy_instruction(set_referral_code_instruction(
+            gmsol_programs::gmsol_evm_proxy::ID,
+            self.payer(),
+            store,
+            intent,
+            signature,
+            recovery_id,
+        )?))
     }
 
     /// Build a Withdraw transaction paid by this client's Solana signer.

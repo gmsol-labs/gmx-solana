@@ -1,7 +1,10 @@
 use std::str::FromStr;
 
 use super::instructions::TransactionGroup;
-use crate::evm_proxy::{cancel_instruction, withdraw_instruction, CancelIntent, WithdrawIntent};
+use crate::evm_proxy::{
+    cancel_instruction, set_referral_code_instruction, withdraw_instruction, CancelIntent,
+    SetReferralCodeIntent, WithdrawIntent,
+};
 use serde::{Deserialize, Serialize};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -369,6 +372,141 @@ pub fn build_withdraw_transaction(
     ))
 }
 
+/// Referral input accepts Store base58 aliases and normalizes before signing.
+#[derive(Clone, Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct SetReferralCodeIntentArgs {
+    evm_address: String,
+    chain_id: String,
+    code: String,
+    nonce: String,
+    deadline: String,
+    store: String,
+    genesis_hash: String,
+    #[serde(default)]
+    program_id: Option<String>,
+}
+
+impl SetReferralCodeIntentArgs {
+    fn parse(&self) -> crate::Result<(Pubkey, Pubkey, [u8; 32], SetReferralCodeIntent)> {
+        let program = match &self.program_id {
+            Some(value) => Pubkey::from_str(value)?,
+            None => gmsol_programs::gmsol_evm_proxy::ID,
+        };
+        let code = gmsol_programs::gmsol_store::accounts::ReferralCodeV2::decode(&self.code)?;
+        if code == [0; 8] {
+            return Err(crate::Error::custom("referral code cannot be zero"));
+        }
+        Ok((
+            program,
+            Pubkey::from_str(&self.store)?,
+            parse_hex(&self.genesis_hash, "genesisHash")?,
+            SetReferralCodeIntent {
+                evm_address: parse_evm_address(&self.evm_address)?,
+                chain_id: parse_hex(&self.chain_id, "chainId")?,
+                code,
+                nonce: self.nonce.parse().map_err(crate::Error::custom)?,
+                deadline: self.deadline.parse().map_err(crate::Error::custom)?,
+            },
+        ))
+    }
+}
+
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct SetReferralCodeSigningPayload {
+    domain: WithdrawDomain,
+    types: SetReferralCodeTypes,
+    #[serde(rename = "primaryType")]
+    primary_type: &'static str,
+    message: SetReferralCodeMessage,
+}
+
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct SetReferralCodeTypes {
+    #[serde(rename = "EIP712Domain")]
+    eip712_domain: Vec<TypedField>,
+    #[serde(rename = "SetReferralCode")]
+    set_referral_code: Vec<TypedField>,
+}
+
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct SetReferralCodeMessage {
+    proxy_account: String,
+    code: String,
+    nonce: String,
+    deadline: String,
+}
+
+/// Sign this normalized payload, not the verbatim input alias.
+#[wasm_bindgen(js_name = buildSetReferralCodeTypedData)]
+pub fn build_set_referral_code_typed_data(
+    args: SetReferralCodeIntentArgs,
+) -> crate::Result<SetReferralCodeSigningPayload> {
+    let (program, store, genesis, intent) = args.parse()?;
+    let data = intent.typed_data(&program, &store, &genesis);
+    Ok(SetReferralCodeSigningPayload {
+        domain: WithdrawDomain {
+            name: data.name,
+            version: data.version,
+            chain_id: format!("0x{}", hex::encode(data.chain_id)),
+            salt: format!("0x{}", hex::encode(data.salt)),
+        },
+        types: SetReferralCodeTypes {
+            eip712_domain: fields(&[
+                ("name", "string"),
+                ("version", "string"),
+                ("chainId", "uint256"),
+                ("salt", "bytes32"),
+            ]),
+            set_referral_code: fields(&[
+                ("proxyAccount", "bytes32"),
+                ("code", "string"),
+                ("nonce", "uint64"),
+                ("deadline", "uint64"),
+            ]),
+        },
+        primary_type: "SetReferralCode",
+        message: SetReferralCodeMessage {
+            proxy_account: format!("0x{}", hex::encode(data.proxy_account.to_bytes())),
+            code: data.code,
+            nonce: data.nonce.to_string(),
+            deadline: data.deadline.to_string(),
+        },
+    })
+}
+
+/// Build an unsigned transaction with separate rent sponsor and fee payer.
+/// Both accounts must sign when their keys differ.
+#[wasm_bindgen(js_name = buildSetReferralCodeTransaction)]
+pub fn build_set_referral_code_transaction(
+    args: SetReferralCodeIntentArgs,
+    submitter: &str,
+    payer: &str,
+    recent_blockhash: &str,
+    signature: &str,
+    recovery_id: u8,
+) -> crate::Result<TransactionGroup> {
+    let (program, store, _, intent) = args.parse()?;
+    let ix = set_referral_code_instruction(
+        program,
+        Pubkey::from_str(submitter)?,
+        store,
+        &intent,
+        parse_hex(signature, "signature")?,
+        recovery_id,
+    )?;
+    Ok(TransactionGroup::from_single_instruction(
+        ix,
+        Pubkey::from_str(payer)?,
+        Hash::from_str(recent_blockhash).map_err(crate::Error::custom)?,
+    ))
+}
+
 /// Derive a proxy PDA from exactly 20 EVM address bytes in hex.
 /// An omitted program ID uses the declared proxy program.
 #[wasm_bindgen(js_name = findProxyAddress)]
@@ -405,6 +543,101 @@ pub fn find_proxy_config_address(program_id: Option<String>) -> crate::Result<Pr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anchor_lang::AnchorDeserialize;
+
+    #[test]
+    fn referral_aliases_and_full_width_nonce_are_normalized_before_signing() {
+        let args = SetReferralCodeIntentArgs {
+            evm_address: hex::encode([0x17; 20]),
+            chain_id: hex::encode([1; 32]),
+            code: "2".into(),
+            nonce: "9007199254740993".into(),
+            deadline: u64::MAX.to_string(),
+            store: Pubkey::new_unique().to_string(),
+            genesis_hash: hex::encode([2; 32]),
+            program_id: None,
+        };
+        for alias in ["2", "12", "11111112"] {
+            for nonce in ["0", "9007199254740993", "18446744073709551615"] {
+                let input = SetReferralCodeIntentArgs {
+                    code: alias.into(),
+                    nonce: nonce.into(),
+                    ..args.clone()
+                };
+                let payload = build_set_referral_code_typed_data(input).unwrap();
+                assert_eq!(payload.message.code, "2");
+                assert_eq!(payload.message.nonce, nonce);
+                assert_eq!(payload.message.deadline, u64::MAX.to_string());
+                assert_eq!(payload.primary_type, "SetReferralCode");
+                assert_eq!(
+                    payload
+                        .types
+                        .set_referral_code
+                        .iter()
+                        .map(|f| (f.name.as_str(), f.field_type.as_str()))
+                        .collect::<Vec<_>>(),
+                    [
+                        ("proxyAccount", "bytes32"),
+                        ("code", "string"),
+                        ("nonce", "uint64"),
+                        ("deadline", "uint64")
+                    ]
+                );
+            }
+        }
+        for invalid in ["", "0", "O", "I", "l", "!", "111111111", "1", "11111111"] {
+            assert!(
+                build_set_referral_code_typed_data(SetReferralCodeIntentArgs {
+                    code: invalid.into(),
+                    ..args.clone()
+                })
+                .is_err(),
+                "{invalid}"
+            );
+        }
+    }
+
+    #[test]
+    fn referral_transaction_preserves_distinct_sponsor_and_fee_payer() {
+        let sponsor = Pubkey::new_unique();
+        let payer = Pubkey::new_unique();
+        let args = SetReferralCodeIntentArgs {
+            evm_address: hex::encode([0x17; 20]),
+            chain_id: hex::encode([1; 32]),
+            code: "12".into(),
+            nonce: u64::MAX.to_string(),
+            deadline: "1700000120".into(),
+            store: Pubkey::new_unique().to_string(),
+            genesis_hash: hex::encode([2; 32]),
+            program_id: None,
+        };
+        let transaction = build_set_referral_code_transaction(
+            args,
+            &sponsor.to_string(),
+            &payer.to_string(),
+            &Hash::default().to_string(),
+            &hex::encode([3; 64]),
+            1,
+        )
+        .unwrap();
+        let wire: Vec<Vec<Vec<u8>>> =
+            bincode::deserialize(&bincode::serialize(&transaction.serialize().unwrap()).unwrap())
+                .unwrap();
+        let transaction: solana_sdk::transaction::VersionedTransaction =
+            bincode::deserialize(&wire[0][0]).unwrap();
+        assert_eq!(transaction.signatures.len(), 2);
+        let solana_sdk::message::VersionedMessage::Legacy(message) = transaction.message else {
+            panic!("expected legacy transaction")
+        };
+        assert_eq!(message.account_keys[0], payer);
+        assert!(message.account_keys[..2].contains(&sponsor));
+        let args = gmsol_programs::gmsol_evm_proxy::client::args::SetReferralCode::deserialize(
+            &mut &message.instructions[0].data[8..],
+        )
+        .unwrap();
+        assert_eq!(args.code, [0, 0, 0, 0, 0, 0, 0, 1]);
+        assert_eq!(args.nonce, u64::MAX);
+    }
 
     #[test]
     fn cancel_payload_keeps_full_width_single_nonce_strings() {

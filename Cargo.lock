@@ -2409,6 +2409,7 @@ name = "gmsol-evm-proxy-intent"
 version = "0.12.0"
 dependencies = [
  "anchor-lang",
+ "bs58 0.5.1",
  "hex",
  "serde_json",
 ]
