@@ -5,7 +5,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc, RwLock,
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use backon::{DefaultSleeper, Sleeper};
@@ -18,6 +18,7 @@ use solana_rpc_client_api::{
 };
 
 use super::{RpcSender, RpcTransportStats};
+use web_time::Instant;
 
 /// HTTP RPC sender implementation.
 pub struct HttpRpcSender {
