@@ -13,3 +13,8 @@ or proof of the absolute lifetime replay requirement.
 
 With those packages on Node's module search path, verify the independent
 vectors with `node crates/evm-proxy-intent/fixtures/scripts/generate-cancel-vectors.cjs --check`.
+
+`withdraw-vectors.json` records the nonce-only Withdraw type and independent
+viem digests, including zero, MAX and a nonce above 2^53. Each vector includes
+the old generation-bearing digest as a negative control. Boundary values do
+not establish a reachable full-cycle history or a lifetime replay proof.
