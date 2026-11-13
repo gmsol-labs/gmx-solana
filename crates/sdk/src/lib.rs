@@ -9,6 +9,10 @@ pub mod constants;
 /// Functions for constructing Program Derived Addresses.
 pub mod pda;
 
+/// Signed EVM proxy intent data and instructions.
+#[cfg(feature = "evm-proxy")]
+pub mod evm_proxy;
+
 /// Instruction Builders.
 pub mod builders;
 
