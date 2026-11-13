@@ -1,6 +1,5 @@
 //! Signed EVM proxy intent data and instructions.
 
-use anchor_lang::Discriminator;
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use base64::Engine;
 use gmsol_programs::gmsol_evm_proxy::events;
@@ -9,6 +8,316 @@ use gmsol_programs::{
     gmsol_evm_proxy::client::{accounts, args},
 };
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
+
+/// Signed registration fields. Code bytes are normalized before signing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetReferralCodeIntent {
+    pub evm_address: [u8; 20],
+    pub chain_id: [u8; 32],
+    pub code: [u8; 8],
+    pub nonce: u64,
+    pub deadline: u64,
+}
+
+/// Exact EIP-712 values for referral registration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetReferralCodeTypedData {
+    pub name: &'static str,
+    pub version: &'static str,
+    pub chain_id: [u8; 32],
+    pub salt: [u8; 32],
+    pub type_signature: &'static str,
+    pub proxy_account: Pubkey,
+    pub code: String,
+    pub nonce: u64,
+    pub deadline: u64,
+}
+
+impl SetReferralCodeIntent {
+    /// Normalize aliases to the only string accepted by the on-chain verifier.
+    pub fn typed_data(
+        &self,
+        program_id: &Pubkey,
+        store: &Pubkey,
+        genesis_hash: &[u8; 32],
+    ) -> SetReferralCodeTypedData {
+        SetReferralCodeTypedData {
+            name: gmsol_evm_proxy_intent::DOMAIN_NAME,
+            version: gmsol_evm_proxy_intent::DOMAIN_VERSION,
+            chain_id: self.chain_id,
+            salt: gmsol_evm_proxy_intent::domain_salt(program_id, store, genesis_hash),
+            type_signature: gmsol_evm_proxy_intent::SET_REFERRAL_CODE_TYPE,
+            proxy_account: crate::pda::find_proxy_address(&self.evm_address, program_id).0,
+            code: gmsol_evm_proxy_intent::canonical_referral_code(&self.code),
+            nonce: self.nonce,
+            deadline: self.deadline,
+        }
+    }
+
+    /// Digest over the canonical code, complete nonce and deployment domain.
+    pub fn digest(&self, program_id: &Pubkey, store: &Pubkey, genesis_hash: &[u8; 32]) -> [u8; 32] {
+        let proxy = crate::pda::find_proxy_address(&self.evm_address, program_id).0;
+        let domain = gmsol_evm_proxy_intent::domain_separator(
+            program_id,
+            store,
+            genesis_hash,
+            &self.chain_id,
+        );
+        let structure = gmsol_evm_proxy_intent::set_referral_code_struct_hash(
+            &proxy,
+            &self.code,
+            self.nonce,
+            self.deadline,
+        );
+        gmsol_evm_proxy_intent::intent_digest(&domain, &structure)
+    }
+}
+
+/// Build registration with canonical Store PDAs, including a missing User.
+/// The submitter signs and sponsors rent; the transaction fee payer may differ.
+pub fn set_referral_code_instruction(
+    program_id: Pubkey,
+    submitter: Pubkey,
+    store: Pubkey,
+    intent: &SetReferralCodeIntent,
+    signature: [u8; 64],
+    recovery_id: u8,
+) -> crate::Result<Instruction> {
+    if intent.code == [0; 8] {
+        return Err(crate::Error::custom("referral code cannot be zero"));
+    }
+    if recovery_id > 1 {
+        return Err(crate::Error::custom("invalid EVM recovery ID"));
+    }
+    let proxy = crate::pda::find_proxy_address(&intent.evm_address, &program_id).0;
+    let store_program = gmsol_programs::gmsol_store::ID;
+    Ok(Instruction {
+        program_id,
+        accounts: accounts::SetReferralCode {
+            submitter,
+            config: crate::pda::find_proxy_config_address(&program_id).0,
+            proxy,
+            store,
+            user: crate::pda::find_user_address(&store, &proxy, &store_program).0,
+            referral_code: crate::pda::find_referral_code_address(
+                &store,
+                intent.code,
+                &store_program,
+            )
+            .0,
+            store_program,
+            system_program: solana_sdk::system_program::ID,
+        }
+        .to_account_metas(None),
+        data: args::SetReferralCode {
+            evm_address: intent.evm_address,
+            chain_id: intent.chain_id,
+            code: intent.code,
+            nonce: intent.nonce,
+            deadline: intent.deadline,
+            signature,
+            recovery_id,
+        }
+        .data(),
+    })
+}
+
+/// Decode only after confirming that the enclosing transaction succeeded.
+pub fn decode_referral_code_event_log(
+    line: &str,
+) -> crate::Result<Option<events::ReferralCodeSet>> {
+    decode_program_data(line)
+}
+
+fn decode_program_data<E: anchor_lang::Event>(line: &str) -> crate::Result<Option<E>> {
+    let Some(encoded) = line.strip_prefix("Program data: ") else {
+        return Ok(None);
+    };
+    let data = base64::engine::general_purpose::STANDARD.decode(encoded)?;
+    if !data.starts_with(E::DISCRIMINATOR) {
+        return Ok(None);
+    }
+    crate::utils::events::decode_anchor_event_with_options::<E>(&data, false).map(Some)
+}
+
+#[cfg(test)]
+mod referral_tests {
+    use super::*;
+    use anchor_lang::{AnchorDeserialize, Discriminator, Event};
+
+    #[test]
+    fn referral_builder_and_digest_match_independent_vectors() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../evm-proxy-intent/fixtures/referral-vectors.json"
+        ))
+        .unwrap();
+        let bytes = |key: &str| {
+            hex::decode(fixture[key].as_str().unwrap().trim_start_matches("0x")).unwrap()
+        };
+        let program = Pubkey::new_from_array(bytes("program").try_into().unwrap());
+        let store = Pubkey::new_from_array(bytes("store").try_into().unwrap());
+        let genesis = bytes("genesis").try_into().unwrap();
+        let submitter = Pubkey::new_unique();
+        for vector in fixture["vectors"].as_array().unwrap() {
+            let intent = SetReferralCodeIntent {
+                evm_address: bytes("evmAddress").try_into().unwrap(),
+                chain_id: hex::decode(vector["chainId"].as_str().unwrap().trim_start_matches("0x"))
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                code: hex::decode(vector["bytesHex"].as_str().unwrap())
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                nonce: vector["nonce"].as_str().unwrap().parse().unwrap(),
+                deadline: vector["deadline"].as_str().unwrap().parse().unwrap(),
+            };
+            assert_eq!(
+                hex::encode(intent.digest(&program, &store, &genesis)),
+                vector["digest"].as_str().unwrap().trim_start_matches("0x")
+            );
+            assert_eq!(
+                intent.typed_data(&program, &store, &genesis).code,
+                vector["canonical"]
+            );
+            if intent.code == [0; 8] {
+                assert!(set_referral_code_instruction(
+                    program, submitter, store, &intent, [1; 64], 0
+                )
+                .is_err());
+                continue;
+            }
+            let ix = set_referral_code_instruction(program, submitter, store, &intent, [1; 64], 0)
+                .unwrap();
+            let data = args::SetReferralCode::deserialize(&mut &ix.data[8..]).unwrap();
+            assert_eq!(
+                (data.code, data.nonce, data.deadline),
+                (intent.code, intent.nonce, intent.deadline)
+            );
+            assert_eq!(ix.accounts.len(), 8);
+            assert!(ix.accounts[0].is_signer && ix.accounts[0].is_writable);
+            for index in [2, 4, 5] {
+                assert!(ix.accounts[index].is_writable);
+                assert!(!ix.accounts[index].is_signer);
+            }
+            let proxy = crate::pda::find_proxy_address(&intent.evm_address, &program).0;
+            assert_eq!(
+                ix.accounts[4].pubkey,
+                crate::pda::find_user_address(&store, &proxy, &gmsol_programs::gmsol_store::ID).0
+            );
+            assert_eq!(
+                ix.accounts[5].pubkey,
+                crate::pda::find_referral_code_address(
+                    &store,
+                    intent.code,
+                    &gmsol_programs::gmsol_store::ID
+                )
+                .0
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_code_matches_store_encoding() {
+        use gmsol_programs::gmsol_store::accounts::ReferralCodeV2;
+
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../evm-proxy-intent/fixtures/referral-vectors.json"
+        ))
+        .unwrap();
+        for vector in fixture["vectors"].as_array().unwrap() {
+            let code: [u8; 8] = hex::decode(vector["bytesHex"].as_str().unwrap())
+                .unwrap()
+                .try_into()
+                .unwrap();
+            let canonical = gmsol_evm_proxy_intent::canonical_referral_code(&code);
+            assert_eq!(canonical, ReferralCodeV2::encode(&code, true));
+            if code != [0; 8] {
+                assert_eq!(ReferralCodeV2::decode(&canonical).unwrap(), code);
+            }
+        }
+    }
+
+    #[test]
+    fn strict_event_logs_preserve_none_and_error_contracts() {
+        fn check<E: Event>(event: E, decode: impl Fn(&str) -> crate::Result<Option<E>>) {
+            let encode = |data: &[u8]| {
+                format!(
+                    "Program data: {}",
+                    base64::engine::general_purpose::STANDARD.encode(data)
+                )
+            };
+            assert!(decode("Program log: unrelated").unwrap().is_none());
+            assert!(matches!(
+                decode("Program data: %%%"),
+                Err(crate::Error::Base64Decode(_))
+            ));
+            for unknown in [&[][..], &[0][..], events::ConfigPauseChanged::DISCRIMINATOR] {
+                assert!(decode(&encode(unknown)).unwrap().is_none());
+            }
+            assert!(decode(&encode(&event.data())).unwrap().is_some());
+            assert!(matches!(
+                decode(&encode(E::DISCRIMINATOR)),
+                Err(crate::Error::Custom(_))
+            ));
+            let mut trailing = event.data();
+            trailing.push(0);
+            assert!(matches!(
+                decode(&encode(&trailing)),
+                Err(crate::Error::Custom(_))
+            ));
+        }
+
+        let proxy = Pubkey::new_unique();
+        check(
+            events::IntentConsumed {
+                proxy,
+                nonce: 7,
+                kind: 1,
+            },
+            decode_intent_event_log,
+        );
+        check(
+            events::Withdrawn {
+                proxy,
+                nonce: 7,
+                mint: Pubkey::new_unique(),
+                amount: 125,
+                recipient: Pubkey::new_unique(),
+            },
+            decode_withdraw_event_log,
+        );
+        check(
+            events::ReferralCodeSet {
+                proxy,
+                nonce: 7,
+                code: [9; 8],
+            },
+            decode_referral_code_event_log,
+        );
+    }
+
+    #[test]
+    fn decodes_registered_code_bytes() {
+        let event = events::ReferralCodeSet {
+            proxy: Pubkey::new_unique(),
+            nonce: u64::MAX,
+            code: [9; 8],
+        };
+        let log = format!(
+            "Program data: {}",
+            base64::engine::general_purpose::STANDARD.encode(event.data())
+        );
+        let decoded = decode_referral_code_event_log(&log).unwrap().unwrap();
+        assert_eq!(
+            (decoded.proxy, decoded.nonce, decoded.code),
+            (event.proxy, event.nonce, event.code)
+        );
+        assert!(decode_referral_code_event_log("Program log: unrelated")
+            .unwrap()
+            .is_none());
+    }
+}
 
 /// Signed fields of one Withdraw intent. The single wrapping nonce is explicit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,7 +454,7 @@ pub fn withdraw_instruction(
 #[cfg(test)]
 mod withdraw_tests {
     use super::*;
-    use anchor_lang::{AnchorDeserialize, Event};
+    use anchor_lang::{AnchorDeserialize, Discriminator, Event};
     use solana_sdk::pubkey::Pubkey;
 
     #[test]
@@ -261,28 +570,12 @@ mod withdraw_tests {
 
 /// Decode a consumed intent from a successful EVM proxy transaction's log.
 pub fn decode_intent_event_log(line: &str) -> crate::Result<Option<events::IntentConsumed>> {
-    let Some(encoded) = line.strip_prefix("Program data: ") else {
-        return Ok(None);
-    };
-    let data = base64::engine::general_purpose::STANDARD.decode(encoded)?;
-    if !data.starts_with(events::IntentConsumed::DISCRIMINATOR) {
-        return Ok(None);
-    }
-    crate::utils::events::decode_anchor_event_with_options::<events::IntentConsumed>(&data, false)
-        .map(Some)
+    decode_program_data(line)
 }
 
 /// Decode one successful Withdraw event after transaction success is confirmed.
 pub fn decode_withdraw_event_log(line: &str) -> crate::Result<Option<events::Withdrawn>> {
-    let Some(encoded) = line.strip_prefix("Program data: ") else {
-        return Ok(None);
-    };
-    let data = base64::engine::general_purpose::STANDARD.decode(encoded)?;
-    if !data.starts_with(events::Withdrawn::DISCRIMINATOR) {
-        return Ok(None);
-    }
-    crate::utils::events::decode_anchor_event_with_options::<events::Withdrawn>(&data, false)
-        .map(Some)
+    decode_program_data(line)
 }
 
 /// Signed fields for one Cancel operation.

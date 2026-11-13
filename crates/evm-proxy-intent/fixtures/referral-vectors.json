@@ -1,0 +1,249 @@
+{
+  "generator": "viem@2.57.7",
+  "encoding": "@scure/base base58",
+  "type": "SetReferralCode(bytes32 proxyAccount,string code,uint64 nonce,uint64 deadline)",
+  "program": "0xbe3e6d227aee58535232047c2e5d6ce8344ac6408b387f63d667ff1205b9e763",
+  "store": "0x4242424242424242424242424242424242424242424242424242424242424242",
+  "genesis": "0x5353535353535353535353535353535353535353535353535353535353535353",
+  "evmAddress": "0x1717171717171717171717171717171717171717",
+  "proxy": "0x591aa4220b2e288290038db0ed951434be680d6e7135618141c3f8a8b253bdfd",
+  "salt": "0x1ea4a9b4942863414b533fb5a07dd39324e1b3f9c6f388bf25c5d1d71f537459",
+  "types": {
+    "SetReferralCode": [
+      {
+        "name": "proxyAccount",
+        "type": "bytes32"
+      },
+      {
+        "name": "code",
+        "type": "string"
+      },
+      {
+        "name": "nonce",
+        "type": "uint64"
+      },
+      {
+        "name": "deadline",
+        "type": "uint64"
+      }
+    ]
+  },
+  "vectors": [
+    {
+      "bytesHex": "0000000000000000",
+      "canonical": "",
+      "nonce": "0",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x39fe1021560b129a0535241a7ae4c79d914b3491716c5981ff8710a8cf79f6cd",
+      "digest": "0x9e5a4a2d57adc4b8cb1e94340a2528091daad277c7a6568a6ef889a29e4794f9"
+    },
+    {
+      "bytesHex": "0000000000000000",
+      "canonical": "",
+      "nonce": "1",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x459ec9a0190ecd8ef62fe9d0e013bf76370c5ac901ed950fb92b6706f75a38ad",
+      "digest": "0xb6add167850b666e077eaa8fe9c66c3ca0bbf34c09a7fb68ee1470efe3a11ed5"
+    },
+    {
+      "bytesHex": "0000000000000000",
+      "canonical": "",
+      "nonce": "9007199254740993",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0xd7e59784cdf4f2c9f4889efe2b6bde594a3862c386d508f606ca94c11e4176ca",
+      "digest": "0x9c54f7c0151551e7ed585c6fedf4b9ac2c69ae11eda24f660708dc0be71ca77a"
+    },
+    {
+      "bytesHex": "0000000000000000",
+      "canonical": "",
+      "nonce": "18446744073709551615",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0xbdac3d78659d967afaa4c304eaa83ce1fb35e194eeebf236d261124cb1425e16",
+      "digest": "0xc82b4e8695b179bd43ed6673a5fd54cb3301abdd5045e8aab2e08ab8ff2c6043"
+    },
+    {
+      "bytesHex": "0000000000000001",
+      "canonical": "2",
+      "nonce": "0",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x30e1d8d29583f7c5586befd59c815ec06aaadd0df450035778e27f504801b8ef",
+      "digest": "0x45e527faba6f68013093c4970b7a21665a8457671f9de760aec924988a9d1e60"
+    },
+    {
+      "bytesHex": "0000000000000001",
+      "canonical": "2",
+      "nonce": "1",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0xb639b86ee315080a2c5a07c961e092cff1ac8a60f5a8dd164af8d70996e86f1e",
+      "digest": "0xc2d34e40ce547dfc8e4d01bc7537ddc1b5f284f1231de7d8a9e1eea88aa52d19"
+    },
+    {
+      "bytesHex": "0000000000000001",
+      "canonical": "2",
+      "nonce": "9007199254740993",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x5957babb204230bd4fa9a0464fd378366fb817947cf49b513f2cf7d0d7b681a6",
+      "digest": "0xccb2a6308c31ee71e27a7870d3686a1c169f4927e885938cb6030374e4cf3390"
+    },
+    {
+      "bytesHex": "0000000000000001",
+      "canonical": "2",
+      "nonce": "18446744073709551615",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x70894b3ff58a0e27debb210ce33ef819bf8e080053b6c45c263709e422b35f44",
+      "digest": "0x83fcd98a7a7dd3c7cc14cfacfd4989a3f1404e7b94b78b1f08d8017bae011f76"
+    },
+    {
+      "bytesHex": "00000000000000ff",
+      "canonical": "5Q",
+      "nonce": "0",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x60642bb5c5a7f9386c1d023e7eed8c3d4d818badaab92247e12ab5d91edcec88",
+      "digest": "0xbb1bef363a71150f04951cc30b882dff4c376e1c6974ac2ed1439854a868fcfa"
+    },
+    {
+      "bytesHex": "00000000000000ff",
+      "canonical": "5Q",
+      "nonce": "1",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0xdff1ae2d4de149c1def1537bd4c1abd9915baa812f73b600e39ba5274888cba9",
+      "digest": "0x7fde0817557e497f476dd616bfb0b895d429e80d0b436940ecbef030edbb6cc8"
+    },
+    {
+      "bytesHex": "00000000000000ff",
+      "canonical": "5Q",
+      "nonce": "9007199254740993",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x2dedc3f0800b91a371f4e17b3930d533562f9ece3724ab95c5bb5d9d1597c6aa",
+      "digest": "0x53c35f79f936edf5c61e2888ec21dd2cf035c58678aa7cef92b92d4e0768af57"
+    },
+    {
+      "bytesHex": "00000000000000ff",
+      "canonical": "5Q",
+      "nonce": "18446744073709551615",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x4f7fbae179a4f2ddc79646b3e2e9f020c39d61114a844c5e51f09196452fe811",
+      "digest": "0xf570b09ab3ac78e9b9075b13e9e6b01b7b6652006ba573e88280db32cf332fc9"
+    },
+    {
+      "bytesHex": "0001020304050607",
+      "canonical": "3DUyZY2dc",
+      "nonce": "0",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x38905edcf19f345e73ef24ea943dfe7ff551e0dcf9ba15817eac7ff4d7484c6f",
+      "digest": "0xdb5eefdf878c45a5874726165b92d99bbeb0b65a19ab7a0823cc1f85f65c98d4"
+    },
+    {
+      "bytesHex": "0001020304050607",
+      "canonical": "3DUyZY2dc",
+      "nonce": "1",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x26cb47e6ccd0741f4cd2c5f64b1c2a3400fdfec15ad414dbaf5ec0cdb28d36bd",
+      "digest": "0x1baa2a2b20cf834ef83a589791e8496b88cd37eaafafc1c8829e7f444e0ff95e"
+    },
+    {
+      "bytesHex": "0001020304050607",
+      "canonical": "3DUyZY2dc",
+      "nonce": "9007199254740993",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0xaef6f55a537213db84f1b1f0384fab0327c60482642414ef14d0e1ea77f9547a",
+      "digest": "0xfa1c86539a286dfa5f395b3e2083f763720afe2c478eb3efe99ada3258853743"
+    },
+    {
+      "bytesHex": "0001020304050607",
+      "canonical": "3DUyZY2dc",
+      "nonce": "18446744073709551615",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x11124e921b44a48b8fcb5d8b198bd52a3422f5e6fe36fc80468d4136e6e94ebd",
+      "digest": "0xdc0591b81e4c322627faf32832b17022c68ce877f2d8e94031bacdf434dac03f"
+    },
+    {
+      "bytesHex": "8000000000000000",
+      "canonical": "NQm6nKp8qFD",
+      "nonce": "0",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0xc554014dd7ddba3a2c5bf32198890f3cdbddcc4d700793a5fecda8a79ee4cfb6",
+      "digest": "0x7abb086a0aa32da413bf131cc4324f78dc47b0f047fa53fabe016b5e99c3d3d8"
+    },
+    {
+      "bytesHex": "8000000000000000",
+      "canonical": "NQm6nKp8qFD",
+      "nonce": "1",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x89f075c3cd22010dc17ed460288fd24f4d5e1601a3d822c4c6332e33e82d48ee",
+      "digest": "0xe28c603f11abfb3aedf32df3212c000b196a3dcfcdec64b2bc62b266323e407c"
+    },
+    {
+      "bytesHex": "8000000000000000",
+      "canonical": "NQm6nKp8qFD",
+      "nonce": "9007199254740993",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0xaefa72a9e7521c1e86e7ce5e68d174cda94798390b9bbfa163690e5ea9a5263a",
+      "digest": "0x33f093ebaa60fc95fc0a4509f0f6a0b50d9171ee35fd09a42066a6dcd8d55971"
+    },
+    {
+      "bytesHex": "8000000000000000",
+      "canonical": "NQm6nKp8qFD",
+      "nonce": "18446744073709551615",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x89f3f779bf9f182dd0911e788f8be378810692fdc8ac1d4bdf57accbcdb99872",
+      "digest": "0xf797aecc27bf550c031638bec84042f372d47d8629b2ff118f626e34da43b768"
+    },
+    {
+      "bytesHex": "ffffffffffffffff",
+      "canonical": "jpXCZedGfVQ",
+      "nonce": "0",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0xe604172df8f7088c50d2ffea67bd32b1d7dd031a68e591528633724c3fcaa61b",
+      "digest": "0xcb1675a44c0a8b6f85fe82fa8d1bba79efa13e7349cadafa80499cb1f8c0fb30"
+    },
+    {
+      "bytesHex": "ffffffffffffffff",
+      "canonical": "jpXCZedGfVQ",
+      "nonce": "1",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0xc0c40c7d9064f346068bfd0df92b51df1c5b0b291ec5662c1ae94d37273f7cfc",
+      "digest": "0x4c194754e50183e9b25a367c83f9e3b34f7f80746df9d960173b2d95fe895de1"
+    },
+    {
+      "bytesHex": "ffffffffffffffff",
+      "canonical": "jpXCZedGfVQ",
+      "nonce": "9007199254740993",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0xdc463c140597b06c29142c6809f1b68cc2ea2b381fdfc608ee80c59734f15653",
+      "digest": "0x1158fd0cfc11771397b7409844cb8c4bac594b0582137ecac326151e0526c2d9"
+    },
+    {
+      "bytesHex": "ffffffffffffffff",
+      "canonical": "jpXCZedGfVQ",
+      "nonce": "18446744073709551615",
+      "deadline": "18446744073709551615",
+      "chainId": "0x000000000000010000000000000000000000000000000000000000000000a4b1",
+      "structHash": "0x33327fb6068be167c76aabd5a47293cdb1caf3874e8c41e4448c338f6f4004be",
+      "digest": "0xe1b25dec2cd1f76b8061576c535a1c9ae3a6290501f2de40c9cee63dbff054d8"
+    }
+  ]
+}
