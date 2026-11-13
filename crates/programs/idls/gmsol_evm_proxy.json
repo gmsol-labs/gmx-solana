@@ -528,6 +528,224 @@
       ]
     },
     {
+      "name": "set_referral_code",
+      "docs": [
+        "Register the EVM owner's canonical code through the production Store.",
+        "The submitter funds only missing targets' rent deficits. The proxy signs",
+        "the Store CPIs as owner without paying rent from its data-bearing account.",
+        "Create the Proxy first, or earlier in the same transaction. Existing target",
+        "balances reduce the submitter's rent cost; excess lamports stay in the targets.",
+        "Proxy, User, referral code and submitter must be writable even when prefunded.",
+        "",
+        "A failed transaction rolls back persistent account, rent and nonce changes,",
+        "but its actual fee payer still pays transaction fees. Failed logs may remain",
+        "visible; apply events only after confirming success and program attribution.",
+        "",
+        "# Errors",
+        "Account constraints bind Store, User and code to Config and the signed",
+        "bytes. Verification and next-nonce checks match every other intent.",
+        "Zero or occupied codes, malformed targets, insufficient sponsor funds,",
+        "or an already-coded User fail atomically, excluding transaction fees."
+      ],
+      "discriminator": [
+        53,
+        102,
+        148,
+        218,
+        64,
+        170,
+        82,
+        216
+      ],
+      "accounts": [
+        {
+          "name": "submitter",
+          "docs": [
+            "Sponsors target rent; may differ from the transaction fee payer."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proxy",
+          "docs": [
+            "Both Store instructions require a writable owner signer."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  120,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "evm_address"
+              }
+            ]
+          }
+        },
+        {
+          "name": "store",
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "user",
+          "docs": [
+            "then the real Store instruction validates initialized fields and bump."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "proxy"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "store_program"
+            }
+          }
+        },
+        {
+          "name": "referral_code",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  97,
+                  108,
+                  95,
+                  99,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "arg",
+                "path": "code"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "store_program"
+            }
+          }
+        },
+        {
+          "name": "store_program",
+          "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "evm_address",
+          "type": {
+            "array": [
+              "u8",
+              20
+            ]
+          }
+        },
+        {
+          "name": "chain_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "code",
+          "type": {
+            "array": [
+              "u8",
+              8
+            ]
+          }
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "deadline",
+          "type": "u64"
+        },
+        {
+          "name": "signature",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "recovery_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "withdraw",
       "docs": [
         "Transfer a signed amount of a legacy SPL mint from the proxy ATA to the",
@@ -965,6 +1183,19 @@
       ]
     },
     {
+      "name": "ReferralCodeSet",
+      "discriminator": [
+        128,
+        34,
+        113,
+        61,
+        97,
+        47,
+        79,
+        237
+      ]
+    },
+    {
       "name": "Withdrawn",
       "discriminator": [
         20,
@@ -1053,6 +1284,16 @@
       "code": 6014,
       "name": "InvalidDecimals",
       "msg": "Signed decimals differ from the mint"
+    },
+    {
+      "code": 6015,
+      "name": "InvalidReferralCode",
+      "msg": "Referral code is zero, occupied or malformed"
+    },
+    {
+      "code": 6016,
+      "name": "InvalidReferralUser",
+      "msg": "Referral User has invalid ownership or layout"
     }
   ],
   "types": [
@@ -1838,6 +2079,34 @@
               "array": [
                 "u8",
                 256
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReferralCodeSet",
+      "docs": [
+        "The registered bytes reconstruct the canonical signed referral code."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proxy",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "code",
+            "type": {
+              "array": [
+                "u8",
+                8
               ]
             }
           }

@@ -183,34 +183,36 @@ pub mod evm_proxy {
     pub fn decode_intent_event_log(
         line: &str,
     ) -> Result<Option<events::IntentConsumed>, crate::DecodeError> {
-        let Some(encoded) = line.strip_prefix("Program data: ") else {
-            return Ok(None);
-        };
-        let data = base64::engine::general_purpose::STANDARD
-            .decode(encoded)
-            .map_err(crate::DecodeError::custom)?;
-        if !data.starts_with(events::IntentConsumed::DISCRIMINATOR) {
-            return Ok(None);
-        }
-        events::IntentConsumed::try_from_slice(&data[events::IntentConsumed::DISCRIMINATOR.len()..])
-            .map(Some)
-            .map_err(crate::DecodeError::custom)
+        decode_program_data(line)
     }
 
     /// Decode a successful Withdraw event from an attributed `Program data:` log.
     pub fn decode_withdraw_event_log(
         line: &str,
     ) -> Result<Option<events::Withdrawn>, crate::DecodeError> {
+        decode_program_data(line)
+    }
+
+    /// Decode registration only from logs attributed to a successful proxy call.
+    pub fn decode_referral_code_event_log(
+        line: &str,
+    ) -> Result<Option<events::ReferralCodeSet>, crate::DecodeError> {
+        decode_program_data(line)
+    }
+
+    fn decode_program_data<E: Discriminator + AnchorDeserialize>(
+        line: &str,
+    ) -> Result<Option<E>, crate::DecodeError> {
         let Some(encoded) = line.strip_prefix("Program data: ") else {
             return Ok(None);
         };
         let data = base64::engine::general_purpose::STANDARD
             .decode(encoded)
             .map_err(crate::DecodeError::custom)?;
-        if !data.starts_with(events::Withdrawn::DISCRIMINATOR) {
+        if !data.starts_with(E::DISCRIMINATOR) {
             return Ok(None);
         }
-        events::Withdrawn::try_from_slice(&data[events::Withdrawn::DISCRIMINATOR.len()..])
+        E::try_from_slice(&data[E::DISCRIMINATOR.len()..])
             .map(Some)
             .map_err(crate::DecodeError::custom)
     }
@@ -261,6 +263,42 @@ pub mod evm_proxy {
             assert_eq!(decoded.config, event.config);
             assert!(decoded.previous_paused);
             assert!(!decoded.paused);
+        }
+
+        #[test]
+        fn strict_event_logs_ignore_short_and_unknown_discriminators() {
+            let cases: [&[u8]; 3] = [&[], &[0], events::ConfigPauseChanged::DISCRIMINATOR];
+            for data in cases {
+                let line = format!(
+                    "Program data: {}",
+                    base64::engine::general_purpose::STANDARD.encode(data)
+                );
+                assert!(decode_intent_event_log(&line).unwrap().is_none());
+                assert!(decode_withdraw_event_log(&line).unwrap().is_none());
+                assert!(decode_referral_code_event_log(&line).unwrap().is_none());
+            }
+        }
+
+        #[test]
+        fn config_event_logs_preserve_trailing_data() {
+            let event = events::ConfigPauseChanged {
+                config: Pubkey::new_unique(),
+                previous_paused: true,
+                paused: false,
+            };
+            let mut data = event.data();
+            data.push(0);
+            let line = format!(
+                "Program data: {}",
+                base64::engine::general_purpose::STANDARD.encode(data)
+            );
+            let Some(ConfigEvent::PauseChanged(decoded)) = decode_config_event_log(&line).unwrap()
+            else {
+                panic!("expected pause event");
+            };
+            assert_eq!(decoded.config, event.config);
+            assert_eq!(decoded.previous_paused, event.previous_paused);
+            assert_eq!(decoded.paused, event.paused);
         }
 
         #[test]
@@ -336,6 +374,36 @@ pub mod evm_proxy {
                 (event.mint, 125, event.recipient)
             );
             assert!(decode_withdraw_event_log("Program log: other")
+                .unwrap()
+                .is_none());
+        }
+
+        #[test]
+        fn decodes_referral_code_event_log() {
+            let event = events::ReferralCodeSet {
+                proxy: Pubkey::new_unique(),
+                nonce: u64::MAX,
+                code: [7; 8],
+            };
+            let encode = |data: &[u8]| {
+                format!(
+                    "Program data: {}",
+                    base64::engine::general_purpose::STANDARD.encode(data)
+                )
+            };
+            let decoded = decode_referral_code_event_log(&encode(&event.data()))
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                (decoded.proxy, decoded.nonce, decoded.code),
+                (event.proxy, event.nonce, event.code)
+            );
+            let mut trailing = event.data();
+            trailing.push(0);
+            assert!(decode_referral_code_event_log(&encode(&trailing)).is_err());
+            assert!(decode_referral_code_event_log(&encode(&event.data()[..20])).is_err());
+            assert!(decode_referral_code_event_log("Program data: %%%").is_err());
+            assert!(decode_referral_code_event_log("Program log: unrelated")
                 .unwrap()
                 .is_none());
         }

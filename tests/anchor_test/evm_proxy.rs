@@ -322,6 +322,7 @@ async fn config_creation_binds_store_and_emits_event() -> eyre::Result<()> {
     assert!(event.paused);
     assert!(event.allowed_chain_ids.is_empty());
     super::cancel::verify_signed_cancel(&deployment, config_address, genesis_hash).await?;
+    super::referral::verify_signed_referral(&deployment, genesis_hash).await?;
     super::config_policy::verify_policy_and_handover(&deployment, config_address, genesis_hash)
         .await?;
     Ok(())
@@ -737,6 +738,7 @@ fn proxy_future_reserved_bytes_preserve_identity_and_abi() -> eyre::Result<()> {
             "propose_admin",
             "set_chain_allowed",
             "set_paused",
+            "set_referral_code",
             "withdraw",
         ]
     );

@@ -30,6 +30,8 @@
 
 ## Integration
 
+The [EVM proxy guide](programs/evm-proxy/README.md) covers signed referral registration and its SDK builders.
+
 ### Method 1: Using the Rust SDK
 
 Add the following to your `Cargo.toml`:
