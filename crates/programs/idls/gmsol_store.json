@@ -1446,6 +1446,95 @@
       "returns": "u64"
     },
     {
+      "name": "claim_rent",
+      "docs": [
+        "Claim the whole balance of a rent receiver's collector.",
+        "",
+        "The collector is a system-owned PDA derived only from the receiver and",
+        "[`RENT_COLLECTOR_SEED`](constants::RENT_COLLECTOR_SEED). Anyone can send",
+        "runtime-valid rent refunds to it without initialization or the receiver's",
+        "account. Fully draining it does not prevent later refunds to the same PDA.",
+        "",
+        "The receiver signs and chooses the destination, which may be the receiver",
+        "itself. Empty collectors are a no-op, including when they do not yet exist.",
+        "No Store account, role or feature flag is required.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](ClaimRent)*",
+        "",
+        "# Errors",
+        "- The rent receiver must sign and the collector must match its canonical PDA.",
+        "- The collector must be system-owned, and transferring from it requires empty data.",
+        "- A nonempty collector cannot be its own destination.",
+        "- The destination must be writable and the transfer must satisfy runtime rules."
+      ],
+      "discriminator": [
+        57,
+        233,
+        51,
+        137,
+        102,
+        101,
+        26,
+        101
+      ],
+      "accounts": [
+        {
+          "name": "rent_receiver",
+          "docs": [
+            "The receiver authorizing withdrawal from its collector."
+          ],
+          "signer": true
+        },
+        {
+          "name": "rent_collector",
+          "docs": [
+            "The receiver's system-owned collector. It needs no initialization or data."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rent_receiver"
+              }
+            ]
+          }
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System program, which owns and transfers the collector's lamports."
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "clear_all_prices",
       "docs": [
         "Clear all prices from the given oracle.",
@@ -35890,6 +35979,14 @@
       ],
       "type": "bytes",
       "value": "[109, 97, 114, 107, 101, 116, 95, 118, 97, 117, 108, 116]"
+    },
+    {
+      "name": "RENT_COLLECTOR_SEED",
+      "docs": [
+        "Seed for a rent receiver's collector."
+      ],
+      "type": "bytes",
+      "value": "[114, 101, 110, 116, 95, 99, 111, 108, 108, 101, 99, 116, 111, 114]"
     },
     {
       "name": "USER_TOKEN_CONTROLLER_SEED",

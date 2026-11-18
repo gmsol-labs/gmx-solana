@@ -34,6 +34,13 @@ pub trait StoreOps<C> {
     /// Initialize callback authority.
     fn initialize_callback_authority(&self) -> TransactionBuilder<C>;
 
+    /// Claim the receiver's whole rent collector balance to a chosen destination.
+    ///
+    /// The receiver must sign; attach its signer if it differs from this client's
+    /// payer. No balance read, Store account or initialization is needed. Empty
+    /// claims are no-ops; nonempty claims reject the collector as destination.
+    fn claim_rent(&self, rent_receiver: &Pubkey, destination: &Pubkey) -> TransactionBuilder<C>;
+
     /// Update last restarted slot.
     fn update_last_restarted_slot(&self, store: &Pubkey) -> TransactionBuilder<C>;
 }
@@ -124,6 +131,17 @@ impl<C: Deref<Target = impl Signer> + Clone> StoreOps<C> for crate::Client<C> {
             })
     }
 
+    fn claim_rent(&self, rent_receiver: &Pubkey, destination: &Pubkey) -> TransactionBuilder<C> {
+        self.store_transaction()
+            .anchor_args(args::ClaimRent {})
+            .anchor_accounts(accounts::ClaimRent {
+                rent_receiver: *rent_receiver,
+                rent_collector: self.find_rent_collector_address(rent_receiver),
+                destination: *destination,
+                system_program: system_program::ID,
+            })
+    }
+
     fn update_last_restarted_slot(&self, store: &Pubkey) -> TransactionBuilder<C> {
         let authority = self.payer();
         self.store_transaction()
@@ -132,5 +150,50 @@ impl<C: Deref<Target = impl Signer> + Clone> StoreOps<C> for crate::Client<C> {
                 authority,
                 store: *store,
             })
+    }
+}
+
+#[cfg(test)]
+mod rent_tests {
+    use gmsol_solana_utils::cluster::Cluster;
+    use solana_sdk::{instruction::AccountMeta, signature::Keypair};
+
+    use super::*;
+
+    #[test]
+    fn rent_claim_uses_exact_accounts_and_configured_program() -> crate::Result<()> {
+        let receiver = Pubkey::new_unique();
+        let destination = Pubkey::new_unique();
+        for program in [gmsol_programs::gmsol_store::ID, Pubkey::new_unique()] {
+            let client = crate::Client::new_with_options(
+                Cluster::Localnet,
+                Arc::new(Keypair::new()),
+                crate::client::ClientOptions::builder()
+                    .store_program_id(Some(program))
+                    .build(),
+            )?;
+            let collector =
+                Pubkey::find_program_address(&[b"rent_collector", receiver.as_ref()], &program).0;
+            assert_eq!(client.find_rent_collector_address(&receiver), collector);
+            let ix = client
+                .claim_rent(&receiver, &destination)
+                .take_instruction()
+                .expect("claim instruction missing");
+            assert_eq!(ix.program_id, program);
+            assert_eq!(
+                ix.accounts,
+                vec![
+                    AccountMeta::new_readonly(receiver, true),
+                    AccountMeta::new(collector, false),
+                    AccountMeta::new(destination, false),
+                    AccountMeta::new_readonly(system_program::ID, false),
+                ]
+            );
+            assert_eq!(
+                ix.data,
+                solana_sdk::hash::hash(b"global:claim_rent").to_bytes()[..8]
+            );
+        }
+        Ok(())
     }
 }

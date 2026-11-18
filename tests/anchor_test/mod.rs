@@ -36,3 +36,5 @@ mod liquidity_provider;
 mod gt_incentive;
 
 mod gt_exchange;
+
+mod rent;
