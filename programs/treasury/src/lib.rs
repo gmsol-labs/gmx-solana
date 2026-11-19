@@ -154,9 +154,14 @@ pub mod gmsol_treasury {
         instructions::complete_gt_exchange(ctx)
     }
 
-    /// Complete a confirmed GT exchange for its owner, returning the rent to its rent receiver.
+    /// Complete a confirmed GT exchange for its owner, collecting rent in its receiver's collector.
+    ///
+    /// Close, payout and bank accounting are atomic. No separate rent receiver
+    /// account is required; even an owner receiver uses its collector. The receiver
+    /// may append Store's `claim_rent` to withdraw in the same transaction, or claim later.
     ///
     /// # Errors
+    /// - The rent collector must match the exchange's effective receiver and be system-owned.
     /// - Each associated token account of the [`owner`](CompleteGtExchangeV2::owner) that
     ///   receives a non-zero amount must be owned by the `owner`. An SPL Token associated token
     ///   account whose owner has been changed fails this check until its owner is set back.

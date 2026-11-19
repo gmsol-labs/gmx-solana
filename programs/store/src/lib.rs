@@ -215,7 +215,7 @@
 //! - [`request_gt_exchange`](gmsol_store::request_gt_exchange): Request a GT exchange.
 //! - [`request_gt_exchange_v2`](gmsol_store::request_gt_exchange_v2): Request a GT exchange as owner or delegate with separate rent payer.
 //! - [`close_gt_exchange`]: Close a confirmed GT exchange.
-//! - [`close_gt_exchange_v2`]: Close a confirmed GT exchange to its rent receiver.
+//! - [`close_gt_exchange_v2`]: Close a confirmed GT exchange to its receiver's rent collector.
 
 /// Instructions.
 pub mod instructions;
@@ -3059,7 +3059,11 @@ pub mod gmsol_store {
         instructions::unchecked_close_gt_exchange(ctx)
     }
 
-    /// Close a confirmed GT exchange to its recorded rent receiver.
+    /// Close a confirmed GT exchange to its effective rent receiver's collector.
+    ///
+    /// The whole exchange balance goes to the receiver's system-owned collector,
+    /// including when the receiver is the owner. The receiver account is not needed.
+    /// The receiver can withdraw separately with [`claim_rent`].
     ///
     /// # Accounts
     /// *[See the documentation for the accounts.](CloseGtExchangeV2)*
@@ -3071,7 +3075,7 @@ pub mod gmsol_store {
     ///   and confirmed.
     /// - The [`exchange`](CloseGtExchangeV2::exchange) must be properly initialized and owned by both
     ///   the `owner` and `vault`.
-    /// - The [`rent_receiver`](CloseGtExchangeV2::rent_receiver) must match the exchange's effective rent receiver.
+    /// - The [`rent_collector`](CloseGtExchangeV2::rent_collector) must be the system-owned canonical collector of the exchange's effective rent receiver.
     #[access_control(internal::Authenticate::only_gt_controller(&ctx))]
     pub fn close_gt_exchange_v2(ctx: Context<CloseGtExchangeV2>) -> Result<()> {
         CloseGtExchangeV2::invoke_unchecked(ctx)

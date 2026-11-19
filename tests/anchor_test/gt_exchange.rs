@@ -14,7 +14,7 @@ use gmsol_programs::{
     },
 };
 use gmsol_sdk::{
-    client::ops::{GtOps, SystemProgramOps, TokenAccountOps, TreasuryOps, UserOps},
+    client::ops::{GtOps, StoreOps, SystemProgramOps, TokenAccountOps, TreasuryOps, UserOps},
     utils::zero_copy::ZeroCopy,
     Client,
 };
@@ -135,7 +135,7 @@ async fn close_gt_exchange_checks_receiver_and_controller() -> eyre::Result<()> 
                 store: *store,
                 owner: owner_address,
                 vault,
-                rent_receiver: wrong_receiver,
+                rent_collector: keeper.find_rent_collector_address(&wrong_receiver),
                 exchange,
             })
             .anchor_args(args::CloseGtExchangeV2 {})
@@ -144,7 +144,7 @@ async fn close_gt_exchange_checks_receiver_and_controller() -> eyre::Result<()> 
             .expect_err("an unrelated receiver must be rejected");
         assert_eq!(
             gmsol_sdk::Error::from(err).anchor_error_code(),
-            Some(CoreError::RentReceiverMismatched.into())
+            Some(ErrorCode::ConstraintSeeds.into())
         );
         assert_eq!(keeper.rpc().get_balance(&exchange).await?, exchange_rent);
         assert_eq!(
@@ -159,7 +159,7 @@ async fn close_gt_exchange_checks_receiver_and_controller() -> eyre::Result<()> 
                 store: *store,
                 owner: owner_address,
                 vault,
-                rent_receiver: owner_address,
+                rent_collector: owner.find_rent_collector_address(&owner_address),
                 exchange,
             })
             .anchor_args(args::CloseGtExchangeV2 {})
@@ -175,7 +175,7 @@ async fn close_gt_exchange_checks_receiver_and_controller() -> eyre::Result<()> 
                 store: *store,
                 owner: owner_address,
                 vault,
-                rent_receiver: owner_address,
+                rent_collector: keeper.find_rent_collector_address(&owner_address),
                 exchange,
             })
             .anchor_args(args::CloseGtExchangeV2 {})
@@ -184,8 +184,20 @@ async fn close_gt_exchange_checks_receiver_and_controller() -> eyre::Result<()> 
         assert_eq!(keeper.rpc().get_balance(&exchange).await?, 0);
         assert_eq!(
             keeper.rpc().get_balance(&owner_address).await?,
-            owner_balance + exchange_rent
+            owner_balance
         );
+        let collector = keeper.find_rent_collector_address(&owner_address);
+        assert_eq!(keeper.rpc().get_balance(&collector).await?, exchange_rent);
+        let destination_balance = keeper.rpc().get_balance(&second_owner_address).await?;
+        owner
+            .claim_rent(&owner_address, &second_owner_address)
+            .send()
+            .await?;
+        assert_eq!(
+            keeper.rpc().get_balance(&second_owner_address).await?,
+            destination_balance + exchange_rent
+        );
+        assert_eq!(keeper.rpc().get_balance(&collector).await?, 0);
 
         let second_exchange_rent = keeper.rpc().get_balance(&second_exchange).await?;
         let second_owner_balance = keeper.rpc().get_balance(&second_owner_address).await?;
@@ -315,6 +327,34 @@ async fn legacy_treasury_completion_pays_owner_and_rejects_distinct_rent_receive
                 Some(payout)
             );
         }
+        // The same recorded sponsored exchange rejected by V1 remains payable
+        // through V2, including for an ordinary, non-executable receiver.
+        let collector = admin.find_rent_collector_address(&rent_payer.pubkey());
+        let rent = admin.rpc().get_balance(&sponsored_exchange).await?;
+        let receiver_balance = admin.rpc().get_balance(&rent_payer.pubkey()).await?;
+        let bank = window.bank(admin).await?;
+        let completion = admin
+            .complete_gt_exchange_v2(store, &sponsored_exchange, None, None, None, None)
+            .await?;
+        assert!(completion.instructions().iter().all(|ix| ix
+            .accounts
+            .iter()
+            .all(|meta| meta.pubkey != rent_payer.pubkey())));
+        completion.send().await?;
+        assert_eq!(admin.rpc().get_balance(&sponsored_exchange).await?, 0);
+        assert_eq!(admin.rpc().get_balance(&collector).await?, rent);
+        assert_eq!(
+            admin.rpc().get_balance(&rent_payer.pubkey()).await?,
+            receiver_balance
+        );
+        for token in &tokens {
+            assert_eq!(
+                deployment
+                    .get_ata_amount(token, &sponsored_owner.payer())
+                    .await?,
+                Some(recorded_balance(&bank, token))
+            );
+        }
         Ok::<(), eyre::Report>(())
     }
     .await;
@@ -328,7 +368,7 @@ async fn legacy_treasury_completion_pays_owner_and_rejects_distinct_rent_receive
 }
 
 #[tokio::test]
-async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::Result<()> {
+async fn permissionless_completion_pays_owner_atas_and_rent_collector() -> eyre::Result<()> {
     const GT_AMOUNT: u64 = 1_000;
     const DUST_GT_AMOUNT: u64 = 1;
     /// Fewer USDG units than the total GT, so the USDG share of the dust exchange rounds to zero.
@@ -346,6 +386,8 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
         .ok_or_eyre("USDG must exist")?
         .address;
     let dust_owner = deployment.funded_client().await?;
+    let zero_owner = deployment.funded_client().await?;
+    let claim_destination = deployment.funded_client().await?.payer();
     let owner = deployment.funded_client().await?;
     let legacy_owner = deployment.funded_client().await?;
     let caller = deployment.funded_client().await?;
@@ -361,6 +403,7 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
         .await?;
     let result = async {
         for (client, amount) in [
+            (&zero_owner, 0),
             (&dust_owner, DUST_GT_AMOUNT),
             (&owner, GT_AMOUNT),
             (&legacy_owner, GT_AMOUNT),
@@ -387,6 +430,10 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
         }
         let window =
             TreasuryWindow::open(deployment, &[("USDG", USDG_DEPOSIT), ("fBTC", 0)]).await?;
+        zero_owner
+            .request_gt_exchange_with_time_window_index(store, window.index, TREASURY_WINDOW, 0)
+            .send()
+            .await?;
         dust_owner
             .request_gt_exchange_with_time_window_index(
                 store,
@@ -420,10 +467,59 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
             .await?;
         window.confirm(deployment).await?;
 
+        // The receiver changes state after the exchange was recorded. Deploy through
+        // the real loader; no test-only account mutation or confirmation hook is used.
+        let sponsored_exchange = admin.find_gt_exchange_address(&window.vault, &owner.payer());
+        let exchange_before = admin.rpc().get_account(&sponsored_exchange).await?;
+        deploy_receiver_program(admin, &caller, &rent_payer).await?;
+        assert!(
+            admin
+                .rpc()
+                .get_account(&rent_payer.pubkey())
+                .await?
+                .executable
+        );
+        assert_eq!(
+            admin.rpc().get_account(&sponsored_exchange).await?,
+            exchange_before
+        );
+
         // fBTC has no recorded balance and the USDG share of the dust exchange
         // rounds to zero, so the owner's associated token accounts are not used
         // and do not need to exist.
         let bank = window.bank(admin).await?;
+        let zero_exchange = admin.find_gt_exchange_address(&window.vault, &zero_owner.payer());
+        let zero_collector = admin.find_rent_collector_address(&zero_owner.payer());
+        let zero_rent = admin.rpc().get_balance(&zero_exchange).await?;
+        // A failing optional claim rolls the entire completion back.
+        let combined = zero_owner
+            .complete_gt_exchange_v2(store, &zero_exchange, None, None, None, None)
+            .await?
+            .merge(zero_owner.claim_rent(&zero_owner.payer(), &zero_collector));
+        let code = reject_without_change(
+            admin,
+            combined,
+            &[zero_exchange, zero_collector, window.bank],
+        )
+        .await?;
+        assert_eq!(code, Some(CoreError::InvalidArgument.into()));
+        let destination_before = admin.rpc().get_balance(&claim_destination).await?;
+        zero_owner
+            .complete_gt_exchange_v2(store, &zero_exchange, None, None, None, None)
+            .await?
+            .merge(zero_owner.claim_rent(&zero_owner.payer(), &claim_destination))
+            .send()
+            .await?;
+        assert_eq!(admin.rpc().get_balance(&zero_exchange).await?, 0);
+        assert_eq!(admin.rpc().get_balance(&zero_collector).await?, 0);
+        assert_eq!(
+            admin.rpc().get_balance(&claim_destination).await?,
+            destination_before + zero_rent
+        );
+        assert_eq!(
+            window.bank(admin).await?.remaining_confirmed_gt_amount,
+            bank.remaining_confirmed_gt_amount
+        );
         assert!(expected_payouts(&bank, &tokens, DUST_GT_AMOUNT)
             .iter()
             .all(|payout| *payout == 0));
@@ -450,8 +546,10 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
         assert_eq!(admin.rpc().get_balance(&dust_exchange).await?, 0);
         assert_eq!(
             admin.rpc().get_balance(&dust_owner.payer()).await?,
-            dust_owner_lamports + rent
+            dust_owner_lamports
         );
+        let dust_collector = admin.find_rent_collector_address(&dust_owner.payer());
+        assert_eq!(admin.rpc().get_balance(&dust_collector).await?, rent);
         let bank_after = window.bank(admin).await?;
         for token in &tokens {
             assert_eq!(
@@ -465,16 +563,33 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
         );
 
         // Payouts go only to the owner's associated token accounts, and the rent
-        // only to the recorded rent receiver.
+        // only to the recorded rent receiver's collector.
         let exchange = admin.find_gt_exchange_address(&window.vault, &owner.payer());
         let owner_address = owner.payer();
         let owner_ata = |token: &Pubkey| get_associated_token_address(&owner_address, token);
         let caller_address = caller.payer();
         let caller_ata = |token: &Pubkey| get_associated_token_address(&caller_address, token);
-        let watched = [exchange, window.bank, rent_payer.pubkey()]
+        let collector = admin.find_rent_collector_address(&rent_payer.pubkey());
+        let watched = [exchange, window.bank, rent_payer.pubkey(), collector]
             .into_iter()
             .chain(tokens.iter().map(owner_ata))
             .collect::<Vec<_>>();
+        // An old V2 client passes the recorded receiver in the former account slot.
+        // This is an account-contract rejection check, not a mixed-binary rollout test.
+        let mut old_ix = caller
+            .complete_gt_exchange_v2(store, &exchange, None, None, None, None)
+            .await?
+            .take_instruction()
+            .expect("completion missing");
+        old_ix.accounts[1].pubkey = rent_payer.pubkey();
+        let code = reject_without_change(
+            admin,
+            caller.treasury_transaction().pre_instruction(old_ix, false),
+            &watched,
+        )
+        .await?;
+        // The executable receiver fails SystemAccount ownership before seeds.
+        assert_eq!(code, Some(ErrorCode::AccountNotSystemOwned.into()));
         let code = reject_without_change(
             admin,
             complete_gt_exchange_v2_to(
@@ -489,7 +604,7 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
             &watched,
         )
         .await?;
-        assert_eq!(code, Some(CoreError::RentReceiverMismatched.into()));
+        assert_eq!(code, Some(ErrorCode::ConstraintSeeds.into()));
         let code = reject_without_change(
             admin,
             complete_gt_exchange_v2_to(
@@ -549,6 +664,8 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
         assert_eq!(code, Some(ErrorCode::AccountNotInitialized.into()));
 
         // The caller can create them earlier in the same transaction.
+        const EXCESS_LAMPORTS: u64 = 123;
+        admin.transfer(&exchange, EXCESS_LAMPORTS)?.send().await?;
         let rent = admin.rpc().get_balance(&exchange).await?;
         let rent_payer_lamports = admin.rpc().get_balance(&rent_payer.pubkey()).await?;
         let mut complete = caller
@@ -565,6 +682,11 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
                 true,
             );
         }
+        let completion_ix = complete.instructions();
+        assert!(completion_ix.iter().all(|ix| ix
+            .accounts
+            .iter()
+            .all(|meta| meta.pubkey != rent_payer.pubkey())));
         complete.send().await?;
         for (token, payout) in tokens.iter().zip(payouts) {
             assert_eq!(
@@ -575,7 +697,45 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
         assert_eq!(admin.rpc().get_balance(&exchange).await?, 0);
         assert_eq!(
             admin.rpc().get_balance(&rent_payer.pubkey()).await?,
-            rent_payer_lamports + rent
+            rent_payer_lamports
+        );
+        assert_eq!(admin.rpc().get_balance(&collector).await?, rent);
+        let destination_before = admin.rpc().get_balance(&claim_destination).await?;
+        let claim = caller
+            .claim_rent(&rent_payer.pubkey(), &claim_destination)
+            .signer(&rent_payer);
+        claim.send().await?;
+        assert_eq!(admin.rpc().get_balance(&collector).await?, 0);
+        assert_eq!(
+            admin.rpc().get_balance(&rent_payer.pubkey()).await?,
+            rent_payer_lamports
+        );
+        assert_eq!(
+            admin.rpc().get_balance(&claim_destination).await?,
+            destination_before + rent
+        );
+        // A fresh completion transaction cannot consume the same exchange twice.
+        let duplicate_rejection = reject_without_change(
+            admin,
+            caller
+                .complete_gt_exchange_v2(
+                    store,
+                    &exchange,
+                    Some(&admin.find_treasury_vault_config_address(
+                        &admin.find_treasury_config_address(store),
+                        Deployment::TREASURY_VAULT_CONFIG_INDEX,
+                    )),
+                    Some(tokens.iter().map(|t| (*t, anchor_spl::token::ID)).collect()),
+                    Some(&window.vault),
+                    Some((&owner_address, &rent_payer.pubkey())),
+                )
+                .await?,
+            &watched,
+        )
+        .await?;
+        assert_eq!(
+            duplicate_rejection,
+            Some(ErrorCode::AccountOwnedByWrongProgram.into())
         );
 
         // The legacy completion follows the same rule, and the last exchange
@@ -596,6 +756,137 @@ async fn permissionless_completion_pays_owner_atas_and_rent_receiver() -> eyre::
                 Some(recorded_balance(&bank, token))
             );
         }
+        Ok::<(), eyre::Report>(())
+    }
+    .await;
+    let restore = keeper
+        .gt_set_exchange_time_window(store, DEFAULT_GT_VAULT_TIME_WINDOW)
+        .send()
+        .await;
+    result?;
+    restore?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn failed_second_payout_restores_exchange_collector_and_bank() -> eyre::Result<()> {
+    // One hundred GT in the seven-decimal fixture gives both deposited tokens
+    // a positive reserved share instead of testing rounded-zero payout skips.
+    const GT_AMOUNT: u64 = 1_000_000_000;
+    let _window_guard = GT_EXCHANGE_WINDOW_LOCK.lock().await;
+    let deployment = current_deployment().await?;
+    let _guard = deployment.use_accounts().await?;
+    let admin = &deployment.client;
+    let keeper = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let owner = deployment.funded_client().await?;
+    let caller = deployment.funded_client().await?;
+    let store = &deployment.store;
+    keeper
+        .gt_set_exchange_time_window(store, TREASURY_WINDOW)
+        .send()
+        .await?;
+    let result = async {
+        owner.prepare_user(store)?.send().await?;
+        keeper
+            .mint_gt_reward(store, &owner.payer(), GT_AMOUNT)?
+            .send()
+            .await?;
+        let window =
+            TreasuryWindow::open(deployment, &[("USDG", 1_000_000), ("fBTC", 1_000)]).await?;
+        owner
+            .request_gt_exchange_with_time_window_index(
+                store,
+                window.index,
+                TREASURY_WINDOW,
+                GT_AMOUNT,
+            )
+            .send()
+            .await?;
+        window.confirm(deployment).await?;
+        let bank = window.bank(admin).await?;
+        // Use the actual on-chain ordering, not deployment token ordering.
+        let tokens = bank.tokens().collect::<Vec<_>>();
+        assert_eq!(tokens.len(), 2);
+        let payouts = expected_payouts(&bank, &tokens, GT_AMOUNT);
+        assert!(
+            payouts.iter().all(|amount| *amount > 0),
+            "both payouts must be positive: {payouts:?}"
+        );
+        for token in &tokens {
+            admin
+                .prepare_associated_token_account(
+                    token,
+                    &anchor_spl::token::ID,
+                    Some(&owner.payer()),
+                )
+                .send()
+                .await?;
+            admin
+                .prepare_associated_token_account(
+                    token,
+                    &anchor_spl::token::ID,
+                    Some(&caller.payer()),
+                )
+                .send()
+                .await?;
+        }
+        let exchange = admin.find_gt_exchange_address(&window.vault, &owner.payer());
+        let collector = admin.find_rent_collector_address(&owner.payer());
+        let watched = [exchange, collector, window.bank]
+            .into_iter()
+            .chain(tokens.iter().flat_map(|token| {
+                [
+                    get_associated_token_address(&window.bank, token),
+                    get_associated_token_address(&owner.payer(), token),
+                    get_associated_token_address(&caller.payer(), token),
+                ]
+            }))
+            .collect::<Vec<_>>();
+        let mut failed = caller
+            .complete_gt_exchange_v2(store, &exchange, None, None, None, None)
+            .await?
+            .take_instruction()
+            .expect("completion missing");
+        let second_target = failed.accounts.len() - 1;
+        assert_eq!(
+            failed.accounts[second_target].pubkey,
+            get_associated_token_address(&owner.payer(), &tokens[1])
+        );
+        failed.accounts[second_target].pubkey =
+            get_associated_token_address(&caller.payer(), &tokens[1]);
+        // The first positive transfer and its accounting precede this target check.
+        let before = admin.rpc().get_multiple_accounts(&watched).await?;
+        let error = caller
+            .treasury_transaction()
+            .pre_instruction(failed, false)
+            .send_without_preflight()
+            .await
+            .expect_err("second payout must fail on the validator");
+        assert!(matches!(
+            error,
+            gmsol_solana_utils::Error::Client(ref error) if matches!(
+                error.get_transaction_error(),
+                Some(solana_sdk::transaction::TransactionError::InstructionError(
+                    _, solana_sdk::instruction::InstructionError::Custom(code)
+                )) if code == ErrorCode::ConstraintTokenOwner as u32
+            )
+        ));
+        assert_eq!(admin.rpc().get_multiple_accounts(&watched).await?, before);
+        let rent = admin.rpc().get_balance(&exchange).await?;
+        caller
+            .complete_gt_exchange_v2(store, &exchange, None, None, None, None)
+            .await?
+            .send()
+            .await?;
+        assert_eq!(admin.rpc().get_balance(&exchange).await?, 0);
+        assert_eq!(admin.rpc().get_balance(&collector).await?, rent);
+        for token in &tokens {
+            assert_eq!(
+                deployment.get_ata_amount(token, &owner.payer()).await?,
+                Some(recorded_balance(&bank, token))
+            );
+        }
+        assert_eq!(window.bank(admin).await?.remaining_confirmed_gt_amount, 0);
         Ok::<(), eyre::Report>(())
     }
     .await;
@@ -821,7 +1112,7 @@ async fn complete_gt_exchange_v2_to<'a>(
             gt_exchange_vault: window.vault,
             gt_bank: window.bank,
             owner: *owner,
-            rent_receiver: *rent_receiver,
+            rent_collector: caller.find_rent_collector_address(rent_receiver),
             exchange: caller.find_gt_exchange_address(&window.vault, owner),
             store_program: *caller.store_program_id(),
             token_program: anchor_spl::token::ID,
@@ -829,6 +1120,90 @@ async fn complete_gt_exchange_v2_to<'a>(
         })
         .anchor_args(treasury_args::CompleteGtExchangeV2 {})
         .accounts(mints.chain(vaults).chain(targets).collect()))
+}
+
+/// Turns the former sponsor account into a real executable through the upgradeable loader.
+async fn deploy_receiver_program(
+    funder: &Client<SignerRef>,
+    client: &Client<SignerRef>,
+    receiver: &Keypair,
+) -> eyre::Result<()> {
+    use solana_sdk::bpf_loader_upgradeable::{self as loader, UpgradeableLoaderState};
+
+    // Reuse a program built by the standard Anchor program build, without adding a
+    // special entrypoint or changing the shared validator configuration.
+    let bytes = std::fs::read(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../target/deploy/gmsol_mock_chainlink_verifier.so"),
+    )?;
+    let buffer = Keypair::new();
+    let rent = client
+        .rpc()
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_buffer(bytes.len()))
+        .await?;
+    // The standard funded client covers transactions, but not a loader buffer
+    // plus ProgramData. Fund those local resources through an ordinary transfer.
+    funder
+        .transfer(
+            &client.payer(),
+            rent.checked_mul(2).expect("fixture rent fits"),
+        )?
+        .send()
+        .await?;
+    let mut create = client.store_transaction().signer(&buffer);
+    for ix in loader::create_buffer(
+        &client.payer(),
+        &buffer.pubkey(),
+        &client.payer(),
+        rent,
+        bytes.len(),
+    )? {
+        create = create.pre_instruction(ix, true);
+    }
+    create.send().await?;
+    for (index, chunk) in bytes.chunks(900).enumerate() {
+        client
+            .store_transaction()
+            .pre_instruction(
+                loader::write(
+                    &buffer.pubkey(),
+                    &client.payer(),
+                    (index * 900).try_into()?,
+                    chunk.to_vec(),
+                ),
+                true,
+            )
+            .send()
+            .await?;
+    }
+    // A system account must be empty before the loader creates the program there.
+    let balance = client.rpc().get_balance(&receiver.pubkey()).await?;
+    client
+        .store_transaction()
+        .signer(receiver)
+        .pre_instruction(
+            system_instruction::transfer(&receiver.pubkey(), &client.payer(), balance),
+            true,
+        )
+        .send()
+        .await?;
+    let rent = client
+        .rpc()
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program())
+        .await?;
+    let mut deploy = client.store_transaction().signer(receiver);
+    for ix in loader::deploy_with_max_program_len(
+        &client.payer(),
+        &receiver.pubkey(),
+        &buffer.pubkey(),
+        &client.payer(),
+        rent,
+        bytes.len(),
+    )? {
+        deploy = deploy.pre_instruction(ix, true);
+    }
+    deploy.send().await?;
+    Ok(())
 }
 
 /// Creates a token account of `mint` owned by `owner` that is not its associated token account.
