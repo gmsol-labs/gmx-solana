@@ -38,5 +38,6 @@ mod gt_incentive;
 mod cancel;
 mod config_policy;
 mod evm_proxy;
+mod withdraw;
 
 mod gt_exchange;
