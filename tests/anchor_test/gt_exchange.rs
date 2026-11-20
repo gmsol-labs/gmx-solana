@@ -900,7 +900,7 @@ async fn failed_second_payout_restores_exchange_collector_and_bank() -> eyre::Re
 }
 
 #[tokio::test]
-async fn permissionless_completion_requires_confirmed_gt_bank() -> eyre::Result<()> {
+async fn positive_completion_rejects_zero_remaining_confirmed_gt() -> eyre::Result<()> {
     const GT_AMOUNT: u64 = 1;
     const NO_BUYBACK_VALUE: u128 = 0;
 
@@ -939,6 +939,7 @@ async fn permissionless_completion_requires_confirmed_gt_bank() -> eyre::Result<
             .confirm_gt_exchange_vault(store, &window.vault, NO_BUYBACK_VALUE, None)
             .send()
             .await?;
+        assert_eq!(window.bank(admin).await?.remaining_confirmed_gt_amount, 0);
 
         let exchange = admin.find_gt_exchange_address(&window.vault, &owner.payer());
         let code = reject_without_change(
@@ -949,7 +950,7 @@ async fn permissionless_completion_requires_confirmed_gt_bank() -> eyre::Result<
             &[exchange, window.bank, owner.payer()],
         )
         .await?;
-        assert_eq!(code, Some(CoreError::PreconditionsAreNotMet.into()));
+        assert_eq!(code, Some(CoreError::Internal.into()));
         Ok::<(), eyre::Report>(())
     }
     .await;
