@@ -25,6 +25,10 @@ pub mod role;
 /// Operations for store account.
 pub mod store;
 
+/// EVM proxy Config instructions and checked initialization.
+#[cfg(feature = "evm-proxy")]
+pub mod evm_proxy;
+
 /// Operations for token config.
 pub mod token_config;
 

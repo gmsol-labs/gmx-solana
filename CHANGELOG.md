@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(solana-utils): Added `SendAndConfirm::send_and_confirm_transaction_detailed`, which returns `Error::SendUnresolved` (with the signature) whenever the transaction may have reached the cluster but its outcome is unknown: the send request timed out, the connection dropped, the response carried a malformed or mismatched signature, or confirmation failed. Only an explicit rejection by the RPC node (e.g. preflight failure) and on-chain failures are still `Error::Client`. It has a default implementation, and `send_and_confirm_transaction_with_config` is unchanged, so existing callers and implementors keep compiling.
 - sdk(solana-utils): Added `Error::SendUnresolved { signature, source }`, returned when a transaction may have been submitted but its outcome is unknown. The signature is taken from the signed transaction, so it is available even when the send response is lost. Its outcome is unknown, so callers should look up `signature` before retrying. `Error::unresolved_signature` returns it.
 
+- programs(evm-proxy): Added a singleton Config bound to one Store and a supplied genesis hash. Its administrator can update the full-width EVM chain allowlist and pause state, then hand over administration through proposal and acceptance; effective changes emit typed events.
+- sdk(sdk): Added Config instruction builders, account and event decoding, and an initialization API that checks the supplied genesis hash against its configured RPC before sending and verifies the immutable Store and hash after confirmation.
+- sdk(decode): Added typed decoding for proxy Config accounts and Config change logs.
+- sdk(js): Added `findProxyConfigAddress` for the singleton Config PDA.
 - programs(evm-proxy): Added `create_proxy` for a permanent account derived from a 20-byte EVM address. Any payer can create it without gaining authority over the proxy.
 - sdk(sdk, js): Added Rust `find_proxy_address` and JavaScript `findProxyAddress` to derive the proxy address and bump from the same EVM address, with an optional program ID.
 
