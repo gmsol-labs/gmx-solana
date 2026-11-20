@@ -473,7 +473,6 @@ pub struct CompleteGtExchangeV2<'info> {
         mut,
         has_one = treasury_vault_config,
         has_one = gt_exchange_vault,
-        constraint = gt_bank.load()?.is_confirmed() @ CoreError::PreconditionsAreNotMet,
     )]
     pub gt_bank: AccountLoader<'info, GtBank>,
     /// Exchange to complete.
