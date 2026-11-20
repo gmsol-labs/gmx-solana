@@ -23,6 +23,7 @@ evm-proxy = ["gmsol-programs/evm-proxy"]
 devnet = ["gmsol-utils/devnet", "switchboard-on-demand-client?/devnet"]
 js = [
     "simulation",
+    "evm-proxy",
     "market-graph",
     "wasm-bindgen",
     "serde",
