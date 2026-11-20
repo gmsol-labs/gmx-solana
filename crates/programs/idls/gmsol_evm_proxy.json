@@ -1,0 +1,37 @@
+{
+  "address": "Dodg22E8BxfCtYBzHVHmAzFqD5bZy6q9Tp4NdYSxkmp6",
+  "metadata": {
+    "name": "gmsol_evm_proxy",
+    "version": "0.12.0",
+    "spec": "0.1.0",
+    "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
+    "repository": "https://github.com/gmsol-labs/gmx-solana"
+  },
+  "instructions": [
+    {
+      "name": "initialize",
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ]
+}

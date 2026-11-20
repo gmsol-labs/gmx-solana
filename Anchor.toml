@@ -16,6 +16,7 @@ gmsol_callback = "9JtQ9fBS91b2YxmHXNeGE8ipQYhLd2DRGGZSV8SPTJGw"
 gmsol_competition = "2AxuNr6euZPKQbTwNsLBjzFTZFAevA85F4PW9m9Dv8pc"
 gmsol_liquidity_provider = "LPMWczEVgXyQ3979XaqqEttanCXmYGvtJqPVtw1PvC8"
 gmsol_gt_incentive = "6iMXVSjiBf75ce9QaUVRnpsUikW8SZm8EaPVGDPfsCso"
+gmsol_evm_proxy = "Dodg22E8BxfCtYBzHVHmAzFqD5bZy6q9Tp4NdYSxkmp6"
 
 [registry]
 url = "https://api.apr.dev"

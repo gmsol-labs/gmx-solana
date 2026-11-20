@@ -13,6 +13,8 @@ anchor_lang::declare_program!(gmsol_competition);
 anchor_lang::declare_program!(gmsol_liquidity_provider);
 #[cfg(feature = "gt-incentive")]
 anchor_lang::declare_program!(gmsol_gt_incentive);
+#[cfg(feature = "evm-proxy")]
+anchor_lang::declare_program!(gmsol_evm_proxy);
 
 /// Constants.
 pub mod constants;
