@@ -1,13 +1,18 @@
 use anchor_lang::prelude::*;
 
+mod intent_verifier;
+
 declare_id!("Dodg22E8BxfCtYBzHVHmAzFqD5bZy6q9Tp4NdYSxkmp6");
 
 #[constant]
 pub const PROXY_SEED: &[u8] = b"proxy";
 pub const PROXY_VERSION: u8 = 1;
+pub const PROXY_LAST_NONCE_OFFSET: usize = 8;
+const PROXY_NONCE_END: usize = 16;
 #[constant]
 pub const CONFIG_SEED: &[u8] = b"config";
 pub const MAX_ALLOWED_CHAINS: usize = 32;
+pub const INTENT_KIND_CANCEL: u8 = 1;
 
 /// Program-wide policy, initialized once by the current upgrade authority.
 #[account]
@@ -62,6 +67,13 @@ pub struct ConfigAdminAccepted {
     pub pending_admin: Option<Pubkey>,
 }
 
+#[event]
+pub struct IntentConsumed {
+    pub proxy: Pubkey,
+    pub nonce: u64,
+    pub kind: u8,
+}
+
 /// Permanent account for one EVM address.
 #[account(zero_copy)]
 pub struct Proxy {
@@ -71,6 +83,36 @@ pub struct Proxy {
     pub evm_address: [u8; 20],
     pub padding_1: [u8; 4],
     pub reserved: [u8; 256],
+}
+
+impl Proxy {
+    pub fn validate_identity(&self, evm_address: [u8; 20], bump: u8) -> Result<()> {
+        require_eq!(self.version, PROXY_VERSION, ProxyError::InvalidProxy);
+        require_eq!(self.bump, bump, ProxyError::InvalidProxy);
+        require!(self.evm_address == evm_address, ProxyError::InvalidProxy);
+        Ok(())
+    }
+
+    pub fn consumed_nonce(&self) -> u64 {
+        let mut nonce = [0; 8];
+        nonce.copy_from_slice(&self.reserved[PROXY_LAST_NONCE_OFFSET..PROXY_NONCE_END]);
+        u64::from_le_bytes(nonce)
+    }
+
+    pub fn expected_next_nonce(&self) -> u64 {
+        self.consumed_nonce().wrapping_add(1)
+    }
+
+    pub fn consume_next_nonce(&mut self, nonce: u64) -> Result<()> {
+        require_eq!(
+            nonce,
+            self.expected_next_nonce(),
+            ProxyError::InvalidIntentNonce
+        );
+        self.reserved[PROXY_LAST_NONCE_OFFSET..PROXY_NONCE_END]
+            .copy_from_slice(&nonce.to_le_bytes());
+        Ok(())
+    }
 }
 
 #[program]
@@ -248,9 +290,62 @@ pub mod gmsol_evm_proxy {
         }
         ctx.accounts.proxy.exit(&crate::ID)?;
         let proxy = ctx.accounts.proxy.load()?;
-        require_eq!(proxy.version, PROXY_VERSION, ProxyError::InvalidProxy);
-        require_eq!(proxy.bump, ctx.bumps.proxy, ProxyError::InvalidProxy);
-        require!(proxy.evm_address == evm_address, ProxyError::InvalidProxy);
+        proxy.validate_identity(evm_address, ctx.bumps.proxy)
+    }
+
+    /// Consume the next signed Cancel nonce, wrapping from u64::MAX to zero,
+    /// without changing the proxy's business state.
+    ///
+    /// # Errors
+    ///
+    /// Anchor rejects a missing submitter signature, invalid account ownership or
+    /// discriminators, noncanonical Config or Proxy PDAs, or a readonly Proxy.
+    /// Account loading/borrowing and Clock access errors propagate.
+    /// Returns `InvalidProxy` for a stored version, bump or EVM address mismatch,
+    /// and `InvalidIntentNonce` when the signed nonce is not the next nonce.
+    /// Returns `Paused` while Config is paused and `ChainNotAllowed` when the
+    /// signed chain ID is not allowed by Config.
+    /// Returns `InvalidDeadline` for a negative Clock timestamp or a deadline
+    /// outside the inclusive window from now through now plus 3600 seconds.
+    /// Returns `InvalidSignature` for an invalid recovery ID, zero or high `s`,
+    /// failed recovery, or a recovered address that does not match the EVM owner
+    /// for the computed domain and Cancel digest.
+    pub fn cancel(
+        ctx: Context<Cancel>,
+        evm_address: [u8; 20],
+        chain_id: [u8; 32],
+        nonce: u64,
+        deadline: u64,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> Result<()> {
+        let proxy_key = ctx.accounts.proxy.key();
+        {
+            let proxy = ctx.accounts.proxy.load()?;
+            proxy.validate_identity(evm_address, ctx.bumps.proxy)?;
+            require!(
+                nonce == proxy.expected_next_nonce(),
+                ProxyError::InvalidIntentNonce
+            );
+        }
+
+        let struct_hash = intent_verifier::cancel_struct_hash(&proxy_key, nonce, deadline);
+        intent_verifier::verify(
+            &ctx.accounts.config,
+            evm_address,
+            chain_id,
+            deadline,
+            struct_hash,
+            signature,
+            recovery_id,
+        )?;
+
+        ctx.accounts.proxy.load_mut()?.consume_next_nonce(nonce)?;
+        emit!(IntentConsumed {
+            proxy: proxy_key,
+            nonce,
+            kind: INTENT_KIND_CANCEL,
+        });
         Ok(())
     }
 }
@@ -315,6 +410,16 @@ pub struct CreateProxy<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+#[instruction(evm_address: [u8; 20])]
+pub struct Cancel<'info> {
+    pub submitter: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump)]
+    pub config: Account<'info, Config>,
+    #[account(mut, seeds = [PROXY_SEED, evm_address.as_ref()], bump)]
+    pub proxy: AccountLoader<'info, Proxy>,
+}
+
 #[error_code]
 pub enum ProxyError {
     #[msg("Proxy account data does not match its EVM address")]
@@ -329,6 +434,19 @@ pub enum ProxyError {
     AllowedChainsFull,
     #[msg("Signer is not the pending admin")]
     NotPendingAdmin,
+    #[msg("Intent nonce is not the proxy's next nonce")]
+    InvalidIntentNonce,
+    // Preserve the numeric slot so later verification errors keep their codes.
+    #[msg("Reserved proxy intent error")]
+    ReservedIntentError,
+    #[msg("Intent verification is paused")]
+    Paused,
+    #[msg("EVM chain is not allowed")]
+    ChainNotAllowed,
+    #[msg("Intent deadline is outside the execution window")]
+    InvalidDeadline,
+    #[msg("Invalid EVM signature")]
+    InvalidSignature,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]
@@ -337,11 +455,93 @@ gmsol_utils::security_txt!("GMX-Solana EVM Proxy Program");
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytemuck::Zeroable;
+
+    fn proxy_with_nonce(nonce: u64) -> Proxy {
+        let mut proxy = Proxy::zeroed();
+        proxy.reserved.fill(0xa5);
+        proxy.reserved[PROXY_LAST_NONCE_OFFSET..PROXY_NONCE_END]
+            .copy_from_slice(&nonce.to_le_bytes());
+        proxy
+    }
 
     #[test]
     fn proxy_account_binary_layout() {
         assert_eq!(std::mem::size_of::<Proxy>(), 288);
         assert_eq!(std::mem::offset_of!(Proxy, evm_address), 8);
         assert_eq!(std::mem::offset_of!(Proxy, reserved), 32);
+        assert_eq!(8 + std::mem::offset_of!(Proxy, reserved), 40);
+        assert_eq!(
+            8 + std::mem::offset_of!(Proxy, reserved) + PROXY_LAST_NONCE_OFFSET,
+            48
+        );
+        assert_eq!(
+            8 + std::mem::offset_of!(Proxy, reserved) + PROXY_NONCE_END,
+            56
+        );
+    }
+
+    #[test]
+    fn first_and_ordinary_nonce_preserve_all_other_bytes() {
+        let mut proxy = proxy_with_nonce(0);
+        assert_eq!(proxy.consumed_nonce(), 0);
+        for nonce in [1_u64, 2] {
+            let mut expected = bytemuck::bytes_of(&proxy).to_vec();
+            expected[40..48].copy_from_slice(&nonce.to_le_bytes());
+            assert_eq!(proxy.expected_next_nonce(), nonce);
+            proxy.consume_next_nonce(nonce).unwrap();
+            assert_eq!(proxy.consumed_nonce(), nonce);
+            assert_eq!(bytemuck::bytes_of(&proxy), expected.as_slice());
+        }
+    }
+
+    #[test]
+    fn wrong_and_repeated_nonces_cannot_change_state() {
+        let mut proxy = proxy_with_nonce(0);
+        for wrong in [0, 2, u64::MAX] {
+            let before = bytemuck::bytes_of(&proxy).to_vec();
+            let Error::AnchorError(error) = proxy.consume_next_nonce(wrong).unwrap_err() else {
+                panic!("expected nonce mismatch");
+            };
+            assert_eq!(error.error_code_number, 6006);
+            assert_eq!(bytemuck::bytes_of(&proxy), before.as_slice());
+        }
+        proxy.consume_next_nonce(1).unwrap();
+        let before = bytemuck::bytes_of(&proxy).to_vec();
+        assert!(proxy.consume_next_nonce(1).is_err());
+        assert_eq!(bytemuck::bytes_of(&proxy), before.as_slice());
+    }
+
+    #[test]
+    fn max_nonce_wraps_to_zero_then_one_without_other_writes() {
+        let mut proxy = proxy_with_nonce(u64::MAX - 1);
+        for nonce in [u64::MAX, 0, 1] {
+            let mut expected = bytemuck::bytes_of(&proxy).to_vec();
+            expected[40..48].copy_from_slice(&nonce.to_le_bytes());
+            assert_eq!(proxy.expected_next_nonce(), nonce);
+            proxy.consume_next_nonce(nonce).unwrap();
+            assert_eq!(proxy.consumed_nonce(), nonce);
+            assert_eq!(bytemuck::bytes_of(&proxy), expected.as_slice());
+            let before = bytemuck::bytes_of(&proxy).to_vec();
+            assert!(proxy.consume_next_nonce(nonce).is_err());
+            assert_eq!(bytemuck::bytes_of(&proxy), before.as_slice());
+        }
+    }
+
+    #[test]
+    fn verification_error_numbers_remain_stable() {
+        for (error, code) in [
+            (ProxyError::InvalidIntentNonce, 6006),
+            (ProxyError::ReservedIntentError, 6007),
+            (ProxyError::Paused, 6008),
+            (ProxyError::ChainNotAllowed, 6009),
+            (ProxyError::InvalidDeadline, 6010),
+            (ProxyError::InvalidSignature, 6011),
+        ] {
+            let Error::AnchorError(error) = anchor_lang::error!(error) else {
+                panic!("expected Anchor error");
+            };
+            assert_eq!(error.error_code_number, code);
+        }
     }
 }

@@ -34,5 +34,6 @@ anchor-lang = { workspace = true, features = ["init-if-needed"] }
 anchor-spl = { workspace = true, features = ["token", "token_2022"] }
 bytemuck = { workspace = true, features = ["min_const_generics"] }
 gmsol-programs = { workspace = true }
+gmsol-evm-proxy-intent = { path = "../../crates/evm-proxy-intent" }
 gmsol-store = { workspace = true, features = ["no-entrypoint"] }
 gmsol-utils = { workspace = true, features = ["security-txt"] }

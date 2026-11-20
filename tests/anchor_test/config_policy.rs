@@ -27,7 +27,7 @@ async fn read_config(
     Ok((account, state))
 }
 
-async fn event<E: AnchorDeserialize + Discriminator>(
+pub(super) async fn event<E: AnchorDeserialize + Discriminator>(
     client: &PolicyClient,
     signature: &Signature,
 ) -> eyre::Result<E> {
@@ -60,7 +60,7 @@ async fn event<E: AnchorDeserialize + Discriminator>(
         .collect::<Result<_, _>>()?;
     eyre::ensure!(
         events.len() == 1,
-        "expected one matching Config event, got {}",
+        "expected one matching proxy event, got {}",
         events.len()
     );
     Ok(events.remove(0))
