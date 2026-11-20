@@ -281,6 +281,13 @@ impl ExecuteGlvDepositOperation<'_, '_> {
                 return Err(error!(err));
             }
         }
+        RemainingAccountsForMarket::validate_for_execution(
+            self.remaining_accounts,
+            &self.store.key(),
+            self.market_token_mint.key(),
+            Some(&self.glv_deposit.load()?.swap),
+            &[&self.market],
+        )?;
         let executed = match self.perform_glv_deposit() {
             Ok(()) => true,
             Err(err) if !throw_on_execution_error => {
@@ -771,6 +778,13 @@ impl ExecuteGlvWithdrawalOperation<'_, '_> {
             }
         }
 
+        RemainingAccountsForMarket::validate_for_execution(
+            self.remaining_accounts,
+            &self.store.key(),
+            self.market_token_mint.key(),
+            Some(&self.glv_withdrawal.load()?.swap),
+            &[&self.market],
+        )?;
         let executed = match self.perform_glv_withdrawal() {
             Ok(amounts) => Some(amounts),
             Err(err) if !throw_on_execution_error => {
@@ -1234,6 +1248,13 @@ impl ExecuteGlvShiftOperation<'_, '_> {
             }
         }
 
+        RemainingAccountsForMarket::validate_for_execution(
+            self.remaining_accounts,
+            &self.store.key(),
+            self.from_market_token_mint.key(),
+            None,
+            &[self.from_market, self.to_market],
+        )?;
         let executed = match self.perform_glv_shift() {
             Ok(()) => true,
             Err(err) if !throw_on_execution_error => {
