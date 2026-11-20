@@ -10,6 +10,9 @@ pub const DOMAIN_VERSION: &str = "1";
 pub const CANCEL_TYPE: &str = "Cancel(bytes32 proxyAccount,uint64 nonce,uint64 deadline)";
 /// Exact primary type used by Withdraw.
 pub const WITHDRAW_TYPE: &str = "Withdraw(bytes32 proxyAccount,string mint,uint64 amount,uint8 decimals,string recipient,uint64 nonce,uint64 deadline)";
+/// Exact primary type used by referral registration.
+pub const SET_REFERRAL_CODE_TYPE: &str =
+    "SetReferralCode(bytes32 proxyAccount,string code,uint64 nonce,uint64 deadline)";
 const DOMAIN_TYPE: &[u8] = b"EIP712Domain(string name,string version,uint256 chainId,bytes32 salt)";
 
 fn u64_word(value: u64) -> [u8; 32] {
@@ -22,6 +25,33 @@ fn u8_word(value: u8) -> [u8; 32] {
     let mut word = [0; 32];
     word[31] = value;
     word
+}
+
+/// Store's registered eight-byte code, encoded without leading base58 ones.
+/// The zero code encodes to an empty string and is rejected by registration.
+pub fn canonical_referral_code(code: &[u8; 8]) -> String {
+    bs58::encode(code)
+        .into_string()
+        .trim_start_matches('1')
+        .to_owned()
+}
+
+/// Hash the canonical code rather than a caller-supplied string alias.
+pub fn set_referral_code_struct_hash(
+    proxy: &Pubkey,
+    code: &[u8; 8],
+    nonce: u64,
+    deadline: u64,
+) -> [u8; 32] {
+    let code = canonical_referral_code(code);
+    keccak::hashv(&[
+        keccak::hash(SET_REFERRAL_CODE_TYPE.as_bytes()).as_ref(),
+        proxy.as_ref(),
+        keccak::hash(code.as_bytes()).as_ref(),
+        &u64_word(nonce),
+        &u64_word(deadline),
+    ])
+    .to_bytes()
 }
 
 /// Hash the canonical single-nonce Cancel fields.
@@ -106,6 +136,39 @@ mod tests {
         let encoded = value[key].as_str().unwrap().strip_prefix("0x").unwrap();
         let bytes = hex::decode(encoded).unwrap();
         bytes.try_into().unwrap()
+    }
+
+    #[test]
+    fn independent_viem_vectors_match_referral_encoding() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../fixtures/referral-vectors.json")).unwrap();
+        assert_eq!(fixture["generator"], "viem@2.57.7");
+        assert_eq!(fixture["type"], SET_REFERRAL_CODE_TYPE);
+        assert_eq!(fixture["vectors"].as_array().unwrap().len(), 24);
+        let program = Pubkey::new_from_array(field(&fixture, "program"));
+        let store = Pubkey::new_from_array(field(&fixture, "store"));
+        let proxy = Pubkey::new_from_array(field(&fixture, "proxy"));
+        for vector in fixture["vectors"].as_array().unwrap() {
+            let code: [u8; 8] = hex::decode(vector["bytesHex"].as_str().unwrap())
+                .unwrap()
+                .try_into()
+                .unwrap();
+            assert_eq!(canonical_referral_code(&code), vector["canonical"]);
+            let structure = set_referral_code_struct_hash(
+                &proxy,
+                &code,
+                vector["nonce"].as_str().unwrap().parse().unwrap(),
+                vector["deadline"].as_str().unwrap().parse().unwrap(),
+            );
+            assert_eq!(structure, field(vector, "structHash"));
+            let domain = domain_separator(
+                &program,
+                &store,
+                &field(&fixture, "genesis"),
+                &field(vector, "chainId"),
+            );
+            assert_eq!(intent_digest(&domain, &structure), field(vector, "digest"));
+        }
     }
 
     #[test]
