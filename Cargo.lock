@@ -2573,6 +2573,7 @@ dependencies = [
  "tracing",
  "url",
  "wasm-bindgen-test",
+ "web-time",
 ]
 
 [[package]]
