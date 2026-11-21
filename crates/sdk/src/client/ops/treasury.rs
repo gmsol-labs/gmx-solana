@@ -169,7 +169,10 @@ pub trait TreasuryOps<C> {
     ///
     /// The payer does not need to be the owner. The GT Bank share goes to the owner's
     /// associated token accounts, which must already exist for non-zero payouts, and
-    /// the rent to the exchange's rent receiver.
+    /// the whole exchange balance to the effective receiver's rent collector.
+    /// The hint must name the effective receiver (the owner when unset). It is used
+    /// only to derive the collector, not passed as a separate account.
+    /// Claiming rent is separate and requires the receiver's signature.
     fn complete_gt_exchange_v2(
         &self,
         store: &Pubkey,
@@ -804,7 +807,7 @@ impl<C: Deref<Target = impl Signer> + Clone> TreasuryOps<C> for crate::Client<C>
             .anchor_args(args::CompleteGtExchangeV2 {})
             .anchor_accounts(accounts::CompleteGtExchangeV2 {
                 owner,
-                rent_receiver,
+                rent_collector: self.find_rent_collector_address(&rent_receiver),
                 store: *store,
                 config,
                 treasury_vault_config,
@@ -1231,5 +1234,59 @@ async fn find_config_addresses<C: Deref<Target = impl Signer> + Clone>(
                     .ok_or_else(|| crate::Error::custom("treasury vault config is not set"))?,
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod collector_tests {
+    use super::*;
+    use gmsol_solana_utils::cluster::Cluster;
+    use solana_sdk::signature::Keypair;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn completion_derives_collector_without_receiver_meta() -> crate::Result<()> {
+        let owner = Pubkey::new_unique();
+        let store = Pubkey::new_unique();
+        let vault = Pubkey::new_unique();
+        let config = Pubkey::new_unique();
+        let exchange = Pubkey::new_unique();
+        for program in [gmsol_programs::gmsol_store::ID, Pubkey::new_unique()] {
+            let client = crate::Client::new_with_options(
+                Cluster::Localnet,
+                Arc::new(Keypair::new()),
+                crate::client::ClientOptions::builder()
+                    .store_program_id(Some(program))
+                    .build(),
+            )?;
+            for receiver in [owner, Pubkey::new_unique()] {
+                let ix = client
+                    .complete_gt_exchange_v2(
+                        &store,
+                        &exchange,
+                        Some(&config),
+                        Some(vec![]),
+                        Some(&vault),
+                        Some((&owner, &receiver)),
+                    )
+                    .await?
+                    .take_instruction()
+                    .expect("completion instruction missing");
+                assert_eq!(ix.accounts[0], AccountMeta::new_readonly(owner, false));
+                assert_eq!(
+                    ix.accounts[1],
+                    AccountMeta::new(client.find_rent_collector_address(&receiver), false)
+                );
+                assert_eq!(ix.accounts[8], AccountMeta::new_readonly(program, false));
+                if receiver != owner {
+                    assert!(ix.accounts.iter().all(|a| a.pubkey != receiver));
+                }
+                assert_eq!(
+                    ix.data,
+                    solana_sdk::hash::hash(b"global:complete_gt_exchange_v2").to_bytes()[..8]
+                );
+            }
+        }
+        Ok(())
     }
 }

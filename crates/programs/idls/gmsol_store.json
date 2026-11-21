@@ -3618,7 +3618,11 @@
     {
       "name": "close_gt_exchange_v2",
       "docs": [
-        "Close a confirmed GT exchange to its recorded rent receiver.",
+        "Close a confirmed GT exchange to its effective rent receiver's collector.",
+        "",
+        "The whole exchange balance goes to the receiver's system-owned collector,",
+        "including when the receiver is the owner. The receiver account is not needed.",
+        "The receiver can withdraw separately with [`claim_rent`].",
         "",
         "# Accounts",
         "*[See the documentation for the accounts.](CloseGtExchangeV2)*",
@@ -3630,7 +3634,7 @@
         "and confirmed.",
         "- The [`exchange`](CloseGtExchangeV2::exchange) must be properly initialized and owned by both",
         "the `owner` and `vault`.",
-        "- The [`rent_receiver`](CloseGtExchangeV2::rent_receiver) must match the exchange's effective rent receiver."
+        "- The [`rent_collector`](CloseGtExchangeV2::rent_collector) must be the system-owned canonical collector of the exchange's effective rent receiver."
       ],
       "discriminator": [
         118,
@@ -3667,7 +3671,10 @@
           ]
         },
         {
-          "name": "rent_receiver",
+          "name": "rent_collector",
+          "docs": [
+            "The system-owned collector of the exchange's effective rent receiver."
+          ],
           "writable": true
         },
         {

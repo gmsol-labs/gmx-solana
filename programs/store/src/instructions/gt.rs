@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use gmsol_utils::InitSpace;
 
 use crate::{
+    constants::RENT_COLLECTOR_SEED,
     events::{EventEmitter, GtAllowanceConsumed, GtBuyback, GtUpdated},
     states::{
         gt::{GtExchange, GtExchangeVault},
@@ -557,14 +558,20 @@ pub struct CloseGtExchangeV2<'info> {
         has_one = store,
     )]
     pub vault: AccountLoader<'info, GtExchangeVault>,
-    /// CHECK: only receives rent after its address is checked against the exchange.
-    #[account(mut)]
-    pub rent_receiver: UncheckedAccount<'info>,
+    /// The system-owned collector of the exchange's effective rent receiver.
     #[account(
         mut,
-        close = rent_receiver,
+        // This effective-receiver expression cannot be represented by IDL PDA
+        // resolution (the receiver may fall back to the owner). Do not let Anchor
+        // describe the exchange address itself as the receiver seed.
+        seeds = [RENT_COLLECTOR_SEED, AsRef::<[u8]>::as_ref(exchange.load()?.rent_receiver())],
+        bump,
+    )]
+    pub rent_collector: SystemAccount<'info>,
+    #[account(
+        mut,
+        close = rent_collector,
         constraint = exchange.load()?.is_initialized() @ CoreError::InvalidArgument,
-        constraint = exchange.load()?.rent_receiver() == rent_receiver.key @ CoreError::RentReceiverMismatched,
         has_one = store,
         has_one = owner,
         has_one = vault,
