@@ -38,3 +38,5 @@ mod gt_incentive;
 mod evm_proxy;
 
 mod gt_exchange;
+
+mod rent;

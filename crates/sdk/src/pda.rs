@@ -17,7 +17,7 @@ use gmsol_programs::gmsol_timelock::accounts as timelock_accounts;
 use gmsol_programs::gmsol_liquidity_provider::accounts as liquidity_provider_accounts;
 
 pub use gmsol_programs::gmsol_store::constants::{
-    USER_TOKEN_CONTROLLER_SEED, VIRTUAL_INVENTORY_FOR_POSITIONS_SEED,
+    RENT_COLLECTOR_SEED, USER_TOKEN_CONTROLLER_SEED, VIRTUAL_INVENTORY_FOR_POSITIONS_SEED,
     VIRTUAL_INVENTORY_FOR_SWAPS_SEED,
 };
 
@@ -158,6 +158,11 @@ pub fn find_default_store_address() -> (Pubkey, u8) {
 /// Find PDA for store wallet account.
 pub fn find_store_wallet_address(store: &Pubkey, store_program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[STORE_WALLET_SEED, store.as_ref()], store_program_id)
+}
+
+/// Find the rent collector from its receiver, without a Store account or RPC read.
+pub fn find_rent_collector_address(receiver: &Pubkey, store_program_id: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[RENT_COLLECTOR_SEED, receiver.as_ref()], store_program_id)
 }
 
 /// Find PDA for market vault.
@@ -678,4 +683,28 @@ pub fn find_lp_token_controller_address(
         ],
         lp_program_id,
     )
+}
+
+#[cfg(test)]
+mod rent_tests {
+    use super::*;
+
+    #[test]
+    fn rent_collector_depends_only_on_receiver_and_program() {
+        let receiver = Pubkey::new_unique();
+        let program = Pubkey::new_unique();
+        let collector = find_rent_collector_address(&receiver, &program);
+        assert_eq!(
+            collector,
+            Pubkey::find_program_address(&[b"rent_collector", receiver.as_ref()], &program)
+        );
+        assert_ne!(
+            collector.0,
+            find_rent_collector_address(&Pubkey::new_unique(), &program).0
+        );
+        assert_ne!(
+            collector.0,
+            find_rent_collector_address(&receiver, &Pubkey::new_unique()).0
+        );
+    }
 }

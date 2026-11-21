@@ -46,6 +46,9 @@ pub mod virtual_inventory;
 /// Instructions for builder fees.
 pub mod builder_fee;
 
+/// Instructions for collecting and claiming rent refunds.
+pub mod rent;
+
 pub use builder_fee::*;
 pub use callback::*;
 pub use config::*;
@@ -56,6 +59,7 @@ pub use gt::*;
 pub use market::*;
 pub use migration::*;
 pub use oracle::*;
+pub use rent::*;
 pub use roles::*;
 pub use store::*;
 pub use token::*;
