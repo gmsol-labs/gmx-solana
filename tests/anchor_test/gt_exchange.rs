@@ -336,7 +336,14 @@ async fn legacy_treasury_completion_pays_owner_and_rejects_distinct_rent_receive
         let completion = admin
             .complete_gt_exchange_v2(store, &sponsored_exchange, None, None, None, None)
             .await?;
-        assert!(completion.instructions().iter().all(|ix| ix
+        let instructions = completion.instructions();
+        let vault_meta = instructions
+            .iter()
+            .flat_map(|ix| &ix.accounts)
+            .find(|meta| meta.pubkey == window.vault)
+            .expect("GT exchange vault missing");
+        assert!(!vault_meta.is_writable);
+        assert!(instructions.iter().all(|ix| ix
             .accounts
             .iter()
             .all(|meta| meta.pubkey != rent_payer.pubkey())));

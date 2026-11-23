@@ -466,7 +466,6 @@ pub struct CompleteGtExchangeV2<'info> {
     pub treasury_vault_config: AccountLoader<'info, TreasuryVaultConfig>,
     /// GT exchange vault.
     /// CHECK: check by CPI.
-    #[account(mut)]
     pub gt_exchange_vault: UncheckedAccount<'info>,
     /// GT bank.
     #[account(

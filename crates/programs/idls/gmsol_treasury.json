@@ -562,7 +562,6 @@
           "docs": [
             "GT exchange vault."
           ],
-          "writable": true,
           "relations": [
             "gt_bank"
           ]
