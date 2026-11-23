@@ -1130,12 +1130,10 @@ async fn deploy_receiver_program(
 ) -> eyre::Result<()> {
     use solana_sdk::bpf_loader_upgradeable::{self as loader, UpgradeableLoaderState};
 
-    // Reuse a program built by the standard Anchor program build, without adding a
-    // special entrypoint or changing the shared validator configuration.
-    let bytes = std::fs::read(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../target/deploy/gmsol_mock_chainlink_verifier.so"),
-    )?;
+    const DEPLOY_CHUNK_SIZE: usize = 900;
+
+    // Reuse the checked-in program loaded by the standard Anchor genesis.
+    let bytes = include_bytes!("../../external-programs/pyth-push-oracle.so");
     let buffer = Keypair::new();
     let rent = client
         .rpc()
@@ -1161,14 +1159,14 @@ async fn deploy_receiver_program(
         create = create.pre_instruction(ix, true);
     }
     create.send().await?;
-    for (index, chunk) in bytes.chunks(900).enumerate() {
+    for (index, chunk) in bytes.chunks(DEPLOY_CHUNK_SIZE).enumerate() {
         client
             .store_transaction()
             .pre_instruction(
                 loader::write(
                     &buffer.pubkey(),
                     &client.payer(),
-                    (index * 900).try_into()?,
+                    (index * DEPLOY_CHUNK_SIZE).try_into()?,
                     chunk.to_vec(),
                 ),
                 true,
