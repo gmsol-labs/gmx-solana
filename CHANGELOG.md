@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- programs(store): Added `claim_rent`, which lets a rent receiver withdraw the whole balance of its generic rent collector to a destination it chooses. The collector is a system-owned PDA derived only from the receiver, so it needs no initialization or Store account to receive refunds.
+- sdk(sdk): Added `find_rent_collector_address`, `Client::find_rent_collector_address` and `StoreOps::claim_rent` for deriving a receiver's rent collector and claiming from it.
 - sdk(sdk): Added `WithPullOracle::temporary_accounts` and `PriceUpdateInstructions::temporary_accounts`, which keep the addresses of the temporary oracle accounts a build creates, `PythPullOracle::close_temporary_accounts`, which builds a bundle closing the ones that still exist, and `PythPullOracle::open_temporary_accounts`, which lists the ones still open so a cleanup can be checked and retried. Calling either again after a partial cleanup is safe.
 - sdk(solana-utils): Added `SendBundleOptions::recent_blockhash` to sign a bundle with a caller-chosen blockhash, so the caller knows its last valid block height. Code that builds `SendBundleOptions` with a struct literal and no `..Default::default()` must add the field.
 - sdk(solana-utils): Added `client::wait_for_blockhash_expiry`, which waits until the block height at a given commitment passes a blockhash's last valid height, so a transaction using it can no longer land and is visible at that commitment. It tolerates short RPC outages and gives up after about 3 minutes. Also added `SetExecutionFee` for `&mut T`.

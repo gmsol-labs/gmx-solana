@@ -379,6 +379,11 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
         crate::pda::find_store_wallet_address(store, self.store_program_id()).0
     }
 
+    /// Find a receiver's rent collector without a Store account or RPC read.
+    pub fn find_rent_collector_address(&self, receiver: &Pubkey) -> Pubkey {
+        crate::pda::find_rent_collector_address(receiver, self.store_program_id()).0
+    }
+
     /// Get the event authority PDA for the `Store` program.
     pub fn store_event_authority(&self) -> Pubkey {
         crate::pda::find_event_authority_address(self.store_program_id()).0

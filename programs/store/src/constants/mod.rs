@@ -31,6 +31,10 @@ pub const GT_MINT_SEED: &[u8] = b"gt";
 #[constant]
 pub const CLAIMABLE_ACCOUNT_SEED: &[u8] = b"claimable_account";
 
+/// Seed for a rent receiver's collector.
+#[constant]
+pub const RENT_COLLECTOR_SEED: &[u8] = b"rent_collector";
+
 /// Decimals of a market token.
 #[constant]
 pub const MARKET_TOKEN_DECIMALS: u8 = 9;

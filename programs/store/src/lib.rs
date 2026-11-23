@@ -4103,6 +4103,29 @@ pub mod gmsol_store {
     //             Other Instructions
     // ===========================================
 
+    /// Claim the whole balance of a rent receiver's collector.
+    ///
+    /// The collector is a system-owned PDA derived only from the receiver and
+    /// [`RENT_COLLECTOR_SEED`](constants::RENT_COLLECTOR_SEED). Anyone can send
+    /// runtime-valid rent refunds to it without initialization or the receiver's
+    /// account. Fully draining it does not prevent later refunds to the same PDA.
+    ///
+    /// The receiver signs and chooses the destination, which may be the receiver
+    /// itself. Empty collectors are a no-op, including when they do not yet exist.
+    /// No Store account, role or feature flag is required.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](ClaimRent)*
+    ///
+    /// # Errors
+    /// - The rent receiver must sign and the collector must match its canonical PDA.
+    /// - The collector must be system-owned, and transferring from it requires empty data.
+    /// - A nonempty collector cannot be its own destination.
+    /// - The destination must be writable and the transfer must satisfy runtime rules.
+    pub fn claim_rent(ctx: Context<ClaimRent>) -> Result<()> {
+        ClaimRent::invoke(ctx)
+    }
+
     #[access_control(internal::Authenticate::only_migration_keeper(&ctx))]
     pub fn migrate_referral_code<'info>(
         ctx: Context<'_, '_, 'info, 'info, MigrateReferralCode<'info>>,
