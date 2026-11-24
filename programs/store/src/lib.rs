@@ -3004,7 +3004,7 @@ pub mod gmsol_store {
     /// *[See the documentation for the accounts.](RequestGtExchange)*
     ///
     /// # Arguments
-    /// - `amount`: The amount of GT to exchange for rewards.
+    /// - `amount`: The amount of GT to exchange for rewards. May be zero.
     ///
     /// # Errors
     /// - The [`owner`](RequestGtExchange::owner) must be a signer.
@@ -3015,9 +3015,7 @@ pub mod gmsol_store {
     /// - The [`exchange`](RequestGtExchange::exchange) must be either:
     ///   - Uninitialized, or
     ///   - Properly initialized and owned by both the `owner` and `vault`
-    /// - The `amount` must be:
-    ///   - Greater than 0
-    ///   - Not exceed the owner's available (excluding reserved) GT balance in their user account
+    /// - The `amount` must not exceed the owner's GT balance in their user account
     pub fn request_gt_exchange(ctx: Context<RequestGtExchange>, amount: u64) -> Result<()> {
         instructions::request_gt_exchange(ctx, amount)
     }
@@ -3028,7 +3026,7 @@ pub mod gmsol_store {
     /// *[See the documentation for the accounts.](RequestGtExchangeV2)*
     ///
     /// # Arguments
-    /// - `amount`: The amount of GT to exchange for rewards.
+    /// - `amount`: The amount of GT to exchange for rewards. May be zero.
     ///
     /// # Errors
     /// - `authority` must sign as the owner or the owner's current GT delegate.
