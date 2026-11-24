@@ -445,10 +445,10 @@ pub struct CompleteGtExchangeV2<'info> {
     /// Owner.
     /// CHECK: check by CPI.
     pub owner: UncheckedAccount<'info>,
-    /// Rent receiver.
-    /// CHECK: check by CPI.
+    /// Rent collector of the exchange's effective rent receiver.
+    /// CHECK: its canonical address and system ownership are checked by the Store CPI.
     #[account(mut)]
-    pub rent_receiver: UncheckedAccount<'info>,
+    pub rent_collector: UncheckedAccount<'info>,
     /// Store.
     #[account(constraint = store.load()?.validate_not_restarted().map(|_| true)?)]
     pub store: AccountLoader<'info, Store>,
@@ -605,7 +605,7 @@ impl<'info> CompleteGtExchangeV2<'info> {
                 store: self.store.to_account_info(),
                 owner: self.owner.to_account_info(),
                 vault: self.gt_exchange_vault.to_account_info(),
-                rent_receiver: self.rent_receiver.to_account_info(),
+                rent_collector: self.rent_collector.to_account_info(),
                 exchange: self.exchange.to_account_info(),
             },
         )
