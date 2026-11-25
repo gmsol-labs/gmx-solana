@@ -125,3 +125,140 @@ pub mod programs {
 
     untagged!(GMSOLData, [Account, CPIEvents]);
 }
+
+/// Decoding for EVM proxy Config logs, which use Anchor `emit!` rather than CPI events.
+#[cfg(feature = "evm-proxy")]
+pub mod evm_proxy {
+    use anchor_lang::{AccountDeserialize, AnchorDeserialize, Discriminator};
+    use base64::Engine;
+    use gmsol_programs::gmsol_evm_proxy::events;
+
+    /// Decode a Config only when its owner is the selected proxy deployment.
+    /// Foreign owners or unrelated account discriminators return no match.
+    pub fn decode_config_account(
+        program_id: &solana_sdk::pubkey::Pubkey,
+        owner: &solana_sdk::pubkey::Pubkey,
+        data: &[u8],
+    ) -> Result<Option<gmsol_programs::gmsol_evm_proxy::accounts::Config>, crate::DecodeError> {
+        use gmsol_programs::gmsol_evm_proxy::accounts::Config;
+        if owner != program_id || !data.starts_with(Config::DISCRIMINATOR) {
+            return Ok(None);
+        }
+        Config::try_deserialize(&mut &data[..])
+            .map(Some)
+            .map_err(crate::DecodeError::custom)
+    }
+
+    /// One decoded Config change event.
+    #[derive(Debug)]
+    pub enum ConfigEvent {
+        /// Initial Config state.
+        Created(events::ConfigCreated),
+        /// Chain policy change.
+        ChainAllowedChanged(events::ConfigChainAllowedChanged),
+        /// Pause state change.
+        PauseChanged(events::ConfigPauseChanged),
+        /// Pending administrator proposal or replacement.
+        AdminProposed(events::ConfigAdminProposed),
+        /// Administrator acceptance.
+        AdminAccepted(events::ConfigAdminAccepted),
+    }
+
+    /// Decode a proxy `Program data:` log. Callers must first attribute it to this
+    /// program and require a successful transaction before applying its change.
+    pub fn decode_config_event_log(line: &str) -> Result<Option<ConfigEvent>, crate::DecodeError> {
+        let Some(encoded) = line.strip_prefix("Program data: ") else {
+            return Ok(None);
+        };
+        let data = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(crate::DecodeError::custom)?;
+        macro_rules! decode {
+            ($event:ty, $variant:ident) => {
+                if data.starts_with(<$event>::DISCRIMINATOR) {
+                    let event = <$event>::deserialize(&mut &data[<$event>::DISCRIMINATOR.len()..])
+                        .map_err(crate::DecodeError::custom)?;
+                    return Ok(Some(ConfigEvent::$variant(event)));
+                }
+            };
+        }
+        decode!(events::ConfigCreated, Created);
+        decode!(events::ConfigChainAllowedChanged, ChainAllowedChanged);
+        decode!(events::ConfigPauseChanged, PauseChanged);
+        decode!(events::ConfigAdminProposed, AdminProposed);
+        decode!(events::ConfigAdminAccepted, AdminAccepted);
+        Ok(None)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::{gmsol::programs::GMSOLAccountData, value::OwnedDataDecoder, Decode};
+        use anchor_lang::{AnchorSerialize, Event};
+        use gmsol_programs::gmsol_evm_proxy::{accounts::Config, constants::CONFIG_SEED, ID};
+        use solana_sdk::pubkey::Pubkey;
+
+        #[test]
+        fn treasury_config_is_not_a_proxy_config() {
+            use gmsol_programs::gmsol_treasury::{
+                accounts::Config as TreasuryConfig, ID as TREASURY_ID,
+            };
+
+            let treasury: TreasuryConfig = bytemuck::Zeroable::zeroed();
+            let mut data = TreasuryConfig::DISCRIMINATOR.to_vec();
+            data.extend_from_slice(bytemuck::bytes_of(&treasury));
+            let decoded =
+                GMSOLAccountData::decode(OwnedDataDecoder::new(&TREASURY_ID, &data)).unwrap();
+            assert!(
+                matches!(decoded, GMSOLAccountData::UnknownOwnedData(_)),
+                "foreign Config must remain outside Store account decoding"
+            );
+            assert!(decode_config_account(&ID, &TREASURY_ID, &data)
+                .unwrap()
+                .is_none());
+        }
+
+        #[test]
+        fn decodes_proxy_config_account() {
+            let (_, bump) = Pubkey::find_program_address(&[CONFIG_SEED], &ID);
+            let config = Config {
+                store: Pubkey::new_unique(),
+                genesis_hash: [7; 32],
+                admin: Pubkey::new_unique(),
+                next_admin: None,
+                paused: true,
+                allowed_chain_ids: vec![],
+                bump,
+            };
+            let mut data = Config::DISCRIMINATOR.to_vec();
+            config.serialize(&mut data).unwrap();
+            let decoded = decode_config_account(&ID, &ID, &data).unwrap().unwrap();
+            assert!(decode_config_account(&ID, &Pubkey::new_unique(), &data)
+                .unwrap()
+                .is_none());
+            assert_eq!(decoded.store, config.store);
+            assert_eq!(decoded.genesis_hash, config.genesis_hash);
+            assert_eq!(decoded.bump, bump);
+        }
+
+        #[test]
+        fn decodes_proxy_event_log() {
+            let event = events::ConfigPauseChanged {
+                config: Pubkey::new_unique(),
+                previous_paused: true,
+                paused: false,
+            };
+            let line = format!(
+                "Program data: {}",
+                base64::engine::general_purpose::STANDARD.encode(event.data())
+            );
+            let Some(ConfigEvent::PauseChanged(decoded)) = decode_config_event_log(&line).unwrap()
+            else {
+                panic!("expected pause event");
+            };
+            assert_eq!(decoded.config, event.config);
+            assert!(decoded.previous_paused);
+            assert!(!decoded.paused);
+        }
+    }
+}

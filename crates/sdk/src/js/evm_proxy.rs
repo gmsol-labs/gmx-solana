@@ -6,11 +6,11 @@ use wasm_bindgen::prelude::*;
 const EVM_ADDRESS_LEN: usize = std::mem::size_of::<EvmAddressBytes>();
 const EVM_ADDRESS_HEX_LEN: usize = EVM_ADDRESS_LEN * 2;
 
-/// Proxy PDA and its canonical bump.
+/// An EVM proxy program PDA and its canonical bump.
 #[derive(Serialize, Deserialize, Tsify)]
 #[tsify(into_wasm_abi)]
 pub struct ProxyAddress {
-    /// Base58 proxy account address.
+    /// Base58 derived account address.
     pub address: String,
     /// Canonical bump used to derive the account.
     pub bump: u8,
@@ -59,9 +59,55 @@ pub fn find_proxy_address(args: FindProxyAddressArgs) -> crate::Result<ProxyAddr
     })
 }
 
+/// Arguments for deriving the singleton Config PDA.
+#[derive(Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct FindProxyConfigAddressArgs {
+    /// Deployment program ID; omitted for the declared deployment.
+    #[serde(default)]
+    pub program_id: Option<StringPubkey>,
+}
+
+/// Derive the selected deployment's singleton Config PDA.
+#[wasm_bindgen]
+pub fn find_proxy_config_address(args: FindProxyConfigAddressArgs) -> crate::Result<ProxyAddress> {
+    let program_id = args
+        .program_id
+        .map(|id| id.0)
+        .unwrap_or(gmsol_programs::gmsol_evm_proxy::ID);
+    let (address, bump) = crate::pda::find_proxy_config_address(&program_id);
+    Ok(ProxyAddress {
+        address: address.to_string(),
+        bump,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn config_address_uses_selected_deployment() {
+        const EXPECTED_CONFIG_BUMP: u8 = 252;
+        let default =
+            find_proxy_config_address(FindProxyConfigAddressArgs { program_id: None }).unwrap();
+        assert_eq!(
+            default.address,
+            "E13dsYehufSsFWGktSYNREVHnogUsrDeJQH6swaL5pJA"
+        );
+        assert_eq!(default.bump, EXPECTED_CONFIG_BUMP);
+        let program = Pubkey::new_unique();
+        let selected = find_proxy_config_address(FindProxyConfigAddressArgs {
+            program_id: Some(program.into()),
+        })
+        .unwrap();
+        let expected = crate::pda::find_proxy_config_address(&program);
+        assert_eq!(
+            (selected.address, selected.bump),
+            (expected.0.to_string(), expected.1)
+        );
+    }
+
     use solana_sdk::pubkey::Pubkey;
 
     #[test]

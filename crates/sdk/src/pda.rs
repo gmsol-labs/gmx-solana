@@ -33,6 +33,10 @@ pub type ReferralCodeBytes = [u8; 8];
 /// Seed for event authority.
 pub const EVENT_AUTHORITY_SEED: &[u8] = b"__event_authority";
 
+/// Seed for the singleton EVM proxy Config.
+#[cfg(feature = "evm-proxy")]
+pub use gmsol_programs::gmsol_evm_proxy::constants::CONFIG_SEED as EVM_PROXY_CONFIG_SEED;
+
 /// Seed for [`Store`](store_accounts::Store).
 pub const STORE_SEED: &[u8] = b"data_store";
 
@@ -625,6 +629,12 @@ pub fn find_participant_address(
         &[PARTICIPANT_SEED, competition.as_ref(), trader.as_ref()],
         competition_program_id,
     )
+}
+
+/// Find the singleton EVM proxy Config PDA.
+#[cfg(feature = "evm-proxy")]
+pub fn find_proxy_config_address(program_id: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[EVM_PROXY_CONFIG_SEED], program_id)
 }
 
 /// Find the proxy PDA for a raw 20-byte EVM address.

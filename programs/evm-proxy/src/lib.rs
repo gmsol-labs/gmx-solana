@@ -36,10 +36,279 @@ impl InitSpace for Proxy {
     const INIT_SPACE: usize = std::mem::size_of::<Self>();
 }
 
+/// Seed prefix for the singleton policy account.
+#[constant]
+pub const CONFIG_SEED: &[u8] = b"config";
+/// Maximum number of allowed full-width EVM chain IDs.
+pub const MAX_ALLOWED_CHAINS: usize = 32;
+
+/// Program-wide policy, initialized once by the current upgrade authority.
+#[account]
+#[derive(InitSpace)]
+pub struct Config {
+    /// Store bound to this deployment for its lifetime.
+    pub store: Pubkey,
+    /// Immutable cluster genesis hash supplied at initialization.
+    pub genesis_hash: [u8; 32],
+    /// Current administrator of the intent policy.
+    pub admin: Pubkey,
+    /// Nominated address that must sign acceptance before taking control.
+    pub next_admin: Option<Pubkey>,
+    /// Whether every intent is disabled.
+    pub paused: bool,
+    /// Allowed EVM chain IDs, encoded as full-width big-endian bytes.
+    #[max_len(MAX_ALLOWED_CHAINS)]
+    pub allowed_chain_ids: Vec<[u8; 32]>,
+    /// Canonical PDA bump for this Config.
+    pub bump: u8,
+}
+
+/// Config initialization event.
+#[event]
+pub struct ConfigCreated {
+    /// Singleton policy account.
+    pub config: Pubkey,
+    /// Store bound to this deployment for its lifetime.
+    pub store: Pubkey,
+    /// Immutable cluster genesis hash supplied at initialization.
+    pub genesis_hash: [u8; 32],
+    /// Current administrator of the intent policy.
+    pub admin: Pubkey,
+    /// Whether every intent is disabled.
+    pub paused: bool,
+    /// Allowed EVM chain IDs, encoded as full-width big-endian bytes.
+    pub allowed_chain_ids: Vec<[u8; 32]>,
+}
+
+/// Allowlist membership-change event.
+#[event]
+pub struct ConfigChainAllowedChanged {
+    /// Singleton policy account.
+    pub config: Pubkey,
+    /// Full-width big-endian EVM chain ID.
+    pub chain_id: [u8; 32],
+    /// Resulting allow status for this chain.
+    pub allowed: bool,
+}
+
+/// Pause-state change event.
+#[event]
+pub struct ConfigPauseChanged {
+    /// Singleton policy account.
+    pub config: Pubkey,
+    /// Pause state before the change.
+    pub previous_paused: bool,
+    /// Whether every intent is disabled.
+    pub paused: bool,
+}
+
+/// Pending-admin proposal or replacement event.
+#[event]
+pub struct ConfigAdminProposed {
+    /// Singleton policy account.
+    pub config: Pubkey,
+    /// Current administrator of the intent policy.
+    pub admin: Pubkey,
+    /// Nominee replaced by this proposal, if any.
+    pub previous_next_admin: Option<Pubkey>,
+    /// Nominated address, required to sign acceptance.
+    pub next_admin: Pubkey,
+}
+
+/// Admin-handover acceptance event.
+#[event]
+pub struct ConfigAdminAccepted {
+    /// Singleton policy account.
+    pub config: Pubkey,
+    /// Administrator replaced by this acceptance.
+    pub previous_admin: Pubkey,
+    /// Current administrator of the intent policy.
+    pub admin: Pubkey,
+    /// Pending nomination after acceptance; always `None`.
+    pub next_admin: Option<Pubkey>,
+}
+
 /// EVM proxy instructions.
 #[program]
 pub mod gmsol_evm_proxy {
     use super::*;
+
+    /// Bind the singleton Config to one Store and a caller-supplied genesis hash.
+    /// The current program upgrade authority must sign; the program does not
+    /// independently attest the supplied hash against the cluster.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](CreateConfig).*
+    ///
+    /// # Arguments
+    /// - `genesis_hash`: Cluster genesis hash checked by the initializing SDK.
+    ///
+    /// # Errors
+    /// - Returns `NotUpgradeAuthority` for a wrong upgrade authority and
+    ///   `InvalidProgramData` for unrelated upgrade metadata. Anchor rejects a
+    ///   missing signer, noncanonical Config or invalid Store. The System program
+    ///   rejects an existing Config with `AccountAlreadyInUse`.
+    ///   Returns `InvalidAdmin` for a zero first admin and `InvalidStore` when the
+    ///   Store account is too short to load.
+    pub fn create_config(ctx: Context<CreateConfig>, genesis_hash: [u8; 32]) -> Result<()> {
+        let first_admin = ctx.accounts.first_admin.key();
+        require_keys_neq!(first_admin, Pubkey::default(), ProxyError::InvalidAdmin);
+        require!(
+            ctx.accounts.store.to_account_info().data_len()
+                >= 8 + <gmsol_store::states::Store as InitSpace>::INIT_SPACE,
+            ProxyError::InvalidStore
+        );
+        ctx.accounts.store.load()?;
+        let config = &mut ctx.accounts.config;
+        config.bump = ctx.bumps.config;
+        config.store = ctx.accounts.store.key();
+        config.genesis_hash = genesis_hash;
+        config.admin = first_admin;
+        config.next_admin = None;
+        config.paused = true;
+        config.allowed_chain_ids = Vec::new();
+        emit!(ConfigCreated {
+            config: config.key(),
+            store: config.store,
+            genesis_hash,
+            admin: first_admin,
+            paused: config.paused,
+            allowed_chain_ids: config.allowed_chain_ids.clone(),
+        });
+        Ok(())
+    }
+
+    /// Change whether one full-width EIP-155 chain ID is allowed.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](CurrentConfigAdmin).*
+    ///
+    /// # Arguments
+    /// - `chain_id`: Full-width big-endian EVM chain ID.
+    /// - `allowed`: Desired membership.
+    ///
+    /// # Errors
+    /// - Returns `NotConfigAdmin` for a signer other than the current admin.
+    ///   Anchor rejects a missing signer or noncanonical Config.
+    ///   Returns `NoConfigChange` if the requested status already holds and
+    ///   `AllowedChainsFull` if the bounded set cannot accept another chain.
+    pub fn set_chain_allowed(
+        ctx: Context<CurrentConfigAdmin>,
+        chain_id: [u8; 32],
+        allowed: bool,
+    ) -> Result<()> {
+        let config = &mut ctx.accounts.config;
+        let position = config
+            .allowed_chain_ids
+            .iter()
+            .position(|id| *id == chain_id);
+        match (allowed, position) {
+            (true, None) => {
+                require!(
+                    config.allowed_chain_ids.len() < MAX_ALLOWED_CHAINS,
+                    ProxyError::AllowedChainsFull
+                );
+                config.allowed_chain_ids.push(chain_id);
+            }
+            (false, Some(index)) => {
+                config.allowed_chain_ids.remove(index);
+            }
+            _ => return err!(ProxyError::NoConfigChange),
+        }
+        emit!(ConfigChainAllowedChanged {
+            config: config.key(),
+            chain_id,
+            allowed,
+        });
+        Ok(())
+    }
+
+    /// Pause or unpause the intent policy recorded in Config.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](CurrentConfigAdmin).*
+    ///
+    /// # Arguments
+    /// - `paused`: Desired intent pause state.
+    ///
+    /// # Errors
+    /// - Returns `NotConfigAdmin` for a signer other than the current admin.
+    ///   Anchor rejects a missing signer or noncanonical Config.
+    ///   Returns `NoConfigChange` when the requested pause state already holds.
+    pub fn set_paused(ctx: Context<CurrentConfigAdmin>, paused: bool) -> Result<()> {
+        let config = &mut ctx.accounts.config;
+        require!(config.paused != paused, ProxyError::NoConfigChange);
+        let previous_paused = config.paused;
+        config.paused = paused;
+        emit!(ConfigPauseChanged {
+            config: config.key(),
+            previous_paused,
+            paused,
+        });
+        Ok(())
+    }
+
+    /// Nominate or replace the next admin without transferring current control.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](TransferAdmin).*
+    ///
+    /// # Arguments
+    /// None.
+    ///
+    /// # Errors
+    /// - Returns `NotConfigAdmin` for a signer other than the current admin.
+    ///   Anchor rejects a missing signer or noncanonical Config.
+    ///   Returns `InvalidAdmin` for the zero address or `NoConfigChange` when
+    ///   nominating the current or already pending admin.
+    pub fn transfer_admin(ctx: Context<TransferAdmin>) -> Result<()> {
+        let next_admin = ctx.accounts.next_admin.key();
+        let config = &mut ctx.accounts.config;
+        require_keys_neq!(next_admin, Pubkey::default(), ProxyError::InvalidAdmin);
+        require_keys_neq!(next_admin, config.admin, ProxyError::NoConfigChange);
+        require!(
+            config.next_admin != Some(next_admin),
+            ProxyError::NoConfigChange
+        );
+        let previous_next_admin = config.next_admin;
+        config.next_admin = Some(next_admin);
+        emit!(ConfigAdminProposed {
+            config: config.key(),
+            admin: config.admin,
+            previous_next_admin,
+            next_admin,
+        });
+        Ok(())
+    }
+
+    /// Complete a nominated admin handover with the nominee's signature.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](AcceptAdmin).*
+    ///
+    /// # Arguments
+    /// None.
+    ///
+    /// # Errors
+    /// - Anchor rejects a missing signer or noncanonical Config. Returns
+    ///   `NotPendingAdmin` when the signer is not the nominated admin.
+    pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+        let config = &mut ctx.accounts.config;
+        require!(
+            config.next_admin == Some(ctx.accounts.next_admin.key()),
+            ProxyError::NotPendingAdmin
+        );
+        let previous_admin = config.admin;
+        config.admin = ctx.accounts.next_admin.key();
+        config.next_admin = None;
+        emit!(ConfigAdminAccepted {
+            config: config.key(),
+            previous_admin,
+            admin: config.admin,
+            next_admin: config.next_admin,
+        });
+        Ok(())
+    }
 
     /// Invoke the program scaffold without creating or changing a proxy.
     ///
@@ -103,6 +372,70 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
 }
 
+/// Accounts for one-time Config initialization.
+#[derive(Accounts)]
+pub struct CreateConfig<'info> {
+    /// Signer paying initialization rent.
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    /// Current program upgrade authority signing initialization.
+    pub upgrade_authority: Signer<'info>,
+    /// Singleton policy account.
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + Config::INIT_SPACE,
+        seeds = [CONFIG_SEED],
+        bump,
+    )]
+    pub config: Account<'info, Config>,
+    /// This EVM proxy deployment.
+    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ ProxyError::InvalidProgramData)]
+    pub program: Program<'info, program::GmsolEvmProxy>,
+    /// Upgradeable-loader metadata for this deployment.
+    #[account(constraint = program_data.upgrade_authority_address == Some(upgrade_authority.key()) @ ProxyError::NotUpgradeAuthority)]
+    pub program_data: Account<'info, ProgramData>,
+    /// Store bound to this deployment for its lifetime.
+    pub store: AccountLoader<'info, gmsol_store::states::Store>,
+    /// CHECK: only this address is recorded as the first admin.
+    pub first_admin: UncheckedAccount<'info>,
+    /// System program used to create Config.
+    pub system_program: Program<'info, System>,
+}
+
+/// Accounts for current-admin policy changes.
+#[derive(Accounts)]
+pub struct CurrentConfigAdmin<'info> {
+    /// Current administrator of the intent policy.
+    pub admin: Signer<'info>,
+    /// Singleton policy account.
+    #[account(mut, seeds = [CONFIG_SEED], bump = config.bump, has_one = admin @ ProxyError::NotConfigAdmin)]
+    pub config: Account<'info, Config>,
+}
+
+/// Accounts for accepting a nominated admin handover.
+#[derive(Accounts)]
+pub struct AcceptAdmin<'info> {
+    /// Nominated address, required to sign acceptance.
+    pub next_admin: Signer<'info>,
+    /// Singleton policy account.
+    #[account(mut, seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, Config>,
+}
+
+/// Accounts for proposing a two-step admin handover.
+#[derive(Accounts)]
+pub struct TransferAdmin<'info> {
+    /// Current admin authorizing the proposal.
+    pub admin: Signer<'info>,
+    /// Singleton policy account.
+    #[account(mut, seeds = [CONFIG_SEED], bump = config.bump, has_one = admin @ ProxyError::NotConfigAdmin)]
+    pub config: Account<'info, Config>,
+    /// Nominated admin address.
+    /// CHECK: only the address is used; it gains authority only by accepting.
+    pub next_admin: UncheckedAccount<'info>,
+}
+
 /// Accounts for permissionless, idempotent proxy creation.
 #[derive(Accounts)]
 #[instruction(evm_address: [u8; EVM_ADDRESS_LEN])]
@@ -129,6 +462,30 @@ pub enum ProxyError {
     /// Existing proxy identity or layout metadata does not match its PDA.
     #[msg("Proxy account data does not match its EVM address")]
     InvalidProxy,
+    /// Store data cannot hold the declared Store layout.
+    #[msg("Store account data is too short")]
+    InvalidStore,
+    /// Admin address is zero.
+    #[msg("Admin address cannot be zero")]
+    InvalidAdmin,
+    /// The requested policy or handover change is already in effect.
+    #[msg("Config change has no effect")]
+    NoConfigChange,
+    /// The bounded allowed-chain set is full.
+    #[msg("Allowed EVM chain set is full")]
+    AllowedChainsFull,
+    /// The signer is not the nominated admin.
+    #[msg("Signer is not the pending admin")]
+    NotPendingAdmin,
+    /// ProgramData does not belong to this proxy program.
+    #[msg("ProgramData does not belong to this proxy program")]
+    InvalidProgramData,
+    /// Signer is not the current program upgrade authority.
+    #[msg("Signer is not the program upgrade authority")]
+    NotUpgradeAuthority,
+    /// Signer is not the current Config admin.
+    #[msg("Signer is not the current Config admin")]
+    NotConfigAdmin,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]

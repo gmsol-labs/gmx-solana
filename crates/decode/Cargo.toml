@@ -12,6 +12,7 @@ keywords.workspace = true
 [features]
 default = []
 gmsol-programs = ["dep:gmsol-programs"]
+evm-proxy = ["gmsol-programs", "gmsol-programs/evm-proxy"]
 solana-decoder = ["bs58"]
 
 [dependencies]
@@ -30,6 +31,7 @@ solana-transaction-status-client-types = { workspace = true }
 bs58 = { workspace = true, optional = true }
 
 [dev-dependencies]
+gmsol-programs = { workspace = true, features = ["treasury"] }
 bincode = { workspace = true }
 serde_json = { workspace = true }
 

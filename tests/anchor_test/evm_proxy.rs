@@ -131,3 +131,66 @@ async fn proxy_creation_rejects_mismatched_address() -> eyre::Result<()> {
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn config_creation_records_immutable_policy() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _accounts = deployment.use_accounts().await?;
+    let _policy = super::setup::EVM_PROXY_CONFIG_LOCK.lock().await;
+    let client = &deployment.client;
+    let config = gmsol_sdk::pda::find_proxy_config_address(&evm_proxy::ID).0;
+    let state = super::config_policy::assert_baseline(&deployment).await?;
+    let history = client.rpc().get_signatures_for_address(&config).await?;
+    let signature = history
+        .iter()
+        .rev()
+        .find(|transaction| transaction.err.is_none())
+        .ok_or_else(|| eyre::eyre!("Config creation history missing"))?
+        .signature
+        .parse()?;
+    let event: evm_proxy::ConfigCreated = super::config_policy::event(client, &signature).await?;
+    assert_eq!(event.config, config);
+    assert_eq!(event.store, deployment.store);
+    assert_eq!(event.genesis_hash, state.genesis_hash);
+    assert_eq!(event.admin, client.payer());
+    assert!(event.paused);
+    assert!(event.allowed_chain_ids.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn config_cannot_be_initialized_twice() -> eyre::Result<()> {
+    use gmsol_sdk::client::ops::{evm_proxy::create_config_instruction, EvmProxyOps};
+    use solana_sdk::{
+        instruction::InstructionError, system_instruction::SystemError,
+        transaction::TransactionError,
+    };
+
+    let deployment = current_deployment().await?;
+    let _accounts = deployment.use_accounts().await?;
+    let _policy = super::setup::EVM_PROXY_CONFIG_LOCK.lock().await;
+    let client = &deployment.client;
+    let config = gmsol_sdk::pda::find_proxy_config_address(&evm_proxy::ID).0;
+    let (before, state) = super::config_policy::read_config(client, &config).await?;
+    let error = client
+        .evm_proxy_instruction(create_config_instruction(
+            evm_proxy::ID,
+            client.payer(),
+            client.payer(),
+            deployment.store,
+            state.genesis_hash,
+            client.payer(),
+        ))
+        .send()
+        .await
+        .expect_err("one-time Config initialization");
+    let transaction_error = match &error {
+        gmsol_solana_utils::Error::Client(error) => error.get_transaction_error(),
+        _ => panic!("unexpected duplicate initialization error: {error:?}"),
+    };
+    assert!(
+        matches!(transaction_error, Some(TransactionError::InstructionError(_, InstructionError::Custom(code))) if code == SystemError::AccountAlreadyInUse as u32)
+    );
+    assert_eq!(client.rpc().get_account(&config).await?, before);
+    Ok(())
+}

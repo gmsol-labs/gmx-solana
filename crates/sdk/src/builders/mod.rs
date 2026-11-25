@@ -1,5 +1,9 @@
 use crate::serde::StringPubkey;
 
+/// EVM proxy deployment and intent builders.
+#[cfg(feature = "evm-proxy")]
+pub mod evm_proxy;
+
 /// Store Program.
 pub mod store_program;
 
