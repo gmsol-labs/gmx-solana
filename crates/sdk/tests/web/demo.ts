@@ -1,4 +1,5 @@
 import {
+  find_proxy_address,
   apply_factor,
   close_orders,
   create_orders,
@@ -788,3 +789,14 @@ for (const batch of noBuilderFeeTransactions.serialize()) {
     console.log(toBase64(txn));
   }
 }
+
+// Derive the permanent proxy for an EVM address.
+const evmProxy = find_proxy_address({
+  evm_address: "0x0123456789abcdef0123456789abcdef01234567",
+});
+console.log("EVM proxy address and bump:", evmProxy.address, evmProxy.bump);
+const alternateEvmProxy = find_proxy_address({
+  evm_address: "0x0123456789abcdef0123456789abcdef01234567",
+  program_id: "11111111111111111111111111111111",
+});
+console.log("Alternate proxy address and bump:", alternateEvmProxy.address, alternateEvmProxy.bump);

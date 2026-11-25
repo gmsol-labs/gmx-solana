@@ -21,6 +21,9 @@ pub use gmsol_programs::gmsol_store::constants::{
     VIRTUAL_INVENTORY_FOR_SWAPS_SEED,
 };
 
+/// Raw 20-byte EVM address used to derive an EVM proxy.
+pub type EvmAddressBytes = [u8; 20];
+
 /// Nonce bytes.
 pub type NonceBytes = [u8; 32];
 
@@ -626,7 +629,7 @@ pub fn find_participant_address(
 
 /// Find the proxy PDA for a raw 20-byte EVM address.
 #[cfg(feature = "evm-proxy")]
-pub fn find_proxy_address(evm_address: &[u8; 20], program_id: &Pubkey) -> (Pubkey, u8) {
+pub fn find_proxy_address(evm_address: &EvmAddressBytes, program_id: &Pubkey) -> (Pubkey, u8) {
     use gmsol_programs::gmsol_evm_proxy::constants::PROXY_SEED;
 
     Pubkey::find_program_address(&[PROXY_SEED, evm_address], program_id)
@@ -638,6 +641,7 @@ mod proxy_tests {
 
     #[test]
     fn proxy_address_uses_raw_evm_bytes_and_program_id() {
+        const EXPECTED_CANONICAL_BUMP: u8 = 255;
         let evm_address = hex::decode("0123456789abcdef0123456789abcdef01234567")
             .unwrap()
             .try_into()
@@ -648,7 +652,7 @@ mod proxy_tests {
             address.to_string(),
             "7jzFUkMMsunBEez71rLLmuuQkifyA5r56MGtCABsd9Zi"
         );
-        assert_eq!(bump, 255);
+        assert_eq!(bump, EXPECTED_CANONICAL_BUMP);
         assert_ne!(
             address,
             find_proxy_address(&evm_address, &Pubkey::new_unique()).0
