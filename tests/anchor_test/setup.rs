@@ -2591,11 +2591,16 @@ async fn initialize_evm_proxy_config(deployment: &Deployment) -> eyre::Result<()
                 payer: sender.payer(),
                 upgrade_authority: sender.payer(),
                 config: config_address,
-                program: evm_proxy::ID,
+                proxy_program: evm_proxy::ID,
                 program_data,
                 store,
                 first_admin,
                 system_program: system_program::ID,
+                event_authority: gmsol_sdk::builders::evm_proxy::EvmProxyProgram::from(
+                    evm_proxy::ID,
+                )
+                .find_event_authority_address(),
+                program: evm_proxy::ID,
             })
             .send()
             .await

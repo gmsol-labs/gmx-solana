@@ -15,6 +15,13 @@ pub struct EvmProxyProgram {
     pub id: StringPubkey,
 }
 
+impl EvmProxyProgram {
+    /// Find the canonical CPI event authority for this deployment.
+    pub fn find_event_authority_address(&self) -> Pubkey {
+        crate::pda::find_event_authority_address(&self.id).0
+    }
+}
+
 impl Default for EvmProxyProgram {
     fn default() -> Self {
         gmsol_programs::gmsol_evm_proxy::ID.into()

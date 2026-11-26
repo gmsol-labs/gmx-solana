@@ -24,7 +24,8 @@
         "",
         "# Errors",
         "- Anchor rejects a missing signer or noncanonical Config. Returns",
-        "`NotPendingAdmin` when the signer is not the nominated admin."
+        "`NotPendingAdmin` when the signer is not the nominated admin.",
+        "- CPI event emission fails if its supplied accounts are invalid."
       ],
       "discriminator": [
         112,
@@ -65,6 +66,38 @@
               }
             ]
           }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": []
@@ -88,7 +121,8 @@
         "missing signer, noncanonical Config or invalid Store. The System program",
         "rejects an existing Config with `AccountAlreadyInUse`.",
         "Returns `InvalidAdmin` for a zero first admin and `InvalidStore` when the",
-        "Store account is too short to load."
+        "Store account is too short to load.",
+        "- CPI event emission fails if its supplied accounts are invalid."
       ],
       "discriminator": [
         201,
@@ -139,7 +173,7 @@
           }
         },
         {
-          "name": "program",
+          "name": "proxy_program",
           "docs": [
             "This EVM proxy deployment."
           ],
@@ -166,6 +200,38 @@
             "System program used to create Config."
           ],
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -320,7 +386,8 @@
         "- Returns `NotConfigAdmin` for a signer other than the current admin.",
         "Anchor rejects a missing signer or noncanonical Config.",
         "Returns `NoConfigChange` if the requested status already holds and",
-        "`AllowedChainsFull` if the bounded set cannot accept another chain."
+        "`AllowedChainsFull` if the bounded set cannot accept another chain.",
+        "- CPI event emission fails if its supplied accounts are invalid."
       ],
       "discriminator": [
         9,
@@ -364,6 +431,38 @@
               }
             ]
           }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -396,7 +495,8 @@
         "# Errors",
         "- Returns `NotConfigAdmin` for a signer other than the current admin.",
         "Anchor rejects a missing signer or noncanonical Config.",
-        "Returns `NoConfigChange` when the requested pause state already holds."
+        "Returns `NoConfigChange` when the requested pause state already holds.",
+        "- CPI event emission fails if its supplied accounts are invalid."
       ],
       "discriminator": [
         91,
@@ -440,6 +540,38 @@
               }
             ]
           }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -464,7 +596,8 @@
         "- Returns `NotConfigAdmin` for a signer other than the current admin.",
         "Anchor rejects a missing signer or noncanonical Config.",
         "Returns `InvalidAdmin` for the zero address or `NoConfigChange` when",
-        "nominating the current or already pending admin."
+        "nominating the current or already pending admin.",
+        "- CPI event emission fails if its supplied accounts are invalid."
       ],
       "discriminator": [
         42,
@@ -514,6 +647,38 @@
           "docs": [
             "Nominated admin address."
           ]
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": []

@@ -30,11 +30,13 @@ pub fn create_config_instruction(
                 payer,
                 upgrade_authority,
                 config: find_proxy_config_address(&program_id).0,
-                program: program_id,
+                proxy_program: program_id,
                 program_data: bpf_loader_upgradeable::get_program_data_address(&program_id),
                 store,
                 first_admin,
                 system_program: system_program::ID,
+                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                program: program_id,
             },
             false,
         )
@@ -54,6 +56,8 @@ pub fn set_chain_allowed_instruction(
             accounts::SetChainAllowed {
                 admin,
                 config: find_proxy_config_address(&program_id).0,
+                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                program: program_id,
             },
             false,
         )
@@ -68,6 +72,8 @@ pub fn set_paused_instruction(program_id: Pubkey, admin: Pubkey, paused: bool) -
             accounts::SetPaused {
                 admin,
                 config: find_proxy_config_address(&program_id).0,
+                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                program: program_id,
             },
             false,
         )
@@ -87,6 +93,8 @@ pub fn transfer_admin_instruction(
                 admin,
                 config: find_proxy_config_address(&program_id).0,
                 next_admin,
+                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                program: program_id,
             },
             false,
         )
@@ -101,6 +109,8 @@ pub fn accept_admin_instruction(program_id: Pubkey, next_admin: Pubkey) -> Instr
             accounts::AcceptAdmin {
                 next_admin,
                 config: find_proxy_config_address(&program_id).0,
+                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                program: program_id,
             },
             false,
         )
@@ -425,7 +435,12 @@ mod tests {
     }
 
     #[test]
-    fn config_builder_binds_first_admin_and_selected_program() {
+    fn config_builders_bind_selected_program_and_cpi_event_accounts() {
+        const CREATE_CONFIG_EVENT_AUTHORITY_INDEX: usize = 8;
+        const POLICY_EVENT_AUTHORITY_INDEX: usize = 2;
+        const TRANSFER_ADMIN_EVENT_AUTHORITY_INDEX: usize = 3;
+        const CREATE_CONFIG_PROXY_PROGRAM_INDEX: usize = 3;
+        const EVENT_ACCOUNT_COUNT: usize = 2;
         let program = Pubkey::new_unique();
         let admin = Pubkey::new_unique();
         let first_admin = Pubkey::new_unique();
@@ -445,6 +460,44 @@ mod tests {
                 .accounts
                 .iter()
                 .any(|meta| meta.pubkey == address));
+        }
+        assert_eq!(
+            instruction.accounts[CREATE_CONFIG_PROXY_PROGRAM_INDEX].pubkey,
+            program
+        );
+        let event_authority = Pubkey::find_program_address(&[b"__event_authority"], &program).0;
+        for (instruction, event_index) in [
+            (instruction, CREATE_CONFIG_EVENT_AUTHORITY_INDEX),
+            (
+                set_chain_allowed_instruction(program, admin, [1; 32], true),
+                POLICY_EVENT_AUTHORITY_INDEX,
+            ),
+            (
+                set_paused_instruction(program, admin, false),
+                POLICY_EVENT_AUTHORITY_INDEX,
+            ),
+            (
+                transfer_admin_instruction(program, admin, first_admin),
+                TRANSFER_ADMIN_EVENT_AUTHORITY_INDEX,
+            ),
+            (
+                accept_admin_instruction(program, first_admin),
+                POLICY_EVENT_AUTHORITY_INDEX,
+            ),
+        ] {
+            assert_eq!(instruction.program_id, program);
+            assert_eq!(
+                instruction.accounts.len(),
+                event_index + EVENT_ACCOUNT_COUNT
+            );
+            assert_eq!(
+                instruction.accounts[event_index],
+                solana_sdk::instruction::AccountMeta::new_readonly(event_authority, false)
+            );
+            assert_eq!(
+                instruction.accounts[event_index + 1],
+                solana_sdk::instruction::AccountMeta::new_readonly(program, false)
+            );
         }
     }
 

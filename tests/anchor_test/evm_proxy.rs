@@ -1,6 +1,7 @@
 use crate::anchor_test::setup::{current_deployment, Deployment};
 use gmsol_evm_proxy as evm_proxy;
 use gmsol_programs::anchor_lang::{error::ErrorCode, AccountDeserialize, Discriminator};
+use gmsol_sdk::evm_proxy::ProxyCPIEvent;
 use gmsol_utils::InitSpace;
 use solana_sdk::{commitment_config::CommitmentConfig, system_program};
 
@@ -148,7 +149,11 @@ async fn config_creation_records_immutable_policy() -> eyre::Result<()> {
         .ok_or_else(|| eyre::eyre!("Config creation history missing"))?
         .signature
         .parse()?;
-    let event: evm_proxy::ConfigCreated = super::config_policy::event(client, &signature).await?;
+    let ProxyCPIEvent::ConfigCreated(event) =
+        super::config_policy::event(client, &signature).await?
+    else {
+        eyre::bail!("expected ConfigCreated CPI event");
+    };
     assert_eq!(event.config, config);
     assert_eq!(event.store, deployment.store);
     assert_eq!(event.genesis_hash, state.genesis_hash);

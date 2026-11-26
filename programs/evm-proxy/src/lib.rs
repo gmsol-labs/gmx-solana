@@ -150,6 +150,7 @@ pub mod gmsol_evm_proxy {
     ///   rejects an existing Config with `AccountAlreadyInUse`.
     ///   Returns `InvalidAdmin` for a zero first admin and `InvalidStore` when the
     ///   Store account is too short to load.
+    /// - CPI event emission fails if its supplied accounts are invalid.
     pub fn create_config(ctx: Context<CreateConfig>, genesis_hash: [u8; 32]) -> Result<()> {
         let first_admin = ctx.accounts.first_admin.key();
         require_keys_neq!(first_admin, Pubkey::default(), ProxyError::InvalidAdmin);
@@ -167,7 +168,7 @@ pub mod gmsol_evm_proxy {
         config.next_admin = None;
         config.paused = true;
         config.allowed_chain_ids = Vec::new();
-        emit!(ConfigCreated {
+        emit_cpi!(ConfigCreated {
             config: config.key(),
             store: config.store,
             genesis_hash,
@@ -192,6 +193,7 @@ pub mod gmsol_evm_proxy {
     ///   Anchor rejects a missing signer or noncanonical Config.
     ///   Returns `NoConfigChange` if the requested status already holds and
     ///   `AllowedChainsFull` if the bounded set cannot accept another chain.
+    /// - CPI event emission fails if its supplied accounts are invalid.
     pub fn set_chain_allowed(
         ctx: Context<CurrentConfigAdmin>,
         chain_id: [u8; 32],
@@ -215,7 +217,7 @@ pub mod gmsol_evm_proxy {
             }
             _ => return err!(ProxyError::NoConfigChange),
         }
-        emit!(ConfigChainAllowedChanged {
+        emit_cpi!(ConfigChainAllowedChanged {
             config: config.key(),
             chain_id,
             allowed,
@@ -235,12 +237,13 @@ pub mod gmsol_evm_proxy {
     /// - Returns `NotConfigAdmin` for a signer other than the current admin.
     ///   Anchor rejects a missing signer or noncanonical Config.
     ///   Returns `NoConfigChange` when the requested pause state already holds.
+    /// - CPI event emission fails if its supplied accounts are invalid.
     pub fn set_paused(ctx: Context<CurrentConfigAdmin>, paused: bool) -> Result<()> {
         let config = &mut ctx.accounts.config;
         require!(config.paused != paused, ProxyError::NoConfigChange);
         let previous_paused = config.paused;
         config.paused = paused;
-        emit!(ConfigPauseChanged {
+        emit_cpi!(ConfigPauseChanged {
             config: config.key(),
             previous_paused,
             paused,
@@ -261,6 +264,7 @@ pub mod gmsol_evm_proxy {
     ///   Anchor rejects a missing signer or noncanonical Config.
     ///   Returns `InvalidAdmin` for the zero address or `NoConfigChange` when
     ///   nominating the current or already pending admin.
+    /// - CPI event emission fails if its supplied accounts are invalid.
     pub fn transfer_admin(ctx: Context<TransferAdmin>) -> Result<()> {
         let next_admin = ctx.accounts.next_admin.key();
         let config = &mut ctx.accounts.config;
@@ -272,7 +276,7 @@ pub mod gmsol_evm_proxy {
         );
         let previous_next_admin = config.next_admin;
         config.next_admin = Some(next_admin);
-        emit!(ConfigAdminProposed {
+        emit_cpi!(ConfigAdminProposed {
             config: config.key(),
             admin: config.admin,
             previous_next_admin,
@@ -292,6 +296,7 @@ pub mod gmsol_evm_proxy {
     /// # Errors
     /// - Anchor rejects a missing signer or noncanonical Config. Returns
     ///   `NotPendingAdmin` when the signer is not the nominated admin.
+    /// - CPI event emission fails if its supplied accounts are invalid.
     pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
         let config = &mut ctx.accounts.config;
         require!(
@@ -301,7 +306,7 @@ pub mod gmsol_evm_proxy {
         let previous_admin = config.admin;
         config.admin = ctx.accounts.next_admin.key();
         config.next_admin = None;
-        emit!(ConfigAdminAccepted {
+        emit_cpi!(ConfigAdminAccepted {
             config: config.key(),
             previous_admin,
             admin: config.admin,
@@ -373,6 +378,7 @@ pub struct Initialize<'info> {
 }
 
 /// Accounts for one-time Config initialization.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct CreateConfig<'info> {
     /// Signer paying initialization rent.
@@ -390,8 +396,8 @@ pub struct CreateConfig<'info> {
     )]
     pub config: Account<'info, Config>,
     /// This EVM proxy deployment.
-    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ ProxyError::InvalidProgramData)]
-    pub program: Program<'info, program::GmsolEvmProxy>,
+    #[account(constraint = proxy_program.programdata_address()? == Some(program_data.key()) @ ProxyError::InvalidProgramData)]
+    pub proxy_program: Program<'info, program::GmsolEvmProxy>,
     /// Upgradeable-loader metadata for this deployment.
     #[account(constraint = program_data.upgrade_authority_address == Some(upgrade_authority.key()) @ ProxyError::NotUpgradeAuthority)]
     pub program_data: Account<'info, ProgramData>,
@@ -404,6 +410,7 @@ pub struct CreateConfig<'info> {
 }
 
 /// Accounts for current-admin policy changes.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct CurrentConfigAdmin<'info> {
     /// Current administrator of the intent policy.
@@ -414,6 +421,7 @@ pub struct CurrentConfigAdmin<'info> {
 }
 
 /// Accounts for accepting a nominated admin handover.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct AcceptAdmin<'info> {
     /// Nominated address, required to sign acceptance.
@@ -424,6 +432,7 @@ pub struct AcceptAdmin<'info> {
 }
 
 /// Accounts for proposing a two-step admin handover.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct TransferAdmin<'info> {
     /// Current admin authorizing the proposal.

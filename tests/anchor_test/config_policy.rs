@@ -1,10 +1,10 @@
 use super::setup::{current_deployment, Deployment, EVM_PROXY_CONFIG_LOCK};
-use base64::Engine;
 use futures_util::FutureExt;
 use gmsol_evm_proxy as evm_proxy;
-use gmsol_programs::anchor_lang::{AccountDeserialize, AnchorDeserialize, Discriminator};
+use gmsol_programs::anchor_lang::AccountDeserialize;
 use gmsol_sdk::{
     client::ops::{EvmProxyOps, SystemProgramOps},
+    evm_proxy::ProxyCPIEvent,
     Client,
 };
 use gmsol_solana_utils::signer::{shared_signer, SignerRef};
@@ -15,7 +15,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
 };
-use solana_transaction_status::{option_serializer::OptionSerializer, UiTransactionEncoding};
+use solana_transaction_status::UiTransactionEncoding;
 use std::panic::{resume_unwind, AssertUnwindSafe};
 
 type PolicyClient = Client<SignerRef>;
@@ -29,40 +29,33 @@ pub(super) async fn read_config(
     Ok((account, state))
 }
 
-pub(super) async fn event<E: AnchorDeserialize + Discriminator>(
+pub(super) async fn event(
     client: &PolicyClient,
     signature: &Signature,
-) -> eyre::Result<E> {
+) -> eyre::Result<ProxyCPIEvent> {
     let transaction = client
         .rpc()
         .get_transaction_with_config(
             signature,
             RpcTransactionConfig {
-                encoding: Some(UiTransactionEncoding::Json),
+                encoding: Some(UiTransactionEncoding::Base64),
                 commitment: Some(CommitmentConfig::confirmed()),
                 max_supported_transaction_version: Some(0),
             },
         )
         .await?;
-    let logs = match transaction
-        .transaction
-        .meta
-        .ok_or_else(|| eyre::eyre!("transaction metadata absent"))?
-        .log_messages
-    {
-        OptionSerializer::Some(logs) => logs,
-        other => eyre::bail!("transaction logs unavailable: {other:?}"),
-    };
-    let mut events: Vec<E> = logs
-        .iter()
-        .filter_map(|line| line.strip_prefix("Program data: "))
-        .filter_map(|data| base64::engine::general_purpose::STANDARD.decode(data).ok())
-        .filter(|data| data.starts_with(E::DISCRIMINATOR))
-        .map(|data| E::deserialize(&mut &data[E::DISCRIMINATOR.len()..]))
-        .collect::<Result<_, _>>()?;
+    let mut events: Vec<_> = gmsol_sdk::evm_proxy::decode_committed_events(
+        &evm_proxy::ID,
+        transaction.slot,
+        *signature,
+        &transaction.transaction,
+    )?
+    .into_iter()
+    .map(|event| event.into_data())
+    .collect();
     eyre::ensure!(
         events.len() == 1,
-        "expected one matching Config event, got {}",
+        "expected one proxy CPI event, got {}",
         events.len()
     );
     Ok(events.remove(0))
@@ -189,7 +182,10 @@ async fn allowlist_enforces_authority_capacity_and_noops() -> eyre::Result<()> {
             .set_proxy_chain_allowed(evm_proxy::ID, first, true)
             .send()
             .await?;
-        let changed: evm_proxy::ConfigChainAllowedChanged = event(client, &signature).await?;
+        let ProxyCPIEvent::ConfigChainAllowedChanged(changed) = event(client, &signature).await?
+        else {
+            eyre::bail!("expected ConfigChainAllowedChanged CPI event");
+        };
         assert_eq!(
             (changed.config, changed.chain_id, changed.allowed),
             (config, first, true)
@@ -233,7 +229,10 @@ async fn allowlist_enforces_authority_capacity_and_noops() -> eyre::Result<()> {
             .set_proxy_chain_allowed(evm_proxy::ID, first, false)
             .send()
             .await?;
-        let removed: evm_proxy::ConfigChainAllowedChanged = event(client, &signature).await?;
+        let ProxyCPIEvent::ConfigChainAllowedChanged(removed) = event(client, &signature).await?
+        else {
+            eyre::bail!("expected ConfigChainAllowedChanged CPI event");
+        };
         assert_eq!(
             (removed.config, removed.chain_id, removed.allowed),
             (config, first, false)
@@ -286,7 +285,10 @@ async fn pause_changes_require_admin_and_reject_noops() -> eyre::Result<()> {
                 .set_proxy_paused(evm_proxy::ID, paused)
                 .send()
                 .await?;
-            let changed: evm_proxy::ConfigPauseChanged = event(client, &signature).await?;
+            let ProxyCPIEvent::ConfigPauseChanged(changed) = event(client, &signature).await?
+            else {
+                eyre::bail!("expected ConfigPauseChanged CPI event");
+            };
             assert_eq!(
                 (changed.config, changed.previous_paused, changed.paused),
                 (config, previous, paused)
@@ -339,7 +341,9 @@ async fn handover_requires_latest_nominee_and_revokes_previous_admin() -> eyre::
             .transfer_proxy_admin(evm_proxy::ID, first_nominee_address)
             .send()
             .await?;
-        let proposal: evm_proxy::ConfigAdminProposed = event(client, &signature).await?;
+        let ProxyCPIEvent::ConfigAdminProposed(proposal) = event(client, &signature).await? else {
+            eyre::bail!("expected ConfigAdminProposed CPI event");
+        };
         assert_eq!(proposal.config, config);
         assert_eq!(proposal.admin, client.payer());
         assert_eq!(proposal.previous_next_admin, None);
@@ -373,7 +377,10 @@ async fn handover_requires_latest_nominee_and_revokes_previous_admin() -> eyre::
         );
         assert_eq!(read_config(client, &config).await?.0, before);
         let signature = client.set_proxy_paused(evm_proxy::ID, false).send().await?;
-        let old_admin_change: evm_proxy::ConfigPauseChanged = event(client, &signature).await?;
+        let ProxyCPIEvent::ConfigPauseChanged(old_admin_change) = event(client, &signature).await?
+        else {
+            eyre::bail!("expected ConfigPauseChanged CPI event");
+        };
         assert_eq!(
             (old_admin_change.previous_paused, old_admin_change.paused),
             (true, false)
@@ -383,7 +390,10 @@ async fn handover_requires_latest_nominee_and_revokes_previous_admin() -> eyre::
             .transfer_proxy_admin(evm_proxy::ID, second_nominee_address)
             .send()
             .await?;
-        let replacement: evm_proxy::ConfigAdminProposed = event(client, &signature).await?;
+        let ProxyCPIEvent::ConfigAdminProposed(replacement) = event(client, &signature).await?
+        else {
+            eyre::bail!("expected ConfigAdminProposed CPI event");
+        };
         assert_eq!(replacement.previous_next_admin, Some(first_nominee_address));
         assert_eq!(replacement.next_admin, second_nominee_address);
         let (before, _) = read_config(client, &config).await?;
@@ -409,7 +419,9 @@ async fn handover_requires_latest_nominee_and_revokes_previous_admin() -> eyre::
             .accept_proxy_admin(evm_proxy::ID)
             .send()
             .await?;
-        let accepted: evm_proxy::ConfigAdminAccepted = event(client, &signature).await?;
+        let ProxyCPIEvent::ConfigAdminAccepted(accepted) = event(client, &signature).await? else {
+            eyre::bail!("expected ConfigAdminAccepted CPI event");
+        };
         assert_eq!(accepted.config, config);
         assert_eq!(accepted.previous_admin, client.payer());
         assert_eq!(accepted.admin, second_nominee_address);
@@ -440,7 +452,9 @@ async fn handover_requires_latest_nominee_and_revokes_previous_admin() -> eyre::
             .set_proxy_paused(evm_proxy::ID, true)
             .send()
             .await?;
-        let changed: evm_proxy::ConfigPauseChanged = event(client, &signature).await?;
+        let ProxyCPIEvent::ConfigPauseChanged(changed) = event(client, &signature).await? else {
+            eyre::bail!("expected ConfigPauseChanged CPI event");
+        };
         assert_eq!((changed.previous_paused, changed.paused), (false, true));
         let (_, state) = read_config(client, &config).await?;
         assert_eq!(state.store, deployment.store);
