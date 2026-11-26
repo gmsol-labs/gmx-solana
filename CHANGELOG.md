@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - cli(gmsol): Added user commands for GT delegate and allowance changes, including Squads proposals through the existing `--squads` mode.
 - sdk(solana-utils): Added `SendAndConfirm::send_and_confirm_transaction_detailed`, which returns `Error::SendUnresolved` (with the signature) whenever the transaction may have reached the cluster but its outcome is unknown: the send request timed out, the connection dropped, the response carried a malformed or mismatched signature, or confirmation failed. Only an explicit rejection by the RPC node (e.g. preflight failure) and on-chain failures are still `Error::Client`. It has a default implementation, and `send_and_confirm_transaction_with_config` is unchanged, so existing callers and implementors keep compiling.
 - sdk(solana-utils): Added `Error::SendUnresolved { signature, source }`, returned when a transaction may have been submitted but its outcome is unknown. The signature is taken from the signed transaction, so it is available even when the send response is lost. Its outcome is unknown, so callers should look up `signature` before retrying. `Error::unresolved_signature` returns it.
+- programs(evm-proxy): Added `create_proxy_idempotent` for a permanent account derived from a 20-byte EVM address. Any payer can create it without gaining authority over the proxy.
+- sdk(sdk): Added `find_proxy_address` to derive an EVM proxy address and bump.
+- sdk(js): Added `find_proxy_address` with a hex EVM address and optional program ID.
 
 ### Changed
 

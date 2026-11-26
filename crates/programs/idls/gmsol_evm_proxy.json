@@ -7,9 +7,105 @@
     "description": "GMX-Solana is an extension of GMX on the Solana blockchain.",
     "repository": "https://github.com/gmsol-labs/gmx-solana"
   },
+  "docs": [
+    "EVM proxy instructions."
+  ],
   "instructions": [
     {
+      "name": "create_proxy_idempotent",
+      "docs": [
+        "Create a permanent proxy, or validate an existing proxy without changing it.",
+        "The payer gains no authority over the proxy.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](CreateProxyIdempotent).*",
+        "",
+        "# Arguments",
+        "- `evm_address`: Raw EVM address identifying the proxy.",
+        "",
+        "# Errors",
+        "- [`ProxyError::InvalidProxy`] if an existing proxy has a different version,",
+        "bump, or EVM address.",
+        "- Anchor seed/account validation or System account creation fails."
+      ],
+      "discriminator": [
+        94,
+        27,
+        58,
+        2,
+        249,
+        137,
+        77,
+        16
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Pays rent but has no authority over the proxy."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "proxy",
+          "docs": [
+            "Permanent PDA for the supplied EVM address."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  120,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "evm_address"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System program used to allocate a new proxy."
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "evm_address",
+          "type": {
+            "array": [
+              "u8",
+              20
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "initialize",
+      "docs": [
+        "Invoke the program scaffold without creating or changing a proxy.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](Initialize).*",
+        "",
+        "# Arguments",
+        "None.",
+        "",
+        "# Errors",
+        "- Anchor account validation fails for invalid accounts."
+      ],
       "discriminator": [
         175,
         175,
@@ -23,15 +119,132 @@
       "accounts": [
         {
           "name": "authority",
+          "docs": [
+            "Caller signing the scaffold invocation."
+          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "system_program",
+          "docs": [
+            "System program."
+          ],
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Proxy",
+      "discriminator": [
+        36,
+        36,
+        123,
+        35,
+        158,
+        89,
+        75,
+        41
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidProxy",
+      "msg": "Proxy account data does not match its EVM address"
+    }
+  ],
+  "types": [
+    {
+      "name": "Proxy",
+      "docs": [
+        "Permanent account for one EVM address."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Layout version, set when the proxy is created."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical PDA bump for this EVM address."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "padding_0",
+            "docs": [
+              "Explicit padding before the EVM address."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          },
+          {
+            "name": "evm_address",
+            "docs": [
+              "EVM address permanently associated with this proxy."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "padding_1",
+            "docs": [
+              "Explicit padding before the reserved bytes."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Future fields take bytes from this region without reallocating the account."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                256
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "constants": [
+    {
+      "name": "PROXY_SEED",
+      "docs": [
+        "Seed prefix for a permanent EVM proxy account."
+      ],
+      "type": "bytes",
+      "value": "[112, 114, 111, 120, 121]"
     }
   ]
 }
