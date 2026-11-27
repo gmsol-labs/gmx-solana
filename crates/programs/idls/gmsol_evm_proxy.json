@@ -876,7 +876,9 @@
         "`InvalidIntentNonce` for any non-next nonce. Verification returns `Paused`,",
         "`ChainNotAllowed`, `InvalidDeadline` or `InvalidSignature` for policy,",
         "deadline or EVM-signature rejection. Loading, borrowing and Clock errors",
-        "propagate. A failed transfer leaves the nonce unconsumed and token balances unchanged."
+        "propagate. NonceExhausted rejects a matching u64::MAX and rolls back the transfer.",
+        "A failed transfer leaves the nonce unconsumed and token balances unchanged.",
+        "- CPI event emission fails if its supplied accounts are invalid."
       ],
       "discriminator": [
         183,
@@ -1077,6 +1079,38 @@
             "Legacy SPL Token program."
           ],
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [

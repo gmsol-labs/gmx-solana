@@ -7,15 +7,12 @@ pub use gmsol_decode::gmsol::evm_proxy::{
 };
 
 use crate::{builders::evm_proxy::EvmProxyProgram, pda::EvmAddressBytes};
-use anchor_lang::Discriminator;
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
-use base64::Engine;
 use gmsol_programs::gmsol_evm_proxy::client::{accounts, args};
-use gmsol_programs::gmsol_evm_proxy::events;
 use gmsol_solana_utils::ProgramExt;
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
 
-/// Signed fields of one Withdraw intent. The nonce wraps from u64::MAX to zero.
+/// Signed fields of one Withdraw intent, using the proxy's shared next nonce.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WithdrawIntent {
     /// EVM owner used to derive the proxy.
@@ -169,36 +166,12 @@ pub fn withdraw_instruction(
                     &token_program,
                 ),
                 token_program,
+                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                program: program_id,
             },
             false,
         )
         .build())
-}
-
-/// Decode a consumed intent from a successful EVM proxy transaction's log.
-pub fn decode_intent_event_log(line: &str) -> crate::Result<Option<events::IntentConsumed>> {
-    let Some(encoded) = line.strip_prefix("Program data: ") else {
-        return Ok(None);
-    };
-    let data = base64::engine::general_purpose::STANDARD.decode(encoded)?;
-    if !data.starts_with(events::IntentConsumed::DISCRIMINATOR) {
-        return Ok(None);
-    }
-    crate::utils::events::decode_anchor_event_with_options::<events::IntentConsumed>(&data, false)
-        .map(Some)
-}
-
-/// Decode one successful Withdraw event after transaction success is confirmed.
-pub fn decode_withdraw_event_log(line: &str) -> crate::Result<Option<events::Withdrawn>> {
-    let Some(encoded) = line.strip_prefix("Program data: ") else {
-        return Ok(None);
-    };
-    let data = base64::engine::general_purpose::STANDARD.decode(encoded)?;
-    if !data.starts_with(events::Withdrawn::DISCRIMINATOR) {
-        return Ok(None);
-    }
-    crate::utils::events::decode_anchor_event_with_options::<events::Withdrawn>(&data, false)
-        .map(Some)
 }
 
 /// Signed fields for one Cancel operation.
@@ -304,12 +277,12 @@ pub fn cancel_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anchor_lang::{AnchorDeserialize, Event};
+    use anchor_lang::{AnchorDeserialize, Discriminator};
     use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn withdraw_builder_binds_canonical_accounts_and_signed_nonce() {
-        let program = gmsol_programs::gmsol_evm_proxy::ID;
+        let program = Pubkey::new_unique();
         let submitter = Pubkey::new_unique();
         let intent = WithdrawIntent {
             evm_address: [7; 20],
@@ -340,6 +313,16 @@ mod tests {
             )
         );
         assert_eq!(ix.accounts[7].pubkey, token_program);
+        assert_eq!(ix.accounts.len(), 10);
+        let authority = Pubkey::find_program_address(&[b"__event_authority"], &program).0;
+        assert_eq!(
+            ix.accounts[8],
+            solana_sdk::instruction::AccountMeta::new_readonly(authority, false)
+        );
+        assert_eq!(
+            ix.accounts[9],
+            solana_sdk::instruction::AccountMeta::new_readonly(program, false)
+        );
         let data =
             args::Withdraw::deserialize(&mut &ix.data[args::Withdraw::DISCRIMINATOR.len()..])
                 .unwrap();
@@ -355,35 +338,6 @@ mod tests {
             intent.digest(&program, &store, &[9; 32]),
             WithdrawIntent { nonce: 1, ..intent }.digest(&program, &store, &[9; 32])
         );
-    }
-
-    #[test]
-    fn decodes_withdraw_event() {
-        let event = events::Withdrawn {
-            proxy: Pubkey::new_unique(),
-            nonce: 5,
-            mint: Pubkey::new_unique(),
-            amount: 42,
-            recipient: Pubkey::new_unique(),
-        };
-        let log = format!(
-            "Program data: {}",
-            base64::engine::general_purpose::STANDARD.encode(event.data())
-        );
-        let decoded = decode_withdraw_event_log(&log).unwrap().unwrap();
-        assert_eq!(
-            (
-                decoded.proxy,
-                decoded.nonce,
-                decoded.mint,
-                decoded.amount,
-                decoded.recipient
-            ),
-            (event.proxy, 5, event.mint, 42, event.recipient)
-        );
-        assert!(decode_withdraw_event_log("Program log: other")
-            .unwrap()
-            .is_none());
     }
 
     #[test]

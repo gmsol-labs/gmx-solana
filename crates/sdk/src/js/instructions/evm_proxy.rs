@@ -165,6 +165,23 @@ mod transaction_tests {
             .expect("proxy instruction")
     }
 
+    fn assert_cpi_accounts(
+        transaction: &VersionedTransaction,
+        instruction: &CompiledInstruction,
+        base: usize,
+        program: Pubkey,
+    ) {
+        let keys = transaction.message.static_account_keys();
+        let authority = Pubkey::find_program_address(&[b"__event_authority"], &program).0;
+        assert_eq!(instruction.accounts.len(), base + 2);
+        for (position, expected) in [(base, authority), (base + 1, program)] {
+            let index = usize::from(instruction.accounts[position]);
+            assert_eq!(keys[index], expected);
+            assert!(!transaction.message.is_signer(index));
+            assert!(!transaction.message.is_maybe_writable(index, None));
+        }
+    }
+
     #[test]
     fn cancel_transaction_preserves_fee_options_payer_and_full_width_nonce() {
         let payer = Pubkey::new_unique();
@@ -175,17 +192,7 @@ mod transaction_tests {
         let transaction =
             checked_transaction(build_evm_proxy_cancel_transaction(input).unwrap(), payer, 1);
         let instruction = proxy_instruction(&transaction, program);
-        let keys = transaction.message.static_account_keys();
-        assert_eq!(instruction.accounts.len(), 5);
-        let authority = Pubkey::find_program_address(&[b"__event_authority"], &program).0;
-        let authority_index = usize::from(instruction.accounts[3]);
-        let program_index = usize::from(instruction.accounts[4]);
-        assert_eq!(keys[authority_index], authority);
-        assert_eq!(keys[program_index], program);
-        assert!(!transaction.message.is_signer(authority_index));
-        assert!(!transaction.message.is_signer(program_index));
-        assert!(!transaction.message.is_maybe_writable(authority_index, None));
-        assert!(!transaction.message.is_maybe_writable(program_index, None));
+        assert_cpi_accounts(&transaction, instruction, 3, program);
         let data =
             args::Cancel::deserialize(&mut &instruction.data[args::Cancel::DISCRIMINATOR.len()..])
                 .unwrap();
@@ -194,7 +201,9 @@ mod transaction_tests {
     #[test]
     fn withdraw_transaction_preserves_fee_options_payer_and_full_width_numbers() {
         let payer = Pubkey::new_unique();
+        let program = Pubkey::new_unique();
         let mut value = transaction_args(payer);
+        value["intent"]["program_id"] = program.to_string().into();
         value["intent"]["mint"] = Pubkey::new_unique().to_string().into();
         value["intent"]["recipient"] = Pubkey::new_unique().to_string().into();
         value["intent"]["amount"] = u64::MAX.to_string().into();
@@ -205,7 +214,8 @@ mod transaction_tests {
             payer,
             1,
         );
-        let instruction = proxy_instruction(&transaction);
+        let instruction = proxy_instruction(&transaction, program);
+        assert_cpi_accounts(&transaction, instruction, 8, program);
         let data = args::Withdraw::deserialize(
             &mut &instruction.data[args::Withdraw::DISCRIMINATOR.len()..],
         )

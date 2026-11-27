@@ -507,7 +507,9 @@ pub mod gmsol_evm_proxy {
     /// `InvalidIntentNonce` for any non-next nonce. Verification returns `Paused`,
     /// `ChainNotAllowed`, `InvalidDeadline` or `InvalidSignature` for policy,
     /// deadline or EVM-signature rejection. Loading, borrowing and Clock errors
-    /// propagate. A failed transfer leaves the nonce unconsumed and token balances unchanged.
+    /// propagate. NonceExhausted rejects a matching u64::MAX and rolls back the transfer.
+    /// A failed transfer leaves the nonce unconsumed and token balances unchanged.
+    /// - CPI event emission fails if its supplied accounts are invalid.
     pub fn withdraw(
         ctx: Context<Withdraw>,
         chain_id: [u8; 32],
@@ -575,12 +577,12 @@ pub mod gmsol_evm_proxy {
             decimals,
         )?;
         ctx.accounts.proxy.load_mut()?.consume_next_nonce(nonce)?;
-        emit!(IntentConsumed {
+        emit_cpi!(IntentConsumed {
             proxy: proxy_key,
             nonce,
             kind: INTENT_KIND_WITHDRAW,
         });
-        emit!(Withdrawn {
+        emit_cpi!(Withdrawn {
             proxy: proxy_key,
             nonce,
             mint,
@@ -706,6 +708,7 @@ pub struct Cancel<'info> {
 }
 
 /// Accounts for transferring a signed amount between existing legacy ATAs.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
     /// Transaction signer; the EVM signature supplies transfer authority.

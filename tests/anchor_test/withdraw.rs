@@ -5,7 +5,7 @@ use gmsol_evm_proxy as evm_proxy;
 use gmsol_programs::anchor_lang::{error::ErrorCode, AccountDeserialize, InstructionData};
 use gmsol_sdk::client::ops::{EvmProxyOps, SystemProgramOps};
 use gmsol_sdk::evm_proxy::CancelIntent;
-use gmsol_sdk::evm_proxy::WithdrawIntent;
+use gmsol_sdk::evm_proxy::{ProxyCPIEvent, WithdrawIntent};
 use gmsol_solana_utils::signer::shared_signer;
 use libsecp256k1::{Message, SecretKey};
 use solana_sdk::{
@@ -265,7 +265,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             .send()
             .await?;
         client.set_proxy_paused(ID, false).send().await?;
-        for nonce in [1, 2] {
+        for nonce in [0, 1] {
             let cancel = CancelIntent {
                 evm_address,
                 chain_id: chain,
@@ -284,7 +284,16 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
         let previous = client.rpc().get_account(&proxy).await?;
         let previous = Proxy::try_deserialize(&mut previous.data.as_slice())?;
         let initial_nonce = previous.expected_next_nonce();
-        let consumed_cancel_nonce_value = previous.consumed_nonce();
+        let consumed_cancel_nonce_value = previous
+            .next_nonce
+            .checked_sub(1)
+            .expect("preceding Cancel consumed a nonce");
+        let mut withdrawal_chain = chain;
+        withdrawal_chain[31] = 2;
+        client
+            .set_proxy_chain_allowed(ID, withdrawal_chain, true)
+            .send()
+            .await?;
         let deadline = fresh_deadline(deployment).await?;
         use anchor_spl::{associated_token::spl_associated_token_account, token::spl_token};
         let admin = deployment.client.payer();
@@ -310,7 +319,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
 
         let intent = WithdrawIntent {
             evm_address,
-            chain_id: chain,
+            chain_id: withdrawal_chain,
             mint,
             amount: WITHDRAW_AMOUNT,
             decimals: WITHDRAW_MINT_DECIMALS,
@@ -339,7 +348,9 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             )?
             .send()
             .await
-            .expect_err("Cancel consumed nonce two before Withdraw");
+            .expect_err(
+                "Cancel on the first chain consumed this nonce before Withdraw on the second chain",
+            );
         assert_eq!(
             gmsol_sdk::Error::from(err).anchor_error_code(),
             Some(ProxyError::InvalidIntentNonce.into())
@@ -364,14 +375,16 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
         );
         let account = payer.rpc().get_account(&proxy).await?;
         let state = Proxy::try_deserialize(&mut account.data.as_slice())?;
-        assert_eq!(state.consumed_nonce(), intent.nonce);
+        assert_eq!(state.next_nonce, intent.nonce + 1);
         let next_nonce = state.expected_next_nonce();
-        let consumed: evm_proxy::IntentConsumed =
-            super::config_policy::event(&deployment.client, &tx_signature).await?;
+        let events = super::config_policy::events(&deployment.client, &tx_signature).await?;
+        let [ProxyCPIEvent::IntentConsumed(consumed), ProxyCPIEvent::Withdrawn(withdrawn)] =
+            events.as_slice()
+        else {
+            eyre::bail!("expected ordered intent and withdrawal CPI events");
+        };
         assert_eq!((consumed.proxy, consumed.nonce), (proxy, intent.nonce));
         assert_eq!(consumed.kind, INTENT_KIND_WITHDRAW);
-        let withdrawn: evm_proxy::Withdrawn =
-            super::config_policy::event(&deployment.client, &tx_signature).await?;
         assert_eq!(
             (
                 withdrawn.proxy,
@@ -440,7 +453,9 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             )?
             .send()
             .await
-            .expect_err("Withdraw consumed nonce three before Cancel");
+            .expect_err(
+                "Withdraw on the second chain consumed this nonce before Cancel on the first chain",
+            );
         assert_eq!(
             gmsol_sdk::Error::from(err).anchor_error_code(),
             Some(ProxyError::InvalidIntentNonce.into())
@@ -716,7 +731,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             next_recovery.serialize(),
         )?;
         zero_ix.data = evm_proxy::instruction::Withdraw {
-            chain_id: chain,
+            chain_id: withdrawal_chain,
             amount: 0,
             decimals: WITHDRAW_MINT_DECIMALS,
             nonce: next_nonce,
@@ -753,7 +768,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
         self_ix.accounts[4].pubkey = proxy;
         self_ix.accounts[6].pubkey = source;
         self_ix.data = evm_proxy::instruction::Withdraw {
-            chain_id: chain,
+            chain_id: withdrawal_chain,
             amount: WITHDRAW_AMOUNT,
             decimals: WITHDRAW_MINT_DECIMALS,
             nonce: next_nonce,
