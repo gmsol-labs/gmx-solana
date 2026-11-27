@@ -277,13 +277,13 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
                 owner,
             );
             client
-                .cancel_proxy_transaction(ID, &cancel, signature.serialize(), recovery.serialize())?
+                .cancel_proxy_intent(ID, &cancel, signature.serialize(), recovery.serialize())?
                 .send()
                 .await?;
         }
         let previous = client.rpc().get_account(&proxy).await?;
         let previous = Proxy::try_deserialize(&mut previous.data.as_slice())?;
-        let initial_nonce = previous.expected_next_nonce();
+        let initial_nonce = previous.next_nonce;
         let consumed_cancel_nonce_value = previous
             .next_nonce
             .checked_sub(1)
@@ -340,7 +340,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             owner,
         );
         let err = payer
-            .withdraw_proxy_transaction(
+            .withdraw_proxy_tokens(
                 ID,
                 &consumed_cancel_nonce,
                 old_signature.serialize(),
@@ -363,7 +363,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             deployment.get_token_account_amount(&destination).await?,
             Some(0)
         );
-        let withdraw = payer.withdraw_proxy_transaction(ID, &intent, signature, recovery)?;
+        let withdraw = payer.withdraw_proxy_tokens(ID, &intent, signature, recovery)?;
         let tx_signature = withdraw.send().await?;
         assert_eq!(
             deployment.get_token_account_amount(&source).await?,
@@ -376,7 +376,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
         let account = payer.rpc().get_account(&proxy).await?;
         let state = Proxy::try_deserialize(&mut account.data.as_slice())?;
         assert_eq!(state.next_nonce, intent.nonce + 1);
-        let next_nonce = state.expected_next_nonce();
+        let next_nonce = state.next_nonce;
         let events = super::config_policy::events(&deployment.client, &tx_signature).await?;
         let [ProxyCPIEvent::IntentConsumed(consumed), ProxyCPIEvent::Withdrawn(withdrawn)] =
             events.as_slice()
@@ -393,13 +393,13 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
                 withdrawn.amount,
                 withdrawn.recipient
             ),
-            (proxy, intent.nonce, mint, 125, recipient)
+            (proxy, intent.nonce, mint, WITHDRAW_AMOUNT, recipient)
         );
 
         let baseline = snapshot(deployment, &proxy, &source, &destination).await?;
         // Change only the Solana message to avoid duplicate-transaction short-circuiting.
         let exact_replay = payer
-            .withdraw_proxy_transaction(ID, &intent, signature, recovery)?
+            .withdraw_proxy_tokens(ID, &intent, signature, recovery)?
             .pre_instruction(
                 system_instruction::transfer(&payer.payer(), &payer.payer(), 0),
                 true,
@@ -419,7 +419,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             owner,
         );
         let err = payer
-            .withdraw_proxy_transaction(
+            .withdraw_proxy_tokens(
                 ID,
                 &replay,
                 replay_signature.serialize(),
@@ -445,7 +445,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             owner,
         );
         let err = payer
-            .cancel_proxy_transaction(
+            .cancel_proxy_intent(
                 ID,
                 &competing_cancel,
                 cancel_signature.serialize(),
@@ -480,7 +480,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             .value
             .is_none());
         let err = payer
-            .withdraw_proxy_transaction(
+            .withdraw_proxy_tokens(
                 ID,
                 &missing_ata,
                 missing_signature.serialize(),
@@ -571,7 +571,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             .value;
         for (reason, changed) in substitutions {
             let error = payer
-                .withdraw_proxy_transaction(
+                .withdraw_proxy_tokens(
                     ID,
                     &changed,
                     next_signature.serialize(),
@@ -604,7 +604,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             ..next_intent
         };
         let err = payer
-            .withdraw_proxy_transaction(
+            .withdraw_proxy_tokens(
                 ID,
                 &changed_amount,
                 next_signature.serialize(),
@@ -636,7 +636,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             owner,
         );
         let err = payer
-            .withdraw_proxy_transaction(
+            .withdraw_proxy_tokens(
                 ID,
                 &wrong_decimals,
                 decimals_signature.serialize(),
@@ -659,7 +659,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             owner,
         );
         let err = payer
-            .withdraw_proxy_transaction(
+            .withdraw_proxy_tokens(
                 ID,
                 &insufficient,
                 insufficient_signature.serialize(),
@@ -700,7 +700,7 @@ async fn withdraw_enforces_signed_fields_legacy_atas_and_atomic_nonce() -> eyre:
             owner,
         );
         let err = payer
-            .withdraw_proxy_transaction(
+            .withdraw_proxy_tokens(
                 ID,
                 &token_2022_intent,
                 token_2022_signature.serialize(),

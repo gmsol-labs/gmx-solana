@@ -32,7 +32,7 @@ pub struct IntentConsumed {
     pub kind: u8,
 }
 
-/// Event kind for a successful Withdraw intent.
+/// Intent-kind tag for a consumed Withdraw intent.
 pub const INTENT_KIND_WITHDRAW: u8 = 2;
 
 /// Transfer completed by a signed Withdraw intent.
@@ -490,25 +490,25 @@ pub mod gmsol_evm_proxy {
     /// *[See the documentation for the accounts.](Withdraw).*
     ///
     /// # Arguments
-    /// - `chain_id`: signed EVM chain ID.
-    /// - `amount`: signed transfer amount in base units.
-    /// - `decimals`: signed mint decimals.
-    /// - `nonce`: signed next counter value.
-    /// - `deadline`: signed execution deadline.
-    /// - `signature`: compact ECDSA signature.
-    /// - `recovery_id`: canonical recovery ID, zero or one.
+    /// - `chain_id`: Signed EVM chain ID.
+    /// - `amount`: Signed transfer amount in base units.
+    /// - `decimals`: Signed mint decimals.
+    /// - `nonce`: Signed next counter value.
+    /// - `deadline`: Signed execution deadline.
+    /// - `signature`: Compact ECDSA signature.
+    /// - `recovery_id`: Canonical recovery ID, zero or one.
     ///
     /// # Errors
     /// - Returns `ZeroAmount` for zero, `SelfRecipient` when the recipient wallet
-    /// is the proxy, and `InvalidDecimals` for a mint decimal mismatch. Account
-    /// constraints reject noncanonical or missing ATAs, wrong mint or Token
-    /// program. The checked token transfer rejects frozen token accounts.
+    ///   is the proxy, and `InvalidDecimals` for a mint decimal mismatch. Account
+    ///   constraints reject noncanonical or missing ATAs, wrong mint or Token
+    ///   program. The checked token transfer rejects frozen token accounts.
     /// - Returns `InvalidProxy` for an unsupported proxy version and
-    /// `InvalidIntentNonce` for any non-next nonce. Verification returns `Paused`,
-    /// `ChainNotAllowed`, `InvalidDeadline` or `InvalidSignature` for policy,
-    /// deadline or EVM-signature rejection. Loading, borrowing and Clock errors
-    /// propagate. NonceExhausted rejects a matching u64::MAX and rolls back the transfer.
-    /// A failed transfer leaves the nonce unconsumed and token balances unchanged.
+    ///   `InvalidIntentNonce` for any non-next nonce. Verification returns `Paused`,
+    ///   `ChainNotAllowed`, `InvalidDeadline` or `InvalidSignature` for policy,
+    ///   deadline or EVM-signature rejection. Loading, borrowing and Clock errors
+    ///   propagate. NonceExhausted rejects a verified matching u64::MAX before transfer.
+    ///   A failed transfer leaves the nonce unconsumed and token balances unchanged.
     /// - CPI event emission fails if its supplied accounts are invalid.
     pub fn withdraw(
         ctx: Context<Withdraw>,
@@ -535,10 +535,6 @@ pub mod gmsol_evm_proxy {
             require_eq!(proxy.version, PROXY_VERSION, ProxyError::InvalidProxy);
             evm_address = proxy.evm_address;
             proxy_bump = proxy.bump;
-            require!(
-                nonce == proxy.expected_next_nonce(),
-                ProxyError::InvalidIntentNonce
-            );
         }
         let mint = ctx.accounts.mint.key();
         let struct_hash =
@@ -560,6 +556,7 @@ pub mod gmsol_evm_proxy {
             signature,
             recovery_id,
         )?;
+        ctx.accounts.proxy.load_mut()?.consume_next_nonce(nonce)?;
         let bump = [proxy_bump];
         let signer_seeds: &[&[u8]] = &[PROXY_SEED, evm_address.as_ref(), &bump];
         transfer_checked(
@@ -576,7 +573,6 @@ pub mod gmsol_evm_proxy {
             amount,
             decimals,
         )?;
-        ctx.accounts.proxy.load_mut()?.consume_next_nonce(nonce)?;
         emit_cpi!(IntentConsumed {
             proxy: proxy_key,
             nonce,
@@ -721,6 +717,7 @@ pub struct Withdraw<'info> {
     pub proxy: AccountLoader<'info, Proxy>,
     /// Initialized legacy SPL mint.
     pub mint: Account<'info, Mint>,
+    /// Recipient wallet bound by the signed intent.
     /// CHECK: the address is signed and the destination ATA is constrained below.
     pub recipient: UncheckedAccount<'info>,
     /// Existing canonical proxy ATA for the legacy SPL Token program and mint.

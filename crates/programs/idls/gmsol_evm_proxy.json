@@ -859,13 +859,13 @@
         "*[See the documentation for the accounts.](Withdraw).*",
         "",
         "# Arguments",
-        "- `chain_id`: signed EVM chain ID.",
-        "- `amount`: signed transfer amount in base units.",
-        "- `decimals`: signed mint decimals.",
-        "- `nonce`: signed next counter value.",
-        "- `deadline`: signed execution deadline.",
-        "- `signature`: compact ECDSA signature.",
-        "- `recovery_id`: canonical recovery ID, zero or one.",
+        "- `chain_id`: Signed EVM chain ID.",
+        "- `amount`: Signed transfer amount in base units.",
+        "- `decimals`: Signed mint decimals.",
+        "- `nonce`: Signed next counter value.",
+        "- `deadline`: Signed execution deadline.",
+        "- `signature`: Compact ECDSA signature.",
+        "- `recovery_id`: Canonical recovery ID, zero or one.",
         "",
         "# Errors",
         "- Returns `ZeroAmount` for zero, `SelfRecipient` when the recipient wallet",
@@ -876,7 +876,7 @@
         "`InvalidIntentNonce` for any non-next nonce. Verification returns `Paused`,",
         "`ChainNotAllowed`, `InvalidDeadline` or `InvalidSignature` for policy,",
         "deadline or EVM-signature rejection. Loading, borrowing and Clock errors",
-        "propagate. NonceExhausted rejects a matching u64::MAX and rolls back the transfer.",
+        "propagate. NonceExhausted rejects a verified matching u64::MAX before transfer.",
         "A failed transfer leaves the nonce unconsumed and token balances unchanged.",
         "- CPI event emission fails if its supplied accounts are invalid."
       ],
@@ -951,7 +951,10 @@
           ]
         },
         {
-          "name": "recipient"
+          "name": "recipient",
+          "docs": [
+            "Recipient wallet bound by the signed intent."
+          ]
         },
         {
           "name": "source",
