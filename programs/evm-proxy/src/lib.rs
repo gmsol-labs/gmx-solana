@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use gmsol_programs::gmsol_store::accounts::Store;
 use gmsol_utils::InitSpace;
 
 declare_id!("Dodg22E8BxfCtYBzHVHmAzFqD5bZy6q9Tp4NdYSxkmp6");
@@ -115,6 +116,17 @@ pub struct ConfigAdminProposed {
     pub next_admin: Pubkey,
 }
 
+/// Pending-admin withdrawal event.
+#[event]
+pub struct ConfigAdminProposalCancelled {
+    /// Singleton policy account.
+    pub config: Pubkey,
+    /// Current administrator of the intent policy.
+    pub admin: Pubkey,
+    /// Nominee cleared by this withdrawal.
+    pub previous_next_admin: Pubkey,
+}
+
 /// Admin-handover acceptance event.
 #[event]
 pub struct ConfigAdminAccepted {
@@ -148,18 +160,11 @@ pub mod gmsol_evm_proxy {
     ///   `InvalidProgramData` for unrelated upgrade metadata. Anchor rejects a
     ///   missing signer, noncanonical Config or invalid Store. The System program
     ///   rejects an existing Config with `AccountAlreadyInUse`.
-    ///   Returns `InvalidAdmin` for a zero first admin and `InvalidStore` when the
-    ///   Store account is too short to load.
+    ///   Returns `InvalidAdmin` for a zero first admin.
     /// - CPI event emission fails if its supplied accounts are invalid.
     pub fn create_config(ctx: Context<CreateConfig>, genesis_hash: [u8; 32]) -> Result<()> {
         let first_admin = ctx.accounts.first_admin.key();
         require_keys_neq!(first_admin, Pubkey::default(), ProxyError::InvalidAdmin);
-        require!(
-            ctx.accounts.store.to_account_info().data_len()
-                >= 8 + <gmsol_store::states::Store as InitSpace>::INIT_SPACE,
-            ProxyError::InvalidStore
-        );
-        ctx.accounts.store.load()?;
         let config = &mut ctx.accounts.config;
         config.bump = ctx.bumps.config;
         config.store = ctx.accounts.store.key();
@@ -252,6 +257,7 @@ pub mod gmsol_evm_proxy {
     }
 
     /// Nominate or replace the next admin without transferring current control.
+    /// Nominating the current admin withdraws the pending nomination.
     ///
     /// # Accounts
     /// *[See the documentation for the accounts.](TransferAdmin).*
@@ -263,13 +269,25 @@ pub mod gmsol_evm_proxy {
     /// - Returns `NotConfigAdmin` for a signer other than the current admin.
     ///   Anchor rejects a missing signer or noncanonical Config.
     ///   Returns `InvalidAdmin` for the zero address or `NoConfigChange` when
-    ///   nominating the current or already pending admin.
+    ///   nominating the already pending admin, or the current admin with no
+    ///   pending nomination.
     /// - CPI event emission fails if its supplied accounts are invalid.
     pub fn transfer_admin(ctx: Context<TransferAdmin>) -> Result<()> {
         let next_admin = ctx.accounts.next_admin.key();
         let config = &mut ctx.accounts.config;
         require_keys_neq!(next_admin, Pubkey::default(), ProxyError::InvalidAdmin);
-        require_keys_neq!(next_admin, config.admin, ProxyError::NoConfigChange);
+        if next_admin == config.admin {
+            let previous_next_admin = config
+                .next_admin
+                .take()
+                .ok_or_else(|| error!(ProxyError::NoConfigChange))?;
+            emit_cpi!(ConfigAdminProposalCancelled {
+                config: config.key(),
+                admin: config.admin,
+                previous_next_admin,
+            });
+            return Ok(());
+        }
         require!(
             config.next_admin != Some(next_admin),
             ProxyError::NoConfigChange
@@ -315,21 +333,6 @@ pub mod gmsol_evm_proxy {
         Ok(())
     }
 
-    /// Invoke the program scaffold without creating or changing a proxy.
-    ///
-    /// # Accounts
-    /// *[See the documentation for the accounts.](Initialize).*
-    ///
-    /// # Arguments
-    /// None.
-    ///
-    /// # Errors
-    /// - Anchor account validation fails for invalid accounts.
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        msg!("Greetings from: {:?}", ctx.program_id);
-        Ok(())
-    }
-
     /// Create a permanent proxy, or validate an existing proxy without changing it.
     /// The payer gains no authority over the proxy.
     ///
@@ -366,17 +369,6 @@ pub mod gmsol_evm_proxy {
     }
 }
 
-/// Accounts for the scaffold initialization instruction.
-#[derive(Accounts)]
-pub struct Initialize<'info> {
-    /// Caller signing the scaffold invocation.
-    #[account(mut)]
-    pub authority: Signer<'info>,
-
-    /// System program.
-    pub system_program: Program<'info, System>,
-}
-
 /// Accounts for one-time Config initialization.
 #[event_cpi]
 #[derive(Accounts)]
@@ -402,7 +394,7 @@ pub struct CreateConfig<'info> {
     #[account(constraint = program_data.upgrade_authority_address == Some(upgrade_authority.key()) @ ProxyError::NotUpgradeAuthority)]
     pub program_data: Account<'info, ProgramData>,
     /// Store bound to this deployment for its lifetime.
-    pub store: AccountLoader<'info, gmsol_store::states::Store>,
+    pub store: AccountLoader<'info, Store>,
     /// Initial administrator recorded by Config.
     /// CHECK: only this address is recorded as the first admin.
     pub first_admin: UncheckedAccount<'info>,
@@ -441,7 +433,7 @@ pub struct TransferAdmin<'info> {
     /// Singleton policy account.
     #[account(mut, seeds = [CONFIG_SEED], bump = config.bump, has_one = admin @ ProxyError::NotConfigAdmin)]
     pub config: Account<'info, Config>,
-    /// Nominated admin address.
+    /// Nominated admin address, or the current admin to withdraw the nomination.
     /// CHECK: only the address is used; it gains authority only by accepting.
     pub next_admin: UncheckedAccount<'info>,
 }
@@ -472,9 +464,6 @@ pub enum ProxyError {
     /// Existing proxy identity or layout metadata does not match its PDA.
     #[msg("Proxy account data does not match its EVM address")]
     InvalidProxy,
-    /// Store data cannot hold the declared Store layout.
-    #[msg("Store account data is too short")]
-    InvalidStore,
     /// Admin address is zero.
     #[msg("Admin address cannot be zero")]
     InvalidAdmin,

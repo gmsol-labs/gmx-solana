@@ -16,14 +16,15 @@ use crate::{builders::evm_proxy::EvmProxyProgram, pda::find_proxy_config_address
 
 /// Build the one-time Config initialization instruction.
 pub fn create_config_instruction(
-    program_id: Pubkey,
+    program: &EvmProxyProgram,
     payer: Pubkey,
     upgrade_authority: Pubkey,
     store: Pubkey,
     genesis_hash: [u8; 32],
     first_admin: Pubkey,
 ) -> Instruction {
-    EvmProxyProgram::from(program_id)
+    let program_id = *program.id;
+    program
         .anchor_instruction(args::CreateConfig { genesis_hash })
         .anchor_accounts(
             accounts::CreateConfig {
@@ -35,7 +36,7 @@ pub fn create_config_instruction(
                 store,
                 first_admin,
                 system_program: system_program::ID,
-                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                event_authority: program.find_event_authority_address(),
                 program: program_id,
             },
             false,
@@ -45,18 +46,19 @@ pub fn create_config_instruction(
 
 /// Build one current-admin chain allowlist mutation.
 pub fn set_chain_allowed_instruction(
-    program_id: Pubkey,
+    program: &EvmProxyProgram,
     admin: Pubkey,
     chain_id: [u8; 32],
     allowed: bool,
 ) -> Instruction {
-    EvmProxyProgram::from(program_id)
+    let program_id = *program.id;
+    program
         .anchor_instruction(args::SetChainAllowed { chain_id, allowed })
         .anchor_accounts(
             accounts::SetChainAllowed {
                 admin,
                 config: find_proxy_config_address(&program_id).0,
-                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                event_authority: program.find_event_authority_address(),
                 program: program_id,
             },
             false,
@@ -65,14 +67,19 @@ pub fn set_chain_allowed_instruction(
 }
 
 /// Build one current-admin pause mutation.
-pub fn set_paused_instruction(program_id: Pubkey, admin: Pubkey, paused: bool) -> Instruction {
-    EvmProxyProgram::from(program_id)
+pub fn set_paused_instruction(
+    program: &EvmProxyProgram,
+    admin: Pubkey,
+    paused: bool,
+) -> Instruction {
+    let program_id = *program.id;
+    program
         .anchor_instruction(args::SetPaused { paused })
         .anchor_accounts(
             accounts::SetPaused {
                 admin,
                 config: find_proxy_config_address(&program_id).0,
-                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                event_authority: program.find_event_authority_address(),
                 program: program_id,
             },
             false,
@@ -80,20 +87,22 @@ pub fn set_paused_instruction(program_id: Pubkey, admin: Pubkey, paused: bool) -
         .build()
 }
 
-/// Build a current-admin handover proposal or replacement.
+/// Build a current-admin handover proposal or replacement, or a withdrawal
+/// when `next_admin` is the current admin.
 pub fn transfer_admin_instruction(
-    program_id: Pubkey,
+    program: &EvmProxyProgram,
     admin: Pubkey,
     next_admin: Pubkey,
 ) -> Instruction {
-    EvmProxyProgram::from(program_id)
+    let program_id = *program.id;
+    program
         .anchor_instruction(args::TransferAdmin {})
         .anchor_accounts(
             accounts::TransferAdmin {
                 admin,
                 config: find_proxy_config_address(&program_id).0,
                 next_admin,
-                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                event_authority: program.find_event_authority_address(),
                 program: program_id,
             },
             false,
@@ -102,14 +111,15 @@ pub fn transfer_admin_instruction(
 }
 
 /// Build pending-admin acceptance; the nominee must sign.
-pub fn accept_admin_instruction(program_id: Pubkey, next_admin: Pubkey) -> Instruction {
-    EvmProxyProgram::from(program_id)
+pub fn accept_admin_instruction(program: &EvmProxyProgram, next_admin: Pubkey) -> Instruction {
+    let program_id = *program.id;
+    program
         .anchor_instruction(args::AcceptAdmin {})
         .anchor_accounts(
             accounts::AcceptAdmin {
                 next_admin,
                 config: find_proxy_config_address(&program_id).0,
-                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                event_authority: program.find_event_authority_address(),
                 program: program_id,
             },
             false,
@@ -174,49 +184,37 @@ fn verify_readback(
     }
 }
 
-/// Client operations for an explicitly selected EVM proxy deployment.
+/// Client operations for this client's EVM proxy deployment.
 pub trait EvmProxyOps<C> {
-    /// Wrap an instruction using its program ID and this client's transaction options.
-    fn evm_proxy_instruction(&self, ix: Instruction) -> TransactionBuilder<'_, C>;
-
     /// Change allowlist membership as this client's payer.
     fn set_proxy_chain_allowed(
         &self,
-        program_id: Pubkey,
         chain_id: [u8; 32],
         allowed: bool,
     ) -> TransactionBuilder<'_, C>;
 
     /// Change the pause flag as this client's payer.
-    fn set_proxy_paused(&self, program_id: Pubkey, paused: bool) -> TransactionBuilder<'_, C>;
+    fn set_proxy_paused(&self, paused: bool) -> TransactionBuilder<'_, C>;
 
-    /// Nominate the next admin as this client's payer.
-    fn transfer_proxy_admin(
-        &self,
-        program_id: Pubkey,
-        next_admin: Pubkey,
-    ) -> TransactionBuilder<'_, C>;
+    /// Nominate the next admin as this client's payer; nominating the payer
+    /// withdraws the pending nomination.
+    fn transfer_proxy_admin(&self, next_admin: Pubkey) -> TransactionBuilder<'_, C>;
 
     /// Accept a nomination with this client's payer as the nominee.
-    fn accept_proxy_admin(&self, program_id: Pubkey) -> TransactionBuilder<'_, C>;
+    fn accept_proxy_admin(&self) -> TransactionBuilder<'_, C>;
 
-    /// Decode the selected deployment's singleton Config.
+    /// Decode the singleton Config.
     fn proxy_config_account(
         &self,
-        program_id: Pubkey,
     ) -> impl Future<Output = crate::Result<gmsol_programs::gmsol_evm_proxy::accounts::Config>>;
 
     /// Read immutable Config fields and the currently observed admin.
-    fn proxy_config(
-        &self,
-        program_id: Pubkey,
-    ) -> impl Future<Output = crate::Result<ConfigReadback>>;
+    fn proxy_config(&self) -> impl Future<Output = crate::Result<ConfigReadback>>;
 
     /// Initialize once after a same-endpoint genesis check, then verify immutable fields.
     /// A readback failure retains the confirmed signature and never resends creation.
     fn initialize_proxy_config(
         &self,
-        program_id: Pubkey,
         store: Pubkey,
         genesis_hash: [u8; 32],
         first_admin: Pubkey,
@@ -224,27 +222,33 @@ pub trait EvmProxyOps<C> {
     ) -> impl Future<Output = crate::Result<ConfigInitialization>>;
 }
 
-fn create_config_transaction<'a, C: Deref<Target = impl Signer> + Clone>(
+fn evm_proxy_transaction<C: Deref<Target = impl Signer> + Clone>(
     client: &Client<C>,
-    program_id: Pubkey,
+    ix: Instruction,
+) -> TransactionBuilder<'_, C> {
+    client
+        .program(ix.program_id)
+        .transaction()
+        .accounts(ix.accounts)
+        .args(ix.data)
+}
+
+fn create_config_transaction<'a, C: Deref<Target = impl Signer> + Clone>(
+    client: &'a Client<C>,
     store: Pubkey,
     genesis_hash: [u8; 32],
     first_admin: Pubkey,
     upgrade_authority: &'a dyn Signer,
 ) -> TransactionBuilder<'a, C> {
     let ix = create_config_instruction(
-        program_id,
+        client.evm_proxy_program_for_builders(),
         client.payer(),
         upgrade_authority.pubkey(),
         store,
         genesis_hash,
         first_admin,
     );
-    let builder = client
-        .program(program_id)
-        .transaction()
-        .accounts(ix.accounts)
-        .args(ix.data);
+    let builder = evm_proxy_transaction(client, ix);
     if upgrade_authority.pubkey() == client.payer() {
         builder
     } else {
@@ -253,51 +257,51 @@ fn create_config_transaction<'a, C: Deref<Target = impl Signer> + Clone>(
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> EvmProxyOps<C> for Client<C> {
-    fn evm_proxy_instruction(&self, ix: Instruction) -> TransactionBuilder<'_, C> {
-        self.program(ix.program_id)
-            .transaction()
-            .accounts(ix.accounts)
-            .args(ix.data)
-    }
-
     fn set_proxy_chain_allowed(
         &self,
-        program_id: Pubkey,
         chain_id: [u8; 32],
         allowed: bool,
     ) -> TransactionBuilder<'_, C> {
-        self.evm_proxy_instruction(set_chain_allowed_instruction(
-            program_id,
-            self.payer(),
-            chain_id,
-            allowed,
-        ))
+        evm_proxy_transaction(
+            self,
+            set_chain_allowed_instruction(
+                self.evm_proxy_program_for_builders(),
+                self.payer(),
+                chain_id,
+                allowed,
+            ),
+        )
     }
 
-    fn set_proxy_paused(&self, program_id: Pubkey, paused: bool) -> TransactionBuilder<'_, C> {
-        self.evm_proxy_instruction(set_paused_instruction(program_id, self.payer(), paused))
+    fn set_proxy_paused(&self, paused: bool) -> TransactionBuilder<'_, C> {
+        evm_proxy_transaction(
+            self,
+            set_paused_instruction(self.evm_proxy_program_for_builders(), self.payer(), paused),
+        )
     }
 
-    fn transfer_proxy_admin(
-        &self,
-        program_id: Pubkey,
-        next_admin: Pubkey,
-    ) -> TransactionBuilder<'_, C> {
-        self.evm_proxy_instruction(transfer_admin_instruction(
-            program_id,
-            self.payer(),
-            next_admin,
-        ))
+    fn transfer_proxy_admin(&self, next_admin: Pubkey) -> TransactionBuilder<'_, C> {
+        evm_proxy_transaction(
+            self,
+            transfer_admin_instruction(
+                self.evm_proxy_program_for_builders(),
+                self.payer(),
+                next_admin,
+            ),
+        )
     }
 
-    fn accept_proxy_admin(&self, program_id: Pubkey) -> TransactionBuilder<'_, C> {
-        self.evm_proxy_instruction(accept_admin_instruction(program_id, self.payer()))
+    fn accept_proxy_admin(&self) -> TransactionBuilder<'_, C> {
+        evm_proxy_transaction(
+            self,
+            accept_admin_instruction(self.evm_proxy_program_for_builders(), self.payer()),
+        )
     }
 
     async fn proxy_config_account(
         &self,
-        program_id: Pubkey,
     ) -> crate::Result<gmsol_programs::gmsol_evm_proxy::accounts::Config> {
+        let program_id = *self.evm_proxy_program_for_builders().id;
         let address = find_proxy_config_address(&program_id).0;
         let account = self
             .rpc()
@@ -313,8 +317,8 @@ impl<C: Deref<Target = impl Signer> + Clone> EvmProxyOps<C> for Client<C> {
         .map_err(Into::into)
     }
 
-    async fn proxy_config(&self, program_id: Pubkey) -> crate::Result<ConfigReadback> {
-        let config = self.proxy_config_account(program_id).await?;
+    async fn proxy_config(&self) -> crate::Result<ConfigReadback> {
+        let config = self.proxy_config_account().await?;
         Ok(ConfigReadback {
             store: config.store,
             genesis_hash: config.genesis_hash,
@@ -324,7 +328,6 @@ impl<C: Deref<Target = impl Signer> + Clone> EvmProxyOps<C> for Client<C> {
 
     async fn initialize_proxy_config(
         &self,
-        program_id: Pubkey,
         store: Pubkey,
         genesis_hash: [u8; 32],
         first_admin: Pubkey,
@@ -340,21 +343,15 @@ impl<C: Deref<Target = impl Signer> + Clone> EvmProxyOps<C> for Client<C> {
                 "supplied genesis hash differs from RPC",
             ));
         }
-        let signature = create_config_transaction(
-            self,
-            program_id,
-            store,
-            genesis_hash,
-            first_admin,
-            upgrade_authority,
-        )
-        .send()
-        .await?;
+        let signature =
+            create_config_transaction(self, store, genesis_hash, first_admin, upgrade_authority)
+                .send()
+                .await?;
         Ok(verify_readback(
             signature,
             store,
             genesis_hash,
-            self.proxy_config(program_id).await,
+            self.proxy_config().await,
         ))
     }
 }
@@ -367,12 +364,20 @@ mod tests {
     use solana_sdk::{hash::Hash, signature::Keypair};
 
     use super::*;
+    use crate::{
+        client::ClientOptions,
+        pda::{find_event_authority_address, find_proxy_config_address},
+    };
+
+    const GENESIS_HASH: [u8; 32] = [5; 32];
+    const OTHER_GENESIS_HASH: [u8; 32] = [7; 32];
+    const CHAIN_ID: [u8; 32] = [1; 32];
 
     #[test]
     fn immutable_verification_reports_observed_admin_without_a_handover_claim() {
         let signature = Signature::new_unique();
         let store = Pubkey::new_unique();
-        let genesis_hash = [5; 32];
+        let genesis_hash = GENESIS_HASH;
         let current_admin = Pubkey::new_unique();
         let result = verify_readback(
             signature,
@@ -395,7 +400,7 @@ mod tests {
     fn immutable_mismatch_preserves_confirmed_signature() {
         let signature = Signature::new_unique();
         let store = Pubkey::new_unique();
-        let genesis_hash = [5; 32];
+        let genesis_hash = GENESIS_HASH;
         let current_admin = Pubkey::new_unique();
         for readback in [
             ConfigReadback {
@@ -405,7 +410,7 @@ mod tests {
             },
             ConfigReadback {
                 store,
-                genesis_hash: [7; 32],
+                genesis_hash: OTHER_GENESIS_HASH,
                 current_admin,
             },
         ] {
@@ -424,7 +429,7 @@ mod tests {
         let result = verify_readback(
             signature,
             Pubkey::new_unique(),
-            [5; 32],
+            GENESIS_HASH,
             Err(crate::Error::custom("Config readback unavailable")),
         );
         assert!(
@@ -442,17 +447,18 @@ mod tests {
         const CREATE_CONFIG_PROXY_PROGRAM_INDEX: usize = 3;
         const EVENT_ACCOUNT_COUNT: usize = 2;
         let program = Pubkey::new_unique();
+        let deployment = EvmProxyProgram::from(program);
         let admin = Pubkey::new_unique();
         let first_admin = Pubkey::new_unique();
         let instruction = create_config_instruction(
-            program,
+            &deployment,
             admin,
             admin,
             Pubkey::new_unique(),
-            [5; 32],
+            GENESIS_HASH,
             first_admin,
         );
-        let config = Pubkey::find_program_address(&[b"config"], &program).0;
+        let config = find_proxy_config_address(&program).0;
         let program_data = bpf_loader_upgradeable::get_program_data_address(&program);
         assert_eq!(instruction.program_id, program);
         for address in [config, program_data, program, first_admin] {
@@ -465,23 +471,23 @@ mod tests {
             instruction.accounts[CREATE_CONFIG_PROXY_PROGRAM_INDEX].pubkey,
             program
         );
-        let event_authority = Pubkey::find_program_address(&[b"__event_authority"], &program).0;
+        let event_authority = find_event_authority_address(&program).0;
         for (instruction, event_index) in [
             (instruction, CREATE_CONFIG_EVENT_AUTHORITY_INDEX),
             (
-                set_chain_allowed_instruction(program, admin, [1; 32], true),
+                set_chain_allowed_instruction(&deployment, admin, CHAIN_ID, true),
                 POLICY_EVENT_AUTHORITY_INDEX,
             ),
             (
-                set_paused_instruction(program, admin, false),
+                set_paused_instruction(&deployment, admin, false),
                 POLICY_EVENT_AUTHORITY_INDEX,
             ),
             (
-                transfer_admin_instruction(program, admin, first_admin),
+                transfer_admin_instruction(&deployment, admin, first_admin),
                 TRANSFER_ADMIN_EVENT_AUTHORITY_INDEX,
             ),
             (
-                accept_admin_instruction(program, first_admin),
+                accept_admin_instruction(&deployment, first_admin),
                 POLICY_EVENT_AUTHORITY_INDEX,
             ),
         ] {
@@ -507,9 +513,8 @@ mod tests {
         let client = Client::new(Cluster::Localnet, payer.clone()).unwrap();
         let transaction = create_config_transaction(
             &client,
-            gmsol_programs::gmsol_evm_proxy::ID,
             Pubkey::new_unique(),
-            [5; 32],
+            GENESIS_HASH,
             Pubkey::new_unique(),
             &*payer,
         )
@@ -527,9 +532,8 @@ mod tests {
         let client = Client::new(Cluster::Localnet, payer).unwrap();
         let transaction = create_config_transaction(
             &client,
-            gmsol_programs::gmsol_evm_proxy::ID,
             Pubkey::new_unique(),
-            [5; 32],
+            GENESIS_HASH,
             Pubkey::new_unique(),
             &authority,
         )
@@ -538,5 +542,20 @@ mod tests {
         })
         .unwrap();
         assert_eq!(transaction.signatures.len(), 2);
+    }
+
+    #[test]
+    fn client_option_selects_proxy_deployment() {
+        let program = Pubkey::new_unique();
+        let client = Client::new_with_options(
+            Cluster::Localnet,
+            Arc::new(Keypair::new()),
+            ClientOptions::builder()
+                .evm_proxy_program_id(Some(program))
+                .build(),
+        )
+        .unwrap();
+        let instruction = client.set_proxy_paused(false).take_instruction().unwrap();
+        assert_eq!(instruction.program_id, program);
     }
 }
