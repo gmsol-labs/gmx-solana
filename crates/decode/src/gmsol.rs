@@ -124,8 +124,35 @@ pub mod programs {
     type CPIEvents = crate::value::AnchorCPIEvents<GMSOLCPIEvent>;
 
     untagged!(GMSOLData, [Account, CPIEvents]);
-}
 
-/// Owner-aware accounts and committed CPI events for EVM proxy deployments.
-#[cfg(feature = "evm-proxy")]
-pub mod evm_proxy;
+    /// Implement [`Decode`](crate::Decode) for EVM proxy types.
+    #[cfg(feature = "evm-proxy")]
+    pub mod evm_proxy {
+        use crate::impl_decode_for_cpi_event;
+        use crate::{untagged, value::UnknownOwnedData};
+        use gmsol_programs::gmsol_evm_proxy::events::{
+            ConfigAdminAccepted, ConfigAdminProposalCancelled, ConfigAdminProposed,
+            ConfigChainAllowedChanged, ConfigCreated, ConfigPauseChanged,
+        };
+
+        impl_decode_for_cpi_event!(ConfigCreated);
+        impl_decode_for_cpi_event!(ConfigChainAllowedChanged);
+        impl_decode_for_cpi_event!(ConfigPauseChanged);
+        impl_decode_for_cpi_event!(ConfigAdminProposed);
+        impl_decode_for_cpi_event!(ConfigAdminProposalCancelled);
+        impl_decode_for_cpi_event!(ConfigAdminAccepted);
+
+        untagged!(
+            EvmProxyCPIEvent,
+            [
+                ConfigCreated,
+                ConfigChainAllowedChanged,
+                ConfigPauseChanged,
+                ConfigAdminProposed,
+                ConfigAdminProposalCancelled,
+                ConfigAdminAccepted,
+                UnknownOwnedData
+            ]
+        );
+    }
+}

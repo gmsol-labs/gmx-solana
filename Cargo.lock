@@ -2399,7 +2399,6 @@ dependencies = [
  "anchor-spl",
  "bytemuck",
  "gmsol-programs",
- "gmsol-store",
  "gmsol-utils",
 ]
 
@@ -2635,7 +2634,6 @@ dependencies = [
  "shellexpand",
  "solana-client",
  "solana-sdk",
- "solana-transaction-status",
  "time",
  "tokio",
  "tracing",

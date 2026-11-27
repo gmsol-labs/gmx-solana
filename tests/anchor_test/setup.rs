@@ -21,8 +21,8 @@ use gmsol_sdk::{
         chainlink::pull_oracle::ChainlinkPullOracleFactory,
         feeds_parser::FeedAddressMap,
         ops::{
-            exchange::order::ExecuteOrderBuilder, AddressLookupTableOps, ConfigOps, ExchangeOps,
-            GlvOps, GtOps, MarketOps, OracleOps, RoleOps, StoreOps, SystemProgramOps,
+            exchange::order::ExecuteOrderBuilder, AddressLookupTableOps, ConfigOps, EvmProxyOps,
+            ExchangeOps, GlvOps, GtOps, MarketOps, OracleOps, RoleOps, StoreOps, SystemProgramOps,
             TokenConfigOps, TreasuryOps,
         },
         pull_oracle::{FeedIds, PullOraclePriceConsumer, WithPullOracle},
@@ -84,6 +84,7 @@ const MAX_DEVIATION_FACTOR: u128 = MARKET_USD_UNIT / 100_000;
 /// `BuilderFee` feature flag. See [`Deployment::lock_builder_fee_globals`].
 static BUILDER_FEE_GLOBALS_LOCK: Mutex<()> = Mutex::const_new(());
 pub(super) static GT_EXCHANGE_WINDOW_LOCK: Mutex<()> = Mutex::const_new(());
+static EVM_PROXY_CONFIG_LOCK: Mutex<()> = Mutex::const_new(());
 
 const PYTH_FETCH_MAX_RETRIES: usize = 3;
 const PYTH_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
@@ -135,8 +136,6 @@ impl<'a> MakeBundleBuilder<'a, SignerRef> for CurrentOrderTimestamp<'a, '_> {
         self.execute.build_with_options(options).await
     }
 }
-
-pub(super) static EVM_PROXY_CONFIG_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Deployment.
 pub struct Deployment {
@@ -664,23 +663,7 @@ impl Deployment {
     }
 
     async fn initialize_evm_proxy(&mut self) -> eyre::Result<()> {
-        use gmsol_evm_proxy as evm_proxy;
-
-        let client = self.user_client(Self::DEFAULT_KEEPER)?;
-        let init_ix = client
-            .store_transaction()
-            .program(evm_proxy::ID)
-            .anchor_args(evm_proxy::instruction::Initialize {})
-            .anchor_accounts(evm_proxy::accounts::Initialize {
-                authority: client.payer(),
-                system_program: system_program::ID,
-            });
-
-        let signature = init_ix.send().await?;
-        tracing::info!(%signature, "initialized evm-proxy program");
-
-        initialize_evm_proxy_config(self).await?;
-        Ok(())
+        initialize_evm_proxy_config(self).await
     }
 
     async fn get_client_and_store() -> eyre::Result<(Client<SignerRef>, String, Pubkey)> {
@@ -1793,6 +1776,94 @@ impl Deployment {
         Ok(value)
     }
 
+    /// Run `fut` with the EVM proxy Config at its baseline, then put the
+    /// baseline back.
+    ///
+    /// The Config is a singleton shared by every test in this binary, so a test
+    /// that changes it, or asserts anything about its state, holds one lock for
+    /// the whole window. The baseline is what the fixture creates: the
+    /// deployment client is admin with no pending nomination, intents are paused
+    /// and no chain is allowed. `admins` are the signers needed to hand
+    /// administration back after a handover.
+    ///
+    /// The restore is reached however the body ends, including a failed
+    /// assertion, which is why the panic is caught rather than just awaited: a
+    /// Config left changed fails the baseline check of every later test.
+    pub(crate) async fn with_evm_proxy_config<Fut, T>(
+        &self,
+        admins: &[&Client<SignerRef>],
+        fut: Fut,
+    ) -> eyre::Result<T>
+    where
+        Fut: Future<Output = eyre::Result<T>>,
+    {
+        let _lock = EVM_PROXY_CONFIG_LOCK.lock().await;
+        self.assert_evm_proxy_config_baseline().await?;
+
+        let result = AssertUnwindSafe(fut).catch_unwind().await;
+
+        let restored = self
+            .restore_evm_proxy_config(admins)
+            .await
+            .inspect_err(|error| tracing::error!(%error, "failed to restore the EVM proxy Config"));
+
+        // The body's failure is the interesting one, so report it before the
+        // restore's.
+        let value = match result {
+            Ok(result) => result?,
+            Err(panic) => resume_unwind(panic),
+        };
+
+        restored?;
+
+        Ok(value)
+    }
+
+    async fn assert_evm_proxy_config_baseline(&self) -> eyre::Result<()> {
+        let client = &self.client;
+        let program_id = *client.evm_proxy_program_for_builders().id;
+        let bump = gmsol_sdk::pda::find_proxy_config_address(&program_id).1;
+        let state = client.proxy_config_account().await?;
+        assert_eq!(state.bump, bump);
+        assert_eq!(state.store, self.store);
+        assert_eq!(
+            state.genesis_hash,
+            client.rpc().get_genesis_hash().await?.to_bytes()
+        );
+        assert_eq!(state.admin, client.payer());
+        assert_eq!(state.next_admin, None);
+        assert!(state.paused);
+        assert!(state.allowed_chain_ids.is_empty());
+        Ok(())
+    }
+
+    async fn restore_evm_proxy_config(&self, admins: &[&Client<SignerRef>]) -> eyre::Result<()> {
+        let client = &self.client;
+        let state = client.proxy_config_account().await?;
+        if state.admin != client.payer() {
+            let admin = admins
+                .iter()
+                .find(|admin| admin.payer() == state.admin)
+                .ok_or_eyre("restore lacks the current EVM proxy admin signer")?;
+            if state.next_admin != Some(client.payer()) {
+                admin.transfer_proxy_admin(client.payer()).send().await?;
+            }
+            client.accept_proxy_admin().send().await?;
+        } else if state.next_admin.is_some() {
+            client.transfer_proxy_admin(client.payer()).send().await?;
+        }
+        if !state.paused {
+            client.set_proxy_paused(true).send().await?;
+        }
+        for chain_id in state.allowed_chain_ids {
+            client
+                .set_proxy_chain_allowed(chain_id, false)
+                .send()
+                .await?;
+        }
+        self.assert_evm_proxy_config_baseline().await
+    }
+
     /// Run `fut` with the store's `BuilderFee` feature disabled, then enable it
     /// again.
     ///
@@ -2540,7 +2611,7 @@ async fn teardown() -> eyre::Result<()> {
 /// Validate the proxy bootstrap contract, then initialize its singleton.
 async fn initialize_evm_proxy_config(deployment: &Deployment) -> eyre::Result<()> {
     use gmsol_evm_proxy as evm_proxy;
-    use gmsol_sdk::client::ops::{evm_proxy::ConfigInitialization, EvmProxyOps};
+    use gmsol_sdk::client::ops::evm_proxy::ConfigInitialization;
     use solana_sdk::{
         bpf_loader_upgradeable,
         signature::{EncodableKey, Keypair, Signer},
@@ -2628,13 +2699,7 @@ async fn initialize_evm_proxy_config(deployment: &Deployment) -> eyre::Result<()
     let mut wrong_genesis = genesis_hash;
     wrong_genesis[0] ^= 1;
     let mismatch = client
-        .initialize_proxy_config(
-            evm_proxy::ID,
-            deployment.store,
-            wrong_genesis,
-            client.payer(),
-            &authority,
-        )
+        .initialize_proxy_config(deployment.store, wrong_genesis, client.payer(), &authority)
         .await
         .expect_err("RPC genesis mismatch");
     assert!(
@@ -2647,13 +2712,7 @@ async fn initialize_evm_proxy_config(deployment: &Deployment) -> eyre::Result<()
         .value
         .is_none());
     match client
-        .initialize_proxy_config(
-            evm_proxy::ID,
-            deployment.store,
-            genesis_hash,
-            client.payer(),
-            &authority,
-        )
+        .initialize_proxy_config(deployment.store, genesis_hash, client.payer(), &authority)
         .await?
     {
         ConfigInitialization::ImmutableFieldsVerified {

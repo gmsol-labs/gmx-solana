@@ -120,8 +120,7 @@
         "`InvalidProgramData` for unrelated upgrade metadata. Anchor rejects a",
         "missing signer, noncanonical Config or invalid Store. The System program",
         "rejects an existing Config with `AccountAlreadyInUse`.",
-        "Returns `InvalidAdmin` for a zero first admin and `InvalidStore` when the",
-        "Store account is too short to load.",
+        "Returns `InvalidAdmin` for a zero first admin.",
         "- CPI event emission fails if its supplied accounts are invalid."
       ],
       "discriminator": [
@@ -329,49 +328,6 @@
           }
         }
       ]
-    },
-    {
-      "name": "initialize",
-      "docs": [
-        "Invoke the program scaffold without creating or changing a proxy.",
-        "",
-        "# Accounts",
-        "*[See the documentation for the accounts.](Initialize).*",
-        "",
-        "# Arguments",
-        "None.",
-        "",
-        "# Errors",
-        "- Anchor account validation fails for invalid accounts."
-      ],
-      "discriminator": [
-        175,
-        175,
-        109,
-        31,
-        13,
-        152,
-        155,
-        237
-      ],
-      "accounts": [
-        {
-          "name": "authority",
-          "docs": [
-            "Caller signing the scaffold invocation."
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "docs": [
-            "System program."
-          ],
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
     },
     {
       "name": "set_chain_allowed",
@@ -588,6 +544,7 @@
       "name": "transfer_admin",
       "docs": [
         "Nominate or replace the next admin without transferring current control.",
+        "Nominating the current admin withdraws the pending nomination.",
         "",
         "# Accounts",
         "*[See the documentation for the accounts.](TransferAdmin).*",
@@ -599,7 +556,8 @@
         "- Returns `NotConfigAdmin` for a signer other than the current admin.",
         "Anchor rejects a missing signer or noncanonical Config.",
         "Returns `InvalidAdmin` for the zero address or `NoConfigChange` when",
-        "nominating the current or already pending admin.",
+        "nominating the already pending admin, or the current admin with no",
+        "pending nomination.",
         "- CPI event emission fails if its supplied accounts are invalid."
       ],
       "discriminator": [
@@ -648,7 +606,7 @@
         {
           "name": "next_admin",
           "docs": [
-            "Nominated admin address."
+            "Nominated admin address, or the current admin to withdraw the nomination."
           ]
         },
         {
@@ -743,6 +701,19 @@
       ]
     },
     {
+      "name": "ConfigAdminProposalCancelled",
+      "discriminator": [
+        69,
+        95,
+        249,
+        224,
+        86,
+        63,
+        71,
+        251
+      ]
+    },
+    {
       "name": "ConfigAdminProposed",
       "discriminator": [
         8,
@@ -803,41 +774,36 @@
     },
     {
       "code": 6001,
-      "name": "InvalidStore",
-      "msg": "Store account data is too short"
-    },
-    {
-      "code": 6002,
       "name": "InvalidAdmin",
       "msg": "Admin address cannot be zero"
     },
     {
-      "code": 6003,
+      "code": 6002,
       "name": "NoConfigChange",
       "msg": "Config change has no effect"
     },
     {
-      "code": 6004,
+      "code": 6003,
       "name": "AllowedChainsFull",
       "msg": "Allowed EVM chain set is full"
     },
     {
-      "code": 6005,
+      "code": 6004,
       "name": "NotPendingAdmin",
       "msg": "Signer is not the pending admin"
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "InvalidProgramData",
       "msg": "ProgramData does not belong to this proxy program"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "NotUpgradeAuthority",
       "msg": "Signer is not the program upgrade authority"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "NotConfigAdmin",
       "msg": "Signer is not the current Config admin"
     }
@@ -1042,6 +1008,38 @@
             "type": {
               "option": "pubkey"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigAdminProposalCancelled",
+      "docs": [
+        "Pending-admin withdrawal event."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "docs": [
+              "Singleton policy account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "docs": [
+              "Current administrator of the intent policy."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "previous_next_admin",
+            "docs": [
+              "Nominee cleared by this withdrawal."
+            ],
+            "type": "pubkey"
           }
         ]
       }
@@ -1335,14 +1333,6 @@
           },
           {
             "name": "max_builder_fee_factor",
-            "docs": [
-              "Max builder fee factor. Reads as `0` on existing stores until a",
-              "CONFIG_KEEPER explicitly raises it via `insert_factor`, so no",
-              "non-zero builder fee factor can be configured by default.",
-              "",
-              "The cap the boundedness invariant is stated against; see the builder",
-              "fee invariants on [`crate::states::order`]."
-            ],
             "type": "u128"
           },
           {
@@ -1389,9 +1379,6 @@
           },
           {
             "name": "grow_step_amount",
-            "docs": [
-              "Grow step amount. It must be immutable."
-            ],
             "type": "u64"
           },
           {
@@ -1400,30 +1387,18 @@
           },
           {
             "name": "supply",
-            "docs": [
-              "Supply of buybackable GT."
-            ],
             "type": "u64"
           },
           {
             "name": "last_cumulative_inv_cost_factor_ts",
-            "docs": [
-              "Timestamp of the last update to `cumulative_inv_cost_factor`."
-            ],
             "type": "i64"
           },
           {
             "name": "gt_vault",
-            "docs": [
-              "Vault for non-buybackable GT."
-            ],
             "type": "u64"
           },
           {
             "name": "cumulative_inv_cost_factor",
-            "docs": [
-              "Cumulative `1 / minting_cost` factor."
-            ],
             "type": "u128"
           },
           {
@@ -1560,9 +1535,6 @@
         "fields": [
           {
             "name": "updatable_market_config_flags",
-            "docs": [
-              "Market config flags updatable by a [`MARKET_CONFIG_KEEPER`](`gmsol_utils::role::RoleKey::MARKET_CONFIG_KEEPER`)."
-            ],
             "type": {
               "defined": {
                 "name": "MarketConfigFlagContainer"
@@ -1571,9 +1543,6 @@
           },
           {
             "name": "updatable_market_config_factors",
-            "docs": [
-              "Market config factors updatable by a [`MARKET_CONFIG_KEEPER`](`gmsol_utils::role::RoleKey::MARKET_CONFIG_KEEPER`)."
-            ],
             "type": {
               "defined": {
                 "name": "MarketConfigFactorContainer"
@@ -1927,30 +1896,18 @@
           },
           {
             "name": "authority",
-            "docs": [
-              "Store authority."
-            ],
             "type": "pubkey"
           },
           {
             "name": "next_authority",
-            "docs": [
-              "Next authority."
-            ],
             "type": "pubkey"
           },
           {
             "name": "token_map",
-            "docs": [
-              "The token map to used."
-            ],
             "type": "pubkey"
           },
           {
             "name": "disabled_features",
-            "docs": [
-              "Disabled features."
-            ],
             "type": {
               "defined": {
                 "name": "DisabledFeatures"
@@ -1968,16 +1925,10 @@
           },
           {
             "name": "last_restarted_slot",
-            "docs": [
-              "Cached last cluster restart slot."
-            ],
             "type": "u64"
           },
           {
             "name": "treasury",
-            "docs": [
-              "Treasury Config."
-            ],
             "type": {
               "defined": {
                 "name": "Treasury"
@@ -1986,9 +1937,6 @@
           },
           {
             "name": "amount",
-            "docs": [
-              "Amounts."
-            ],
             "type": {
               "defined": {
                 "name": "Amounts"
@@ -2006,9 +1954,6 @@
           },
           {
             "name": "factor",
-            "docs": [
-              "Factors."
-            ],
             "type": {
               "defined": {
                 "name": "Factors"
@@ -2017,9 +1962,6 @@
           },
           {
             "name": "address",
-            "docs": [
-              "Addresses."
-            ],
             "type": {
               "defined": {
                 "name": "Addresses"
@@ -2028,9 +1970,6 @@
           },
           {
             "name": "gt",
-            "docs": [
-              "GT State."
-            ],
             "type": {
               "defined": {
                 "name": "GtState"
@@ -2071,16 +2010,10 @@
         "fields": [
           {
             "name": "receiver",
-            "docs": [
-              "Receiver."
-            ],
             "type": "pubkey"
           },
           {
             "name": "next_receiver",
-            "docs": [
-              "Next receiver."
-            ],
             "type": "pubkey"
           },
           {

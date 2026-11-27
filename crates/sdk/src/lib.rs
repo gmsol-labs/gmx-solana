@@ -79,7 +79,3 @@ pub use gmsol_solana_utils::{
 
 #[cfg(feature = "decode")]
 pub use gmsol_decode as decode;
-
-/// Owner-aware account decoding and committed proxy CPI events.
-#[cfg(all(feature = "evm-proxy", feature = "decode"))]
-pub use gmsol_decode::gmsol::evm_proxy;
