@@ -13,6 +13,10 @@ use solana_sdk::{signature::NullSigner, transaction::VersionedTransaction};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+/// Signed EVM proxy intent transactions.
+#[cfg(feature = "evm-proxy")]
+pub mod evm_proxy;
+
 /// Create order.
 pub mod create_order;
 

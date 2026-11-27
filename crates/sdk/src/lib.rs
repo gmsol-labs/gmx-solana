@@ -9,6 +9,10 @@ pub mod constants;
 /// Functions for constructing Program Derived Addresses.
 pub mod pda;
 
+/// Signed EVM proxy intent data and instructions.
+#[cfg(feature = "evm-proxy")]
+pub mod evm_proxy;
+
 /// Instruction Builders.
 pub mod builders;
 
@@ -79,7 +83,3 @@ pub use gmsol_solana_utils::{
 
 #[cfg(feature = "decode")]
 pub use gmsol_decode as decode;
-
-/// Owner-aware account decoding and committed proxy CPI events.
-#[cfg(all(feature = "evm-proxy", feature = "decode"))]
-pub use gmsol_decode::gmsol::evm_proxy;

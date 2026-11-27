@@ -54,7 +54,13 @@ async fn proxy_account_creation_records_evm_address() -> eyre::Result<()> {
     assert_eq!(proxy.version, evm_proxy::PROXY_VERSION);
     assert_eq!(proxy.bump, bump);
     assert_eq!(proxy.evm_address, evm_address);
+    assert_eq!(proxy.next_nonce, 0);
     assert_eq!(proxy.reserved, [0; evm_proxy::PROXY_RESERVED_LEN]);
+    let sdk_proxy = gmsol_programs::gmsol_evm_proxy::accounts::Proxy::try_deserialize(
+        &mut account.data.as_slice(),
+    )?;
+    assert_eq!(sdk_proxy.next_nonce, 0);
+    assert_eq!(sdk_proxy.evm_address, evm_address);
     Ok(())
 }
 

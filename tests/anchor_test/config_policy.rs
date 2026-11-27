@@ -138,7 +138,7 @@ pub(super) async fn restore_baseline(
     Ok(())
 }
 
-fn finish_policy_test(
+pub(super) fn finish_policy_test(
     result: std::thread::Result<eyre::Result<()>>,
     restored: eyre::Result<()>,
 ) -> eyre::Result<()> {

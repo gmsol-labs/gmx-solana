@@ -16,6 +16,7 @@ crate::impl_decode_for_cpi_event!(events::ConfigChainAllowedChanged);
 crate::impl_decode_for_cpi_event!(events::ConfigPauseChanged);
 crate::impl_decode_for_cpi_event!(events::ConfigAdminProposed);
 crate::impl_decode_for_cpi_event!(events::ConfigAdminAccepted);
+crate::impl_decode_for_cpi_event!(events::IntentConsumed);
 
 /// Decode Config only when its owner is the selected proxy deployment.
 /// Foreign owners and unrelated account discriminators return no match.
@@ -46,6 +47,8 @@ pub enum ProxyCPIEvent {
     ConfigAdminProposed(events::ConfigAdminProposed),
     /// Administrator acceptance.
     ConfigAdminAccepted(events::ConfigAdminAccepted),
+    /// Nonce consumed by a successful intent.
+    IntentConsumed(events::IntentConsumed),
     /// Unrecognized event discriminator, including the CPI header.
     Unknown(Vec<u8>),
 }
@@ -78,6 +81,7 @@ impl Decode for ProxyCPIEvent {
                 known!(events::ConfigPauseChanged, ConfigPauseChanged);
                 known!(events::ConfigAdminProposed, ConfigAdminProposed);
                 known!(events::ConfigAdminAccepted, ConfigAdminAccepted);
+                known!(events::IntentConsumed, IntentConsumed);
                 Ok(ProxyCPIEvent::Unknown(data.to_vec()))
             }
         }
@@ -244,6 +248,34 @@ mod tests {
         assert!(decode_committed_events(&selected, SLOT, Signature::default(), &tx).is_err());
         tx.meta = None;
         assert!(decode_committed_events(&selected, SLOT, Signature::default(), &tx).is_err());
+    }
+
+    #[test]
+    fn committed_wrapper_decodes_intent_consumed_and_rejects_malformed_payloads() {
+        let selected = Pubkey::new_unique();
+        let event = events::IntentConsumed {
+            proxy: Pubkey::new_unique(),
+            nonce: 0,
+            kind: 1,
+        };
+        let mut valid = EVENT_IX_TAG_LE.to_vec();
+        valid.extend(event.data());
+        let tx = transaction(selected, authority(&selected), &valid);
+        let events = decode_committed_events(&selected, SLOT, Signature::default(), &tx).unwrap();
+        assert_eq!(events.events().len(), 1);
+        let ProxyCPIEvent::IntentConsumed(decoded) = events.events()[0].data() else {
+            panic!("expected IntentConsumed CPI event");
+        };
+        assert_eq!(
+            (decoded.proxy, decoded.nonce, decoded.kind),
+            (event.proxy, event.nonce, event.kind)
+        );
+        let mut trailing = valid.clone();
+        trailing.push(0);
+        for data in [valid[..valid.len() - 1].to_vec(), trailing] {
+            let tx = transaction(selected, authority(&selected), &data);
+            assert!(decode_committed_events(&selected, SLOT, Signature::default(), &tx).is_err());
+        }
     }
 
     #[test]

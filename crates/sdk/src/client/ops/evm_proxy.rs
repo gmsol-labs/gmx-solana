@@ -176,6 +176,15 @@ fn verify_readback(
 
 /// Client operations for an explicitly selected EVM proxy deployment.
 pub trait EvmProxyOps<C> {
+    /// Submit a signed Cancel using this client's transaction options.
+    fn cancel_proxy_intent(
+        &self,
+        program_id: Pubkey,
+        intent: &crate::evm_proxy::CancelIntent,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
+
     /// Wrap an instruction using its program ID and this client's transaction options.
     fn evm_proxy_instruction(&self, ix: Instruction) -> TransactionBuilder<'_, C>;
 
@@ -253,6 +262,24 @@ fn create_config_transaction<'a, C: Deref<Target = impl Signer> + Clone>(
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> EvmProxyOps<C> for Client<C> {
+    /// Submit a signed Cancel using this client's transaction options.
+    fn cancel_proxy_intent(
+        &self,
+        program_id: Pubkey,
+        intent: &crate::evm_proxy::CancelIntent,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let ix = crate::evm_proxy::cancel_instruction(
+            program_id,
+            self.payer(),
+            intent,
+            signature,
+            recovery_id,
+        )?;
+        Ok(self.evm_proxy_instruction(ix))
+    }
+
     fn evm_proxy_instruction(&self, ix: Instruction) -> TransactionBuilder<'_, C> {
         self.program(ix.program_id)
             .transaction()
