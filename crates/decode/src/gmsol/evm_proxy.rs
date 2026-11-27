@@ -1,6 +1,7 @@
 //! Owner-aware account decoding and committed CPI events for an EVM proxy deployment.
 
-use anchor_lang::{event::EVENT_IX_TAG_LE, AccountDeserialize, Discriminator};
+use anchor_lang::{event::EVENT_IX_TAG_LE, AccountDeserialize, AnchorDeserialize, Discriminator};
+use base64::Engine;
 use gmsol_programs::gmsol_evm_proxy::{accounts::Config, events};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use solana_transaction_status_client_types::EncodedTransactionWithStatusMeta;
@@ -110,6 +111,25 @@ pub fn decode_committed_events(
     decoder.add_cpi_event_program_id(program_id)?;
     AnchorCPIEvents::decode(&decoder)
 }
+
+/// Existing child-owned Withdraw log decoder, pending CPI conversion.
+pub fn decode_withdraw_event_log(
+    line: &str,
+) -> Result<Option<events::Withdrawn>, crate::DecodeError> {
+    let Some(encoded) = line.strip_prefix("Program data: ") else {
+        return Ok(None);
+    };
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(crate::DecodeError::custom)?;
+    if !data.starts_with(events::Withdrawn::DISCRIMINATOR) {
+        return Ok(None);
+    }
+    events::Withdrawn::try_from_slice(&data[events::Withdrawn::DISCRIMINATOR.len()..])
+        .map(Some)
+        .map_err(crate::DecodeError::custom)
+}
+
 
 #[cfg(test)]
 mod tests {

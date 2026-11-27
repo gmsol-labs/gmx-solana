@@ -1,4 +1,8 @@
-use crate::{evm_proxy::CancelIntent, pda::EvmAddressBytes, serde::StringPubkey};
+use crate::{
+    evm_proxy::{CancelIntent, WithdrawIntent},
+    pda::EvmAddressBytes,
+    serde::StringPubkey,
+};
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use tsify_next::Tsify;
@@ -207,12 +211,6 @@ pub fn build_evm_proxy_cancel_typed_data(
     let store = args.store.0;
     let genesis = parse_hex(&args.genesis_hash, "genesisHash")?;
     let data = intent.typed_data(&program, &store, &genesis);
-    let fields = |items: &[(&'static str, &'static str)]| {
-        items
-            .iter()
-            .map(|(name, field_type)| TypedField { name, field_type })
-            .collect()
-    };
     Ok(EvmProxyCancelSigningPayload {
         domain: Eip712Domain {
             name: data.name,
@@ -240,6 +238,154 @@ pub fn build_evm_proxy_cancel_typed_data(
             deadline: data.deadline.to_string(),
         },
     })
+}
+
+/// Signed Withdraw fields and proxy deployment.
+#[derive(Clone, Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct EvmProxyWithdrawIntentArgs {
+    /// Exactly 20 EVM address bytes in hex.
+    evm_address: String,
+    /// Full-width 32-byte big-endian chain ID in hex.
+    chain_id: String,
+    /// Base58 legacy SPL mint address.
+    mint: StringPubkey,
+    /// Base-unit transfer amount as a uint64 decimal string.
+    amount: String,
+    /// Signed mint decimals.
+    decimals: u8,
+    /// Base58 recipient wallet address.
+    recipient: StringPubkey,
+    /// Unsigned uint64 nonce as a decimal string.
+    nonce: String,
+    /// Unix deadline as a uint64 decimal string.
+    deadline: String,
+    /// Proxy deployment; omitted for the declared program.
+    #[serde(default)]
+    program_id: Option<StringPubkey>,
+}
+
+impl EvmProxyWithdrawIntentArgs {
+    pub(super) fn parse(&self) -> crate::Result<(Pubkey, WithdrawIntent)> {
+        let program = match &self.program_id {
+            Some(value) => value.0,
+            None => gmsol_programs::gmsol_evm_proxy::ID,
+        };
+        let intent = WithdrawIntent {
+            evm_address: parse_evm_address(&self.evm_address)?,
+            chain_id: parse_hex(&self.chain_id, "chainId")?,
+            mint: self.mint.0,
+            amount: self.amount.parse().map_err(crate::Error::custom)?,
+            decimals: self.decimals,
+            recipient: self.recipient.0,
+            nonce: self.nonce.parse().map_err(crate::Error::custom)?,
+            deadline: self.deadline.parse().map_err(crate::Error::custom)?,
+        };
+        Ok((program, intent))
+    }
+}
+
+/// EIP-712 type definitions for Withdraw.
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct EvmProxyWithdrawTypes {
+    #[serde(rename = "EIP712Domain")]
+    eip712_domain: Vec<TypedField>,
+    #[serde(rename = "Withdraw")]
+    withdraw: Vec<TypedField>,
+}
+
+/// Canonical signed Withdraw fields.
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct EvmProxyWithdrawMessage {
+    #[serde(rename = "proxyAccount")]
+    proxy_account: String,
+    mint: String,
+    amount: String,
+    decimals: u8,
+    recipient: String,
+    nonce: String,
+    deadline: String,
+}
+
+/// viem-compatible EIP-712 object. Numeric strings are typed as uints below.
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct EvmProxyWithdrawSigningPayload {
+    domain: Eip712Domain,
+    types: EvmProxyWithdrawTypes,
+    #[serde(rename = "primaryType")]
+    primary_type: &'static str,
+    message: EvmProxyWithdrawMessage,
+}
+
+fn fields(items: &[(&'static str, &'static str)]) -> Vec<TypedField> {
+    items
+        .iter()
+        .map(|(name, field_type)| TypedField { name, field_type })
+        .collect()
+}
+
+/// Construct the exact signable Withdraw typed data without JS Number conversion.
+#[wasm_bindgen]
+pub fn build_evm_proxy_withdraw_typed_data(
+    args: EvmProxyWithdrawSigningArgs,
+) -> crate::Result<EvmProxyWithdrawSigningPayload> {
+    let (program, intent) = args.intent.parse()?;
+    intent.validate(&program)?;
+    let store = args.store.0;
+    let genesis = parse_hex(&args.genesis_hash, "genesisHash")?;
+    let data = intent.typed_data(&program, &store, &genesis);
+    let types = EvmProxyWithdrawTypes {
+        eip712_domain: fields(&[
+            ("name", "string"),
+            ("version", "string"),
+            ("chainId", "uint256"),
+            ("salt", "bytes32"),
+        ]),
+        withdraw: fields(&[
+            ("proxyAccount", "bytes32"),
+            ("mint", "string"),
+            ("amount", "uint64"),
+            ("decimals", "uint8"),
+            ("recipient", "string"),
+            ("nonce", "uint64"),
+            ("deadline", "uint64"),
+        ]),
+    };
+    Ok(EvmProxyWithdrawSigningPayload {
+        domain: Eip712Domain {
+            name: data.name,
+            version: data.version,
+            chain_id: format!("0x{}", hex::encode(data.chain_id)),
+            salt: format!("0x{}", hex::encode(data.salt)),
+        },
+        types,
+        primary_type: "Withdraw",
+        message: EvmProxyWithdrawMessage {
+            proxy_account: format!("0x{}", hex::encode(data.proxy_account.to_bytes())),
+            mint: data.mint,
+            amount: data.amount.to_string(),
+            decimals: data.decimals,
+            recipient: data.recipient,
+            nonce: data.nonce.to_string(),
+            deadline: data.deadline.to_string(),
+        },
+    })
+}
+
+/// Withdraw fields plus immutable EVM signing domain inputs.
+#[derive(Clone, Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct EvmProxyWithdrawSigningArgs {
+    /// Signed Withdraw fields flattened into the argument object.
+    #[serde(flatten)]
+    intent: EvmProxyWithdrawIntentArgs,
+    /// Base58 Store account bound to this deployment.
+    store: StringPubkey,
+    /// Exactly 32 cluster genesis hash bytes in hex.
+    genesis_hash: String,
 }
 
 #[cfg(test)]
@@ -364,5 +510,121 @@ mod tests {
                 "accepted {invalid:?}"
             );
         }
+    }
+    #[test]
+    fn withdraw_payload_preserves_signed_numbers_and_canonical_keys() {
+        let recipient = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        let store = Pubkey::new_unique();
+        let args = EvmProxyWithdrawSigningArgs {
+            intent: EvmProxyWithdrawIntentArgs {
+                evm_address: "0x0123456789abcdef0123456789abcdef01234567".to_string(),
+                chain_id: format!("0x{}", hex::encode([0x12; 32])),
+                mint: mint.into(),
+                amount: u64::MAX.to_string(),
+                decimals: 6,
+                recipient: recipient.into(),
+                nonce: "0".to_string(),
+                deadline: "1700000120".to_string(),
+                program_id: None,
+            },
+            store: store.into(),
+            genesis_hash: format!("0x{}", hex::encode([0x42; 32])),
+        };
+        let payload = build_evm_proxy_withdraw_typed_data(args.clone()).unwrap();
+        assert_eq!(payload.primary_type, "Withdraw");
+        let serialized = serde_json::to_value(&payload).unwrap();
+        assert_eq!(serialized["primaryType"], "Withdraw");
+        assert!(serialized["domain"].get("chainId").is_some());
+        assert!(serialized["message"].get("proxyAccount").is_some());
+        assert_eq!(payload.message.amount, u64::MAX.to_string());
+        assert_eq!(payload.message.nonce, "0");
+        for nonce in ["0", "9007199254740993", "18446744073709551615"] {
+            let typed = build_evm_proxy_withdraw_typed_data(EvmProxyWithdrawSigningArgs {
+                intent: EvmProxyWithdrawIntentArgs {
+                    nonce: nonce.to_string(),
+                    ..args.intent.clone()
+                },
+                ..args.clone()
+            })
+            .unwrap();
+            assert_eq!(typed.message.nonce, nonce);
+        }
+        assert_eq!(payload.message.mint, mint.to_string());
+        assert_eq!(payload.message.recipient, recipient.to_string());
+        assert_eq!(payload.domain.name, gmsol_evm_proxy_intent::DOMAIN_NAME);
+        assert_eq!(
+            payload.domain.salt,
+            format!(
+                "0x{}",
+                hex::encode(gmsol_evm_proxy_intent::domain_salt(
+                    &gmsol_programs::gmsol_evm_proxy::ID,
+                    &store,
+                    &[0x42; 32]
+                ))
+            )
+        );
+        assert_eq!(
+            payload
+                .types
+                .withdraw
+                .iter()
+                .map(|field| (field.name, field.field_type))
+                .collect::<Vec<_>>(),
+            vec![
+                ("proxyAccount", "bytes32"),
+                ("mint", "string"),
+                ("amount", "uint64"),
+                ("decimals", "uint8"),
+                ("recipient", "string"),
+                ("nonce", "uint64"),
+                ("deadline", "uint64")
+            ]
+        );
+    }
+    fn withdraw_signing_input(
+        amount: u64,
+        recipient: Pubkey,
+        program: Pubkey,
+    ) -> EvmProxyWithdrawSigningArgs {
+        serde_json::from_value(serde_json::json!({
+            "evm_address": hex::encode([0x17; 20]), "chain_id": hex::encode([1; 32]),
+            "amount": amount.to_string(), "decimals": 6, "mint": Pubkey::new_unique().to_string(),
+            "recipient": recipient.to_string(), "nonce": "1", "deadline": u64::MAX.to_string(),
+            "store": Pubkey::new_unique().to_string(), "genesis_hash": hex::encode([2; 32]),
+            "program_id": program.to_string(),
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn withdraw_signing_rejects_zero_amount() {
+        let program = Pubkey::new_unique();
+        let recipient = Pubkey::new_unique();
+        assert!(
+            build_evm_proxy_withdraw_typed_data(withdraw_signing_input(1, recipient, program))
+                .is_ok()
+        );
+        assert!(
+            build_evm_proxy_withdraw_typed_data(withdraw_signing_input(0, recipient, program))
+                .is_err(),
+            "signing must reject a zero Withdraw amount"
+        );
+    }
+
+    #[test]
+    fn withdraw_signing_rejects_self_recipient_for_selected_deployment() {
+        let program = Pubkey::new_unique();
+        let proxy = crate::pda::find_proxy_address(&[0x17; 20], &program).0;
+        assert!(build_evm_proxy_withdraw_typed_data(withdraw_signing_input(
+            1,
+            Pubkey::new_unique(),
+            program
+        ))
+        .is_ok());
+        assert!(
+            build_evm_proxy_withdraw_typed_data(withdraw_signing_input(1, proxy, program)).is_err(),
+            "signing must reject the selected deployment proxy as recipient"
+        );
     }
 }

@@ -1,4 +1,4 @@
-# Cancel intent vectors
+# Intent vectors
 
 Cancel encodes a uint64 nonce. Domain salt binds the program, Store and genesis hash. The vectors preserve full-width chain IDs, uint64 boundaries and domain mutations.
 
@@ -13,3 +13,9 @@ Check the saved public vectors and signatures:
 `--write` generates a fresh signing key in memory and stores only public data and signatures. It never saves the key.
 
 The first execution nonce is 0. The first vector demonstrates it; MAX remains a valid signing/encoding input but cannot execute. The counter never wraps. Vector names describe encoding inputs, not independent on-chain state transitions.
+
+Withdraw has twelve deterministic domain, field and uint64 cases. Check or regenerate with the same pinned tooling:
+
+`node fixtures/scripts/generate-withdraw-vectors.cjs --check`
+
+`node fixtures/scripts/generate-withdraw-vectors.cjs --write`

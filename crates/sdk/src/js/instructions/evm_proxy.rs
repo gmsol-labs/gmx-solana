@@ -1,6 +1,6 @@
 use super::{TransactionGroup, TransactionGroupOptions};
 use crate::{
-    js::evm_proxy::{parse_hex, EvmProxyCancelIntentArgs},
+    js::evm_proxy::{parse_hex, EvmProxyCancelIntentArgs, EvmProxyWithdrawIntentArgs},
     serde::StringPubkey,
 };
 use gmsol_solana_utils::IntoAtomicGroup;
@@ -50,6 +50,54 @@ pub fn build_evm_proxy_cancel_transaction(
     let mut group = args.transaction_group.build();
     TransactionGroup::new(
         group.add(cancel)?.optimize(false),
+        &args.recent_blockhash,
+        args.compute_unit_price_micro_lamports,
+        args.compute_unit_min_priority_lamports,
+    )
+}
+
+/// Arguments for a signed Withdraw transaction.
+#[derive(Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct BuildEvmProxyWithdrawTransactionArgs {
+    /// Signed fields and selected proxy deployment.
+    intent: EvmProxyWithdrawIntentArgs,
+    /// Base58 transaction fee payer and intent submitter.
+    payer: StringPubkey,
+    /// Recent Solana blockhash in base58.
+    recent_blockhash: String,
+    /// Exactly 64 hex bytes encoding compact ECDSA r || s.
+    signature: String,
+    /// Canonical recovery ID, zero or one.
+    recovery_id: u8,
+    /// Optional compute-unit price in micro-lamports.
+    #[serde(default)]
+    compute_unit_price_micro_lamports: Option<u64>,
+    /// Optional minimum priority fee in lamports.
+    #[serde(default)]
+    compute_unit_min_priority_lamports: Option<u64>,
+    /// Standard transaction-group options.
+    #[serde(default)]
+    transaction_group: TransactionGroupOptions,
+}
+
+/// Build a Withdraw through the standard transaction group and compute-budget path.
+#[wasm_bindgen]
+pub fn build_evm_proxy_withdraw_transaction(
+    args: BuildEvmProxyWithdrawTransactionArgs,
+) -> crate::Result<TransactionGroup> {
+    let (program, intent) = args.intent.parse()?;
+    let withdraw = crate::builders::evm_proxy::Withdraw::builder()
+        .program(program.into())
+        .payer(args.payer)
+        .intent(intent)
+        .signature(parse_hex(&args.signature, "signature")?)
+        .recovery_id(args.recovery_id)
+        .build()
+        .into_atomic_group(&())?;
+    let mut group = args.transaction_group.build();
+    TransactionGroup::new(
+        group.add(withdraw)?.optimize(false),
         &args.recent_blockhash,
         args.compute_unit_price_micro_lamports,
         args.compute_unit_min_priority_lamports,
@@ -142,5 +190,27 @@ mod transaction_tests {
             args::Cancel::deserialize(&mut &instruction.data[args::Cancel::DISCRIMINATOR.len()..])
                 .unwrap();
         assert_eq!(data.nonce, SIGNED_NONCE);
+    }
+    #[test]
+    fn withdraw_transaction_preserves_fee_options_payer_and_full_width_numbers() {
+        let payer = Pubkey::new_unique();
+        let mut value = transaction_args(payer);
+        value["intent"]["mint"] = Pubkey::new_unique().to_string().into();
+        value["intent"]["recipient"] = Pubkey::new_unique().to_string().into();
+        value["intent"]["amount"] = u64::MAX.to_string().into();
+        value["intent"]["decimals"] = 6.into();
+        let input: BuildEvmProxyWithdrawTransactionArgs = serde_json::from_value(value).unwrap();
+        let transaction = checked_transaction(
+            build_evm_proxy_withdraw_transaction(input).unwrap(),
+            payer,
+            1,
+        );
+        let instruction = proxy_instruction(&transaction);
+        let data = args::Withdraw::deserialize(
+            &mut &instruction.data[args::Withdraw::DISCRIMINATOR.len()..],
+        )
+        .unwrap();
+        assert_eq!(data.nonce, SIGNED_NONCE);
+        assert_eq!(data.amount, u64::MAX);
     }
 }

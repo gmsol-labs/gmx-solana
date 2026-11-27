@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
 use gmsol_utils::InitSpace;
 
 mod intent_verifier;
@@ -29,6 +30,24 @@ pub struct IntentConsumed {
     pub nonce: u64,
     /// Kind of the successful intent.
     pub kind: u8,
+}
+
+/// Event kind for a successful Withdraw intent.
+pub const INTENT_KIND_WITHDRAW: u8 = 2;
+
+/// Transfer completed by a signed Withdraw intent.
+#[event]
+pub struct Withdrawn {
+    /// Proxy that authorized the transfer.
+    pub proxy: Pubkey,
+    /// Nonce consumed by the transfer.
+    pub nonce: u64,
+    /// Legacy SPL mint transferred.
+    pub mint: Pubkey,
+    /// Exact amount transferred in base units.
+    pub amount: u64,
+    /// Recipient wallet whose canonical ATA received the transfer.
+    pub recipient: Pubkey,
 }
 
 /// Permanent account for one EVM address.
@@ -460,6 +479,116 @@ pub mod gmsol_evm_proxy {
         });
         Ok(())
     }
+    /// Transfer a signed amount of a legacy SPL mint from the proxy ATA to the
+    /// existing ATA of the signed recipient wallet. Any Solana payer may submit
+    /// the EVM owner's signature; the payer does not become the token recipient.
+    /// The signature binds the mint, recipient wallet, amount, decimals, nonce,
+    /// deadline, chain, and deployment domain. Both token accounts must exist,
+    /// use the legacy Token program, and be unfrozen.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](Withdraw).*
+    ///
+    /// # Arguments
+    /// - `chain_id`: signed EVM chain ID.
+    /// - `amount`: signed transfer amount in base units.
+    /// - `decimals`: signed mint decimals.
+    /// - `nonce`: signed next counter value.
+    /// - `deadline`: signed execution deadline.
+    /// - `signature`: compact ECDSA signature.
+    /// - `recovery_id`: canonical recovery ID, zero or one.
+    ///
+    /// # Errors
+    /// - Returns `ZeroAmount` for zero, `SelfRecipient` when the recipient wallet
+    /// is the proxy, and `InvalidDecimals` for a mint decimal mismatch. Account
+    /// constraints reject noncanonical or missing ATAs, wrong mint or Token
+    /// program. The checked token transfer rejects frozen token accounts.
+    /// - Returns `InvalidProxy` for an unsupported proxy version and
+    /// `InvalidIntentNonce` for any non-next nonce. Verification returns `Paused`,
+    /// `ChainNotAllowed`, `InvalidDeadline` or `InvalidSignature` for policy,
+    /// deadline or EVM-signature rejection. Loading, borrowing and Clock errors
+    /// propagate. A failed transfer leaves the nonce unconsumed and token balances unchanged.
+    pub fn withdraw(
+        ctx: Context<Withdraw>,
+        chain_id: [u8; 32],
+        amount: u64,
+        decimals: u8,
+        nonce: u64,
+        deadline: u64,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> Result<()> {
+        require!(amount > 0, ProxyError::ZeroAmount);
+        let proxy_key = ctx.accounts.proxy.key();
+        let recipient = ctx.accounts.recipient.key();
+        require_keys_neq!(proxy_key, recipient, ProxyError::SelfRecipient);
+        require_eq!(
+            decimals,
+            ctx.accounts.mint.decimals,
+            ProxyError::InvalidDecimals
+        );
+        let (evm_address, proxy_bump);
+        {
+            let proxy = ctx.accounts.proxy.load()?;
+            require_eq!(proxy.version, PROXY_VERSION, ProxyError::InvalidProxy);
+            evm_address = proxy.evm_address;
+            proxy_bump = proxy.bump;
+            require!(
+                nonce == proxy.expected_next_nonce(),
+                ProxyError::InvalidIntentNonce
+            );
+        }
+        let mint = ctx.accounts.mint.key();
+        let struct_hash =
+            gmsol_evm_proxy_intent::withdraw_struct_hash(&gmsol_evm_proxy_intent::WithdrawFields {
+                proxy: proxy_key,
+                mint,
+                amount,
+                decimals,
+                recipient,
+                nonce,
+                deadline,
+            });
+        intent_verifier::verify(
+            &ctx.accounts.config,
+            evm_address,
+            chain_id,
+            deadline,
+            struct_hash,
+            signature,
+            recovery_id,
+        )?;
+        let bump = [proxy_bump];
+        let signer_seeds: &[&[u8]] = &[PROXY_SEED, evm_address.as_ref(), &bump];
+        transfer_checked(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.source.to_account_info(),
+                    mint: ctx.accounts.mint.to_account_info(),
+                    to: ctx.accounts.destination.to_account_info(),
+                    authority: ctx.accounts.proxy.to_account_info(),
+                },
+            )
+            .with_signer(&[signer_seeds]),
+            amount,
+            decimals,
+        )?;
+        ctx.accounts.proxy.load_mut()?.consume_next_nonce(nonce)?;
+        emit!(IntentConsumed {
+            proxy: proxy_key,
+            nonce,
+            kind: INTENT_KIND_WITHDRAW,
+        });
+        emit!(Withdrawn {
+            proxy: proxy_key,
+            nonce,
+            mint,
+            amount,
+            recipient
+        });
+        Ok(())
+    }
 }
 
 /// Accounts for the scaffold initialization instruction.
@@ -576,6 +705,31 @@ pub struct Cancel<'info> {
     pub proxy: AccountLoader<'info, Proxy>,
 }
 
+/// Accounts for transferring a signed amount between existing legacy ATAs.
+#[derive(Accounts)]
+pub struct Withdraw<'info> {
+    /// Transaction signer; the EVM signature supplies transfer authority.
+    pub submitter: Signer<'info>,
+    /// Singleton policy and immutable signing domain.
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    /// Proxy whose stored identity determines the canonical PDA.
+    #[account(mut, seeds = [PROXY_SEED, proxy.load()?.evm_address.as_ref()], bump = proxy.load()?.bump)]
+    pub proxy: AccountLoader<'info, Proxy>,
+    /// Initialized legacy SPL mint.
+    pub mint: Account<'info, Mint>,
+    /// CHECK: the address is signed and the destination ATA is constrained below.
+    pub recipient: UncheckedAccount<'info>,
+    /// Existing canonical proxy ATA for the legacy SPL Token program and mint.
+    #[account(mut, associated_token::mint = mint, associated_token::authority = proxy, associated_token::token_program = token_program)]
+    pub source: Account<'info, TokenAccount>,
+    /// Existing canonical recipient ATA for the legacy SPL Token program and mint.
+    #[account(mut, associated_token::mint = mint, associated_token::authority = recipient, associated_token::token_program = token_program)]
+    pub destination: Account<'info, TokenAccount>,
+    /// Legacy SPL Token program.
+    pub token_program: Program<'info, Token>,
+}
+
 /// EVM proxy account errors.
 #[error_code]
 pub enum ProxyError {
@@ -624,6 +778,15 @@ pub enum ProxyError {
     /// The matching next nonce has no representable successor.
     #[msg("Proxy nonce is exhausted")]
     NonceExhausted,
+    /// Signed transfer amount is zero.
+    #[msg("Withdraw amount must be positive")]
+    ZeroAmount,
+    /// Signed recipient is the source proxy itself.
+    #[msg("Proxy cannot withdraw to itself")]
+    SelfRecipient,
+    /// Signed decimal precision differs from the mint.
+    #[msg("Signed decimals differ from the mint")]
+    InvalidDecimals,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]
