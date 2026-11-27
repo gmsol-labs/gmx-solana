@@ -1,6 +1,7 @@
 //! Owner-aware account decoding and committed CPI events for an EVM proxy deployment.
 
-use anchor_lang::{event::EVENT_IX_TAG_LE, AccountDeserialize, Discriminator};
+use anchor_lang::{event::EVENT_IX_TAG_LE, AccountDeserialize, AnchorDeserialize, Discriminator};
+use base64::Engine;
 use gmsol_programs::gmsol_evm_proxy::{accounts::Config, events};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use solana_transaction_status_client_types::EncodedTransactionWithStatusMeta;
@@ -113,6 +114,30 @@ pub fn decode_committed_events(
     let mut decoder = TransactionDecoder::new(slot, signature, transaction);
     decoder.add_cpi_event_program_id(program_id)?;
     AnchorCPIEvents::decode(&decoder)
+}
+
+/// Existing child-owned referral log decoding, pending CPI conversion.
+pub fn decode_referral_code_event_log(
+    line: &str,
+) -> Result<Option<events::ReferralCodeSet>, crate::DecodeError> {
+    decode_program_data(line)
+}
+
+fn decode_program_data<E: Discriminator + AnchorDeserialize>(
+    line: &str,
+) -> Result<Option<E>, crate::DecodeError> {
+    let Some(encoded) = line.strip_prefix("Program data: ") else {
+        return Ok(None);
+    };
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(crate::DecodeError::custom)?;
+    if !data.starts_with(E::DISCRIMINATOR) {
+        return Ok(None);
+    }
+    E::try_from_slice(&data[E::DISCRIMINATOR.len()..])
+        .map(Some)
+        .map_err(crate::DecodeError::custom)
 }
 
 #[cfg(test)]

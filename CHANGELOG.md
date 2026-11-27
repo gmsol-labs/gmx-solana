@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - cli(gmsol): Added user commands for GT delegate and allowance changes, including Squads proposals through the existing `--squads` mode.
 - sdk(solana-utils): Added `SendAndConfirm::send_and_confirm_transaction_detailed`, which returns `Error::SendUnresolved` (with the signature) whenever the transaction may have reached the cluster but its outcome is unknown: the send request timed out, the connection dropped, the response carried a malformed or mismatched signature, or confirmation failed. Only an explicit rejection by the RPC node (e.g. preflight failure) and on-chain failures are still `Error::Client`. It has a default implementation, and `send_and_confirm_transaction_with_config` is unchanged, so existing callers and implementors keep compiling.
 - sdk(solana-utils): Added `Error::SendUnresolved { signature, source }`, returned when a transaction may have been submitted but its outcome is unknown. The signature is taken from the signed transaction, so it is available even when the send response is lost. Its outcome is unknown, so callers should look up `signature` before retrying. `Error::unresolved_signature` returns it.
+- programs(evm-proxy): Added EVM-owner-signed referral code registration with submitter-funded Store rent, shared intent verification and nonce consumption, and a `ReferralCodeSet` event.
+- sdk(sdk): Added referral intent typed data, instruction and client builders, and registration event decoding.
+- sdk(js): Added canonical referral typed data and unsigned transactions with separate rent sponsor and fee payer.
+- sdk(decode): Added typed referral registration event decoding.
 - programs(evm-proxy): Added EVM-owner-signed Withdraw of legacy SPL tokens to an existing recipient ATA, with exact amount and CPI nonce consumption events. Cancel and Withdraw use the same deployment domain and shared next nonce with checked advancement.
 - sdk(sdk): Added Rust Withdraw intent, typed hash, transaction builder and event decoding.
 - sdk(js): Added typed-data and unsigned transaction builders for signed Withdraw intents.

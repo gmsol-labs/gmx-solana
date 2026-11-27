@@ -10,6 +10,9 @@ pub const DOMAIN_VERSION: &str = "1";
 pub const CANCEL_TYPE: &str = "Cancel(bytes32 proxyAccount,uint64 nonce,uint64 deadline)";
 /// Exact primary type used by Withdraw.
 pub const WITHDRAW_TYPE: &str = "Withdraw(bytes32 proxyAccount,string mint,uint64 amount,uint8 decimals,string recipient,uint64 nonce,uint64 deadline)";
+/// Exact primary type used by referral registration.
+pub const SET_REFERRAL_CODE_TYPE: &str =
+    "SetReferralCode(bytes32 proxyAccount,string code,uint64 nonce,uint64 deadline)";
 const DOMAIN_TYPE: &[u8] = b"EIP712Domain(string name,string version,uint256 chainId,bytes32 salt)";
 
 fn u64_word(value: u64) -> [u8; 32] {
@@ -22,6 +25,23 @@ fn u8_word(value: u8) -> [u8; 32] {
     let mut word = [0; 32];
     word[31] = value;
     word
+}
+
+/// Hash the canonical code string supplied by the Store encoder.
+pub fn set_referral_code_struct_hash(
+    proxy: &Pubkey,
+    code: &str,
+    nonce: u64,
+    deadline: u64,
+) -> [u8; 32] {
+    keccak::hashv(&[
+        keccak::hash(SET_REFERRAL_CODE_TYPE.as_bytes()).as_ref(),
+        proxy.as_ref(),
+        keccak::hash(code.as_bytes()).as_ref(),
+        &u64_word(nonce),
+        &u64_word(deadline),
+    ])
+    .to_bytes()
 }
 
 /// Hash the canonical Cancel fields.
@@ -116,11 +136,48 @@ mod tests {
     }
 
     #[test]
+    fn independent_viem_vectors_match_referral_encoding() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../fixtures/referral-vectors.json")).unwrap();
+        assert_eq!(fixture["generator"], "viem@2.57.7");
+        assert_eq!(fixture["type"], SET_REFERRAL_CODE_TYPE);
+        const EXPECTED_REFERRAL_VECTORS: usize = 24;
+        assert_eq!(
+            fixture["vectors"].as_array().unwrap().len(),
+            EXPECTED_REFERRAL_VECTORS
+        );
+        let program = Pubkey::new_from_array(field(&fixture, "program"));
+        let store = Pubkey::new_from_array(field(&fixture, "store"));
+        let proxy = Pubkey::new_from_array(field(&fixture, "proxy"));
+        for vector in fixture["vectors"].as_array().unwrap() {
+            let code = vector["canonical"].as_str().unwrap();
+            let structure = set_referral_code_struct_hash(
+                &proxy,
+                code,
+                vector["nonce"].as_str().unwrap().parse().unwrap(),
+                vector["deadline"].as_str().unwrap().parse().unwrap(),
+            );
+            assert_eq!(structure, field(vector, "structHash"));
+            let domain = domain_separator(
+                &program,
+                &store,
+                &field(&fixture, "genesis"),
+                &field(vector, "chainId"),
+            );
+            assert_eq!(intent_digest(&domain, &structure), field(vector, "digest"));
+        }
+    }
+
+    #[test]
     fn independent_viem_vectors_match_cancel_encoding() {
         let fixture: Value =
             serde_json::from_str(include_str!("../fixtures/cancel-vectors.json")).unwrap();
         assert_eq!(fixture["generator"], "viem@2.57.7");
-        assert_eq!(fixture["vectors"].as_array().unwrap().len(), 22);
+        const EXPECTED_CANCEL_VECTORS: usize = 22;
+        assert_eq!(
+            fixture["vectors"].as_array().unwrap().len(),
+            EXPECTED_CANCEL_VECTORS
+        );
         for vector in fixture["vectors"].as_array().unwrap() {
             let program = Pubkey::new_from_array(field(vector, "program"));
             let store = Pubkey::new_from_array(field(vector, "store"));
@@ -172,7 +229,11 @@ mod tests {
             serde_json::from_str(include_str!("../fixtures/withdraw-vectors.json")).unwrap();
         assert_eq!(fixture["generator"], "viem@2.57.7");
         assert_eq!(fixture["type"], WITHDRAW_TYPE);
-        assert_eq!(fixture["vectors"].as_array().unwrap().len(), 12);
+        const EXPECTED_WITHDRAW_VECTORS: usize = 12;
+        assert_eq!(
+            fixture["vectors"].as_array().unwrap().len(),
+            EXPECTED_WITHDRAW_VECTORS
+        );
         for vector in fixture["vectors"].as_array().unwrap() {
             let program = Pubkey::new_from_array(field(vector, "program"));
             let store = Pubkey::new_from_array(field(vector, "store"));

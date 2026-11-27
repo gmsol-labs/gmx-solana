@@ -55,6 +55,11 @@ url = "https://api.devnet.solana.com"
 ledger = ".anchor/test-ledger"
 rpc_port = 8899
 
+# A valid existing uncoded Proxy User for referral registration coverage.
+[[test.validator.account]]
+address = "7E1AmyyaedVkkL1ZmHvy2K2sW3HhgZ8oSsm7jVN7RpQA"
+filename = "tests/fixtures/proxy-referral-user.json"
+
 # Chainlink Verifier Program
 [[test.validator.clone]]
 address = "Gt9S41PtjR58CbG9JhJ3J6vxesqrNAswbWYbLNTMZA3c"

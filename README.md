@@ -30,6 +30,8 @@
 
 ## Integration
 
+The [EVM proxy guide](programs/evm-proxy/README.md) covers the EVM proxy program and its signed intents and its SDK builders.
+
 ### Method 1: Using the Rust SDK
 
 Add the following to your `Cargo.toml`:

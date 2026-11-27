@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
+use anchor_lang::system_program;
 use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
+use gmsol_store::states::{user::ReferralCodeV2, Seed, Store, UserHeader};
 use gmsol_utils::InitSpace;
 
 mod intent_verifier;
@@ -48,6 +50,22 @@ pub struct Withdrawn {
     pub amount: u64,
     /// Recipient wallet whose canonical ATA received the transfer.
     pub recipient: Pubkey,
+}
+
+/// Intent-kind tag for referral-code registration.
+pub const INTENT_KIND_SET_REFERRAL_CODE: u8 = 3;
+/// Width of the canonical signed referral code.
+pub const REFERRAL_CODE_LEN: usize = ReferralCodeV2::LEN;
+
+/// Referral code registered by a successful signed intent.
+#[event]
+pub struct ReferralCodeSet {
+    /// Proxy that owns the registered code.
+    pub proxy: Pubkey,
+    /// Nonce consumed by registration.
+    pub nonce: u64,
+    /// Canonical signed code bytes.
+    pub code: [u8; REFERRAL_CODE_LEN],
 }
 
 /// Permanent account for one EVM address.
@@ -587,6 +605,175 @@ pub mod gmsol_evm_proxy {
         });
         Ok(())
     }
+    /// Register the EVM owner's canonical code through Store.
+    /// The submitter funds only missing targets' rent deficits. The proxy signs
+    /// the Store CPIs as owner without paying rent from its data-bearing account.
+    /// Create the Proxy first, or earlier in the same transaction. Existing target
+    /// balances reduce the submitter's rent cost; excess lamports stay in the targets.
+    /// Proxy, User, referral code and submitter must be writable even when prefunded.
+    ///
+    /// A failed transaction rolls back persistent account, rent and nonce changes,
+    /// but its actual fee payer still pays transaction fees. Failed logs may remain
+    /// visible; apply events only after confirming success and program attribution.
+    ///
+    /// # Accounts
+    /// *[See the documentation for the accounts.](SetReferralCode).*
+    ///
+    /// # Arguments
+    /// - `chain_id`: signed EVM chain ID.
+    /// - `code`: canonical signed referral-code bytes.
+    /// - `nonce`: signed next counter value.
+    /// - `deadline`: signed execution deadline.
+    /// - `signature`: compact ECDSA signature.
+    /// - `recovery_id`: canonical recovery ID, zero or one.
+    ///
+    /// # Errors
+    /// - Anchor account validation rejects Store, User or code accounts that do
+    ///   not match Config and the signed code bytes.
+    /// - [`ProxyError::InvalidReferralCode`] for a zero code.
+    /// - [`ProxyError::ReferralCodeTaken`] for an occupied code target.
+    /// - [`ProxyError::InvalidReferralUser`] for invalid User ownership or layout.
+    /// - [`ProxyError::InvalidConfigStore`] for a Store other than Config's Store.
+    /// - [`ProxyError::InvalidProxy`] for an unsupported proxy version.
+    /// - [`ProxyError::InvalidIntentNonce`] when the signed nonce is not next.
+    /// - [`ProxyError::Paused`], [`ProxyError::ChainNotAllowed`],
+    ///   [`ProxyError::InvalidDeadline`] or [`ProxyError::InvalidSignature`]
+    ///   for policy, deadline or EVM-signature rejection.
+    /// - Account loading/borrowing, Clock, rent, funding and Store CPI errors
+    ///   propagate. Insufficient sponsor funds or an already-coded User fail
+    ///   atomically, excluding transaction fees.
+    pub fn set_referral_code(
+        ctx: Context<SetReferralCode>,
+        chain_id: [u8; 32],
+        code: [u8; REFERRAL_CODE_LEN],
+        nonce: u64,
+        deadline: u64,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> Result<()> {
+        require!(
+            code != [0; REFERRAL_CODE_LEN],
+            ProxyError::InvalidReferralCode
+        );
+        let proxy_key = ctx.accounts.proxy.key();
+        let (evm_address, proxy_bump);
+        {
+            let proxy = ctx.accounts.proxy.load()?;
+            require_eq!(proxy.version, PROXY_VERSION, ProxyError::InvalidProxy);
+            evm_address = proxy.evm_address;
+            proxy_bump = proxy.bump;
+            require_eq!(
+                nonce,
+                proxy.expected_next_nonce(),
+                ProxyError::InvalidIntentNonce
+            );
+        }
+        intent_verifier::verify(
+            &ctx.accounts.config,
+            evm_address,
+            chain_id,
+            deadline,
+            gmsol_evm_proxy_intent::set_referral_code_struct_hash(
+                &proxy_key,
+                &ReferralCodeV2::encode(&code, true),
+                nonce,
+                deadline,
+            ),
+            signature,
+            recovery_id,
+        )?;
+
+        let user = ctx.accounts.user.to_account_info();
+        let referral_code = ctx.accounts.referral_code.to_account_info();
+        require!(
+            referral_code.owner == &system_program::ID && referral_code.data_is_empty(),
+            ProxyError::ReferralCodeTaken
+        );
+        let missing_user = user.owner == &system_program::ID && user.data_is_empty();
+        if !missing_user {
+            require_keys_eq!(
+                *user.owner,
+                gmsol_store::ID,
+                ProxyError::InvalidReferralUser
+            );
+            require!(
+                user.data_len() >= 8 + UserHeader::space(0)
+                    && user
+                        .try_borrow_data()?
+                        .starts_with(UserHeader::DISCRIMINATOR),
+                ProxyError::InvalidReferralUser
+            );
+        }
+        let rent = Rent::get()?;
+        if missing_user {
+            ctx.accounts
+                .fund_rent_deficit(&user, rent.minimum_balance(8 + UserHeader::space(0)))?;
+        }
+        ctx.accounts.fund_rent_deficit(
+            &referral_code,
+            rent.minimum_balance(8 + <ReferralCodeV2 as InitSpace>::INIT_SPACE),
+        )?;
+
+        let bump = [proxy_bump];
+        let seeds: &[&[u8]] = &[PROXY_SEED, evm_address.as_ref(), &bump];
+        let signer = &[seeds];
+        gmsol_store::cpi::prepare_user(CpiContext::new_with_signer(
+            ctx.accounts.store_program.to_account_info(),
+            gmsol_store::cpi::accounts::PrepareUser {
+                owner: ctx.accounts.proxy.to_account_info(),
+                store: ctx.accounts.store.to_account_info(),
+                user: user.clone(),
+                system_program: ctx.accounts.system_program.to_account_info(),
+            },
+            signer,
+        ))?;
+        gmsol_store::cpi::initialize_referral_code(
+            CpiContext::new_with_signer(
+                ctx.accounts.store_program.to_account_info(),
+                gmsol_store::cpi::accounts::InitializeReferralCode {
+                    owner: ctx.accounts.proxy.to_account_info(),
+                    store: ctx.accounts.store.to_account_info(),
+                    referral_code,
+                    user,
+                    system_program: ctx.accounts.system_program.to_account_info(),
+                },
+                signer,
+            ),
+            code,
+        )?;
+        ctx.accounts.proxy.load_mut()?.consume_next_nonce(nonce)?;
+        emit!(IntentConsumed {
+            proxy: proxy_key,
+            nonce,
+            kind: INTENT_KIND_SET_REFERRAL_CODE
+        });
+        emit!(ReferralCodeSet {
+            proxy: proxy_key,
+            nonce,
+            code
+        });
+        Ok(())
+    }
+}
+
+/// Fund only the target account's missing rent through an ordinary transfer.
+impl<'info> SetReferralCode<'info> {
+    fn fund_rent_deficit(&self, target: &AccountInfo<'info>, minimum: u64) -> Result<()> {
+        let deficit = minimum.saturating_sub(target.lamports());
+        if deficit != 0 {
+            system_program::transfer(
+                CpiContext::new(
+                    self.system_program.to_account_info(),
+                    system_program::Transfer {
+                        from: self.submitter.to_account_info(),
+                        to: target.clone(),
+                    },
+                ),
+                deficit,
+            )?;
+        }
+        Ok(())
+    }
 }
 
 /// Accounts for the scaffold initialization instruction.
@@ -730,6 +917,36 @@ pub struct Withdraw<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+/// Accounts for sponsored referral-code registration.
+#[derive(Accounts)]
+#[instruction(chain_id: [u8; 32], code: [u8; REFERRAL_CODE_LEN])]
+pub struct SetReferralCode<'info> {
+    /// Sponsors target rent; may differ from the transaction fee payer.
+    #[account(mut)]
+    pub submitter: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump, has_one = store @ ProxyError::InvalidConfigStore)]
+    /// Singleton policy and immutable Store binding.
+    pub config: Account<'info, Config>,
+    /// Both Store instructions require a writable owner signer.
+    #[account(mut, seeds = [PROXY_SEED, proxy.load()?.evm_address.as_ref()], bump = proxy.load()?.bump)]
+    pub proxy: AccountLoader<'info, Proxy>,
+    /// Store permanently bound by Config.
+    pub store: AccountLoader<'info, Store>,
+    /// CHECK: canonical Store PDA; ownership/layout checked before funding,
+    /// then the Store instruction validates initialized fields and bump.
+    #[account(mut, seeds = [UserHeader::SEED, store.key().as_ref(), proxy.key().as_ref()],
+        bump, seeds::program = store_program.key())]
+    pub user: UncheckedAccount<'info>,
+    /// CHECK: canonical code PDA, required to be empty and System-owned before funding.
+    #[account(mut, seeds = [ReferralCodeV2::SEED, store.key().as_ref(), &code],
+        bump, seeds::program = store_program.key())]
+    pub referral_code: UncheckedAccount<'info>,
+    /// Store program used for User preparation and code registration.
+    pub store_program: Program<'info, gmsol_store::program::GmsolStore>,
+    /// System program used to fund target rent deficits.
+    pub system_program: Program<'info, System>,
+}
+
 /// EVM proxy account errors.
 #[error_code]
 pub enum ProxyError {
@@ -787,6 +1004,18 @@ pub enum ProxyError {
     /// Signed decimal precision differs from the mint.
     #[msg("Signed decimals differ from the mint")]
     InvalidDecimals,
+    /// Signed referral-code input is zero.
+    #[msg("Referral code cannot be zero")]
+    InvalidReferralCode,
+    /// Store User has invalid ownership or layout.
+    #[msg("Referral User has invalid ownership or layout")]
+    InvalidReferralUser,
+    /// Canonical referral-code target is already occupied.
+    #[msg("Referral code is already taken")]
+    ReferralCodeTaken,
+    /// Supplied Store differs from Config's immutable Store.
+    #[msg("Store differs from Config's bound Store")]
+    InvalidConfigStore,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]

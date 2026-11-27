@@ -123,3 +123,49 @@ impl gmsol_solana_utils::IntoAtomicGroup for Withdraw {
         ))
     }
 }
+
+/// Builder for a sponsored referral-code registration transaction group.
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct SetReferralCode {
+    /// Deployment selected for the signed domain.
+    #[builder(default)]
+    pub program: EvmProxyProgram,
+    /// Transaction fee payer.
+    #[builder(setter(into))]
+    pub payer: StringPubkey,
+    /// Rent sponsor signing registration; may differ from the fee payer.
+    #[builder(setter(into))]
+    pub submitter: StringPubkey,
+    /// Store bound by Config and the signature domain.
+    #[builder(setter(into))]
+    pub store: StringPubkey,
+    /// Fields bound by the signature.
+    pub intent: crate::evm_proxy::SetReferralCodeIntent,
+    /// Compact ECDSA signature.
+    pub signature: [u8; 64],
+    /// Canonical recovery ID, zero or one.
+    pub recovery_id: u8,
+}
+
+impl gmsol_solana_utils::IntoAtomicGroup for SetReferralCode {
+    type Hint = ();
+
+    fn into_atomic_group(
+        self,
+        _hint: &(),
+    ) -> gmsol_solana_utils::Result<gmsol_solana_utils::AtomicGroup> {
+        let instruction = crate::evm_proxy::set_referral_code_instruction(
+            self.program.id.0,
+            self.submitter.0,
+            self.store.0,
+            &self.intent,
+            self.signature,
+            self.recovery_id,
+        )
+        .map_err(gmsol_solana_utils::Error::custom)?;
+        let mut group =
+            gmsol_solana_utils::AtomicGroup::with_instructions(&self.payer.0, Some(instruction));
+        group.add_signer(&self.submitter.0);
+        Ok(group)
+    }
+}
