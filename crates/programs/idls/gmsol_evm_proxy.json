@@ -103,6 +103,131 @@
       "args": []
     },
     {
+      "name": "cancel",
+      "docs": [
+        "Consume the next signed Cancel nonce, wrapping from u64::MAX to zero,",
+        "without changing the proxy's business state.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](Cancel).*",
+        "",
+        "# Arguments",
+        "- `chain_id`: Signed full-width EVM chain ID.",
+        "- `nonce`: Signed next nonce.",
+        "- `deadline`: Signed execution deadline.",
+        "- `signature`: Compact ECDSA signature over the Cancel digest.",
+        "- `recovery_id`: Canonical recovery ID, zero or one.",
+        "",
+        "# Errors",
+        "- Anchor account validation, account borrowing or Clock access fails.",
+        "- [`ProxyError::InvalidProxy`] for an unsupported stored layout version.",
+        "- [`ProxyError::InvalidIntentNonce`] when the signed nonce is not next.",
+        "- [`ProxyError::Paused`] while Config is paused.",
+        "- [`ProxyError::ChainNotAllowed`] when the chain ID is not allowed.",
+        "- [`ProxyError::InvalidDeadline`] for a negative Clock timestamp or a",
+        "deadline outside the inclusive window from now through now plus 3600 seconds.",
+        "- [`ProxyError::InvalidSignature`] for an invalid recovery ID, zero or",
+        "high `s`, failed recovery or a recovered address differing from the EVM owner."
+      ],
+      "discriminator": [
+        232,
+        219,
+        223,
+        41,
+        219,
+        236,
+        220,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "submitter",
+          "docs": [
+            "Signer submitting the intent; no EVM owner authority is required."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Singleton policy and immutable domain fields."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proxy",
+          "docs": [
+            "Permanent proxy identified by its own stored address and bump."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  120,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proxy"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "chain_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "deadline",
+          "type": "u64"
+        },
+        {
+          "name": "signature",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "recovery_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "create_config",
       "docs": [
         "Bind the singleton Config to one Store and a caller-supplied genesis hash.",
@@ -764,6 +889,19 @@
         26,
         193
       ]
+    },
+    {
+      "name": "IntentConsumed",
+      "discriminator": [
+        142,
+        216,
+        106,
+        77,
+        223,
+        216,
+        165,
+        48
+      ]
     }
   ],
   "errors": [
@@ -806,6 +944,31 @@
       "code": 6007,
       "name": "NotConfigAdmin",
       "msg": "Signer is not the current Config admin"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidIntentNonce",
+      "msg": "Intent nonce is not the proxy's next nonce"
+    },
+    {
+      "code": 6010,
+      "name": "Paused",
+      "msg": "Intent verification is paused"
+    },
+    {
+      "code": 6011,
+      "name": "ChainNotAllowed",
+      "msg": "EVM chain is not allowed"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidDeadline",
+      "msg": "Intent deadline is outside the execution window"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidSignature",
+      "msg": "Invalid EVM signature"
     }
   ],
   "types": [
@@ -1479,6 +1642,38 @@
                 256
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "IntentConsumed",
+      "docs": [
+        "Nonce consumption by a successful intent."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proxy",
+            "docs": [
+              "Proxy whose nonce was consumed."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "Nonce consumed by this instruction."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "docs": [
+              "Kind of the successful intent."
+            ],
+            "type": "u8"
           }
         ]
       }
