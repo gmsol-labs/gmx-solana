@@ -124,6 +124,18 @@ mod transaction_tests {
         let transaction =
             checked_transaction(build_evm_proxy_cancel_transaction(input).unwrap(), payer, 1);
         let instruction = proxy_instruction(&transaction);
+        let keys = transaction.message.static_account_keys();
+        assert_eq!(instruction.accounts.len(), 5);
+        let program = gmsol_programs::gmsol_evm_proxy::ID;
+        let authority = Pubkey::find_program_address(&[b"__event_authority"], &program).0;
+        let authority_index = usize::from(instruction.accounts[3]);
+        let program_index = usize::from(instruction.accounts[4]);
+        assert_eq!(keys[authority_index], authority);
+        assert_eq!(keys[program_index], program);
+        assert!(!transaction.message.is_signer(authority_index));
+        assert!(!transaction.message.is_signer(program_index));
+        assert!(!transaction.message.is_maybe_writable(authority_index, None));
+        assert!(!transaction.message.is_maybe_writable(program_index, None));
         let data =
             args::Cancel::deserialize(&mut &instruction.data[args::Cancel::DISCRIMINATOR.len()..])
                 .unwrap();

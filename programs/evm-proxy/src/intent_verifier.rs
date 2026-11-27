@@ -20,6 +20,21 @@ fn is_low_s(s: &[u8; 32]) -> bool {
     *s != [0; 32] && *s <= SECP256K1_HALF_ORDER
 }
 
+fn latest_deadline(now: u64) -> Result<u64> {
+    now.checked_add(EXECUTION_WINDOW)
+        .ok_or(error!(ProxyError::InvalidDeadline))
+}
+
+fn verify_deadline(timestamp: i64, deadline: u64) -> Result<()> {
+    let now = u64::try_from(timestamp).map_err(|_| error!(ProxyError::InvalidDeadline))?;
+    let latest = latest_deadline(now)?;
+    require!(
+        (now..=latest).contains(&deadline),
+        ProxyError::InvalidDeadline
+    );
+    Ok(())
+}
+
 /// The caller supplies a struct hash computed from its own signed fields.
 pub(crate) fn verify(
     config: &Config,
@@ -35,15 +50,7 @@ pub(crate) fn verify(
         config.allowed_chain_ids.contains(&chain_id),
         ProxyError::ChainNotAllowed
     );
-    let now = u64::try_from(Clock::get()?.unix_timestamp)
-        .map_err(|_| error!(ProxyError::InvalidDeadline))?;
-    let latest = now
-        .checked_add(EXECUTION_WINDOW)
-        .ok_or(error!(ProxyError::InvalidDeadline))?;
-    require!(
-        (now..=latest).contains(&deadline),
-        ProxyError::InvalidDeadline
-    );
+    verify_deadline(Clock::get()?.unix_timestamp, deadline)?;
     require!(recovery_id <= 1, ProxyError::InvalidSignature);
     let s: [u8; 32] = signature[SECP256K1_SCALAR_LEN..]
         .try_into()
@@ -98,5 +105,49 @@ mod tests {
         assert!(!is_low_s(&above_bound));
         assert!(!is_low_s(&SECP256K1_ORDER));
         assert!(!is_low_s(&[u8::MAX; 32]));
+    }
+
+    #[test]
+    fn deadline_window_includes_endpoints_and_their_inside_neighbors() {
+        const NOW: u64 = 7200;
+        let timestamp = i64::try_from(NOW).unwrap();
+        for deadline in [NOW - 1, NOW + EXECUTION_WINDOW + 1] {
+            let Error::AnchorError(error) = verify_deadline(timestamp, deadline).unwrap_err()
+            else {
+                panic!("expected deadline error");
+            };
+            assert_eq!(
+                error.error_code_number,
+                u32::from(ProxyError::InvalidDeadline)
+            );
+        }
+        for deadline in [
+            NOW,
+            NOW + 1,
+            NOW + EXECUTION_WINDOW - 1,
+            NOW + EXECUTION_WINDOW,
+        ] {
+            verify_deadline(timestamp, deadline).unwrap();
+        }
+    }
+
+    #[test]
+    fn invalid_clock_and_deadline_overflow_keep_the_deadline_error() {
+        for error in [
+            verify_deadline(-1, 0).unwrap_err(),
+            latest_deadline(u64::MAX).unwrap_err(),
+        ] {
+            let Error::AnchorError(error) = error else {
+                panic!("expected deadline error");
+            };
+            assert_eq!(
+                error.error_code_number,
+                u32::from(ProxyError::InvalidDeadline)
+            );
+        }
+        assert_eq!(
+            latest_deadline(u64::MAX - EXECUTION_WINDOW).unwrap(),
+            u64::MAX
+        );
     }
 }

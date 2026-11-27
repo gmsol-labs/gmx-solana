@@ -17,12 +17,12 @@
       "domainName": "GMX Solana EVM Proxy",
       "version": "1",
       "proxyAccount": "0x90af321c602108821aa4f09c6aaf49d560e9e8df950d972f46ac22c5edbf9dc1",
-      "nonce": "1",
-      "deadline": "1700000120",
+      "nonce": "0",
+      "deadline": "1700007320",
       "domainSeparator": "0x59e0fc07bf661e3c4ffbe73c317c222fdcdef854ff23b9becf6420a548db87cf",
-      "structHash": "0x82b9a21b6079372587eb9df7eabd2de30f0549bc8dba0d47489579ee58e972ab",
-      "digest": "0xe564c4b3f33116585edb565816a6aae9585c12d33adcd9ce8e83aef9cbb56752",
-      "signature": "0x2441b91a20d0acaaddbdf9e243be1daefdc939e0b0192c562c1d144bec7e49f80c2d8b797139dbe8404a2713d6b5c610b1bcff11d9dee78811ae3704b3744d3b",
+      "structHash": "0x3c7b1cf9fe461aba8d9b8ad465ac0bd236b88190b5b8229479dec2f9b4b8d70b",
+      "digest": "0x6a28f99fbb3f821b024f6ed615c24bca3662f5bd787d8e71dcfb35ec01684d51",
+      "signature": "0xa1b2d7f2f531ea8d8d57015510ba785360de4cc22a3695f911115b4991266d2904c13eadd1a7d602288fd2cb7f1725de5e45de017a08fb9c3828baed11b79e55",
       "recoveryId": 1
     },
     {
@@ -62,7 +62,7 @@
       "recoveryId": 0
     },
     {
-      "name": "near-wrap-cancel",
+      "name": "near-max-cancel",
       "typeHash": "0x95c586dadce785687c833ad56e3a23d67296c04619c1dde8b41e9ed9b7b3e47a",
       "program": "0xbe3e6d227aee58535232047c2e5d6ce8344ac6408b387f63d667ff1205b9e763",
       "store": "0x2222222222222222222222222222222222222222222222222222222222222222",
@@ -80,7 +80,7 @@
       "recoveryId": 1
     },
     {
-      "name": "near-wrap-competing",
+      "name": "near-max-competing",
       "typeHash": "0x95c586dadce785687c833ad56e3a23d67296c04619c1dde8b41e9ed9b7b3e47a",
       "program": "0xbe3e6d227aee58535232047c2e5d6ce8344ac6408b387f63d667ff1205b9e763",
       "store": "0x2222222222222222222222222222222222222222222222222222222222222222",
@@ -116,7 +116,7 @@
       "recoveryId": 1
     },
     {
-      "name": "wrong-zero",
+      "name": "zero-current-window",
       "typeHash": "0x95c586dadce785687c833ad56e3a23d67296c04619c1dde8b41e9ed9b7b3e47a",
       "program": "0xbe3e6d227aee58535232047c2e5d6ce8344ac6408b387f63d667ff1205b9e763",
       "store": "0x2222222222222222222222222222222222222222222222222222222222222222",
@@ -134,7 +134,7 @@
       "recoveryId": 1
     },
     {
-      "name": "zero",
+      "name": "one",
       "typeHash": "0x95c586dadce785687c833ad56e3a23d67296c04619c1dde8b41e9ed9b7b3e47a",
       "program": "0xbe3e6d227aee58535232047c2e5d6ce8344ac6408b387f63d667ff1205b9e763",
       "store": "0x2222222222222222222222222222222222222222222222222222222222222222",
@@ -143,12 +143,12 @@
       "domainName": "GMX Solana EVM Proxy",
       "version": "1",
       "proxyAccount": "0x90af321c602108821aa4f09c6aaf49d560e9e8df950d972f46ac22c5edbf9dc1",
-      "nonce": "0",
-      "deadline": "1700007320",
+      "nonce": "1",
+      "deadline": "1700000120",
       "domainSeparator": "0x59e0fc07bf661e3c4ffbe73c317c222fdcdef854ff23b9becf6420a548db87cf",
-      "structHash": "0x3c7b1cf9fe461aba8d9b8ad465ac0bd236b88190b5b8229479dec2f9b4b8d70b",
-      "digest": "0x6a28f99fbb3f821b024f6ed615c24bca3662f5bd787d8e71dcfb35ec01684d51",
-      "signature": "0xa1b2d7f2f531ea8d8d57015510ba785360de4cc22a3695f911115b4991266d2904c13eadd1a7d602288fd2cb7f1725de5e45de017a08fb9c3828baed11b79e55",
+      "structHash": "0x82b9a21b6079372587eb9df7eabd2de30f0549bc8dba0d47489579ee58e972ab",
+      "digest": "0xe564c4b3f33116585edb565816a6aae9585c12d33adcd9ce8e83aef9cbb56752",
+      "signature": "0x2441b91a20d0acaaddbdf9e243be1daefdc939e0b0192c562c1d144bec7e49f80c2d8b797139dbe8404a2713d6b5c610b1bcff11d9dee78811ae3704b3744d3b",
       "recoveryId": 1
     },
     {

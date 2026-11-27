@@ -1,7 +1,6 @@
 //! Owner-aware account decoding and committed CPI events for an EVM proxy deployment.
 
-use anchor_lang::{event::EVENT_IX_TAG_LE, AccountDeserialize, AnchorDeserialize, Discriminator};
-use base64::Engine;
+use anchor_lang::{event::EVENT_IX_TAG_LE, AccountDeserialize, Discriminator};
 use gmsol_programs::gmsol_evm_proxy::{accounts::Config, events};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use solana_transaction_status_client_types::EncodedTransactionWithStatusMeta;
@@ -17,6 +16,7 @@ crate::impl_decode_for_cpi_event!(events::ConfigChainAllowedChanged);
 crate::impl_decode_for_cpi_event!(events::ConfigPauseChanged);
 crate::impl_decode_for_cpi_event!(events::ConfigAdminProposed);
 crate::impl_decode_for_cpi_event!(events::ConfigAdminAccepted);
+crate::impl_decode_for_cpi_event!(events::IntentConsumed);
 
 /// Decode Config only when its owner is the selected proxy deployment.
 /// Foreign owners and unrelated account discriminators return no match.
@@ -47,6 +47,8 @@ pub enum ProxyCPIEvent {
     ConfigAdminProposed(events::ConfigAdminProposed),
     /// Administrator acceptance.
     ConfigAdminAccepted(events::ConfigAdminAccepted),
+    /// Nonce consumed by a successful intent.
+    IntentConsumed(events::IntentConsumed),
     /// Unrecognized event discriminator, including the CPI header.
     Unknown(Vec<u8>),
 }
@@ -79,6 +81,7 @@ impl Decode for ProxyCPIEvent {
                 known!(events::ConfigPauseChanged, ConfigPauseChanged);
                 known!(events::ConfigAdminProposed, ConfigAdminProposed);
                 known!(events::ConfigAdminAccepted, ConfigAdminAccepted);
+                known!(events::IntentConsumed, IntentConsumed);
                 Ok(ProxyCPIEvent::Unknown(data.to_vec()))
             }
         }
@@ -106,24 +109,6 @@ pub fn decode_committed_events(
     let mut decoder = TransactionDecoder::new(slot, signature, transaction);
     decoder.add_cpi_event_program_id(program_id)?;
     AnchorCPIEvents::decode(&decoder)
-}
-
-/// Existing child-owned log decoder, pending the separate Cancel CPI conversion.
-pub fn decode_intent_event_log(
-    line: &str,
-) -> Result<Option<events::IntentConsumed>, crate::DecodeError> {
-    let Some(encoded) = line.strip_prefix("Program data: ") else {
-        return Ok(None);
-    };
-    let data = base64::engine::general_purpose::STANDARD
-        .decode(encoded)
-        .map_err(crate::DecodeError::custom)?;
-    if !data.starts_with(events::IntentConsumed::DISCRIMINATOR) {
-        return Ok(None);
-    }
-    events::IntentConsumed::try_from_slice(&data[events::IntentConsumed::DISCRIMINATOR.len()..])
-        .map(Some)
-        .map_err(crate::DecodeError::custom)
 }
 
 #[cfg(test)]
@@ -266,6 +251,34 @@ mod tests {
     }
 
     #[test]
+    fn committed_wrapper_decodes_intent_consumed_and_rejects_malformed_payloads() {
+        let selected = Pubkey::new_unique();
+        let event = events::IntentConsumed {
+            proxy: Pubkey::new_unique(),
+            nonce: 0,
+            kind: 1,
+        };
+        let mut valid = EVENT_IX_TAG_LE.to_vec();
+        valid.extend(event.data());
+        let tx = transaction(selected, authority(&selected), &valid);
+        let events = decode_committed_events(&selected, SLOT, Signature::default(), &tx).unwrap();
+        assert_eq!(events.events().len(), 1);
+        let ProxyCPIEvent::IntentConsumed(decoded) = events.events()[0].data() else {
+            panic!("expected IntentConsumed CPI event");
+        };
+        assert_eq!(
+            (decoded.proxy, decoded.nonce, decoded.kind),
+            (event.proxy, event.nonce, event.kind)
+        );
+        let mut trailing = valid.clone();
+        trailing.push(0);
+        for data in [valid[..valid.len() - 1].to_vec(), trailing] {
+            let tx = transaction(selected, authority(&selected), &data);
+            assert!(decode_committed_events(&selected, SLOT, Signature::default(), &tx).is_err());
+        }
+    }
+
+    #[test]
     fn treasury_config_is_not_a_proxy_config() {
         use crate::{gmsol::programs::GMSOLAccountData, value::OwnedDataDecoder};
         use gmsol_programs::gmsol_treasury::{
@@ -302,42 +315,5 @@ mod tests {
         assert_eq!(decoded.store, config.store);
         assert_eq!(decoded.genesis_hash, config.genesis_hash);
         assert_eq!(decoded.bump, bump);
-    }
-}
-
-#[cfg(test)]
-mod legacy_intent_tests {
-    use super::*;
-    use anchor_lang::Event;
-
-    #[test]
-    fn decodes_consumed_nonce_event() {
-        let event = events::IntentConsumed {
-            proxy: Pubkey::new_unique(),
-            nonce: 0,
-            kind: 1,
-        };
-        let line = format!(
-            "Program data: {}",
-            base64::engine::general_purpose::STANDARD.encode(event.data())
-        );
-        let decoded = decode_intent_event_log(&line).unwrap().unwrap();
-        assert_eq!(decoded.proxy, event.proxy);
-        assert_eq!(decoded.nonce, event.nonce);
-        assert_eq!(decoded.kind, event.kind);
-
-        let encode = |data: &[u8]| {
-            format!(
-                "Program data: {}",
-                base64::engine::general_purpose::STANDARD.encode(data)
-            )
-        };
-        let mut extra = event.data();
-        extra.push(0);
-        assert!(decode_intent_event_log(&encode(&extra)).is_err());
-        let truncated_len = event.data().len() - 1;
-        assert!(decode_intent_event_log(&encode(&event.data()[..truncated_len])).is_err());
-        assert!(decode_intent_event_log("Program data: %%%").is_err());
-        assert!(decode_intent_event_log("unrelated log").unwrap().is_none());
     }
 }
