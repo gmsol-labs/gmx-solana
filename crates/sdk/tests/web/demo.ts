@@ -2,6 +2,8 @@ import {
   find_proxy_address,
   build_evm_proxy_cancel_typed_data,
   build_evm_proxy_cancel_transaction,
+  build_evm_proxy_withdraw_typed_data,
+  build_evm_proxy_withdraw_transaction,
   find_proxy_config_address,
   apply_factor,
   close_orders,
@@ -821,3 +823,9 @@ const proxyCancelTransactions = build_evm_proxy_cancel_transaction({
 });
 console.log("Proxy Cancel transactions:", proxyCancelTransactions.serialize());
 proxyCancelTransactions.free();
+
+const proxyWithdrawIntent = { ...proxyCancelIntent, mint: "11111111111111111111111111111111", recipient: "11111111111111111111111111111111", amount: "125", decimals: 6 };
+console.log("Proxy Withdraw signing payload:", build_evm_proxy_withdraw_typed_data({ ...proxyWithdrawIntent, store: "11111111111111111111111111111111", genesis_hash: "0x" + "02".repeat(32) }));
+const proxyWithdrawTransactions = build_evm_proxy_withdraw_transaction({ intent: proxyWithdrawIntent, payer: "11111111111111111111111111111111", recent_blockhash: recentBlockhash, signature: "0x" + "13".repeat(64), recovery_id: 0 });
+console.log("Proxy Withdraw transactions:", proxyWithdrawTransactions.serialize());
+proxyWithdrawTransactions.free();

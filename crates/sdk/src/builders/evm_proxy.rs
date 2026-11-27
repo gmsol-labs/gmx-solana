@@ -84,3 +84,42 @@ impl gmsol_solana_utils::IntoAtomicGroup for Cancel {
         ))
     }
 }
+
+/// Builder for one signed Withdraw transaction group.
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct Withdraw {
+    /// Deployment selected for the signed domain.
+    #[builder(default)]
+    pub program: EvmProxyProgram,
+    /// Transaction fee payer and submitter.
+    #[builder(setter(into))]
+    pub payer: StringPubkey,
+    /// Fields bound by the signature.
+    pub intent: crate::evm_proxy::WithdrawIntent,
+    /// Compact ECDSA signature.
+    pub signature: [u8; 64],
+    /// Canonical recovery ID, zero or one.
+    pub recovery_id: u8,
+}
+
+impl gmsol_solana_utils::IntoAtomicGroup for Withdraw {
+    type Hint = ();
+
+    fn into_atomic_group(
+        self,
+        _hint: &(),
+    ) -> gmsol_solana_utils::Result<gmsol_solana_utils::AtomicGroup> {
+        let instruction = crate::evm_proxy::withdraw_instruction(
+            self.program.id.0,
+            self.payer.0,
+            &self.intent,
+            self.signature,
+            self.recovery_id,
+        )
+        .map_err(gmsol_solana_utils::Error::custom)?;
+        Ok(gmsol_solana_utils::AtomicGroup::with_instructions(
+            &self.payer.0,
+            Some(instruction),
+        ))
+    }
+}

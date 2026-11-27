@@ -16,6 +16,7 @@ crate::impl_decode_for_cpi_event!(events::ConfigChainAllowedChanged);
 crate::impl_decode_for_cpi_event!(events::ConfigPauseChanged);
 crate::impl_decode_for_cpi_event!(events::ConfigAdminProposed);
 crate::impl_decode_for_cpi_event!(events::ConfigAdminAccepted);
+crate::impl_decode_for_cpi_event!(events::Withdrawn);
 crate::impl_decode_for_cpi_event!(events::IntentConsumed);
 
 /// Decode Config only when its owner is the selected proxy deployment.
@@ -49,6 +50,8 @@ pub enum ProxyCPIEvent {
     ConfigAdminAccepted(events::ConfigAdminAccepted),
     /// Nonce consumed by a successful intent.
     IntentConsumed(events::IntentConsumed),
+    /// Transfer completed by a successful withdrawal.
+    Withdrawn(events::Withdrawn),
     /// Unrecognized event discriminator, including the CPI header.
     Unknown(Vec<u8>),
 }
@@ -82,6 +85,7 @@ impl Decode for ProxyCPIEvent {
                 known!(events::ConfigAdminProposed, ConfigAdminProposed);
                 known!(events::ConfigAdminAccepted, ConfigAdminAccepted);
                 known!(events::IntentConsumed, IntentConsumed);
+                known!(events::Withdrawn, Withdrawn);
                 Ok(ProxyCPIEvent::Unknown(data.to_vec()))
             }
         }
@@ -269,6 +273,48 @@ mod tests {
         assert_eq!(
             (decoded.proxy, decoded.nonce, decoded.kind),
             (event.proxy, event.nonce, event.kind)
+        );
+        let mut trailing = valid.clone();
+        trailing.push(0);
+        for data in [valid[..valid.len() - 1].to_vec(), trailing] {
+            let tx = transaction(selected, authority(&selected), &data);
+            assert!(decode_committed_events(&selected, SLOT, Signature::default(), &tx).is_err());
+        }
+    }
+
+    #[test]
+    fn committed_wrapper_decodes_withdrawn_and_rejects_malformed_payloads() {
+        let selected = Pubkey::new_unique();
+        let event = events::Withdrawn {
+            proxy: Pubkey::new_unique(),
+            nonce: 7,
+            mint: Pubkey::new_unique(),
+            amount: 125,
+            recipient: Pubkey::new_unique(),
+        };
+        let mut valid = EVENT_IX_TAG_LE.to_vec();
+        valid.extend(event.data());
+        let tx = transaction(selected, authority(&selected), &valid);
+        let events = decode_committed_events(&selected, SLOT, Signature::default(), &tx).unwrap();
+        assert_eq!(events.events().len(), 1);
+        let ProxyCPIEvent::Withdrawn(decoded) = events.events()[0].data() else {
+            panic!("expected Withdrawn CPI event");
+        };
+        assert_eq!(
+            (
+                decoded.proxy,
+                decoded.nonce,
+                decoded.mint,
+                decoded.amount,
+                decoded.recipient
+            ),
+            (
+                event.proxy,
+                event.nonce,
+                event.mint,
+                event.amount,
+                event.recipient
+            )
         );
         let mut trailing = valid.clone();
         trailing.push(0);

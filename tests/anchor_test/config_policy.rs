@@ -29,10 +29,10 @@ pub(super) async fn read_config(
     Ok((account, state))
 }
 
-pub(super) async fn event(
+pub(super) async fn events(
     client: &PolicyClient,
     signature: &Signature,
-) -> eyre::Result<ProxyCPIEvent> {
+) -> eyre::Result<Vec<ProxyCPIEvent>> {
     let transaction = client
         .rpc()
         .get_transaction_with_config(
@@ -44,7 +44,7 @@ pub(super) async fn event(
             },
         )
         .await?;
-    let mut events: Vec<_> = gmsol_sdk::evm_proxy::decode_committed_events(
+    let events: Vec<_> = gmsol_sdk::evm_proxy::decode_committed_events(
         &evm_proxy::ID,
         transaction.slot,
         *signature,
@@ -53,12 +53,20 @@ pub(super) async fn event(
     .into_iter()
     .map(|event| event.into_data())
     .collect();
+    Ok(events)
+}
+
+pub(super) async fn event(
+    client: &PolicyClient,
+    signature: &Signature,
+) -> eyre::Result<ProxyCPIEvent> {
+    let mut decoded = events(client, signature).await?;
     eyre::ensure!(
-        events.len() == 1,
+        decoded.len() == 1,
         "expected one proxy CPI event, got {}",
-        events.len()
+        decoded.len()
     );
-    Ok(events.remove(0))
+    Ok(decoded.remove(0))
 }
 
 pub(super) fn assert_anchor_error(error: gmsol_solana_utils::Error, expected: u32) {
