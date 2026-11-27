@@ -104,29 +104,31 @@ mod transaction_tests {
         transaction
     }
 
-    fn proxy_instruction(transaction: &VersionedTransaction) -> &CompiledInstruction {
+    fn proxy_instruction(
+        transaction: &VersionedTransaction,
+        program: Pubkey,
+    ) -> &CompiledInstruction {
         let keys = transaction.message.static_account_keys();
         transaction
             .message
             .instructions()
             .iter()
-            .find(|ix| {
-                keys[usize::from(ix.program_id_index)] == gmsol_programs::gmsol_evm_proxy::ID
-            })
+            .find(|ix| keys[usize::from(ix.program_id_index)] == program)
             .expect("proxy instruction")
     }
 
     #[test]
     fn cancel_transaction_preserves_fee_options_payer_and_full_width_nonce() {
         let payer = Pubkey::new_unique();
-        let input: BuildEvmProxyCancelTransactionArgs =
-            serde_json::from_value(transaction_args(payer)).unwrap();
+        let program = Pubkey::new_unique();
+        let mut value = transaction_args(payer);
+        value["intent"]["program_id"] = program.to_string().into();
+        let input: BuildEvmProxyCancelTransactionArgs = serde_json::from_value(value).unwrap();
         let transaction =
             checked_transaction(build_evm_proxy_cancel_transaction(input).unwrap(), payer, 1);
-        let instruction = proxy_instruction(&transaction);
+        let instruction = proxy_instruction(&transaction, program);
         let keys = transaction.message.static_account_keys();
         assert_eq!(instruction.accounts.len(), 5);
-        let program = gmsol_programs::gmsol_evm_proxy::ID;
         let authority = Pubkey::find_program_address(&[b"__event_authority"], &program).0;
         let authority_index = usize::from(instruction.accounts[3]);
         let program_index = usize::from(instruction.accounts[4]);
