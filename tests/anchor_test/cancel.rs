@@ -221,13 +221,20 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
             assert_eq!(admin.rpc().get_account(&proxy).await?, before);
         }
 
-        for (label, invalid_deadline) in [
-            ("expired deadline", 0),
-            (
-                "deadline beyond execution window",
-                deadline + OUTSIDE_EXECUTION_WINDOW_SECONDS,
-            ),
+        for (label, offset) in [
+            ("expired deadline", None),
+            ("deadline beyond execution window", Some(OUTSIDE_EXECUTION_WINDOW_SECONDS)),
         ] {
+            let invalid_deadline = if let Some(offset) = offset {
+                let account = admin.rpc().get_account_with_commitment(
+                    &solana_sdk::sysvar::clock::ID,
+                    CommitmentConfig::processed(),
+                ).await?.value.ok_or_else(|| eyre::eyre!("processed Clock account unavailable"))?;
+                let clock: Clock = bincode::deserialize(&account.data)?;
+                u64::try_from(clock.unix_timestamp)?.checked_add(offset).expect("deadline overflow")
+            } else {
+                0
+            };
             let invalid = CancelIntent {
                 deadline: invalid_deadline,
                 ..intent
@@ -454,6 +461,10 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
         let after = admin.rpc().get_account(&proxy).await?;
         let consumed = evm_proxy::Proxy::try_deserialize(&mut after.data.as_slice())?;
         assert_eq!(consumed.next_nonce, 1);
+        let sdk_proxy = gmsol_programs::gmsol_evm_proxy::accounts::Proxy::try_deserialize(
+            &mut after.data.as_slice(),
+        )?;
+        assert_eq!(sdk_proxy.next_nonce, 1);
         assert_only_next_nonce_changed(&before, &after, 1)?;
         let ProxyCPIEvent::IntentConsumed(event) =
             super::config_policy::event(admin, &signature_on_chain).await? else { eyre::bail!("expected consumed Cancel CPI event"); };

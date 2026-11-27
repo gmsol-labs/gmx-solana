@@ -111,7 +111,7 @@ mod tests {
     fn deadline_window_includes_endpoints_and_their_inside_neighbors() {
         const NOW: u64 = 7200;
         let timestamp = i64::try_from(NOW).unwrap();
-        for deadline in [NOW - 1, NOW + EXECUTION_WINDOW + 1] {
+        for deadline in [NOW - 1, NOW + 3601] {
             let Error::AnchorError(error) = verify_deadline(timestamp, deadline).unwrap_err()
             else {
                 panic!("expected deadline error");
@@ -121,12 +121,7 @@ mod tests {
                 u32::from(ProxyError::InvalidDeadline)
             );
         }
-        for deadline in [
-            NOW,
-            NOW + 1,
-            NOW + EXECUTION_WINDOW - 1,
-            NOW + EXECUTION_WINDOW,
-        ] {
+        for deadline in [NOW, NOW + 1, NOW + 3599, NOW + 3600] {
             verify_deadline(timestamp, deadline).unwrap();
         }
     }
@@ -135,6 +130,7 @@ mod tests {
     fn invalid_clock_and_deadline_overflow_keep_the_deadline_error() {
         for error in [
             verify_deadline(-1, 0).unwrap_err(),
+            verify_deadline(-3601, u64::MAX).unwrap_err(),
             latest_deadline(u64::MAX).unwrap_err(),
         ] {
             let Error::AnchorError(error) = error else {
