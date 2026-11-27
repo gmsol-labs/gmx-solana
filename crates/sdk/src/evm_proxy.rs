@@ -2,7 +2,9 @@
 
 /// Owner-aware accounts and committed CPI events for the selected Proxy deployment.
 #[cfg(feature = "decode")]
-pub use gmsol_decode::gmsol::evm_proxy::{decode_committed_events, decode_config_account, ProxyCPIEvent};
+pub use gmsol_decode::gmsol::evm_proxy::{
+    decode_committed_events, decode_config_account, ProxyCPIEvent,
+};
 
 use crate::{builders::evm_proxy::EvmProxyProgram, pda::EvmAddressBytes};
 use gmsol_programs::gmsol_evm_proxy::client::{accounts, args};
@@ -16,7 +18,7 @@ pub struct CancelIntent {
     pub evm_address: EvmAddressBytes,
     /// Full-width EVM chain ID.
     pub chain_id: [u8; 32],
-    /// Signed nonce, encoded as uint64.
+    /// Signed next expected nonce, initially zero, encoded as uint64.
     pub nonce: u64,
     /// Signed execution deadline.
     pub deadline: u64,
@@ -37,7 +39,7 @@ pub struct CancelTypedData {
     pub type_signature: &'static str,
     /// Permanent proxy account bound by this message.
     pub proxy_account: Pubkey,
-    /// Signed nonce, encoded as uint64.
+    /// Signed next expected nonce, initially zero, encoded as uint64.
     pub nonce: u64,
     /// Signed execution deadline.
     pub deadline: u64,
@@ -101,6 +103,8 @@ pub fn cancel_instruction(
                 submitter,
                 config: crate::pda::find_proxy_config_address(&program_id).0,
                 proxy: crate::pda::find_proxy_address(&intent.evm_address, &program_id).0,
+                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                program: program_id,
             },
             false,
         )
@@ -121,12 +125,40 @@ mod tests {
     }
 
     #[test]
+    fn cancel_builder_derives_cpi_accounts_for_selected_program() {
+        let program = Pubkey::new_unique();
+        let submitter = Pubkey::new_unique();
+        let intent = CancelIntent {
+            evm_address: [0x42; 20],
+            chain_id: [1; 32],
+            nonce: 0,
+            deadline: 7200,
+        };
+        let instruction = cancel_instruction(program, submitter, &intent, [1; 64], 0).unwrap();
+        assert_eq!(instruction.program_id, program);
+        assert_eq!(instruction.accounts.len(), 5);
+        let expected_authority = Pubkey::find_program_address(&[b"__event_authority"], &program).0;
+        assert_eq!(
+            instruction.accounts[3],
+            solana_sdk::instruction::AccountMeta::new_readonly(expected_authority, false)
+        );
+        assert_eq!(
+            instruction.accounts[4],
+            solana_sdk::instruction::AccountMeta::new_readonly(program, false)
+        );
+        let decoded =
+            args::Cancel::deserialize(&mut &instruction.data[args::Cancel::DISCRIMINATOR.len()..])
+                .unwrap();
+        assert_eq!(decoded.nonce, 0);
+    }
+
+    #[test]
     fn cancel_vectors_bind_nonce_typed_data_and_instruction() {
         let fixture: Value = serde_json::from_str(include_str!(
             "../../evm-proxy-intent/fixtures/cancel-vectors.json"
         ))
         .unwrap();
-        for name in ["first", "max", "zero", "large-nonce"] {
+        for name in ["first", "max", "one", "large-nonce"] {
             let vector = fixture["vectors"]
                 .as_array()
                 .unwrap()

@@ -1,6 +1,6 @@
 # Cancel intent vectors
 
-Cancel encodes a uint64 nonce. Domain salt binds the program, Store and genesis hash. The vectors preserve full-width chain IDs, uint64 boundaries, domain mutations and wrapping-counter boundaries.
+Cancel encodes a uint64 nonce. Domain salt binds the program, Store and genesis hash. The vectors preserve full-width chain IDs, uint64 boundaries, domain mutations and uint64 encoding boundaries.
 
 From this crate's root, install the pinned tooling without changing a package manifest or lockfile:
 
@@ -11,3 +11,5 @@ Check the saved public vectors and signatures:
 `node fixtures/scripts/generate-cancel-vectors.cjs --check`
 
 `--write` generates a fresh signing key in memory and stores only public data and signatures. It never saves the key.
+
+The first execution nonce is 0. The first vector demonstrates it; MAX remains a valid signing/encoding input but cannot execute. The counter never wraps. Vector names describe encoding inputs, not independent on-chain state transitions.

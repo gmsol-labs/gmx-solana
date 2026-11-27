@@ -6,8 +6,11 @@ use gmsol_sdk::{
     client::ops::{EvmProxyOps, SystemProgramOps},
     evm_proxy::CancelIntent,
 };
-use gmsol_solana_utils::signer::shared_signer;
+use gmsol_sdk::{decode::Decode, evm_proxy::ProxyCPIEvent};
+use gmsol_solana_utils::{client::SendAndConfirm, signer::shared_signer};
 use libsecp256k1::{Message, PublicKey, SecretKey};
+use solana_client::rpc_config::{RpcSendTransactionConfig, RpcTransactionConfig};
+use solana_sdk::transaction::TransactionError;
 use solana_sdk::{
     clock::Clock,
     commitment_config::CommitmentConfig,
@@ -15,6 +18,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     system_program,
 };
+use solana_transaction_status::UiTransactionEncoding;
 use std::panic::AssertUnwindSafe;
 
 fn random_signing_key() -> SecretKey {
@@ -69,14 +73,34 @@ fn owner_address(key: &SecretKey) -> [u8; 20] {
     digest[12..].try_into().expect("20-byte EVM address")
 }
 
+fn assert_only_next_nonce_changed(
+    before: &solana_sdk::account::Account,
+    after: &solana_sdk::account::Account,
+    expected_next_nonce: u64,
+) -> eyre::Result<()> {
+    let previous = evm_proxy::Proxy::try_deserialize(&mut before.data.as_slice())?;
+    let current = evm_proxy::Proxy::try_deserialize(&mut after.data.as_slice())?;
+    assert_eq!(current.next_nonce, expected_next_nonce);
+    assert_eq!(current.version, previous.version);
+    assert_eq!(current.bump, previous.bump);
+    assert_eq!(current.padding_0, previous.padding_0);
+    assert_eq!(current.evm_address, previous.evm_address);
+    assert_eq!(current.padding_1, previous.padding_1);
+    assert_eq!(current.reserved, previous.reserved);
+    assert_eq!(after.owner, before.owner);
+    assert_eq!(after.lamports, before.lamports);
+    assert_eq!(after.executable, before.executable);
+    assert_eq!(after.rent_epoch, before.rent_epoch);
+    assert_eq!(after.data.len(), before.data.len());
+    Ok(())
+}
+
 #[tokio::test]
 async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() -> eyre::Result<()>
 {
     const SUBMITTER_FUNDING_LAMPORTS: u64 = 2_000_000_000;
     const INTENT_VALIDITY_SECONDS: u64 = 120;
     const OUTSIDE_EXECUTION_WINDOW_SECONDS: u64 = 3601;
-    const EXPECTED_NONCE_ACCOUNT_START: usize = 48;
-    const EXPECTED_NONCE_ACCOUNT_END: usize = 56;
     let deployment = current_deployment().await?;
     let _accounts = deployment.use_accounts().await?;
     let _policy = EVM_PROXY_CONFIG_LOCK.lock().await;
@@ -108,7 +132,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
         let before = admin.rpc().get_account(&proxy).await?;
         assert_eq!(before.owner, evm_proxy::ID);
         let initial = evm_proxy::Proxy::try_deserialize(&mut before.data.as_slice())?;
-        assert_eq!(initial.consumed_nonce(), 0);
+        assert_eq!(initial.next_nonce, 0);
 
         let mut chain_id = [0; 32];
         chain_id[chain_id.len() - 1] = 1;
@@ -128,7 +152,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
         let intent = CancelIntent {
             evm_address,
             chain_id,
-            nonce: 1,
+            nonce: 0,
             deadline,
         };
         let (signature, recovery_id) = signed(&intent, deployment.store, genesis_hash, &owner);
@@ -243,7 +267,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
             .program(evm_proxy::ID)
             .anchor_args(evm_proxy::instruction::Cancel {
                 chain_id,
-                nonce: 1,
+                nonce: 0,
                 deadline,
                 signature: high_signature,
                 recovery_id: high_recovery,
@@ -252,6 +276,8 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
                 submitter: submitter.payer(),
                 config,
                 proxy,
+                event_authority: gmsol_sdk::builders::evm_proxy::EvmProxyProgram::from(evm_proxy::ID).find_event_authority_address(),
+                program: evm_proxy::ID,
             })
             .send()
             .await
@@ -267,7 +293,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
             .program(evm_proxy::ID)
             .anchor_args(evm_proxy::instruction::Cancel {
                 chain_id,
-                nonce: 1,
+                nonce: 0,
                 deadline,
                 signature,
                 recovery_id: 27,
@@ -276,6 +302,8 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
                 submitter: submitter.payer(),
                 config,
                 proxy,
+                event_authority: gmsol_sdk::builders::evm_proxy::EvmProxyProgram::from(evm_proxy::ID).find_event_authority_address(),
+                program: evm_proxy::ID,
             })
             .send()
             .await
@@ -336,6 +364,83 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
         assert_eq!(admin.rpc().get_account(&proxy).await?, before);
         assert_eq!(admin.rpc().get_account(&other_proxy).await?, other_before);
 
+        // This failure must land on the validator: simulation alone cannot prove
+        // that successful CPI traces from a failed transaction are not committed.
+        let rollback_owner = random_signing_key();
+        let rollback_address = owner_address(&rollback_owner);
+        let rollback_proxy = gmsol_sdk::pda::find_proxy_address(&rollback_address, &evm_proxy::ID).0;
+        assert!(admin.rpc().get_account_with_commitment(&rollback_proxy, CommitmentConfig::confirmed()).await?.value.is_none());
+        let rollback_intent = CancelIntent { evm_address: rollback_address, ..intent };
+        let (rollback_signature, rollback_recovery) = signed(
+            &rollback_intent, deployment.store, genesis_hash, &rollback_owner,
+        );
+        let create = submitter.store_transaction()
+            .program(evm_proxy::ID)
+            .anchor_args(evm_proxy::instruction::CreateProxyIdempotent { evm_address: rollback_address })
+            .anchor_accounts(evm_proxy::accounts::CreateProxyIdempotent {
+                payer: submitter.payer(), proxy: rollback_proxy, system_program: system_program::ID,
+            }).take_instruction().expect("proxy creation instruction");
+        let cancel = gmsol_sdk::evm_proxy::cancel_instruction(
+            evm_proxy::ID, submitter.payer(), &rollback_intent, rollback_signature, rollback_recovery,
+        )?;
+        let fail = solana_sdk::system_instruction::transfer(
+            &submitter.payer(), &Pubkey::new_unique(), u64::MAX,
+        );
+        let rollback_builder = submitter.store_transaction()
+            .pre_instruction(create, true)
+            .pre_instruction(cancel, true)
+            .pre_instruction(fail, true);
+        let transaction = rollback_builder.signed_transaction_with_options(
+            false, None, None, gmsol_solana_utils::transaction_builder::default_before_sign,
+        ).await?;
+        let failing_index = u8::try_from(transaction.message.instructions().len() - 1)?;
+        let on_chain_signature = transaction.signatures[0];
+        let payer_before = admin.rpc().get_balance(&submitter.payer()).await?;
+        submitter.rpc().send_and_confirm_transaction_with_config(
+            &transaction,
+            RpcSendTransactionConfig { skip_preflight: true, ..Default::default() },
+        ).await.expect_err("later instruction must fail after the valid Cancel");
+        // Confirmation can precede RPC history indexing. Keep the wait bounded
+        // and propagate its final error.
+        const METADATA_RETRIES: usize = 19;
+        const METADATA_RETRY_MILLIS: u64 = 250;
+        let mut attempt = 0;
+        let failed = loop {
+            match admin.rpc().get_transaction_with_config(
+                &on_chain_signature,
+                RpcTransactionConfig {
+                    encoding: Some(UiTransactionEncoding::Base64),
+                    commitment: Some(CommitmentConfig::confirmed()),
+                    max_supported_transaction_version: Some(0),
+                },
+            ).await {
+                Ok(observed) => break observed,
+                Err(_) if attempt < METADATA_RETRIES => {
+                    attempt += 1;
+                    tokio::time::sleep(std::time::Duration::from_millis(METADATA_RETRY_MILLIS)).await;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        };
+        let meta = failed.transaction.meta.as_ref().expect("landed transaction metadata");
+        assert!(matches!(meta.err, Some(TransactionError::InstructionError(index, _)) if index == failing_index));
+        let mut trace_decoder = gmsol_sdk::decode::decoder::TransactionDecoder::new(
+            failed.slot, on_chain_signature, &failed.transaction,
+        );
+        trace_decoder.add_cpi_event_program_id(&evm_proxy::ID)?;
+        let traces = gmsol_sdk::decode::value::AnchorCPIEvents::<ProxyCPIEvent>::decode(&trace_decoder)?;
+        assert_eq!(traces.events().len(), 1, "valid intent emitted before the later failure");
+        assert!(matches!(traces.events()[0].data(), ProxyCPIEvent::IntentConsumed(event)
+            if event.proxy == rollback_proxy && event.nonce == 0 && event.kind == evm_proxy::INTENT_KIND_CANCEL));
+        assert!(gmsol_sdk::evm_proxy::decode_committed_events(
+            &evm_proxy::ID, failed.slot, on_chain_signature, &failed.transaction,
+        ).is_err(), "failed transaction traces must not become committed events");
+        assert!(admin.rpc().get_account_with_commitment(&rollback_proxy, CommitmentConfig::confirmed()).await?.value.is_none(),
+            "proxy creation rent and nonce write must both roll back");
+        assert_eq!(admin.rpc().get_balance(&submitter.payer()).await?, payer_before - meta.fee,
+            "rent rolls back while transaction fees remain charged");
+        assert_eq!(admin.rpc().get_account(&proxy).await?, before);
+
         let competing = CancelIntent {
             deadline: deadline + 1,
             ..intent
@@ -348,16 +453,13 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
             .await?;
         let after = admin.rpc().get_account(&proxy).await?;
         let consumed = evm_proxy::Proxy::try_deserialize(&mut after.data.as_slice())?;
-        assert_eq!(consumed.consumed_nonce(), 1);
-        let mut expected = before.clone();
-        expected.data[EXPECTED_NONCE_ACCOUNT_START..EXPECTED_NONCE_ACCOUNT_END]
-            .copy_from_slice(&1u64.to_le_bytes());
-        assert_eq!(after, expected);
-        let event: evm_proxy::IntentConsumed =
-            super::config_policy::event(admin, &signature_on_chain).await?;
+        assert_eq!(consumed.next_nonce, 1);
+        assert_only_next_nonce_changed(&before, &after, 1)?;
+        let ProxyCPIEvent::IntentConsumed(event) =
+            super::config_policy::event(admin, &signature_on_chain).await? else { eyre::bail!("expected consumed Cancel CPI event"); };
         assert_eq!(
             (event.proxy, event.nonce, event.kind),
-            (proxy, 1, evm_proxy::INTENT_KIND_CANCEL)
+            (proxy, intent.nonce, evm_proxy::INTENT_KIND_CANCEL)
         );
 
         // A different funded payer must preserve already consumed state on recreation.
@@ -406,19 +508,28 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
         );
         assert_eq!(admin.rpc().get_account(&proxy).await?, after);
 
+        let following = CancelIntent {
+            nonce: intent.nonce + 1,
+            ..intent
+        };
+        let (following_signature, following_recovery) =
+            signed(&following, deployment.store, genesis_hash, &owner);
         let second_signature = submitter
-            .cancel_proxy_transaction(evm_proxy::ID, &forged, forged_signature, forged_recovery)?
+            .cancel_proxy_transaction(
+                evm_proxy::ID,
+                &following,
+                following_signature,
+                following_recovery,
+            )?
             .send()
             .await?;
-        let mut expected_second = after.clone();
-        expected_second.data[EXPECTED_NONCE_ACCOUNT_START..EXPECTED_NONCE_ACCOUNT_END]
-            .copy_from_slice(&2_u64.to_le_bytes());
-        assert_eq!(admin.rpc().get_account(&proxy).await?, expected_second);
-        let second_event: evm_proxy::IntentConsumed =
-            super::config_policy::event(admin, &second_signature).await?;
+        let after_second = admin.rpc().get_account(&proxy).await?;
+        assert_only_next_nonce_changed(&after, &after_second, 2)?;
+        let ProxyCPIEvent::IntentConsumed(second_event) =
+            super::config_policy::event(admin, &second_signature).await? else { eyre::bail!("expected consumed Cancel CPI event"); };
         assert_eq!(
             (second_event.proxy, second_event.nonce, second_event.kind),
-            (proxy, 2, evm_proxy::INTENT_KIND_CANCEL)
+            (proxy, following.nonce, evm_proxy::INTENT_KIND_CANCEL)
         );
 
         Ok(())

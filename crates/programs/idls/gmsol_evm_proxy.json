@@ -105,7 +105,7 @@
     {
       "name": "cancel",
       "docs": [
-        "Consume the next signed Cancel nonce, wrapping from u64::MAX to zero,",
+        "Consume the next signed Cancel nonce with checked advancement,",
         "without changing the proxy's business state.",
         "",
         "# Accounts",
@@ -122,12 +122,14 @@
         "- Anchor account validation, account borrowing or Clock access fails.",
         "- [`ProxyError::InvalidProxy`] for an unsupported stored layout version.",
         "- [`ProxyError::InvalidIntentNonce`] when the signed nonce is not next.",
+        "- [`ProxyError::NonceExhausted`] when the matching nonce is u64::MAX.",
         "- [`ProxyError::Paused`] while Config is paused.",
         "- [`ProxyError::ChainNotAllowed`] when the chain ID is not allowed.",
         "- [`ProxyError::InvalidDeadline`] for a negative Clock timestamp or a",
         "deadline outside the inclusive window from now through now plus 3600 seconds.",
         "- [`ProxyError::InvalidSignature`] for an invalid recovery ID, zero or",
-        "high `s`, failed recovery or a recovered address differing from the EVM owner."
+        "high `s`, failed recovery or a recovered address differing from the EVM owner.",
+        "- CPI event emission fails if its supplied accounts are invalid."
       ],
       "discriminator": [
         232,
@@ -192,6 +194,38 @@
               }
             ]
           }
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -969,6 +1003,11 @@
       "code": 6013,
       "name": "InvalidSignature",
       "msg": "Invalid EVM signature"
+    },
+    {
+      "code": 6014,
+      "name": "NonceExhausted",
+      "msg": "Proxy nonce is exhausted"
     }
   ],
   "types": [
@@ -1869,7 +1908,7 @@
           {
             "name": "padding_1",
             "docs": [
-              "Explicit padding before the reserved bytes."
+              "Explicit padding before the nonce."
             ],
             "type": {
               "array": [
@@ -1879,6 +1918,13 @@
             }
           },
           {
+            "name": "next_nonce",
+            "docs": [
+              "Next expected intent nonce, initially zero."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "docs": [
               "Future fields take bytes from this region without reallocating the account."
@@ -1886,7 +1932,7 @@
             "type": {
               "array": [
                 "u8",
-                256
+                248
               ]
             }
           }
