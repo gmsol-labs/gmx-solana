@@ -177,7 +177,7 @@ fn verify_readback(
 /// Client operations for an explicitly selected EVM proxy deployment.
 pub trait EvmProxyOps<C> {
     /// Register a signed referral code with this client paying rent and fees.
-    fn set_proxy_referral_code_transaction(
+    fn set_proxy_referral_code(
         &self,
         program_id: Pubkey,
         store: Pubkey,
@@ -282,7 +282,7 @@ fn create_config_transaction<'a, C: Deref<Target = impl Signer> + Clone>(
 
 impl<C: Deref<Target = impl Signer> + Clone> EvmProxyOps<C> for Client<C> {
     /// Register a signed referral code with this client paying rent and fees.
-    fn set_proxy_referral_code_transaction(
+    fn set_proxy_referral_code(
         &self,
         program_id: Pubkey,
         store: Pubkey,

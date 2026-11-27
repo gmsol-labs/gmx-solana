@@ -783,7 +783,7 @@
         "- Account loading/borrowing, Clock, rent, funding and Store CPI errors",
         "propagate. Insufficient sponsor funds or an already-coded User fail",
         "atomically, excluding transaction fees.",
-        "- NonceExhausted rejects a matching u64::MAX and rolls back both Store CPIs.",
+        "- NonceExhausted rejects a verified matching u64::MAX before funding or Store CPIs.",
         "- CPI event emission fails if its supplied accounts are invalid."
       ],
       "discriminator": [
@@ -863,7 +863,7 @@
         {
           "name": "user",
           "docs": [
-            "then the Store instruction validates initialized fields and bump."
+            "User account owned by this Proxy in the bound Store."
           ],
           "writable": true,
           "pda": {
@@ -894,6 +894,9 @@
         },
         {
           "name": "referral_code",
+          "docs": [
+            "Referral code account registered to this Proxy."
+          ],
           "writable": true,
           "pda": {
             "seeds": [

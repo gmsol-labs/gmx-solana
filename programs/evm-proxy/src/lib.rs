@@ -642,7 +642,7 @@ pub mod gmsol_evm_proxy {
     /// - Account loading/borrowing, Clock, rent, funding and Store CPI errors
     ///   propagate. Insufficient sponsor funds or an already-coded User fail
     ///   atomically, excluding transaction fees.
-    /// - NonceExhausted rejects a matching u64::MAX and rolls back both Store CPIs.
+    /// - NonceExhausted rejects a verified matching u64::MAX before funding or Store CPIs.
     /// - CPI event emission fails if its supplied accounts are invalid.
     pub fn set_referral_code(
         ctx: Context<SetReferralCode>,
@@ -664,11 +664,6 @@ pub mod gmsol_evm_proxy {
             require_eq!(proxy.version, PROXY_VERSION, ProxyError::InvalidProxy);
             evm_address = proxy.evm_address;
             proxy_bump = proxy.bump;
-            require_eq!(
-                nonce,
-                proxy.expected_next_nonce(),
-                ProxyError::InvalidIntentNonce
-            );
         }
         intent_verifier::verify(
             &ctx.accounts.config,
@@ -685,6 +680,7 @@ pub mod gmsol_evm_proxy {
             recovery_id,
         )?;
 
+        ctx.accounts.proxy.load_mut()?.consume_next_nonce(nonce)?;
         let user = ctx.accounts.user.to_account_info();
         let referral_code = ctx.accounts.referral_code.to_account_info();
         require!(
@@ -743,7 +739,6 @@ pub mod gmsol_evm_proxy {
             ),
             code,
         )?;
-        ctx.accounts.proxy.load_mut()?.consume_next_nonce(nonce)?;
         emit_cpi!(IntentConsumed {
             proxy: proxy_key,
             nonce,
@@ -758,8 +753,8 @@ pub mod gmsol_evm_proxy {
     }
 }
 
-/// Fund only the target account's missing rent through an ordinary transfer.
 impl<'info> SetReferralCode<'info> {
+    /// Fund only the target account's missing rent through an ordinary transfer.
     fn fund_rent_deficit(&self, target: &AccountInfo<'info>, minimum: u64) -> Result<()> {
         let deficit = minimum.saturating_sub(target.lamports());
         if deficit != 0 {
@@ -927,19 +922,20 @@ pub struct SetReferralCode<'info> {
     /// Sponsors target rent; may differ from the transaction fee payer.
     #[account(mut)]
     pub submitter: Signer<'info>,
-    #[account(seeds = [CONFIG_SEED], bump = config.bump, has_one = store @ ProxyError::InvalidConfigStore)]
     /// Singleton policy and immutable Store binding.
+    #[account(seeds = [CONFIG_SEED], bump = config.bump, has_one = store @ ProxyError::InvalidConfigStore)]
     pub config: Account<'info, Config>,
     /// Both Store instructions require a writable owner signer.
     #[account(mut, seeds = [PROXY_SEED, proxy.load()?.evm_address.as_ref()], bump = proxy.load()?.bump)]
     pub proxy: AccountLoader<'info, Proxy>,
     /// Store permanently bound by Config.
     pub store: AccountLoader<'info, Store>,
-    /// CHECK: canonical Store PDA; ownership/layout checked before funding,
-    /// then the Store instruction validates initialized fields and bump.
+    /// User account owned by this Proxy in the bound Store.
+    /// CHECK: canonical Store PDA; ownership/layout checked before funding; Store validates initialized fields and bump.
     #[account(mut, seeds = [UserHeader::SEED, store.key().as_ref(), proxy.key().as_ref()],
         bump, seeds::program = store_program.key())]
     pub user: UncheckedAccount<'info>,
+    /// Referral code account registered to this Proxy.
     /// CHECK: canonical code PDA, required to be empty and System-owned before funding.
     #[account(mut, seeds = [ReferralCodeV2::SEED, store.key().as_ref(), &code],
         bump, seeds::program = store_program.key())]

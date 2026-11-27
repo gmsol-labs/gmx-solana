@@ -36,7 +36,7 @@ Successful intents emit IntentConsumed; Withdraw and referral registration also 
 
 ## Nonce and event contract
 
-Each proxy stores its next expected nonce, initially 0, shared across all intents and allowed EVM chains. Successful execution stores the checked successor. A matching u64::MAX fails with NonceExhausted and no business-state change; the counter never wraps. The account's declared field consumes eight reserved bytes without changing its allocation or identity offsets. Used accounts from an older counter interpretation require a separate deployment inventory and compatibility decision.
+Each proxy stores its next expected nonce, initially 0, shared across all intents and allowed EVM chains. Successful execution stores the checked successor. A matching u64::MAX fails with NonceExhausted and no business-state change; the counter never wraps.
 
 The execution window is inclusive: now <= deadline <= now + 3600 seconds, using Solana's Clock. InvalidDeadline covers invalid timestamps and deadlines outside this window.
 
