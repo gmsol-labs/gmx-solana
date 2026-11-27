@@ -35,6 +35,7 @@ mod liquidity_provider;
 
 mod gt_incentive;
 
+mod config_policy;
 mod evm_proxy;
 
 mod gt_exchange;

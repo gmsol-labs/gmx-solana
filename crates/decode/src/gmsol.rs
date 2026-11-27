@@ -125,3 +125,7 @@ pub mod programs {
 
     untagged!(GMSOLData, [Account, CPIEvents]);
 }
+
+/// Owner-aware accounts and committed CPI events for EVM proxy deployments.
+#[cfg(feature = "evm-proxy")]
+pub mod evm_proxy;

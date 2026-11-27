@@ -136,6 +136,8 @@ impl<'a> MakeBundleBuilder<'a, SignerRef> for CurrentOrderTimestamp<'a, '_> {
     }
 }
 
+pub(super) static EVM_PROXY_CONFIG_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Deployment.
 pub struct Deployment {
     rng: StdRng,
@@ -677,6 +679,7 @@ impl Deployment {
         let signature = init_ix.send().await?;
         tracing::info!(%signature, "initialized evm-proxy program");
 
+        initialize_evm_proxy_config(self).await?;
         Ok(())
     }
 
@@ -2532,4 +2535,137 @@ async fn teardown() -> eyre::Result<()> {
     }
 
     Ok(())
+}
+
+/// Validate the proxy bootstrap contract, then initialize its singleton.
+async fn initialize_evm_proxy_config(deployment: &Deployment) -> eyre::Result<()> {
+    use gmsol_evm_proxy as evm_proxy;
+    use gmsol_sdk::client::ops::{evm_proxy::ConfigInitialization, EvmProxyOps};
+    use solana_sdk::{
+        bpf_loader_upgradeable,
+        signature::{EncodableKey, Keypair, Signer},
+    };
+
+    let client = &deployment.client;
+    let other = deployment.user_client(Deployment::DEFAULT_KEEPER)?;
+    let program_data = bpf_loader_upgradeable::get_program_data_address(&evm_proxy::ID);
+    let config = gmsol_sdk::pda::find_proxy_config_address(&evm_proxy::ID).0;
+    let genesis_hash = client.rpc().get_genesis_hash().await?.to_bytes();
+    let invalid_cases = [
+        (
+            "wrong upgrade authority",
+            &other,
+            client.payer(),
+            program_data,
+            deployment.store,
+            config,
+            evm_proxy::ProxyError::NotUpgradeAuthority.into(),
+        ),
+        (
+            "zero first admin",
+            client,
+            solana_sdk::pubkey::Pubkey::default(),
+            program_data,
+            deployment.store,
+            config,
+            evm_proxy::ProxyError::InvalidAdmin.into(),
+        ),
+        (
+            "unrelated ProgramData",
+            client,
+            client.payer(),
+            bpf_loader_upgradeable::get_program_data_address(&gmsol_store::ID),
+            deployment.store,
+            config,
+            evm_proxy::ProxyError::InvalidProgramData.into(),
+        ),
+    ];
+    for (reason, sender, first_admin, program_data, store, config_address, expected) in
+        invalid_cases
+    {
+        let error = sender
+            .store_transaction()
+            .program(evm_proxy::ID)
+            .anchor_args(evm_proxy::instruction::CreateConfig { genesis_hash })
+            .anchor_accounts(evm_proxy::accounts::CreateConfig {
+                payer: sender.payer(),
+                upgrade_authority: sender.payer(),
+                config: config_address,
+                proxy_program: evm_proxy::ID,
+                program_data,
+                store,
+                first_admin,
+                system_program: system_program::ID,
+                event_authority: gmsol_sdk::builders::evm_proxy::EvmProxyProgram::from(
+                    evm_proxy::ID,
+                )
+                .find_event_authority_address(),
+                program: evm_proxy::ID,
+            })
+            .send()
+            .await
+            .expect_err(reason);
+        eyre::ensure!(
+            gmsol_sdk::Error::from(error).anchor_error_code() == Some(expected),
+            "bootstrap rejection differs: {reason}"
+        );
+        for address in [config] {
+            assert!(
+                client
+                    .rpc()
+                    .get_account_with_commitment(&address, CommitmentConfig::processed())
+                    .await?
+                    .value
+                    .is_none(),
+                "{reason} created an account"
+            );
+        }
+    }
+    let wallet = std::env::var(ENV_ANCHOR_WALLET)?;
+    let authority = Keypair::read_from_file(&wallet)
+        .map_err(|error| eyre::eyre!("upgrade authority wallet unavailable: {error}"))?;
+    assert_eq!(authority.pubkey(), client.payer());
+    let mut wrong_genesis = genesis_hash;
+    wrong_genesis[0] ^= 1;
+    let mismatch = client
+        .initialize_proxy_config(
+            evm_proxy::ID,
+            deployment.store,
+            wrong_genesis,
+            client.payer(),
+            &authority,
+        )
+        .await
+        .expect_err("RPC genesis mismatch");
+    assert!(
+        matches!(mismatch, gmsol_sdk::Error::Custom(ref message) if message == "supplied genesis hash differs from RPC")
+    );
+    assert!(client
+        .rpc()
+        .get_account_with_commitment(&config, CommitmentConfig::processed())
+        .await?
+        .value
+        .is_none());
+    match client
+        .initialize_proxy_config(
+            evm_proxy::ID,
+            deployment.store,
+            genesis_hash,
+            client.payer(),
+            &authority,
+        )
+        .await?
+    {
+        ConfigInitialization::ImmutableFieldsVerified {
+            signature,
+            current_admin,
+        } => {
+            assert_eq!(current_admin, client.payer());
+            tracing::info!(%signature, "initialized evm-proxy Config");
+            Ok(())
+        }
+        ConfigInitialization::VerificationIncomplete { reason, .. } => {
+            eyre::bail!("confirmed Config creation failed readback: {reason}")
+        }
+    }
 }
