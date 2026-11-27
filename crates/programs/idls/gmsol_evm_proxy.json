@@ -744,6 +744,285 @@
       ]
     },
     {
+      "name": "set_referral_code",
+      "docs": [
+        "Register the EVM owner's canonical code through Store.",
+        "The submitter funds only missing targets' rent deficits. The proxy signs",
+        "the Store CPIs as owner without paying rent from its data-bearing account.",
+        "Create the Proxy first, or earlier in the same transaction. Existing target",
+        "balances reduce the submitter's rent cost; excess lamports stay in the targets.",
+        "Proxy, User, referral code and submitter must be writable even when prefunded.",
+        "",
+        "A failed transaction rolls back persistent account, rent and nonce changes,",
+        "but its actual fee payer still pays transaction fees. Failed logs may remain",
+        "visible; apply events only after confirming success and program attribution.",
+        "",
+        "# Accounts",
+        "*[See the documentation for the accounts.](SetReferralCode).*",
+        "",
+        "# Arguments",
+        "- `chain_id`: signed EVM chain ID.",
+        "- `code`: canonical signed referral-code bytes.",
+        "- `nonce`: signed next counter value.",
+        "- `deadline`: signed execution deadline.",
+        "- `signature`: compact ECDSA signature.",
+        "- `recovery_id`: canonical recovery ID, zero or one.",
+        "",
+        "# Errors",
+        "- Anchor account validation rejects Store, User or code accounts that do",
+        "not match Config and the signed code bytes.",
+        "- [`ProxyError::InvalidReferralCode`] for a zero code.",
+        "- [`ProxyError::ReferralCodeTaken`] for an occupied code target.",
+        "- [`ProxyError::InvalidReferralUser`] for invalid User ownership or layout.",
+        "- [`ProxyError::InvalidConfigStore`] for a Store other than Config's Store.",
+        "- [`ProxyError::InvalidProxy`] for an unsupported proxy version.",
+        "- [`ProxyError::InvalidIntentNonce`] when the signed nonce is not next.",
+        "- [`ProxyError::Paused`], [`ProxyError::ChainNotAllowed`],",
+        "[`ProxyError::InvalidDeadline`] or [`ProxyError::InvalidSignature`]",
+        "for policy, deadline or EVM-signature rejection.",
+        "- Account loading/borrowing, Clock, rent, funding and Store CPI errors",
+        "propagate. Insufficient sponsor funds or an already-coded User fail",
+        "atomically, excluding transaction fees.",
+        "- NonceExhausted rejects a verified matching u64::MAX before funding or Store CPIs.",
+        "- CPI event emission fails if its supplied accounts are invalid."
+      ],
+      "discriminator": [
+        53,
+        102,
+        148,
+        218,
+        64,
+        170,
+        82,
+        216
+      ],
+      "accounts": [
+        {
+          "name": "submitter",
+          "docs": [
+            "Sponsors target rent; may differ from the transaction fee payer."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Singleton policy and immutable Store binding."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proxy",
+          "docs": [
+            "Both Store instructions require a writable owner signer."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  120,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proxy"
+              }
+            ]
+          }
+        },
+        {
+          "name": "store",
+          "docs": [
+            "Store permanently bound by Config."
+          ],
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "user",
+          "docs": [
+            "User account owned by this Proxy in the bound Store."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "account",
+                "path": "proxy"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "store_program"
+            }
+          }
+        },
+        {
+          "name": "referral_code",
+          "docs": [
+            "Referral code account registered to this Proxy."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  102,
+                  101,
+                  114,
+                  114,
+                  97,
+                  108,
+                  95,
+                  99,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "store"
+              },
+              {
+                "kind": "arg",
+                "path": "code"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "store_program"
+            }
+          }
+        },
+        {
+          "name": "store_program",
+          "docs": [
+            "Store program used for User preparation and code registration."
+          ],
+          "address": "Gmso1uvJnLbawvw7yezdfCDcPydwW2s2iqG3w6MDucLo"
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System program used to fund target rent deficits."
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "chain_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "code",
+          "type": {
+            "array": [
+              "u8",
+              8
+            ]
+          }
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "deadline",
+          "type": "u64"
+        },
+        {
+          "name": "signature",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "recovery_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "transfer_admin",
       "docs": [
         "Nominate or replace the next admin without transferring current control.",
@@ -1279,6 +1558,19 @@
       ]
     },
     {
+      "name": "ReferralCodeSet",
+      "discriminator": [
+        128,
+        34,
+        113,
+        61,
+        97,
+        47,
+        79,
+        237
+      ]
+    },
+    {
       "name": "Withdrawn",
       "discriminator": [
         20,
@@ -1382,6 +1674,26 @@
       "code": 6017,
       "name": "InvalidDecimals",
       "msg": "Signed decimals differ from the mint"
+    },
+    {
+      "code": 6018,
+      "name": "InvalidReferralCode",
+      "msg": "Referral code cannot be zero"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidReferralUser",
+      "msg": "Referral User has invalid ownership or layout"
+    },
+    {
+      "code": 6020,
+      "name": "ReferralCodeTaken",
+      "msg": "Referral code is already taken"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidConfigStore",
+      "msg": "Store differs from Config's bound Store"
     }
   ],
   "types": [
@@ -2304,6 +2616,43 @@
               "array": [
                 "u8",
                 248
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReferralCodeSet",
+      "docs": [
+        "Referral code registered by a successful signed intent."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proxy",
+            "docs": [
+              "Proxy that owns the registered code."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "Nonce consumed by registration."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "code",
+            "docs": [
+              "Canonical signed code bytes."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                8
               ]
             }
           }

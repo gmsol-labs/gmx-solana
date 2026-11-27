@@ -1,6 +1,9 @@
 use super::{TransactionGroup, TransactionGroupOptions};
 use crate::{
-    js::evm_proxy::{parse_hex, EvmProxyCancelIntentArgs, EvmProxyWithdrawIntentArgs},
+    js::evm_proxy::{
+        parse_hex, EvmProxyCancelIntentArgs, EvmProxySetReferralCodeIntentArgs,
+        EvmProxyWithdrawIntentArgs,
+    },
     serde::StringPubkey,
 };
 use gmsol_solana_utils::IntoAtomicGroup;
@@ -98,6 +101,58 @@ pub fn build_evm_proxy_withdraw_transaction(
     let mut group = args.transaction_group.build();
     TransactionGroup::new(
         group.add(withdraw)?.optimize(false),
+        &args.recent_blockhash,
+        args.compute_unit_price_micro_lamports,
+        args.compute_unit_min_priority_lamports,
+    )
+}
+
+/// Arguments for signed referral registration.
+#[derive(Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct BuildEvmProxySetReferralCodeTransactionArgs {
+    /// Referral fields, Store and selected deployment.
+    intent: EvmProxySetReferralCodeIntentArgs,
+    /// Base58 rent sponsor, which may differ from the fee payer.
+    submitter: StringPubkey,
+    /// Base58 transaction fee payer.
+    payer: StringPubkey,
+    /// Recent Solana blockhash in base58.
+    recent_blockhash: String,
+    /// Exactly 64 hex bytes encoding compact ECDSA r || s.
+    signature: String,
+    /// Canonical recovery ID, zero or one.
+    recovery_id: u8,
+    /// Optional compute-unit price in micro-lamports.
+    #[serde(default)]
+    compute_unit_price_micro_lamports: Option<u64>,
+    /// Optional minimum priority fee in lamports.
+    #[serde(default)]
+    compute_unit_min_priority_lamports: Option<u64>,
+    /// Standard transaction-group options.
+    #[serde(default)]
+    transaction_group: TransactionGroupOptions,
+}
+
+/// Build unsigned registration with distinct rent sponsor and transaction fee payer.
+#[wasm_bindgen]
+pub fn build_evm_proxy_set_referral_code_transaction(
+    args: BuildEvmProxySetReferralCodeTransactionArgs,
+) -> crate::Result<TransactionGroup> {
+    let (program, store, intent) = args.intent.parse()?;
+    let registration = crate::builders::evm_proxy::SetReferralCode::builder()
+        .program(program.into())
+        .payer(args.payer)
+        .submitter(args.submitter)
+        .store(store)
+        .intent(intent)
+        .signature(parse_hex(&args.signature, "signature")?)
+        .recovery_id(args.recovery_id)
+        .build()
+        .into_atomic_group(&())?;
+    let mut group = args.transaction_group.build();
+    TransactionGroup::new(
+        group.add(registration)?.optimize(false),
         &args.recent_blockhash,
         args.compute_unit_price_micro_lamports,
         args.compute_unit_min_priority_lamports,
@@ -222,5 +277,35 @@ mod transaction_tests {
         .unwrap();
         assert_eq!(data.nonce, SIGNED_NONCE);
         assert_eq!(data.amount, u64::MAX);
+    }
+    #[test]
+    fn referral_transaction_preserves_distinct_sponsor_payer_and_fee_options() {
+        let payer = Pubkey::new_unique();
+        let program = Pubkey::new_unique();
+        let sponsor = Pubkey::new_unique();
+        let mut value = transaction_args(payer);
+        value["intent"]["program_id"] = program.to_string().into();
+        value["intent"]["store"] = Pubkey::new_unique().to_string().into();
+        value["intent"]["code"] = "12".into();
+        value["submitter"] = sponsor.to_string().into();
+        let input: BuildEvmProxySetReferralCodeTransactionArgs =
+            serde_json::from_value(value).unwrap();
+        let transaction = checked_transaction(
+            build_evm_proxy_set_referral_code_transaction(input).unwrap(),
+            payer,
+            2,
+        );
+        assert!(
+            transaction.message.static_account_keys()[..transaction.signatures.len()]
+                .contains(&sponsor)
+        );
+        let instruction = proxy_instruction(&transaction, program);
+        assert_cpi_accounts(&transaction, instruction, 8, program);
+        let data = args::SetReferralCode::deserialize(
+            &mut &instruction.data[args::SetReferralCode::DISCRIMINATOR.len()..],
+        )
+        .unwrap();
+        assert_eq!(data.nonce, SIGNED_NONCE);
+        assert_eq!(data.code, [0, 0, 0, 0, 0, 0, 0, 1]);
     }
 }

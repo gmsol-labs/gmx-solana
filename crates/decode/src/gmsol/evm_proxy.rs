@@ -16,6 +16,7 @@ crate::impl_decode_for_cpi_event!(events::ConfigChainAllowedChanged);
 crate::impl_decode_for_cpi_event!(events::ConfigPauseChanged);
 crate::impl_decode_for_cpi_event!(events::ConfigAdminProposed);
 crate::impl_decode_for_cpi_event!(events::ConfigAdminAccepted);
+crate::impl_decode_for_cpi_event!(events::ReferralCodeSet);
 crate::impl_decode_for_cpi_event!(events::Withdrawn);
 crate::impl_decode_for_cpi_event!(events::IntentConsumed);
 
@@ -52,6 +53,8 @@ pub enum ProxyCPIEvent {
     IntentConsumed(events::IntentConsumed),
     /// Transfer completed by a successful withdrawal.
     Withdrawn(events::Withdrawn),
+    /// Code registered by a successful referral intent.
+    ReferralCodeSet(events::ReferralCodeSet),
     /// Unrecognized event discriminator, including the CPI header.
     Unknown(Vec<u8>),
 }
@@ -86,6 +89,7 @@ impl Decode for ProxyCPIEvent {
                 known!(events::ConfigAdminAccepted, ConfigAdminAccepted);
                 known!(events::IntentConsumed, IntentConsumed);
                 known!(events::Withdrawn, Withdrawn);
+                known!(events::ReferralCodeSet, ReferralCodeSet);
                 Ok(ProxyCPIEvent::Unknown(data.to_vec()))
             }
         }
@@ -315,6 +319,34 @@ mod tests {
                 event.amount,
                 event.recipient
             )
+        );
+        let mut trailing = valid.clone();
+        trailing.push(0);
+        for data in [valid[..valid.len() - 1].to_vec(), trailing] {
+            let tx = transaction(selected, authority(&selected), &data);
+            assert!(decode_committed_events(&selected, SLOT, Signature::default(), &tx).is_err());
+        }
+    }
+
+    #[test]
+    fn committed_wrapper_decodes_referral_code_set_and_rejects_malformed_payloads() {
+        let selected = Pubkey::new_unique();
+        let event = events::ReferralCodeSet {
+            proxy: Pubkey::new_unique(),
+            nonce: 7,
+            code: [7; 8],
+        };
+        let mut valid = EVENT_IX_TAG_LE.to_vec();
+        valid.extend(event.data());
+        let tx = transaction(selected, authority(&selected), &valid);
+        let events = decode_committed_events(&selected, SLOT, Signature::default(), &tx).unwrap();
+        assert_eq!(events.events().len(), 1);
+        let ProxyCPIEvent::ReferralCodeSet(decoded) = events.events()[0].data() else {
+            panic!("expected ReferralCodeSet CPI event");
+        };
+        assert_eq!(
+            (decoded.proxy, decoded.nonce, decoded.code),
+            (event.proxy, event.nonce, event.code)
         );
         let mut trailing = valid.clone();
         trailing.push(0);

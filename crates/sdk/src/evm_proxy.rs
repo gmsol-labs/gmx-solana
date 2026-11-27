@@ -6,11 +6,142 @@ pub use gmsol_decode::gmsol::evm_proxy::{
     decode_committed_events, decode_config_account, ProxyCPIEvent,
 };
 
-use crate::{builders::evm_proxy::EvmProxyProgram, pda::EvmAddressBytes};
+use crate::{
+    builders::evm_proxy::EvmProxyProgram,
+    pda::{EvmAddressBytes, ReferralCodeBytes},
+};
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use gmsol_programs::gmsol_evm_proxy::client::{accounts, args};
 use gmsol_solana_utils::ProgramExt;
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
+
+/// Signed registration fields. Code bytes are normalized before signing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetReferralCodeIntent {
+    /// EVM owner used to derive the proxy.
+    pub evm_address: EvmAddressBytes,
+    /// Signed full-width EVM chain ID.
+    pub chain_id: [u8; 32],
+    /// Canonical eight-byte referral code.
+    pub code: ReferralCodeBytes,
+    /// Signed uint64 counter value.
+    pub nonce: u64,
+    /// Signed execution deadline.
+    pub deadline: u64,
+}
+
+/// Exact EIP-712 values for referral registration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetReferralCodeTypedData {
+    /// EIP-712 domain name.
+    pub name: &'static str,
+    /// EIP-712 domain version.
+    pub version: &'static str,
+    /// Signed full-width EVM chain ID.
+    pub chain_id: [u8; 32],
+    /// Deployment, Store and genesis binding.
+    pub salt: [u8; 32],
+    /// Canonical SetReferralCode type definition.
+    pub type_signature: &'static str,
+    /// Permanent proxy bound by this signature.
+    pub proxy_account: Pubkey,
+    /// Canonical referral-code bytes or their signable string representation.
+    pub code: String,
+    /// Signed uint64 counter value.
+    pub nonce: u64,
+    /// Signed execution deadline.
+    pub deadline: u64,
+}
+
+impl SetReferralCodeIntent {
+    /// Normalize aliases to the only string accepted by the on-chain verifier.
+    pub fn typed_data(
+        &self,
+        program_id: &Pubkey,
+        store: &Pubkey,
+        genesis_hash: &[u8; 32],
+    ) -> SetReferralCodeTypedData {
+        SetReferralCodeTypedData {
+            name: gmsol_evm_proxy_intent::DOMAIN_NAME,
+            version: gmsol_evm_proxy_intent::DOMAIN_VERSION,
+            chain_id: self.chain_id,
+            salt: gmsol_evm_proxy_intent::domain_salt(program_id, store, genesis_hash),
+            type_signature: gmsol_evm_proxy_intent::SET_REFERRAL_CODE_TYPE,
+            proxy_account: crate::pda::find_proxy_address(&self.evm_address, program_id).0,
+            code: gmsol_programs::gmsol_store::accounts::ReferralCodeV2::encode(&self.code, true),
+            nonce: self.nonce,
+            deadline: self.deadline,
+        }
+    }
+
+    /// Digest over the canonical code, complete nonce and deployment domain.
+    pub fn digest(&self, program_id: &Pubkey, store: &Pubkey, genesis_hash: &[u8; 32]) -> [u8; 32] {
+        let proxy = crate::pda::find_proxy_address(&self.evm_address, program_id).0;
+        let domain = gmsol_evm_proxy_intent::domain_separator(
+            program_id,
+            store,
+            genesis_hash,
+            &self.chain_id,
+        );
+        let structure = gmsol_evm_proxy_intent::set_referral_code_struct_hash(
+            &proxy,
+            &gmsol_programs::gmsol_store::accounts::ReferralCodeV2::encode(&self.code, true),
+            self.nonce,
+            self.deadline,
+        );
+        gmsol_evm_proxy_intent::intent_digest(&domain, &structure)
+    }
+}
+
+/// Build registration with canonical Store PDAs, including a missing User.
+/// The submitter signs and sponsors rent; the transaction fee payer may differ.
+pub fn set_referral_code_instruction(
+    program_id: Pubkey,
+    submitter: Pubkey,
+    store: Pubkey,
+    intent: &SetReferralCodeIntent,
+    signature: [u8; 64],
+    recovery_id: u8,
+) -> crate::Result<Instruction> {
+    if intent.code == [0; 8] {
+        return Err(crate::Error::custom("referral code cannot be zero"));
+    }
+    if recovery_id > 1 {
+        return Err(crate::Error::custom("invalid EVM recovery ID"));
+    }
+    let proxy = crate::pda::find_proxy_address(&intent.evm_address, &program_id).0;
+    let store_program = gmsol_programs::gmsol_store::ID;
+    Ok(EvmProxyProgram::from(program_id)
+        .anchor_instruction(args::SetReferralCode {
+            chain_id: intent.chain_id,
+            code: intent.code,
+            nonce: intent.nonce,
+            deadline: intent.deadline,
+            signature,
+            recovery_id,
+        })
+        .anchor_accounts(
+            accounts::SetReferralCode {
+                submitter,
+                config: crate::pda::find_proxy_config_address(&program_id).0,
+                proxy,
+                store,
+                user: crate::pda::find_user_address(&store, &proxy, &store_program).0,
+                referral_code: crate::pda::find_referral_code_address(
+                    &store,
+                    intent.code,
+                    &store_program,
+                )
+                .0,
+                store_program,
+                system_program: solana_sdk::system_program::ID,
+                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                program: program_id,
+            },
+            false,
+        )
+        .build())
+}
 
 /// Signed fields of one Withdraw intent, using the proxy's shared next nonce.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -276,6 +407,117 @@ pub fn cancel_instruction(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn referral_builder_derives_cpi_accounts_for_selected_program() {
+        let program = Pubkey::new_unique();
+        let intent = SetReferralCodeIntent {
+            evm_address: [0x42; 20],
+            chain_id: [1; 32],
+            code: [7; 8],
+            nonce: 0,
+            deadline: 7200,
+        };
+        let instruction = set_referral_code_instruction(
+            program,
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            &intent,
+            [1; 64],
+            0,
+        )
+        .unwrap();
+        let authority = Pubkey::find_program_address(&[b"__event_authority"], &program).0;
+        assert_eq!(instruction.accounts.len(), 10);
+        assert_eq!(
+            instruction.accounts[8],
+            solana_sdk::instruction::AccountMeta::new_readonly(authority, false)
+        );
+        assert_eq!(
+            instruction.accounts[9],
+            solana_sdk::instruction::AccountMeta::new_readonly(program, false)
+        );
+    }
+
+    mod referral_tests {
+        use super::*;
+        use anchor_lang::{AnchorDeserialize, Discriminator};
+        #[test]
+        fn referral_builder_and_digest_match_independent_vectors() {
+            const SUBMITTER_ACCOUNT_INDEX: usize = 0;
+            const USER_ACCOUNT_INDEX: usize = 4;
+            const REFERRAL_ACCOUNT_INDEX: usize = 5;
+            let fixture: serde_json::Value = serde_json::from_str(include_str!(
+                "../../evm-proxy-intent/fixtures/referral-vectors.json"
+            ))
+            .unwrap();
+            let bytes = |key: &str| {
+                hex::decode(fixture[key].as_str().unwrap().trim_start_matches("0x")).unwrap()
+            };
+            let program = Pubkey::new_from_array(bytes("program").try_into().unwrap());
+            let store = Pubkey::new_from_array(bytes("store").try_into().unwrap());
+            let genesis = bytes("genesis").try_into().unwrap();
+            let submitter = Pubkey::new_unique();
+            for vector in fixture["vectors"].as_array().unwrap() {
+                let intent = SetReferralCodeIntent {
+                    evm_address: bytes("evmAddress").try_into().unwrap(),
+                    chain_id: hex::decode(
+                        vector["chainId"].as_str().unwrap().trim_start_matches("0x"),
+                    )
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                    code: hex::decode(vector["bytesHex"].as_str().unwrap())
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                    nonce: vector["nonce"].as_str().unwrap().parse().unwrap(),
+                    deadline: vector["deadline"].as_str().unwrap().parse().unwrap(),
+                };
+                assert_eq!(
+                    hex::encode(intent.digest(&program, &store, &genesis)),
+                    vector["digest"].as_str().unwrap().trim_start_matches("0x")
+                );
+                assert_eq!(
+                    intent.typed_data(&program, &store, &genesis).code,
+                    vector["canonical"]
+                );
+                if intent.code == [0; 8] {
+                    assert!(set_referral_code_instruction(
+                        program, submitter, store, &intent, [1; 64], 0
+                    )
+                    .is_err());
+                    continue;
+                }
+                let ix =
+                    set_referral_code_instruction(program, submitter, store, &intent, [1; 64], 0)
+                        .unwrap();
+                let data = args::SetReferralCode::deserialize(
+                    &mut &ix.data[args::SetReferralCode::DISCRIMINATOR.len()..],
+                )
+                .unwrap();
+                assert_eq!(
+                    (data.code, data.nonce, data.deadline),
+                    (intent.code, intent.nonce, intent.deadline)
+                );
+                assert_eq!(ix.accounts[SUBMITTER_ACCOUNT_INDEX].pubkey, submitter);
+                let proxy = crate::pda::find_proxy_address(&intent.evm_address, &program).0;
+                assert_eq!(
+                    ix.accounts[USER_ACCOUNT_INDEX].pubkey,
+                    crate::pda::find_user_address(&store, &proxy, &gmsol_programs::gmsol_store::ID)
+                        .0
+                );
+                assert_eq!(
+                    ix.accounts[REFERRAL_ACCOUNT_INDEX].pubkey,
+                    crate::pda::find_referral_code_address(
+                        &store,
+                        intent.code,
+                        &gmsol_programs::gmsol_store::ID
+                    )
+                    .0
+                );
+            }
+        }
+    }
     use super::*;
     use anchor_lang::{AnchorDeserialize, Discriminator};
     use solana_sdk::pubkey::Pubkey;

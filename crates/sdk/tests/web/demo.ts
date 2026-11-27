@@ -4,6 +4,8 @@ import {
   build_evm_proxy_cancel_transaction,
   build_evm_proxy_withdraw_typed_data,
   build_evm_proxy_withdraw_transaction,
+  build_evm_proxy_set_referral_code_typed_data,
+  build_evm_proxy_set_referral_code_transaction,
   find_proxy_config_address,
   apply_factor,
   close_orders,
@@ -829,3 +831,9 @@ console.log("Proxy Withdraw signing payload:", build_evm_proxy_withdraw_typed_da
 const proxyWithdrawTransactions = build_evm_proxy_withdraw_transaction({ intent: proxyWithdrawIntent, payer: "11111111111111111111111111111111", recent_blockhash: recentBlockhash, signature: "0x" + "13".repeat(64), recovery_id: 0 });
 console.log("Proxy Withdraw transactions:", proxyWithdrawTransactions.serialize());
 proxyWithdrawTransactions.free();
+
+const proxyReferralIntent = { ...proxyCancelIntent, store: "11111111111111111111111111111111", code: "12" };
+console.log("Proxy referral signing payload:", build_evm_proxy_set_referral_code_typed_data({ ...proxyReferralIntent, genesis_hash: "0x" + "02".repeat(32) }));
+const proxyReferralTransactions = build_evm_proxy_set_referral_code_transaction({intent: proxyReferralIntent, payer: "11111111111111111111111111111111", submitter: "11111111111111111111111111111111", recent_blockhash: recentBlockhash, signature: "0x" + "13".repeat(64), recovery_id: 0});
+console.log("Proxy referral transactions:", proxyReferralTransactions.serialize());
+proxyReferralTransactions.free();

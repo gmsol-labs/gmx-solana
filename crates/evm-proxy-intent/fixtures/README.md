@@ -19,3 +19,7 @@ Withdraw has twelve deterministic domain, field and uint64 cases. Check or regen
 `node fixtures/scripts/generate-withdraw-vectors.cjs --check`
 
 `node fixtures/scripts/generate-withdraw-vectors.cjs --write`
+
+## Referral registration vectors
+
+Use the pinned viem and web3 tooling above. Run `node fixtures/scripts/generate-referral-vectors.cjs --check` to recompute all code/nonce cases and compare encoding and hashes; `--write` regenerates expected values from the public domain parameters.

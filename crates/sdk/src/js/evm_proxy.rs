@@ -1,5 +1,5 @@
 use crate::{
-    evm_proxy::{CancelIntent, WithdrawIntent},
+    evm_proxy::{CancelIntent, SetReferralCodeIntent, WithdrawIntent},
     pda::EvmAddressBytes,
     serde::StringPubkey,
 };
@@ -388,6 +388,133 @@ pub struct EvmProxyWithdrawSigningArgs {
     genesis_hash: String,
 }
 
+/// Canonical referral inputs shared by signing and transaction construction.
+#[derive(Clone, Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct EvmProxySetReferralCodeIntentArgs {
+    /// Exactly 20 EVM address bytes in hex.
+    evm_address: String,
+    /// Full-width 32-byte big-endian chain ID in hex.
+    chain_id: String,
+    /// Store referral code in base58; aliases normalize before signing.
+    code: String,
+    /// Unsigned uint64 nonce as a decimal string.
+    nonce: String,
+    /// Unix deadline as a uint64 decimal string.
+    deadline: String,
+    /// Base58 Store account bound to the deployment.
+    store: StringPubkey,
+    /// Proxy deployment; omitted for the declared program.
+    #[serde(default)]
+    program_id: Option<StringPubkey>,
+}
+
+impl EvmProxySetReferralCodeIntentArgs {
+    pub(super) fn parse(&self) -> crate::Result<(Pubkey, Pubkey, SetReferralCodeIntent)> {
+        let program = match &self.program_id {
+            Some(value) => value.0,
+            None => gmsol_programs::gmsol_evm_proxy::ID,
+        };
+        let code = gmsol_programs::gmsol_store::accounts::ReferralCodeV2::decode(&self.code)?;
+        if code == [0; 8] {
+            return Err(crate::Error::custom("referral code cannot be zero"));
+        }
+        Ok((
+            program,
+            self.store.0,
+            SetReferralCodeIntent {
+                evm_address: parse_evm_address(&self.evm_address)?,
+                chain_id: parse_hex(&self.chain_id, "chainId")?,
+                code,
+                nonce: self.nonce.parse().map_err(crate::Error::custom)?,
+                deadline: self.deadline.parse().map_err(crate::Error::custom)?,
+            },
+        ))
+    }
+}
+
+/// Canonical EIP-712 referral signing payload.
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct EvmProxySetReferralCodeSigningPayload {
+    domain: Eip712Domain,
+    types: EvmProxySetReferralCodeTypes,
+    #[serde(rename = "primaryType")]
+    primary_type: &'static str,
+    message: EvmProxySetReferralCodeMessage,
+}
+
+/// EIP-712 type definitions for referral registration.
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct EvmProxySetReferralCodeTypes {
+    #[serde(rename = "EIP712Domain")]
+    eip712_domain: Vec<TypedField>,
+    #[serde(rename = "SetReferralCode")]
+    set_referral_code: Vec<TypedField>,
+}
+
+/// Signed canonical referral-code message.
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct EvmProxySetReferralCodeMessage {
+    #[serde(rename = "proxyAccount")]
+    proxy_account: String,
+    code: String,
+    nonce: String,
+    deadline: String,
+}
+
+/// Sign this normalized payload, not the verbatim input alias.
+#[wasm_bindgen]
+pub fn build_evm_proxy_set_referral_code_typed_data(
+    args: EvmProxySetReferralCodeSigningArgs,
+) -> crate::Result<EvmProxySetReferralCodeSigningPayload> {
+    let (program, store, intent) = args.intent.parse()?;
+    let genesis = parse_hex(&args.genesis_hash, "genesisHash")?;
+    let data = intent.typed_data(&program, &store, &genesis);
+    Ok(EvmProxySetReferralCodeSigningPayload {
+        domain: Eip712Domain {
+            name: data.name,
+            version: data.version,
+            chain_id: format!("0x{}", hex::encode(data.chain_id)),
+            salt: format!("0x{}", hex::encode(data.salt)),
+        },
+        types: EvmProxySetReferralCodeTypes {
+            eip712_domain: fields(&[
+                ("name", "string"),
+                ("version", "string"),
+                ("chainId", "uint256"),
+                ("salt", "bytes32"),
+            ]),
+            set_referral_code: fields(&[
+                ("proxyAccount", "bytes32"),
+                ("code", "string"),
+                ("nonce", "uint64"),
+                ("deadline", "uint64"),
+            ]),
+        },
+        primary_type: "SetReferralCode",
+        message: EvmProxySetReferralCodeMessage {
+            proxy_account: format!("0x{}", hex::encode(data.proxy_account.to_bytes())),
+            code: data.code,
+            nonce: data.nonce.to_string(),
+            deadline: data.deadline.to_string(),
+        },
+    })
+}
+
+/// Referral intent plus immutable cluster signing-domain input.
+#[derive(Clone, Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct EvmProxySetReferralCodeSigningArgs {
+    /// Intent and Store inputs flattened into the signing object.
+    #[serde(flatten)]
+    intent: EvmProxySetReferralCodeIntentArgs,
+    /// Exactly 32 cluster genesis hash bytes in hex.
+    genesis_hash: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -626,5 +753,48 @@ mod tests {
             build_evm_proxy_withdraw_typed_data(withdraw_signing_input(1, proxy, program)).is_err(),
             "signing must reject the selected deployment proxy as recipient"
         );
+    }
+
+    #[test]
+    fn referral_aliases_and_full_width_nonce_are_normalized_before_signing() {
+        let mut value = serde_json::json!({"evm_address":hex::encode([0x17;20]),"chain_id":hex::encode([1;32]),"code":"2","nonce":"1","deadline":u64::MAX.to_string(),"store":Pubkey::new_unique().to_string(),"genesis_hash":hex::encode([2;32])});
+        for alias in ["2", "12", "11111112"] {
+            for nonce in ["0", "9007199254740993", "18446744073709551615"] {
+                value["code"] = alias.into();
+                value["nonce"] = nonce.into();
+                let payload = build_evm_proxy_set_referral_code_typed_data(
+                    serde_json::from_value(value.clone()).unwrap(),
+                )
+                .unwrap();
+                assert_eq!(payload.message.code, "2");
+                assert_eq!(payload.message.nonce, nonce);
+                assert_eq!(payload.message.deadline, u64::MAX.to_string());
+                assert_eq!(payload.primary_type, "SetReferralCode");
+                assert_eq!(
+                    payload
+                        .types
+                        .set_referral_code
+                        .iter()
+                        .map(|f| (f.name, f.field_type))
+                        .collect::<Vec<_>>(),
+                    [
+                        ("proxyAccount", "bytes32"),
+                        ("code", "string"),
+                        ("nonce", "uint64"),
+                        ("deadline", "uint64")
+                    ]
+                );
+            }
+        }
+        for invalid in ["", "0", "O", "I", "l", "!", "111111111", "1", "11111111"] {
+            value["code"] = invalid.into();
+            assert!(
+                build_evm_proxy_set_referral_code_typed_data(
+                    serde_json::from_value(value.clone()).unwrap()
+                )
+                .is_err(),
+                "{invalid}"
+            );
+        }
     }
 }
