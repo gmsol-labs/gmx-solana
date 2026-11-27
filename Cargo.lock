@@ -2647,6 +2647,7 @@ dependencies = [
  "shellexpand",
  "solana-client",
  "solana-sdk",
+ "solana-transaction-status",
  "time",
  "tokio",
  "tracing",

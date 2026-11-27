@@ -1,11 +1,5 @@
 //! Signed EVM proxy intent data and instructions.
 
-/// Owner-aware accounts and committed CPI events for the selected Proxy deployment.
-#[cfg(feature = "decode")]
-pub use gmsol_decode::gmsol::evm_proxy::{
-    decode_committed_events, decode_config_account, ProxyCPIEvent,
-};
-
 use crate::{builders::evm_proxy::EvmProxyProgram, pda::EvmAddressBytes};
 use gmsol_programs::gmsol_evm_proxy::client::{accounts, args};
 use gmsol_solana_utils::ProgramExt;
@@ -81,7 +75,7 @@ impl CancelIntent {
 
 /// Build a Cancel instruction against the canonical Config and proxy PDAs.
 pub fn cancel_instruction(
-    program_id: Pubkey,
+    program: &EvmProxyProgram,
     submitter: Pubkey,
     intent: &CancelIntent,
     signature: [u8; 64],
@@ -90,7 +84,8 @@ pub fn cancel_instruction(
     if recovery_id > 1 {
         return Err(crate::Error::custom("invalid EVM recovery ID"));
     }
-    Ok(EvmProxyProgram::from(program_id)
+    let program_id = *program.id;
+    Ok(program
         .anchor_instruction(args::Cancel {
             chain_id: intent.chain_id,
             nonce: intent.nonce,
@@ -103,7 +98,7 @@ pub fn cancel_instruction(
                 submitter,
                 config: crate::pda::find_proxy_config_address(&program_id).0,
                 proxy: crate::pda::find_proxy_address(&intent.evm_address, &program_id).0,
-                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                event_authority: program.find_event_authority_address(),
                 program: program_id,
             },
             false,
@@ -134,7 +129,8 @@ mod tests {
             nonce: 0,
             deadline: 7200,
         };
-        let instruction = cancel_instruction(program, submitter, &intent, [1; 64], 0).unwrap();
+        let instruction =
+            cancel_instruction(&program.into(), submitter, &intent, [1; 64], 0).unwrap();
         assert_eq!(instruction.program_id, program);
         assert_eq!(instruction.accounts.len(), 5);
         let expected_authority = Pubkey::find_program_address(&[b"__event_authority"], &program).0;
@@ -189,7 +185,7 @@ mod tests {
                 bytes::<32>(vector["digest"].as_str().unwrap())
             );
             let submitter = Pubkey::new_unique();
-            let ix = cancel_instruction(program, submitter, &intent, [1; 64], 0).unwrap();
+            let ix = cancel_instruction(&program.into(), submitter, &intent, [1; 64], 0).unwrap();
             let decoded =
                 args::Cancel::deserialize(&mut &ix.data[args::Cancel::DISCRIMINATOR.len()..])
                     .unwrap();

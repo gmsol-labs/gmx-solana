@@ -186,6 +186,14 @@ fn verify_readback(
 
 /// Client operations for this client's EVM proxy deployment.
 pub trait EvmProxyOps<C> {
+    /// Submit a signed Cancel using this client's transaction options.
+    fn cancel_proxy_intent(
+        &self,
+        intent: &crate::evm_proxy::CancelIntent,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
+
     /// Change allowlist membership as this client's payer.
     fn set_proxy_chain_allowed(
         &self,
@@ -257,6 +265,22 @@ fn create_config_transaction<'a, C: Deref<Target = impl Signer> + Clone>(
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> EvmProxyOps<C> for Client<C> {
+    fn cancel_proxy_intent(
+        &self,
+        intent: &crate::evm_proxy::CancelIntent,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let ix = crate::evm_proxy::cancel_instruction(
+            self.evm_proxy_program_for_builders(),
+            self.payer(),
+            intent,
+            signature,
+            recovery_id,
+        )?;
+        Ok(evm_proxy_transaction(self, ix))
+    }
+
     fn set_proxy_chain_allowed(
         &self,
         chain_id: [u8; 32],

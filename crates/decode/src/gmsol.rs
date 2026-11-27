@@ -132,7 +132,7 @@ pub mod programs {
         use crate::{untagged, value::UnknownOwnedData};
         use gmsol_programs::gmsol_evm_proxy::events::{
             ConfigAdminAccepted, ConfigAdminProposalCancelled, ConfigAdminProposed,
-            ConfigChainAllowedChanged, ConfigCreated, ConfigPauseChanged,
+            ConfigChainAllowedChanged, ConfigCreated, ConfigPauseChanged, IntentConsumed,
         };
 
         impl_decode_for_cpi_event!(ConfigCreated);
@@ -141,6 +141,7 @@ pub mod programs {
         impl_decode_for_cpi_event!(ConfigAdminProposed);
         impl_decode_for_cpi_event!(ConfigAdminProposalCancelled);
         impl_decode_for_cpi_event!(ConfigAdminAccepted);
+        impl_decode_for_cpi_event!(IntentConsumed);
 
         untagged!(
             EvmProxyCPIEvent,
@@ -151,6 +152,7 @@ pub mod programs {
                 ConfigAdminProposed,
                 ConfigAdminProposalCancelled,
                 ConfigAdminAccepted,
+                IntentConsumed,
                 UnknownOwnedData
             ]
         );

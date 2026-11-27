@@ -71,7 +71,7 @@ impl gmsol_solana_utils::IntoAtomicGroup for Cancel {
         _hint: &(),
     ) -> gmsol_solana_utils::Result<gmsol_solana_utils::AtomicGroup> {
         let instruction = crate::evm_proxy::cancel_instruction(
-            self.program.id.0,
+            &self.program,
             self.payer.0,
             &self.intent,
             self.signature,

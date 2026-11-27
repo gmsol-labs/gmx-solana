@@ -980,32 +980,32 @@
       "msg": "Signer is not the current Config admin"
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "InvalidIntentNonce",
       "msg": "Intent nonce is not the proxy's next nonce"
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "Paused",
       "msg": "Intent verification is paused"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "ChainNotAllowed",
       "msg": "EVM chain is not allowed"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "InvalidDeadline",
       "msg": "Intent deadline is outside the execution window"
     },
     {
-      "code": 6013,
+      "code": 6012,
       "name": "InvalidSignature",
       "msg": "Invalid EVM signature"
     },
     {
-      "code": 6014,
+      "code": 6013,
       "name": "NonceExhausted",
       "msg": "Proxy nonce is exhausted"
     }
