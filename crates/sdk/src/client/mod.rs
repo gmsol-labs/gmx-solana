@@ -115,6 +115,9 @@ use gmsol_solana_utils::Program as ProgramTrait;
 #[cfg(liquidity_provider)]
 use crate::builders::liquidity_provider::LiquidityProviderProgram;
 
+#[cfg(feature = "evm-proxy")]
+use crate::builders::evm_proxy::EvmProxyProgram;
+
 #[cfg(feature = "decode")]
 use gmsol_decode::{gmsol::programs::GMSOLCPIEvent, Decode};
 
@@ -140,6 +143,9 @@ pub struct ClientOptions {
     #[cfg(liquidity_provider)]
     #[builder(default)]
     liquidity_provider_program_id: Option<Pubkey>,
+    #[cfg(feature = "evm-proxy")]
+    #[builder(default)]
+    evm_proxy_program_id: Option<Pubkey>,
     #[builder(default)]
     timelock_program_id: Option<Pubkey>,
     #[builder(default)]
@@ -161,6 +167,8 @@ pub struct Client<C> {
     treasury_program: Program<C>,
     #[cfg(liquidity_provider)]
     liquidity_provider_program: LiquidityProviderProgram,
+    #[cfg(feature = "evm-proxy")]
+    evm_proxy_program: EvmProxyProgram,
     timelock_program: Program<C>,
     rpc: OnceLock<RpcClient>,
     pub_sub: OnceCell<PubsubClient>,
@@ -179,6 +187,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             treasury_program_id,
             #[cfg(liquidity_provider)]
             liquidity_provider_program_id,
+            #[cfg(feature = "evm-proxy")]
+            evm_proxy_program_id,
             timelock_program_id,
             commitment,
             subscription,
@@ -197,6 +207,10 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             liquidity_provider_program: LiquidityProviderProgram::builder()
                 .id(liquidity_provider_program_id
                     .unwrap_or(gmsol_programs::gmsol_liquidity_provider::ID))
+                .build(),
+            #[cfg(feature = "evm-proxy")]
+            evm_proxy_program: EvmProxyProgram::builder()
+                .id(evm_proxy_program_id.unwrap_or(gmsol_programs::gmsol_evm_proxy::ID))
                 .build(),
             timelock_program: Program::new(
                 timelock_program_id.unwrap_or(gmsol_programs::gmsol_timelock::ID),
@@ -227,6 +241,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
                 treasury_program_id: Some(*self.treasury_program_id()),
                 #[cfg(liquidity_provider)]
                 liquidity_provider_program_id: Some(*self.liquidity_provider_program.id()),
+                #[cfg(feature = "evm-proxy")]
+                evm_proxy_program_id: Some(*self.evm_proxy_program.id),
                 timelock_program_id: Some(*self.timelock_program_id()),
                 commitment: self.commitment(),
                 subscription: self.subscription_config.clone(),
@@ -242,6 +258,8 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
             treasury_program: self.program(*self.treasury_program_id()),
             #[cfg(liquidity_provider)]
             liquidity_provider_program: self.liquidity_provider_program.clone(),
+            #[cfg(feature = "evm-proxy")]
+            evm_proxy_program: self.evm_proxy_program.clone(),
             timelock_program: self.program(*self.timelock_program_id()),
             pub_sub: OnceCell::default(),
             rpc: Default::default(),
@@ -297,6 +315,12 @@ impl<C: Clone + Deref<Target = impl Signer>> Client<C> {
     #[cfg(liquidity_provider)]
     pub fn lp_program_for_builders(&self) -> &LiquidityProviderProgram {
         &self.liquidity_provider_program
+    }
+
+    /// Get [`EvmProxyProgram`] for builders.
+    #[cfg(feature = "evm-proxy")]
+    pub fn evm_proxy_program_for_builders(&self) -> &EvmProxyProgram {
+        &self.evm_proxy_program
     }
 
     /// Get treasury program.

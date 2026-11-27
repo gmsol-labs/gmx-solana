@@ -25,6 +25,10 @@ pub mod role;
 /// Operations for store account.
 pub mod store;
 
+/// EVM proxy Config instructions and checked initialization.
+#[cfg(feature = "evm-proxy")]
+pub mod evm_proxy;
+
 /// Operations for token config.
 pub mod token_config;
 
@@ -63,6 +67,8 @@ pub mod builder_fee;
 pub use alt::AddressLookupTableOps;
 pub use builder_fee::BuilderFeeOps;
 pub use config::ConfigOps;
+#[cfg(feature = "evm-proxy")]
+pub use evm_proxy::EvmProxyOps;
 pub use exchange::ExchangeOps;
 pub use glv::GlvOps;
 pub use gt::GtOps;

@@ -1,5 +1,6 @@
 import {
   find_proxy_address,
+  find_proxy_config_address,
   apply_factor,
   close_orders,
   create_orders,
@@ -800,3 +801,6 @@ const alternateEvmProxy = find_proxy_address({
   program_id: "11111111111111111111111111111111",
 });
 console.log("Alternate proxy address and bump:", alternateEvmProxy.address, alternateEvmProxy.bump);
+
+console.log("Proxy Config:", find_proxy_config_address({}));
+console.log("Alternate proxy Config:", find_proxy_config_address({ program_id: "11111111111111111111111111111111" }));
