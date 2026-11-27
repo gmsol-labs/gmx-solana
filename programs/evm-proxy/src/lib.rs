@@ -56,11 +56,6 @@ impl InitSpace for Proxy {
 }
 
 impl Proxy {
-    /// Next accepted nonce shared by every intent and EVM chain.
-    pub fn expected_next_nonce(&self) -> u64 {
-        self.next_nonce
-    }
-
     /// Consume the expected nonce and store its checked successor.
     ///
     /// # Errors
@@ -70,7 +65,7 @@ impl Proxy {
         require_eq!(nonce, self.next_nonce, ProxyError::InvalidIntentNonce);
         let next = nonce
             .checked_add(1)
-            .ok_or(error!(ProxyError::NonceExhausted))?;
+            .ok_or_else(|| error!(ProxyError::NonceExhausted))?;
         self.next_nonce = next;
         Ok(())
     }
@@ -424,14 +419,14 @@ pub mod gmsol_evm_proxy {
     /// # Errors
     /// - Anchor account validation, account borrowing or Clock access fails.
     /// - [`ProxyError::InvalidProxy`] for an unsupported stored layout version.
-    /// - [`ProxyError::InvalidIntentNonce`] when the signed nonce is not next.
-    /// - [`ProxyError::NonceExhausted`] when the matching nonce is u64::MAX.
     /// - [`ProxyError::Paused`] while Config is paused.
     /// - [`ProxyError::ChainNotAllowed`] when the chain ID is not allowed.
     /// - [`ProxyError::InvalidDeadline`] for a negative Clock timestamp or a
     ///   deadline outside the inclusive window from now through now plus 3600 seconds.
     /// - [`ProxyError::InvalidSignature`] for an invalid recovery ID, zero or
     ///   high `s`, failed recovery or a recovered address differing from the EVM owner.
+    /// - [`ProxyError::InvalidIntentNonce`] when a verified intent's nonce is not next.
+    /// - [`ProxyError::NonceExhausted`] when the verified matching nonce is u64::MAX.
     /// - CPI event emission fails if its supplied accounts are invalid.
     pub fn cancel(
         ctx: Context<Cancel>,
@@ -447,10 +442,6 @@ pub mod gmsol_evm_proxy {
             let proxy = ctx.accounts.proxy.load()?;
             require_eq!(proxy.version, PROXY_VERSION, ProxyError::InvalidProxy);
             evm_address = proxy.evm_address;
-            require!(
-                nonce == proxy.expected_next_nonce(),
-                ProxyError::InvalidIntentNonce
-            );
         }
 
         let struct_hash = gmsol_evm_proxy_intent::cancel_struct_hash(&proxy_key, nonce, deadline);
@@ -638,6 +629,7 @@ mod tests {
         const EXPECTED_NEXT_NONCE_OFFSET: usize = 32;
         assert_eq!(std::mem::size_of::<Proxy>(), EXPECTED_PROXY_ACCOUNT_SIZE);
         assert_eq!(Proxy::INIT_SPACE, EXPECTED_PROXY_ACCOUNT_SIZE);
+        assert_eq!(std::mem::offset_of!(Proxy, reserved), 40);
         assert_eq!(
             std::mem::offset_of!(Proxy, evm_address),
             EXPECTED_EVM_ADDRESS_OFFSET
@@ -667,7 +659,7 @@ mod tests {
     #[test]
     fn next_nonce_starts_at_zero_and_advances_once() {
         let mut proxy: Proxy = bytemuck::Zeroable::zeroed();
-        assert_eq!(proxy.expected_next_nonce(), 0);
+        assert_eq!(proxy.next_nonce, 0);
         proxy.consume_next_nonce(0).unwrap();
         assert_eq!(proxy.next_nonce, 1);
         proxy.consume_next_nonce(1).unwrap();

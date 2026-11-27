@@ -121,14 +121,14 @@
         "# Errors",
         "- Anchor account validation, account borrowing or Clock access fails.",
         "- [`ProxyError::InvalidProxy`] for an unsupported stored layout version.",
-        "- [`ProxyError::InvalidIntentNonce`] when the signed nonce is not next.",
-        "- [`ProxyError::NonceExhausted`] when the matching nonce is u64::MAX.",
         "- [`ProxyError::Paused`] while Config is paused.",
         "- [`ProxyError::ChainNotAllowed`] when the chain ID is not allowed.",
         "- [`ProxyError::InvalidDeadline`] for a negative Clock timestamp or a",
         "deadline outside the inclusive window from now through now plus 3600 seconds.",
         "- [`ProxyError::InvalidSignature`] for an invalid recovery ID, zero or",
         "high `s`, failed recovery or a recovered address differing from the EVM owner.",
+        "- [`ProxyError::InvalidIntentNonce`] when a verified intent's nonce is not next.",
+        "- [`ProxyError::NonceExhausted`] when the verified matching nonce is u64::MAX.",
         "- CPI event emission fails if its supplied accounts are invalid."
       ],
       "discriminator": [

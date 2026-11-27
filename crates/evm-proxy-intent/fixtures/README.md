@@ -1,6 +1,6 @@
 # Cancel intent vectors
 
-Cancel encodes a uint64 nonce. Domain salt binds the program, Store and genesis hash. The vectors preserve full-width chain IDs, uint64 boundaries, domain mutations and uint64 encoding boundaries.
+Cancel encodes a uint64 nonce. Domain salt binds the program, Store and genesis hash. The vectors preserve full-width chain IDs, uint64 boundaries and domain mutations.
 
 From this crate's root, install the pinned tooling without changing a package manifest or lockfile:
 

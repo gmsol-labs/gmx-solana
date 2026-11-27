@@ -100,7 +100,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
 {
     const SUBMITTER_FUNDING_LAMPORTS: u64 = 2_000_000_000;
     const INTENT_VALIDITY_SECONDS: u64 = 120;
-    const OUTSIDE_EXECUTION_WINDOW_SECONDS: u64 = 3601;
+    const OUTSIDE_EXECUTION_WINDOW_SECONDS: u64 = 3600 + 120;
     let deployment = current_deployment().await?;
     let _accounts = deployment.use_accounts().await?;
     let _policy = EVM_PROXY_CONFIG_LOCK.lock().await;
@@ -158,7 +158,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
         let (signature, recovery_id) = signed(&intent, deployment.store, genesis_hash, &owner);
 
         let paused = submitter
-            .cancel_proxy_transaction(evm_proxy::ID, &intent, signature, recovery_id)?
+            .cancel_proxy_intent(evm_proxy::ID, &intent, signature, recovery_id)?
             .send()
             .await
             .expect_err("Config starts paused");
@@ -170,7 +170,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
 
         admin.set_proxy_paused(evm_proxy::ID, false).send().await?;
         let disallowed = submitter
-            .cancel_proxy_transaction(evm_proxy::ID, &intent, signature, recovery_id)?
+            .cancel_proxy_intent(evm_proxy::ID, &intent, signature, recovery_id)?
             .send()
             .await
             .expect_err("chain is not allowed");
@@ -188,7 +188,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
         let (wrong_signature, wrong_recovery) =
             signed(&intent, deployment.store, genesis_hash, &wrong_owner);
         let wrong = submitter
-            .cancel_proxy_transaction(evm_proxy::ID, &intent, wrong_signature, wrong_recovery)?
+            .cancel_proxy_intent(evm_proxy::ID, &intent, wrong_signature, wrong_recovery)?
             .send()
             .await
             .expect_err("wrong EVM signer");
@@ -205,7 +205,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
             let (foreign_signature, foreign_recovery) =
                 signed(&intent, store, cluster_hash, &owner);
             let error = submitter
-                .cancel_proxy_transaction(
+                .cancel_proxy_intent(
                     evm_proxy::ID,
                     &intent,
                     foreign_signature,
@@ -242,7 +242,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
             let (invalid_signature, invalid_recovery) =
                 signed(&invalid, deployment.store, genesis_hash, &owner);
             let error = submitter
-                .cancel_proxy_transaction(
+                .cancel_proxy_intent(
                     evm_proxy::ID,
                     &invalid,
                     invalid_signature,
@@ -325,7 +325,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
         let (forged_signature, forged_recovery) =
             signed(&forged, deployment.store, genesis_hash, &owner);
         let future = submitter
-            .cancel_proxy_transaction(evm_proxy::ID, &forged, forged_signature, forged_recovery)?
+            .cancel_proxy_intent(evm_proxy::ID, &forged, forged_signature, forged_recovery)?
             .send()
             .await
             .expect_err("future nonce");
@@ -448,6 +448,13 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
             "rent rolls back while transaction fees remain charged");
         assert_eq!(admin.rpc().get_account(&proxy).await?, before);
 
+        let clock_account = admin.rpc().get_account_with_commitment(
+            &solana_sdk::sysvar::clock::ID, CommitmentConfig::processed(),
+        ).await?.value.ok_or_else(|| eyre::eyre!("processed Clock account unavailable"))?;
+        let clock: Clock = bincode::deserialize(&clock_account.data)?;
+        let deadline = u64::try_from(clock.unix_timestamp)?.checked_add(INTENT_VALIDITY_SECONDS).expect("deadline overflow");
+        let intent = CancelIntent { deadline, ..intent };
+        let (signature, recovery_id) = signed(&intent, deployment.store, genesis_hash, &owner);
         let competing = CancelIntent {
             deadline: deadline + 1,
             ..intent
@@ -455,7 +462,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
         let (competing_signature, competing_recovery) =
             signed(&competing, deployment.store, genesis_hash, &owner);
         let signature_on_chain = submitter
-            .cancel_proxy_transaction(evm_proxy::ID, &intent, signature, recovery_id)?
+            .cancel_proxy_intent(evm_proxy::ID, &intent, signature, recovery_id)?
             .send()
             .await?;
         let after = admin.rpc().get_account(&proxy).await?;
@@ -493,7 +500,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
         );
 
         let replay = admin
-            .cancel_proxy_transaction(evm_proxy::ID, &intent, signature, recovery_id)?
+            .cancel_proxy_intent(evm_proxy::ID, &intent, signature, recovery_id)?
             .send()
             .await
             .expect_err("consumed nonce replay");
@@ -504,7 +511,7 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
         assert_eq!(admin.rpc().get_account(&proxy).await?, after);
 
         let canceled = submitter
-            .cancel_proxy_transaction(
+            .cancel_proxy_intent(
                 evm_proxy::ID,
                 &competing,
                 competing_signature,
@@ -519,14 +526,20 @@ async fn cancel_verifies_domain_signature_policy_and_preserves_consumed_nonce() 
         );
         assert_eq!(admin.rpc().get_account(&proxy).await?, after);
 
+        let clock_account = admin.rpc().get_account_with_commitment(
+            &solana_sdk::sysvar::clock::ID, CommitmentConfig::processed(),
+        ).await?.value.ok_or_else(|| eyre::eyre!("processed Clock account unavailable"))?;
+        let clock: Clock = bincode::deserialize(&clock_account.data)?;
+        let deadline = u64::try_from(clock.unix_timestamp)?.checked_add(INTENT_VALIDITY_SECONDS).expect("deadline overflow");
         let following = CancelIntent {
+            deadline,
             nonce: intent.nonce + 1,
             ..intent
         };
         let (following_signature, following_recovery) =
             signed(&following, deployment.store, genesis_hash, &owner);
         let second_signature = submitter
-            .cancel_proxy_transaction(
+            .cancel_proxy_intent(
                 evm_proxy::ID,
                 &following,
                 following_signature,
