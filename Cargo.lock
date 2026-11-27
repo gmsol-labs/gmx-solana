@@ -2625,6 +2625,7 @@ name = "gmsol-tests"
 version = "0.12.0"
 dependencies = [
  "anchor-spl",
+ "bincode",
  "event-listener 5.4.0",
  "eyre",
  "futures-util",

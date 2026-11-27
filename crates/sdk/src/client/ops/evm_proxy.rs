@@ -177,7 +177,7 @@ fn verify_readback(
 /// Client operations for an explicitly selected EVM proxy deployment.
 pub trait EvmProxyOps<C> {
     /// Submit a signed Cancel using this client's transaction options.
-    fn cancel_proxy_transaction(
+    fn cancel_proxy_intent(
         &self,
         program_id: Pubkey,
         intent: &crate::evm_proxy::CancelIntent,
@@ -263,7 +263,7 @@ fn create_config_transaction<'a, C: Deref<Target = impl Signer> + Clone>(
 
 impl<C: Deref<Target = impl Signer> + Clone> EvmProxyOps<C> for Client<C> {
     /// Submit a signed Cancel using this client's transaction options.
-    fn cancel_proxy_transaction(
+    fn cancel_proxy_intent(
         &self,
         program_id: Pubkey,
         intent: &crate::evm_proxy::CancelIntent,
