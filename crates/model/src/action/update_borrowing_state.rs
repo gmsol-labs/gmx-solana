@@ -72,7 +72,7 @@ pub struct UpdateBorrowingReport<T> {
 
 #[cfg(feature = "gmsol-utils")]
 impl<T: gmsol_utils::InitSpace> gmsol_utils::InitSpace for UpdateBorrowingReport<T> {
-    const INIT_SPACE: usize = u64::INIT_SPACE + 2 * T::INIT_SPACE;
+    const INIT_SPACE: usize = <u64 as gmsol_utils::InitSpace>::INIT_SPACE + 2 * T::INIT_SPACE;
 }
 
 impl<T> UpdateBorrowingReport<T> {

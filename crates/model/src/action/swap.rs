@@ -331,7 +331,8 @@ pub struct SwapParams<T> {
 
 #[cfg(feature = "gmsol-utils")]
 impl<T: gmsol_utils::InitSpace> gmsol_utils::InitSpace for SwapParams<T> {
-    const INIT_SPACE: usize = bool::INIT_SPACE + T::INIT_SPACE + Prices::<T>::INIT_SPACE;
+    const INIT_SPACE: usize =
+        <bool as gmsol_utils::InitSpace>::INIT_SPACE + T::INIT_SPACE + Prices::<T>::INIT_SPACE;
 }
 
 impl<T> SwapParams<T> {
