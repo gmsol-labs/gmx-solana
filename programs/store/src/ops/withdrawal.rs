@@ -174,6 +174,13 @@ impl ExecuteWithdrawalOperation<'_, '_> {
                 return Err(error!(err));
             }
         }
+        RemainingAccountsForMarket::validate_for_execution(
+            self.remaining_accounts,
+            &self.store.key(),
+            self.market_token_mint.key(),
+            Some(self.withdrawal.load()?.swap()),
+            &[self.market],
+        )?;
         match self.perform_withdrawal() {
             Ok(res) => Ok(Some(res)),
             Err(err) if !throw_on_execution_error => {

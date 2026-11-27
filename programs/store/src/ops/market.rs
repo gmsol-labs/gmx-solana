@@ -37,6 +37,55 @@ pub(crate) struct RemainingAccountsForMarket<'info> {
 }
 
 impl<'info> RemainingAccountsForMarket<'info> {
+    /// Reject malformed keeper-supplied accounts before execution errors can be cancelled.
+    pub(crate) fn validate_for_execution(
+        remaining_accounts: &'info [AccountInfo<'info>],
+        store: &Pubkey,
+        current_market_token: Pubkey,
+        swap: Option<&SwapActionParams>,
+        required_markets: &[&AccountLoader<'info, Market>],
+    ) -> Result<()> {
+        for info in remaining_accounts {
+            require!(info.is_writable, ErrorCode::AccountNotMutable);
+        }
+        let accounts = Self::new(remaining_accounts, current_market_token, swap)?;
+        if let Some(swap) = swap {
+            for (expected_token, market) in swap
+                .unique_market_tokens_excluding_current(&current_market_token)
+                .zip(&accounts.swap_markets)
+            {
+                let expected_market =
+                    Market::find_market_address(store, expected_token, &crate::ID).0;
+                require_keys_eq!(market.key(), expected_market, CoreError::MarketMismatched);
+                let market = market.load()?;
+                Self::validate_virtual_inventory_accounts(&market, &accounts)?;
+            }
+        }
+        for market in required_markets {
+            Self::validate_virtual_inventory_accounts(&*market.load()?, &accounts)?;
+        }
+        for virtual_inventory in accounts.virtual_inventories.values() {
+            virtual_inventory.load()?;
+        }
+        Ok(())
+    }
+
+    fn validate_virtual_inventory_accounts(market: &Market, accounts: &Self) -> Result<()> {
+        for key in [
+            market.virtual_inventory_for_swaps(),
+            market.virtual_inventory_for_positions(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            require!(
+                accounts.virtual_inventories.contains_key(key),
+                CoreError::InvalidArgument
+            );
+        }
+        Ok(())
+    }
+
     pub(crate) fn new(
         remaining_accounts: &'info [AccountInfo<'info>],
         current_market_token: Pubkey,
@@ -65,6 +114,76 @@ impl<'info> RemainingAccountsForMarket<'info> {
 
     pub(crate) fn load_virtual_inventories(&self) -> Result<RevertibleVirtualInventories<'info>> {
         RevertibleVirtualInventories::from_loaders(&self.virtual_inventories)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anchor_lang::Discriminator;
+
+    #[test]
+    fn no_swap_needs_no_remaining_accounts() {
+        assert!(RemainingAccountsForMarket::validate_for_execution(
+            &[],
+            &Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            None,
+            &[],
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn missing_swap_market_is_rejected_before_execution() {
+        let current_market_token = Pubkey::new_unique();
+        let mut swap = SwapActionParams::default();
+        swap.primary_length = 1;
+        swap.paths[0] = Pubkey::new_unique();
+
+        assert!(RemainingAccountsForMarket::validate_for_execution(
+            &[],
+            &Pubkey::new_unique(),
+            current_market_token,
+            Some(&swap),
+            &[],
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn wrong_swap_market_is_rejected_before_execution() {
+        let store = Pubkey::new_unique();
+        let current_market_token = Pubkey::new_unique();
+        let mut swap = SwapActionParams::default();
+        swap.primary_length = 1;
+        swap.paths[0] = Pubkey::new_unique();
+
+        let wrong_market = Pubkey::new_unique();
+        let mut lamports = 1;
+        let mut data = vec![0; 8 + std::mem::size_of::<Market>()];
+        data[..8].copy_from_slice(Market::DISCRIMINATOR);
+        let info = AccountInfo::new(
+            &wrong_market,
+            false,
+            true,
+            &mut lamports,
+            &mut data,
+            &crate::ID,
+            false,
+            0,
+        );
+
+        let infos = [info];
+        assert!(RemainingAccountsForMarket::new(&infos, current_market_token, Some(&swap)).is_ok());
+        assert!(RemainingAccountsForMarket::validate_for_execution(
+            &infos,
+            &store,
+            current_market_token,
+            Some(&swap),
+            &[],
+        )
+        .is_err());
     }
 }
 
