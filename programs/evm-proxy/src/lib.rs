@@ -642,6 +642,8 @@ pub mod gmsol_evm_proxy {
     /// - Account loading/borrowing, Clock, rent, funding and Store CPI errors
     ///   propagate. Insufficient sponsor funds or an already-coded User fail
     ///   atomically, excluding transaction fees.
+    /// - NonceExhausted rejects a matching u64::MAX and rolls back both Store CPIs.
+    /// - CPI event emission fails if its supplied accounts are invalid.
     pub fn set_referral_code(
         ctx: Context<SetReferralCode>,
         chain_id: [u8; 32],
@@ -742,12 +744,12 @@ pub mod gmsol_evm_proxy {
             code,
         )?;
         ctx.accounts.proxy.load_mut()?.consume_next_nonce(nonce)?;
-        emit!(IntentConsumed {
+        emit_cpi!(IntentConsumed {
             proxy: proxy_key,
             nonce,
             kind: INTENT_KIND_SET_REFERRAL_CODE
         });
-        emit!(ReferralCodeSet {
+        emit_cpi!(ReferralCodeSet {
             proxy: proxy_key,
             nonce,
             code
@@ -918,6 +920,7 @@ pub struct Withdraw<'info> {
 }
 
 /// Accounts for sponsored referral-code registration.
+#[event_cpi]
 #[derive(Accounts)]
 #[instruction(chain_id: [u8; 32], code: [u8; REFERRAL_CODE_LEN])]
 pub struct SetReferralCode<'info> {

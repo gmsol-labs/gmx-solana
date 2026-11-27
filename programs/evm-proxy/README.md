@@ -34,6 +34,10 @@ Pass nonce, deadline and token amount as decimal strings in JS to preserve all 6
 
 Successful intents emit IntentConsumed; Withdraw and referral registration also emit their effect events.
 
-## Known Issues
+## Nonce and event contract
 
-Every action and allowed EVM chain shares one wrapping uint64 nonce per proxy. MAX advances to zero. This finite counter does not establish absolute lifetime replay resistance after an entire nonce cycle if a historical signature's other validity conditions recur.
+Each proxy stores its next expected nonce, initially 0, shared across all intents and allowed EVM chains. Successful execution stores the checked successor. A matching u64::MAX fails with NonceExhausted and no business-state change; the counter never wraps. The account's declared field consumes eight reserved bytes without changing its allocation or identity offsets. Used accounts from an older counter interpretation require a separate deployment inventory and compatibility decision.
+
+The execution window is inclusive: now <= deadline <= now + 3600 seconds, using Solana's Clock. InvalidDeadline covers invalid timestamps and deadlines outside this window.
+
+Config changes and successful intents emit CPI events. Every emitting instruction and SDK/JS output includes this Proxy deployment's event authority and program accounts. With the decode feature, gmsol-sdk re-exports the canonical ProxyCPIEvent and decode_committed_events API from gmsol-decode. Consume successful transaction metadata for the selected deployment; failed inner traces do not establish committed changes, and malformed recognized events return errors.

@@ -1,7 +1,6 @@
 //! Owner-aware account decoding and committed CPI events for an EVM proxy deployment.
 
-use anchor_lang::{event::EVENT_IX_TAG_LE, AccountDeserialize, AnchorDeserialize, Discriminator};
-use base64::Engine;
+use anchor_lang::{event::EVENT_IX_TAG_LE, AccountDeserialize, Discriminator};
 use gmsol_programs::gmsol_evm_proxy::{accounts::Config, events};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use solana_transaction_status_client_types::EncodedTransactionWithStatusMeta;
@@ -17,6 +16,7 @@ crate::impl_decode_for_cpi_event!(events::ConfigChainAllowedChanged);
 crate::impl_decode_for_cpi_event!(events::ConfigPauseChanged);
 crate::impl_decode_for_cpi_event!(events::ConfigAdminProposed);
 crate::impl_decode_for_cpi_event!(events::ConfigAdminAccepted);
+crate::impl_decode_for_cpi_event!(events::ReferralCodeSet);
 crate::impl_decode_for_cpi_event!(events::Withdrawn);
 crate::impl_decode_for_cpi_event!(events::IntentConsumed);
 
@@ -53,6 +53,8 @@ pub enum ProxyCPIEvent {
     IntentConsumed(events::IntentConsumed),
     /// Transfer completed by a successful withdrawal.
     Withdrawn(events::Withdrawn),
+    /// Code registered by a successful referral intent.
+    ReferralCodeSet(events::ReferralCodeSet),
     /// Unrecognized event discriminator, including the CPI header.
     Unknown(Vec<u8>),
 }
@@ -87,6 +89,7 @@ impl Decode for ProxyCPIEvent {
                 known!(events::ConfigAdminAccepted, ConfigAdminAccepted);
                 known!(events::IntentConsumed, IntentConsumed);
                 known!(events::Withdrawn, Withdrawn);
+                known!(events::ReferralCodeSet, ReferralCodeSet);
                 Ok(ProxyCPIEvent::Unknown(data.to_vec()))
             }
         }
@@ -114,30 +117,6 @@ pub fn decode_committed_events(
     let mut decoder = TransactionDecoder::new(slot, signature, transaction);
     decoder.add_cpi_event_program_id(program_id)?;
     AnchorCPIEvents::decode(&decoder)
-}
-
-/// Existing child-owned referral log decoding, pending CPI conversion.
-pub fn decode_referral_code_event_log(
-    line: &str,
-) -> Result<Option<events::ReferralCodeSet>, crate::DecodeError> {
-    decode_program_data(line)
-}
-
-fn decode_program_data<E: Discriminator + AnchorDeserialize>(
-    line: &str,
-) -> Result<Option<E>, crate::DecodeError> {
-    let Some(encoded) = line.strip_prefix("Program data: ") else {
-        return Ok(None);
-    };
-    let data = base64::engine::general_purpose::STANDARD
-        .decode(encoded)
-        .map_err(crate::DecodeError::custom)?;
-    if !data.starts_with(E::DISCRIMINATOR) {
-        return Ok(None);
-    }
-    E::try_from_slice(&data[E::DISCRIMINATOR.len()..])
-        .map(Some)
-        .map_err(crate::DecodeError::custom)
 }
 
 #[cfg(test)]
@@ -340,6 +319,34 @@ mod tests {
                 event.amount,
                 event.recipient
             )
+        );
+        let mut trailing = valid.clone();
+        trailing.push(0);
+        for data in [valid[..valid.len() - 1].to_vec(), trailing] {
+            let tx = transaction(selected, authority(&selected), &data);
+            assert!(decode_committed_events(&selected, SLOT, Signature::default(), &tx).is_err());
+        }
+    }
+
+    #[test]
+    fn committed_wrapper_decodes_referral_code_set_and_rejects_malformed_payloads() {
+        let selected = Pubkey::new_unique();
+        let event = events::ReferralCodeSet {
+            proxy: Pubkey::new_unique(),
+            nonce: 7,
+            code: [7; 8],
+        };
+        let mut valid = EVENT_IX_TAG_LE.to_vec();
+        valid.extend(event.data());
+        let tx = transaction(selected, authority(&selected), &valid);
+        let events = decode_committed_events(&selected, SLOT, Signature::default(), &tx).unwrap();
+        assert_eq!(events.events().len(), 1);
+        let ProxyCPIEvent::ReferralCodeSet(decoded) = events.events()[0].data() else {
+            panic!("expected ReferralCodeSet CPI event");
+        };
+        assert_eq!(
+            (decoded.proxy, decoded.nonce, decoded.code),
+            (event.proxy, event.nonce, event.code)
         );
         let mut trailing = valid.clone();
         trailing.push(0);

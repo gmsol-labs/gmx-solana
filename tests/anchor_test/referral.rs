@@ -6,7 +6,8 @@ use gmsol_programs::anchor_lang::{AccountDeserialize, Discriminator, Instruction
 use gmsol_sdk::{
     client::ops::{EvmProxyOps, SystemProgramOps},
     evm_proxy::{
-        set_referral_code_instruction, CancelIntent, SetReferralCodeIntent, WithdrawIntent,
+        set_referral_code_instruction, CancelIntent, ProxyCPIEvent, SetReferralCodeIntent,
+        WithdrawIntent,
     },
 };
 use gmsol_solana_utils::{signer::shared_signer, transaction_builder::default_before_sign};
@@ -109,7 +110,7 @@ async fn execute(
     fee_payer: &Keypair,
     instructions: &[Instruction],
     expected_error: Option<InstructionError>,
-) -> eyre::Result<Vec<String>> {
+) -> eyre::Result<(Vec<String>, Vec<ProxyCPIEvent>)> {
     let rpc = deployment.client.rpc();
     let client = deployment
         .client
@@ -160,7 +161,7 @@ async fn execute(
             .get_transaction_with_config(
                 &signature,
                 RpcTransactionConfig {
-                    encoding: Some(UiTransactionEncoding::Json),
+                    encoding: Some(UiTransactionEncoding::Base64),
                     commitment: Some(CommitmentConfig::confirmed()),
                     max_supported_transaction_version: Some(0),
                 },
@@ -174,6 +175,24 @@ async fn execute(
             }
             Err(error) => return Err(error.into()),
         }
+    };
+    let decoded = gmsol_sdk::evm_proxy::decode_committed_events(
+        &proxy_program::ID,
+        observed.slot,
+        signature,
+        &observed.transaction,
+    );
+    let committed = if succeeds {
+        decoded?
+            .into_iter()
+            .map(|event| event.into_data())
+            .collect()
+    } else {
+        assert!(
+            decoded.is_err(),
+            "failed transaction traces are not committed events"
+        );
+        Vec::new()
     };
     let meta = observed
         .transaction
@@ -192,7 +211,7 @@ async fn execute(
         OptionSerializer::Some(logs) => logs,
         _ => eyre::bail!("transaction logs missing"),
     };
-    Ok(logs)
+    Ok((logs, committed))
 }
 
 const REFERRAL_ACCOUNT_INDEX: usize = 5;
@@ -259,7 +278,7 @@ async fn verify_referral_cases(
         evm_address: address,
         chain_id: chain,
         code,
-        nonce: 1,
+        nonce: 0,
         deadline: deadline(deployment).await?,
     };
     let instruction = signed_instruction(deployment, sponsor.pubkey(), &intent, &owner, &genesis)?;
@@ -348,7 +367,7 @@ async fn verify_referral_cases(
     .await?;
     assert_eq!(snapshot(deployment, &keys).await?, before);
 
-    let logs = execute(
+    let (logs, events) = execute(
         deployment,
         &sponsor,
         &fee_payer,
@@ -397,24 +416,23 @@ async fn verify_referral_cases(
     );
     let proxy_data =
         proxy_program::Proxy::try_deserialize(&mut after[0].as_ref().unwrap().data.as_slice())?;
-    assert_eq!(proxy_data.consumed_nonce(), 1);
-    let events = logs
-        .iter()
-        .filter_map(|line| gmsol_sdk::evm_proxy::decode_referral_code_event_log(line).transpose())
-        .collect::<Result<Vec<_>, _>>()?;
-    assert_eq!(events.len(), 1);
+    assert_eq!(proxy_data.next_nonce, 1);
+    let [ProxyCPIEvent::IntentConsumed(consumed), ProxyCPIEvent::ReferralCodeSet(registered)] =
+        events.as_slice()
+    else {
+        eyre::bail!("expected ordered intent and referral CPI events");
+    };
     assert_eq!(
-        (events[0].proxy, events[0].nonce, events[0].code),
-        (proxy, 1, code)
+        (registered.proxy, registered.nonce, registered.code),
+        (proxy, intent.nonce, code)
     );
-    let consumed = logs
-        .iter()
-        .filter_map(|line| gmsol_sdk::evm_proxy::decode_intent_event_log(line).transpose())
-        .collect::<Result<Vec<_>, _>>()?;
-    assert_eq!(consumed.len(), 1);
     assert_eq!(
-        (consumed[0].proxy, consumed[0].nonce, consumed[0].kind),
-        (proxy, 1, proxy_program::INTENT_KIND_SET_REFERRAL_CODE)
+        (consumed.proxy, consumed.nonce, consumed.kind),
+        (
+            proxy,
+            intent.nonce,
+            proxy_program::INTENT_KIND_SET_REFERRAL_CODE
+        )
     );
 
     let mut alternate_chain = [0; 32];
@@ -469,11 +487,11 @@ async fn verify_referral_cases(
     let existing_before = snapshot(deployment, &existing_keys).await?;
     let next = SetReferralCodeIntent {
         code: unused_code,
-        nonce: 2,
+        nonce: 1,
         deadline: deadline(deployment).await?,
         ..intent
     };
-    let logs = execute(
+    let (logs, _) = execute(
         deployment,
         &sponsor,
         &fee_payer,
@@ -517,7 +535,7 @@ async fn verify_referral_cases(
         gmsol_sdk::pda::find_user_address(&deployment.store, &other_proxy, &gmsol_store::ID).0;
     let occupied_keys = [other_proxy, other_user, code_account, sponsor.pubkey()];
     let occupied_before = snapshot(deployment, &occupied_keys).await?;
-    let logs = execute(
+    let (logs, _) = execute(
         deployment,
         &sponsor,
         &fee_payer,
@@ -687,7 +705,7 @@ async fn verify_referral_cases(
             ..intent
         };
         let bad = SetReferralCodeIntent {
-            nonce: 2,
+            nonce: 1,
             ..persistent
         };
         execute(
@@ -779,7 +797,7 @@ async fn verify_referral_cases(
         deadline: deadline(deployment).await?,
         ..intent
     };
-    let logs = execute(
+    let (logs, _) = execute(
         deployment,
         &sponsor,
         &fee_payer,
@@ -861,7 +879,7 @@ async fn verify_referral_cases(
             &drain_recipient,
             user_rent + code_rent - balance,
         );
-        let logs = execute(
+        let (logs, _) = execute(
             deployment,
             &poor_sponsor,
             &fee_payer,
@@ -914,7 +932,7 @@ async fn verify_referral_cases(
     zero.data = proxy_program::instruction::SetReferralCode {
         chain_id: chain,
         code: [0; 8],
-        nonce: 1,
+        nonce: 0,
         deadline: deadline(deployment).await?,
         signature: [1; 64],
         recovery_id: 0,
@@ -932,11 +950,11 @@ async fn verify_referral_cases(
     .await?;
     assert_eq!(snapshot(deployment, &zero_keys).await?, zero_before);
 
-    // Normal-range cross-intent sequence: registration 1, Cancel 2, Withdraw 3.
+    // Normal-range cross-intent sequence: registration 0, Cancel 1, Withdraw 2.
     let cancel = CancelIntent {
         evm_address: address,
         chain_id: alternate_chain,
-        nonce: 2,
+        nonce: 1,
         deadline: deadline(deployment).await?,
     };
     let (signature, recovery) = libsecp256k1::sign(
@@ -971,7 +989,7 @@ async fn verify_referral_cases(
         amount: super::withdraw::WITHDRAW_AMOUNT,
         decimals: super::withdraw::WITHDRAW_MINT_DECIMALS,
         recipient,
-        nonce: 3,
+        nonce: 2,
         deadline: deadline(deployment).await?,
     };
     let (signature, recovery) = libsecp256k1::sign(
@@ -996,8 +1014,8 @@ async fn verify_referral_cases(
     );
     let account = deployment.client.rpc().get_account(&proxy).await?;
     assert_eq!(
-        proxy_program::Proxy::try_deserialize(&mut account.data.as_slice())?.consumed_nonce(),
-        withdraw.nonce
+        proxy_program::Proxy::try_deserialize(&mut account.data.as_slice())?.next_nonce,
+        withdraw.nonce + 1
     );
     Ok(())
 }

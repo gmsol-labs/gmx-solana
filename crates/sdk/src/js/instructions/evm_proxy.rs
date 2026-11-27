@@ -281,8 +281,10 @@ mod transaction_tests {
     #[test]
     fn referral_transaction_preserves_distinct_sponsor_payer_and_fee_options() {
         let payer = Pubkey::new_unique();
+        let program = Pubkey::new_unique();
         let sponsor = Pubkey::new_unique();
         let mut value = transaction_args(payer);
+        value["intent"]["program_id"] = program.to_string().into();
         value["intent"]["store"] = Pubkey::new_unique().to_string().into();
         value["intent"]["code"] = "12".into();
         value["submitter"] = sponsor.to_string().into();
@@ -297,7 +299,8 @@ mod transaction_tests {
             transaction.message.static_account_keys()[..transaction.signatures.len()]
                 .contains(&sponsor)
         );
-        let instruction = proxy_instruction(&transaction);
+        let instruction = proxy_instruction(&transaction, program);
+        assert_cpi_accounts(&transaction, instruction, 8, program);
         let data = args::SetReferralCode::deserialize(
             &mut &instruction.data[args::SetReferralCode::DISCRIMINATOR.len()..],
         )

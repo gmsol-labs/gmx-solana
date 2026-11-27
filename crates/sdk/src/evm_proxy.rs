@@ -6,9 +6,10 @@ pub use gmsol_decode::gmsol::evm_proxy::{
     decode_committed_events, decode_config_account, ProxyCPIEvent,
 };
 
-use crate::{builders::evm_proxy::EvmProxyProgram, pda::{EvmAddressBytes, ReferralCodeBytes}};
-use base64::Engine;
-use gmsol_programs::gmsol_evm_proxy::events;
+use crate::{
+    builders::evm_proxy::EvmProxyProgram,
+    pda::{EvmAddressBytes, ReferralCodeBytes},
+};
 use anchor_spl::associated_token::get_associated_token_address_with_program_id;
 use gmsol_programs::gmsol_evm_proxy::client::{accounts, args};
 use gmsol_solana_utils::ProgramExt;
@@ -134,28 +135,12 @@ pub fn set_referral_code_instruction(
                 .0,
                 store_program,
                 system_program: solana_sdk::system_program::ID,
+                event_authority: EvmProxyProgram::from(program_id).find_event_authority_address(),
+                program: program_id,
             },
             false,
         )
         .build())
-}
-
-/// Decode only after confirming that the enclosing transaction succeeded.
-pub fn decode_referral_code_event_log(
-    line: &str,
-) -> crate::Result<Option<events::ReferralCodeSet>> {
-    decode_program_data(line)
-}
-
-fn decode_program_data<E: anchor_lang::Event>(line: &str) -> crate::Result<Option<E>> {
-    let Some(encoded) = line.strip_prefix("Program data: ") else {
-        return Ok(None);
-    };
-    let data = base64::engine::general_purpose::STANDARD.decode(encoded)?;
-    if !data.starts_with(E::DISCRIMINATOR) {
-        return Ok(None);
-    }
-    crate::utils::events::decode_anchor_event_with_options::<E>(&data, false).map(Some)
 }
 
 /// Signed fields of one Withdraw intent, using the proxy's shared next nonce.
@@ -422,6 +407,37 @@ pub fn cancel_instruction(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn referral_builder_derives_cpi_accounts_for_selected_program() {
+        let program = Pubkey::new_unique();
+        let intent = SetReferralCodeIntent {
+            evm_address: [0x42; 20],
+            chain_id: [1; 32],
+            code: [7; 8],
+            nonce: 0,
+            deadline: 7200,
+        };
+        let instruction = set_referral_code_instruction(
+            program,
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            &intent,
+            [1; 64],
+            0,
+        )
+        .unwrap();
+        let authority = Pubkey::find_program_address(&[b"__event_authority"], &program).0;
+        assert_eq!(instruction.accounts.len(), 10);
+        assert_eq!(
+            instruction.accounts[8],
+            solana_sdk::instruction::AccountMeta::new_readonly(authority, false)
+        );
+        assert_eq!(
+            instruction.accounts[9],
+            solana_sdk::instruction::AccountMeta::new_readonly(program, false)
+        );
+    }
+
     mod referral_tests {
         use super::*;
         use anchor_lang::{AnchorDeserialize, Discriminator};
