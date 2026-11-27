@@ -403,6 +403,7 @@ pub struct CreateConfig<'info> {
     pub program_data: Account<'info, ProgramData>,
     /// Store bound to this deployment for its lifetime.
     pub store: AccountLoader<'info, gmsol_store::states::Store>,
+    /// Initial administrator recorded by Config.
     /// CHECK: only this address is recorded as the first admin.
     pub first_admin: UncheckedAccount<'info>,
     /// System program used to create Config.

@@ -192,7 +192,10 @@
           ]
         },
         {
-          "name": "first_admin"
+          "name": "first_admin",
+          "docs": [
+            "Initial administrator recorded by Config."
+          ]
         },
         {
           "name": "system_program",
