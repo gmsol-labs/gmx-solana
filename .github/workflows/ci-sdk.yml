@@ -42,6 +42,7 @@ jobs:
       - minrust
       - features
       - test
+      - node
     steps:
       - run: exit 0
 
@@ -165,3 +166,31 @@ jobs:
         env:
           RUSTFLAGS: "" # remove -Dwarnings: program crates are not warning-gated (excluded from clippy)
           PYTH_API_KEY: ${{ secrets.PYTH_API_KEY }}
+
+  node:
+    name: node tests
+    needs: basics
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/sdk
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@wasm-pack
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: crates/sdk/package-lock.json
+      - run: npm ci
+      - name: "npm run test:node"
+        run: npm run test:node
+        env:
+          RUSTFLAGS: "" # remove -Dwarnings, as in the test job

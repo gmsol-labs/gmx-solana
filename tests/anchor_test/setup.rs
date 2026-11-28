@@ -119,20 +119,8 @@ impl<'a> MakeBundleBuilder<'a, SignerRef> for CurrentOrderTimestamp<'a, '_> {
         &mut self,
         options: BundleOptions,
     ) -> gmsol_solana_utils::Result<BundleBuilder<'a, SignerRef>> {
-        let account = self
-            .clock_client
-            .rpc()
-            .get_account_with_commitment(
-                &solana_sdk::sysvar::clock::id(),
-                CommitmentConfig::processed(),
-            )
-            .await
-            .map_err(gmsol_solana_utils::Error::custom)?
-            .value
-            .ok_or_else(|| gmsol_solana_utils::Error::custom("validator clock account missing"))?;
-        let clock: solana_sdk::clock::Clock = solana_sdk::account::from_account(&account)
-            .ok_or_else(|| gmsol_solana_utils::Error::custom("invalid validator clock"))?;
-        self.execute.recent_timestamp(clock.unix_timestamp);
+        self.execute
+            .recent_timestamp(Deployment::clock_timestamp(self.clock_client).await?);
         self.execute.build_with_options(options).await
     }
 }
@@ -1724,6 +1712,46 @@ impl Deployment {
     /// call both.
     pub(crate) async fn lock_builder_fee_globals() -> tokio::sync::MutexGuard<'static, ()> {
         BUILDER_FEE_GLOBALS_LOCK.lock().await
+    }
+
+    /// Read the validator Clock's Unix timestamp at processed commitment.
+    pub(crate) async fn clock_timestamp(
+        client: &Client<SignerRef>,
+    ) -> gmsol_solana_utils::Result<i64> {
+        let account = client
+            .rpc()
+            .get_account_with_commitment(
+                &solana_sdk::sysvar::clock::id(),
+                CommitmentConfig::processed(),
+            )
+            .await
+            .map_err(gmsol_solana_utils::Error::custom)?
+            .value
+            .ok_or_else(|| gmsol_solana_utils::Error::custom("validator clock account missing"))?;
+        let clock: solana_sdk::clock::Clock = solana_sdk::account::from_account(&account)
+            .ok_or_else(|| gmsol_solana_utils::Error::custom("invalid validator clock"))?;
+        Ok(clock.unix_timestamp)
+    }
+
+    /// Create the EVM proxy of `evm_address`, or validate an existing one,
+    /// with `payer` paying rent.
+    pub(crate) async fn create_evm_proxy(
+        payer: &Client<SignerRef>,
+        evm_address: [u8; gmsol_evm_proxy::EVM_ADDRESS_LEN],
+    ) -> eyre::Result<Pubkey> {
+        let proxy = gmsol_sdk::pda::find_proxy_address(&evm_address, &gmsol_evm_proxy::ID).0;
+        payer
+            .store_transaction()
+            .program(gmsol_evm_proxy::ID)
+            .anchor_args(gmsol_evm_proxy::instruction::CreateProxyIdempotent { evm_address })
+            .anchor_accounts(gmsol_evm_proxy::accounts::CreateProxyIdempotent {
+                payer: payer.payer(),
+                proxy,
+                system_program: solana_sdk::system_program::ID,
+            })
+            .send()
+            .await?;
+        Ok(proxy)
     }
 
     /// Run `fut` with the store's [`FactorKey::MaxBuilderFeeFactor`] raised to

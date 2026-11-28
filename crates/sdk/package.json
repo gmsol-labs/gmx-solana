@@ -4,7 +4,8 @@
   "scripts": {
     "build": "rimraf dist pkg && webpack --mode production",
     "start": "rimraf dist pkg && webpack serve",
-    "test": "cargo test --features js && wasm-pack test --chrome --features js"
+    "test": "cargo test --features js && wasm-pack test --chrome --features js",
+    "test:node": "wasm-pack build --target nodejs --out-dir pkg-node --features js && node --test tests/node/*.test.mjs"
   },
   "devDependencies": {
     "@wasm-tool/wasm-pack-plugin": "1.7.0",
@@ -12,6 +13,7 @@
     "rimraf": "^6.0.1",
     "ts-loader": "^9.5.2",
     "typescript": "^5.8.2",
+    "viem": "^2.58.8",
     "webpack": "^5.107.2",
     "webpack-cli": "6.0.1",
     "webpack-dev-server": "^6.0.0"
