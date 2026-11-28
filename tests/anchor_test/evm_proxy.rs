@@ -773,8 +773,11 @@ impl CancelFixture {
         self.submit(intent, sign(&self.domain, &intent, &self.owner))
     }
 
-    /// Submit `intent`, check its event and return the proxy account after it.
+    /// Submit `intent`, check its event and that only the proxy's
+    /// `next_nonce` advances, and return the proxy account after it.
     async fn consume(&self, intent: Cancel) -> eyre::Result<Account> {
+        let rpc = self.submitter.rpc();
+        let mut expected = rpc.get_account(&self.proxy).await?;
         let signature = send(self.submit_signed(intent)?).await?;
         let EvmProxyCPIEvent::IntentConsumed(consumed) = event(&self.submitter, signature).await?
         else {
@@ -782,9 +785,12 @@ impl CancelFixture {
         };
         assert_eq!((consumed.proxy, consumed.nonce), (self.proxy, intent.nonce));
         assert!(matches!(consumed.kind, IntentKind::Cancel));
-        let account = self.submitter.rpc().get_account(&self.proxy).await?;
-        let proxy = evm_proxy::Proxy::try_deserialize(&mut account.data.as_slice())?;
-        assert_eq!(proxy.next_nonce, intent.nonce + 1);
+        let next_nonce = evm_proxy::Proxy::DISCRIMINATOR.len()
+            + std::mem::offset_of!(evm_proxy::Proxy, next_nonce);
+        expected.data[next_nonce..next_nonce + std::mem::size_of::<u64>()]
+            .copy_from_slice(&(intent.nonce + 1).to_le_bytes());
+        let account = rpc.get_account(&self.proxy).await?;
+        assert_eq!(account, expected);
         Ok(account)
     }
 }
