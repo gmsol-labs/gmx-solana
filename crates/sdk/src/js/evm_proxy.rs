@@ -197,12 +197,19 @@ impl EvmProxyTypedData {
         store: &Pubkey,
         genesis_hash: [u8; 32],
         chain_id: u64,
-        values: impl IntoIterator<Item = TypedDataValue>,
+        values: Vec<TypedDataValue>,
     ) -> crate::Result<Self> {
         let invalid_type = || crate::Error::custom("invalid EIP-712 type");
         let (domain_type, domain_members) = type_members(DOMAIN_TYPE).ok_or_else(invalid_type)?;
         let (primary_type, members) = type_members(I::TYPE).ok_or_else(invalid_type)?;
         let members = members.collect::<Vec<_>>();
+        if values.len() != members.len() {
+            return Err(crate::Error::custom(format!(
+                "{primary_type} has {} members but {} values",
+                members.len(),
+                values.len()
+            )));
+        }
         let fields = |members: &[(&'static str, &'static str)]| {
             members
                 .iter()
@@ -244,7 +251,7 @@ pub fn build_evm_proxy_cancel_typed_data(
         &args.store,
         parse_hex(&args.genesis_hash, "genesis_hash")?,
         args.intent.chain_id,
-        [
+        vec![
             TypedDataValue::Bytes32(hex_string(intent.proxy_account)),
             TypedDataValue::Uint64(intent.nonce),
             TypedDataValue::Uint64(intent.deadline),
