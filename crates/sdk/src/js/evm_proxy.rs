@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::{builders::evm_proxy::EvmProxyProgram, pda::EvmAddressBytes, serde::StringPubkey};
 use gmsol_evm_proxy_intent::{
-    type_members, u64_word, Cancel, Domain, Intent, DOMAIN_NAME, DOMAIN_TYPE, DOMAIN_VERSION,
+    u64_word, Cancel, Domain, Intent, DOMAIN_NAME, DOMAIN_TYPE, DOMAIN_VERSION,
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
@@ -97,6 +97,16 @@ pub(super) fn parse_hex<const N: usize>(input: &str, name: &str) -> crate::Resul
     hex::decode_to_slice(value, &mut bytes)
         .map_err(|error| crate::Error::custom(format!("{name}: {error}")))?;
     Ok(bytes)
+}
+
+/// Name and `(name, type)` members of an EIP-712 type such as [`DOMAIN_TYPE`].
+fn type_members(encoded: &str) -> Option<(&str, impl Iterator<Item = (&str, &str)>)> {
+    let (name, members) = encoded.strip_suffix(')')?.split_once('(')?;
+    let members = members.split(',').filter_map(|member| {
+        let (ty, name) = member.split_once(' ')?;
+        Some((name, ty))
+    });
+    Some((name, members))
 }
 
 fn hex_string(bytes: impl AsRef<[u8]>) -> String {
@@ -262,6 +272,21 @@ pub fn build_evm_proxy_cancel_typed_data(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn type_members_split_the_type_string() {
+        let (name, members) = type_members(DOMAIN_TYPE).unwrap();
+        assert_eq!(name, "EIP712Domain");
+        assert_eq!(
+            members.collect::<Vec<_>>(),
+            [
+                ("name", "string"),
+                ("version", "string"),
+                ("chainId", "uint256"),
+                ("salt", "bytes32"),
+            ]
+        );
+    }
 
     #[test]
     fn config_address_uses_selected_deployment() {

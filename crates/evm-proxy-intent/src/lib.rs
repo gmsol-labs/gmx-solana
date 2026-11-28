@@ -89,16 +89,6 @@ pub fn u64_word(value: u64) -> [u8; 32] {
     word
 }
 
-/// Name and `(name, type)` members of an EIP-712 type such as [`DOMAIN_TYPE`].
-pub fn type_members(encoded: &str) -> Option<(&str, impl Iterator<Item = (&str, &str)>)> {
-    let (name, members) = encoded.strip_suffix(')')?.split_once('(')?;
-    let members = members.split(',').filter_map(|member| {
-        let (ty, name) = member.split_once(' ')?;
-        Some((name, ty))
-    });
-    Some((name, members))
-}
-
 /// Whether `deadline` lies in the inclusive window from `now` through
 /// `now + EXECUTION_WINDOW_SECONDS`. A negative `now` has no window.
 pub fn is_within_execution_window(now: i64, deadline: u64) -> bool {
@@ -112,21 +102,6 @@ pub fn is_within_execution_window(now: i64, deadline: u64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn type_members_split_the_type_string() {
-        let (name, members) = type_members(DOMAIN_TYPE).unwrap();
-        assert_eq!(name, "EIP712Domain");
-        assert_eq!(
-            members.collect::<Vec<_>>(),
-            [
-                ("name", "string"),
-                ("version", "string"),
-                ("chainId", "uint256"),
-                ("salt", "bytes32"),
-            ]
-        );
-    }
 
     #[test]
     fn execution_window_includes_both_ends() {
