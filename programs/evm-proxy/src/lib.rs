@@ -20,6 +20,7 @@ const PROXY_PADDING_1_LEN: usize = 4;
 
 /// Kind of a consumed intent.
 #[derive(AnchorSerialize, AnchorDeserialize)]
+#[non_exhaustive]
 pub enum IntentKind {
     /// Cancel.
     Cancel,
