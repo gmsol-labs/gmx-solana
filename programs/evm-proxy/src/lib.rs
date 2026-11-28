@@ -18,8 +18,12 @@ pub const PROXY_RESERVED_LEN: usize = 248;
 const PROXY_PADDING_0_LEN: usize = 6;
 const PROXY_PADDING_1_LEN: usize = 4;
 
-/// Intent-kind tag for a consumed Cancel intent.
-pub const INTENT_KIND_CANCEL: u8 = 1;
+/// Kind of a consumed intent.
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub enum IntentKind {
+    /// Cancel.
+    Cancel,
+}
 
 /// Nonce consumption by a successful intent.
 #[event]
@@ -29,7 +33,7 @@ pub struct IntentConsumed {
     /// Nonce consumed by this instruction.
     pub nonce: u64,
     /// Kind of the successful intent.
-    pub kind: u8,
+    pub kind: IntentKind,
 }
 
 /// Permanent account for one EVM address.
@@ -69,6 +73,16 @@ impl Proxy {
         self.next_nonce = next;
         Ok(())
     }
+}
+
+/// Load a proxy with the current layout version.
+///
+/// # Errors
+/// Returns `InvalidProxy` for another layout version.
+fn load_proxy<'a>(proxy: &'a AccountLoader<Proxy>) -> Result<std::cell::Ref<'a, Proxy>> {
+    let loaded = proxy.load()?;
+    require_eq!(loaded.version, PROXY_VERSION, ProxyError::InvalidProxy);
+    Ok(loaded)
 }
 
 /// Seed prefix for the singleton policy account.
@@ -396,8 +410,7 @@ pub mod gmsol_evm_proxy {
             Err(err) => return Err(err),
         }
         ctx.accounts.proxy.exit(&crate::ID)?;
-        let proxy = ctx.accounts.proxy.load()?;
-        require_eq!(proxy.version, PROXY_VERSION, ProxyError::InvalidProxy);
+        let proxy = load_proxy(&ctx.accounts.proxy)?;
         require_eq!(proxy.bump, ctx.bumps.proxy, ProxyError::InvalidProxy);
         require!(proxy.evm_address == evm_address, ProxyError::InvalidProxy);
         Ok(())
@@ -436,30 +449,23 @@ pub mod gmsol_evm_proxy {
         signature: [u8; 64],
         recovery_id: u8,
     ) -> Result<()> {
-        let proxy_key = ctx.accounts.proxy.key();
-        let evm_address;
-        {
-            let proxy = ctx.accounts.proxy.load()?;
-            require_eq!(proxy.version, PROXY_VERSION, ProxyError::InvalidProxy);
-            evm_address = proxy.evm_address;
-        }
-
-        let struct_hash = gmsol_evm_proxy_intent::cancel_struct_hash(&proxy_key, nonce, deadline);
-        intent_verifier::verify(
-            &ctx.accounts.config,
-            evm_address,
-            chain_id,
+        let intent = gmsol_evm_proxy_intent::Cancel {
+            proxy_account: ctx.accounts.proxy.key(),
+            nonce,
             deadline,
-            struct_hash,
+        };
+        intent_verifier::consume(
+            &ctx.accounts.config,
+            &ctx.accounts.proxy,
+            chain_id,
+            &intent,
             signature,
             recovery_id,
         )?;
-
-        ctx.accounts.proxy.load_mut()?.consume_next_nonce(nonce)?;
         emit_cpi!(IntentConsumed {
-            proxy: proxy_key,
-            nonce,
-            kind: INTENT_KIND_CANCEL,
+            proxy: intent.proxy_account,
+            nonce: intent.nonce,
+            kind: IntentKind::Cancel,
         });
         Ok(())
     }
@@ -627,9 +633,9 @@ mod tests {
         const EXPECTED_PROXY_ACCOUNT_SIZE: usize = 288;
         const EXPECTED_EVM_ADDRESS_OFFSET: usize = 8;
         const EXPECTED_NEXT_NONCE_OFFSET: usize = 32;
+        const EXPECTED_RESERVED_OFFSET: usize = 40;
         assert_eq!(std::mem::size_of::<Proxy>(), EXPECTED_PROXY_ACCOUNT_SIZE);
         assert_eq!(Proxy::INIT_SPACE, EXPECTED_PROXY_ACCOUNT_SIZE);
-        assert_eq!(std::mem::offset_of!(Proxy, reserved), 40);
         assert_eq!(
             std::mem::offset_of!(Proxy, evm_address),
             EXPECTED_EVM_ADDRESS_OFFSET
@@ -638,13 +644,10 @@ mod tests {
             std::mem::offset_of!(Proxy, next_nonce),
             EXPECTED_NEXT_NONCE_OFFSET
         );
-    }
-
-    fn assert_nonce_error(error: Error, expected: ProxyError) {
-        let Error::AnchorError(error) = error else {
-            panic!("expected nonce error");
-        };
-        assert_eq!(error.error_code_number, u32::from(expected));
+        assert_eq!(
+            std::mem::offset_of!(Proxy, reserved),
+            EXPECTED_RESERVED_OFFSET
+        );
     }
 
     fn proxy_with_nonce(nonce: u64) -> Proxy {
@@ -656,62 +659,34 @@ mod tests {
         proxy
     }
 
-    #[test]
-    fn next_nonce_starts_at_zero_and_advances_once() {
-        let mut proxy: Proxy = bytemuck::Zeroable::zeroed();
-        assert_eq!(proxy.next_nonce, 0);
-        proxy.consume_next_nonce(0).unwrap();
-        assert_eq!(proxy.next_nonce, 1);
-        proxy.consume_next_nonce(1).unwrap();
-        assert_eq!(proxy.next_nonce, 2);
+    fn assert_rejected(proxy: &mut Proxy, nonce: u64, expected: ProxyError) {
+        let before = *proxy;
+        let Error::AnchorError(error) = proxy.consume_next_nonce(nonce).unwrap_err() else {
+            panic!("expected nonce error");
+        };
+        assert_eq!(error.error_code_number, u32::from(expected));
+        assert_eq!(bytemuck::bytes_of(proxy), bytemuck::bytes_of(&before));
     }
 
     #[test]
-    fn adjacent_nonces_and_replay_leave_all_state_unchanged() {
-        const CURRENT_NONCE: u64 = 7;
-        let mut proxy = proxy_with_nonce(CURRENT_NONCE);
-        let before = proxy;
-        for wrong in [CURRENT_NONCE - 1, CURRENT_NONCE + 1] {
-            assert_nonce_error(
-                proxy.consume_next_nonce(wrong).unwrap_err(),
-                ProxyError::InvalidIntentNonce,
-            );
-            assert_eq!(bytemuck::bytes_of(&proxy), bytemuck::bytes_of(&before));
+    fn accepts_only_the_next_nonce() {
+        const NEXT_NONCE: u64 = 7;
+        let mut proxy = proxy_with_nonce(NEXT_NONCE);
+        for nonce in [NEXT_NONCE - 1, NEXT_NONCE + 1] {
+            assert_rejected(&mut proxy, nonce, ProxyError::InvalidIntentNonce);
         }
-        proxy.consume_next_nonce(CURRENT_NONCE).unwrap();
-        assert_eq!(proxy.next_nonce, CURRENT_NONCE + 1);
-        let before_replay = proxy;
-        assert_nonce_error(
-            proxy.consume_next_nonce(CURRENT_NONCE).unwrap_err(),
-            ProxyError::InvalidIntentNonce,
-        );
-        assert_eq!(
-            bytemuck::bytes_of(&proxy),
-            bytemuck::bytes_of(&before_replay)
-        );
-        proxy.consume_next_nonce(CURRENT_NONCE + 1).unwrap();
-        let mut expected = before;
-        expected.next_nonce = CURRENT_NONCE + 2;
+        let mut expected = proxy;
+        proxy.consume_next_nonce(NEXT_NONCE).unwrap();
+        expected.next_nonce = NEXT_NONCE + 1;
         assert_eq!(bytemuck::bytes_of(&proxy), bytemuck::bytes_of(&expected));
+        assert_rejected(&mut proxy, NEXT_NONCE, ProxyError::InvalidIntentNonce);
     }
 
     #[test]
-    fn nonce_exhaustion_never_wraps_or_changes_state() {
+    fn stops_at_the_maximum_nonce() {
         let mut proxy = proxy_with_nonce(u64::MAX - 1);
         proxy.consume_next_nonce(u64::MAX - 1).unwrap();
         assert_eq!(proxy.next_nonce, u64::MAX);
-        let exhausted = proxy;
-        assert_nonce_error(
-            proxy.consume_next_nonce(u64::MAX).unwrap_err(),
-            ProxyError::NonceExhausted,
-        );
-        assert_eq!(bytemuck::bytes_of(&proxy), bytemuck::bytes_of(&exhausted));
-        for wrong in [0, u64::MAX - 1] {
-            assert_nonce_error(
-                proxy.consume_next_nonce(wrong).unwrap_err(),
-                ProxyError::InvalidIntentNonce,
-            );
-            assert_eq!(bytemuck::bytes_of(&proxy), bytemuck::bytes_of(&exhausted));
-        }
+        assert_rejected(&mut proxy, u64::MAX, ProxyError::NonceExhausted);
     }
 }

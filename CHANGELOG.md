@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sdk(solana-utils): Added `Error::SendUnresolved { signature, source }`, returned when a transaction may have been submitted but its outcome is unknown. The signature is taken from the signed transaction, so it is available even when the send response is lost. Its outcome is unknown, so callers should look up `signature` before retrying. `Error::unresolved_signature` returns it.
 - programs(evm-proxy): Added signed Cancel intents with checked nonces starting at zero and an inclusive one-hour deadline window.
 - sdk(sdk): Added proxy Cancel typed data, instruction builder and client operations.
-- sdk(js): Added proxy-specific Cancel signing and transaction arguments with full-width integer strings.
+- sdk(js): Added proxy Cancel typed data for viem and a transaction builder that takes the 65-byte signature viem returns. Chain IDs, nonces and deadlines are bigints.
 - sdk(decode): Added the `IntentConsumed` CPI event to `EvmProxyCPIEvent`.
 - programs(evm-proxy): Added a singleton Config bound to one Store and a supplied genesis hash. Its administrator can update the full-width EVM chain allowlist and pause state, then hand over administration through proposal and acceptance or withdraw a pending proposal; effective changes emit CPI events.
 - sdk(sdk): Added Config instruction builders, account decoding, and an initialization API that checks the supplied genesis hash against its configured RPC before sending and verifies the immutable Store and hash after confirmation. `ClientOptions` selects the EVM proxy deployment with `evm_proxy_program_id`.

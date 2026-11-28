@@ -1712,7 +1712,25 @@
             "docs": [
               "Kind of the successful intent."
             ],
-            "type": "u8"
+            "type": {
+              "defined": {
+                "name": "IntentKind"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "IntentKind",
+      "docs": [
+        "Kind of a consumed intent."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Cancel"
           }
         ]
       }

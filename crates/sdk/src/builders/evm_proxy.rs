@@ -1,4 +1,6 @@
-use gmsol_solana_utils::Program;
+use gmsol_evm_proxy_intent::ChainId;
+use gmsol_programs::gmsol_evm_proxy::client::{accounts, args};
+use gmsol_solana_utils::{AtomicGroup, IntoAtomicGroup, Program, ProgramExt};
 use solana_sdk::pubkey::Pubkey;
 use typed_builder::TypedBuilder;
 
@@ -46,7 +48,7 @@ impl Program for EvmProxyProgram {
     }
 }
 
-/// Builder for one signed Cancel transaction group.
+/// Builder for a signed Cancel.
 #[derive(Debug, Clone, TypedBuilder)]
 pub struct Cancel {
     /// Deployment selected for the signed domain.
@@ -55,32 +57,42 @@ pub struct Cancel {
     /// Transaction fee payer and submitter.
     #[builder(setter(into))]
     pub payer: StringPubkey,
-    /// Fields bound by the signature.
-    pub intent: crate::evm_proxy::CancelIntent,
-    /// Compact ECDSA signature.
+    /// EVM chain the intent is signed for.
+    pub chain_id: ChainId,
+    /// Signed Cancel fields.
+    pub intent: gmsol_evm_proxy_intent::Cancel,
+    /// Compact ECDSA `r || s` signature.
     pub signature: [u8; 64],
-    /// Canonical recovery ID, zero or one.
+    /// Recovery ID of the signature.
     pub recovery_id: u8,
 }
 
-impl gmsol_solana_utils::IntoAtomicGroup for Cancel {
+impl IntoAtomicGroup for Cancel {
     type Hint = ();
 
-    fn into_atomic_group(
-        self,
-        _hint: &(),
-    ) -> gmsol_solana_utils::Result<gmsol_solana_utils::AtomicGroup> {
-        let instruction = crate::evm_proxy::cancel_instruction(
-            &self.program,
-            self.payer.0,
-            &self.intent,
-            self.signature,
-            self.recovery_id,
-        )
-        .map_err(gmsol_solana_utils::Error::custom)?;
-        Ok(gmsol_solana_utils::AtomicGroup::with_instructions(
-            &self.payer.0,
-            Some(instruction),
-        ))
+    fn into_atomic_group(self, _hint: &Self::Hint) -> gmsol_solana_utils::Result<AtomicGroup> {
+        let payer = self.payer.0;
+        let program_id = *self.program.id;
+        let instruction = self
+            .program
+            .anchor_instruction(args::Cancel {
+                chain_id: self.chain_id,
+                nonce: self.intent.nonce,
+                deadline: self.intent.deadline,
+                signature: self.signature,
+                recovery_id: self.recovery_id,
+            })
+            .anchor_accounts(
+                accounts::Cancel {
+                    submitter: payer,
+                    config: crate::pda::find_proxy_config_address(&program_id).0,
+                    proxy: self.intent.proxy_account,
+                    event_authority: self.program.find_event_authority_address(),
+                    program: program_id,
+                },
+                false,
+            )
+            .build();
+        Ok(AtomicGroup::with_instructions(&payer, Some(instruction)))
     }
 }
