@@ -2,13 +2,17 @@ use crate::anchor_test::setup::{current_deployment, Deployment};
 use eyre::OptionExt;
 use futures_util::{stream, StreamExt};
 use gmsol_evm_proxy as evm_proxy;
-use gmsol_programs::anchor_lang::{error::ErrorCode, AccountDeserialize, Discriminator};
+use gmsol_programs::{
+    anchor_lang::{error::ErrorCode, AccountDeserialize, Discriminator},
+    gmsol_evm_proxy::types::IntentKind,
+};
 use gmsol_sdk::{
     client::{
         ops::{evm_proxy::create_config_instruction, EvmProxyOps, SystemProgramOps},
         transaction_history::extract_cpi_events,
     },
     decode::{gmsol::programs::evm_proxy::EvmProxyCPIEvent, Decode},
+    evm_proxy_intent::{digest, evm_address, Cancel, Domain},
     Client,
 };
 use gmsol_solana_utils::{
@@ -17,6 +21,7 @@ use gmsol_solana_utils::{
     utils::WithSlot,
 };
 use gmsol_utils::InitSpace;
+use libsecp256k1::{Message, PublicKey, SecretKey};
 use solana_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
 use solana_sdk::{
     account::Account,
@@ -29,6 +34,7 @@ use solana_sdk::{
 type PolicyClient = Client<SignerRef>;
 
 const NOMINEE_FUNDING_LAMPORTS: u64 = 10_000_000;
+const INTENT_VALIDITY_SECONDS: u64 = 120;
 
 async fn read_config(
     client: &PolicyClient,
@@ -131,7 +137,13 @@ async fn proxy_account_creation_records_evm_address() -> eyre::Result<()> {
     assert_eq!(proxy.version, evm_proxy::PROXY_VERSION);
     assert_eq!(proxy.bump, bump);
     assert_eq!(proxy.evm_address, evm_address);
+    assert_eq!(proxy.next_nonce, 0);
     assert_eq!(proxy.reserved, [0; evm_proxy::PROXY_RESERVED_LEN]);
+    let sdk_proxy = gmsol_programs::gmsol_evm_proxy::accounts::Proxy::try_deserialize(
+        &mut account.data.as_slice(),
+    )?;
+    assert_eq!(sdk_proxy.next_nonce, 0);
+    assert_eq!(sdk_proxy.evm_address, evm_address);
     Ok(())
 }
 
@@ -143,18 +155,7 @@ async fn proxy_second_payer_preserves_existing_account() -> eyre::Result<()> {
     let second_payer = &deployment.client;
     assert_ne!(first_payer.payer(), second_payer.payer());
     let evm_address = [0x34; evm_proxy::EVM_ADDRESS_LEN];
-    let proxy = gmsol_sdk::pda::find_proxy_address(&evm_address, &evm_proxy::ID).0;
-    first_payer
-        .store_transaction()
-        .program(evm_proxy::ID)
-        .anchor_args(evm_proxy::instruction::CreateProxyIdempotent { evm_address })
-        .anchor_accounts(evm_proxy::accounts::CreateProxyIdempotent {
-            payer: first_payer.payer(),
-            proxy,
-            system_program: system_program::ID,
-        })
-        .send()
-        .await?;
+    let proxy = Deployment::create_evm_proxy(&first_payer, evm_address).await?;
     let before = first_payer.rpc().get_account(&proxy).await?;
     second_payer
         .store_transaction()
@@ -693,6 +694,286 @@ async fn admin_withdraws_pending_nomination() -> eyre::Result<()> {
                 evm_proxy::ProxyError::NoConfigChange.into(),
             );
             assert_eq!(read_config(client, &config).await?.0, before);
+            Ok(())
+        })
+        .await
+}
+
+fn signing_key() -> SecretKey {
+    loop {
+        if let Ok(key) = SecretKey::parse(&rand::random()) {
+            return key;
+        }
+    }
+}
+
+fn owner_address(key: &SecretKey) -> [u8; evm_proxy::EVM_ADDRESS_LEN] {
+    let public_key = PublicKey::from_secret_key(key).serialize();
+    evm_address(public_key[1..].try_into().expect("64-byte public key"))
+}
+
+fn sign(domain: &Domain, intent: &Cancel, key: &SecretKey) -> ([u8; 64], u8) {
+    let (signature, recovery_id) =
+        libsecp256k1::sign(&Message::parse(&digest(domain, intent)), key);
+    (signature.serialize(), recovery_id.serialize())
+}
+
+/// A funded submitter and a proxy owned by a fresh EVM key, with the
+/// deployment's signing domain.
+struct CancelFixture {
+    submitter: PolicyClient,
+    owner: SecretKey,
+    proxy: Pubkey,
+    domain: Domain,
+}
+
+impl CancelFixture {
+    async fn new(deployment: &Deployment) -> eyre::Result<Self> {
+        let client = &deployment.client;
+        let submitter = funded_nominee(client).await?;
+        let owner = signing_key();
+        let proxy = Deployment::create_evm_proxy(&submitter, owner_address(&owner)).await?;
+        let domain = Domain {
+            program: evm_proxy::ID,
+            store: deployment.store,
+            genesis_hash: client.proxy_config_account().await?.genesis_hash,
+            chain_id: chain_id(0, 1),
+        };
+        Ok(Self {
+            submitter,
+            owner,
+            proxy,
+            domain,
+        })
+    }
+
+    async fn intent(&self, nonce: u64) -> eyre::Result<Cancel> {
+        let now = u64::try_from(Deployment::clock_timestamp(&self.submitter).await?)?;
+        Ok(Cancel {
+            proxy_account: self.proxy,
+            nonce,
+            deadline: now + INTENT_VALIDITY_SECONDS,
+        })
+    }
+
+    fn submit(
+        &self,
+        intent: Cancel,
+        (signature, recovery_id): ([u8; 64], u8),
+    ) -> eyre::Result<TransactionBuilder<'_, SignerRef>> {
+        Ok(self.submitter.cancel_proxy_intent(
+            self.domain.chain_id,
+            intent,
+            signature,
+            recovery_id,
+        )?)
+    }
+
+    fn submit_signed(&self, intent: Cancel) -> eyre::Result<TransactionBuilder<'_, SignerRef>> {
+        self.submit(intent, sign(&self.domain, &intent, &self.owner))
+    }
+
+    /// Submit `intent`, check its event and that only the proxy's
+    /// `next_nonce` advances, and return the proxy account after it.
+    async fn consume(&self, intent: Cancel) -> eyre::Result<Account> {
+        let rpc = self.submitter.rpc();
+        let mut expected = rpc.get_account(&self.proxy).await?;
+        let signature = send(self.submit_signed(intent)?).await?;
+        let EvmProxyCPIEvent::IntentConsumed(consumed) = event(&self.submitter, signature).await?
+        else {
+            eyre::bail!("expected IntentConsumed CPI event");
+        };
+        assert_eq!((consumed.proxy, consumed.nonce), (self.proxy, intent.nonce));
+        assert!(matches!(consumed.kind, IntentKind::Cancel));
+        let next_nonce = evm_proxy::Proxy::DISCRIMINATOR.len()
+            + std::mem::offset_of!(evm_proxy::Proxy, next_nonce);
+        expected.data[next_nonce..next_nonce + std::mem::size_of::<u64>()]
+            .copy_from_slice(&(intent.nonce + 1).to_le_bytes());
+        let account = rpc.get_account(&self.proxy).await?;
+        assert_eq!(account, expected);
+        Ok(account)
+    }
+}
+
+#[tokio::test]
+async fn cancel_requires_unpaused_config_and_allowed_chain() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _accounts = deployment.use_accounts().await?;
+    let client = &deployment.client;
+    deployment
+        .with_evm_proxy_config(&[], async {
+            let cancel = CancelFixture::new(deployment).await?;
+            let intent = cancel.intent(0).await?;
+            assert_anchor_error(
+                cancel
+                    .submit_signed(intent)?
+                    .send()
+                    .await
+                    .expect_err("Config starts paused"),
+                evm_proxy::ProxyError::Paused.into(),
+            );
+            client.set_proxy_paused(false).send().await?;
+            assert_anchor_error(
+                cancel
+                    .submit_signed(intent)?
+                    .send()
+                    .await
+                    .expect_err("chain is not allowed"),
+                evm_proxy::ProxyError::ChainNotAllowed.into(),
+            );
+            Ok(())
+        })
+        .await
+}
+
+#[tokio::test]
+async fn cancel_binds_signer_proxy_deadline_and_domain() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _accounts = deployment.use_accounts().await?;
+    let client = &deployment.client;
+    deployment
+        .with_evm_proxy_config(&[], async {
+            let cancel = CancelFixture::new(deployment).await?;
+            client.set_proxy_paused(false).send().await?;
+            client
+                .set_proxy_chain_allowed(cancel.domain.chain_id, true)
+                .send()
+                .await?;
+            let other_proxy =
+                Deployment::create_evm_proxy(&cancel.submitter, owner_address(&signing_key()))
+                    .await?;
+            let intent = cancel.intent(0).await?;
+            let expired = Cancel {
+                deadline: intent.deadline - INTENT_VALIDITY_SECONDS - 1,
+                ..intent
+            };
+            let (domain, owner, other) = (cancel.domain, &cancel.owner, Pubkey::new_unique());
+            for (reason, transaction, expected) in [
+                (
+                    "wrong signer",
+                    cancel.submit(intent, sign(&domain, &intent, &signing_key()))?,
+                    evm_proxy::ProxyError::InvalidSignature,
+                ),
+                (
+                    "substituted proxy",
+                    cancel.submit(
+                        Cancel {
+                            proxy_account: other_proxy,
+                            ..intent
+                        },
+                        sign(&domain, &intent, owner),
+                    )?,
+                    evm_proxy::ProxyError::InvalidSignature,
+                ),
+                (
+                    "expired deadline",
+                    cancel.submit_signed(expired)?,
+                    evm_proxy::ProxyError::InvalidDeadline,
+                ),
+                (
+                    "another Store",
+                    cancel.submit(
+                        intent,
+                        sign(
+                            &Domain {
+                                store: other,
+                                ..domain
+                            },
+                            &intent,
+                            owner,
+                        ),
+                    )?,
+                    evm_proxy::ProxyError::InvalidSignature,
+                ),
+                (
+                    "another cluster",
+                    cancel.submit(
+                        intent,
+                        sign(
+                            &Domain {
+                                genesis_hash: other.to_bytes(),
+                                ..domain
+                            },
+                            &intent,
+                            owner,
+                        ),
+                    )?,
+                    evm_proxy::ProxyError::InvalidSignature,
+                ),
+                (
+                    "another program ID",
+                    cancel.submit(
+                        intent,
+                        sign(
+                            &Domain {
+                                program: other,
+                                ..domain
+                            },
+                            &intent,
+                            owner,
+                        ),
+                    )?,
+                    evm_proxy::ProxyError::InvalidSignature,
+                ),
+            ] {
+                assert_anchor_error(transaction.send().await.expect_err(reason), expected.into());
+            }
+            Ok(())
+        })
+        .await
+}
+
+#[tokio::test]
+async fn cancel_consumes_only_the_next_nonce() -> eyre::Result<()> {
+    let deployment = current_deployment().await?;
+    let _accounts = deployment.use_accounts().await?;
+    let client = &deployment.client;
+    deployment
+        .with_evm_proxy_config(&[], async {
+            let cancel = CancelFixture::new(deployment).await?;
+            client.set_proxy_paused(false).send().await?;
+            client
+                .set_proxy_chain_allowed(cancel.domain.chain_id, true)
+                .send()
+                .await?;
+            assert_anchor_error(
+                cancel
+                    .submit_signed(cancel.intent(1).await?)?
+                    .send()
+                    .await
+                    .expect_err("future nonce"),
+                evm_proxy::ProxyError::InvalidIntentNonce.into(),
+            );
+
+            let first = cancel.intent(0).await?;
+            let consumed = cancel.consume(first).await?;
+            Deployment::create_evm_proxy(client, owner_address(&cancel.owner)).await?;
+            assert_eq!(
+                client.rpc().get_account(&cancel.proxy).await?,
+                consumed,
+                "recreation keeps the consumed nonce"
+            );
+            for (reason, intent) in [
+                ("replay", first),
+                (
+                    "another message at the consumed nonce",
+                    Cancel {
+                        deadline: first.deadline + 1,
+                        ..first
+                    },
+                ),
+            ] {
+                assert_anchor_error(
+                    cancel
+                        .submit_signed(intent)?
+                        .send()
+                        .await
+                        .expect_err(reason),
+                    evm_proxy::ProxyError::InvalidIntentNonce.into(),
+                );
+            }
+
+            cancel.consume(cancel.intent(1).await?).await?;
             Ok(())
         })
         .await

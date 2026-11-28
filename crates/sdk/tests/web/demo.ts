@@ -1,5 +1,7 @@
 import {
   find_proxy_address,
+  build_evm_proxy_cancel_typed_data,
+  build_evm_proxy_cancel_transaction,
   find_proxy_config_address,
   apply_factor,
   close_orders,
@@ -804,3 +806,23 @@ console.log("Alternate proxy address and bump:", alternateEvmProxy.address, alte
 
 console.log("Proxy Config:", find_proxy_config_address({}));
 console.log("Alternate proxy Config:", find_proxy_config_address({ program_id: "11111111111111111111111111111111" }));
+
+const proxyCancel = {
+  evm_address: "0x0123456789abcdef0123456789abcdef01234567",
+  chain_id: 42161n,
+  nonce: 1n,
+  deadline: 18446744073709551615n,
+};
+console.log("Proxy Cancel typed data:", build_evm_proxy_cancel_typed_data({
+  ...proxyCancel,
+  store: "11111111111111111111111111111111",
+  genesis_hash: "0x" + "02".repeat(32),
+}));
+const proxyCancelTransactions = build_evm_proxy_cancel_transaction({
+  ...proxyCancel,
+  signature: "0x" + "13".repeat(64) + "1b",
+  payer: "11111111111111111111111111111111",
+  recent_blockhash: recentBlockhash,
+});
+console.log("Proxy Cancel transactions:", proxyCancelTransactions.serialize());
+proxyCancelTransactions.free();

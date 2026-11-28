@@ -1,5 +1,11 @@
-use crate::{pda::EvmAddressBytes, serde::StringPubkey};
+use std::collections::BTreeMap;
+
+use crate::{builders::evm_proxy::EvmProxyProgram, pda::EvmAddressBytes, serde::StringPubkey};
+use gmsol_evm_proxy_intent::{
+    u64_word, Cancel, Domain, Intent, DOMAIN_NAME, DOMAIN_TYPE, DOMAIN_VERSION,
+};
 use serde::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
@@ -82,9 +88,205 @@ pub fn find_proxy_config_address(args: FindProxyConfigAddressArgs) -> crate::Res
     })
 }
 
+pub(super) fn parse_hex<const N: usize>(input: &str, name: &str) -> crate::Result<[u8; N]> {
+    let value = input
+        .strip_prefix("0x")
+        .or_else(|| input.strip_prefix("0X"))
+        .unwrap_or(input);
+    let mut bytes = [0; N];
+    hex::decode_to_slice(value, &mut bytes)
+        .map_err(|error| crate::Error::custom(format!("{name}: {error}")))?;
+    Ok(bytes)
+}
+
+/// Name and `(name, type)` members of an EIP-712 type such as [`DOMAIN_TYPE`].
+fn type_members(encoded: &str) -> Option<(&str, impl Iterator<Item = (&str, &str)>)> {
+    let (name, members) = encoded.strip_suffix(')')?.split_once('(')?;
+    let members = members.split(',').filter_map(|member| {
+        let (ty, name) = member.split_once(' ')?;
+        Some((name, ty))
+    });
+    Some((name, members))
+}
+
+fn hex_string(bytes: impl AsRef<[u8]>) -> String {
+    format!("0x{}", hex::encode(bytes))
+}
+
+/// Signed Cancel fields and the proxy deployment.
+#[derive(Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi, large_number_types_as_bigints)]
+pub struct EvmProxyCancelArgs {
+    /// EVM owner address, 20 bytes in hex.
+    evm_address: String,
+    /// EVM chain the intent is signed for.
+    pub(super) chain_id: u64,
+    /// Proxy nonce consumed by the intent.
+    nonce: u64,
+    /// Latest Unix timestamp at which the intent executes.
+    deadline: u64,
+    /// Proxy deployment; defaults to the declared program ID.
+    #[serde(default)]
+    program: Option<EvmProxyProgram>,
+}
+
+impl EvmProxyCancelArgs {
+    pub(super) fn program(&self) -> EvmProxyProgram {
+        self.program.clone().unwrap_or_default()
+    }
+
+    pub(super) fn intent(&self, program: &EvmProxyProgram) -> crate::Result<Cancel> {
+        let evm_address = parse_evm_address(&self.evm_address)?;
+        Ok(Cancel {
+            proxy_account: crate::pda::find_proxy_address(&evm_address, &program.id).0,
+            nonce: self.nonce,
+            deadline: self.deadline,
+        })
+    }
+}
+
+/// Arguments for the Cancel typed data.
+#[derive(Serialize, Deserialize, Tsify)]
+#[tsify(from_wasm_abi)]
+pub struct BuildEvmProxyCancelTypedDataArgs {
+    /// Signed Cancel fields.
+    #[serde(flatten)]
+    intent: EvmProxyCancelArgs,
+    /// Store bound to the deployment.
+    store: StringPubkey,
+    /// Genesis hash of the Solana cluster, 32 bytes in hex.
+    genesis_hash: String,
+}
+
+/// EIP-712 typed data for an EVM proxy intent, in the shape viem
+/// `signTypedData` and `hashTypedData` take.
+#[derive(Serialize, Tsify)]
+#[tsify(into_wasm_abi, hashmap_as_object, large_number_types_as_bigints)]
+#[serde(rename_all = "camelCase")]
+pub struct EvmProxyTypedData {
+    domain: EvmProxyTypedDataDomain,
+    types: BTreeMap<&'static str, Vec<TypedDataField>>,
+    primary_type: &'static str,
+    message: BTreeMap<&'static str, TypedDataValue>,
+}
+
+/// EIP-712 domain of the typed data.
+#[derive(Serialize, Tsify)]
+#[tsify(large_number_types_as_bigints)]
+#[serde(rename_all = "camelCase")]
+pub struct EvmProxyTypedDataDomain {
+    name: &'static str,
+    version: &'static str,
+    chain_id: u64,
+    salt: String,
+}
+
+/// One member of an EIP-712 type.
+#[derive(Serialize, Tsify)]
+pub struct TypedDataField {
+    name: &'static str,
+    #[serde(rename = "type")]
+    ty: &'static str,
+}
+
+/// One EIP-712 message value.
+#[derive(Serialize, Tsify)]
+#[tsify(large_number_types_as_bigints)]
+#[serde(untagged)]
+pub enum TypedDataValue {
+    /// `bytes32` in hex.
+    Bytes32(String),
+    /// `uint64`.
+    Uint64(u64),
+}
+
+impl EvmProxyTypedData {
+    /// `values` follow the member order of `I::TYPE`.
+    fn new<I: Intent>(
+        program: &Pubkey,
+        store: &Pubkey,
+        genesis_hash: [u8; 32],
+        chain_id: u64,
+        values: Vec<TypedDataValue>,
+    ) -> crate::Result<Self> {
+        let invalid_type = || crate::Error::custom("invalid EIP-712 type");
+        let (domain_type, domain_members) = type_members(DOMAIN_TYPE).ok_or_else(invalid_type)?;
+        let (primary_type, members) = type_members(I::TYPE).ok_or_else(invalid_type)?;
+        let members = members.collect::<Vec<_>>();
+        if values.len() != members.len() {
+            return Err(crate::Error::custom(format!(
+                "{primary_type} has {} members but {} values",
+                members.len(),
+                values.len()
+            )));
+        }
+        let fields = |members: &[(&'static str, &'static str)]| {
+            members
+                .iter()
+                .map(|&(name, ty)| TypedDataField { name, ty })
+                .collect()
+        };
+        let domain = Domain {
+            program: *program,
+            store: *store,
+            genesis_hash,
+            chain_id: u64_word(chain_id),
+        };
+        Ok(Self {
+            domain: EvmProxyTypedDataDomain {
+                name: DOMAIN_NAME,
+                version: DOMAIN_VERSION,
+                chain_id,
+                salt: hex_string(domain.salt()),
+            },
+            types: BTreeMap::from([
+                (domain_type, fields(&domain_members.collect::<Vec<_>>())),
+                (primary_type, fields(&members)),
+            ]),
+            primary_type,
+            message: members.iter().map(|&(name, _)| name).zip(values).collect(),
+        })
+    }
+}
+
+/// Build the EIP-712 typed data of a Cancel for the EVM owner to sign.
+#[wasm_bindgen]
+pub fn build_evm_proxy_cancel_typed_data(
+    args: BuildEvmProxyCancelTypedDataArgs,
+) -> crate::Result<EvmProxyTypedData> {
+    let program = args.intent.program();
+    let intent = args.intent.intent(&program)?;
+    EvmProxyTypedData::new::<Cancel>(
+        &program.id,
+        &args.store,
+        parse_hex(&args.genesis_hash, "genesis_hash")?,
+        args.intent.chain_id,
+        vec![
+            TypedDataValue::Bytes32(hex_string(intent.proxy_account)),
+            TypedDataValue::Uint64(intent.nonce),
+            TypedDataValue::Uint64(intent.deadline),
+        ],
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn type_members_split_the_type_string() {
+        let (name, members) = type_members(DOMAIN_TYPE).unwrap();
+        assert_eq!(name, "EIP712Domain");
+        assert_eq!(
+            members.collect::<Vec<_>>(),
+            [
+                ("name", "string"),
+                ("version", "string"),
+                ("chainId", "uint256"),
+                ("salt", "bytes32"),
+            ]
+        );
+    }
 
     #[test]
     fn config_address_uses_selected_deployment() {

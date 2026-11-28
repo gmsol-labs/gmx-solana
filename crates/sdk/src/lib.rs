@@ -79,3 +79,6 @@ pub use gmsol_solana_utils::{
 
 #[cfg(feature = "decode")]
 pub use gmsol_decode as decode;
+
+#[cfg(feature = "evm-proxy")]
+pub use gmsol_evm_proxy_intent as evm_proxy_intent;

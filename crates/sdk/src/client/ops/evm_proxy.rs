@@ -2,17 +2,22 @@
 
 use std::{future::Future, ops::Deref};
 
+use gmsol_evm_proxy_intent::ChainId;
 use gmsol_programs::{
     anchor_lang::AccountDeserialize,
     gmsol_evm_proxy::client::{accounts, args},
 };
-use gmsol_solana_utils::{transaction_builder::TransactionBuilder, ProgramExt};
+use gmsol_solana_utils::{transaction_builder::TransactionBuilder, IntoAtomicGroup, ProgramExt};
 use solana_sdk::{
     bpf_loader_upgradeable, instruction::Instruction, pubkey::Pubkey, signature::Signature,
     signer::Signer, system_program,
 };
 
-use crate::{builders::evm_proxy::EvmProxyProgram, pda::find_proxy_config_address, Client};
+use crate::{
+    builders::evm_proxy::{Cancel, EvmProxyProgram},
+    pda::find_proxy_config_address,
+    Client,
+};
 
 /// Build the one-time Config initialization instruction.
 pub fn create_config_instruction(
@@ -186,6 +191,15 @@ fn verify_readback(
 
 /// Client operations for this client's EVM proxy deployment.
 pub trait EvmProxyOps<C> {
+    /// Submit a signed Cancel as this client's payer.
+    fn cancel_proxy_intent(
+        &self,
+        chain_id: ChainId,
+        intent: gmsol_evm_proxy_intent::Cancel,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> crate::Result<TransactionBuilder<'_, C>>;
+
     /// Change allowlist membership as this client's payer.
     fn set_proxy_chain_allowed(
         &self,
@@ -257,6 +271,25 @@ fn create_config_transaction<'a, C: Deref<Target = impl Signer> + Clone>(
 }
 
 impl<C: Deref<Target = impl Signer> + Clone> EvmProxyOps<C> for Client<C> {
+    fn cancel_proxy_intent(
+        &self,
+        chain_id: ChainId,
+        intent: gmsol_evm_proxy_intent::Cancel,
+        signature: [u8; 64],
+        recovery_id: u8,
+    ) -> crate::Result<TransactionBuilder<'_, C>> {
+        let ag = Cancel::builder()
+            .program(self.evm_proxy_program_for_builders().clone())
+            .payer(self.payer())
+            .chain_id(chain_id)
+            .intent(intent)
+            .signature(signature)
+            .recovery_id(recovery_id)
+            .build()
+            .into_atomic_group(&())?;
+        Ok(self.store_transaction().pre_atomic_group(ag, true))
+    }
+
     fn set_proxy_chain_allowed(
         &self,
         chain_id: [u8; 32],
@@ -444,6 +477,7 @@ mod tests {
         const CREATE_CONFIG_EVENT_AUTHORITY_INDEX: usize = 8;
         const POLICY_EVENT_AUTHORITY_INDEX: usize = 2;
         const TRANSFER_ADMIN_EVENT_AUTHORITY_INDEX: usize = 3;
+        const CANCEL_EVENT_AUTHORITY_INDEX: usize = 3;
         const CREATE_CONFIG_PROXY_PROGRAM_INDEX: usize = 3;
         const EVENT_ACCOUNT_COUNT: usize = 2;
         let program = Pubkey::new_unique();
@@ -471,6 +505,24 @@ mod tests {
             instruction.accounts[CREATE_CONFIG_PROXY_PROGRAM_INDEX].pubkey,
             program
         );
+        let cancel = Cancel::builder()
+            .program(deployment.clone())
+            .payer(admin)
+            .chain_id(CHAIN_ID)
+            .intent(gmsol_evm_proxy_intent::Cancel {
+                proxy_account: Pubkey::new_unique(),
+                nonce: 0,
+                deadline: 0,
+            })
+            .signature([0; 64])
+            .recovery_id(0)
+            .build()
+            .into_atomic_group(&())
+            .unwrap()
+            .instructions_with_options(Default::default())
+            .find(|instruction| instruction.program_id == program)
+            .unwrap()
+            .into_owned();
         let event_authority = find_event_authority_address(&program).0;
         for (instruction, event_index) in [
             (instruction, CREATE_CONFIG_EVENT_AUTHORITY_INDEX),
@@ -490,6 +542,7 @@ mod tests {
                 accept_admin_instruction(&deployment, first_admin),
                 POLICY_EVENT_AUTHORITY_INDEX,
             ),
+            (cancel, CANCEL_EVENT_AUTHORITY_INDEX),
         ] {
             assert_eq!(instruction.program_id, program);
             assert_eq!(
